@@ -21,7 +21,7 @@ TEST WORKFLOW:
     │       ├── bluestore_debug_inject_read_err=true
     │       └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
     │
-    ├── THRASHING PHASE (11 parallel threads)
+    ├── THRASHING PHASE (up to 12 parallel threads)
     │   ├── io_workload_burst: rados bench 30s write bursts (64K blocks)
     │   ├── comprehensive_io_workload: Various object sizes + overwrites + appends
     │   ├── monitor_cluster_health: Periodic ceph health detail + ceph -s logging
@@ -33,7 +33,8 @@ TEST WORKFLOW:
     │   │   └── { partial_write } & ceph osd down <osd> (synchronized timing)
     │   ├── thrash_osds: Mark out → orch daemon stop → wait → mark in → orch daemon start
     │   ├── thrash_crush_weights: Reduce to 50% → restore (if enabled)
-    │   └── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub (if enabled)
+    │   ├── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub (if enabled)
+    │   └── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW (if enabled)
     │
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
@@ -69,7 +70,7 @@ import concurrent.futures as cf
 import random
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -116,6 +117,7 @@ def run(ceph_cluster, **kw):
         inject_errors (bool): Inject EC write errors on random OSDs (default: True)
         num_osds_to_inject (int): Number of OSDs to inject errors on (default: 3)
         num_writes_to_inject (int): Number of writes to inject errors per OSD (default: 1000)
+        enable_rgw_thrashing (bool): Enable RGW S3 thrashing (default: False, requires RGW)
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -142,7 +144,9 @@ def run(ceph_cluster, **kw):
     inject_errors = config.get("inject_errors", True)
     num_osds_to_inject = config.get("num_osds_to_inject", 3)
     num_writes_to_inject = config.get("num_writes_to_inject", 1000)
+    enable_rgw_thrashing = config.get("enable_rgw_thrashing", False)
     compression_algorithms = ["snappy", "zlib"]
+    rgw_config = None
 
     up_osds = rados_obj.get_osd_list(status="up")
     inject_osds = random.sample(up_osds, min(num_osds_to_inject, len(up_osds)))
@@ -166,9 +170,10 @@ def run(ceph_cluster, **kw):
         f"  RADOS pools from config: {len(config.get('pool_configs', []))}\n"
         f"  Additional pools: CephFS (2 pools) + RBD (2 pools)\n"
         f"  Inject errors: {inject_errors}\n"
-        f"  Snapshot thrashing: CephFS + RBD (create, clone, flatten, delete)"
-        f"  OSDs to inject errors: {len(inject_osds)}"
-        f"  Writes to inject per OSD: {num_writes_to_inject}"
+        f"  Snapshot thrashing: CephFS + RBD (create, clone, flatten, delete)\n"
+        f"  RGW S3 thrashing: {enable_rgw_thrashing}\n"
+        f"  OSDs to inject errors: {len(inject_osds)}\n"
+        f"  Writes to inject per OSD: {num_writes_to_inject}\n"
         f"{'=' * 60}\n"
     )
     log.info(test_params)
@@ -321,6 +326,19 @@ def run(ceph_cluster, **kw):
             section="global", name="osd_max_markdown_count", value="99999999"
         )
 
+        # Setup RGW S3 client if enabled (includes endpoint discovery)
+        if enable_rgw_thrashing:
+            log.info("Setting up RGW S3 client for thrashing with EC data pool...")
+            rgw_config = setup_rgw_s3_client(
+                client_node,
+                rados_obj,
+                data_pool_type="erasure",
+                ec_config={"k": 2, "m": 2},
+            )
+            if not rgw_config:
+                log.warning("RGW S3 setup failed, disabling RGW thrashing")
+                enable_rgw_thrashing = False
+
         log.info("Setup phase completed successfully")
 
         log.info(f"\n{'=' * 60}\nTHRASHING PHASE\n{'=' * 60}")
@@ -331,12 +349,15 @@ def run(ceph_cluster, **kw):
 
         reboot_osd = False if inject_errors else True
 
-        # Calculate worker count: 9 base threads + optional CRUSH + optional PG
+        # Calculate worker count: 9 base threads + optional CRUSH + optional PG + optional RGW
         # Base threads: rados bench, comprehensive I/O, CephFS FIO, RBD FIO,
         #               OSD thrashing, CephFS snapshots, RBD snapshots, EC pool snapshots,
         #               cluster health monitoring
         max_workers = (
-            9 + (1 if enable_crush_thrashing else 0) + (1 if enable_pg_thrashing else 0)
+            9
+            + (1 if enable_crush_thrashing else 0)
+            + (1 if enable_pg_thrashing else 0)
+            + (1 if enable_rgw_thrashing else 0)
         )
 
         with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -477,6 +498,19 @@ def run(ceph_cluster, **kw):
                     )
                 )
 
+            # RGW S3 thrashing (optional: requires RGW deployment)
+            if enable_rgw_thrashing and rgw_config:
+                log.info("RGW S3 thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_rgw_s3,
+                        client_node=client_node,
+                        rgw_config=rgw_config,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+
             log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
             try:
                 for future in cf.as_completed(futures, timeout=duration):
@@ -511,6 +545,37 @@ def run(ceph_cluster, **kw):
 
         log.info("Thrashing phase completed")
         log.info(f"\n{'=' * 60}\nVALIDATION PHASE\n{'=' * 60}")
+
+        # Check for inconsistent PGs across all pools and repair if found
+        log.info("Checking for inconsistent PGs across all pools...")
+        all_pools = rados_obj.list_pools()
+        inconsistent_pgs_found = []
+        for check_pool in all_pools:
+            try:
+                inconsistent_pgs = rados_obj.get_inconsistent_pg_list(check_pool)
+                if inconsistent_pgs:
+                    log.warning(
+                        f"Found {len(inconsistent_pgs)} inconsistent PG(s) in pool "
+                        f"{check_pool}: {inconsistent_pgs}"
+                    )
+                    inconsistent_pgs_found.extend(inconsistent_pgs)
+            except Exception as e:
+                log.debug(f"Error checking pool {check_pool}: {e}")
+
+        if inconsistent_pgs_found:
+            log.debug(
+                f"Total inconsistent PGs found: {len(inconsistent_pgs_found)}. "
+                f"Initiating PG repair..."
+            )
+            for pg_id in inconsistent_pgs_found:
+                try:
+                    log.info(f"Running pg repair on PG: {pg_id}")
+                    rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
+                except Exception as e:
+                    log.error(f"Failed to repair PG {pg_id}: {e}")
+            time.sleep(30)
+        else:
+            log.info("No inconsistent PGs found across all pools")
 
         log.info("Waiting for PGs to reach active+clean state...")
         if not wait_for_clean_pg_sets(rados_obj, timeout=600, recovery_thread=False):
@@ -592,7 +657,7 @@ def run(ceph_cluster, **kw):
 
         if config.get("cleanup_pools", True) and created_pools:
             log.debug("Cleaning up test resources...")
-            with cf.ThreadPoolExecutor(max_workers=2) as cleanup_executor:
+            with cf.ThreadPoolExecutor(max_workers=3) as cleanup_executor:
                 cephfs_cleanup = (
                     cleanup_executor.submit(
                         _cleanup_cephfs, client_node, cephfs_mount_path, fs_name
@@ -609,18 +674,26 @@ def run(ceph_cluster, **kw):
                     else None
                 )
 
-                # Wait for cleanup tasks to complete
-                if cephfs_cleanup:
-                    try:
-                        cephfs_cleanup.result()
-                    except Exception as e:
-                        log.warning(f"CephFS cleanup failed: {e}")
+                rgw_cleanup = (
+                    cleanup_executor.submit(
+                        cleanup_rgw_s3, client_node, rgw_config, rados_obj
+                    )
+                    if rgw_config
+                    else None
+                )
 
-                if rbd_cleanup:
-                    try:
-                        rbd_cleanup.result()
-                    except Exception as e:
-                        log.warning(f"RBD cleanup failed: {e}")
+                # Wait for cleanup tasks to complete
+                cleanup_tasks = [
+                    ("CephFS", cephfs_cleanup),
+                    ("RBD", rbd_cleanup),
+                    ("RGW", rgw_cleanup),
+                ]
+                for name, task in cleanup_tasks:
+                    if task:
+                        try:
+                            task.result()
+                        except Exception as e:
+                            log.warning(f"{name} cleanup failed: {e}")
 
             log.info(f"Deleting {len(created_pools)} pool(s)...")
             failed_pools = []
@@ -2032,6 +2105,784 @@ def thrash_ec_pool_snapshots(
         f"EC pool snapshot thrashing completed: {ops_completed} ops, {total_snaps} snapshots"
     )
     return ops_completed
+
+
+def setup_rgw_s3_client(
+    client_node,
+    rados_obj: RadosOrchestrator,
+    data_pool_type: str = "replicated",
+    ec_config: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Setup RGW S3 client by discovering endpoints, installing dependencies,
+    creating user, and configuring tools.
+
+    This is a self-contained setup method that:
+    1. Discovers RGW daemon endpoints via 'ceph orch ps --daemon_type rgw'
+    2. Installs awscli and s3cmd on the client node
+    3. Creates or reuses an RGW user with S3 credentials
+    4. Configures awscli and s3cmd with credentials
+    5. Creates both a normal bucket and a versioned bucket
+    6. Optionally configures an EC pool as the RGW data pool
+
+    Args:
+        client_node: Client node to configure s3cmd/awscli
+        rados_obj: RadosOrchestrator object for running ceph commands
+        data_pool_type: Type of data pool - "replicated" (default) or "erasure"
+        ec_config: Optional EC pool configuration when data_pool_type is "erasure"
+                   Example: {"k": 2, "m": 2, "plugin": "jerasure"}
+                   If not provided, defaults to k=2, m=2
+
+    Returns:
+        Dict with access_key, secret_key, endpoints, buckets, uid, ec_pool_name or None if setup fails
+    """
+    import json as json_module  # Only needed for zone config serialization
+
+    ec_pool_name = None
+    original_zone_config = None
+
+    try:
+        # Step 1: Discover RGW endpoints via ceph orch ps
+        log.info("Discovering RGW daemon endpoints...")
+        rgw_endpoints = []
+        try:
+            rgw_daemons = rados_obj.run_ceph_command(
+                cmd="ceph orch ps --daemon_type rgw"
+            )
+            if rgw_daemons:
+                for daemon in rgw_daemons:
+                    if daemon.get("status_desc") == "running":
+                        hostname = daemon.get("hostname")
+                        ports = daemon.get("ports") or [80]
+                        port = ports[0] if ports else 80
+                        if hostname:
+                            rgw_endpoints.append(
+                                {
+                                    "hostname": hostname,
+                                    "port": port,
+                                    "daemon_id": daemon.get("daemon_id"),
+                                    "endpoint": f"http://{hostname}:{port}",
+                                }
+                            )
+        except Exception as e:
+            log.warning(f"Failed to query RGW daemons: {e}")
+
+        if not rgw_endpoints:
+            log.warning("No running RGW daemons found")
+            return None
+
+        log.info(
+            f"Found {len(rgw_endpoints)} RGW endpoint(s): "
+            f"{', '.join(ep['endpoint'] for ep in rgw_endpoints)}"
+        )
+
+        # Use first endpoint for initial setup
+        primary_ep = rgw_endpoints[0]
+        rgw_host = primary_ep["hostname"]
+        rgw_port = primary_ep["port"]
+        rgw_endpoint = primary_ep["endpoint"]
+
+        # Step 1.5: Configure EC pool as RGW data pool if requested
+        if data_pool_type == "erasure":
+            log.info("Configuring EC pool as RGW data pool...")
+
+            # Get EC parameters from config or use defaults
+            if ec_config is None:
+                ec_config = {}
+            ec_k = ec_config.get("k", 2)
+            ec_m = ec_config.get("m", 2)
+            ec_plugin = ec_config.get("plugin", "isa")
+            enable_fast_ec = ec_config.get("enable_fast_ec_features", True)
+
+            ts = int(time.time())
+            ec_pool_name = f"rgw-ec-data-pool-{ts}"
+
+            # Create EC pool using existing method with fast EC features enabled
+            log.info(
+                f"Creating EC pool: {ec_pool_name} (k={ec_k}, m={ec_m}, "
+                f"plugin={ec_plugin}, fast_ec={enable_fast_ec})"
+            )
+            ec_pool_params = {
+                "pool_name": ec_pool_name,
+                "k": ec_k,
+                "m": ec_m,
+                "plugin": ec_plugin,
+                "app_name": "rgw",
+                "enable_fast_ec_features": enable_fast_ec,
+            }
+
+            if not rados_obj.create_erasure_pool(**ec_pool_params):
+                log.error(f"Failed to create EC pool: {ec_pool_name}")
+                raise Exception(f"Failed to create EC pool {ec_pool_name}")
+
+            log.info(
+                f"EC pool {ec_pool_name} created successfully with fast EC features"
+            )
+
+            # Get current zone configuration
+            log.info("Fetching current RGW zone configuration...")
+            zone_out, _ = client_node.exec_command(
+                cmd="radosgw-admin zone get", sudo=True
+            )
+            zone_config = json_module.loads(zone_out)
+            original_zone_config = json_module.loads(zone_out)  # Independent copy
+            log.debug("Original zone config saved for cleanup")
+
+            # Update default-placement to use EC pool for STANDARD storage class
+            placement_pools = zone_config.get("placement_pools", [])
+            default_placement = next(
+                (p for p in placement_pools if p.get("key") == "default-placement"),
+                None,
+            )
+            if default_placement:
+                default_placement.setdefault("val", {}).setdefault(
+                    "storage_classes", {}
+                ).setdefault("STANDARD", {})["data_pool"] = ec_pool_name
+            else:
+                placement_pools.append(
+                    {
+                        "key": "default-placement",
+                        "val": {
+                            "index_pool": "default.rgw.buckets.index",
+                            "storage_classes": {
+                                "STANDARD": {"data_pool": ec_pool_name}
+                            },
+                            "data_extra_pool": "default.rgw.buckets.non-ec",
+                        },
+                    }
+                )
+            zone_config["placement_pools"] = placement_pools
+            log.info(f"Updated STANDARD storage class data_pool to: {ec_pool_name}")
+
+            # Write modified zone config to temp file and set it
+            zone_config_str = json_module.dumps(zone_config, indent=2)
+            zone_file = f"/tmp/rgw_zone_ec_{ts}.json"
+            client_node.exec_command(
+                cmd=f"echo '{zone_config_str}' > {zone_file}", sudo=True
+            )
+
+            log.info("Setting modified RGW zone configuration...")
+            client_node.exec_command(
+                cmd=f"radosgw-admin zone set --infile {zone_file}", sudo=True
+            )
+
+            # Cleanup temp file
+            client_node.exec_command(
+                cmd=f"rm -f {zone_file}", sudo=True, check_ec=False
+            )
+
+            # Commit the period update to apply zone changes
+            log.info("Committing period update to apply zone changes...")
+            client_node.exec_command(
+                cmd="radosgw-admin period update --commit",
+                sudo=True,
+                check_ec=False,  # May fail on non-multisite, which is OK
+            )
+
+            # Restart RGW daemons to apply zone configuration
+            log.info("Restarting RGW daemons to apply zone configuration...")
+            if not rados_obj.restart_daemon_services(daemon="rgw", timeout=600):
+                log.warning("RGW daemon restart may not have completed successfully")
+                raise Exception(
+                    "RGW daemon restart may not have completed successfully"
+                )
+
+            # Verify zone configuration was applied
+            log.info("Verifying zone configuration...")
+            zone_verify_out, _ = client_node.exec_command(
+                cmd="radosgw-admin zone get", sudo=True
+            )
+            updated_zone = json_module.loads(zone_verify_out)
+            placement_pools = updated_zone.get("placement_pools", [])
+            default_placement = next(
+                (p for p in placement_pools if p.get("key") == "default-placement"),
+                None,
+            )
+            if default_placement:
+                data_pool = (
+                    default_placement.get("val", {})
+                    .get("storage_classes", {})
+                    .get("STANDARD", {})
+                    .get("data_pool", "")
+                )
+                if data_pool == ec_pool_name:
+                    log.info(f"Zone configuration verified: data_pool = {ec_pool_name}")
+                else:
+                    log.warning(
+                        f"Zone data_pool mismatch: expected {ec_pool_name}, got {data_pool}"
+                    )
+                    raise Exception(
+                        f"Zone data_pool mismatch: expected {ec_pool_name}, got {data_pool}"
+                    )
+
+            log.info(f"EC pool {ec_pool_name} configured as RGW data pool")
+
+        # Step 2: Install S3 client dependencies (awscli, s3cmd)
+        log.info("Installing S3 client dependencies (awscli, s3cmd)...")
+        client_node.exec_command(
+            cmd="pip3 install awscli s3cmd --quiet", sudo=True, check_ec=False
+        )
+
+        # Step 3: Check if user already exists, create if not
+        uid = f"thrash-user-{int(time.time())}"
+
+        def create_new_user(user_id: str) -> dict:
+            """Create a new RGW user and return user info."""
+            log.info(f"Creating new RGW user: {user_id}")
+            out, _ = client_node.exec_command(
+                cmd=f"radosgw-admin user create --uid={user_id} "
+                f"--display-name='OSD Thrash Test User' --email={user_id}@test.local",
+                sudo=True,
+            )
+            return json_module.loads(out)
+
+        try:
+            users_out, _ = client_node.exec_command(
+                cmd="radosgw-admin user list", sudo=True
+            )
+            existing_users = json_module.loads(users_out) if users_out.strip() else []
+
+            # Look for any existing thrash-user to reuse
+            for existing_uid in existing_users:
+                if existing_uid.startswith("thrash-user-"):
+                    info_out, _ = client_node.exec_command(
+                        cmd=f"radosgw-admin user info --uid={existing_uid}",
+                        sudo=True,
+                    )
+                    user_info = json_module.loads(info_out)
+                    if user_info.get("keys"):
+                        uid = existing_uid
+                        log.info(f"Reusing existing RGW user: {uid}")
+                        break
+            else:
+                user_info = create_new_user(uid)
+        except Exception as e:
+            log.warning(f"Error checking/creating user: {e}, creating new user")
+            user_info = create_new_user(uid)
+
+        access_key = user_info["keys"][0]["access_key"]
+        secret_key = user_info["keys"][0]["secret_key"]
+
+        # Step 4: Configure awscli
+        log.info("Configuring awscli credentials...")
+        aws_config = f"""[default]
+aws_access_key_id = {access_key}
+aws_secret_access_key = {secret_key}
+"""
+        client_node.exec_command(cmd="mkdir -p ~/.aws", sudo=True, check_ec=False)
+        client_node.exec_command(
+            cmd=f"echo '{aws_config}' > ~/.aws/credentials", sudo=True, check_ec=False
+        )
+
+        # Step 5: Configure s3cmd
+        log.info("Configuring s3cmd...")
+        s3cmd_config = f"""[default]
+access_key = {access_key}
+secret_key = {secret_key}
+host_base = {rgw_host}:{rgw_port}
+host_bucket = {rgw_host}:{rgw_port}/%(bucket)s
+use_https = False
+signature_v2 = True
+"""
+        client_node.exec_command(
+            cmd=f"echo '{s3cmd_config}' > ~/.s3cfg", sudo=True, check_ec=False
+        )
+
+        # Step 6: Create buckets (normal + versioned)
+        ts = int(time.time())
+        bucket_name = f"thrash-bucket-{ts}"
+        versioned_bucket = f"thrash-bucket-ver-{ts}"
+
+        for bkt, enable_versioning in [(bucket_name, False), (versioned_bucket, True)]:
+            bkt_type = "versioned" if enable_versioning else "normal"
+            log.info(f"Creating {bkt_type} bucket: {bkt}")
+            client_node.exec_command(
+                cmd=f"aws s3 mb s3://{bkt} --endpoint {rgw_endpoint}",
+                sudo=True,
+                check_ec=False,
+            )
+            if enable_versioning:
+                client_node.exec_command(
+                    cmd=(
+                        f"aws --endpoint {rgw_endpoint} s3api put-bucket-versioning "
+                        f"--versioning-configuration Status=Enabled --bucket {bkt}"
+                    ),
+                    sudo=True,
+                    check_ec=False,
+                )
+
+        # Verify buckets exist
+        out, _ = client_node.exec_command(
+            cmd=f"aws s3 ls --endpoint {rgw_endpoint}", sudo=True, check_ec=False
+        )
+        if bucket_name not in out or versioned_bucket not in out:
+            log.warning("Bucket creation may have failed")
+            raise Exception(
+                "Bucket creation may have failed for bucket: {bucket_name} or {versioned_bucket}"
+            )
+
+        # Verify bucket placement if EC pool was configured
+        pool_info = ""
+        if ec_pool_name:
+            pool_info = f", data_pool: {ec_pool_name} (EC)"
+            # Check bucket stats to verify data pool
+            try:
+                stats_out, _ = client_node.exec_command(
+                    cmd=f"radosgw-admin bucket stats --bucket={bucket_name}",
+                    sudo=True,
+                )
+                bucket_stats = json_module.loads(stats_out)
+                bucket_placement = bucket_stats.get("placement_rule", "unknown")
+                log.info(f"Bucket {bucket_name} placement_rule: {bucket_placement}")
+                log.debug(f"Bucket stats: {bucket_stats}")
+            except Exception as bucket_err:
+                log.warning(f"Could not verify bucket placement: {bucket_err}")
+        log.info(
+            f"RGW S3 client setup complete: {len(rgw_endpoints)} endpoints, "
+            f"buckets: {bucket_name} (normal), {versioned_bucket} (versioned){pool_info}"
+        )
+        return {
+            "access_key": access_key,
+            "secret_key": secret_key,
+            "endpoints": rgw_endpoints,
+            "primary_endpoint": rgw_endpoint,
+            "bucket_name": bucket_name,
+            "versioned_bucket": versioned_bucket,
+            "uid": uid,
+            "data_pool_type": data_pool_type,
+            "ec_pool_name": ec_pool_name,
+            "original_zone_config": original_zone_config,
+        }
+    except Exception as e:
+        log.warning(f"Failed to setup RGW S3 client: {e}")
+        # Cleanup EC pool if created during failed setup
+        if ec_pool_name:
+            try:
+                log.info(f"Cleaning up EC pool {ec_pool_name} after setup failure")
+                rados_obj.delete_pool(pool=ec_pool_name)
+            except Exception:
+                pass
+        return None
+
+
+def thrash_rgw_s3(
+    client_node,
+    rgw_config: Dict[str, Any],
+    duration: int,
+    stop_flag: Dict,
+) -> int:
+    """
+    Thrash RGW with S3 operations during OSD thrashing using round-robin endpoints.
+
+    Operations per bucket (normal and versioned):
+    1. PUT objects (various sizes: 4KB, 64KB, 1MB, 5MB)
+    2. Overwrite existing objects
+    3. Multipart upload (10MB in 5MB parts)
+    4. GET/verify random objects
+    5. LIST bucket contents
+    6. HEAD object metadata checks
+    7. List object versions (versioned bucket only)
+    8. DELETE ~50% of objects
+
+    Notes:
+    - Versioned buckets use fixed object names to create multiple versions
+    - Normal buckets use unique object names per iteration
+    - Uses round-robin across all available RGW endpoints for load distribution
+
+    Args:
+        client_node: Client node with awscli/s3cmd installed
+        rgw_config: Dict with access_key, secret_key, endpoints, bucket_name, versioned_bucket
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+
+    Returns:
+        Number of S3 operations completed
+    """
+    endpoints = rgw_config.get("endpoints", [])
+    access_key = rgw_config["access_key"]
+    secret_key = rgw_config["secret_key"]
+
+    if not endpoints:
+        log.warning("No RGW endpoints available, skipping RGW S3 thrashing")
+        return 0
+
+    # Setup bucket configurations
+    buckets = [
+        {
+            "name": rgw_config["bucket_name"],
+            "versioned": False,
+            "objects": [],
+            "sizes": [4096, 65536, 1048576, 5242880],  # 4KB, 64KB, 1MB, 5MB
+        }
+    ]
+    if rgw_config.get("versioned_bucket"):
+        buckets.append(
+            {
+                "name": rgw_config["versioned_bucket"],
+                "versioned": True,
+                "objects": [],
+                "sizes": [4096, 65536],  # Smaller sizes for versioned bucket
+            }
+        )
+
+    bucket_info = ", ".join(
+        f"{b['name']} ({'versioned' if b['versioned'] else 'normal'})" for b in buckets
+    )
+    log.info(
+        f"Starting RGW S3 thrashing on {len(buckets)} bucket(s): "
+        f"{bucket_info}, {len(endpoints)} endpoint(s)"
+    )
+
+    ops_completed = 0
+    end_time = time.time() + duration
+    iteration = 0
+    endpoint_idx = 0  # Round-robin counter
+
+    def get_next_endpoint() -> Dict[str, Any]:
+        """Get next endpoint in round-robin fashion."""
+        nonlocal endpoint_idx
+        ep = endpoints[endpoint_idx % len(endpoints)]
+        endpoint_idx += 1
+        return ep
+
+    def run_s3cmd(cmd_suffix: str, timeout: int = 60) -> bool:
+        """Run s3cmd with round-robin endpoint selection."""
+        ep = get_next_endpoint()
+        host_base = f"{ep['hostname']}:{ep['port']}"
+        full_cmd = (
+            f"s3cmd --access_key={access_key} --secret_key={secret_key} "
+            f"--host={host_base} --host-bucket='{host_base}/%(bucket)s' "
+            f"--no-ssl --signature-v2 {cmd_suffix}"
+        )
+        try:
+            client_node.exec_command(
+                cmd=full_cmd, sudo=True, check_ec=False, timeout=timeout
+            )
+            return True
+        except Exception as e:
+            log.debug(f"s3cmd failed on {ep['endpoint']}: {e}")
+            return False
+
+    def run_awscli(cmd_suffix: str, timeout: int = 60) -> bool:
+        """Run awscli with round-robin endpoint selection."""
+        ep = get_next_endpoint()
+        full_cmd = f"aws --endpoint {ep['endpoint']} {cmd_suffix}"
+        try:
+            client_node.exec_command(
+                cmd=full_cmd, sudo=True, check_ec=False, timeout=timeout
+            )
+            return True
+        except Exception as e:
+            log.debug(f"awscli failed on {ep['endpoint']}: {e}")
+            return False
+
+    try:
+        while time.time() < end_time and not stop_flag.get("stop"):
+            iteration += 1
+            ts = int(time.time() * 1000)
+
+            # Iterate over all buckets (normal and versioned)
+            for bucket_cfg in buckets:
+                if stop_flag.get("stop"):
+                    break
+
+                bucket_name = bucket_cfg["name"]
+                is_versioned = bucket_cfg["versioned"]
+                bucket_objects = bucket_cfg["objects"]
+                bucket_sizes = bucket_cfg["sizes"]
+
+                # Step 1: PUT objects (uses fixed names for versioned to create versions)
+                for idx, size in enumerate(bucket_sizes):
+                    if stop_flag.get("stop"):
+                        break
+                    obj_name = (
+                        f"obj_{idx}" if is_versioned else f"obj_{iteration}_{idx}_{ts}"
+                    )
+                    tmp_file = f"tmp_{iteration}_{idx}_{ts}"
+                    try:
+                        client_node.exec_command(
+                            cmd=f"dd if=/dev/urandom of=/tmp/{tmp_file} bs={size} count=1 2>/dev/null",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        if run_s3cmd(
+                            f"put /tmp/{tmp_file} s3://{bucket_name}/{obj_name}",
+                            timeout=120,
+                        ):
+                            if obj_name not in bucket_objects:
+                                bucket_objects.append(obj_name)
+                            ops_completed += 1
+                    except Exception:
+                        pass
+                    finally:
+                        client_node.exec_command(
+                            cmd=f"rm -f /tmp/{tmp_file}", sudo=True, check_ec=False
+                        )
+
+                if stop_flag.get("stop"):
+                    break
+
+                # Step 2: Overwrite random existing objects
+                if bucket_objects and len(bucket_objects) > 2:
+                    overwrite_targets = random.sample(
+                        bucket_objects,
+                        min(3 if is_versioned else 3, len(bucket_objects)),
+                    )
+                    for obj_name in overwrite_targets:
+                        if stop_flag.get("stop"):
+                            break
+                        try:
+                            size = random.choice(bucket_sizes[:2])
+                            client_node.exec_command(
+                                cmd=f"dd if=/dev/urandom of=/tmp/overwrite bs={size} count=1 2>/dev/null",
+                                sudo=True,
+                                check_ec=False,
+                            )
+                            if run_s3cmd(
+                                f"put /tmp/overwrite s3://{bucket_name}/{obj_name}",
+                                timeout=60,
+                            ):
+                                ops_completed += 1
+                        except Exception:
+                            pass
+                        finally:
+                            client_node.exec_command(
+                                cmd="rm -f /tmp/overwrite", sudo=True, check_ec=False
+                            )
+
+                # Step 3: Multipart upload (all buckets)
+                # For versioned buckets, use fixed name to create new version
+                if not stop_flag.get("stop"):
+                    mp_obj = (
+                        "multipart_obj"
+                        if is_versioned
+                        else f"multipart_{iteration}_{ts}"
+                    )
+                    try:
+                        client_node.exec_command(
+                            cmd=f"dd if=/dev/urandom of=/tmp/{mp_obj} bs=1M count=10 2>/dev/null",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        if run_s3cmd(
+                            f"put --multipart-chunk-size-mb=5 /tmp/{mp_obj} s3://{bucket_name}/{mp_obj}",
+                            timeout=180,
+                        ):
+                            if mp_obj not in bucket_objects:
+                                bucket_objects.append(mp_obj)
+                            ops_completed += 1
+                    except Exception:
+                        pass
+                    finally:
+                        client_node.exec_command(
+                            cmd=f"rm -f /tmp/{mp_obj}", sudo=True, check_ec=False
+                        )
+
+                # Step 4: GET random objects
+                if bucket_objects:
+                    get_targets = random.sample(
+                        bucket_objects, min(5, len(bucket_objects))
+                    )
+                    for obj_name in get_targets:
+                        if stop_flag.get("stop"):
+                            break
+                        if run_s3cmd(
+                            f"get s3://{bucket_name}/{obj_name} /tmp/s3get_{obj_name} --force",
+                            timeout=60,
+                        ):
+                            ops_completed += 1
+                        client_node.exec_command(
+                            cmd=f"rm -f /tmp/s3get_{obj_name}",
+                            sudo=True,
+                            check_ec=False,
+                        )
+
+                # Step 5: LIST bucket
+                if run_s3cmd(f"ls s3://{bucket_name}/", timeout=30):
+                    ops_completed += 1
+
+                # Step 6: HEAD objects
+                if bucket_objects:
+                    for obj_name in random.sample(
+                        bucket_objects, min(3, len(bucket_objects))
+                    ):
+                        if stop_flag.get("stop"):
+                            break
+                        if run_s3cmd(f"info s3://{bucket_name}/{obj_name}", timeout=30):
+                            ops_completed += 1
+
+                # Step 7: List object versions (versioned bucket only)
+                if is_versioned:
+                    if run_awscli(
+                        f"s3api list-object-versions --bucket {bucket_name} --max-keys 50",
+                        timeout=30,
+                    ):
+                        ops_completed += 1
+
+                # Step 8: DELETE ~50% of objects
+                if bucket_objects and random.random() < 0.5:
+                    delete_count = max(1, len(bucket_objects) // 2)
+                    delete_targets = random.sample(
+                        bucket_objects, min(delete_count, len(bucket_objects))
+                    )
+                    for obj_name in delete_targets:
+                        if run_s3cmd(f"del s3://{bucket_name}/{obj_name}", timeout=30):
+                            # For versioned buckets, don't remove from list (delete marker created)
+                            if not is_versioned:
+                                bucket_objects.remove(obj_name)
+                            ops_completed += 1
+
+            # Log with endpoint rotation info
+            current_ep_idx = endpoint_idx % len(endpoints)
+            bucket_stats = ", ".join(
+                f"{b['name']}={len(b['objects'])}" for b in buckets
+            )
+            log.debug(
+                f"RGW S3 iteration {iteration}: {ops_completed} ops, "
+                f"buckets: {bucket_stats}, "
+                f"next endpoint: {endpoints[current_ep_idx]['endpoint']}"
+            )
+            time.sleep(random.uniform(1, 3))
+
+    except Exception as e:
+        log.warning(f"RGW S3 thrashing error: {e}")
+
+    bucket_stats = ", ".join(f"{b['name']}={len(b['objects'])}" for b in buckets)
+    log.info(
+        f"RGW S3 thrashing completed: {ops_completed} ops, "
+        f"buckets: {bucket_stats}, "
+        f"used {endpoint_idx} requests across {len(endpoints)} endpoint(s)"
+    )
+    return ops_completed
+
+
+def cleanup_rgw_s3(
+    client_node, rgw_config: Dict[str, Any], rados_obj: RadosOrchestrator = None
+) -> None:
+    """
+    Cleanup RGW S3 resources after thrashing.
+
+    Handles both normal and versioned buckets. For versioned buckets,
+    deletes all object versions before removing the bucket.
+    Also handles cleanup of EC pool and restoration of original zone config.
+
+    Args:
+        client_node: Client node to execute cleanup
+        rgw_config: Dict with bucket_name, versioned_bucket, uid, primary_endpoint,
+                    ec_pool_name, ec_profile_name, original_zone_config
+        rados_obj: Optional RadosOrchestrator for ceph commands (needed for EC cleanup)
+    """
+    import json as json_module
+
+    if not rgw_config:
+        return
+
+    bucket = rgw_config.get("bucket_name")
+    versioned_bucket = rgw_config.get("versioned_bucket")
+    uid = rgw_config.get("uid")
+    endpoint = rgw_config.get("primary_endpoint", "")
+    ec_pool_name = rgw_config.get("ec_pool_name")
+    original_zone_config = rgw_config.get("original_zone_config")
+
+    try:
+        # Cleanup buckets (both normal and versioned) using force delete
+        for bkt in [bucket, versioned_bucket]:
+            if not bkt:
+                continue
+            log.info(f"Cleaning up RGW bucket: {bkt}")
+            # Force delete with s3cmd (handles objects and versions)
+            client_node.exec_command(
+                cmd=f"s3cmd rb --recursive --force s3://{bkt}",
+                sudo=True,
+                check_ec=False,
+                timeout=300,
+            )
+            # Fallback: awscli force delete if s3cmd fails
+            if endpoint:
+                client_node.exec_command(
+                    cmd=f"aws --endpoint {endpoint} s3 rb s3://{bkt} --force",
+                    sudo=True,
+                    check_ec=False,
+                    timeout=300,
+                )
+
+        # Remove user (will also purge any remaining data)
+        if uid:
+            log.info(f"Removing RGW user: {uid}")
+            client_node.exec_command(
+                cmd=f"radosgw-admin user rm --uid={uid} --purge-data",
+                sudo=True,
+                check_ec=False,
+            )
+
+        # Restore original zone configuration and cleanup EC pool if used
+        if ec_pool_name:
+            log.info("Cleaning up EC pool and restoring original zone configuration...")
+
+            # Restore original zone configuration first
+            if original_zone_config:
+                log.info("Restoring original RGW zone configuration...")
+                try:
+                    zone_config_str = json_module.dumps(original_zone_config, indent=2)
+                    zone_file = "/tmp/rgw_zone_restore.json"
+                    client_node.exec_command(
+                        cmd=f"echo '{zone_config_str}' > {zone_file}", sudo=True
+                    )
+                    client_node.exec_command(
+                        cmd=f"radosgw-admin zone set --infile {zone_file}", sudo=True
+                    )
+                    client_node.exec_command(
+                        cmd=f"rm -f {zone_file}", sudo=True, check_ec=False
+                    )
+                    # Commit the period update
+                    client_node.exec_command(
+                        cmd="radosgw-admin period update --commit",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    log.info("Original zone configuration restored")
+
+                    # Restart RGW daemons to apply restored configuration
+                    if rados_obj:
+                        rados_obj.restart_daemon_services(daemon="rgw", timeout=300)
+                except Exception as zone_err:
+                    log.warning(f"Failed to restore zone configuration: {zone_err}")
+
+            # Delete EC pool using rados_obj if available, otherwise use client_node
+            log.info(f"Deleting EC pool: {ec_pool_name}")
+            if rados_obj:
+                try:
+                    rados_obj.delete_pool(pool=ec_pool_name)
+                except Exception as pool_err:
+                    log.warning(f"Failed to delete EC pool via rados_obj: {pool_err}")
+                    # Fallback to direct command
+                    client_node.exec_command(
+                        cmd=f"ceph osd pool delete {ec_pool_name} {ec_pool_name} "
+                        f"--yes-i-really-really-mean-it",
+                        sudo=True,
+                        check_ec=False,
+                    )
+            else:
+                client_node.exec_command(
+                    cmd=f"ceph osd pool delete {ec_pool_name} {ec_pool_name} "
+                    f"--yes-i-really-really-mean-it",
+                    sudo=True,
+                    check_ec=False,
+                )
+
+            # Remove EC profile (profile name follows ecp_{pool_name} convention)
+            profile_name = f"ecp_{ec_pool_name}"
+            log.info(f"Removing EC profile: {profile_name}")
+            client_node.exec_command(
+                cmd=f"ceph osd erasure-code-profile rm {profile_name}",
+                sudo=True,
+                check_ec=False,
+            )
+
+            log.info("EC pool cleanup completed")
+
+    except Exception as e:
+        log.warning(f"RGW cleanup error: {e}")
 
 
 def _cleanup_cephfs(client_node, mount_path: str, fs_name: str) -> None:
