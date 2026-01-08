@@ -22,9 +22,10 @@ def wait_for_process(client, process_name, timeout=180, interval=5, ispresent=Tr
     end_time = datetime.now() + timedelta(seconds=timeout)
     log.info("Wait for the process to start or stop")
     while end_time > datetime.now():
-        client.exec_command(
+        out, _ = client.exec_command(
             sudo=True, cmd=f"ceph orch ps | grep {process_name}", check_ec=False
         )
+        log.debug("Running Process: {}".format(out))
         if client.node.exit_status == 0 and ispresent:
             return True
         if client.node.exit_status == 1 and not ispresent:
