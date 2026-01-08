@@ -6,6 +6,8 @@ from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
 from tests.nfs.test_nfs_qos_on_cluster_level_enablement import (
+    _maybe_json_loads,
+    _within_qos_limit,
     capture_copy_details,
     enable_disable_qos_for_cluster,
 )
@@ -222,14 +224,18 @@ def run(ceph_cluster, **kw):
             if not export_data:
                 raise OperationFailedError("Failed to create nfs export")
 
-            export_data_after_restart = json.loads(export_data_after_restart)
+            export_data_after_restart = _maybe_json_loads(export_data_after_restart)
             log.info("export_data_after_restart: {0}".format(export_data_after_restart))
 
-            if export_data_after_restart["qos_block"].get("max_export_write_bw"):
+            qos_block = {}
+            if isinstance(export_data_after_restart, dict):
+                qos_block = export_data_after_restart.get("qos_block") or {}
+
+            if qos_block.get("max_export_write_bw"):
                 if float(
                     re.findall(
                         r"\d+\.\d+",
-                        export_data_after_restart["qos_block"]["max_export_write_bw"],
+                        qos_block["max_export_write_bw"],
                     )[0]
                 ) == float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]):
                     log.info(
@@ -237,13 +243,11 @@ def run(ceph_cluster, **kw):
                             qos_type
                         )
                     )
-            elif export_data_after_restart["qos_block"].get("max_export_combined_bw"):
+            elif qos_block.get("max_export_combined_bw"):
                 if float(
                     re.findall(
                         r"\d+\.\d+",
-                        export_data_after_restart["qos_block"][
-                            "max_export_combined_bw"
-                        ],
+                        qos_block["max_export_combined_bw"],
                     )[0]
                 ) == float(re.findall(r"\d+", export_bw["max_export_combined_bw"])[0]):
                     log.info(
@@ -281,44 +285,51 @@ def run(ceph_cluster, **kw):
             max_client_write_bw = max_client_combined_bw
             max_client_read_bw = max_client_combined_bw
 
-        if (
-            (max_export_write_bw is not None and max_export_read_bw is not None)
-            and float(max_export_write_bw.replace("MB", ""))
-            >= float(write_speed.replace(" MB/s", ""))
-            and float(max_export_read_bw.replace("MB", ""))
-            >= float(read_speed.replace(" MB/s", ""))
-        ) or (
-            (max_client_write_bw is not None and max_client_read_bw is not None)
-            and float(max_client_write_bw.replace("MB", ""))
-            >= float(write_speed.replace(" MB/s", ""))
-            and float(max_client_read_bw.replace("MB", ""))
-            >= float(read_speed.replace(" MB/s", ""))
-        ):
+        export_ok = False
+        if max_export_write_bw is not None or max_export_read_bw is not None:
+            export_ok = True
+            if max_export_write_bw is not None:
+                export_ok = export_ok and _within_qos_limit(
+                    max_export_write_bw, write_speed
+                )
+            if max_export_read_bw is not None:
+                export_ok = export_ok and _within_qos_limit(
+                    max_export_read_bw, read_speed
+                )
+
+        client_ok = False
+        if max_client_write_bw is not None or max_client_read_bw is not None:
+            client_ok = True
+            if max_client_write_bw is not None:
+                client_ok = client_ok and _within_qos_limit(
+                    max_client_write_bw, write_speed
+                )
+            if max_client_read_bw is not None:
+                client_ok = client_ok and _within_qos_limit(
+                    max_client_read_bw, read_speed
+                )
+
+        if export_ok or client_ok:
             log.info(
                 "Test passed: QoS {0} enabled successfully in export level write speed is {1}"
-                " , max_export_write_bw is {2} and read speed is {3}"
-                " and max_export_read_bw is {4}".format(
-                    qos_type,
-                    write_speed,
-                    max_export_write_bw,
-                    read_speed,
-                    max_export_read_bw,
+                " and read speed is {2} config is {3}".format(
+                    qos_type, write_speed, read_speed, export_bw
                 )
             )
         else:
             raise OperationFailedError(
                 "Test failed: QoS {0} enabled successfully in export level write speed is {1}"
                 " and read speed is {2} config is {3}".format(
-                    qos_type, write_speed, read_speed, cluster_bw
+                    qos_type, write_speed, read_speed, export_bw
                 )
             )
 
         enable_disable_qos_for_export(
             enable_flag=False,
-            nfs_name=nfs_name,
-            export=nfs_export,
             ceph_export_nfs_obj=ceph_nfs_client.export,
             cluster_name=cluster_name,
+            nfs_name=nfs_name,
+            export=nfs_export,
         )
 
         enable_disable_qos_for_cluster(
