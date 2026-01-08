@@ -479,6 +479,8 @@ class CephFSCommonUtils(FsUtils):
 
         self.create_nfs(client, cluster, nfs_server_name=server)
 
+        wait_for_process(client, process_name=cluster)
+
         subvolume_name = kwargs.get("subvolume_name")
         if subvolume_name:
             self.create_nfs_export(
