@@ -38,6 +38,7 @@ def deploy_smb_service_imperative(
     custom_dns,
     clustering="default",
     earmark=None,
+    smb_share_name=None,
 ):
     """Deploy smb services
     Args:
@@ -51,6 +52,7 @@ def deploy_smb_service_imperative(
         smb_user_name (str): Smb username
         smb_user_password (str): Smb password
         smb_shares (list): Smb shares list
+        smb_share_name (str): Smb share name
         path (str): Smb path
         domain_realm (str): Smb AD domain relam
         custom_dns (str): Smb AD custom dms
@@ -92,6 +94,7 @@ def deploy_smb_service_imperative(
             smb_cluster_id,
             cephfs_vol,
             path,
+            smb_share_name,
             smb_subvol_group,
             smb_subvols,
         )
@@ -410,6 +413,7 @@ def create_smb_share(
     smb_cluster_id,
     cephfs_vol,
     path,
+    smb_share_name,
     smb_subvol_group,
     smb_subvols,
 ):
@@ -420,6 +424,7 @@ def create_smb_share(
         smb_cluster_id (str): Smb cluster id
         cephfs_vol (str): CephFS volume
         path (str): Smb path
+        smb_share_name (str): Use a seperate share name
         smb_subvol_group (str): Smb subvloume group
         smb_subvols (str): Smb subvloumes
     """
@@ -430,6 +435,7 @@ def create_smb_share(
                 smb_shares[i],
                 cephfs_vol,
                 path,
+                share_name=smb_share_name,
                 subvolume=f"{smb_subvol_group}/{smb_subvols[i]}",
             )
         # Check share count
