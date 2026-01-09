@@ -129,6 +129,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -187,6 +188,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         test_case: CEPH-83595464
@@ -245,6 +247,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -301,6 +304,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -388,6 +392,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -449,6 +454,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -510,6 +516,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -581,6 +588,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -672,6 +680,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -765,6 +774,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -854,6 +864,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
