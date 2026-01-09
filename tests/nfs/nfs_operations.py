@@ -54,6 +54,7 @@ def setup_nfs_cluster(
         sudo=True, cmd="date +'%Y-%m-%d %H:%M:%S'"
     )
     setup_start_time = setup_start_time.strip()
+    setup_start_time = datetime.strptime(setup_start_time, "%Y-%m-%d %H:%M:%S")
 
     # Step 1: Enable nfs
     version_info = installer_node.exec_command(
