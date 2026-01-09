@@ -164,3 +164,46 @@ tests:
   #             subvolumegroup: smb
   #             subvolume: sv2
   #             path: /
+
+  - test:
+      name: Deploy colocation samba services and restart
+      desc: Deploy colocation samba services and restart
+      module: smb_colocation_operations.py
+      polarion-id: CEPH-83628783
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            custom_ports:
+              smb: 1111
+              smbmetrics: 2222
+              ctdb: 3333
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
