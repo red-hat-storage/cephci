@@ -204,6 +204,39 @@ def add(cls, config: Dict) -> None:
             if config.get("git_clone", False):
                 log.info("perform cloning operation")
                 role = config.get("git_node_role", "client")
+
+                # If git_node_role is rgw, install git on all RGW nodes
+                if role == "rgw":
+                    log.info("git_node_role is rgw, installing git on all RGW nodes")
+                    rgw_objects = cls.cluster.get_ceph_objects("rgw")
+                    for rgw_obj in rgw_objects:
+                        rgw_node = rgw_obj.node
+                        log.info(
+                            f"Checking git installation on RGW node: {rgw_node.hostname}"
+                        )
+                        try:
+                            out, err = rgw_node.exec_command(
+                                cmd="rpm -q git", sudo=True, check_ec=False
+                            )
+                            if err or "not installed" in str(out).lower():
+                                log.info(f"Installing git on {rgw_node.hostname}")
+                                rgw_node.exec_command(
+                                    cmd="yum install -y git --nogpgcheck",
+                                    sudo=True,
+                                )
+                                log.info(
+                                    f"Successfully installed git on {rgw_node.hostname}"
+                                )
+                            else:
+                                log.info(
+                                    f"Git is already installed on {rgw_node.hostname}"
+                                )
+                        except Exception as e:
+                            log.warning(
+                                f"Failed to check/install git on {rgw_node.hostname}: {e}. "
+                                "Continuing with git clone operation."
+                            )
+
                 ceph_object = cls.cluster.get_ceph_object(role)
                 node_value = ceph_object.node
                 utils.perform_env_setup(config, node_value, cls.cluster)
