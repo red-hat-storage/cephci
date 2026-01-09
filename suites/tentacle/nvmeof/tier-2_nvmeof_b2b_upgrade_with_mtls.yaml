@@ -135,6 +135,7 @@ tests:
       config:
         rbd_pool: rbd
         do_not_create_image: true
+        nvme_metadata_pool: rbd
         rep-pool-only: true
         gw_group: gw_group1
         mtls: true
