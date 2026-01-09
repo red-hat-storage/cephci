@@ -163,6 +163,54 @@ class MDSMetricsHelper:
                 log.error("Failed to collect metrics from %s: %s", mds_name, e)
         return results
 
+    def collect_mds_metrics(
+        self,
+        client=None,
+        fs_name: str = "cephfs",
+        role: str = "active",  # "active" | "standby-replay" | "both"
+        ranks: Optional[List[int]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Collect 'mds_metrics' from selected MDS daemons.
+
+        Returns:
+          { "<mds_name>": [ {fs_name, rank, cpu_usage, open_requests...}, ... ], ... }
+        """
+        client = client or self.clients[0]
+        role = role.lower()
+        if role not in ("active", "standby-replay", "both"):
+            raise ValueError("role must be one of: 'active', 'standby-replay', 'both'")
+
+        # Normalize the prefix so it matches the label format in counters
+
+        targets: List[str] = []
+        if role in ("active"):
+            targets.extend(self.get_active_by_ranks(client, fs_name, ranks))
+        if role in ("standby-replay", "standby"):
+            targets.extend(
+                self.get_standby_replay_by_ranks(client, fs_name, ranks, pick="all")
+            )
+
+        # Deduplicate while preserving order
+        seen = set()
+        uniq_targets: List[str] = []
+        for t in targets:
+            if t not in seen:
+                seen.add(t)
+                uniq_targets.append(t)
+
+        results: Dict[str, List[Dict[str, Any]]] = {}
+        for mds_name in uniq_targets:
+            try:
+                # For mds_rank_perf, use JSON dump directly (jq method is for subvolume metrics)
+                dump = self._mds_counter_dump_json(client, mds_name)
+                items = dump.get("mds_rank_perf", []) or []
+                if items:
+                    results[mds_name] = items
+            except Exception as e:
+                log.error("Failed to collect metrics from %s: %s", mds_name, e)
+        return results
+
     # ---------------------------------------------------------------------
     # Snapshot polling during a run
     # ---------------------------------------------------------------------
@@ -331,6 +379,8 @@ class MDSMetricsHelper:
                     "avg_write_lat_msec": counters.get("avg_write_lat_msec", 0),
                     "last_window_end_sec": counters.get("last_window_end_sec", 0),
                     "last_window_dur_sec": counters.get("last_window_dur_sec", 0),
+                    "quota_bytes": counters.get("quota_bytes", 0),
+                    "used_bytes": counters.get("used_bytes", 0),
                 }
             )
         return out
