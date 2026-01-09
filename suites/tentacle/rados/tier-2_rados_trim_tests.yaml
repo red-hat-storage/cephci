@@ -205,3 +205,249 @@ tests:
             volume_group: cfsstress
             duration: 10
       desc: Perform OSD compaction with & without failures, client stress tests, and OSD restart validation
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario 1 - Validate default compression values
+# scenario 2 - Enables bluestore write v2
+# scenario 3 - Compression mode tests with allocation hints
+
+  - test:
+      name: Bluestore data compression v2 - enable bluestore write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+
+  - test:
+      name: Bluestore data compression v2 - compression mode tests with allocation hints
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-3
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario-1: Validate basic compression workflow
+# scenario-2: uncompressed pool to compressed pool conversion
+# scenario-3: Compressed pool to uncompressed pool conversion
+# scenario-4: Enable compressesion at OSD level and disable compression at pool level
+# scenario-5: Validate pools inherit compression configurations from OSD
+# scenario-6: Validate data migration between compressed pools
+# scenario-7: Validate OSD replacement
+# run duration - 0:01:29
+  - test:
+      name: Bluestore data compression v2 - basic workflow
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-1
+
+# run duration - 0:07:04
+  - test:
+      name: Bluestore data compression - uncompressed pool to compressed pool conversion - write v2
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "snappy"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-2
+
+# run duration - 0:07:19
+  - test:
+      name: Bluestore data compression - compressed pool to uncompressed pool conversion - write v2
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-3
+
+# run duration - 0:03:48
+  - test:
+      name: Bluestore data compression v2 - pool level compression override osd level compression
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "snappy"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-4
+
+# run duration - 0:04:03
+  - test:
+      name: Bluestore data compression v2 - pools inherit compression settings from OSD
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-5
+
+# run duration - 0:03:07
+  - test:
+      name: Bluestore data compression v2 - Validate data migration between compressed pools
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "snappy"
+        scenarios_to_run:
+          - scenario-6
+
+# run duration - 0:07:54
+  - test:
+      name: Bluestore data compression v2 - Validate OSD replacement
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-7
+
+  # Commenting test case due to BZ :- https://bugzilla.redhat.com/show_bug.cgi?id=2412464
+  #  - test:
+  #        name: Bluestore data recompression - overwrite tests - pool level compression tests
+  #        module: test_bluestore_comp_enhancements.py
+  #        desc: Positive workflows for bluestore data compression enhancements
+  #        polarion-id: CEPH-83620071
+  #        abort-on-fail: true
+  #        config:
+  #          pool_level_compression: True
+  #          scenarios_to_run:
+  #            - scenario-4
+  #          recompression_min_gain_to_test:
+  #            - 0.9
+  #            - 1.2
+  #            - 1.5
+  #          object_sizes_to_test:
+  #            - 750000
+  #            - 92000
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario-5: Test minimum allocation size variations
+# scenario-6: Test blob sizes by writing IO to a compressed pool and validating blob
+#   sizes match configured minimum blob size
+# scenario-7: Test target_blob_size validation based on object allocation hints
+# scenario-8: Disable bluestore_write_v2 and validate
+# scenario-9: Test compression validation when primary OSD is down
+# scenario-10: Test compression validation when primary OSD host is down
+# scenario-11: Test compression validation when primary OSD host is restarted after IO
+#scenario-8: Disable bluestore_write_v2 and validate
+
+# run duration - 0:11:59
+  - test:
+      name: Bluestore data recompression write v2 - min alloc size tests 1
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "snappy"
+        pool_level_compression: True
+        scenarios_to_run:
+          - scenario-5
+        min_alloc_size_to_test:
+          - 4096
+        min_alloc_size_variations:
+          - 2000
+          - -2000
+
+# run duration - 0:10:23
+  - test:
+      name: Bluestore data recompression write v2 - min alloc size tests 2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zlib"
+        pool_level_compression: True
+        scenarios_to_run:
+          - scenario-5
+        min_alloc_size_to_test:
+          - 8192
+        min_alloc_size_variations:
+          - 4000
+          - -4000
+
+# run duration - 0:09:56.
+  - test:
+      name: Bluestore data recompression write v2 - target blob size variation test
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "snappy"
+        scenarios_to_run:
+          - scenario-6
+
+# run duration - 0:11:15
+  - test:
+      name: Bluestore blob size tests - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-7
+
+# run duration - 0:28:05
+  - test:
+      name: Bluestore OSD down during IO scenario - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "snappy"
+        scenarios_to_run:
+          - scenario-9
+
+# run duration - 0:17:50
+  - test:
+      name: Bluestore OSD host down during IO scenario - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-10
+
+# run duration - 0:21:47
+  - test:
+      name: Bluestore compression validation post OSD restart - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zstd"
+        scenarios_to_run:
+          - scenario-11
+
+# run duration - 0:06:31
+  - test:
+      name: Bluestore disable bluestore_write_v2 and validate
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        scenarios_to_run:
+          - scenario-8
