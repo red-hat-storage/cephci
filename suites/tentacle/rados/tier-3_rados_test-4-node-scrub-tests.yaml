@@ -232,8 +232,8 @@ tests:
           - case3
 
   - test:
-      name: Verification of osd_scrub_load_threshold
-      desc: Verification of osd_scrub_load_threshold parameter functionality
+      name: Case1-Verification of osd_scrub_load_threshold
+      desc: Verification of osd_scrub_load_threshold parameter=0
       module: test_osd_scrub_load_threshold_parameter.py
       polarion-id: CEPH-83620201
       config:
@@ -242,6 +242,73 @@ tests:
           pool_name: replicated_pool
           pg_num: 1
         debug_enable: False
+        case_to_run:
+          - case1
+  - test:
+      name: Case2-Verification of osd_scrub_load_threshold
+      desc: Repair inconsistent object when threshold parameter is 0
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case2
+  - test:
+      name: Case3-Verification of osd_scrub_load_threshold
+      desc: Repair inconsistent object when threshold parameter is 10
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case3
+  - test:
+      name: Case4-Verification of osd_scrub_load_threshold
+      desc: Functionality check below and above the node load average
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case4
+  - test:
+      name: Case5-Verification of osd_scrub_load_threshold
+      desc: User initiated VS scheduled scrub
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case5
+  - test:
+      name: Case6-Verification of osd_scrub_load_threshold
+      desc: Verification of scrub by high CPU load using stress-ng
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case6
 
   - test:
       name: Verification of the scrub store replicated pool
