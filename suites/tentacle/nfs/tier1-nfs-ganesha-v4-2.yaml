@@ -309,7 +309,7 @@ tests:
           service_type: nfs
           service_id: nfs
           placement:
-            host_pattern: '*'
+            label: nfs
           spec:
             port: 50000
             monitoring_port: 60000

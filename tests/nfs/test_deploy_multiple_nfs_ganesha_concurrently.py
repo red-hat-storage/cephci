@@ -1,3 +1,4 @@
+from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError
 from tests.nfs.nfs_operations import (
     create_nfs_via_file_and_verify,
@@ -16,7 +17,8 @@ def run(ceph_cluster, **kw):
 
     config = kw.get("config")
     clients = ceph_cluster.get_nodes("client")
-
+    client = clients[0]
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
     no_clients = int(config.get("clients", "2"))
     nfs_instance_number = int(config.get("nfs_instance_number", "1"))
     installer = ceph_cluster.get_nodes(role="installer")[0]
@@ -37,9 +39,7 @@ def run(ceph_cluster, **kw):
             new_object = {
                 "service_type": original_config["service_type"],
                 "service_id": f"{original_config['service_id']}{i if i != 0 else ''}",
-                "placement": {
-                    "host_pattern": original_config["placement"]["host_pattern"]
-                },
+                "placement": {"label": original_config["placement"]["label"]},
                 "spec": {
                     "port": original_config["spec"]["port"] + i,
                     "monitoring_port": original_config["spec"]["monitoring_port"] + i,
@@ -47,6 +47,11 @@ def run(ceph_cluster, **kw):
             }
             new_objects.append(new_object)
         log.info(f"New NFS Ganesha objects to be created: {new_objects}")
+
+        # Ensure rpcbind service is running on the nodes before applying the spec file
+        nfs_cluster = Ceph(client).nfs.cluster
+        for nfs_node in nfs_nodes:
+            nfs_cluster.validate_rpcbind_running(nfs_node)
 
         # Create a nfs instance using the provided configuration
         if not create_nfs_via_file_and_verify(installer, new_objects, timeout):

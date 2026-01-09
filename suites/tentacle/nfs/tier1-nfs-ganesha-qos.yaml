@@ -312,7 +312,7 @@ tests:
           service_type: nfs
           service_id: nfs
           placement:
-            host_pattern: '*'
+            label: nfs
           spec:
               cluster_qos_config:
                 combined_rw_bw_control: false
