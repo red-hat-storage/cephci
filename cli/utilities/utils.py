@@ -673,6 +673,11 @@ def create_files(client, mount_point, file_count, windows_client=False):
                 )
             else:
                 cmd = f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1"
+                # create a file with touch command instead of dd command to avoid the error "No space left on device"
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"touch {mount_point}/file{i}",
+                )
                 client.exec_command(
                     sudo=True,
                     cmd=cmd,
