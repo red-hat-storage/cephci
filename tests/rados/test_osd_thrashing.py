@@ -21,25 +21,25 @@ TEST WORKFLOW:
     │       ├── bluestore_debug_inject_read_err=true
     │       └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
     │
-    ├── THRASHING PHASE (up to 12 parallel threads)
-    │   ├── io_workload_burst: rados bench 30s write bursts (64K blocks)
-    │   ├── comprehensive_io_workload: Various object sizes + overwrites + appends
-    │   ├── monitor_cluster_health: Periodic ceph health detail + ceph -s logging
-    │   ├── _run_fio_workload (CephFS): FIO with snapshots on work directory
-    │   ├── _run_fio_workload (RBD): FIO on mounted RBD image
-    │   ├── thrash_cephfs_snapshots: 5 snaps/iter, parallel writes, ~20% deletion
-    │   ├── thrash_rbd_snapshots: 4 snaps/iter, protect, clone, flatten, ~20% deletion
-    │   ├── thrash_ec_pool_snapshots: RADOS-level snapshots + partial writes + OSD down
-    │   │   └── { partial_write } & ceph osd down <osd> (synchronized timing)
-    │   ├── thrash_osds: Mark out → orch daemon stop → wait → mark in → orch daemon start
-    │   ├── thrash_crush_weights: Reduce to 50% → restore (if enabled)
-    │   ├── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub (if enabled)
-    │   └── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW (if enabled)
+    ├── THRASHING PHASE (dynamically configured parallel threads)
+    │   ├── io_workload_burst: rados bench 30s write bursts (64K blocks) [always]
+    │   ├── comprehensive_io_workload: Various object sizes + overwrites + appends [always]
+    │   ├── monitor_cluster_health: Periodic ceph health detail + ceph -s logging [always]
+    │   ├── _run_fio_workload (CephFS): FIO with snapshots on work directory [if enabled]
+    │   ├── _run_fio_workload (RBD): FIO on mounted RBD image [if enabled]
+    │   ├── thrash_cephfs_snapshots: 5 snaps/iter, parallel writes, ~20% deletion [if enabled]
+    │   ├── thrash_rbd_snapshots: 4 snaps/iter, protect, clone, flatten, ~20% deletion [if enabled]
+    │   ├── thrash_ec_pool_snapshots: RADOS-level snapshots + partial writes [if enabled]
+    │   ├── thrash_osds: Mark out → orch daemon stop → wait → mark in → start [if enabled]
+    │   ├── thrash_crush_weights: Reduce to 50% → restore [if enabled]
+    │   ├── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub [if enabled]
+    │   ├── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW [if enabled]
+    │   ├── thrash_mon: Leader failover, rolling restart, election strategy [if enabled]
+    │   └── thrash_mgr: Failover, rolling restart, random fail [if enabled]
     │
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
     │   ├── Check cluster health
-    │   ├── Analyze OSD logs for divergent patterns
     │   ├── Check for crashes (ceph crash ls-new)
     │   └── Report findings and fail if crashes detected
     │
@@ -53,8 +53,8 @@ TEST WORKFLOW:
 
 CONFIGURATION OPTIONS:
 ======================
-- iterations: Number of OSD thrash iterations (default: 20)
-- duration: Total test duration in seconds (default: 600)
+- iterations: Number of OSD thrash iterations (default: 60)
+- duration: Total test duration in seconds (default: 1200)
 - aggressive: Enable aggressive mode with longer waits (default: True)
 - enable_crush_thrashing: Enable CRUSH weight modifications (default: True)
 - enable_pg_thrashing: Enable PG count thrashing via bulk flag (default: True)
@@ -63,6 +63,16 @@ CONFIGURATION OPTIONS:
 - enable_debug_logs: Enable debug logging for OSD peering and BlueStore (default: False)
 - inject_errors: Inject EC write errors on random OSDs (default: False)
 - num_osds_to_inject: Number of OSDs to inject errors on (default: 3)
+- enable_fio_cephfs: Enable FIO workload on CephFS mount (default: True)
+- enable_fio_rbd: Enable FIO workload on RBD mount (default: True)
+- enable_cephfs_snapshots: Enable CephFS snapshot thrashing (default: True)
+- enable_rbd_snapshots: Enable RBD snapshot thrashing (default: True)
+- enable_ec_snapshots: Enable EC pool snapshot thrashing (default: True)
+- enable_osd_thrashing: Enable OSD thrashing operations (default: True)
+- enable_rgw_thrashing: Enable RGW S3 thrashing (default: False)
+- enable_mon_thrashing: Enable MON thrashing - leader failover/restart (default: False)
+- enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
+- enable_election_strategy_thrash: Enable election strategy changes during MON thrash (default: False)
 
 """
 
@@ -76,9 +86,11 @@ import yaml
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.mgr_workflows import MgrWorkflows
+from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.utils import get_cluster_timestamp
-from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStrategies
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
 from utility.log import Log
@@ -106,18 +118,27 @@ def run(ceph_cluster, **kw):
             - sample_pool_id (str): Pool ID from pool-configurations.yaml
             - Any additional parameters will override file config
 
-        iterations (int): Number of OSD thrash iterations (default: 20)
-        duration (int): Test duration in seconds (default: 600)
+        iterations (int): Number of OSD thrash iterations (default: 60)
+        duration (int): Test duration in seconds (default: 1200)
         aggressive (bool): Enable aggressive mode with longer waits (default: True)
         enable_crush_thrashing (bool): Enable CRUSH weight thrashing (default: True)
         enable_pg_thrashing (bool): Enable PG count thrashing via bulk flag (default: True)
         compression (bool): Enable pool compression with mode=force (default: False)
         cleanup_pools (bool): Delete pools after test (default: True)
-        enable_debug_logs (bool): Enable debug logging for OSD/BlueStore (default: True)
-        inject_errors (bool): Inject EC write errors on random OSDs (default: True)
+        enable_debug_logs (bool): Enable debug logging for OSD/BlueStore (default: False)
+        inject_errors (bool): Inject EC write errors on random OSDs (default: False)
         num_osds_to_inject (int): Number of OSDs to inject errors on (default: 3)
         num_writes_to_inject (int): Number of writes to inject errors per OSD (default: 1000)
         enable_rgw_thrashing (bool): Enable RGW S3 thrashing (default: False, requires RGW)
+        enable_fio_cephfs (bool): Enable FIO workload on CephFS mount (default: True)
+        enable_fio_rbd (bool): Enable FIO workload on RBD mount (default: True)
+        enable_cephfs_snapshots (bool): Enable CephFS snapshot thrashing (default: True)
+        enable_rbd_snapshots (bool): Enable RBD snapshot thrashing (default: True)
+        enable_ec_snapshots (bool): Enable EC pool snapshot thrashing (default: True)
+        enable_osd_thrashing (bool): Enable OSD thrashing - main thrash operation (default: True)
+        enable_mon_thrashing (bool): Enable MON thrashing - leader failover/restart (default: False)
+        enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
+        enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -132,19 +153,33 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
+    mon_workflow_obj = MonitorWorkflows(node=cephadm)
+    mon_election_obj = MonElectionStrategies(rados_obj=rados_obj)
+    mgr_workflow_obj = MgrWorkflows(node=cephadm)
 
     # Test parameters
-    iterations = config.get("iterations", 20)
-    duration = config.get("duration", 600)
+    iterations = config.get("iterations", 60)
+    duration = config.get("duration", 1200)
     aggressive = config.get("aggressive", True)
     enable_crush_thrashing = config.get("enable_crush_thrashing", True)
     enable_pg_thrashing = config.get("enable_pg_thrashing", True)
     compression = config.get("compression", False)
     enable_debug_logs = config.get("enable_debug_logs", True)
-    inject_errors = config.get("inject_errors", True)
+    inject_errors = config.get("inject_errors", False)
     num_osds_to_inject = config.get("num_osds_to_inject", 3)
     num_writes_to_inject = config.get("num_writes_to_inject", 1000)
-    enable_rgw_thrashing = config.get("enable_rgw_thrashing", False)
+    enable_rgw_thrashing = config.get("enable_rgw_thrashing", True)
+    enable_fio_cephfs = config.get("enable_fio_cephfs", True)
+    enable_fio_rbd = config.get("enable_fio_rbd", True)
+    enable_cephfs_snapshots = config.get("enable_cephfs_snapshots", True)
+    enable_rbd_snapshots = config.get("enable_rbd_snapshots", True)
+    enable_ec_snapshots = config.get("enable_ec_snapshots", True)
+    enable_osd_thrashing = config.get("enable_osd_thrashing", True)
+    enable_mon_thrashing = config.get("enable_mon_thrashing", True)
+    enable_mgr_thrashing = config.get("enable_mgr_thrashing", False)
+    enable_election_strategy_thrash = config.get(
+        "enable_election_strategy_thrash", True
+    )
     compression_algorithms = ["snappy", "zlib"]
     rgw_config = None
 
@@ -154,6 +189,17 @@ def run(ceph_cluster, **kw):
         f"Injecting EC write errors on {len(inject_osds)} OSDs: "
         f"{', '.join(str(osd) for osd in inject_osds)} if enabled in config"
     )
+
+    # Determine which pool types will be created based on enabled workflows
+    enable_cephfs_pools = enable_fio_cephfs or enable_cephfs_snapshots
+    enable_rbd_pools = enable_fio_rbd or enable_rbd_snapshots
+
+    additional_pools = []
+    if enable_cephfs_pools:
+        additional_pools.append("CephFS (2 pools)")
+    if enable_rbd_pools:
+        additional_pools.append("RBD (2 pools)")
+    additional_pools_str = " + ".join(additional_pools) if additional_pools else "None"
 
     test_params = (
         f"\n{'=' * 60}\n"
@@ -168,12 +214,20 @@ def run(ceph_cluster, **kw):
         f"  Compression (mode=force): {compression}\n"
         f"  Debug logs: {enable_debug_logs}\n"
         f"  RADOS pools from config: {len(config.get('pool_configs', []))}\n"
-        f"  Additional pools: CephFS (2 pools) + RBD (2 pools)\n"
+        f"  Additional pools: {additional_pools_str}\n"
         f"  Inject errors: {inject_errors}\n"
-        f"  Snapshot thrashing: CephFS + RBD (create, clone, flatten, delete)\n"
         f"  RGW S3 thrashing: {enable_rgw_thrashing}\n"
         f"  OSDs to inject errors: {len(inject_osds)}\n"
         f"  Writes to inject per OSD: {num_writes_to_inject}\n"
+        f"  FIO on CephFS: {enable_fio_cephfs}\n"
+        f"  FIO on RBD: {enable_fio_rbd}\n"
+        f"  CephFS snapshot thrashing: {enable_cephfs_snapshots}\n"
+        f"  RBD snapshot thrashing: {enable_rbd_snapshots}\n"
+        f"  EC pool snapshot thrashing: {enable_ec_snapshots}\n"
+        f"  OSD thrashing: {enable_osd_thrashing}\n"
+        f"  MON thrashing: {enable_mon_thrashing}\n"
+        f"  MGR thrashing: {enable_mgr_thrashing}\n"
+        f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
         f"{'=' * 60}\n"
     )
     log.info(test_params)
@@ -198,30 +252,49 @@ def run(ceph_cluster, **kw):
         osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"\nPool Creation Phase - RADOS, CephFS & RBD (Parallel)\n{'-' * 60}")
 
-        with cf.ThreadPoolExecutor(max_workers=3) as pool_executor:
+        pool_workers = (
+            1 + (1 if enable_cephfs_pools else 0) + (1 if enable_rbd_pools else 0)
+        )
+        with cf.ThreadPoolExecutor(max_workers=pool_workers) as pool_executor:
             log.info("Creating pools in parallel...")
 
             rados_future = pool_executor.submit(create_rados_pools, rados_obj, config)
-            cephfs_future = pool_executor.submit(
-                rados_obj.create_cephfs_filesystem_mount,
-                client_node,
-                pool_type="erasure",
-            )
-            rbd_future = pool_executor.submit(rados_obj.create_ec_rbd_pools)
 
-            # Collect results (order: RADOS, CephFS, RBD)
+            cephfs_future = None
+            if enable_cephfs_pools:
+                log.info("CephFS workflows enabled - creating CephFS pools")
+                cephfs_future = pool_executor.submit(
+                    rados_obj.create_cephfs_filesystem_mount,
+                    client_node,
+                    pool_type="erasure",
+                )
+
+            rbd_future = None
+            if enable_rbd_pools:
+                log.info("RBD workflows enabled - creating RBD pools")
+                rbd_future = pool_executor.submit(rados_obj.create_ec_rbd_pools)
+
+            # Collect results
             try:
                 rados_pools = rados_future.result()
                 created_pools.extend(rados_pools)
                 log.info(f"Created {len(rados_pools)} RADOS pool(s)")
 
-                fs_name, cephfs_mount_path, cephfs_pools = cephfs_future.result()
-                created_pools.extend(cephfs_pools)
-                log.info(f"Created CephFS: {fs_name} at {cephfs_mount_path}")
+                if cephfs_future:
+                    fs_name, cephfs_mount_path, cephfs_pools = cephfs_future.result()
+                    created_pools.extend(cephfs_pools)
+                    log.info(f"Created CephFS: {fs_name} at {cephfs_mount_path}")
+                else:
+                    log.info(
+                        "CephFS pool creation skipped (no CephFS workflows enabled)"
+                    )
 
-                rbd_mount_path, rbd_device_path, rbd_pools = rbd_future.result()
-                created_pools.extend(rbd_pools)
-                log.info(f"Created RBD pools at {rbd_mount_path}")
+                if rbd_future:
+                    rbd_mount_path, rbd_device_path, rbd_pools = rbd_future.result()
+                    created_pools.extend(rbd_pools)
+                    log.info(f"Created RBD pools at {rbd_mount_path}")
+                else:
+                    log.info("RBD pool creation skipped (no RBD workflows enabled)")
             except Exception as e:
                 log.error(f"Failed to create pools: {e}")
                 raise
@@ -349,16 +422,22 @@ def run(ceph_cluster, **kw):
 
         reboot_osd = False if inject_errors else True
 
-        # Calculate worker count: 9 base threads + optional CRUSH + optional PG + optional RGW
-        # Base threads: rados bench, comprehensive I/O, CephFS FIO, RBD FIO,
-        #               OSD thrashing, CephFS snapshots, RBD snapshots, EC pool snapshots,
-        #               cluster health monitoring
-        max_workers = (
-            9
-            + (1 if enable_crush_thrashing else 0)
-            + (1 if enable_pg_thrashing else 0)
-            + (1 if enable_rgw_thrashing else 0)
-        )
+        # Calculate worker count dynamically based on enabled workloads
+        # Base threads: rados bench (always), comprehensive I/O (always),
+        #               cluster health monitoring (always)
+        max_workers = 3  # rados bench + comprehensive I/O + health monitoring
+        max_workers += 1 if enable_fio_cephfs else 0
+        max_workers += 1 if enable_fio_rbd else 0
+        max_workers += 1 if enable_cephfs_snapshots else 0
+        max_workers += 1 if enable_rbd_snapshots else 0
+        max_workers += 1 if enable_ec_snapshots else 0
+        max_workers += 1 if enable_osd_thrashing else 0
+        max_workers += 1 if enable_crush_thrashing else 0
+        max_workers += 1 if enable_pg_thrashing else 0
+        max_workers += 1 if enable_rgw_thrashing else 0
+        max_workers += 1 if enable_mon_thrashing else 0
+        max_workers += 1 if enable_mgr_thrashing else 0
+        log.debug(f"ThreadPoolExecutor max_workers: {max_workers}")
 
         with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
@@ -397,79 +476,100 @@ def run(ceph_cluster, **kw):
                 )
             )
 
-            # FIO workload on CephFS
-            futures.append(
-                executor.submit(
-                    _run_fio_workload,
-                    client_node=client_node,
-                    mount_path=cephfs_mount_path,
-                    workload_name="cephfs",
-                    duration=duration,
-                    stop_flag=stop_flag,
+            # FIO workload on CephFS (default: enabled)
+            if enable_fio_cephfs and cephfs_mount_path:
+                log.info("FIO workload on CephFS enabled")
+                futures.append(
+                    executor.submit(
+                        _run_fio_workload,
+                        client_node=client_node,
+                        mount_path=cephfs_mount_path,
+                        workload_name="cephfs",
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
                 )
-            )
+            elif enable_fio_cephfs:
+                log.warning("FIO CephFS enabled but mount path not available")
 
-            # FIO workload on RBD
-            futures.append(
-                executor.submit(
-                    _run_fio_workload,
-                    client_node=client_node,
-                    mount_path=rbd_mount_path,
-                    workload_name="rbd",
-                    duration=duration,
-                    stop_flag=stop_flag,
+            # FIO workload on RBD (default: enabled)
+            if enable_fio_rbd and rbd_mount_path:
+                log.info("FIO workload on RBD enabled")
+                futures.append(
+                    executor.submit(
+                        _run_fio_workload,
+                        client_node=client_node,
+                        mount_path=rbd_mount_path,
+                        workload_name="rbd",
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
                 )
-            )
+            elif enable_fio_rbd:
+                log.warning("FIO RBD enabled but mount path not available")
 
-            # CephFS snapshot thrashing (create, modify, rollback)
-            futures.append(
-                executor.submit(
-                    thrash_cephfs_snapshots,
-                    client_node=client_node,
-                    mount_path=cephfs_mount_path,
-                    duration=duration,
-                    stop_flag=stop_flag,
+            # CephFS snapshot thrashing (create, modify, rollback) (default: enabled)
+            if enable_cephfs_snapshots and cephfs_mount_path:
+                log.info("CephFS snapshot thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_cephfs_snapshots,
+                        client_node=client_node,
+                        mount_path=cephfs_mount_path,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
                 )
-            )
+            elif enable_cephfs_snapshots:
+                log.warning("CephFS snapshots enabled but mount path not available")
 
-            # RBD snapshot thrashing (create, clone, write to clones)
-            futures.append(
-                executor.submit(
-                    thrash_rbd_snapshots,
-                    client_node=client_node,
-                    pool_name="rbd-thrash-metadata",
-                    image_name="thrash-test-image",
-                    duration=duration,
-                    stop_flag=stop_flag,
+            # RBD snapshot thrashing (create, clone, write to clones) (default: enabled)
+            # Requires RBD pool to be created (rbd_mount_path exists)
+            if enable_rbd_snapshots and rbd_mount_path:
+                log.info("RBD snapshot thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_rbd_snapshots,
+                        client_node=client_node,
+                        pool_name="rbd-thrash-metadata",
+                        image_name="thrash-test-image",
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
                 )
-            )
+            elif enable_rbd_snapshots:
+                log.warning("RBD snapshots enabled but RBD mount not available")
 
-            # EC pool snapshot thrashing
+            # EC pool snapshot thrashing (default: enabled)
             # Uses RADOS-level snapshots + partial writes to trigger BlueStore clones
             # Clone log → ALL shards, write data → SOME shards
-            futures.append(
-                executor.submit(
-                    thrash_ec_pool_snapshots,
-                    rados_obj=rados_obj,
-                    pools=created_pools,
-                    duration=duration,
-                    stop_flag=stop_flag,
-                    reboot_osd=reboot_osd,
+            if enable_ec_snapshots:
+                log.info("EC pool snapshot thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_ec_pool_snapshots,
+                        rados_obj=rados_obj,
+                        pools=created_pools,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                        reboot_osd=reboot_osd,
+                    )
                 )
-            )
 
-            # OSD thrashing thread (main thrashing operation)
-            futures.append(
-                executor.submit(
-                    thrash_osds,
-                    rados_obj=rados_obj,
-                    osd_list=osd_list,
-                    iterations=iterations,
-                    aggressive=aggressive,
-                    stop_flag=stop_flag,
-                    reboot_osd=reboot_osd,
+            # OSD thrashing thread (main thrashing operation) (default: enabled)
+            if enable_osd_thrashing:
+                log.info("OSD thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_osds,
+                        rados_obj=rados_obj,
+                        osd_list=osd_list,
+                        iterations=iterations,
+                        aggressive=aggressive,
+                        stop_flag=stop_flag,
+                        reboot_osd=reboot_osd,
+                    )
                 )
-            )
 
             # CRUSH weight thrashing (default: enabled)
             if enable_crush_thrashing:
@@ -511,6 +611,34 @@ def run(ceph_cluster, **kw):
                     )
                 )
 
+            # MON thrashing (optional: leader failover, rolling restart, election strategy)
+            if enable_mon_thrashing:
+                log.info("MON thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_mon,
+                        rados_obj=rados_obj,
+                        mon_workflow_obj=mon_workflow_obj,
+                        mon_election_obj=mon_election_obj,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                        enable_election_strategy_thrash=enable_election_strategy_thrash,
+                    )
+                )
+
+            # MGR thrashing (optional: failover, rolling restart, random fail)
+            if enable_mgr_thrashing:
+                log.info("MGR thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_mgr,
+                        rados_obj=rados_obj,
+                        mgr_workflow_obj=mgr_workflow_obj,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+
             log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
             try:
                 for future in cf.as_completed(futures, timeout=duration):
@@ -543,8 +671,84 @@ def run(ceph_cluster, **kw):
                 except Exception as e:
                     log.warning(f"Thread had exception (non-fatal): {e}")
 
-        log.info("Thrashing phase completed")
+            # Log iteration counts for each thrash workflow
+            log.info(f"\n{'=' * 60}")
+            log.info("THRASH WORKFLOW ITERATION SUMMARY")
+            log.info(f"{'=' * 60}")
+            workflow_results = {
+                "io_workload_burst": None,
+                "comprehensive_io_workload": None,
+                "monitor_cluster_health": None,
+                "fio_cephfs": None,
+                "fio_rbd": None,
+                "cephfs_snapshots": None,
+                "rbd_snapshots": None,
+                "ec_pool_snapshots": None,
+                "osd_thrashing": None,
+                "crush_weight_thrashing": None,
+                "pg_count_thrashing": None,
+                "rgw_s3_thrashing": None,
+                "mon_thrashing": None,
+                "mgr_thrashing": None,
+            }
+            # Map futures to workflow names based on their index
+            workflow_order = []
+            # Always enabled workflows
+            workflow_order.extend(
+                [
+                    "io_workload_burst",
+                    "comprehensive_io_workload",
+                    "monitor_cluster_health",
+                ]
+            )
+            if enable_fio_cephfs and cephfs_mount_path:
+                workflow_order.append("fio_cephfs")
+            if enable_fio_rbd and rbd_mount_path:
+                workflow_order.append("fio_rbd")
+            if enable_cephfs_snapshots and cephfs_mount_path:
+                workflow_order.append("cephfs_snapshots")
+            if enable_rbd_snapshots and rbd_mount_path:
+                workflow_order.append("rbd_snapshots")
+            if enable_ec_snapshots:
+                workflow_order.append("ec_pool_snapshots")
+            if enable_osd_thrashing:
+                workflow_order.append("osd_thrashing")
+            if enable_crush_thrashing:
+                workflow_order.append("crush_weight_thrashing")
+            if enable_pg_thrashing:
+                workflow_order.append("pg_count_thrashing")
+            if enable_rgw_thrashing and rgw_config:
+                workflow_order.append("rgw_s3_thrashing")
+            if enable_mon_thrashing:
+                workflow_order.append("mon_thrashing")
+            if enable_mgr_thrashing:
+                workflow_order.append("mgr_thrashing")
+
+            for idx, future in enumerate(futures):
+                workflow_name = (
+                    workflow_order[idx]
+                    if idx < len(workflow_order)
+                    else f"unknown_{idx}"
+                )
+                try:
+                    if future in done:
+                        result = future.result()
+                        workflow_results[workflow_name] = result
+                        log.info(
+                            f"  {workflow_name}: {result} iterations/operations completed"
+                        )
+                    else:
+                        log.info(f"  {workflow_name}: Did not complete in time")
+                except Exception as e:
+                    log.info(f"  {workflow_name}: Failed with exception - {e}")
+            log.info(f"{'=' * 60}")
+
+        log.info(
+            "Thrashing phase completed\n Sleeping for 60 seconds to allow for recovery..."
+        )
+        time.sleep(60)
         log.info(f"\n{'=' * 60}\nVALIDATION PHASE\n{'=' * 60}")
+        rados_obj.log_cluster_health()
 
         # Check for inconsistent PGs across all pools and repair if found
         log.info("Checking for inconsistent PGs across all pools...")
@@ -565,10 +769,16 @@ def run(ceph_cluster, **kw):
         if inconsistent_pgs_found:
             log.debug(
                 f"Total inconsistent PGs found: {len(inconsistent_pgs_found)}. "
+                f"Inconsistent PGs: {inconsistent_pgs_found}. "
                 f"Initiating PG repair..."
             )
             for pg_id in inconsistent_pgs_found:
                 try:
+                    client_node.exec_command(
+                        cmd=f"ceph pg {pg_id} query -f json-pretty > /tmp/{pg_id}_query.txt",
+                        sudo=True,
+                    )
+                    time.sleep(5)
                     log.info(f"Running pg repair on PG: {pg_id}")
                     rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
                 except Exception as e:
@@ -578,29 +788,11 @@ def run(ceph_cluster, **kw):
             log.info("No inconsistent PGs found across all pools")
 
         log.info("Waiting for PGs to reach active+clean state...")
-        if not wait_for_clean_pg_sets(rados_obj, timeout=600, recovery_thread=False):
+        if not wait_for_clean_pg_sets(rados_obj, timeout=1200, recovery_thread=False):
             log.error("Not all PGs are active+clean")
             raise Exception("Not all PGs are active+clean")
 
         rados_obj.log_cluster_health()
-
-        if enable_debug_logs:
-            # Analyze OSD logs for divergent PG log patterns
-            log.info("Analyzing OSD logs for divergent PG log patterns...")
-            test_end_time = get_cluster_timestamp(rados_obj.node)
-            divergent_results = analyze_osd_logs_for_divergent_patterns(
-                rados_obj, start_time, test_end_time
-            )
-            if divergent_results.get("merge_divergent_entries", 0) > 0:
-                log.warning(
-                    "Detected %s divergent entry merge operations!",
-                    divergent_results["merge_divergent_entries"],
-                )
-            if divergent_results.get("clone_operations", 0) > 0:
-                log.info(
-                    "Detected %s clone operations (good for divergent log testing)",
-                    divergent_results["clone_operations"],
-                )
 
         log.info("\nValidation phase completed")
 
@@ -655,65 +847,91 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.warning(f"Failed to check/restore OSDs: {e}")
 
-        if config.get("cleanup_pools", True) and created_pools:
+        # Restore election strategy to classic (default) if it was modified
+        if enable_election_strategy_thrash:
+            log.info("Restoring MON election strategy to classic (default)...")
+            try:
+                current_strategy = mon_election_obj.get_election_strategy()
+                if current_strategy != 1:  # 1 = classic
+                    mon_election_obj.set_election_strategy(mode="classic")
+                    log.info("Election strategy restored to classic")
+                else:
+                    log.info("Election strategy already set to classic")
+            except Exception as e:
+                log.warning(f"Failed to restore election strategy: {e}")
+
+        if config.get("cleanup_pools", True):
             log.debug("Cleaning up test resources...")
+
+            # Phase 1: Unmount filesystems and cleanup RGW (parallel)
+            cleanup_tasks = []
             with cf.ThreadPoolExecutor(max_workers=3) as cleanup_executor:
-                cephfs_cleanup = (
-                    cleanup_executor.submit(
-                        _cleanup_cephfs, client_node, cephfs_mount_path, fs_name
+                if enable_cephfs_pools:
+                    cleanup_tasks.append(
+                        (
+                            "CephFS",
+                            cleanup_executor.submit(
+                                _cleanup_cephfs,
+                                client_node,
+                                cephfs_mount_path,
+                                fs_name if fs_name else "cephfs-thrash",
+                            ),
+                        )
                     )
-                    if (cephfs_mount_path or fs_name)
-                    else None
-                )
 
-                rbd_cleanup = (
-                    cleanup_executor.submit(
-                        _cleanup_rbd, client_node, rbd_mount_path, rbd_device_path
+                if enable_rbd_pools:
+                    cleanup_tasks.append(
+                        (
+                            "RBD",
+                            cleanup_executor.submit(
+                                _cleanup_rbd,
+                                client_node,
+                                rbd_mount_path,
+                                rbd_device_path,
+                            ),
+                        )
                     )
-                    if rbd_mount_path
-                    else None
-                )
 
-                rgw_cleanup = (
-                    cleanup_executor.submit(
-                        cleanup_rgw_s3, client_node, rgw_config, rados_obj
+                if rgw_config:
+                    cleanup_tasks.append(
+                        (
+                            "RGW",
+                            cleanup_executor.submit(
+                                cleanup_rgw_s3, client_node, rgw_config, rados_obj
+                            ),
+                        )
                     )
-                    if rgw_config
-                    else None
-                )
 
-                # Wait for cleanup tasks to complete
-                cleanup_tasks = [
-                    ("CephFS", cephfs_cleanup),
-                    ("RBD", rbd_cleanup),
-                    ("RGW", rgw_cleanup),
-                ]
                 for name, task in cleanup_tasks:
-                    if task:
-                        try:
-                            task.result()
-                        except Exception as e:
-                            log.warning(f"{name} cleanup failed: {e}")
+                    try:
+                        task.result()
+                    except Exception as e:
+                        log.warning(f"{name} cleanup failed: {e}")
 
-            log.info(f"Deleting {len(created_pools)} pool(s)...")
-            failed_pools = []
+            # Phase 2: Delete tracked pools
+            if created_pools:
+                log.info(f"Deleting {len(created_pools)} tracked pool(s)...")
+                failed_pools = []
+                for pool in created_pools:
+                    pool_name = pool["pool_name"]
+                    try:
+                        rados_obj.delete_pool(pool=pool_name)
+                    except Exception as e:
+                        log.error(f"Failed to delete pool {pool_name}: {e}")
+                        failed_pools.append(pool_name)
 
-            for pool in created_pools:
-                pool_name = pool["pool_name"]
-                try:
-                    rados_obj.delete_pool(pool=pool_name)
-                except Exception as e:
-                    log.error(f"Failed to delete pool {pool_name}: {e}")
-                    failed_pools.append(pool_name)
-
-            if failed_pools:
-                log.warning(
-                    f"Failed to delete {len(failed_pools)} pool(s): {failed_pools}"
-                )
+                if failed_pools:
+                    log.warning(
+                        f"Failed to delete {len(failed_pools)} pool(s): {failed_pools}"
+                    )
+                else:
+                    log.info("All tracked pools deleted successfully")
             else:
-                log.info("All pools deleted successfully")
+                log.info("No pools to delete")
+
+            log.info("Pool cleanup completed")
         else:
-            log.info("Skipping cleanup (cleanup_pools=False or no pools created)")
+            log.info("Skipping cleanup (cleanup_pools=False)")
 
         test_end_time = get_cluster_timestamp(rados_obj.node)
         log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
@@ -2756,6 +2974,360 @@ def thrash_rgw_s3(
     return ops_completed
 
 
+def thrash_mon(
+    rados_obj: RadosOrchestrator,
+    mon_workflow_obj,
+    mon_election_obj,
+    duration: int,
+    stop_flag: Dict,
+    enable_election_strategy_thrash: bool = False,
+) -> int:
+    """
+    Holistic MON thrashing - randomly picks between operations each iteration.
+
+    Operations:
+    1. Leader failover - Stop leader to trigger re-election
+    2. Election strategy change - Switch between classic/connectivity (if enabled)
+    3. Rolling restart - Restart MONs daemons via orchestrator
+
+    Args:
+        rados_obj: RadosOrchestrator instance
+        mon_workflow_obj: MonitorWorkflows instance
+        mon_election_obj: MonElectionStrategies instance
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+        enable_election_strategy_thrash: Enable election strategy changes (default: False)
+
+    Returns:
+        Number of thrash operations completed
+    """
+    ops_completed = 0
+    end_time = time.time() + duration
+    iteration = 0
+
+    # Build list of available operations
+    operations = ["leader_failover", "rolling_restart"]
+    if enable_election_strategy_thrash:
+        operations.append("election_strategy")
+
+    log.info(
+        f"Starting MON thrashing with operations: {operations} "
+        f"(duration: {duration}s)"
+    )
+
+    while time.time() < end_time and not stop_flag.get("stop"):
+        iteration += 1
+        operation = random.choice(operations)
+        log.info(f"MON thrash iteration {iteration}: Selected operation = {operation}")
+
+        try:
+            if operation == "leader_failover":
+                result = _thrash_mon_leader(rados_obj, mon_workflow_obj)
+            elif operation == "election_strategy":
+                result = _thrash_mon_election_strategy(mon_election_obj)
+            elif operation == "rolling_restart":
+                result = _thrash_mon_rolling_restart(rados_obj, mon_workflow_obj)
+            else:
+                result = False
+
+            if result:
+                ops_completed += 1
+                log.info(f"MON thrash operation '{operation}' completed successfully")
+            else:
+                log.warning(f"MON thrash operation '{operation}' did not complete")
+
+        except Exception as e:
+            log.warning(f"MON thrash iteration {iteration} failed: {e}")
+
+        # Wait between operations to allow cluster stabilization
+        time.sleep(20)
+
+    log.info(
+        f"MON thrashing completed: {ops_completed} operations in {iteration} iterations"
+    )
+    return ops_completed
+
+
+def _thrash_mon_leader(rados_obj: RadosOrchestrator, mon_workflow_obj) -> bool:
+    """
+    Stop the current MON leader to trigger re-election, then restart it.
+    Maintains quorum by only stopping one MON at a time.
+    """
+    try:
+        # Get current leader and quorum
+        leader = mon_workflow_obj.get_mon_quorum_leader()
+        quorum_hosts = mon_workflow_obj.get_mon_quorum_hosts()
+        log.info(f"Current MON leader: {leader}, quorum size: {len(quorum_hosts)}")
+
+        # Stop the leader daemon to trigger election
+        log.info(f"Stopping MON leader: {leader}")
+        if not rados_obj.change_daemon_systemctl_state(
+            action="stop", daemon_type="mon", daemon_id=leader
+        ):
+            log.warning(f"Failed to stop MON leader: {leader}")
+            return False
+
+        time.sleep(15)
+
+        try:
+            new_leader = mon_workflow_obj.get_mon_quorum_leader()
+            log.info(
+                f"New leader elected: {new_leader}"
+                if new_leader != leader
+                else "Leader unchanged"
+            )
+        except Exception:
+            pass
+
+        # Start the stopped MON
+        log.info(f"Starting MON: {leader}")
+        rados_obj.change_daemon_systemctl_state(
+            action="start", daemon_type="mon", daemon_id=leader
+        )
+        time.sleep(20)
+
+        if leader in mon_workflow_obj.get_mon_quorum_hosts():
+            log.info(f"MON {leader} rejoined quorum successfully")
+            return True
+
+        log.warning(f"MON {leader} did not rejoin quorum within 20 seconds")
+        return False
+
+    except Exception as e:
+        log.error(f"Leader failover failed: {e}")
+        return False
+
+
+def _thrash_mon_election_strategy(mon_election_obj) -> bool:
+    """
+    Switch MON election strategy randomly between classic, disallow, and connectivity.
+    """
+    try:
+        # Get current strategy
+        current_strategy = mon_election_obj.get_election_strategy()
+        strategy_map = {1: "classic", 2: "disallow", 3: "connectivity"}
+        current_name = strategy_map.get(current_strategy, "unknown")
+        log.info(f"Current election strategy: {current_name} ({current_strategy})")
+
+        available_strategies = ["classic", "disallow", "connectivity"]
+        # Remove current strategy to ensure we actually change it
+        if current_name in available_strategies:
+            available_strategies.remove(current_name)
+        new_strategy = random.choice(available_strategies)
+
+        log.info(f"Changing election strategy to: {new_strategy}")
+        if mon_election_obj.set_election_strategy(mode=new_strategy):
+            log.info(f"Election strategy changed to {new_strategy}")
+            return True
+        else:
+            log.warning(f"Failed to change election strategy to {new_strategy}")
+            return False
+
+    except Exception as e:
+        log.error(f"Election strategy change failed: {e}")
+        return False
+
+
+def _thrash_mon_rolling_restart(rados_obj: RadosOrchestrator, mon_workflow_obj) -> bool:
+    """
+    Rolling restart of MON daemons using orchestrator.
+
+    Uses restart_daemon_services() which triggers 'ceph orch restart mon'.
+    The orchestrator handles rolling restart internally to maintain quorum.
+    """
+    try:
+        # Get quorum hosts before restart for verification
+        quorum_hosts_before = mon_workflow_obj.get_mon_quorum_hosts()
+        log.info(
+            f"Initiating rolling restart of MON daemons via orchestrator. "
+            f"Current quorum: {quorum_hosts_before}"
+        )
+
+        # Use restart_daemon_services() - orchestrator handles rolling restart
+        if not rados_obj.restart_daemon_services(daemon="mon", timeout=300):
+            log.warning(
+                "MON rolling restart via orchestrator did not complete successfully"
+            )
+            return False
+
+        # Verify all MONs are back in quorum
+        quorum_hosts_after = mon_workflow_obj.get_mon_quorum_hosts()
+        if set(quorum_hosts_before) == set(quorum_hosts_after):
+            log.info(
+                f"MON rolling restart completed. All MONs back in quorum: {quorum_hosts_after}"
+            )
+            return True
+        else:
+            log.warning(
+                f"Some MONs may not have rejoined quorum. "
+                f"Before: {quorum_hosts_before}, After: {quorum_hosts_after}"
+            )
+            return False
+
+    except Exception as e:
+        log.error(f"Rolling restart failed: {e}")
+        return False
+
+
+def thrash_mgr(
+    rados_obj: RadosOrchestrator,
+    mgr_workflow_obj: MgrWorkflows,
+    duration: int,
+    stop_flag: Dict,
+) -> int:
+    """
+    Holistic MGR thrashing - randomly picks between operations each iteration.
+
+    Operations:
+    1. Failover - Fail active MGR to trigger failover to standby
+    2. Rolling restart - Restart MGR daemons via orchestrator
+    3. Random fail - Fail a random MGR (active or standby)
+
+    Args:
+        rados_obj: RadosOrchestrator instance
+        mgr_workflow_obj: MgrWorkflows instance
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+
+    Returns:
+        Number of thrash operations completed
+    """
+    ops_completed = 0
+    end_time = time.time() + duration
+    iteration = 0
+
+    operations = ["failover", "rolling_restart", "random_fail"]
+
+    log.info(
+        f"Starting MGR thrashing with operations: {operations} "
+        f"(duration: {duration}s)"
+    )
+
+    while time.time() < end_time and not stop_flag.get("stop"):
+        iteration += 1
+        operation = random.choice(operations)
+        log.info(f"MGR thrash iteration {iteration}: Selected operation = {operation}")
+
+        try:
+            if operation == "failover":
+                result = _thrash_mgr_failover(mgr_workflow_obj)
+            elif operation == "rolling_restart":
+                result = _thrash_mgr_rolling_restart(rados_obj)
+            elif operation == "random_fail":
+                result = _thrash_mgr_random_fail(mgr_workflow_obj)
+            else:
+                result = False
+
+            if result:
+                ops_completed += 1
+                log.info(f"MGR thrash operation '{operation}' completed successfully")
+            else:
+                log.warning(f"MGR thrash operation '{operation}' did not complete")
+
+        except Exception as e:
+            log.warning(f"MGR thrash iteration {iteration} failed: {e}")
+
+        # Wait between operations to allow cluster stabilization
+        time.sleep(20)
+
+    log.info(
+        f"MGR thrashing completed: {ops_completed} operations in {iteration} iterations"
+    )
+    return ops_completed
+
+
+def _thrash_mgr_failover(mgr_workflow_obj: MgrWorkflows) -> bool:
+    """
+    Fail the active MGR to trigger failover to a standby MGR.
+    """
+    try:
+        # Get current active MGR
+        active_mgr = mgr_workflow_obj.get_active_mgr()
+        log.info(f"Current active MGR: {active_mgr}")
+
+        # Get standby list to verify failover target exists
+        mgr_list = mgr_workflow_obj.get_mgr_daemon_list()
+        standby_mgrs = [m for m in mgr_list if m != active_mgr]
+
+        if not standby_mgrs:
+            log.warning("No standby MGR available for failover")
+            return False
+
+        log.info(f"Standby MGRs available: {standby_mgrs}")
+        log.info(f"Failing active MGR: {active_mgr}")
+
+        mgr_workflow_obj.set_mgr_fail(host=active_mgr)
+        time.sleep(10)
+
+        # Verify failover occurred
+        new_active_mgr = mgr_workflow_obj.get_active_mgr()
+        if new_active_mgr != active_mgr:
+            log.info(f"MGR failover successful. New active MGR: {new_active_mgr}")
+            return True
+        else:
+            log.warning(f"MGR failover did not occur. Active MGR still: {active_mgr}")
+            return False
+
+    except Exception as e:
+        log.error(f"MGR failover failed: {e}")
+        return False
+
+
+def _thrash_mgr_rolling_restart(rados_obj: RadosOrchestrator) -> bool:
+    """
+    Rolling restart of MGR daemons using orchestrator.
+    """
+    try:
+        log.info("Initiating MGR rolling restart via orchestrator")
+
+        if not rados_obj.restart_daemon_services(daemon="mgr"):
+            log.warning("MGR orch restart command returned failure")
+            return False
+
+        log.info("MGR rolling restart initiated successfully")
+        time.sleep(30)  # Allow time for restart to complete
+        return True
+
+    except Exception as e:
+        log.error(f"MGR rolling restart failed: {e}")
+        return False
+
+
+def _thrash_mgr_random_fail(mgr_workflow_obj: MgrWorkflows) -> bool:
+    """
+    Randomly fail any MGR daemon (active or standby) to test recovery.
+    """
+    try:
+        mgr_list = mgr_workflow_obj.get_mgr_daemon_list()
+
+        if len(mgr_list) < 2:
+            log.warning("Need at least 2 MGRs for random fail thrashing")
+            return False
+
+        # Randomly select a MGR to fail
+        target_mgr = random.choice(mgr_list)
+        active_mgr = mgr_workflow_obj.get_active_mgr()
+
+        mgr_type = "active" if target_mgr == active_mgr else "standby"
+        log.info(f"Randomly selected {mgr_type} MGR to fail: {target_mgr}")
+
+        mgr_workflow_obj.set_mgr_fail(host=target_mgr)
+        time.sleep(15)
+
+        # Verify cluster still has an active MGR
+        new_active = mgr_workflow_obj.get_active_mgr()
+        if new_active:
+            log.info(f"MGR fail successful. Current active MGR: {new_active}")
+            return True
+        else:
+            log.warning("No active MGR after fail operation")
+            return False
+
+    except Exception as e:
+        log.error(f"MGR random fail failed: {e}")
+        return False
+
+
 def cleanup_rgw_s3(
     client_node, rgw_config: Dict[str, Any], rados_obj: RadosOrchestrator = None
 ) -> None:
@@ -2953,152 +3525,3 @@ def _cleanup_rbd(client_node, mount_path: str, device_path: str) -> None:
             log.debug(f"RBD unmounted from {mount_path}")
         except Exception as e:
             log.warning(f"Failed to unmount RBD: {e}")
-
-
-def analyze_osd_logs_for_divergent_patterns(
-    rados_obj: RadosOrchestrator,
-    start_time: str,
-    end_time: str,
-    samples_per_osd: int = 5,
-) -> Dict[str, Any]:
-    """
-    Analyze OSD logs for divergent log patterns indicating bug #74221 conditions.
-
-    Args:
-        rados_obj: RadosOrchestrator object
-        start_time: Start timestamp
-        end_time: End timestamp
-        samples_per_osd: Number of sample log lines to store per OSD (default: 5)
-
-    Returns:
-        Dictionary with pattern counts and sample entries per OSD
-    """
-    # Pattern config: (grep_pattern, result_key, exclude_pattern, sample_key)
-    pattern_config = [
-        (
-            "_merge_object_divergent_entries",
-            "merge_divergent_entries",
-            None,
-            "sample_divergent_entries",
-        ),
-        (
-            "proc_replica_log:.*divergent",
-            "proc_replica_log_divergent",
-            "not looking for divergent",
-            None,
-        ),
-        ("clear_divergent_priors: 1", "clear_divergent_priors", None, None),
-        (
-            "written_shards shard_info",
-            "written_shards_partial",
-            "written={}",
-            "sample_partial_writes",
-        ),
-        ("shard_versions=", "shard_versions_found", "shard_versions={}", None),
-        ("bluestore.*_do_clone", "clone_operations", None, "sample_clone_ops"),
-        ("bluestore.*_remove", "bluestore_removes", None, None),
-    ]
-
-    results = {cfg[1]: 0 for cfg in pattern_config}
-    results.update(
-        {
-            "sample_divergent_entries": {},
-            "sample_partial_writes": {},
-            "sample_clone_ops": {},
-        }
-    )
-
-    try:
-        # Get cluster FSID
-        fsid_result = rados_obj.run_ceph_command(cmd="ceph fsid")
-        fsid = fsid_result.get("fsid") if isinstance(fsid_result, dict) else fsid_result
-        if not fsid:
-            log.warning("Could not get cluster FSID for log analysis")
-            return results
-
-        # Extract date pattern for filtering
-        start_date = start_time.split("T")[0].split(" ")[0]
-        end_date = end_time.split("T")[0].split(" ")[0]
-        date_pattern = (
-            start_date if start_date == end_date else f"{start_date}|{end_date}"
-        )
-
-        log.debug("Analyzing OSD logs for divergent patterns...")
-
-        for osd_id in rados_obj.get_osd_list(status="up")[:8]:
-            osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
-            if not osd_host:
-                continue
-
-            log_path = f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
-
-            for grep_pattern, result_key, exclude, sample_key in pattern_config:
-                try:
-                    cmd = (
-                        f"grep -E '{date_pattern}' {log_path} 2>/dev/null | "
-                        f"grep -i '{grep_pattern}' 2>/dev/null | head -{samples_per_osd * 2}"
-                    )
-                    output, _ = osd_host.exec_command(
-                        cmd=cmd, sudo=True, check_ec=False
-                    )
-
-                    if not output or not output.strip():
-                        continue
-
-                    lines = [l for l in output.strip().split("\n") if l.strip()]
-
-                    # Apply exclusion filter if specified
-                    if exclude:
-                        lines = [l for l in lines if exclude not in l]
-
-                    results[result_key] += len(lines)
-
-                    # Store samples if sample_key is defined
-                    if sample_key and lines:
-                        results[sample_key][osd_id] = lines[:samples_per_osd]
-
-                except Exception:
-                    pass
-
-    except Exception as e:
-        log.warning("OSD log analysis failed: %s", e)
-
-    # Log summary
-    if any(
-        results[k] for k in results if isinstance(results[k], int) and results[k] > 0
-    ):
-        log.info("OSD log analysis results:")
-        log.info("  - Divergent entry merges: %s", results["merge_divergent_entries"])
-        log.info(
-            "  - proc_replica_log divergent: %s", results["proc_replica_log_divergent"]
-        )
-        log.info(
-            "  - clear_divergent_priors set: %s", results["clear_divergent_priors"]
-        )
-        log.info("  - Partial writes: %s", results["written_shards_partial"])
-        log.info("  - Non-empty shard_versions: %s", results["shard_versions_found"])
-        log.info("  - Clone operations: %s", results["clone_operations"])
-        log.info("  - BlueStore removes: %s", results["bluestore_removes"])
-
-        if results["sample_divergent_entries"]:
-            log.info("  Sample divergent entries:")
-            for osd_id, entries in results["sample_divergent_entries"].items():
-                log.info("    OSD.%s (%d samples):", osd_id, len(entries))
-                for i, entry in enumerate(entries, 1):
-                    log.info("      [%d] %s", i, entry)
-
-        if results["sample_partial_writes"]:
-            log.info("  Sample partial writes:")
-            for osd_id, entries in results["sample_partial_writes"].items():
-                log.info("    OSD.%s (%d samples):", osd_id, len(entries))
-                for i, entry in enumerate(entries, 1):
-                    log.info("      [%d] %s", i, entry)
-
-        if results["sample_clone_ops"]:
-            log.info("  Sample clone operations:")
-            for osd_id, entries in results["sample_clone_ops"].items():
-                log.info("    OSD.%s (%d samples):", osd_id, len(entries))
-                for i, entry in enumerate(entries, 1):
-                    log.info("      [%d] %s", i, entry)
-
-    return results

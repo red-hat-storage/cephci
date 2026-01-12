@@ -195,8 +195,8 @@ tests:
             sample_pool_id: sample-pool-9
           - pool_type: replicated
             sample_pool_id: sample-pool-2
-        iterations: 30
-        duration: 1200
+        iterations: 60
+        duration: 1800
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
@@ -205,6 +205,16 @@ tests:
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        # Workload controls (all default to true)
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_mgr_thrashing: false
 
   - test:
       name: OSD thrashing test with concurrent IO - no compression
@@ -219,8 +229,8 @@ tests:
             sample_pool_id: sample-pool-9
           - pool_type: replicated
             sample_pool_id: sample-pool-2
-        iterations: 30
-        duration: 1200
+        iterations: 60
+        duration: 1800
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
@@ -229,10 +239,20 @@ tests:
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        # Workload controls
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_mgr_thrashing: false
 
   - test:
       name: OSD thrashing with EC error injection
-      desc: OSD thrashing with EC write error injection to trigger divergent logs
+      desc: OSD thrashing with EC write error injection
       module: test_osd_thrashing.py
       polarion-id: CEPH-83632230
       config:
@@ -241,8 +261,8 @@ tests:
             sample_pool_id: sample-pool-7
           - pool_type: erasure
             sample_pool_id: sample-pool-9
-        iterations: 25
-        duration: 900
+        iterations: 60
+        duration: 1200
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
@@ -253,6 +273,16 @@ tests:
         inject_errors: true
         num_osds_to_inject: 3
         num_writes_to_inject: 1000
+        # Workload controls
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: false
+        enable_mgr_thrashing: false
 
   - test:
       name: OSD thrashing - minimal (quick validation)
@@ -266,7 +296,7 @@ tests:
           - pool_type: replicated
             sample_pool_id: sample-pool-2
         iterations: 10
-        duration: 900
+        duration: 600
         aggressive: false
         enable_crush_thrashing: false
         enable_pg_thrashing: false
@@ -275,6 +305,16 @@ tests:
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        # Minimal workload
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_mgr_thrashing: false
 
   # ===========================================================================
   # Bug #2423971 EC Divergent Log Reproduction Tests
