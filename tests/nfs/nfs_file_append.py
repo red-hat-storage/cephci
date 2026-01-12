@@ -58,7 +58,7 @@ def run(ceph_cluster, **kw):
         # From client 2 append to the file created
         thread_pool = []
         for i in range(10):
-            cmd = f"dd if=/dev/urandom of={nfs_mount}/test_file_{i} bs=1G count=1"
+            cmd = f"dd if=/dev/zero of={nfs_mount}/test_file_{i} bs=100M count=10"
             th = Thread(
                 target=lambda: clients[1].exec_command(cmd=cmd, sudo=True), args=()
             )
