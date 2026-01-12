@@ -2,6 +2,7 @@ from utility.gklm_client.auth import GklmAuth
 from utility.gklm_client.certs import GklmCertificate
 from utility.gklm_client.client_mgmt import GklmClientManagement
 from utility.gklm_client.objects import GklmObjects
+from utility.gklm_client.server_mgmt import GklmServer
 
 
 class GklmClient:
@@ -19,6 +20,7 @@ class GklmClient:
         self.certificates = GklmCertificate(self.auth)
         self.clients = GklmClientManagement(self.auth)
         self.objects = GklmObjects(self.auth)
+        self.server = GklmServer(self.auth)
         self.auth.login()
 
     def login(self):

@@ -678,9 +678,21 @@ def check_nfs_daemons_removed(client):
     """
     Check if NFS daemons are removed.
     Wait until there are no NFS daemons listed by 'ceph orch ls'.
-    Uses retry decorator with timeout (30 tries * 10 seconds = 300 seconds max).
     """
-    check_nfs_daemons_removed_retry(client)
+    while True:
+        try:
+            cmd = "ceph orch ls | grep nfs"
+            out = client.exec_command(sudo=True, cmd=cmd)
+
+            if out:
+                log.info("NFS daemons are still present. Waiting...")
+                sleep(10)  # Wait before checking again
+            else:
+                log.info("All NFS daemons have been removed.")
+                break
+        except Exception as e:
+            log.error(f"Unexpected error: {e}")
+            break
 
 
 def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
@@ -860,26 +872,6 @@ def fuse_mount_retry(client, mount, **kwargs):
         client_hostname=client.hostname, mount_point=mount, **kwargs
     ):
         raise OperationFailedError("Failed to fuse mount nfs on %s" % client.hostname)
-    return True
-
-
-@retry(OperationFailedError, tries=30, delay=10, backoff=1)
-def check_nfs_daemons_removed_retry(client):
-    """
-    Helper function to check if NFS daemons are removed.
-    Raises OperationFailedError if daemons are still present (to trigger retry).
-    Returns True if all daemons are removed.
-    """
-    try:
-        out = client.exec_command(sudo=True, cmd="ceph orch ls | grep nfs")
-        # if there are no nfs daemons, then grep exit code is 1
-        # hence we check if not err, and not if err
-        if out:
-            raise OperationFailedError("NFS daemons are still present")
-    except Exception as e:
-        log.info(f"Caugt Exception: {e}")
-
-    log.info("All NFS daemons have been removed.")
     return True
 
 
@@ -1087,7 +1079,7 @@ def dynamic_cleanup_common_names(
 
     # Step 3: Delete all CephFS subvolumes associated with the exports
     subvols = json.loads(
-        Ceph(client).fs.sub_volume.ls(volume="cephfs", group=group_name)
+        Ceph(client).fs.sub_volume.ls(volume="cephfs", group_name=group_name)
     )
     for cluster in clusters:
         exports = json.loads(Ceph(client).nfs.export.ls(cluster))
@@ -1100,7 +1092,7 @@ def dynamic_cleanup_common_names(
         sub_vols_infos = []
         for subvol in subvols:
             subvol_info = Ceph(client).fs.sub_volume.info(
-                volume="cephfs", subvolume=subvol["name"], group=group_name
+                volume="cephfs", subvolume=subvol["name"], group_name=group_name
             )
             sub_vols_infos.append(subvol_info)
             for export in exports:
@@ -1110,7 +1102,7 @@ def dynamic_cleanup_common_names(
                     Ceph(client).fs.sub_volume.rm(
                         volume="cephfs",
                         subvolume=subvol["name"],
-                        group=group_name,
+                        group_name=group_name,
                         force=True,
                     )
                     log.info(
