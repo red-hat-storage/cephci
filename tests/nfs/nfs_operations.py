@@ -695,7 +695,9 @@ def check_nfs_daemons_removed(client):
             break
 
 
-def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
+def create_nfs_via_file_and_verify(
+    installer_node, nfs_objects, timeout, nfs_nodes=None
+):
     """
     Create a temporary YAML file with NFS Ganesha configuration.
     Args:
@@ -706,6 +708,12 @@ def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
         str: Path to the temporary YAML file.
     """
     temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+
+    # Ensure rpcbind service is running on the nodes before applying the spec file
+    if nfs_nodes:
+        nfs_cluster = Ceph(installer_node).nfs.cluster
+        for nfs_node in nfs_nodes:
+            nfs_cluster.validate_rpcbind_running(nfs_node)
 
     # Handle case where installer_node is a list
     if isinstance(installer_node, list):
