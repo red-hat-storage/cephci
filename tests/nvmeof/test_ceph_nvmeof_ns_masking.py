@@ -19,8 +19,6 @@ from utility.log import Log
 from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
-io_tasks = []
-executor = None
 
 
 def add_namespaces(
@@ -181,7 +179,6 @@ def add_host(config, command, init_nodes, hostnqn_dict, nvmegwcli, ns_masking):
                 )
 
     ns_masking.execute_io_ns_masking(init_nodes, rbd_images_subsys, negative=False)
-    return ns_masking.executor, ns_masking.io_tasks
 
 
 def del_host(config, command, init_nodes, hostnqn_dict, nvmegwcli, ns_masking):
@@ -274,7 +271,6 @@ def del_host(config, command, init_nodes, hostnqn_dict, nvmegwcli, ns_masking):
                 )
 
     ns_masking.execute_io_ns_masking(init_nodes, rbd_images_subsys, negative=True)
-    return ns_masking.executor, ns_masking.io_tasks
 
 
 def change_visibility(config, command, init_nodes, hostnqn_dict, nvmegwcli, ns_masking):
