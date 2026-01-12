@@ -310,3 +310,43 @@ tests:
       config:
         nfs_version: 3
         clients: 4
+
+  - test:
+      name: NFS Ganesha non-overlapping byte-range locks test
+      module: nfs_non_overlapping_locks.py
+      desc: Test non-overlapping byte-range locks - verify multiple clients can hold non-overlapping locks simultaneously
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  - test:
+      name: NFS Ganesha overlapping byte-range locks test
+      module: nfs_overlapping_locks.py
+      desc: Test overlapping byte-range locks - verify non-overlapping locks succeed simultaneously and overlapping locks block each other
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 3
+
+  - test:
+      name: NFS Ganesha conflicting byte-range locks test
+      module: nfs_conflicting_locks.py
+      desc: Test conflicting byte-range locks - verify only one client can hold conflicting/overlapping locks at a time
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  - test:
+      name: NFS Ganesha queue management locks test
+      module: nfs_queue_management_locks.py
+      desc: Test queue management for locks - verify FIFO behavior when multiple clients request the same lock
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
