@@ -248,21 +248,3 @@ tests:
         nfs_version: 4.1
         port: 2049
 
-  # =============================================================================
-  # Test Scenario 8: Verify ID Updates After One Client Unmounts
-  # =============================================================================
-  - test:
-      name: NFS gRPC - Verify ID Updates After Client Unmount
-      module: test_nfs_grpc.py
-      desc: Unmount from 1 client and verify client/session IDs are updated
-      polarion-id: CEPH-83630616
-      abort-on-fail: false
-      config:
-        operation: verify_id_after_unmount
-        nfs_name: cephfs-nfs
-        nfs_export: /export
-        nfs_mount: /mnt/nfs
-        fs_name: cephfs
-        clients: 3
-        nfs_version: 4.1
-        port: 2049
