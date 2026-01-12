@@ -7085,6 +7085,7 @@ EOF"""
         rbd_metadata_pool: str = "rbd-thrash-metadata",
         image_name: str = "thrash-test-image",
         image_size: str = "10G",
+        crush_failure_domain: str = "host",
     ) -> tuple:
         """
         Create EC RBD pools, image, and mount it.
@@ -7094,6 +7095,7 @@ EOF"""
             rbd_metadata_pool: Metadata pool name (default: "rbd-thrash-metadata")
             image_name: RBD image name (default: "thrash-test-image")
             image_size: Image size (default: "10G")
+            crush_failure_domain: CRUSH failure domain for EC pool (default: "host")
 
         Returns:
             Tuple of (mount_path, device_path, list of created pool configs)
@@ -7107,7 +7109,7 @@ EOF"""
             "k": 2,
             "m": 2,
             "app_name": "rbd",
-            "crush-failure-domain": "host",
+            "crush-failure-domain": crush_failure_domain,
             "enable_fast_ec_features": True,
             "stripe_unit": 16384,
         }
@@ -7151,6 +7153,65 @@ EOF"""
             },
             {
                 "pool_name": rbd_metadata_pool,
+                "pool_type": "replicated",
+                "client": "rbd",
+            },
+        ]
+
+        return mount_path, device_path, created_pools
+
+    def create_replicated_rbd_pools(
+        self,
+        rbd_pool: str = "rbd-replicated",
+        image_name: str = "rbd-image",
+        image_size: str = "10G",
+        mount_path: str = "/mnt/rbd/",
+    ) -> tuple:
+        """
+        Create RBD replicated pools, image, and mount it.
+
+        Args:
+            rbd_pool: EC data pool name (default: "rbd-replicated")
+            image_name: RBD image name (default: "rbd-image")
+            image_size: Image size (default: "10G")
+            mount_path: Mount path on client (default: "/mnt/rbd/")
+
+        Returns:
+            Tuple of (mount_path, device_path, list of created pool configs)
+        """
+        log.info("Creating RBD pools (replicated data)")
+        log.debug(f"creating replicated data pool : {rbd_pool}")
+        # Create data pool (replicated)
+        assert self.create_pool(
+            pool_name=rbd_pool,
+            app_name="rbd",
+        ), f"Failed to create data pool {rbd_pool}"
+        log.debug(f"Created data pool: {rbd_pool}")
+
+        # Create RBD image with replicated data pool
+        log.info(f"Creating RBD image: {image_name}")
+        cmd = f"rbd create {rbd_pool}/{image_name} --size {image_size}"
+        self.client.exec_command(cmd=cmd, sudo=True)
+        log.info(f"Created RBD image: {rbd_pool}/{image_name}")
+
+        # Mount the image
+        log.info("Mounting RBD image...")
+        mount_result = self.mount_image_on_client(
+            pool_name=rbd_pool,
+            img_name=image_name,
+            client_obj=self.client,
+            mount_path=mount_path,
+        )
+
+        if not mount_result:
+            raise Exception("Failed to mount RBD image")
+
+        mount_path, device_path = mount_result
+        log.info(f"Mounted RBD image at {mount_path} (device: {device_path})")
+
+        created_pools = [
+            {
+                "pool_name": rbd_pool,
                 "pool_type": "replicated",
                 "client": "rbd",
             },

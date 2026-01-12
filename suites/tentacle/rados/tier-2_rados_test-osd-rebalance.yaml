@@ -67,7 +67,8 @@ tests:
                   nodes:
                     - node2
                     - node6
-                  limit: 2            # no of daemons
+                    - node8
+                  limit: 3            # no of daemons
                   sep: " "            # separator to be used for placements
       destroy-cluster: false
       abort-on-fail: true
@@ -180,3 +181,89 @@ tests:
 #            k: 4
 #            m: 2
 #            disable_pg_autoscale: true
+
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario 2 - Enables bluestore write v2
+# setup - setup phase for bluestore compression tests
+#     --> Cephfs - replicated & EC
+#     --> RBD - replicated & EC
+#     --> RGW - replicated
+# scenario 12 - data integrity tests
+# scenario 13 - compression algorithm tests
+# scenario 14 - compression mode tests
+# scenario 16 - compression tests post recovery
+
+  - test:
+      name: Bluestore data compression - enable bluestore write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-2
+
+  - test:
+      name: Bluestore compression v2 - setup rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        cleanup_objects: true
+        cleanup_pools: false
+        scenarios_to_run:
+          - setup
+
+  - test:
+      name: Bluestore compression v2 - data integrity tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        cleanup_objects: true
+        cleanup_pools: false
+        scenarios_to_run:
+          - scenario-12
+
+  - test:
+      name: Bluestore compression v2 - compression algorithm tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        cleanup_objects: true
+        cleanup_pools: false
+        scenarios_to_run:
+          - scenario-13
+
+  - test:
+      name: Bluestore compression v2 - compression mode tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        cleanup_objects: false
+        cleanup_pools: false
+        scenarios_to_run:
+          - scenario-14
+          # Disabling scenario 15 - compression_required_ratio test in bluestore compression v2
+          # due to BZ https://bugzilla.redhat.com/show_bug.cgi?id=2386822
+          # scenario-15
+
+  - test:
+      name: Bluestore compression v2 - OSD recovery tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        cleanup_objects: true
+        cleanup_pools: true
+        scenarios_to_run:
+          - scenario-16
