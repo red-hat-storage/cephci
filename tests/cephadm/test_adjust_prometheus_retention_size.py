@@ -14,6 +14,7 @@ def get_retention_size(node, promethus_api_host):
     Get the retention_size set for prometheus daemon
     """
     cmd = f"curl -s {promethus_api_host}/api/v1/status/flags | grep -A2 retention"
+    log.info(f"####CMD###### {cmd}")
     out = loads(node.exec_command(sudo=True, cmd=cmd)[0])["data"][
         "storage.tsdb.retention.size"
     ]
@@ -31,6 +32,7 @@ def run(ceph_cluster, **kw):
     # Get prometheus api host
     kw = {"get-prometheus-api-host": ""}
     prometheus = CephAdm(installer).ceph.dashboard(**kw)
+    log.info(f"####PROM API HOsT###### {prometheus}")
 
     # Validate the default retention size for prometheus using curl
     # it should be 0B
