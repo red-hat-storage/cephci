@@ -545,7 +545,6 @@ def create_multiple_nfs_instance_for_byok(
         spec["kmip_key"] = (rsa_key.rstrip("\\n"),)
         spec["kmip_ca_cert"] = (ca_cert.rstrip("\\n"),)
         spec["kmip_host_list"] = [kmip_host_list]
-
         log.debug(f"Prepared BYOK-enabled NFS Ganesha service spec:\n{spec}")
 
         # Call core spec deployment function

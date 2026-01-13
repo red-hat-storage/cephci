@@ -211,6 +211,7 @@ def run(ceph_cluster, **kw):
     gkml_client_name = "automation"
     gklm_cert_alias = "cert2"
     client_export_mount_dict = None
+    spec = config.get("spec")
 
     try:
         log.info("Step 1: Setting up GKLM infrastructure")
@@ -341,8 +342,9 @@ def run(ceph_cluster, **kw):
                 f">>> Running multi-cluster BYOK: {nfs_replication_number} clusters"
             )
 
+            spec["placement"]["host_pattern"] = nfs_nodes[0].hostname
             multiclusters_dict = create_multiple_nfs_instance_for_byok(
-                spec=config.get("spec"),
+                spec=spec,
                 replication_number=nfs_replication_number,
                 installer=installer,
                 cert=cert,
@@ -358,9 +360,7 @@ def run(ceph_cluster, **kw):
             nfs_names = [x["service_id"] for x in multiclusters_dict]
 
             # Ensure we have enough NFS servers for all clusters
-            nfs_servers = [
-                nfs_nodes[i % len(nfs_nodes)].hostname for i in range(len(nfs_names))
-            ]
+            nfs_servers = nfs_nodes[0].hostname
             nfs_ports = [x["spec"]["port"] for x in multiclusters_dict]
 
             log.info(

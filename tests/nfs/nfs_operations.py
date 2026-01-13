@@ -957,10 +957,16 @@ def create_multiple_nfs_instance_via_spec_file(
             port = spec["spec"]["port"] + i
             monitoring_port = spec["spec"]["monitoring_port"] + i
 
+            placement = {}
+            if "host_pattern" in spec.get("placement", {}):
+                placement["host_pattern"] = spec["placement"]["host_pattern"]
+            elif "label" in spec.get("placement", {}):
+                placement["label"] = spec["placement"]["label"]
+
             new_object = {
                 "service_type": spec["service_type"],
                 "service_id": service_id,
-                "placement": {"host_pattern": spec["placement"]["host_pattern"]},
+                "placement": placement,
                 "spec": {
                     "port": port,
                     "monitoring_port": monitoring_port,
@@ -1090,6 +1096,7 @@ def dynamic_cleanup_common_names(
     subvols = json.loads(
         Ceph(client).fs.sub_volume.ls(volume="cephfs", group_name=group_name)
     )
+    log.info(Ceph(clients[0]).orch.ls())
     for cluster in clusters:
         exports = json.loads(Ceph(client).nfs.export.ls(cluster))
         log.info(f"Found {len(exports)} exports in cluster '{cluster}': {exports}")
