@@ -43,13 +43,24 @@ def sanity_rgw_workflow(config):
 
         uid = bucket_cfg.get("uid")
         lifecycle = bucket_cfg.get("lifecycle")
-        ratelimit_config = bucket_cfg.get("ratelimit")
+        bucket_ratelimit = bucket_cfg.get("bucket_ratelimit")
+        user_ratelimit = bucket_cfg.get("user_ratelimit")
+        role_policy = bucket_cfg.get("role_policy")
+        user_details = bucket_cfg.get("user_details")
         if not uid:
             log.error(f"Missing 'uid' for bucket '{bucket_name}'")
             return 1
 
         if not lifecycle:
             log.error(f"Missing 'lifecycle' for bucket '{bucket_name}'")
+            return 1
+
+        if not role_policy:
+            log.error(f"Missing 'role_policy' for bucket '{bucket_name}'")
+            return 1
+
+        if not user_details:
+            log.error(f"Missing 'user_details' for user '{uid}'")
             return 1
 
         log.info(f"Step 2: Creating and verifying bucket '{bucket_name}'")
@@ -59,7 +70,10 @@ def sanity_rgw_workflow(config):
             rest=_rest,
             rest_v1=_rest_v1,
             lifecycle=lifecycle,
-            ratelimit=ratelimit_config,
+            bucket_ratelimit=bucket_ratelimit,
+            user_ratelimit=user_ratelimit,
+            role_policy=role_policy,
+            user_details=user_details,
         )
         if rc != 0:
             log.error(

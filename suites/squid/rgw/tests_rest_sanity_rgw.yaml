@@ -70,6 +70,17 @@ tests:
 
 # RGW REST sanity tests for bucket operations
   - test:
+      name: Enable Dashboard debug
+      desc: Enable Dashboard debug
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - "ceph dashboard debug enable"
+          - "ceph config set mgr mgr/dashboard/log_level debug"
+      module: exec.py
+
+  - test:
       desc: Create a basic bucket and verify its listed using REST_API endpoints
       module: test_rgw_rest_sanity.py
       name: Create and verify basic RGW bucket
@@ -78,5 +89,8 @@ tests:
         args:
           rgw1:
             uid: user1
-            lifecycle: {"Rules": [{"Expiration": {"Date": "2028-1-1"}, "ID": "rule1", "Status": "Enabled"}]}
-            ratelimit: {"enabled": true, "max_read_ops": 10, "max_write_ops": 10, "max_read_bytes": 2048, "max_write_bytes": 2048}
+            user_details: {"display_name": "User1", "email":"user1@abc.com", "max_buckets": null,"system": null,"suspended": null}
+            lifecycle: "{\"Rules\":[{\"Status\":\"Enabled\",\"Filter\":{},\"Expiration\":{\"Days\":10}}]}"
+            role_policy: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Action\":[\"*\"]}]}"
+            bucket_ratelimit: {"enabled": true, "max_read_ops": 10, "max_write_ops": 10, "max_read_bytes": 2048, "max_write_bytes": 2048}
+            user_ratelimit: {"enabled": true, "max_read_ops": 10, "max_write_ops": 10, "max_read_bytes": 2048, "max_write_bytes": 2048}
