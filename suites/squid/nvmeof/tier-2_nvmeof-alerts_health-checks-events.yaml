@@ -255,7 +255,7 @@ tests:
               - node6
               - node7
             allow_host: "*"
-        test_case: CEPH-83616917s
+        test_case: CEPH-83616917
         cleanup:
           - pool
           - gateway
@@ -395,9 +395,9 @@ tests:
         gw_group: gw_group1
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
-            max_ns: 1024
+            max_ns: 2048
             bdevs:
-              - count: 1024
+              - count: 2048
                 size: 1G
             listener_port: 4420
             listeners:
