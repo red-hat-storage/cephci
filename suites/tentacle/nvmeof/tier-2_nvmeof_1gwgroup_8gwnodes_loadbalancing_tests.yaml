@@ -70,6 +70,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -92,6 +93,7 @@ tests:
             bdevs:
             - count: 8
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -101,6 +103,7 @@ tests:
             bdevs:
             - count: 8
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -123,6 +126,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -144,6 +148,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -152,6 +157,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -160,6 +166,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -168,6 +175,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -190,6 +198,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -210,6 +219,7 @@ tests:
             bdevs:
             - count: 8
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7]
             allow_host: "*"
@@ -219,6 +229,7 @@ tests:
             bdevs:
             - count: 8
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7]
             allow_host: "*"
@@ -244,6 +255,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -269,6 +281,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -277,6 +290,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -285,6 +299,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -293,6 +308,7 @@ tests:
             bdevs:
             - count: 2
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -314,6 +330,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -334,8 +351,9 @@ tests:
             serial: 1
             max_ns: 2048
             bdevs:
-            - count: 8
-              size: 5G                              # auto NS load balancing for namespace addition would be verified here
+            - count: 10
+              size: 5G
+              ns_create_image: true                         # auto NS load balancing for namespace addition would be verified here
             listener_port: 4420
             listeners: [node4, node5, node6, node7]
             allow_host: "*"
@@ -343,8 +361,9 @@ tests:
             serial: 2
             max_ns: 2048
             bdevs:
-            - count: 8
+            - count: 10
               size: 5G
+              ns_create_image: true
             listener_port: 4420
             listeners: [node4, node5, node6, node7]
             allow_host: "*"
@@ -364,10 +383,12 @@ tests:
                   bdevs:
                     - count: 5
                       size: 5G
+                      ns_create_image: true
                 - nqn: nqn.2016-06.io.spdk:cnode2
                   bdevs:
                     - count: 5
                       size: 5G
+                      ns_create_image: true
           - ns_del:
               count: 3
               subsystems:
@@ -387,6 +408,7 @@ tests:
           - node5
           - node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         subsystems:
           - nqn: nqn.2016-06.io.spdk:cnode1

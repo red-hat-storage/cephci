@@ -6,14 +6,17 @@ from typing import Type, Union
 
 from packaging.version import Version
 
-from ceph.ceph import Ceph
+from ceph.ceph import Ceph, CommandFailed
 from ceph.ceph_admin.orch import Orch
 from ceph.nvmeof.cli.v1 import NVMeGWCLI
 from ceph.nvmeof.cli.v2 import NVMeGWCLIV2
+from ceph.parallel import parallel
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from utility.log import Log
+from utility.retry import retry
 from utility.systemctl import SystemCtl
+from utility.utils import log_json_dump
 
 LOG = Log(__name__)
 
@@ -249,7 +252,6 @@ def fetch_nvme_entity_in_omap(cluster, entity, pool, group=""):
 
 
 def validate_qos(client, device, **kw):
-
     bandwidth = {"mb_read/s": [], "mb_write/s": [], "mb_r/s": [], "mb_w/s": []}
     try:
         client.exec_command(cmd="dnf install -y sysstat", sudo=True, long_running=True)
@@ -262,7 +264,6 @@ def validate_qos(client, device, **kw):
             found_header = False
 
             for line in lines:
-
                 # Identify the headers row
                 if "Device" in line and "rMB/s" in line and "wMB/s" in line:
                     found_header = True
@@ -477,3 +478,202 @@ def check_and_set_nvme_cli_image(
             if key == "nvmeof_cli_image":
                 NVMeGWCLI.NVMEOF_CLI_IMAGE = value
                 break
+
+
+def string_to_dict(string):
+    """Parse ANA states from the string."""
+    states = string.replace(" ", "").split(",")
+    dict = {}
+    for state in states:
+        if not state:
+            continue
+        _id, _state = state.split(":")
+        dict[int(_id)] = _state
+    return dict
+
+
+def catogorize(nvme_service, gws):
+    """Categorize to-be failed and running GWs.
+
+    Args:
+        all_gws: all gateways
+        gws: gateways to be failed/stopped/scaled-down
+
+    Returns:
+        list of,
+            - to-be failed gateways
+            - rest of the gateways
+    """
+    fail_gws = []
+    running_gws = []
+
+    # collect impending Gateways to be failed.
+    if isinstance(gws, str):
+        gws = [gws]
+    for gw_id in gws:
+        fail_gws.append(check_gateway(nvme_service.gateways, gw_id))
+
+    # Collect rest of the Gateways
+    for gw in nvme_service.gateways:
+        if gw.node.id not in gws:
+            running_gws.append(gw)
+
+    return fail_gws, running_gws
+
+
+def ana_states(nvme_service, orch, gw_group=""):
+    """Fetch ANA states and convert into python dict."""
+
+    out, _ = orch.shell(
+        args=[
+            "ceph",
+            "nvme-gw",
+            "show",
+            nvme_service.nvme_metadata_pool,
+            repr(nvme_service.group),
+        ]
+    )
+    states = {}
+    if nvme_service.ceph_cluster.rhcs_version >= "8":
+        out = json.loads(out)
+        for gateway in out.get("Created Gateways:"):
+            gw = gateway["gw-id"]
+            states[gw] = gateway
+            states[gw].update(string_to_dict(gateway["ana states"]))
+    else:
+        for data in out.split("}"):
+            data = data.strip()
+            if not data:
+                continue
+            data = json.loads(f"{data}}}")
+            if data.get("ana states"):
+                gw = data["gw-id"]
+                states[gw] = data
+                states[gw].update(string_to_dict(data["ana states"]))
+
+    return states
+
+
+def check_gateway_availability(
+    nvme_service, ana_id, orch, state="AVAILABLE", anastates=None
+):
+    """Check for failed ANA GW become unavailable.
+
+    Args:
+        ana_id: Gateway ANA group id.
+        state: Gateway availability state
+        ana_states: Overall ana state. (output from self.ana_states)
+    Return:
+        True if Gateway availability is in expected state, else False
+    """
+    # get ANA states
+    if not anastates:
+        anastates = ana_states(nvme_service, orch)
+
+    # Check Availability of ANA Group Gateway
+    for _, _state in anastates.items():
+        if _state["anagrp-id"] == ana_id:
+            if _state["Availability"] == state:
+                return True
+            return False
+    return False
+
+
+def check_gateway(gateways, node_id):
+    """Check node is NVMeoF Gateway node.
+
+    Args:
+        node_id: Ceph node Id (ex., node6)
+    """
+    for gw in gateways:
+        if gw.node.id == node_id:
+            LOG.info(f"[{node_id}] {gw.node.hostname} is NVMeoF Gateway node.")
+            return gw
+    raise Exception(f"{node_id} doesn't match to any gateways provided...")
+
+
+def get_optimized_state(nvme_service, orch, failed_ana_id):
+    """Fetch the Optimized ANA states for failed gateway.
+
+    Args:
+        gateway: The gateway which is operational.
+        failed_ana_id: failed gateway ANA Group Id.
+
+    Returns:
+        gateways which shows ACTIVE state for failed ANA Group Id
+    """
+    # get ANA states
+    anastates = ana_states(nvme_service, orch)
+
+    # Fetch failed ANA Group Id in ACTIVE state
+    found = []
+
+    for ana_gw_id, state in anastates.items():
+        if (
+            state["Availability"] == "AVAILABLE"
+            and state.get(failed_ana_id) == "ACTIVE"
+        ):
+            found.append({ana_gw_id: state})
+
+    return found
+
+
+@retry((IOError, TimeoutError, CommandFailed), tries=7, delay=2)
+def validate_io(orch, namespaces, negative=False):
+    """Validate Continuous IO on namespaces.
+
+    - Collect rbd disk usage info for each rbd image.
+    - Validate written bytes value is incremental.
+
+    Args:
+        namespaces: list of namespaces
+    """
+
+    def io_value(ns):
+        sub_ns, pool, image = ns.rsplit("|", 2)
+        count = 3
+        samples = []
+        for _ in range(count):
+            out, _ = orch.shell(
+                args=[f"rbd --format json du {pool}/{image}"], timeout=600
+            )
+            out = json.loads(out)["images"][0]
+            samples.append(out)
+            time.sleep(6)
+        return sub_ns, f"{pool}/{image}", samples
+
+    def validate_incremetal_io(write_samples):
+        for i in range(len(write_samples) - 1):
+            if write_samples[i] >= write_samples[i + 1]:
+                return False
+        return True
+
+    with parallel() as p:
+        for namespace in namespaces:
+            p.spawn(io_value, namespace)
+
+        for result in p:
+            subsys, pool_img, samples = result
+            res = [i["used_size"] for i in samples]
+
+            LOG.info(
+                f"[ {subsys}|{pool_img} ] RBD DU Detailed - {log_json_dump(samples)}"
+            )
+            LOG.info(f"[ {subsys}|{pool_img} ] RBD DU samples - {res}")
+            if not validate_incremetal_io(res):
+                if negative:
+                    LOG.info(
+                        f"[ {subsys}|{pool_img} ] IO is not progressing as expected - {res}"
+                    )
+                    continue
+                raise IOError(f"[ {subsys}|{pool_img} ] IO is not progressing - {res}")
+            if negative:
+                LOG.error(
+                    f"[ {subsys}|{pool_img} ] IO is progressing as expected - {res}"
+                )
+                raise IOError(
+                    f"[ {subsys}|{pool_img} ] IO is progressing as expected - {res}"
+                )
+            LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
+
+    LOG.info("IO Validation is Successfull on all RBD images..")

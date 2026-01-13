@@ -10,7 +10,7 @@ from tests.nvmeof.workflows.constants import (
 )
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from utility.log import Log
-from utility.utils import generate_unique_id
+from utility.utils import generate_unique_id, log_json_dump
 
 LOG = Log(__name__)
 
@@ -251,12 +251,26 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                                     "RBD object not provided for pre-creating RBD image"
                                 )
 
+                lb_groups = namespace_args.pop("lb_groups", None)
+                ceph_cluster = namespace_args.pop("ceph_cluster", None)
                 with parallel() as p:
                     for num in range(bdev_cfg["count"]):
                         ns_args = deepcopy(namespace_args)
                         rbd_image = f"{name}-image{num}"
                         ns_args["rbd-image"] = rbd_image
                         ns_args = {"args": ns_args}
+                        if lb_groups:
+                            if isinstance(lb_groups, dict):
+                                if bdev_cfg.get("lb_group"):
+                                    lbgid = lb_groups[
+                                        get_node_by_id(
+                                            ceph_cluster,
+                                            bdev_cfg["lb_group"],
+                                        ).hostname
+                                    ]
+                                    ns_args.update({"load-balancing-group": lbgid})
+                            elif opt_args.get("lb_groups") == "sequential":
+                                lbgid = num
                         expected_namespaces.append(rbd_image)
                         p.spawn(gateway.namespace.add, **ns_args)
             validate_namespaces(gateway, expected_namespaces, nqn)
@@ -291,7 +305,7 @@ def validate_listeners(gateway, expected_listeners, nqn):
             )
 
 
-def configure_listeners(gateways, config: dict):
+def configure_listeners(gateways, config: dict, listeners=None):
     """
     Configure listeners for this specific gateway.
     This is called per gateway since each gateway needs its own listeners.
@@ -304,7 +318,8 @@ def configure_listeners(gateways, config: dict):
     expected_listeners = []
     for sub_cfg in subsystem_config:
         nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
-        listeners = sub_cfg.get("listeners", [])
+        if not listeners:
+            listeners = sub_cfg.get("listeners", [])
         if listeners:
             if not isinstance(listeners, list):
                 listeners = [listeners]
@@ -430,3 +445,44 @@ def teardown(nvme_service, rbd_obj):
             pools_to_delete.add(nvme_service.nvme_metadata_pool)
         rbd_obj.clean_up(pools=list(pools_to_delete))
     return rc
+
+
+def fetch_namespaces(gateway, failed_ana_grp_ids=[], get_list=False):
+    """Fetch all namespaces for failed gateways.
+
+    Args:
+        gateway: Operational gateway
+        failed_ana_grp_ids: Failed or to-be failed gateway ids
+    Returns:
+        list of namespaces
+    """
+    args = {"base_cmd_args": {"format": "json"}}
+    subsystems, _ = gateway.subsystem.list(**args)
+    subsystems = json.loads(subsystems)
+
+    namespaces = []
+    all_ns = []
+    for subsystem in subsystems["subsystems"]:
+        sub_name = subsystem["nqn"]
+        cmd_args = {"args": {"subsystem": subsystem["nqn"]}}
+        nspaces, _ = gateway.namespace.list(**{**args, **cmd_args})
+        nspaces = json.loads(nspaces)["namespaces"]
+        all_ns.extend(nspaces)
+
+        if failed_ana_grp_ids:
+            for ns in nspaces:
+                if ns["load_balancing_group"] in failed_ana_grp_ids:
+                    # <subsystem>|<nsid>|<pool_name>|<image>
+                    ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
+                    if get_list:
+                        namespaces.append({"list": ns, "info": f"{sub_name}|{ns_info}"})
+                    else:
+                        namespaces.append(f"{sub_name}|{ns_info}")
+    if not failed_ana_grp_ids:
+        LOG.info(f"All namespaces : {log_json_dump(all_ns)}")
+        return all_ns
+
+    LOG.info(
+        f"Namespaces found for ANA-grp-id [{failed_ana_grp_ids}]: {log_json_dump(namespaces)}"
+    )
+    return namespaces
