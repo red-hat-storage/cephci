@@ -115,6 +115,7 @@ tests:
       abort-on-fail: true
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:

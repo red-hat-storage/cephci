@@ -7,6 +7,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd-gw
+        nvme_metadata_pool: rbd-gw
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -42,6 +43,7 @@ tests:
       module: test_ceph_nvmeof_high_availability.py
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
