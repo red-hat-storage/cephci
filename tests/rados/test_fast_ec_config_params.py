@@ -636,6 +636,9 @@ def run(ceph_cluster, **kw):
                     expected_ec_opt=None,
                 )
 
+                # Create staggered upgrade pools that will accumulate across upgrades
+                create_staggered_upgrade_pools(rados_obj, client_node, upgrade_case)
+
             elif upgrade_case in ["case_2_mon_and_mgr", "case_3_osd_mon_mgr"]:
                 # Case 2 and Case 3 have identical behavior
                 case_desc = (
@@ -710,6 +713,9 @@ def run(ceph_cluster, **kw):
                     ],
                 )
 
+                # Create staggered upgrade pools that will accumulate across upgrades
+                create_staggered_upgrade_pools(rados_obj, client_node, upgrade_case)
+
             elif upgrade_case == "case_4_and_5_all_core_daemons":
                 log.info("\n" + "=" * 80)
                 log.info("All core daemons (Mon, Mgr, OSD) upgraded to 9.x")
@@ -756,6 +762,11 @@ def run(ceph_cluster, **kw):
                     additional_info=[
                         "osd_pool_default_flag_ec_optimizations: true (verified)"
                     ],
+                )
+
+                # Create staggered upgrade pools that will accumulate across upgrades
+                create_staggered_upgrade_pools(
+                    rados_obj, client_node, "case_4_all_core_daemons"
                 )
 
                 # ===== CASE 5: Backward Compatibility Test =====
@@ -826,16 +837,16 @@ def run(ceph_cluster, **kw):
                         )
                         log.info(f"CephFS {fs_name} created successfully")
 
-                        # Deploy MDS daemons
-                        log.info("Deploying MDS daemons...")
-                        all_nodes = ceph_cluster.get_nodes()
-                        mds_placement = f"1 {all_nodes[0].hostname}"
+                        # # no need to deploy MDS daemons, Existing MDS daemons will be used
+                        # log.info("Deploying MDS daemons...")
+                        # all_nodes = ceph_cluster.get_nodes()
+                        # mds_placement = f"1 {all_nodes[0].hostname}"
 
-                        client_node.exec_command(
-                            cmd=f"ceph orch apply mds {fs_name} --placement='{mds_placement}'",
-                            sudo=True,
-                        )
-                        time.sleep(30)  # Wait for MDS
+                        # client_node.exec_command(
+                        #     cmd=f"ceph orch apply mds {fs_name} --placement='{mds_placement}'",
+                        #     sudo=True,
+                        # )
+                        # time.sleep(30)  # Wait for MDS
 
                         mds_stat_out, _ = client_node.exec_command(
                             cmd=f"ceph fs status {fs_name}", sudo=True
@@ -891,18 +902,6 @@ def run(ceph_cluster, **kw):
                             log.info(f"Filesystem {fs_name} removed")
                         except Exception as e:
                             log.warning(f"Failed to remove filesystem: {e}")
-
-                        # Remove MDS service
-                        try:
-                            log.info(f"Removing MDS service mds.{fs_name}...")
-                            mds_rm_cmd = f"ceph orch rm mds.{fs_name}"
-                            client_node.exec_command(
-                                cmd=mds_rm_cmd, sudo=True, check_ec=False
-                            )
-                            time.sleep(5)
-                            log.info(f"MDS service mds.{fs_name} removed")
-                        except Exception as e:
-                            log.warning(f"Failed to remove MDS service: {e}")
 
                         # Delete pools
                         try:
@@ -1604,6 +1603,473 @@ def run(ceph_cluster, **kw):
             return 1
 
         log.info("Verification of Fast EC space gain completed successfully")
+        return 0
+
+    if config.get("test_staggered_upgrade_accumulated_pools"):
+        """
+        Test suite for verifying all pools accumulated during staggered upgrades.
+
+        This test runs AFTER the entire cluster is upgraded.
+
+        Workflow:
+        1. Discover all staggered upgrade pools
+        2. Enable Fast EC features on all EC pools
+        3. Run I/O tests on EC pools
+        4. Test RBD images (existing + create new)
+        5. Run scrub & deep-scrub, verify PGs are active+clean
+        6. Summary and cleanup (if cleanup_pools=True)
+        """
+        log.info("=" * 80)
+        log.info("TEST: STAGGERED UPGRADE ACCUMULATED POOLS VERIFICATION")
+        log.info("=" * 80)
+
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
+        test_failed = False
+        cleanup_pools = config.get("cleanup_pools", True)
+        staggered_pools = None  # Initialize for finally block access
+
+        try:
+            # Step 1: Discover all staggered upgrade pools
+            log.info("\nStep 1: Discovering staggered upgrade pools...")
+            staggered_pools = get_staggered_upgrade_pools(rados_obj)
+
+            if not staggered_pools["all_pools"]:
+                log.warning(
+                    "No staggered upgrade pools found! "
+                    "Ensure test_fast_ec_optimization_params_partial_upgrade was run "
+                    "during each staggered upgrade phase."
+                )
+                log.info("Test skipped: No pools to verify")
+                return 0
+
+            log.info(
+                "Found %d staggered upgrade pools:", len(staggered_pools["all_pools"])
+            )
+            log.info("  EC pools: %d", len(staggered_pools["ec_pools"]))
+            log.info("  RBD data pools: %d", len(staggered_pools["rbd_data_pools"]))
+            log.info("  RBD meta pools: %d", len(staggered_pools["rbd_meta_pools"]))
+            log.info("  Upgrade cases found: %s", staggered_pools["upgrade_cases"])
+
+            # Step 2: Enable Fast EC features on all EC pools if not already enabled
+            log.info("\nStep 2: Enabling Fast EC features on all EC pools...")
+            all_ec_pools = (
+                staggered_pools["ec_pools"] + staggered_pools["rbd_data_pools"]
+            )
+            for pool_name in all_ec_pools:
+                ec_opt_dict = rados_obj.get_pool_property(
+                    pool=pool_name, props="allow_ec_optimizations"
+                )
+                if ec_opt_dict.get("allow_ec_optimizations") is True:
+                    log.info("  %s: Fast EC already enabled", pool_name)
+                else:
+                    if not rados_obj.enable_fast_ec_feature_on_pool(
+                        pool_name=pool_name
+                    ):
+                        raise Exception(f"Failed to enable Fast EC on pool {pool_name}")
+                    log.info("  %s: Fast EC enabled", pool_name)
+
+            # Step 3: Run I/O tests on accumulated pools
+            log.info("\nStep 3: Running I/O tests on accumulated pools...")
+
+            # Test EC pools
+            for pool_name in staggered_pools["ec_pools"]:
+                log.info("  Testing I/O on EC pool: %s", pool_name)
+                if not rados_obj.bench_write(
+                    pool_name=pool_name,
+                    byte_size="8K",
+                    max_objs=50,
+                    verify_stats=False,
+                ):
+                    log.error("    Write test FAILED on pool: %s", pool_name)
+                    raise Exception(f"Failed to write data to EC pool {pool_name}")
+                log.info("    Write test: PASSED")
+
+            # Step 4: Test RBD images - write on existing and create new images
+            log.info("\nStep 4: Testing RBD images (existing + new)...")
+            for meta_pool in staggered_pools["rbd_meta_pools"]:
+                data_pool = meta_pool.replace(
+                    STAGGERED_UPGRADE_RBD_META_POOL_PREFIX,
+                    STAGGERED_UPGRADE_RBD_DATA_POOL_PREFIX,
+                )
+                log.info("  Pool: %s (data: %s)", meta_pool, data_pool)
+
+                # List and test existing images
+                images_out, _ = client_node.exec_command(
+                    cmd=f"rbd ls {meta_pool}", sudo=True
+                )
+                existing_images = (
+                    [img for img in images_out.strip().split("\n") if img]
+                    if images_out
+                    else []
+                )
+                log.info("    Existing images: %s", existing_images)
+
+                # Create new image
+                new_image = f"post-upgrade-image-{meta_pool.split('-')[-1]}"
+                client_node.exec_command(
+                    cmd=f"rbd create {new_image} --size 256M --data-pool {data_pool} --pool {meta_pool}",
+                    sudo=True,
+                )
+                log.info("    Created new image: %s", new_image)
+
+                # Run I/O on all images (existing + new)
+                all_images = existing_images + [new_image]
+                try:
+                    for image in all_images:
+                        client_node.exec_command(
+                            cmd=f"rbd bench {meta_pool}/{image} --io-type write --io-size 4K --io-total 512K",
+                            sudo=True,
+                        )
+                        log.info("    I/O on %s: PASSED", image)
+                except Exception as e:
+                    log.error("    I/O test failed: %s", e)
+                    raise Exception(f"RBD I/O test failed in pool {meta_pool}: {e}")
+
+            # Step 5: Run scrub and deep-scrub on all pools, verify PGs are active+clean
+            log.info("\nStep 5: Running scrub & deep-scrub on all pools...")
+
+            # Initiate scrub and deep-scrub on all pools
+            for pool_name in staggered_pools["all_pools"]:
+                rados_obj.run_scrub(pool=pool_name)
+                rados_obj.run_deep_scrub(pool=pool_name)
+                log.info("  Initiated scrub/deep-scrub on: %s", pool_name)
+
+            # Wait for scrubs to complete
+            log.info("  Waiting for scrubs to complete...")
+            time.sleep(120)
+
+            # Verify PG states
+            disallowed_states = [
+                "remapped",
+                "backfilling",
+                "degraded",
+                "incomplete",
+                "peering",
+                "recovering",
+                "recovery_wait",
+                "undersized",
+                "backfilling_wait",
+                "scrubbing",
+            ]
+            for pool_name in staggered_pools["all_pools"]:
+                if not rados_obj.check_pool_pg_states(
+                    pool=pool_name, disallowed_states=disallowed_states
+                ):
+                    raise Exception(f"Pool {pool_name} PGs not active+clean")
+                log.info("  %s: PGs active+clean", pool_name)
+
+            # Step 6: Summary
+            log.info("\n" + "=" * 80)
+            log.info("STAGGERED UPGRADE ACCUMULATED POOLS TEST SUMMARY")
+            log.info("=" * 80)
+            log.info("Total pools tested: %d", len(staggered_pools["all_pools"]))
+            log.info(
+                "  EC pools (app=ec-upgrade): %d", len(staggered_pools["ec_pools"])
+            )
+            log.info(
+                "  RBD data pools (EC): %d", len(staggered_pools["rbd_data_pools"])
+            )
+            log.info(
+                "  RBD meta pools (replicated): %d",
+                len(staggered_pools["rbd_meta_pools"]),
+            )
+            log.info("Upgrade cases covered: %s", staggered_pools["upgrade_cases"])
+            log.info("=" * 80)
+
+        except Exception as e:
+            log.error("Failed with exception: %s", e.__doc__)
+            log.exception(e)
+            rados_obj.log_cluster_health()
+            test_failed = True
+        finally:
+            log.info("\n \n ************** in finally block *************** \n \n")
+
+            # Cleanup staggered upgrade pools if configured
+            if cleanup_pools and staggered_pools and staggered_pools["all_pools"]:
+                log.info(
+                    "Cleaning up %d staggered upgrade pools...",
+                    len(staggered_pools["all_pools"]),
+                )
+                for pool_name in (
+                    staggered_pools["rbd_meta_pools"]
+                    + staggered_pools["rbd_data_pools"]
+                    + staggered_pools["ec_pools"]
+                ):
+                    rados_obj.delete_pool(pool=pool_name)
+                    log.info("  Deleted: %s", pool_name)
+            elif not cleanup_pools:
+                log.info("Skipping pool cleanup (cleanup_pools=False)")
+
+            # Log cluster health
+            rados_obj.log_cluster_health()
+
+            # Check for crashes after test execution
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
+                log.error("Test failed due to crash at the end of test")
+                test_failed = True
+
+        if test_failed:
+            return 1
+
+        log.info(
+            "Staggered upgrade accumulated pools verification completed successfully"
+        )
+        return 0
+
+    if config.get("test_stripe_unit_pool_creation"):
+        """
+        Test: Stripe Unit and Fast EC Default Verification
+
+        Verifies that Fast EC is enabled by default only for supported configurations,
+        and that stripe_unit defaults are correct.
+
+        Expected Defaults:
+        - Fast EC pools: stripe_unit = 16K, allow_ec_optimizations = True
+        - Non-Fast EC pools: stripe_unit = 4K, allow_ec_optimizations = False
+
+        Workflow:
+        1. Create EC pools with various plugin/technique/k/m combinations
+        2. Verify allow_ec_optimizations matches expected
+        3. Verify stripe_unit matches expected (16K for Fast EC, 4K otherwise)
+        4. Write data to verify pool functionality
+        5. Cleanup all test pools
+        """
+        log.info("=" * 80)
+        log.info("TEST: STRIPE UNIT AND FAST EC DEFAULT VERIFICATION")
+        log.info("=" * 80)
+
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
+        test_failed = False
+        created_pools = []
+        pool_fast_ec_expected = {}  # pool_name -> fast_ec_expected
+
+        # Pool configurations: (k, m, plugin, technique, fast_ec_expected, d, description)
+        # Fast EC supported: Jerasure+reed_sol_van, ISA+reed_sol_van, ISA+cauchy
+        pool_configs = [
+            # Jerasure with reed_sol_van - Fast EC SUPPORTED
+            (2, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k2m2"),
+            (4, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k4m2"),
+            (4, 3, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k4m3"),
+            (5, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k5m2"),
+            (6, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k6m2"),
+            (8, 4, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k8m4"),
+            (8, 6, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k8m6"),
+            # ISA with reed_sol_van - Fast EC SUPPORTED
+            (2, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k2m2"),
+            (4, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k4m2"),
+            (4, 3, "isa", "reed_sol_van", True, None, "isa-rsv-k4m3"),
+            (5, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k5m2"),
+            (6, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k6m2"),
+            (8, 4, "isa", "reed_sol_van", True, None, "isa-rsv-k8m4"),
+            (8, 6, "isa", "reed_sol_van", True, None, "isa-rsv-k8m6"),
+            # ISA with cauchy - Fast EC SUPPORTED
+            (2, 2, "isa", "cauchy", True, None, "isa-cauchy-k2m2"),
+            (4, 2, "isa", "cauchy", True, None, "isa-cauchy-k4m2"),
+            (4, 3, "isa", "cauchy", True, None, "isa-cauchy-k4m3"),
+            (5, 2, "isa", "cauchy", True, None, "isa-cauchy-k5m2"),
+            (6, 2, "isa", "cauchy", True, None, "isa-cauchy-k6m2"),
+            (8, 4, "isa", "cauchy", True, None, "isa-cauchy-k8m4"),
+            (8, 6, "isa", "cauchy", True, None, "isa-cauchy-k8m6"),
+            # ISA with reed_sol_van but m > 4 - falls back to cauchy - Fast EC supported
+            (4, 5, "isa", "reed_sol_van", True, None, "isa-rsv-m5-fallback-k4m5"),
+            (5, 5, "isa", "reed_sol_van", True, None, "isa-rsv-m5-fallback-k5m5"),
+            (6, 5, "isa", "reed_sol_van", True, None, "isa-rsv-m5-fallback-k6m5"),
+            (4, 6, "isa", "reed_sol_van", True, None, "isa-rsv-m6-fallback-k4m6"),
+            (6, 6, "isa", "reed_sol_van", True, None, "isa-rsv-m6-fallback-k6m6"),
+            # Clay plugin - Fast EC NOT supported
+            (2, 2, "clay", None, False, 3, "clay-k2m2d3"),
+            (3, 2, "clay", None, False, 4, "clay-k3m2d4"),
+            (4, 2, "clay", None, False, 5, "clay-k4m2d5"),
+        ]
+
+        try:
+            log.info("\nStep 1: Creating EC pools with various configurations...")
+
+            # Get number of OSD hosts to determine failure domain
+            num_osd_hosts = len(rados_obj.get_osd_hosts())
+            log.info("  Number of OSD hosts: %d", num_osd_hosts)
+
+            for k, m, plugin, technique, fast_ec_expected, d, desc in pool_configs:
+                pool_name = f"stripe-unit-test-{desc}"
+                profile_name = f"ec_profile_{pool_name}"
+
+                # Determine failure domain: host if enough hosts, else osd
+                required_shards = k + m if d is None else max(k + m, d)
+                failure_domain = "host" if num_osd_hosts >= required_shards else "osd"
+
+                log.info(
+                    "  Creating: %s (k=%d, m=%d, plugin=%s, technique=%s, d=%s, "
+                    "fast_ec=%s, failure_domain=%s)",
+                    pool_name,
+                    k,
+                    m,
+                    plugin,
+                    technique or "default",
+                    d,
+                    fast_ec_expected,
+                    failure_domain,
+                )
+
+                try:
+                    # Build kwargs for create_erasure_pool
+                    pool_kwargs = {
+                        "pool_name": pool_name,
+                        "profile_name": profile_name,
+                        "k": k,
+                        "m": m,
+                        "plugin": plugin,
+                        "crush-failure-domain": failure_domain,
+                    }
+                    if technique:
+                        pool_kwargs["technique"] = technique
+                    if d is not None:
+                        pool_kwargs["d"] = d
+
+                    if not rados_obj.create_erasure_pool(**pool_kwargs):
+                        raise Exception(f"Failed to create pool {pool_name}")
+
+                    created_pools.append(pool_name)
+                    pool_fast_ec_expected[pool_name] = fast_ec_expected
+                    log.info("    Created successfully")
+
+                except Exception as e:
+                    log.error("    Failed to create pool %s: %s", pool_name, e)
+                    raise
+
+            log.info("\nStep 2: Verifying Fast EC, stripe_unit and stripe_width...")
+            verification_passed = True
+            fast_ec_count, non_fast_ec_count = 0, 0
+
+            # Fetch all pool details and convert to dict for O(1) lookups
+            pool_details_map = {
+                p.get("pool_name"): p
+                for p in rados_obj.run_ceph_command(cmd="ceph osd pool ls detail")
+            }
+
+            # Cache for EC profiles (fetched on-demand, deduplicated)
+            ec_profiles_cache = {}
+
+            for pool_name in created_pools:
+                fast_ec_expected = pool_fast_ec_expected[pool_name]
+                pool_detail = pool_details_map.get(pool_name, {})
+                ec_profile_name = pool_detail.get("erasure_code_profile", "")
+
+                # Fetch EC profile if not cached
+                if ec_profile_name and ec_profile_name not in ec_profiles_cache:
+                    ec_profiles_cache[ec_profile_name] = rados_obj.run_ceph_command(
+                        cmd=f"ceph osd erasure-code-profile get {ec_profile_name}"
+                    )
+
+                # Extract allow_ec_optimizations from flags_names
+                ec_opt_actual = "ec_optimizations" in pool_detail.get("flags_names", "")
+
+                # Get EC profile details
+                profile = ec_profiles_cache.get(ec_profile_name, {})
+                stripe_unit_actual = int(profile.get("stripe_unit", 0))
+                k_val = int(profile.get("k", 0))
+
+                # Get stripe_width from pool details
+                stripe_width_actual = pool_detail.get("stripe_width", 0)
+
+                # Some profiles (e.g., clay) may not expose stripe_unit; derive from stripe_width
+                if stripe_unit_actual == 0 and stripe_width_actual and k_val:
+                    stripe_unit_actual = int(stripe_width_actual / k_val)
+
+                # Expected values
+                expected_stripe_unit = 16384 if fast_ec_expected else 4096
+                expected_stripe_width = k_val * stripe_unit_actual
+
+                # Verify
+                ec_opt_ok = ec_opt_actual == fast_ec_expected
+                stripe_unit_ok = stripe_unit_actual == expected_stripe_unit
+                stripe_width_ok = stripe_width_actual == expected_stripe_width
+
+                all_ok = ec_opt_ok and stripe_unit_ok and stripe_width_ok
+                status = "PASS" if all_ok else "FAIL"
+                if not all_ok:
+                    verification_passed = False
+
+                # Count for summary
+                if fast_ec_expected:
+                    fast_ec_count += 1
+                else:
+                    non_fast_ec_count += 1
+
+                log.info(
+                    "  %s: ec_opt=%s (exp=%s), stripe_unit=%d (exp=%d), "
+                    "stripe_width=%d (exp=k*stripe_unit=%d) - %s",
+                    pool_name,
+                    ec_opt_actual,
+                    fast_ec_expected,
+                    stripe_unit_actual,
+                    expected_stripe_unit,
+                    stripe_width_actual,
+                    expected_stripe_width,
+                    status,
+                )
+
+            if not verification_passed:
+                raise Exception("Pool property verification failed")
+
+            log.info("\nStep 3: Writing data to verify pool functionality...")
+
+            for pool_name in created_pools:
+                log.info("  Writing to: %s", pool_name)
+                if not rados_obj.bench_write(
+                    pool_name=pool_name,
+                    byte_size="4K",
+                    max_objs=20,
+                    verify_stats=False,
+                ):
+                    raise Exception(f"Failed to write to pool {pool_name}")
+                log.info("    Write: PASSED")
+
+            # Summary
+            log.info("\n" + "=" * 80)
+            log.info("STRIPE UNIT AND FAST EC VERIFICATION SUMMARY")
+            log.info("=" * 80)
+            log.info("Total pools tested: %d", len(created_pools))
+            log.info("Fast EC enabled pools: %d", fast_ec_count)
+            log.info("Non-Fast EC pools: %d", non_fast_ec_count)
+            log.info("All verifications: PASSED")
+            log.info("=" * 80)
+
+        except Exception as e:
+            log.error("Failed with exception: %s", e.__doc__)
+            log.exception(e)
+            rados_obj.log_cluster_health()
+            test_failed = True
+        finally:
+            log.info("\n \n ************** in finally block *************** \n \n")
+
+            # Cleanup created pools
+            log.info("\nCleaning up %d test pools...", len(created_pools))
+            for pool_name in created_pools:
+                rados_obj.delete_pool(pool=pool_name)
+            log.info("Cleanup completed")
+
+            rados_obj.log_cluster_health()
+
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
+                log.error("Test failed due to crash at the end of test")
+                test_failed = True
+
+        if test_failed:
+            return 1
+
+        log.info("Stripe unit pool creation verification completed successfully")
         return 0
 
 
@@ -2634,5 +3100,145 @@ def create_ec_pool_and_check_optimizations(rados_obj, pool_name, app_name="rados
         result["error"] = str(e)
         log.error("Error in create_ec_pool_and_check_optimizations: %s", e)
         log.exception(e)
+
+    return result
+
+
+# Pool name prefixes for staggered upgrade pools - used for identification and cleanup
+STAGGERED_UPGRADE_EC_POOL_PREFIX = "staggered-upgrade-ec-"
+STAGGERED_UPGRADE_RBD_DATA_POOL_PREFIX = "staggered-upgrade-rbd-data-"
+STAGGERED_UPGRADE_RBD_META_POOL_PREFIX = "staggered-upgrade-rbd-meta-"
+
+
+def create_staggered_upgrade_pools(rados_obj, client_node, upgrade_case):
+    """
+    Create pools that will accumulate during staggered upgrades.
+
+    Creates three pools per upgrade case:
+    1. EC pool with application "ec-upgrade" for tracking upgrade state
+    2. EC RBD data pool for RBD workloads
+    3. Replicated metadata pool for RBD
+
+    Writes test data to both EC and RBD pools to ensure they have content.
+    Pools are discovered later using get_staggered_upgrade_pools().
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        client_node: Client node for executing commands
+        upgrade_case: String identifying the upgrade case (e.g., "case_1_mgr_only")
+
+    Returns:
+        str or None: Error message if any step failed, None if all succeeded
+    """
+    # Generate unique pool names based on upgrade case
+    ec_pool_name = f"{STAGGERED_UPGRADE_EC_POOL_PREFIX}{upgrade_case}"
+    rbd_data_pool_name = f"{STAGGERED_UPGRADE_RBD_DATA_POOL_PREFIX}{upgrade_case}"
+    rbd_meta_pool_name = f"{STAGGERED_UPGRADE_RBD_META_POOL_PREFIX}{upgrade_case}"
+    rbd_image_name = f"staggered-upgrade-image-{upgrade_case}"
+
+    log.info(
+        "Creating staggered upgrade pools for %s: EC=%s, RBD-Data=%s, RBD-Meta=%s",
+        upgrade_case,
+        ec_pool_name,
+        rbd_data_pool_name,
+        rbd_meta_pool_name,
+    )
+
+    try:
+        # Step 1: Create EC pool with "ec-upgrade" application and write test data
+        if not rados_obj.create_erasure_pool(
+            pool_name=ec_pool_name,
+            profile_name=f"ec_profile_{ec_pool_name}",
+            k=2,
+            m=2,
+            app_name="ec-upgrade",
+        ):
+            return f"Failed to create EC pool {ec_pool_name}"
+        log.info("  Created EC pool: %s", ec_pool_name)
+
+        # Write test data to EC pool
+        rados_obj.bench_write(
+            pool_name=ec_pool_name, byte_size="4K", max_objs=100, verify_stats=False
+        )
+
+        # Step 2: Create EC RBD data pool
+        if not rados_obj.create_erasure_pool(
+            pool_name=rbd_data_pool_name,
+            profile_name=f"ec_profile_{rbd_data_pool_name}",
+            k=2,
+            m=2,
+            app_name="rbd",
+        ):
+            return f"Failed to create RBD EC data pool {rbd_data_pool_name}"
+        log.info("  Created RBD EC data pool: %s", rbd_data_pool_name)
+
+        # Step 3: Create replicated metadata pool
+        if not rados_obj.create_pool(pool_name=rbd_meta_pool_name, app_name="rbd"):
+            return f"Failed to create RBD metadata pool {rbd_meta_pool_name}"
+        log.info("  Created RBD metadata pool: %s", rbd_meta_pool_name)
+
+        # Step 4: Create RBD image and write data (without mounting)
+        create_cmd = (
+            f"rbd create {rbd_image_name} --size 512M "
+            f"--data-pool {rbd_data_pool_name} --pool {rbd_meta_pool_name}"
+        )
+        client_node.exec_command(cmd=create_cmd, sudo=True)
+        log.info("  Created RBD image: %s", rbd_image_name)
+
+        # Write data using rbd bench
+        bench_cmd = (
+            f"rbd bench {rbd_meta_pool_name}/{rbd_image_name} "
+            f"--io-type write --io-size 4K --io-total 1M"
+        )
+        client_node.exec_command(cmd=bench_cmd, sudo=True, check_ec=False)
+        log.info("  Test data written to RBD image")
+
+        log.info("Staggered upgrade pools created successfully for %s", upgrade_case)
+        return None  # Success
+
+    except Exception as e:
+        log.error("Error creating staggered upgrade pools: %s", e)
+        return str(e)
+
+
+def get_staggered_upgrade_pools(rados_obj):
+    """
+    Get all staggered upgrade pools created during upgrade process.
+
+    Args:
+        rados_obj: RadosOrchestrator object
+
+    Returns:
+        dict with ec_pools, rbd_data_pools, rbd_meta_pools, all_pools, upgrade_cases
+    """
+    result = {
+        "ec_pools": [],
+        "rbd_data_pools": [],
+        "rbd_meta_pools": [],
+        "all_pools": [],
+        "upgrade_cases": [],
+    }
+
+    all_pools = rados_obj.list_pools()
+    for pool_name in all_pools:
+        if pool_name.startswith(STAGGERED_UPGRADE_EC_POOL_PREFIX):
+            result["ec_pools"].append(pool_name)
+            result["all_pools"].append(pool_name)
+            result["upgrade_cases"].append(
+                pool_name[len(STAGGERED_UPGRADE_EC_POOL_PREFIX) :]
+            )
+        elif pool_name.startswith(STAGGERED_UPGRADE_RBD_DATA_POOL_PREFIX):
+            result["rbd_data_pools"].append(pool_name)
+            result["all_pools"].append(pool_name)
+        elif pool_name.startswith(STAGGERED_UPGRADE_RBD_META_POOL_PREFIX):
+            result["rbd_meta_pools"].append(pool_name)
+            result["all_pools"].append(pool_name)
+
+    log.info(
+        "Found staggered upgrade pools: EC=%d, RBD-data=%d, RBD-meta=%d",
+        len(result["ec_pools"]),
+        len(result["rbd_data_pools"]),
+        len(result["rbd_meta_pools"]),
+    )
 
     return result

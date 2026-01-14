@@ -16,7 +16,7 @@ TEST WORKFLOW:
     │   ├── Enable EC optimizations for EC pools
     │   ├── Enable compression (if configured)
     │   ├── Configure aggressive recovery settings
-    │   ├── Enable debug logging: debug_osd=20/20, debug_bluestore=20/20 (if configured)
+    │   ├── Enable debug logging: debug_osd=20/20 (if configured)
     │   └── Inject EC write errors on random OSDs (if configured)
     │       ├── bluestore_debug_inject_read_err=true
     │       └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
@@ -139,6 +139,7 @@ def run(ceph_cluster, **kw):
         enable_mon_thrashing (bool): Enable MON thrashing - leader failover/restart (default: False)
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
+        enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -180,6 +181,13 @@ def run(ceph_cluster, **kw):
     enable_election_strategy_thrash = config.get(
         "enable_election_strategy_thrash", True
     )
+    enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
+    if rados_obj.rhbuild.split(".")[0] < "9":
+        enable_fast_ec_config_params = False
+        log.info(
+            "Fast EC config params are not supported in this version. Running tests without fast EC config params."
+        )
+
     compression_algorithms = ["snappy", "zlib"]
     rgw_config = None
 
@@ -258,7 +266,12 @@ def run(ceph_cluster, **kw):
         with cf.ThreadPoolExecutor(max_workers=pool_workers) as pool_executor:
             log.info("Creating pools in parallel...")
 
-            rados_future = pool_executor.submit(create_rados_pools, rados_obj, config)
+            rados_future = pool_executor.submit(
+                create_rados_pools,
+                rados_obj,
+                config=config,
+                enable_fast_ec_config_params=enable_fast_ec_config_params,
+            )
 
             cephfs_future = None
             if enable_cephfs_pools:
@@ -267,12 +280,16 @@ def run(ceph_cluster, **kw):
                     rados_obj.create_cephfs_filesystem_mount,
                     client_node,
                     pool_type="erasure",
+                    enable_fast_ec_config_params=enable_fast_ec_config_params,
                 )
 
             rbd_future = None
             if enable_rbd_pools:
                 log.info("RBD workflows enabled - creating RBD pools")
-                rbd_future = pool_executor.submit(rados_obj.create_ec_rbd_pools)
+                rbd_future = pool_executor.submit(
+                    rados_obj.create_ec_rbd_pools,
+                    enable_fast_ec_config_params=enable_fast_ec_config_params,
+                )
 
             # Collect results
             try:
@@ -407,6 +424,7 @@ def run(ceph_cluster, **kw):
                 rados_obj,
                 data_pool_type="erasure",
                 ec_config={"k": 2, "m": 2},
+                enable_fast_ec_config_params=enable_fast_ec_config_params,
             )
             if not rgw_config:
                 log.warning("RGW S3 setup failed, disabling RGW thrashing")
@@ -778,6 +796,11 @@ def run(ceph_cluster, **kw):
                         cmd=f"ceph pg {pg_id} query -f json-pretty > /tmp/{pg_id}_query.txt",
                         sudo=True,
                     )
+                    client_node.exec_command(
+                        cmd=f"rados list-inconsistent-obj {pg_id} -f json-pretty "
+                        f"> /tmp/{pg_id}_inconsistent_obj.txt",
+                        sudo=True,
+                    )
                     time.sleep(5)
                     log.info(f"Running pg repair on PG: {pg_id}")
                     rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
@@ -986,14 +1009,16 @@ def run(ceph_cluster, **kw):
     return 0
 
 
-def create_rados_pools(rados_obj: RadosOrchestrator, config: Dict) -> List[Dict]:
+def create_rados_pools(
+    rados_obj: RadosOrchestrator, config: Dict, enable_fast_ec_config_params: bool
+) -> List[Dict]:
     """
     Create RADOS pools from file-based configuration.
 
     Args:
         rados_obj: RadosOrchestrator object
         config: Test configuration with pool_configs
-
+        enable_fast_ec_config_params: Whether to enable fast EC config params
     Returns:
         List of created pool configurations
     """
@@ -1035,7 +1060,7 @@ def create_rados_pools(rados_obj: RadosOrchestrator, config: Dict) -> List[Dict]
                 {
                     "name": pool_name,
                     "profile_name": f"{pool_name}-profile",
-                    "enable_fast_ec_features": True,
+                    "enable_fast_ec_features": enable_fast_ec_config_params,
                     "stripe_unit": 16384,
                 }
             )
@@ -2330,6 +2355,7 @@ def setup_rgw_s3_client(
     rados_obj: RadosOrchestrator,
     data_pool_type: str = "replicated",
     ec_config: Optional[Dict[str, Any]] = None,
+    enable_fast_ec_config_params: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Setup RGW S3 client by discovering endpoints, installing dependencies,
@@ -2350,7 +2376,7 @@ def setup_rgw_s3_client(
         ec_config: Optional EC pool configuration when data_pool_type is "erasure"
                    Example: {"k": 2, "m": 2, "plugin": "jerasure"}
                    If not provided, defaults to k=2, m=2
-
+        enable_fast_ec_config_params: Whether to enable fast EC config params
     Returns:
         Dict with access_key, secret_key, endpoints, buckets, uid, ec_pool_name or None if setup fails
     """
@@ -2410,7 +2436,9 @@ def setup_rgw_s3_client(
             ec_k = ec_config.get("k", 2)
             ec_m = ec_config.get("m", 2)
             ec_plugin = ec_config.get("plugin", "isa")
-            enable_fast_ec = ec_config.get("enable_fast_ec_features", True)
+            enable_fast_ec = ec_config.get(
+                "enable_fast_ec_features", enable_fast_ec_config_params
+            )
 
             ts = int(time.time())
             ec_pool_name = f"rgw-ec-data-pool-{ts}"
