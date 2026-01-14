@@ -1,10 +1,12 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 
 from cli.ceph.ceph import Ceph
+from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
-from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
+from tests.nfs.nfs_operations import dynamic_cleanup_common_names, setup_nfs_cluster
 from utility.log import Log
 
 log = Log(__name__)
@@ -74,9 +76,9 @@ def _dd_speed_to_mbps(dd_output: str):
     return bytes_per_sec / 1_000_000
 
 
-def capture_copy_details(client, nfs_mount, file_name, size="100"):
+def _capture_single_client_copy_details(client, nfs_mount, file_name, size="100"):
     """
-    Captures the output of the dd command executed remotely.
+    Captures the output of the dd command executed remotely for a single client.
     :param nfs_mount: The NFS mount path where the file will be created.
     :param size: The size of the file to create (default is "100M").
     :return: A tuple containing (stdout, stderr) from the dd command.
@@ -140,6 +142,55 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
         raise OperationFailedError(
             "Failed to capture read/write speed on {0}".format(client.hostname)
         )
+
+
+def capture_copy_details(client, nfs_mount, file_name, size="100"):
+    """
+    Captures the output of the dd command executed remotely.
+    Supports single client or list of clients.
+    :param nfs_mount: The NFS mount path where the file will be created.
+    :param size: The size of the file to create (default is "100M").
+    :return: A tuple containing (stdout, stderr) from the dd command.
+    """
+    if isinstance(client, list):
+        with ThreadPoolExecutor(max_workers=len(client)) as executor:
+            # Use unique filenames for each client to avoid conflicts
+            futures = [
+                executor.submit(
+                    _capture_single_client_copy_details,
+                    c,
+                    nfs_mount,
+                    f"{file_name}_{c.hostname}",
+                    size,
+                )
+                for c in client
+            ]
+            results = [f.result() for f in futures]
+
+            # Calculate average speeds for logging/debugging
+            total_write = 0.0
+            total_read = 0.0
+            count = 0
+            for res in results:
+                w = _extract_first_float(res.get("write_speed"))
+                r = _extract_first_float(res.get("read_speed"))
+                if w is not None and r is not None:
+                    total_write += w
+                    total_read += r
+                    count += 1
+
+            if count > 0:
+                avg_write = total_write / count
+                avg_read = total_read / count
+                return {
+                    "write_speed": f"{avg_write:.3f} MB/s",
+                    "read_speed": f"{avg_read:.3f} MB/s",
+                    "individual_results": results,
+                }
+            return results
+
+    else:
+        return _capture_single_client_copy_details(client, nfs_mount, file_name, size)
 
 
 def validate_qos_operation(operation_key, qos_type, cluster_name, qos_data):
@@ -623,7 +674,6 @@ def validate_ops_control(client, nfs_mount, file_name, dd_params):
         except Exception as cleanup_err:
             log.debug(f"validate_ops_control cleanup failed: {cleanup_err}")
 
-
 def run(ceph_cluster, **kw):
     """Verify QoS operations on NFS cluster"""
     config = kw.get("config")
@@ -638,7 +688,11 @@ def run(ceph_cluster, **kw):
     nfs_export = "/export"
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
+    cluster_qos = config.get("cluster_qos", False)
     subvolume_group = "ganeshagroup"
+    installer = ceph_cluster.get_nodes("installer")
+    if not nfs_nodes:
+        raise OperationFailedError("No NFS nodes found in cluster")
 
     if not nfs_nodes:
         raise OperationFailedError("No NFS nodes found in cluster")
@@ -653,15 +707,21 @@ def run(ceph_cluster, **kw):
     clients = clients[:no_clients]
     client = clients[0]
 
-    _orig_exec = client.exec_command
     ceph_nfs_client = Ceph(client).nfs
     Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
+    nfs_nodes = installer + nfs_nodes if cluster_qos else nfs_nodes
+    host_name = (
+        " ".join([x.hostname for x in nfs_nodes]) if cluster_qos else nfs_node.hostname
+    )
+
+    # rpc bind need to be enabled in installer
+    CephAdm(installer).ceph.nfs.cluster.validate_rpcbind_running(installer)
 
     try:
         # Setup nfs cluster
         setup_nfs_cluster(
             clients,
-            nfs_node.hostname,
+            host_name,
             port,
             version,
             nfs_name,
@@ -670,6 +730,8 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            round_robin=True if cluster_qos else False,
+            single_export=True if cluster_qos else False,
         )
 
         # Process QoS operations
@@ -722,7 +784,9 @@ def run(ceph_cluster, **kw):
                         qos_type, qos_data_after_restart
                     )
                 )
-        speed = capture_copy_details(client, nfs_mount, "sample.txt")
+        speed = capture_copy_details(
+            clients if cluster_qos else client, nfs_mount, "sample.txt"
+        )
         log.info(
             "Transfer speed is {0} for QoS {1} enabled in cluster level".format(
                 speed, qos_type
@@ -802,9 +866,10 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleanup in progress")
         log.debug("deleting NFS cluster {0}".format(cluster_name))
-        # restore original exec_command so other tests are unaffected
-        try:
-            client.exec_command = _orig_exec
-        except Exception:
-            pass
-        cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
+        dynamic_cleanup_common_names(
+            clients,
+            mounts_common_name="nfs",
+            clusters=[nfs_name],
+            mount_point="/mnt/",
+            group_name=subvolume_group,
+        )

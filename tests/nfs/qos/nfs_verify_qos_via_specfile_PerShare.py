@@ -4,7 +4,7 @@ from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Mount
 from tests.nfs.nfs_operations import cleanup_cluster, create_nfs_via_file_and_verify
-from tests.nfs.test_nfs_qos_on_cluster_level_enablement import (
+from tests.nfs.qos.test_nfs_qos_on_cluster_level_enablement import (
     _within_qos_limit,
     capture_copy_details,
 )

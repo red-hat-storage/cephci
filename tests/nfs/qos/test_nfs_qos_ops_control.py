@@ -4,7 +4,7 @@ from time import sleep
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
-from tests.nfs.test_nfs_qos_on_cluster_level_enablement import (
+from tests.nfs.qos.test_nfs_qos_on_cluster_level_enablement import (
     enable_cluster_ops_control,
     enable_export_ops_control,
     validate_ops_control,

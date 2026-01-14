@@ -4,12 +4,12 @@ from time import sleep
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
-from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
-from tests.nfs.test_nfs_qos_on_cluster_level_enablement import (
+from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster, validate_rpcbind_running_tool
+from tests.nfs.qos.test_nfs_qos_on_cluster_level_enablement import (
     _maybe_json_loads,
     _within_qos_limit,
     capture_copy_details,
-    enable_disable_qos_for_cluster,
+    enable_disable_qos_for_cluster, validate_rpcbind_running,
 )
 from utility.log import Log
 
@@ -116,6 +116,7 @@ def run(ceph_cluster, **kw):
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
     operation = config.get("operation", None)
+    cluster_qos = config.get("cluster_qos", False)
     cluster_bw = config["cluster_bw"][0]
     export_bw = config["export_bw"][0]
     if not nfs_nodes:
@@ -124,6 +125,9 @@ def run(ceph_cluster, **kw):
     nfs_node = nfs_nodes[0]
     qos_type = config.get("qos_type", None)
     subvolume_group = "ganeshagroup"
+    installer = ceph_cluster.get_nodes("installer")
+    if not nfs_nodes:
+        raise OperationFailedError("No NFS nodes found in cluster")
 
     no_clients = int(config.get("clients", "1"))
     if no_clients > len(clients):
@@ -133,12 +137,18 @@ def run(ceph_cluster, **kw):
     client = clients[0]
     ceph_nfs_client = Ceph(client).nfs
     Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
+    nfs_nodes = installer + nfs_nodes if cluster_qos else nfs_nodes
+    host_name = (
+        " ".join([x.hostname for x in nfs_nodes]) if cluster_qos else nfs_node.hostname
+    )  # supports mutliple nfs
 
+    # rpc bind need to be enabled in installer
+    validate_rpcbind_running_tool(installer)
     try:
         # Setup nfs cluster
         setup_nfs_cluster(
             clients,
-            nfs_node.hostname,
+            host_name,
             port,
             version,
             nfs_name,
@@ -147,10 +157,11 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            round_robin=True if cluster_qos else False,
+            single_export=True if cluster_qos else False,
         )
 
         # Process QoS operations
-        nfs_export = "{0}_0".format(nfs_export)
         # Enable QoS with parameters
         enable_disable_qos_for_cluster(
             enable_flag=True,
@@ -171,27 +182,31 @@ def run(ceph_cluster, **kw):
             },
         )
 
-        # enable QoS for export
-        enable_disable_qos_for_export(
-            enable_flag=True,
-            ceph_export_nfs_obj=ceph_nfs_client.export,
-            cluster_name=cluster_name,
-            qos_type=qos_type,
-            nfs_name=nfs_name,
-            export=nfs_export,
-            **{
-                k: export_bw[k]
-                for k in [
-                    "max_export_write_bw",
-                    "max_export_read_bw",
-                    "max_client_write_bw",
-                    "max_client_read_bw",
-                    "max_export_combined_bw",
-                    "max_client_combined_bw",
-                ]
-                if k in export_bw
-            },
-        )
+        # enable QoS for all exports
+        for i in range(no_clients):
+            current_export = f"{nfs_export}_0" if cluster_qos else f"{nfs_export}_{i}"
+            enable_disable_qos_for_export(
+                enable_flag=True,
+                ceph_export_nfs_obj=ceph_nfs_client.export,
+                cluster_name=cluster_name,
+                qos_type=qos_type,
+                nfs_name=nfs_name,
+                export=current_export,
+                **{
+                    k: export_bw[k]
+                    for k in [
+                        "max_export_write_bw",
+                        "max_export_read_bw",
+                        "max_client_write_bw",
+                        "max_client_read_bw",
+                        "max_export_combined_bw",
+                        "max_client_combined_bw",
+                    ]
+                    if k in export_bw
+                },
+            )
+            if cluster_qos:
+                break
 
         if operation == "restart":
             # Get nfs service name
@@ -200,13 +215,19 @@ def run(ceph_cluster, **kw):
                 x["service_name"] for x in data if x.get("service_id") == cluster_name
             ]
 
-            export_data_before_restart = ceph_nfs_client.export.get(
-                nfs_name=nfs_name, nfs_export=nfs_export
-            )
-
-            log.info(
-                "export_data_before_restart: {0}".format(export_data_before_restart)
-            )
+            # Check persistence for all exports
+            for i in range(no_clients):
+                current_export = (
+                    f"{nfs_export}_0" if cluster_qos else f"{nfs_export}_{i}"
+                )
+                export_data_before_restart = ceph_nfs_client.export.get(
+                    nfs_name=nfs_name, nfs_export=current_export
+                )
+                log.info(
+                    f"export_data_before_restart for {current_export}: {export_data_before_restart}"
+                )
+                if cluster_qos:
+                    break
 
             # restart the service
             Ceph(client).orch.restart(service_name)
@@ -214,55 +235,71 @@ def run(ceph_cluster, **kw):
                 sleep(5)
             # Waiting for QoS settings to load after cluster restart
             sleep(20)
-            export_data = ceph_nfs_client.export.get(
-                nfs_name=nfs_name, nfs_export=nfs_export
-            )
-            # validate if QOS data persists after cluster restart
-            export_data_after_restart = ceph_nfs_client.export.get(
-                nfs_name=nfs_name, nfs_export=nfs_export
-            )
-            if not export_data:
-                raise OperationFailedError("Failed to create nfs export")
 
-            export_data_after_restart = _maybe_json_loads(export_data_after_restart)
-            log.info("export_data_after_restart: {0}".format(export_data_after_restart))
+            # Validate persistence for all exports
+            for i in range(no_clients):
+                current_export = (
+                    f"{nfs_export}_0" if cluster_qos else f"{nfs_export}_{i}"
+                )
+                export_data = ceph_nfs_client.export.get(
+                    nfs_name=nfs_name, nfs_export=current_export
+                )
+                # validate if QOS data persists after cluster restart
+                export_data_after_restart = ceph_nfs_client.export.get(
+                    nfs_name=nfs_name, nfs_export=current_export
+                )
+                if not export_data:
+                    raise OperationFailedError(
+                        f"Failed to get nfs export {current_export}"
+                    )
 
-            qos_block = {}
-            if isinstance(export_data_after_restart, dict):
-                qos_block = export_data_after_restart.get("qos_block") or {}
-
-            if qos_block.get("max_export_write_bw"):
-                if float(
-                    re.findall(
-                        r"\d+\.\d+",
-                        qos_block["max_export_write_bw"],
-                    )[0]
-                ) == float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]):
-                    log.info(
-                        "Qos data for {0} for export persists even after the nfs cluster restarted".format(
-                            qos_type
-                        )
-                    )
-            elif qos_block.get("max_export_combined_bw"):
-                if float(
-                    re.findall(
-                        r"\d+\.\d+",
-                        qos_block["max_export_combined_bw"],
-                    )[0]
-                ) == float(re.findall(r"\d+", export_bw["max_export_combined_bw"])[0]):
-                    log.info(
-                        "Qos data for {0} for export persists even after the nfs cluster restarted".format(
-                            qos_type
-                        )
-                    )
-            else:
-                raise OperationFailedError(
-                    "Qos data for {0} did not persist after the nfs cluster restarted".format(
-                        qos_type
-                    )
+                export_data_after_restart = _maybe_json_loads(export_data_after_restart)
+                log.info(
+                    f"export_data_after_restart for {current_export}: {export_data_after_restart}"
                 )
 
-        speed = capture_copy_details(client, nfs_mount, "sample.txt")
+                qos_block = {}
+                if isinstance(export_data_after_restart, dict):
+                    qos_block = export_data_after_restart.get("qos_block") or {}
+
+                if qos_block.get("max_export_write_bw"):
+                    if float(
+                        re.findall(
+                            r"\d+\.\d+",
+                            qos_block["max_export_write_bw"],
+                        )[0]
+                    ) == float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]):
+                        log.info(
+                            "Qos data for {0} for export {1} persists even after the nfs cluster restarted".format(
+                                qos_type, current_export
+                            )
+                        )
+                elif qos_block.get("max_export_combined_bw"):
+                    if float(
+                        re.findall(
+                            r"\d+\.\d+",
+                            qos_block["max_export_combined_bw"],
+                        )[0]
+                    ) == float(
+                        re.findall(r"\d+", export_bw["max_export_combined_bw"])[0]
+                    ):
+                        log.info(
+                            "Qos data for {0} for export {1} persists even after the nfs cluster restarted".format(
+                                qos_type, current_export
+                            )
+                        )
+                else:
+                    raise OperationFailedError(
+                        "Qos data for {0} did not persist after the nfs cluster restarted for export {1}".format(
+                            qos_type, current_export
+                        )
+                    )
+                if cluster_qos:
+                    break
+
+        speed = capture_copy_details(
+            clients if cluster_qos else client, nfs_mount, "sample.txt"
+        )
         log.info(
             "Transfer speed is {0} for QoS {1} enabled in export level".format(
                 speed, qos_type
@@ -318,19 +355,24 @@ def run(ceph_cluster, **kw):
             )
         else:
             raise OperationFailedError(
-                "Test failed: QoS {0} enabled successfully in export level write speed is {1}"
-                " and read speed is {2} config is {3}".format(
+                "Test failed: \n QoS {0} enabled successfully in export level write speed is {1}"
+                " and read speed is {2} \n config is {3}".format(
                     qos_type, write_speed, read_speed, export_bw
                 )
             )
 
-        enable_disable_qos_for_export(
-            enable_flag=False,
-            ceph_export_nfs_obj=ceph_nfs_client.export,
-            cluster_name=cluster_name,
-            nfs_name=nfs_name,
-            export=nfs_export,
-        )
+        # Disable QoS for all exports
+        for i in range(no_clients):
+            current_export = f"{nfs_export}_0" if cluster_qos else f"{nfs_export}_{i}"
+            enable_disable_qos_for_export(
+                enable_flag=False,
+                ceph_export_nfs_obj=ceph_nfs_client.export,
+                cluster_name=cluster_name,
+                nfs_name=nfs_name,
+                export=current_export,
+            )
+            if cluster_qos:
+                break
 
         enable_disable_qos_for_cluster(
             enable_flag=False,
