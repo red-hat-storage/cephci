@@ -13,21 +13,22 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def add_smbtorture(client):
+def add_smbtorture(client, cloud_type):
     try:
-        # Fetch os version
-        cmd = '. /etc/os-release && echo "${VERSION_ID%%.*}"'
-        os_version = client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )[0].strip()
+        if cloud_type != "ibmc":
+            # Fetch os version
+            cmd = '. /etc/os-release && echo "${VERSION_ID%%.*}"'
+            os_version = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )[0].strip()
 
-        # Enable repo
-        cmd = f"subscription-manager repos --enable codeready-builder-for-rhel-{os_version}-x86_64-rpms"
-        client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
+            # Enable repo
+            cmd = f"subscription-manager repos --enable codeready-builder-for-rhel-{os_version}-x86_64-rpms"
+            client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
 
         # Install samba-test
         cmd = "dnf install -y --nogpgcheck samba-test"
@@ -111,6 +112,9 @@ def run(ceph_cluster, **kw):
     # Get smbtorture test case
     smbtorture_test = config.get("smbtorture_test", False)
 
+    # Get cloud type
+    cloud_type = config.get("cloud-type")
+
     # Get smb service value from spec file
     smb_shares = []
     smb_subvols = []
@@ -190,7 +194,7 @@ def run(ceph_cluster, **kw):
 
         if setup_smbtorture:
             # Setup smbtorture
-            add_smbtorture(client)
+            add_smbtorture(client, cloud_type)
 
         # Execute Smbtorture test
         out = run_smbtorture_tc(
