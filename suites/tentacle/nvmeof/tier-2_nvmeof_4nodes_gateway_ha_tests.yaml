@@ -309,7 +309,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 5G
@@ -321,7 +321,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 5G
@@ -333,7 +333,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 5G
@@ -500,7 +500,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 4
               size: 5G
@@ -565,7 +565,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 5G
@@ -577,7 +577,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 5G
@@ -589,7 +589,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 5G
@@ -654,7 +654,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 5G
@@ -666,7 +666,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 5G
@@ -678,7 +678,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 5G
@@ -745,7 +745,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 5G
@@ -757,7 +757,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 5G
@@ -769,7 +769,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 5G
@@ -832,7 +832,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 5G
@@ -844,7 +844,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 5G
@@ -856,7 +856,7 @@ tests:
               - node9
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 5G

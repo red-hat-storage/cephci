@@ -154,7 +154,7 @@ tests:
             listener_port: 4420
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
               count: 1
               size: 1G

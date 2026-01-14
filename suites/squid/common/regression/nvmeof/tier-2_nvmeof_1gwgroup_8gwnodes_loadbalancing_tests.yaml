@@ -33,7 +33,7 @@ tests:
             listeners: [node14, node15, node16, node17]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 8G
@@ -41,7 +41,7 @@ tests:
             listeners: [node14, node15, node16, node17]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 8G
@@ -49,7 +49,7 @@ tests:
             listeners: [node14, node15, node16, node17]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 8G
@@ -104,14 +104,14 @@ tests:
             listeners: [node16, node17, node14, node15, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 1
+            serial: 2
             bdevs:
             - count: 2
               size: 8G
             listener_port: 4420
             listeners: [node16, node17, node14, node15, node10, node11, node12, node13]
           - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
+            serial: 3
             bdevs:
             - count: 2
               size: 8G
@@ -119,7 +119,7 @@ tests:
             listeners: [node16, node17, node14, node15, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
+            serial: 4
             bdevs:
             - count: 2
               size: 8G
