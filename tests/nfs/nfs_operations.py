@@ -42,6 +42,8 @@ def setup_nfs_cluster(
     vip=None,
     ceph_cluster=None,
     active_standby=False,
+    round_robin=False,
+    single_export=False,
 ):
     # Get ceph cluter object and setup start time
     global ceph_cluster_obj
@@ -79,8 +81,13 @@ def setup_nfs_cluster(
 
     # Step 3: Perform Export on clients
     export_list = []
+
+    # If single_export is True, we only create one export but still populate export_list
+    # so the mounting logic can reference it.
+    loop_clients = [clients[0]] if single_export else clients
+
     i = 0
-    for client in clients:
+    for client in loop_clients:
         export_name = "{export}_{i}".format(export=export, i=i)
         Ceph(client).nfs.export.create(
             fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
@@ -105,18 +112,49 @@ def setup_nfs_cluster(
         ports_to_open = ["portmapper", "mountd"]
         for nfs_node in nfs_nodes:
             open_mandatory_v3_ports(nfs_node, ports_to_open)
-    if isinstance(nfs_server, list):
-        nfs_server = nfs_server[0]
+
+    mount_servers = []
     if ha:
-        nfs_server = vip.split("/")[0]  # Remove the port
+        mount_servers = [vip.split("/")[0]]  # Remove the port
+    else:
+        # Normalize nfs_server to a list
+        if isinstance(nfs_server, list):
+            servers = nfs_server
+        elif isinstance(nfs_server, str):
+            # Split by space if multiple servers are provided in one string
+            servers = nfs_server.split()
+        else:
+            servers = [nfs_server]
+
+        if round_robin:
+            mount_servers = servers
+        else:
+            mount_servers = [servers[0]]
 
     i = 0
+    server_idx = 0
     for version, clients in mount_versions.items():
         for client in clients:
+            current_server = mount_servers[server_idx % len(mount_servers)]
+
+            # Determine export to mount
+            if single_export:
+                current_export = export_list[0]
+            elif i < len(export_list):
+                current_export = export_list[i]
+            else:
+                current_export = export_name  # Fallback
+
             client.create_dirs(dir_path=nfs_mount, sudo=True)
-            if mount_retry(client, nfs_mount, version, port, nfs_server, export_name):
-                log.info("Mount succeeded on %s" % client.hostname)
+            if mount_retry(
+                client, nfs_mount, version, port, current_server, current_export
+            ):
+                log.info(
+                    "Mount succeeded on %s using server %s and export %s"
+                    % (client.hostname, current_server, current_export)
+                )
             i += 1
+            server_idx += 1
             sleep(1)
     log.info("Mount succeeded on all clients")
 
@@ -909,6 +947,7 @@ def verify_nfs_ganesha_service(node, timeout):
             )
             log.info("sleep(20)  # Allow some time for the service to stabilize")
             sleep(20)  # Allow some time for the service to stabilize
+
             return True
         else:
             log.info(
@@ -957,16 +996,10 @@ def create_multiple_nfs_instance_via_spec_file(
             port = spec["spec"]["port"] + i
             monitoring_port = spec["spec"]["monitoring_port"] + i
 
-            placement = {}
-            if "host_pattern" in spec.get("placement", {}):
-                placement["host_pattern"] = spec["placement"]["host_pattern"]
-            elif "label" in spec.get("placement", {}):
-                placement["label"] = spec["placement"]["label"]
-
             new_object = {
                 "service_type": spec["service_type"],
                 "service_id": service_id,
-                "placement": placement,
+                "placement": {"host_pattern": spec["placement"]["host_pattern"]},
                 "spec": {
                     "port": port,
                     "monitoring_port": monitoring_port,
@@ -1038,14 +1071,6 @@ def dynamic_cleanup_common_names(
     if ceph_cluster_obj:
         nfs_nodes = ceph_cluster_obj.get_nodes("nfs")
         coredump_path = "/var/lib/systemd/coredump"
-        for nfs_node in nfs_nodes:
-            if check_coredump_generated(nfs_node, coredump_path, setup_start_time):
-                log.error(
-                    f"Coredump found on {nfs_node.hostname} after test execution."
-                )
-                raise NfsCleanupFailed(
-                    "Coredump generated post execution of the current test case"
-                )
 
     # Step 1: Unmount and remove all matching mount directories on each client
     for client in clients:
@@ -1096,9 +1121,14 @@ def dynamic_cleanup_common_names(
     subvols = json.loads(
         Ceph(client).fs.sub_volume.ls(volume="cephfs", group_name=group_name)
     )
-    log.info(Ceph(clients[0]).orch.ls())
     for cluster in clusters:
-        exports = json.loads(Ceph(client).nfs.export.ls(cluster))
+        try:
+            exports = json.loads(Ceph(client).nfs.export.ls(cluster))
+        except json.JSONDecodeError:
+            log.warning(
+                f"Failed to list exports for cluster '{cluster}'. Skipping export cleanup."
+            )
+            exports = []
         log.info(f"Found {len(exports)} exports in cluster '{cluster}': {exports}")
 
         for export in exports:
@@ -1131,8 +1161,13 @@ def dynamic_cleanup_common_names(
 
     # Step 5: Wait for all NFS daemons to be removed
     log.info("Waiting for all NFS daemons to be removed from the cluster...")
-    sleep(30)
     check_nfs_daemons_removed(client)
+    for nfs_node in nfs_nodes:
+        if check_coredump_generated(nfs_node, coredump_path, setup_start_time):
+            log.error(f"Coredump found on {nfs_node.hostname} after test execution.")
+            raise NfsCleanupFailed(
+                "Coredump generated post execution of the current test case"
+            )
     log.info("Dynamic cleanup of NFS resources completed")
 
 

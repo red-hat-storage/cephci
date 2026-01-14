@@ -2,14 +2,17 @@ import json
 from time import sleep
 
 from cli.ceph.ceph import Ceph
+from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
-from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
-from tests.nfs.test_nfs_qos_on_cluster_level_enablement import (
-    enable_cluster_ops_control,
-    enable_export_ops_control,
+from tests.nfs.nfs_operations import dynamic_cleanup_common_names, setup_nfs_cluster
+from tests.nfs.qos.test_nfs_qos_on_cluster_level_enablement import (
+    enable_disable_qos_for_cluster,
     validate_ops_control,
     validate_ops_limit,
     verify_ops_control_settings,
+)
+from tests.nfs.qos.test_nfs_qos_on_export_level_enablement import (
+    enable_disable_qos_for_export,
 )
 from utility.log import Log
 
@@ -80,15 +83,34 @@ def run(ceph_cluster, **kw):
         nfs_export = "/export_0"
         nfs_mount = "/mnt/nfs"
         fs = "cephfs"
+        cluster_qos = config.get("cluster_qos", False)
+        control = config.get("control", None)
+        if not control:
+            log.warning(
+                "Config 'control' is missing or empty. Defaulting to 'ops_control' for this test."
+            )
+            control = "ops_control"
         qos_type = config.get("qos_type")
+        installer = ceph_cluster.get_nodes("installer")
+        subvolume_group = "ganeshagroup"
         if not qos_type:
             raise ConfigError("qos_type missing in config")
         dd_params = config.get("dd_parameters") or {"block_size": "4K", "count": 16384}
 
+        nfs_nodes = installer + nfs_nodes if cluster_qos else nfs_nodes
+        host_name = (
+            " ".join([x.hostname for x in nfs_nodes])
+            if cluster_qos
+            else nfs_node.hostname
+        )
+
+        Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
+        CephAdm(installer).ceph.nfs.cluster.validate_rpcbind_running(installer[0])
+
         # Setup NFS cluster
         setup_nfs_cluster(
             clients=clients,
-            nfs_server=nfs_node.hostname,
+            nfs_server=host_name,
             port=config.get("port", "2049"),
             version=config.get("nfs_version", "4.2"),
             nfs_name=cluster_name,
@@ -97,12 +119,16 @@ def run(ceph_cluster, **kw):
             export=nfs_export,
             fs=fs,
             ceph_cluster=ceph_cluster,
+            round_robin=True if cluster_qos else False,
+            single_export=True if cluster_qos else False,
         )
+
+        target_clients = clients if cluster_qos else client
 
         log.info("=" * 80)
         log.info("STEP 1: Measuring baseline performance (no ops control)...")
         baseline = validate_ops_control(
-            client=client,
+            client=target_clients,
             nfs_mount=nfs_mount,
             file_name="baseline.txt",
             dd_params=dd_params,
@@ -115,12 +141,21 @@ def run(ceph_cluster, **kw):
         cluster_ops = config.get("cluster_ops", {}) or {}
         log.info("Cluster ops config: %s", cluster_ops)
         if cluster_ops:
-            enable_cluster_ops_control(client, cluster_name, qos_type, cluster_ops)
+            enable_disable_qos_for_cluster(
+                enable_flag=True,
+                ceph_cluster_nfs_obj=Ceph(client).nfs.cluster,
+                cluster_name=cluster_name,
+                qos_type=qos_type,
+                operation=control,
+                cluster_qos=cluster_qos,
+                **cluster_ops,
+            )
+
             cluster_settings, _ = verify_ops_control_settings(client, cluster_name)
             log.info("Cluster settings verified: %s", cluster_settings)
 
             cluster_test = validate_ops_control(
-                client=client,
+                client=target_clients,
                 nfs_mount=nfs_mount,
                 file_name="cluster_ops.txt",
                 dd_params=dd_params,
@@ -160,12 +195,15 @@ def run(ceph_cluster, **kw):
             log.info("STEP 3: Enabling export-level ops control...")
             nfs_export_path = f"{nfs_export}_0"
 
-            enable_export_ops_control(
-                client,
-                cluster_name,
-                nfs_export_path,
-                qos_type,
-                export_ops,
+            enable_disable_qos_for_export(
+                enable_flag=True,
+                ceph_export_nfs_obj=Ceph(client).nfs.export,
+                cluster_name=cluster_name,
+                qos_type=qos_type,
+                operation=control,
+                nfs_name=cluster_name,
+                export=nfs_export_path,
+                **export_ops,
             )
 
             cluster_settings, export_settings = verify_ops_control_settings(
@@ -176,7 +214,7 @@ def run(ceph_cluster, **kw):
             log.info("Export settings verified: %s", export_settings)
 
         export_test = validate_ops_control(
-            client=client,
+            client=target_clients,
             nfs_mount=nfs_mount,
             file_name="export_ops.txt",
             dd_params=dd_params,
@@ -221,7 +259,7 @@ def run(ceph_cluster, **kw):
 
                 # verify ops still effective
                 post_restart_test = validate_ops_control(
-                    client=client,
+                    client=target_clients,
                     nfs_mount=nfs_mount,
                     file_name="post_restart.txt",
                     dd_params=dd_params,
@@ -235,12 +273,38 @@ def run(ceph_cluster, **kw):
                     "Service for cluster not found; skipping restart persistence checks"
                 )
 
+        if cluster_ops:
+            log.info("=" * 80)
+            log.info("STEP 5: Disabling cluster-level ops control...")
+            enable_disable_qos_for_cluster(
+                enable_flag=False,
+                ceph_cluster_nfs_obj=Ceph(client).nfs.cluster,
+                cluster_name=cluster_name,
+                qos_type=qos_type,
+                operation=control,
+                cluster_qos=cluster_qos,
+            )
+
+        if export_ops:
+            log.info("=" * 80)
+            log.info("STEP 6: Disabling export-level ops control...")
+            enable_disable_qos_for_export(
+                enable_flag=False,
+                ceph_export_nfs_obj=Ceph(client).nfs.export,
+                cluster_name=cluster_name,
+                qos_type=qos_type,
+                operation=control,
+                nfs_name=cluster_name,
+                export=nfs_export_path,
+                **export_ops,
+            )
+
         log.info("=" * 80)
         log.info("NFS ops control ops-only test completed successfully")
         return 0
 
     except Exception as e:
-        log.error("NFS ops control test failed: %s", str(e))
+        log.error("NFS ops control test failed: %s", str(e), exc_info=True)
         return 1
 
     finally:
@@ -255,8 +319,14 @@ def run(ceph_cluster, **kw):
             ]
             for fname in files_to_remove:
                 try:
-                    client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/{fname}")
+                    client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/{fname}*")
                 except Exception:
                     log.debug("failed to remove %s", fname)
             # prefer the export-level path if set
-            cleanup_cluster(client, nfs_mount, cluster_name, nfs_export)
+            dynamic_cleanup_common_names(
+                clients,
+                mounts_common_name="nfs",
+                clusters=[cluster_name],
+                mount_point="/mnt/",
+                group_name=subvolume_group,
+            )
