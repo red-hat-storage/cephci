@@ -927,7 +927,7 @@ class HighAvailability:
             raise Exception(err)
 
     @retry(IOError, tries=3, delay=3)
-    def compare_client_namespace(self, uuids):
+    def compare_client_namespace(self, uuids, FEWR_NAMESPACES=False):
         lsblk_devs = []
         for client in self.clients:
             lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
@@ -935,8 +935,12 @@ class HighAvailability:
         LOG.info(
             f"Expected NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
         )
-        if sorted(uuids) != sorted(set(lsblk_devs)):
-            raise IOError("Few Namespaces are missing!!!")
+        if FEWR_NAMESPACES:
+            if not set(uuids).issubset(lsblk_devs):
+                raise IOError("Few Namespaces are missing!!!")
+        else:
+            if sorted(uuids) != sorted(set(lsblk_devs)):
+                raise IOError("Few Namespaces are missing!!!")
         LOG.info("All namespaces are listed at Client(s)")
         return True
 
@@ -1326,7 +1330,7 @@ class HighAvailability:
             except Exception as e:
                 LOG.error(f"Failed to parse FIO output: {e}")
 
-    def run(self):
+    def run(self, FEWR_NAMESPACES=False):
         """Execute the HA failover and failback with IO validation."""
         fail_methods = self.config["fault-injection-methods"]
         initiators = self.config["initiators"]
@@ -1338,7 +1342,12 @@ class HighAvailability:
             self.prepare_io_execution(initiators)
 
             # Check for targets at clients
-            self.compare_client_namespace([i["uuid"] for i in namespaces])
+            if FEWR_NAMESPACES:
+                self.compare_client_namespace(
+                    [i["uuid"] for i in namespaces], FEWR_NAMESPACES=True
+                )
+            else:
+                self.compare_client_namespace([i["uuid"] for i in namespaces])
 
             repeat_ha_count = self.config.get("repeat_ha_count", 1)
 

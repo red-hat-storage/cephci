@@ -1,5 +1,6 @@
 # Ceph-NVMeoF GWgroup with HA Test suite
-# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_4-nvmeof-gwgroup_2gw_cluster.yaml
+# cluster configuration file:
+# conf/squid/nvmeof/ceph_nvmeof_4-nvmeof-gwgroup_2gw_cluster.yaml
 # inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 
 tests:
@@ -71,22 +72,26 @@ tests:
   - test:
       abort-on-fail: false
       config:
-        install: true                           # Run SPDK with all pre-requisites
+        install: true  # Run SPDK with all pre-requisites
+        nvme_metadata_pool: rbd
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         cleanup:
+          - subsystems
+          - initiators
           - pool
           - gateway
-          - initiators
-        gw_groups:                             # Configure gatewayGroups
+        gw_groups:  # Configure gatewayGroups
           - gw_group: group1
+            nvme_metadata_pool: rbd
+            gw_node: node6
             gw_nodes:
               - node6
               - node7
-            subsystems:                       # Configure subsystems with all sub-entities
+            subsystems: # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode1
                 no-group-append: True
                 listener_port: 4420
@@ -103,16 +108,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node6
               - tool: daemon
                 nodes: node7
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group2
+            nvme_metadata_pool: rbd
+            gw_node: node8
             gw_nodes:
               - node8
               - node9
@@ -133,16 +140,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node8
               - tool: daemon
                 nodes: node9
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group3
+            nvme_metadata_pool: rbd
+            gw_node: node10
             gw_nodes:
               - node10
               - node11
@@ -163,16 +172,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node10
               - tool: daemon
                 nodes: node11
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group4
+            nvme_metadata_pool: rbd
+            gw_node: node12
             gw_nodes:
               - node12
               - node13
@@ -185,42 +196,50 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node12
               - tool: daemon
                 nodes: node13
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
-      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback with different NQN's
+      desc: >
+        NVMeoF 4-GWgroups with 2 gateways HA
+        failover-failback with different NQN's
       destroy-cluster: false
       module: test_nvmeof_gwgroup.py
-      name: Configure NVMeoF 4-GWgroups with 2 gateways HA different NQN's without mtls
+      name: >
+        Configure NVMeoF 4-GWgroups with 2 gateways
+        HA different NQN's without mtls
       polarion-id: CEPH-83595701
 
 # mtls HA tests with same NQNs in GWgroup sequential
   - test:
       abort-on-fail: false
       config:
-        install: true                           # Run SPDK with all pre-requisites
+        install: true # Run SPDK with all pre-requisites
+        nvme_metadata_pool: rbd1
         rbd_pool: rbd1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd1
         cleanup:
+          - subsystems
+          - initiators
           - pool
           - gateway
-          - initiators
-        gw_groups:                             # Configure gatewayGroups
+        gw_groups: # Configure gatewayGroups
           - gw_group: group1
             mtls: true
+            nvme_metadata_pool: rbd1
+            gw_node: node6
             gw_nodes:
               - node6
               - node7
-            subsystems:                       # Configure subsystems with all sub-entities
+            subsystems: # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -235,17 +254,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node6
               - tool: daemon
                 nodes: node7
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group2
             mtls: true
+            nvme_metadata_pool: rbd1
+            gw_node: node8
             gw_nodes:
               - node8
               - node9
@@ -264,17 +285,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node8
               - tool: daemon
                 nodes: node9
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group3
             mtls: true
+            nvme_metadata_pool: rbd1
+            gw_node: node10
             gw_nodes:
               - node10
               - node11
@@ -286,17 +309,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node10
               - tool: daemon
                 nodes: node11
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group4
             mtls: true
+            nvme_metadata_pool: rbd1
+            gw_node: node12
             gw_nodes:
               - node12
               - node13
@@ -308,41 +333,49 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node12
               - tool: daemon
                 nodes: node13
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
-      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback with mtls and same NQN's
+      desc: >
+        NVMeoF 4-GWgroups with 2 gateways HA
+        failover-failback with mtls and same NQN's
       destroy-cluster: false
       module: test_nvmeof_gwgroup.py
-      name: Configure NVMeoF 4-GWgroups with 2 gateways HA with mtls and same NQN's
+      name: >
+        Configure NVMeoF 4-GWgroups with 2
+        gateways HA with mtls and same NQN's
       polarion-id: CEPH-83598264
 
   - test:
       abort-on-fail: false
       config:
-        install: true                           # Run SPDK with all pre-requisites
+        install: true # Run SPDK with all pre-requisites
         rbd_pool: rbd10
+        nvme_metadata_pool: rbd10
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd10
         cleanup:
+          - subsystems
+          - initiators
           - pool
           - gateway
-          - initiators
-        gw_groups:                             # Configure gatewayGroups
+        gw_groups: # Configure gatewayGroups
           - gw_group: group1
             mtls: true
+            nvme_metadata_pool: rbd10
+            gw_node: node6
             gw_nodes:
               - node6
               - node7
-            subsystems:                       # Configure subsystems with all sub-entities
+            subsystems: # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -357,17 +390,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node6
               - tool: daemon
                 nodes: node7
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group2
             mtls: true
+            nvme_metadata_pool: rbd10
+            gw_node: node8
             gw_nodes:
               - node8
               - node9
@@ -386,16 +421,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node8
               - tool: daemon
                 nodes: node9
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group3
+            nvme_metadata_pool: rbd10
+            gw_node: node10
             gw_nodes:
               - node10
               - node11
@@ -407,16 +444,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node10
               - tool: daemon
                 nodes: node11
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group4
+            nvme_metadata_pool: rbd10
+            gw_node: node12
             gw_nodes:
               - node12
               - node13
@@ -428,19 +467,23 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node12
               - tool: daemon
                 nodes: node13
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
-      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback with mtls and without mtls
+      desc: >
+        NVMeoF 4-GWgroups with 2 gateways HA
+        failover-failback with mtls and without mtls
       destroy-cluster: false
       module: test_nvmeof_gwgroup.py
-      name: Configure NVMeoF 4-GWgroups with 2 gateways HA with and without mtls
+      name: >
+        Configure NVMeoF 4-GWgroups with 2
+        gateways HA with and without mtls
       polarion-id: CEPH-83598266
 
 # non-mtls HA tests with same NQNs in GWgroup parallel
@@ -448,22 +491,26 @@ tests:
       abort-on-fail: false
       config:
         parallel: true
-        install: true                           # Run SPDK with all pre-requisites
+        install: true  # Run SPDK with all pre-requisites
         rbd_pool: rbd3
+        nvme_metadata_pool: rbd3
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd3
         cleanup:
+          - subsystems
+          - initiators
           - pool
           - gateway
-          - initiators
-        gw_groups:                                     # Configure gatewayGroups
+        gw_groups: # Configure gatewayGroups
           - gw_group: group1
+            nvme_metadata_pool: rbd3
+            gw_node: node6
             gw_nodes:
               - node6
               - node7
-            subsystems:                                # Configure subsystems with all sub-entities
+            subsystems: # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -478,16 +525,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node6
               - tool: daemon
                 nodes: node7
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group2
+            nvme_metadata_pool: rbd3
+            gw_node: node8
             gw_nodes:
               - node8
               - node9
@@ -506,16 +555,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node8
               - tool: daemon
                 nodes: node9
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node15
           - gw_group: group3
+            nvme_metadata_pool: rbd3
+            gw_node: node10
             gw_nodes:
               - node10
               - node11
@@ -527,16 +578,18 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node10
               - tool: daemon
                 nodes: node11
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node16
           - gw_group: group4
+            nvme_metadata_pool: rbd3
+            gw_node: node12
             gw_nodes:
               - node12
               - node13
@@ -548,12 +601,12 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node12
               - tool: daemon
                 nodes: node13
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node17
@@ -568,23 +621,27 @@ tests:
       abort-on-fail: false
       config:
         parallel: true
-        install: true                           # Run SPDK with all pre-requisites
+        install: true # Run SPDK with all pre-requisites
         rbd_pool: rbd3
+        nvme_metadata_pool: rbd3
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd3
         cleanup:
+          - subsystems
+          - initiators
           - pool
           - gateway
-          - initiators
-        gw_groups:                                     # Configure gatewayGroups
+        gw_groups: # Configure gatewayGroups
           - gw_group: group1
             rbd_pool: rbd10
+            nvme_metadata_pool: rbd10
+            gw_node: node6
             gw_nodes:
               - node6
               - node7
-            subsystems:                                # Configure subsystems with all sub-entities
+            subsystems: # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -599,17 +656,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node6
               - tool: daemon
                 nodes: node7
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
           - gw_group: group2
             rbd_pool: rbd11
+            nvme_metadata_pool: rbd11
+            gw_node: node8
             gw_nodes:
               - node8
               - node9
@@ -628,17 +687,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node8
               - tool: daemon
                 nodes: node9
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node15
           - gw_group: group3
             rbd_pool: rbd12
+            nvme_metadata_pool: rbd12
+            gw_node: node10
             gw_nodes:
               - node10
               - node11
@@ -650,17 +711,19 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: systemctl
                 nodes: node10
               - tool: daemon
                 nodes: node11
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node16
           - gw_group: group4
             rbd_pool: rbd13
+            nvme_metadata_pool: rbd13
+            gw_node: node12
             gw_nodes:
               - node12
               - node13
@@ -672,12 +735,12 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-            fault-injection-methods:                   # Failure induction
+            fault-injection-methods: # Failure induction
               - tool: maintanence_mode
                 nodes: node12
               - tool: power_on_off
                 nodes: node13
-            initiators:                                # Configure Initiators with all pre-req
+            initiators: # Configure Initiators with all pre-req
               - nqn: connect-all
                 listener_port: 4420
                 node: node17
