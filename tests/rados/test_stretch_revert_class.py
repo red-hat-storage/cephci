@@ -117,7 +117,7 @@ class StretchMode:
             log.error(err_msg)
             raise Exception(err_msg)
         if not self.rados_obj.bench_write(
-            pool_name=pool_name, byte_size="64KB", max_objs=400
+            pool_name=pool_name, byte_size="4MB", max_objs=400
         ):
             err_msg = f"Failed to write IO using rados put command to pool {pool_name}"
             log.error(err_msg)
