@@ -781,7 +781,7 @@ def create_inconsistent_objects(rados_object, pool_name):
 
         for obj in rep_obj_list:
             try:
-                rados_object.create_inconsistent_object(pool_name, obj, num_keys=3)
+                rados_object.create_inconsistent_object(pool_name, obj, no_of_objects=3)
             except Exception as err:
                 msg_err = (
                     f"Cannot able to convert the object-{obj} into inconsistent object.Picking another object "

@@ -92,6 +92,7 @@ class ServiceabilityMethods:
 
             ncount_pre = self.get_host_count()
             deploy_host(ceph_cluster=self.cluster, config=add_args)
+            time.sleep(30)
             if crush_bucket_name:
                 cmd = f"ceph osd crush move {crush_bucket_name} {crush_bucket_type}={crush_bucket_val}"
                 self.rados_obj.run_ceph_command(cmd=cmd)
