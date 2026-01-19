@@ -216,3 +216,12 @@ tests:
         delete_pool: true
         set_debug: false
       desc: Netsplit detection and warning in stretch mode
+
+  - test:
+      name: 1 - OSD deployment tests - raw data device - spec file
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83604848
+      config:
+        test_scenarios:
+          - scenario1
+      desc: OSD deployment tests - raw data device - spec file
