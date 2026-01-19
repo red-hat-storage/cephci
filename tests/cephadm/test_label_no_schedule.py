@@ -27,13 +27,28 @@ def run(ceph_cluster, **kw):
         result = list(result.values())[0][0].strip()
         if exp_out != result:
             raise LabelNoScheduleError("Failed to add _no_schedule label to node")
+
         # Verfiy label added to host
-        result = CephAdm(installer_node).ceph.orch.host.ls(
-            format="json", host_pattern=node_name
-        )
-        result = list(result.values())[0][0].strip()
-        if label not in result:
-            raise LabelNoScheduleError("Failed to add _no_schedule label to node")
+        timeout, interval = 60, 5
+        for w in WaitUntil(timeout=timeout, interval=interval):
+            try:
+                result = CephAdm(installer_node).ceph.orch.host.ls(
+                    format="json", host_pattern=node_name
+                )
+                host_data = json.loads(list(result.values())[0][0])
+                labels = host_data[0].get("labels", [])
+
+                if label in labels:
+                    break
+            except (IndexError, KeyError, json.JSONDecodeError):
+                # Orchestrator state not updated yet, retry
+                pass
+
+        if w.expired:
+            raise LabelNoScheduleError(
+                f"Failed to verify '{label}' label on node {node_name}"
+            )
+
         # Checking all the deamons in node.
         timeout, interval = 60, 5
         for w in WaitUntil(timeout=timeout, interval=interval):
