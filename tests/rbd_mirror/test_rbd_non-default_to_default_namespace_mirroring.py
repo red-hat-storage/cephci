@@ -264,7 +264,7 @@ def test_non_default_to_default_namespace_mirroring(
                 image_spec = []
                 image_spec.append(pri_image_spec)
                 io_config["config"]["image_spec"] = image_spec
-                (io, err) = krbd_io_handler(**io_config)
+                io, err = krbd_io_handler(**io_config)
                 if err:
                     raise Exception(
                         f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"
@@ -361,7 +361,7 @@ def test_non_default_to_default_namespace_mirroring(
             image_spec.append(pri_image_spec)
             io_config["config"]["image_spec"] = image_spec
             # Write data on images created on secondary side
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception(
                     f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"
@@ -485,7 +485,7 @@ def test_default_to_non_default_namespace_mirroring(
                 image_spec = []
                 image_spec.append(pri_image_spec)
                 io_config["config"]["image_spec"] = image_spec
-                (io, err) = krbd_io_handler(**io_config)
+                io, err = krbd_io_handler(**io_config)
                 if err:
                     raise Exception(
                         f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"
@@ -613,7 +613,7 @@ def test_default_to_non_default_namespace_mirroring(
             image_spec = []
             image_spec.append(pri_image_spec)
             io_config["config"]["image_spec"] = image_spec
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception(
                     f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"

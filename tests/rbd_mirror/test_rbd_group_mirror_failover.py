@@ -138,7 +138,7 @@ def test_group_mirroring_failover(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
@@ -194,7 +194,7 @@ def test_group_mirroring_failover(
                 )
 
             # 17: Perform group demote on site-a and group promote on site-b
-            (out, err) = rbd_primary.mirror.group.demote(**{"group-spec": group_spec})
+            out, err = rbd_primary.mirror.group.demote(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to demote group on site-A: " + str(err))
             log.info("Demoted " + group_spec + " on site-A ")
@@ -213,9 +213,7 @@ def test_group_mirroring_failover(
                 "Group states reached 'up+unknown' on site-A and 'up+unknown' on site-B"
             )
 
-            (out, err) = rbd_secondary.mirror.group.promote(
-                **{"group-spec": group_spec}
-            )
+            out, err = rbd_secondary.mirror.group.promote(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to promote group on site-B: " + str(err))
             log.info("Promoted " + group_spec + " on site-B ")
@@ -258,7 +256,7 @@ def test_group_mirroring_failover(
             io_config["client"] = client_secondary
             image_spec_copy = deepcopy(image_spec)
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
@@ -282,7 +280,7 @@ def test_group_mirroring_failover(
                     f"site-B : {md5sum_after_failover_site_b}"
                 )
             # 21: demote group on site-b and promote group on site-a
-            (out, err) = rbd_secondary.mirror.group.demote(**{"group-spec": group_spec})
+            out, err = rbd_secondary.mirror.group.demote(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to demote group on site-B " + str(err))
             log.info("Demoted " + group_spec + " on site-B ")
@@ -300,7 +298,7 @@ def test_group_mirroring_failover(
             log.info(
                 "Group states reached 'up+unknown' on site-A and 'up+unknown' on site-B"
             )
-            (out, err) = rbd_primary.mirror.group.promote(**{"group-spec": group_spec})
+            out, err = rbd_primary.mirror.group.promote(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to promote group on site-A " + str(err))
             log.info("Promoted " + group_spec + " on site-A ")
@@ -331,7 +329,7 @@ def test_group_mirroring_failover(
                     )
                 )
             # 25: force promote on site-b
-            (out, err) = rbd_secondary.mirror.group.promote(
+            out, err = rbd_secondary.mirror.group.promote(
                 **{"group-spec": group_spec, "force": True}
             )
             if err:
@@ -356,14 +354,14 @@ def test_group_mirroring_failover(
             io_config["client"] = client_secondary
             image_spec_copy = deepcopy(image_spec)
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
                 log.info("Map, mount and IOs successful for " + str(image_spec))
 
             # 28: demote site-b
-            (out, err) = rbd_secondary.mirror.group.demote(**{"group-spec": group_spec})
+            out, err = rbd_secondary.mirror.group.demote(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to demote group on site-B " + str(err))
             log.info("Demoted " + group_spec + " on site-B ")
@@ -392,7 +390,7 @@ def test_group_mirroring_failover(
                 )
 
             # Perform resync
-            (out, err) = rbd_secondary.mirror.group.resync(**{"group-spec": group_spec})
+            out, err = rbd_secondary.mirror.group.resync(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to resync group on site-B " + str(err))
             log.info("Resync group done for " + group_spec + " on site-B ")

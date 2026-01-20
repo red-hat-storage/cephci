@@ -28,7 +28,7 @@ def create_group_and_verify(**kw):
     log.info(f"verifying if pool {pool_name} exists")
     pool_init_kw = {}
     pool_init_kw["pool-name"] = pool_name
-    (_, pool_stats_err) = rbd.pool.stats(**pool_init_kw)
+    _, pool_stats_err = rbd.pool.stats(**pool_init_kw)
 
     # if pool does not exists, fail. Because pool and image creation is taken care by initial_rbd_config.py
     # but namespace creation is not taken care by initial_rbd_config.py
@@ -49,7 +49,7 @@ def create_group_and_verify(**kw):
             ns_create_kw = {}
             ns_create_kw["namespace"] = namespace
             ns_create_kw["pool-name"] = pool_name
-            (_, ns_create_err) = rbd.namespace.create(**ns_create_kw)
+            _, ns_create_err = rbd.namespace.create(**ns_create_kw)
             if not ns_create_err:
                 log.info(
                     "SUCCESS: Namespace {namespace_name} got created in pool {pool_name} "
@@ -67,7 +67,7 @@ def create_group_and_verify(**kw):
         log.error("Group name is must to create a group")
         return 1
     group_kw.update({"group": group})
-    (_, g_err) = rbd.group.create(**group_kw)
+    _, g_err = rbd.group.create(**group_kw)
     if not g_err:
         log.info(f"SUCCESS: Group {group} got created in pool {pool_name}/{namespace} ")
     else:
@@ -78,7 +78,7 @@ def create_group_and_verify(**kw):
 
     # verify group creation
     group_kw.pop("group")
-    (gls_out, _) = rbd.group.list(**group_kw)
+    gls_out, _ = rbd.group.list(**group_kw)
     if group in gls_out:
         log.info(f"Group creation {group} verification is successfull")
         return 0
@@ -150,7 +150,7 @@ def add_image_to_group_and_verify(**kw):
         else:
             log.error("Image is the must kw for adding image to the group")
             return 1
-    (_, img_g_err) = rbd.group.image.add(**image_group_kw)
+    _, img_g_err = rbd.group.image.add(**image_group_kw)
     if not img_g_err:
         log.info(f"{image} successfully added to the group {group}")
     else:
@@ -166,7 +166,7 @@ def add_image_to_group_and_verify(**kw):
         group_ls_kw.update({"group": group})
         if namespace is not None:
             group_ls_kw.update({"namespace": namespace})
-    (g_ls_out, _) = rbd.group.image.list(**group_ls_kw)
+    g_ls_out, _ = rbd.group.image.list(**group_ls_kw)
 
     if namespace and f"{image_pool}/{namespace}/{image}" in g_ls_out:
         log.info(f"Added Namespace image in the group {group}  successfully verified")
@@ -212,7 +212,7 @@ def create_snap_and_verify(**kw):
     snap_create_kw.update({"snap": snap})
 
     # create group snapshot
-    (_, snap_c_err) = rbd.group.snap.create(**snap_create_kw)
+    _, snap_c_err = rbd.group.snap.create(**snap_create_kw)
     if not snap_c_err:
         log.info(f"{snap} successfully created for the group {group}")
     else:
@@ -222,7 +222,7 @@ def create_snap_and_verify(**kw):
     # snap creation validation by rbd group snap list
     snap_list_kw = deepcopy(snap_create_kw)
     _ = snap_list_kw.pop("snap")
-    (snap_l_out, _) = rbd.group.snap.list(**snap_list_kw)
+    snap_l_out, _ = rbd.group.snap.list(**snap_list_kw)
     if snap in snap_l_out:
         log.info(
             f"{snap} creation successfully verified by snap list for the group {group}"
@@ -269,7 +269,7 @@ def rollback_to_snap(**kw):
         return 1
 
     # rollback to given snap
-    (snap_r_out, snap_r_err) = rbd.group.snap.rollback(**snap_rollback_kw)
+    snap_r_out, snap_r_err = rbd.group.snap.rollback(**snap_rollback_kw)
     if snap_r_err and "100% complete" not in snap_r_out + snap_r_err:
         log.error(f"Group {group} rollbacked to {snap} failed {snap_r_err}")
         return 1
@@ -304,7 +304,7 @@ def group_info(**kw):
         return 1
 
     # Group info
-    (group_i_out, group_i_err) = rbd.group.info(**group_info_kw)
+    group_i_out, group_i_err = rbd.group.info(**group_info_kw)
     return (group_i_out, group_i_err)
 
 
@@ -336,7 +336,7 @@ def group_snap_info(**kw):
         return 1
 
     # Group info
-    (group_snap_out, group_snap_err) = rbd.group.snap.info(**group_snap_info_kw)
+    group_snap_out, group_snap_err = rbd.group.snap.info(**group_snap_info_kw)
     return (group_snap_out, group_snap_err)
 
 

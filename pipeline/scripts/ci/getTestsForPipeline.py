@@ -245,7 +245,7 @@ def fetch_tests(args):
     # Fetch the pipeline, tier and stage values from tags
     tags = args["tags"].split(",")
     cloud_type = "ibmc" if "ibmc" in tags else "openstack"
-    (pipeline, pipeline_data) = next(
+    pipeline, pipeline_data = next(
         ((i, test_pipelines[i]) for i in tags if i in test_pipelines.keys()), None
     )
     tier = next((i for i in tags if i.startswith("tier-")), None)

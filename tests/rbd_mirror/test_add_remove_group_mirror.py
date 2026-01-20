@@ -150,14 +150,14 @@ def test_add_remove_group_mirroring(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
                 log.info("Map, mount and IOs successful for " + str(image_spec))
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -176,7 +176,7 @@ def test_add_remove_group_mirroring(
             image_size = kw.get("config", {}).get(pool_type, {}).get("size")
             image_name = "image_standalone"
             standalone_image_spec = pool_spec + "/" + image_name
-            (image_create_status, err) = rbd_primary.create(
+            image_create_status, err = rbd_primary.create(
                 **{"image-spec": standalone_image_spec, "size": image_size}
             )
             if err:
@@ -195,7 +195,7 @@ def test_add_remove_group_mirroring(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
 
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception(
                     "Map, mount and run IOs failed for " + standalone_image_spec
@@ -204,7 +204,7 @@ def test_add_remove_group_mirroring(
                 log.info("Map, mount and IOs successful for " + standalone_image_spec)
 
             # Enable mirroring on Image
-            (image_mirror_status, err) = rbd_primary.mirror.image.enable(
+            image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{"image-spec": standalone_image_spec, "mode": "snapshot"}
             )
             if err:
@@ -219,7 +219,7 @@ def test_add_remove_group_mirroring(
             # Verify if Image mirroring state is achieved
             retry = 0
             while retry < 10:
-                (image_mirror_status, err) = rbd_primary.mirror.image.status(
+                image_mirror_status, err = rbd_primary.mirror.image.status(
                     **{"image-spec": standalone_image_spec, "format": "json"}
                 )
                 if err:
@@ -373,7 +373,7 @@ def test_add_remove_group_mirroring(
             log.info("Successfully completed group mirroring sync to secondary")
 
             # Validate size of each image should be same on site-a and site-b
-            (group_image_list, err) = rbd_primary.group.image.list(
+            group_image_list, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -384,7 +384,7 @@ def test_add_remove_group_mirroring(
             log.info("Successfully verified image size matches across both clusters")
 
             # Check group is replicated on site-b using group info
-            (group_info_status, err) = rbd_secondary.group.info(
+            group_info_status, err = rbd_secondary.group.info(
                 **group_config, format="json"
             )
             if err:
@@ -399,7 +399,7 @@ def test_add_remove_group_mirroring(
             log.info("Successfully verified group is present on secondary site")
 
             # Check whether images are part of correct group on site-b using group image-list
-            (group_image_list_secondary, err) = rbd_secondary.group.image.list(
+            group_image_list_secondary, err = rbd_secondary.group.image.list(
                 **group_config, format="json"
             )
             if err:

@@ -93,7 +93,7 @@ def test_rbd_live_migration_namespace_image(rbd_obj, c1_client, c2_client, **kw)
                     # Create image in namespace
                     image_size = kw.get("config", {}).get(pool_type, {}).get("size")
                     image_name = "Image_" + random_string(len=5)
-                    (image_create_status, err) = rbd.create(
+                    image_create_status, err = rbd.create(
                         **{
                             "image-spec": pool
                             + "/"

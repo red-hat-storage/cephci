@@ -128,7 +128,7 @@ def run(ceph_cluster, **kw):
             )
             p.spawn(fs_util.read_write_IO, client3, client_info["mounting_dir"])
             for op in p:
-                (return_counts, rc) = op
+                return_counts, rc = op
 
         print("Results:")
         result = fs_util.rc_verify(tc, return_counts)

@@ -96,7 +96,7 @@ def run(ceph_cluster, **kw):
             )
             p.spawn(fs_util.read_write_IO, client3, client_info["mounting_dir"])
             for op in p:
-                (return_counts, rc) = op
+                return_counts, rc = op
 
         log.info("Test completed for CEPH-%s" % tc)
         print("Results:")
@@ -148,8 +148,8 @@ def run(ceph_cluster, **kw):
         print("Script execution time:------")
         stop = timeit.default_timer()
         total_time = stop - start
-        (mins, secs) = divmod(total_time, 60)
-        (hours, mins) = divmod(mins, 60)
+        mins, secs = divmod(total_time, 60)
+        hours, mins = divmod(mins, 60)
 
         print("Hours:%d Minutes:%d Seconds:%f" % (hours, mins, secs))
 

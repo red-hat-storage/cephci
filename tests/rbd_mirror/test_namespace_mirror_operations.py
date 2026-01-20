@@ -192,7 +192,7 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                 image_spec = []
                 image_spec.append(pri_image_spec)
                 io_config["config"]["image_spec"] = image_spec
-                (io, err) = krbd_io_handler(**io_config)
+                io, err = krbd_io_handler(**io_config)
                 if err:
                     raise Exception(
                         f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"
@@ -615,7 +615,7 @@ def test_non_default_to_non_default_one_way_mirroring(
                 image_spec = []
                 image_spec.append(pri_image_spec)
                 io_config["config"]["image_spec"] = image_spec
-                (io, err) = krbd_io_handler(**io_config)
+                io, err = krbd_io_handler(**io_config)
                 if err:
                     raise Exception(
                         f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"

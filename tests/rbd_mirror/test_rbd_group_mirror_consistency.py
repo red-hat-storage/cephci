@@ -206,7 +206,7 @@ def test_mirror_group_consistency(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception(
                     "Map, mount and run IOs failed for " + str(image_spec_small)
@@ -236,7 +236,7 @@ def test_mirror_group_consistency(
             )
             image_spec_copy = deepcopy(image_spec_large)
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception(
                     "Map, mount and run IOs failed for " + str(image_spec_large)
@@ -405,7 +405,7 @@ def test_mirror_group_consistency(
             )
 
             time.sleep(5)
-            (out, err) = rbd_secondary.mirror.group.promote(
+            out, err = rbd_secondary.mirror.group.promote(
                 **{"group-spec": group_spec, "force": True}
             )
             if err:
@@ -541,7 +541,7 @@ def test_mirror_group_snapshot_consistency(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:

@@ -165,7 +165,7 @@ def test_rbd_groups_image_clone(rbd_obj, client, **kw):
                     "group": group,
                     "format": "json",
                 }
-                (g_ls_out, _) = group_info(**group_ls_kw)
+                g_ls_out, _ = group_info(**group_ls_kw)
                 log.info(g_ls_out)
                 g_ls_out = json.loads(g_ls_out)
                 if g_ls_out["group_id"].isalnum():
@@ -185,7 +185,7 @@ def test_rbd_groups_image_clone(rbd_obj, client, **kw):
                     "snap": group_snap,
                     "format": "json",
                 }
-                (snap_g_out, _) = group_snap_info(**snap_group_info)
+                snap_g_out, _ = group_snap_info(**snap_group_info)
                 log.info(snap_g_out)
                 snap_g_out = json.loads(snap_g_out)
                 snap_id = snap_g_out["images"][0]["snap_id"]
