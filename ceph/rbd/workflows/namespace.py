@@ -23,7 +23,7 @@ def create_namespace_and_verify(**kw):
     log.info(f"verifying if pool {pool_name} exists")
     pool_init_kw = {}
     pool_init_kw["pool-name"] = pool_name
-    (_, pool_stats_err) = rbd.pool.stats(**pool_init_kw)
+    _, pool_stats_err = rbd.pool.stats(**pool_init_kw)
 
     # if pool does not exists, create a pool
     if pool_stats_err:
@@ -43,7 +43,7 @@ def create_namespace_and_verify(**kw):
     _pool_name = kw.get("pool-name", None)
     ns_create_kw["namespace"] = namespace_name
     ns_create_kw["pool-name"] = _pool_name
-    (_, ns_create_err) = rbd.namespace.create(**ns_create_kw)
+    _, ns_create_err = rbd.namespace.create(**ns_create_kw)
     if not ns_create_err:
         log.info(
             f"SUCCESS: Namespace {namespace_name} got created in pool {pool_name} "
@@ -87,7 +87,7 @@ def remove_namespace_and_verify(**kw):
     log.info(f"verifying if pool {pool_name} exists")
     pool_init_kw = {}
     pool_init_kw["pool-name"] = pool_name
-    (_, pool_stats_err) = rbd.pool.stats(**pool_init_kw)
+    _, pool_stats_err = rbd.pool.stats(**pool_init_kw)
 
     # if pool does not exists,  exit
     if pool_stats_err:
@@ -106,7 +106,7 @@ def remove_namespace_and_verify(**kw):
     _pool_name = kw.get("pool-name", None)
     ns_delete_kw["namespace"] = namespace_name
     ns_delete_kw["pool-name"] = _pool_name
-    (_, ns_delete_err) = rbd.namespace.remove(**ns_delete_kw)
+    _, ns_delete_err = rbd.namespace.remove(**ns_delete_kw)
     if not ns_delete_err:
         log.info(
             f"SUCCESS: Namespace {namespace_name} got deleted in pool {pool_name} "

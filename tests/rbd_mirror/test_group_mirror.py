@@ -200,14 +200,14 @@ def test_group_mirroring(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
                 log.info("Map, mount and IOs successful for " + str(image_spec))
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -234,7 +234,7 @@ def test_group_mirroring(
             )
 
             # Validate size of each image should be same on site-a and site-b
-            (group_image_list, err) = rbd_primary.group.image.list(
+            group_image_list, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -248,7 +248,7 @@ def test_group_mirroring(
             )
 
             # Check group is replicated on site-b using group info
-            (group_info_status, err) = rbd_secondary.group.info(
+            group_info_status, err = rbd_secondary.group.info(
                 **group_config, format="json"
             )
             if err:
@@ -263,10 +263,10 @@ def test_group_mirroring(
             log.info("Successfully verified group is present on secondary cluster")
 
             # Check whether images are part of correct group on site-b using group image-list
-            (group_image_list_primary, err) = rbd_primary.group.image.list(
+            group_image_list_primary, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
-            (group_image_list_secondary, err) = rbd_secondary.group.image.list(
+            group_image_list_secondary, err = rbd_secondary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -421,14 +421,14 @@ def test_group_renaming_with_mirroring(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
                 log.info("Map, mount and IOs successful for " + str(image_spec))
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -478,7 +478,7 @@ def test_group_renaming_with_mirroring(
             )
 
             # Validate size of each image should be same on site-a and site-b
-            (group_image_list, err) = rbd_primary.group.image.list(
+            group_image_list, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -491,7 +491,7 @@ def test_group_renaming_with_mirroring(
             )
 
             # Check group is replicated on site-b using group info
-            (group_info_status, err) = rbd_secondary.group.info(
+            group_info_status, err = rbd_secondary.group.info(
                 **group_config, format="json"
             )
             if err:
@@ -509,7 +509,7 @@ def test_group_renaming_with_mirroring(
             log.info("Successfully verified group is present on secondary cluster")
 
             # Check whether images are part of correct group on site-b using group image-list
-            (group_image_list_secondary, err) = rbd_secondary.group.image.list(
+            group_image_list_secondary, err = rbd_secondary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -675,7 +675,7 @@ def test_toggle_enable_disable(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
@@ -695,7 +695,7 @@ def test_toggle_enable_disable(
             )
 
             # Validate the integrity of the data on secondary site-b
-            (group_image_list, err) = rbd_primary.group.image.list(
+            group_image_list, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
             if err:

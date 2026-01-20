@@ -3,6 +3,7 @@
 
 This test module uses pytest to unit test the sensitive data log filter
 """
+
 import os
 from copy import deepcopy
 

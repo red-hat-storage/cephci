@@ -212,7 +212,7 @@ def test_group_consistency(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
@@ -789,7 +789,7 @@ def test_rbd_group_toggle_demote_promote(
                 "Group states reached 'up+replaying' on site-A and 'up+stopped' on site-B"
             )
 
-            (out, err) = rbd_primary.mirror.group.promote(
+            out, err = rbd_primary.mirror.group.promote(
                 **{"group-spec": group_spec, "force": True}
             )
             if err:
@@ -824,7 +824,7 @@ def test_rbd_group_toggle_demote_promote(
             )
 
             # wait for split-brain status:
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(
+            group_mirror_status, err = rbd_primary.mirror.group.status(
                 **{"group-spec": group_spec}, format="json"
             )
 
@@ -832,7 +832,7 @@ def test_rbd_group_toggle_demote_promote(
             if data.get("description") == "split-brain":
                 log.info("Mirror group is in split-brain state")
 
-            (out, err) = rbd_primary.mirror.group.resync(**{"group-spec": group_spec})
+            out, err = rbd_primary.mirror.group.resync(**{"group-spec": group_spec})
             if err:
                 raise Exception("Failed to resync group on site-B " + str(err))
             log.info("Resync group done for " + group_spec + " on site-A ")
@@ -868,7 +868,7 @@ def test_rbd_group_toggle_demote_promote(
             disable_group_mirroring_and_verify_state(
                 rbd_primary, **{"group-spec": group_spec}
             )
-            (group_mirror_status, err) = rbd_secondary.mirror.group.status(
+            group_mirror_status, err = rbd_secondary.mirror.group.status(
                 **{"group-spec": group_spec}, format="json"
             )
 
@@ -896,7 +896,7 @@ def demote(rbd, group_spec, site):
         Nil
 
     """
-    (out, err) = rbd.mirror.group.demote(**{"group-spec": group_spec})
+    out, err = rbd.mirror.group.demote(**{"group-spec": group_spec})
     if err:
         raise Exception("Failed to demote group on " + site + str(err))
     log.info("Demoted " + group_spec + " on " + site)
@@ -916,7 +916,7 @@ def promote(rbd, group_spec, site):
         Nil
 
     """
-    (out, err) = rbd.mirror.group.promote(**{"group-spec": group_spec})
+    out, err = rbd.mirror.group.promote(**{"group-spec": group_spec})
     if err:
         raise Exception("Failed to promote group on " + site + str(err))
     log.info("Promoted " + group_spec + " on " + site)

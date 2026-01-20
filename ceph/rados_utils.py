@@ -37,7 +37,7 @@ class RadosHelper:
         print(ceph_args)
         clstr_cmd = " ".join(str(x) for x in ceph_args)
         print(clstr_cmd)
-        (stdout, stderr) = self.mon.exec_command(cmd=clstr_cmd)
+        stdout, stderr = self.mon.exec_command(cmd=clstr_cmd)
         return stdout, stderr
 
     def get_num_pools(self):
@@ -52,7 +52,7 @@ class RadosHelper:
         osd dump --format=json converted to a python object
         :returns: the python object
         """
-        (out, err) = self.raw_cluster_cmd("osd", "dump", "--format=json")
+        out, err = self.raw_cluster_cmd("osd", "dump", "--format=json")
         print(type(out))
         return json.loads("\n".join(out.split("\n")[1:]))
 
@@ -128,7 +128,7 @@ class RadosHelper:
         """
         assert isinstance(pool_name, str)
         assert isinstance(prop, str)
-        (output, err) = self.raw_cluster_cmd("osd", "pool", "get", pool_name, prop)
+        output, err = self.raw_cluster_cmd("osd", "pool", "get", pool_name, prop)
         return int(output.split()[1])
 
     def get_pool_dump(self, pool):
@@ -162,7 +162,7 @@ class RadosHelper:
         get primary for pool, pgnum (e.g. (data, 0)->0
         """
         pg_str = self.get_pgid(pool, pgnum)
-        (output, err) = self.raw_cluster_cmd("pg", "map", pg_str, "--format=json")
+        output, err = self.raw_cluster_cmd("pg", "map", pg_str, "--format=json")
         j = json.loads("\n".join(output.split("\n")[1:]))
         return int(j["acting"][0])
         assert False
@@ -172,7 +172,7 @@ class RadosHelper:
         get random osd for pool, pgnum (e.g. (data, 0)->0
         """
         pg_str = self.get_pgid(pool, pgnum)
-        (output, err) = self.raw_cluster_cmd("pg", "map", pg_str, "--format=json")
+        output, err = self.raw_cluster_cmd("pg", "map", pg_str, "--format=json")
         j = json.loads("\n".join(output.split("\n")[1:]))
         return int(j["acting"][random.randint(0, len(j["acting"]) - 1)])
         assert False
@@ -199,7 +199,7 @@ class RadosHelper:
         """
         :return 1 if up, 0 if down
         """
-        (output, err) = self.raw_cluster_cmd("osd", "dump", "--format=json")
+        output, err = self.raw_cluster_cmd("osd", "dump", "--format=json")
         jbuf = json.loads(output)
         self.log(jbuf)
 

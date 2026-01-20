@@ -129,7 +129,7 @@ def test_group_info_during_force_promote(
                 )
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -169,7 +169,7 @@ def test_group_info_during_force_promote(
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
             io_config["config"]["image_spec"] = image_spec_copy
-            (io, err) = krbd_io_handler(**io_config)
+            io, err = krbd_io_handler(**io_config)
             if err:
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
@@ -242,7 +242,7 @@ def test_group_info_during_force_promote(
 
 
 def force_promote_secondary(group_spec, rbd_secondary):
-    (out, err) = rbd_secondary.mirror.group.promote(
+    out, err = rbd_secondary.mirror.group.promote(
         **{"group-spec": group_spec, "force": True}
     )
     if err:
@@ -274,7 +274,7 @@ def check_group_snap_list(snapshot_id, verify_state, rbd_secondary, **status_spe
 
 
 def check_group_info(expected_primary_field, rbd_secondary, **group_config):
-    (group_info_status, err) = rbd_secondary.group.info(**group_config, format="json")
+    group_info_status, err = rbd_secondary.group.info(**group_config, format="json")
     if err:
         raise Exception("Getting group info failed : " + str(err))
     primary_value = json.loads(group_info_status)["mirroring"]["primary"]

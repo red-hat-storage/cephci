@@ -124,7 +124,7 @@ def test_group_mirroring_neg_case(
             image_spec_copy = deepcopy(image_spec)
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -149,7 +149,7 @@ def test_group_mirroring_neg_case(
             log.info("Successfully Enabled group mirroring")
 
             # Enable Journal Mode mirroring on images, should FAIL
-            (image_mirror_status, err) = rbd_primary.mirror.image.enable(
+            image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{
                     "image-spec": image_spec_copy[0],
                     "mode": "journal",
@@ -185,7 +185,7 @@ def test_group_mirroring_neg_case(
             log.info("Successfully Disabled group mirroring")
 
             # Enable Journal Mode mirroring on images, should FAIL
-            (image_mirror_status, err) = rbd_primary.mirror.image.enable(
+            image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{
                     "image-spec": image_spec_copy[0],
                     "mode": "journal",
@@ -226,7 +226,7 @@ def test_group_mirroring_neg_case(
             )
 
             # Enable Journal Mode mirroring on images, Should Succeed
-            (image_mirror_status, err) = rbd_primary.mirror.image.enable(
+            image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{
                     "image-spec": image_spec_copy[0],
                     "mode": "journal",
@@ -316,7 +316,7 @@ def test_group_mirroring_neg_case(
 
             image_size = kw.get("config", {}).get(pool_type, {}).get("size")
             image_name_second_pool = "second_pool_image_" + random_string(len=5)
-            (image_create_status, err) = rbd_primary.create(
+            image_create_status, err = rbd_primary.create(
                 **{
                     "image-spec": pool_spec + image_name_second_pool,
                     "size": image_size,
@@ -411,7 +411,7 @@ def test_group_mirror_snapshot_schedule_neg_case(
                 )
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -427,7 +427,7 @@ def test_group_mirror_snapshot_schedule_neg_case(
             )
 
             # Add the group mirror snapshot schedule should fail
-            (group_info_status, err) = rbd_primary.group.info(
+            group_info_status, err = rbd_primary.group.info(
                 **group_config, format="json"
             )
             group_id = json.loads(group_info_status)["group_id"]
