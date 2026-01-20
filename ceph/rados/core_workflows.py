@@ -7160,6 +7160,44 @@ EOF"""
 
         return mount_path, device_path, created_pools
 
+    def rotate_logs(self, hosts) -> bool:
+        """
+        Rotates logs on OSD nodes by forcing logrotate
+        Args:
+            hosts : Host objects
+        Returns: True -> pass, False -> fail
+        """
+        log.info("Forcing log rotation on OSD nodes...")
+        try:
+            fsid_result = self.run_ceph_command(cmd="ceph fsid")
+            fsid = (
+                fsid_result.get("fsid")
+                if isinstance(fsid_result, dict)
+                else fsid_result
+            )
+            if not fsid:
+                log.warning("Failed to get cluster FSID for log rotation")
+                return False
+
+            logrotate_cmd = f"logrotate -f /etc/logrotate.d/ceph-{fsid}"
+            for host in hosts:
+                try:
+                    host.exec_command(
+                        cmd=logrotate_cmd,
+                        sudo=True,
+                        check_ec=False,
+                        long_running=True,
+                    )
+                    time.sleep(10)
+                    log.debug(f"Log rotation completed on {host.hostname}")
+                except Exception:
+                    pass
+            log.info(f"Log rotation triggered on {len(hosts)} OSD host(s)")
+            return True
+        except Exception as e:
+            log.warning(f"Failed to rotate logs: {e}")
+            return False
+
     def create_replicated_rbd_pools(
         self,
         rbd_pool: str = "rbd-replicated",
