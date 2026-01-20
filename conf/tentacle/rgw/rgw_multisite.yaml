@@ -35,6 +35,7 @@ globals:
         disk-size: 15
         no-of-volumes: 3
         role:
+          - mon
           - osd
           - rgw
 
@@ -77,6 +78,7 @@ globals:
         disk-size: 15
         no-of-volumes: 3
         role:
+          - mon
           - osd
           - rgw
 
