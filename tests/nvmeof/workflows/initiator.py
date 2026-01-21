@@ -193,13 +193,20 @@ class NVMeInitiator(Initiator):
         if kwargs.get("io_type"):
             io_args.update({"io_type": kwargs.get("io_type")})
 
+        # Check whether to execute blkdiscard
+        # For read only namespaces, blkdiscard is not required
+        blkdiscard_cmd = kwargs.get("execute_blkdiscard", True)
+
         # Use max_workers to ensure all FIO processes can start simultaneously
         with parallel(max_workers=len(paths) + 4) as p:
             for path in paths:
                 _io_args = {}
                 # TODO: blkdiscard is temporary workaround for same image usage
                 #  in the IO progression tasks especially HA failover and failback.
-                self.node.exec_command(cmd=f"blkdiscard {path}", sudo=True)
+                if blkdiscard_cmd:
+                    self.node.exec_command(cmd=f"blkdiscard {path}", sudo=True)
+                else:
+                    LOG.info(f"Skipping blkdiscard for {path}")
                 if io_args.get("test_name"):
                     test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
                     _io_args.update({"test_name": test_name})

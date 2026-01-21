@@ -93,7 +93,9 @@ def execute_io(
     LOG.info("All namespaces are listed at Client(s)")
     # Run FIO
     LOG.info("Run FIO")
-    results = clients[0].start_fio(io_size="100%", paths=paths, io_type=io_type)
+    results = clients[0].start_fio(
+        io_size="100%", paths=paths, io_type=io_type, execute_blkdiscard=False
+    )
     for op in results:
         if int(verify_io_execution) == 0 and int(op[2]) != 0:
             raise RuntimeError(f"FIO failed with exit code : {op}")
