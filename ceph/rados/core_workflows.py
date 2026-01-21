@@ -6993,7 +6993,7 @@ EOF"""
         Returns:
             None (raises exception on failure)
         """
-        log.info(f"Creating EC pools for CephFS: {fs_name}")
+        log.info(f"Creating {pool_type} pools for CephFS: {fs_name}")
         data_pool = f"cephfs_{pool_type}_{fs_name}_data"
         metadata_pool = f"cephfs_{pool_type}_{fs_name}_metadata"
 
@@ -7032,13 +7032,13 @@ EOF"""
         assert self.create_pool(pool_name=metadata_pool, app_name="cephfs")
         log.debug(f"Created metadata pool: {metadata_pool}")
 
-        # Create CephFS with EC data pool and replicated metadata pool
-        log.debug(f"Creating CephFS: {fs_name} with EC data pool")
+        # Create CephFS with data pool and replicated metadata pool
+        log.debug(f"Creating CephFS: {fs_name} with {pool_type} data pool")
         client_node.exec_command(
             sudo=True,
             cmd=f"ceph fs new {fs_name} {metadata_pool} {data_pool} --force",
         )
-        log.info(f"Created CephFS filesystem: {fs_name} with EC data pool")
+        log.info(f"Created CephFS filesystem: {fs_name} with {pool_type} data pool")
 
     def create_cephfs_filesystem_mount(
         self,
@@ -7226,7 +7226,7 @@ EOF"""
         Create RBD replicated pools, image, and mount it.
 
         Args:
-            rbd_pool: EC data pool name (default: "rbd-replicated")
+            rbd_pool: Replicated data pool name (default: "rbd-replicated")
             image_name: RBD image name (default: "rbd-image")
             image_size: Image size (default: "10G")
             mount_path: Mount path on client (default: "/mnt/rbd/")
