@@ -22,11 +22,7 @@ from time import sleep
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
-from tests.nfs.nfs_operations import (
-    cleanup_cluster,
-    nfs_log_parser,
-    setup_nfs_cluster,
-)
+from tests.nfs.nfs_operations import cleanup_cluster, nfs_log_parser, setup_nfs_cluster
 from utility.log import Log
 
 log = Log(__name__)

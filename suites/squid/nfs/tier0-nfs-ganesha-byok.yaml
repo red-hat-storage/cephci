@@ -209,7 +209,7 @@ tests:
             config:
               nfs_version: 4.2
               total_export_num: 4
-              clients: 1
+              clients: 2
               nfs_replication_number: 4           # Multi-cluster mode - number of clusters
               nfs_mount_common_name: nfs_byok     # Used for multi-cluster cleanup naming
               nfs_export: /export_byok
@@ -217,7 +217,7 @@ tests:
                 service_type: nfs
                 service_id: nfs_byok
                 placement:
-                  host_pattern: '*'
+                  host_pattern: ""
                 spec:
                   port: 62000
                   monitoring_port: 62500
