@@ -24,6 +24,7 @@
   # CEPH-83592512 - Prevent scrub running using standby MDS
   # CEPH-83592513 - Verify Client evict -h,--help works without running the function
   # CEPH-83609202 - Verify data scan works on missing non-immediate dir frags and FS recovery suceeds
+  # CEPH-83593402 - Clone create with parallel volume operations
 #=======================================================================================================================
 ---
 tests:
@@ -292,4 +293,10 @@ tests:
       module: cephfs_bugs.test_fs_recovery_dir_rm.py
       polarion-id: CEPH-83609202
       desc: fs_recovery_dir_rm
+      abort-on-fail: false
+  - test:
+      name: volume_ops_parallel_to_clone
+      module: cephfs_bugs.test_volume_ops_parallel_to_clone.py
+      polarion-id: CEPH-83593402
+      desc: volume_ops_parallel_to_clone
       abort-on-fail: false
