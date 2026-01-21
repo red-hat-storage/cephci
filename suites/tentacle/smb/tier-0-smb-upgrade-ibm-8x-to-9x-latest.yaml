@@ -16,8 +16,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo"
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:latest"
+                rhcs-version: "8.1"
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -83,12 +83,12 @@ tests:
       module: smb_upgrade_operations.py
       polarion-id: CEPH-83622441
       config:
-        initial_ga_version: 9.x
-        upgrade_target_version: 9.x
+        deployment_version: 8.1
+        deployment_release: rc
         operations:
           - deploy_smb
           - upgrade
-          - cleanup_smb
+          - cleanup
         file_type: yaml
         file_mount: /tmp
         spec:
