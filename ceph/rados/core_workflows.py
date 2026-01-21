@@ -6975,7 +6975,13 @@ EOF"""
         )
         return False
 
-    def create_cephfs_pools(self, client_node, fs_name: str, pool_type: str) -> None:
+    def create_cephfs_pools(
+        self,
+        client_node,
+        fs_name: str,
+        pool_type: str,
+        enable_fast_ec_config_params: bool = False,
+    ) -> None:
         """
         Create CephFS filesystem with EC/replicated data pool and replicated metadata pool
 
@@ -6983,7 +6989,7 @@ EOF"""
             client_node: Client node to execute commands
             fs_name: Filesystem name
             pool_type: Pool type identifier
-
+            enable_fast_ec_config_params: Whether to enable fast EC config params
         Returns:
             None (raises exception on failure)
         """
@@ -7011,7 +7017,7 @@ EOF"""
                 "m": 2,
                 "app_name": "cephfs",
                 "erasure_code_use_overwrites": "true",
-                "enable_fast_ec_features": True,
+                "enable_fast_ec_features": enable_fast_ec_config_params,
                 "bulk": True,
                 "pg_num_max": 128,
                 "stripe_unit": 16384,
@@ -7035,7 +7041,11 @@ EOF"""
         log.info(f"Created CephFS filesystem: {fs_name} with EC data pool")
 
     def create_cephfs_filesystem_mount(
-        self, client_node, fs_name: str = "cephfs-thrash", pool_type: str = "erasure"
+        self,
+        client_node,
+        fs_name: str = "cephfs-thrash",
+        pool_type: str = "erasure",
+        enable_fast_ec_config_params: bool = False,
     ) -> tuple:
         """
         Create CephFS filesystem, mount it, and return mount path.
@@ -7044,7 +7054,7 @@ EOF"""
             client_node: Client node to execute commands
             fs_name: Filesystem name (default: "cephfs-thrash")
             pool_type: Pool type - "erasure" or "replicated"
-
+            enable_fast_ec_config_params: Whether to enable fast EC config params
         Returns:
             Tuple of (fs_name, mount_path, list of created pool configs)
         """
@@ -7052,7 +7062,12 @@ EOF"""
 
         log.info(f"Creating CephFS with {pool_type} data pool: {fs_name}")
 
-        self.create_cephfs_pools(client_node, fs_name, pool_type=pool_type)
+        self.create_cephfs_pools(
+            client_node,
+            fs_name,
+            pool_type=pool_type,
+            enable_fast_ec_config_params=enable_fast_ec_config_params,
+        )
 
         log.info(f"Mounting CephFS at {mount_path}")
         client_node.exec_command(
@@ -7086,6 +7101,7 @@ EOF"""
         image_name: str = "thrash-test-image",
         image_size: str = "10G",
         crush_failure_domain: str = "host",
+        enable_fast_ec_config_params: bool = False,
     ) -> tuple:
         """
         Create EC RBD pools, image, and mount it.
@@ -7096,6 +7112,7 @@ EOF"""
             image_name: RBD image name (default: "thrash-test-image")
             image_size: Image size (default: "10G")
             crush_failure_domain: CRUSH failure domain for EC pool (default: "host")
+            enable_fast_ec_config_params: Whether to enable fast EC config params
 
         Returns:
             Tuple of (mount_path, device_path, list of created pool configs)
@@ -7110,7 +7127,7 @@ EOF"""
             "m": 2,
             "app_name": "rbd",
             "crush-failure-domain": crush_failure_domain,
-            "enable_fast_ec_features": True,
+            "enable_fast_ec_features": enable_fast_ec_config_params,
             "stripe_unit": 16384,
         }
 
