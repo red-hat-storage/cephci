@@ -45,6 +45,18 @@ Utility to generate a CSV report of DNS records from IBM cloud.
         --dry-run          Show what would be deleted without actually deleting
 """
 
+# Hardcoded VM names to exclude from orphan detection (infrastructure VMs)
+EXCLUDE_VM_NAMES = {
+    "infra-vm-jenkins-01",
+    "infra-vm-jenkins-agent-01",
+    "infra-vm-jenkins-agent-02",
+    "infra-vm-jenkins-agent-03",
+    "nginx-vm-01",
+    "rgw-vault-server-01",
+    "smb-windows-ad-server-vm1",
+    "metaltank",
+}
+
 
 def get_all_instances(vm_node: CephVMNodeIBM, vpc_name: str) -> List[Dict]:
     instances = []
@@ -92,7 +104,9 @@ def get_all_dns_records(
 
 
 def generate_dns_report(
-    instances: List[Dict], dns_records: List[Dict]
+    instances: List[Dict],
+    dns_records: List[Dict],
+    exclude_vm_names: set = None,
 ) -> Tuple[List[Dict], List[Dict]]:
     ip_to_vm = {}
     for instance in instances:
@@ -102,6 +116,17 @@ def generate_dns_report(
 
     orphan_entries = []
     active_entries = []
+    excluded_count = 0
+
+    if exclude_vm_names is None:
+        exclude_vm_names = set()
+
+    def is_excluded(dns_name: str) -> bool:
+        """Check if the DNS name matches any excluded VM name."""
+        # DNS name format is typically: vm-name.zone (e.g., nginx-vm-01.qe.ceph.lab)
+        # Extract the hostname part (before the first dot or the full name)
+        hostname = dns_name.split(".")[0] if "." in dns_name else dns_name
+        return hostname in exclude_vm_names
 
     for record in dns_records:
         zone_name = record.get("_zone_name", "Unknown")
@@ -120,6 +145,21 @@ def generate_dns_report(
                         "dns_name": dns_name,
                         "ip_address": dns_ip,
                         "vm_name": ip_to_vm[dns_ip],
+                        "record_id": record_id,
+                        "has_ptr": "Yes" if record.get("linked_ptr_record") else "No",
+                    }
+                )
+            elif is_excluded(dns_name):
+                # Treat excluded VM names as active (protected)
+                excluded_count += 1
+                active_entries.append(
+                    {
+                        "status": "Excluded",
+                        "zone_name": zone_name,
+                        "record_type": "A",
+                        "dns_name": dns_name,
+                        "ip_address": dns_ip,
+                        "vm_name": "EXCLUDED",
                         "record_id": record_id,
                         "has_ptr": "Yes" if record.get("linked_ptr_record") else "No",
                     }
@@ -155,6 +195,21 @@ def generate_dns_report(
                         "has_ptr": "N/A",
                     }
                 )
+            elif is_excluded(ptr_target):
+                # Treat excluded VM names as active (protected)
+                excluded_count += 1
+                active_entries.append(
+                    {
+                        "status": "Excluded",
+                        "zone_name": zone_name,
+                        "record_type": "PTR",
+                        "dns_name": ptr_target,
+                        "ip_address": ptr_name,
+                        "vm_name": "EXCLUDED",
+                        "record_id": record["id"],
+                        "has_ptr": "N/A",
+                    }
+                )
             else:
                 orphan_entries.append(
                     {
@@ -168,6 +223,9 @@ def generate_dns_report(
                         "has_ptr": "N/A",
                     }
                 )
+
+    if excluded_count > 0:
+        logger.info("Excluded %s DNS records from orphan detection", excluded_count)
 
     return orphan_entries, active_entries
 
@@ -405,9 +463,14 @@ def run(args: Dict) -> int:
 
             logger.info("Total VM instances across all VPCs: %s", len(all_instances))
 
+            logger.info(
+                "Excluding %s infrastructure VMs from orphan detection",
+                len(EXCLUDE_VM_NAMES),
+            )
+
             logger.info("Analyzing DNS records...")
             orphan_entries, active_entries = generate_dns_report(
-                all_instances, all_dns_records
+                all_instances, all_dns_records, exclude_vm_names=EXCLUDE_VM_NAMES
             )
 
             logger.info("Writing CSV report...")
