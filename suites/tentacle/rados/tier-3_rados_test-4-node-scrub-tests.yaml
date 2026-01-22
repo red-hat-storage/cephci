@@ -320,3 +320,24 @@ tests:
         pool_name: scrub_pool
         pg_num_max: 1
         is_ecpool: False
+
+  - test:
+      name: Verification of the scrub queue
+      desc: Verification of scrub queue in scheduled scrubs
+      module: test_scrub_queue_timing.py
+      polarion-id: CEPH-83620445
+      config:
+        create: true
+        pool_name: scrub_pool
+        pg_num_max: 8
+        operation: "scrub"
+  - test:
+      name: Verification of the scrub queue
+      desc: Verification of scrub queue in scheduled scrubs
+      module: test_scrub_queue_timing.py
+      polarion-id: CEPH-83620445
+      config:
+        create: true
+        pool_name: scrub_pool
+        pg_num_max: 8
+        operation: "deep-scrub"
