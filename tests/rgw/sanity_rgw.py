@@ -27,6 +27,10 @@ Below configs are needed in order to run the tests
         env-vars (optional):
                     - cleanup=False
                     - objects_count: 500
+        ibm_cloud_api_key_required (optional):
+                    If true, IBM_CLOUD_API_KEY must be set (env or
+                    ibm_cloud.api-key in ~/.cephci.yaml). Checked before
+                    test execution; key is never logged (masked).
         extra-pkgs (optional):
                     Packages to install
                     example:
@@ -45,6 +49,8 @@ Below configs are needed in order to run the tests
 
 """
 
+import os
+
 import yaml
 
 from utility import utils
@@ -52,6 +58,7 @@ from utility.log import Log
 from utility.utils import (
     config_keystone_ldap,
     configure_kafka_security,
+    get_cephci_config,
     install_start_kafka,
     setup_cluster_access,
 )
@@ -85,6 +92,7 @@ def run(ceph_cluster, **kw):
     client_ceph_object = ceph_cluster.get_ceph_object("client")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
+    git_clone_configs_repo = config.get("git_clone_configs_repo", False)
     install_start_kafka_broker = config.get("install_start_kafka")
     configure_kafka_broker_security = config.get("configure_kafka_security")
     install_keystone_ldap = config.get("install_keystone_ldap")
@@ -141,6 +149,9 @@ def run(ceph_cluster, **kw):
     if not out:
         exec_from.exec_command(cmd=f"sudo mkdir {test_folder}")
         utils.clone_the_repo(config, exec_from, test_folder_path)
+    if git_clone_configs_repo:
+        utils.clone_configs_repo(rgw_node, repo_name="rgw_configs")
+        utils.clone_configs_repo(client_node, repo_name="rgw_configs")
 
     install_common = config.get("install_common", True)
     if install_common:
@@ -192,21 +203,74 @@ def run(ceph_cluster, **kw):
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
-    cmd_env = " ".join(config.get("env-vars", []))
-    test_status = exec_from.exec_command(
-        cmd=cmd_env
-        + f"sudo {python_cmd} "
-        + test_folder_path
+    # Build env vars for test execution; inject IBM_CLOUD_API_KEY from env or cephci.yaml
+    env_vars = list(config.get("env-vars", []))
+    ibm_cloud_api_key_required = config.get("ibm_cloud_api_key_required", False)
+    ibm_cloud_api_key = os.environ.get("IBM_CLOUD_API_KEY")
+    if not ibm_cloud_api_key:
+        try:
+            cephci_config = get_cephci_config()
+            ibm_cloud_config = cephci_config.get("ibm_cloud", {})
+            ibm_cloud_api_key = ibm_cloud_config.get("api-key")
+        except (IOError, KeyError, AttributeError) as e:
+            log.debug("Could not read IBM_CLOUD_API_KEY from cephci.yaml: %s", e)
+    if ibm_cloud_api_key_required and not ibm_cloud_api_key:
+        raise ValueError(
+            "ibm_cloud_api_key_required is true but IBM_CLOUD_API_KEY is not set. "
+            "Set IBM_CLOUD_API_KEY in the environment or ibm_cloud.api-key in ~/.cephci.yaml"
+        )
+    ibm_key_file = None
+    if ibm_cloud_api_key:
+        log.info("IBM_CLOUD_API_KEY configured (masked), adding to test execution")
+        # Pass key via file so it never appears in logged command
+        ibm_key_file = "/tmp/.cephci_ibm_api_key"
+        try:
+            remote_fp = exec_from.remote_file(
+                file_name=ibm_key_file, file_mode="w", sudo=True
+            )
+            remote_fp.write(ibm_cloud_api_key)
+            remote_fp.flush()
+            exec_from.exec_command(cmd=f"sudo chmod 600 {ibm_key_file}")
+        except Exception:
+            log.error(
+                "Failed to write IBM_CLOUD_API_KEY file on remote (key not logged)"
+            )
+            raise
+    # Use 'sudo env VAR=val ...' for normal env; IBM key via file so logs stay masked
+    cmd_env = " ".join(env_vars)
+    test_script_args = (
+        test_folder_path
         + script_dir
         + script_name
         + " -c "
         + test_folder
         + config_dir
         + config_file_name
-        + append_param,
-        long_running=True,
-        timeout=timeout,
+        + append_param
     )
+    if ibm_key_file:
+        expanded_path = f"/home/cephuser/{test_folder}"
+        run_cmd = (
+            f"sudo bash -c 'export IBM_CLOUD_API_KEY=$(cat {ibm_key_file}) && "
+            f"cd /home/cephuser && {python_cmd} {expanded_path}{script_dir}{script_name} "
+            f" -c {test_folder}{config_dir}{config_file_name}{append_param}'"
+        )
+    elif cmd_env:
+        run_cmd = f"sudo env {cmd_env} {python_cmd} " + test_script_args
+    else:
+        run_cmd = f"sudo {python_cmd} " + test_script_args
+    try:
+        test_status = exec_from.exec_command(
+            cmd=run_cmd,
+            long_running=True,
+            timeout=timeout,
+        )
+    finally:
+        if ibm_key_file:
+            exec_from.exec_command(
+                cmd=f"sudo rm -f {ibm_key_file}",
+                check_ec=False,
+            )
 
     if run_io_verify:
         log.info("running io verify script")
