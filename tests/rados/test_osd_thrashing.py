@@ -182,11 +182,26 @@ def run(ceph_cluster, **kw):
         "enable_election_strategy_thrash", True
     )
     enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
-    if rados_obj.rhbuild.split(".")[0] < "9":
+    disabled_ec_optimizations = False
+    major_version = int(rados_obj.rhbuild.split(".")[0])
+
+    if major_version < 9:
         enable_fast_ec_config_params = False
         log.info(
-            "Fast EC config params are not supported in this version. Running tests without fast EC config params."
+            "Fast EC config params are not supported in this version. "
+            "Running tests without fast EC config params."
         )
+    elif not enable_fast_ec_config_params:
+        log.info(
+            "Fast EC is enabled by default in 9.x and above. "
+            "Explicitly disabling it by setting osd_pool_default_flag_ec_optimizations to false."
+        )
+        mon_obj.set_config(
+            section="global",
+            name="osd_pool_default_flag_ec_optimizations",
+            value="false",
+        )
+        disabled_ec_optimizations = True
 
     compression_algorithms = ["snappy", "zlib"]
     rgw_config = None
@@ -225,8 +240,8 @@ def run(ceph_cluster, **kw):
         f"  Additional pools: {additional_pools_str}\n"
         f"  Inject errors: {inject_errors}\n"
         f"  RGW S3 thrashing: {enable_rgw_thrashing}\n"
-        f"  OSDs to inject errors: {len(inject_osds)}\n"
-        f"  Writes to inject per OSD: {num_writes_to_inject}\n"
+        f"  OSDs to inject errors: {len(inject_osds) if inject_errors else 0}\n"
+        f"  Writes to inject per OSD: {num_writes_to_inject if inject_errors else 0}\n"
         f"  FIO on CephFS: {enable_fio_cephfs}\n"
         f"  FIO on RBD: {enable_fio_rbd}\n"
         f"  CephFS snapshot thrashing: {enable_cephfs_snapshots}\n"
@@ -505,6 +520,7 @@ def run(ceph_cluster, **kw):
                         workload_name="cephfs",
                         duration=duration,
                         stop_flag=stop_flag,
+                        enable_cephfs_snapshots=enable_cephfs_snapshots,
                     )
                 )
             elif enable_fio_cephfs:
@@ -521,6 +537,7 @@ def run(ceph_cluster, **kw):
                         workload_name="rbd",
                         duration=duration,
                         stop_flag=stop_flag,
+                        enable_cephfs_snapshots=enable_cephfs_snapshots,
                     )
                 )
             elif enable_fio_rbd:
@@ -846,6 +863,12 @@ def run(ceph_cluster, **kw):
             log.info("Removing EC write error injection config...")
             mon_obj.remove_config(
                 section="global", name="bluestore_debug_inject_read_err"
+            )
+
+        if disabled_ec_optimizations:
+            log.info("Reverting osd_pool_default_flag_ec_optimizations config...")
+            mon_obj.remove_config(
+                section="global", name="osd_pool_default_flag_ec_optimizations"
             )
 
         # Restore any OSDs that are out or down
@@ -1278,14 +1301,19 @@ def monitor_cluster_health(
 
 
 def _run_fio_workload(
-    client_node, mount_path: str, workload_name: str, duration: int, stop_flag: Dict
+    client_node,
+    mount_path: str,
+    workload_name: str,
+    duration: int,
+    stop_flag: Dict,
+    enable_cephfs_snapshots: bool,
 ) -> int:
     """
     Run comprehensive FIO workload with writes, overwrites, partial writes, reads.
 
     Performs multiple phases per iteration:
     1. Initial writes (create files)
-    2. Create snapshot (CephFS only - enables clone-on-write)
+    2. Create snapshot (CephFS only - enables clone-on-write, gated by flag)
     3. Overwrites AFTER snapshot (triggers BlueStore clones)
     4. Partial writes AFTER snapshot (triggers BlueStore clones)
     5. Mixed read/write (reads expose corruption)
@@ -1302,6 +1330,7 @@ def _run_fio_workload(
         workload_name: Name for the workload (for logging) - "cephfs" or "rbd"
         duration: Total duration in seconds
         stop_flag: Dict with 'stop' key to signal early termination
+        enable_cephfs_snapshots: Whether to create/delete CephFS snapshots (only applies when workload_name="cephfs")
 
     Returns:
         Number of FIO runs completed
@@ -1337,7 +1366,7 @@ def _run_fio_workload(
                 break
 
             # Phase 2: Create CephFS snapshot (enables clone-on-write for subsequent writes)
-            if is_cephfs:
+            if is_cephfs and enable_cephfs_snapshots:
                 snap_name = f"fio_snap_{runs}_{int(time.time())}"
                 client_node.exec_command(
                     cmd=f"mkdir -p {snap_dir}/{snap_name}", sudo=True, check_ec=False
@@ -1366,7 +1395,12 @@ def _run_fio_workload(
             )
 
             # Phase 7: Delete ~20% of snapshots (CephFS only)
-            if is_cephfs and all_snaps and random.random() < 0.2:
+            if (
+                is_cephfs
+                and enable_cephfs_snapshots
+                and all_snaps
+                and random.random() < 0.2
+            ):
                 snap = random.choice(all_snaps)
                 client_node.exec_command(
                     cmd=f"rmdir {snap_dir}/{snap} 2>/dev/null || true",
@@ -1377,7 +1411,11 @@ def _run_fio_workload(
 
             time.sleep(random.uniform(2, 5))
 
-        snap_info = f", {len(all_snaps)} snapshots" if is_cephfs else ""
+        snap_info = (
+            f", {len(all_snaps)} snapshots"
+            if is_cephfs and enable_cephfs_snapshots
+            else ""
+        )
         log.info(f"FIO {workload_name} completed: {runs} iterations{snap_info}")
         return runs
     except Exception as e:

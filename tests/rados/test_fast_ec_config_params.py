@@ -1675,14 +1675,12 @@ def run(ceph_cluster, **kw):
             # Test EC pools
             for pool_name in staggered_pools["ec_pools"]:
                 log.info("  Testing I/O on EC pool: %s", pool_name)
-                if not rados_obj.bench_write(
+                assert rados_obj.bench_write(
                     pool_name=pool_name,
                     byte_size="8K",
                     max_objs=50,
-                    verify_stats=False,
-                ):
-                    log.error("    Write test FAILED on pool: %s", pool_name)
-                    raise Exception(f"Failed to write data to EC pool {pool_name}")
+                    verify_stats=True,
+                ), f"Failed to write data to EC pool {pool_name}"
                 log.info("    Write test: PASSED")
 
             # Step 4: Test RBD images - write on existing and create new images
@@ -2023,13 +2021,12 @@ def run(ceph_cluster, **kw):
 
             for pool_name in created_pools:
                 log.info("  Writing to: %s", pool_name)
-                if not rados_obj.bench_write(
+                assert rados_obj.bench_write(
                     pool_name=pool_name,
                     byte_size="4K",
                     max_objs=20,
-                    verify_stats=False,
-                ):
-                    raise Exception(f"Failed to write to pool {pool_name}")
+                    verify_stats=True,
+                ), f"Failed to write to pool {pool_name}"
                 log.info("    Write: PASSED")
 
             # Summary
@@ -3157,9 +3154,9 @@ def create_staggered_upgrade_pools(rados_obj, client_node, upgrade_case):
         log.info("  Created EC pool: %s", ec_pool_name)
 
         # Write test data to EC pool
-        rados_obj.bench_write(
-            pool_name=ec_pool_name, byte_size="4K", max_objs=100, verify_stats=False
-        )
+        assert rados_obj.bench_write(
+            pool_name=ec_pool_name, byte_size="4K", max_objs=100, verify_stats=True
+        ), f"Failed to write data to EC pool {ec_pool_name}"
 
         # Step 2: Create EC RBD data pool
         if not rados_obj.create_erasure_pool(

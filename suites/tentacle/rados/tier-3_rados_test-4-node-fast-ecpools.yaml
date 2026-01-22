@@ -307,7 +307,7 @@ tests:
   - test:
       name: Stripe unit and Fast EC default verification
       module: test_fast_ec_config_params.py
-      polarion-id: CEPH-83620447
+      polarion-id: CEPH-83632256
       abort-on-fail: false
       config:
         test_stripe_unit_pool_creation: true

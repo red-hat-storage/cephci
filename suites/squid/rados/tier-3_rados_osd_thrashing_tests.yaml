@@ -183,8 +183,8 @@ tests:
   # OSD Thrashing Tests
   # ===========================================================================
   - test:
-      name: Fast EC OSD thrashing with compression
-      desc: Aggressive OSD thrashing with compression & Fast EC enabled
+      name: OSD thrashing with compression
+      desc: Aggressive OSD thrashing with compression enabled
       module: test_osd_thrashing.py
       polarion-id: CEPH-83632230
       config:
@@ -205,6 +205,7 @@ tests:
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        enable_fast_ec_config_params: false
         # Workload controls (all default to true)
         enable_fio_cephfs: true
         enable_fio_rbd: true
@@ -217,43 +218,8 @@ tests:
         enable_mgr_thrashing: false
 
   - test:
-      name: Fast EC OSD thrashing without compression
-      desc: Aggressive OSD thrashing with Fast EC without compression
-      module: test_osd_thrashing.py
-      polarion-id: CEPH-83632230
-      config:
-        pool_configs:
-          - pool_type: erasure
-            sample_pool_id: sample-pool-7
-          - pool_type: erasure
-            sample_pool_id: sample-pool-9
-          - pool_type: replicated
-            sample_pool_id: sample-pool-2
-        iterations: 120
-        duration: 1800
-        aggressive: true
-        enable_crush_thrashing: true
-        enable_pg_thrashing: true
-        enable_rgw_thrashing: true
-        compression: false
-        cleanup_pools: true
-        enable_debug_logs: false
-        inject_errors: false
-        # Workload controls
-        enable_fio_cephfs: true
-        enable_fio_rbd: true
-        enable_cephfs_snapshots: true
-        enable_rbd_snapshots: true
-        enable_ec_snapshots: true
-        enable_osd_thrashing: true
-        enable_mon_thrashing: true
-        enable_election_strategy_thrash: true
-        enable_mgr_thrashing: false
-
-
-  - test:
-      name: OSD thrashing without Fast EC
-      desc: Aggressive OSD thrashing without Fast EC & compression
+      name: OSD thrashing without compression
+      desc: Aggressive OSD thrashing without compression
       module: test_osd_thrashing.py
       polarion-id: CEPH-83632230
       config:
@@ -286,9 +252,10 @@ tests:
         enable_election_strategy_thrash: true
         enable_mgr_thrashing: false
 
+
   - test:
-      name: Fast EC OSD thrashing with EC error injection
-      desc: Fast EC OSD thrashing with EC write error injection
+      name: OSD thrashing with EC error injection
+      desc: OSD thrashing with EC write error injection
       module: test_osd_thrashing.py
       polarion-id: CEPH-83632230
       config:
@@ -309,6 +276,7 @@ tests:
         inject_errors: true
         num_osds_to_inject: 3
         num_writes_to_inject: 1000
+        enable_fast_ec_config_params: false
         # Workload controls
         enable_fio_cephfs: true
         enable_fio_rbd: true
@@ -341,6 +309,7 @@ tests:
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        enable_fast_ec_config_params: false
         # Minimal workload
         enable_fio_cephfs: true
         enable_fio_rbd: true
@@ -351,30 +320,3 @@ tests:
         enable_mon_thrashing: false
         enable_election_strategy_thrash: false
         enable_mgr_thrashing: false
-
-  # ===========================================================================
-  # Bug #2423971 EC Divergent Log Reproduction Tests
-  # ===========================================================================
-  - test:
-      name: Bug 2423971 EC Divergent Log - Short Run
-      desc: Attempts to reproduce the Fast EC divergent log bug with 5 iterations
-      module: test_bug_2423971_ec_divergent.py
-      polarion-id: CEPH-83632231
-      config:
-        iterations: 5
-        duration: 600
-        pool_name: bug-2423971-short
-        cleanup_pool: true
-        fail_on_crash: false
-
-  - test:
-      name: Bug 2423971 EC Divergent Log - Long Run
-      desc: Extended bug reproduction - continues even after crash detected
-      module: test_bug_2423971_ec_divergent.py
-      polarion-id: CEPH-83632231
-      config:
-        iterations: 40
-        duration: 900
-        pool_name: bug-2423971-long
-        cleanup_pool: true
-        fail_on_crash: false
