@@ -377,7 +377,7 @@ class FsUtils(object):
     def deamon_name(node, service):
         out, rc = node.exec_command(
             sudo=True,
-            cmd=f"systemctl list-units --type=service | grep {service} | awk {{'print $1'}}",
+            cmd=f"systemctl list-units --type=service --all | grep {service} | awk {{'print $1'}}",
         )
         service_deamon = out.strip().split()[0]
         return service_deamon
