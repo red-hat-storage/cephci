@@ -45,6 +45,7 @@ Below configs are needed in order to run the tests
 
 """
 
+import os
 import yaml
 
 from utility import utils
@@ -52,6 +53,7 @@ from utility.log import Log
 from utility.utils import (
     config_keystone_ldap,
     configure_kafka_security,
+    get_cephci_config,
     install_start_kafka,
     setup_cluster_access,
 )
@@ -192,7 +194,28 @@ def run(ceph_cluster, **kw):
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
-    cmd_env = " ".join(config.get("env-vars", []))
+    # Build environment variables for test execution
+    env_vars = list(config.get("env-vars", []))
+    
+    # Automatically inject IBM_CLOUD_API_KEY from environment or cephci.yaml config
+    # Environment variable takes precedence over config file
+    ibm_cloud_api_key = os.getenv("IBM_CLOUD_API_KEY")
+    if not ibm_cloud_api_key:
+        try:
+            cephci_config = get_cephci_config()
+            ibm_cloud_config = cephci_config.get("ibm_cloud", {})
+            ibm_cloud_api_key = ibm_cloud_config.get("api-key")
+            if ibm_cloud_api_key:
+                log.info("IBM_CLOUD_API_KEY found in cephci.yaml config, adding to test execution")
+        except (IOError, KeyError, AttributeError) as e:
+            log.debug(f"Could not read IBM_CLOUD_API_KEY from cephci.yaml: {e}")
+    
+    if ibm_cloud_api_key:
+        env_vars.append(f"IBM_CLOUD_API_KEY={ibm_cloud_api_key}")
+    else:
+        log.debug("IBM_CLOUD_API_KEY not found in environment or cephci.yaml config")
+    
+    cmd_env = " ".join(env_vars) if env_vars else ""
     test_status = exec_from.exec_command(
         cmd=cmd_env
         + f"sudo {python_cmd} "
