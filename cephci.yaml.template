@@ -57,6 +57,11 @@
 #  resource-id: <deployed-instance-resource-id>
 #  location-constraint: <storage-class>
 
+# Provide IBM Cloud API Key
+# This key is used for IBM IAM authentication in test scenarios.
+# ibm_cloud:
+#  api-key: <ibm-cloud-api-key>
+
 # [Depricated] URI to be used for retrieving the RHCS build details
 # build-url: <URI to fileserver>
 
