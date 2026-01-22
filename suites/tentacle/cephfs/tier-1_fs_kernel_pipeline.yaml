@@ -166,16 +166,15 @@ tests:
         module: test_client.py
         name: configure client
   - test:
+      name: Run fsstress on kernel and fuse mounts
+      module: cephfs_bugs.test_fsstress_on_kernel_and_fuse.py
+      polarion-id: CEPH-83575623
+      desc: Run fsstress on kernel and fuse mounts
+      abort-on-fail: false
+  - test:
       name: Run xfs test on kernel
       module: xfs_test.py
       polarion-id: CEPH-83592787
       desc: Run xfs test on kernel
       abort-on-fail: false
       comments: "Fails on RHEL-10: BZ-2423825"
-  - test:
-      name: Run fsstress on kernel and fuse mounts
-      module: cephfs_bugs.test_fsstress_on_kernel_and_fuse.py
-      polarion-id: CEPH-83575623
-      desc: Run fsstress on kernel and fuse mounts
-      abort-on-fail: false
-

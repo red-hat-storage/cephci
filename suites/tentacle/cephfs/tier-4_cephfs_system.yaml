@@ -166,32 +166,24 @@ tests:
       module: cephfs_system.mon_failure_with_client_IO.py
       polarion-id: CEPH-11261
       name: "MON node power failure, with client IO"
-      config:
-          num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "MDS node power failure, with client IO"
       module: cephfs_system.mds_failure_with_client_IO.py
       polarion-id: CEPH-11263
       name: "MDS node power failure, with client IO"
-      config:
-        num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "OSD node power failure, with client IO"
       module: cephfs_system.osd_failure_with_client_IO.py
       polarion-id: CEPH-11262
       name: "OSD node power failure, with client IO"
-      config:
-          num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "MON node failures ops with client IO"
       module: cephfs_system.mon_node_failure_ops.py
       polarion-id: CEPH-11254
       name: "MON node power failure with client IO"
-      config:
-        num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "MDS node failures ops with client IO"
@@ -204,8 +196,6 @@ tests:
       module: cephfs_system.osd_node_failure_ops.py
       polarion-id: CEPH-11255
       name: "OSD node power failure with client IO ops"
-      config:
-        num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "mds_node_remove_with_IO"
