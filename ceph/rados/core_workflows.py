@@ -7094,6 +7094,177 @@ EOF"""
 
         return fs_name, mount_path, created_pools
 
+    def create_nfs_clusters_and_exports(
+        self,
+        client_node,
+        num_clusters: int = 3,
+        exports_per_cluster: int = 4,
+        placement: int = 1,
+        nfs_fs_name: str = "nfs-cephfs",
+        pool_type: str = "erasure",
+        enable_fast_ec_config_params: bool = False,
+    ) -> dict:
+        """
+        Create NFS clusters with a dedicated CephFS filesystem and exports.
+
+        Args:
+            client_node: Client node to execute commands
+            num_clusters: Number of NFS clusters to create (default: 3)
+            exports_per_cluster: Number of exports per cluster (default: 4)
+            placement: Placement count for NFS daemons (default: 1)
+            nfs_fs_name: CephFS filesystem name for NFS (default: "nfs-cephfs")
+            pool_type: Pool type for CephFS - "erasure" or "replicated"
+            enable_fast_ec_config_params: Whether to enable fast EC config params
+
+        Returns:
+            Dict with nfs_config containing clusters, exports, fs_name, and pool info
+        """
+        log.info(
+            f"Creating NFS setup: {num_clusters} clusters, "
+            f"{exports_per_cluster} exports each"
+        )
+
+        # Step 1: Create CephFS filesystem for NFS
+        log.info(f"Creating CephFS filesystem for NFS: {nfs_fs_name}")
+        self.create_cephfs_pools(
+            client_node=client_node,
+            fs_name=nfs_fs_name,
+            pool_type=pool_type,
+            enable_fast_ec_config_params=enable_fast_ec_config_params,
+        )
+
+        # Get OSD hosts for NFS placement
+        available_hosts = self.get_osd_hosts()
+        log.info(f"Available OSD hosts for NFS placement: {available_hosts}")
+
+        # Step 2: Create NFS clusters with unique ports starting from 2049
+        clusters = []
+        base_port = 2049
+        for i in range(num_clusters):
+            cluster_id = f"nfs-cluster-{i + 1}"
+            port = base_port + i
+
+            # Distribute clusters across hosts (round-robin)
+            host_idx = i % len(available_hosts)
+            selected_host = available_hosts[host_idx]
+            placement_str = f'"{placement} {selected_host}"'
+
+            log.info(
+                f"Creating NFS cluster: {cluster_id} on port {port}, host {selected_host}"
+            )
+
+            cmd = f"ceph nfs cluster create {cluster_id} {placement_str} --port={port}"
+            self.client.exec_command(cmd=cmd, sudo=True)
+            clusters.append(
+                {"cluster_id": cluster_id, "port": port, "host": selected_host}
+            )
+            time.sleep(5)  # Allow cluster to initialize
+
+        log.info(f"Created {len(clusters)} NFS clusters")
+
+        # Wait for NFS clusters to be ready
+        time.sleep(30)
+
+        # Step 3: Create exports for each cluster
+        exports = []
+        for cluster in clusters:
+            cluster_id = cluster["cluster_id"]
+            for j in range(exports_per_cluster):
+                pseudo_path = f"/export/{cluster_id}/path{j + 1}"
+
+                log.info(f"Creating NFS export: {pseudo_path} on cluster {cluster_id}")
+                cmd = (
+                    f"ceph nfs export create cephfs {cluster_id} {pseudo_path} "
+                    f"{nfs_fs_name} --path=/"
+                )
+                try:
+                    self.client.exec_command(cmd=cmd, sudo=True)
+                    exports.append(
+                        {
+                            "cluster_id": cluster_id,
+                            "pseudo_path": pseudo_path,
+                            "fs_name": nfs_fs_name,
+                        }
+                    )
+                except Exception as e:
+                    log.warning(f"Failed to create export {pseudo_path}: {e}")
+
+        log.info(f"Created {len(exports)} NFS exports across {len(clusters)} clusters")
+
+        # Build pool info for tracking
+        created_pools = [
+            {
+                "pool_name": f"cephfs_{pool_type}_{nfs_fs_name}_data",
+                "pool_type": pool_type,
+                "client": "nfs",
+            },
+            {
+                "pool_name": f"cephfs_{pool_type}_{nfs_fs_name}_metadata",
+                "pool_type": "replicated",
+                "client": "nfs",
+            },
+        ]
+
+        return {
+            "fs_name": nfs_fs_name,
+            "clusters": clusters,
+            "exports": exports,
+            "pools": created_pools,
+        }
+
+    def cleanup_nfs_clusters(self, nfs_config: dict) -> None:
+        """
+        Cleanup NFS clusters, exports, and associated filesystem.
+
+        Args:
+            nfs_config: Dict returned by create_nfs_clusters_and_exports
+        """
+        if not nfs_config:
+            return
+
+        log.info("Cleaning up NFS clusters and exports...")
+
+        # Step 1: Delete all exports
+        for export in nfs_config.get("exports", []):
+            cluster_id = export["cluster_id"]
+            pseudo_path = export["pseudo_path"]
+            try:
+                cmd = f"ceph nfs export rm {cluster_id} {pseudo_path}"
+                self.client.exec_command(cmd=cmd, sudo=True, check_ec=False)
+                log.debug(f"Deleted NFS export: {pseudo_path}")
+            except Exception as e:
+                log.warning(f"Failed to delete export {pseudo_path}: {e}")
+
+        # Step 2: Delete NFS clusters
+        for cluster in nfs_config.get("clusters", []):
+            cluster_id = cluster["cluster_id"]
+            try:
+                cmd = f"ceph nfs cluster rm {cluster_id}"
+                self.client.exec_command(cmd=cmd, sudo=True, check_ec=False)
+                log.debug(f"Deleted NFS cluster: {cluster_id}")
+            except Exception as e:
+                log.warning(f"Failed to delete cluster {cluster_id}: {e}")
+
+        # Step 3: Delete filesystem
+        # Note: Pools are deleted separately via created_pools tracking in the caller
+        fs_name = nfs_config.get("fs_name")
+        if fs_name:
+            try:
+                self.client.exec_command(
+                    cmd=f"ceph fs fail {fs_name}", sudo=True, check_ec=False
+                )
+                time.sleep(5)
+                self.client.exec_command(
+                    cmd=f"ceph fs rm {fs_name} --yes-i-really-mean-it",
+                    sudo=True,
+                    check_ec=False,
+                )
+                log.debug(f"Deleted filesystem: {fs_name}")
+            except Exception as e:
+                log.warning(f"Failed to delete filesystem {fs_name}: {e}")
+
+        log.info("NFS cleanup completed")
+
     def create_ec_rbd_pools(
         self,
         rbd_ec_data_pool: str = "rbd-ec-thrash-data",
