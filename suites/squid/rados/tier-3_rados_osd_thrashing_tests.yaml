@@ -216,6 +216,8 @@ tests:
         enable_mon_thrashing: true
         enable_election_strategy_thrash: true
         enable_mgr_thrashing: false
+        enable_mds_thrashing: true
+        enable_nfs_thrashing: true
 
   - test:
       name: OSD thrashing without compression
@@ -251,7 +253,8 @@ tests:
         enable_mon_thrashing: true
         enable_election_strategy_thrash: true
         enable_mgr_thrashing: false
-
+        enable_mds_thrashing: true
+        enable_nfs_thrashing: true
 
   - test:
       name: OSD thrashing with EC error injection
@@ -287,6 +290,8 @@ tests:
         enable_mon_thrashing: true
         enable_election_strategy_thrash: false
         enable_mgr_thrashing: false
+        enable_mds_thrashing: true
+        enable_nfs_thrashing: true
 
   - test:
       name: OSD thrashing - minimal (quick validation)
@@ -320,3 +325,5 @@ tests:
         enable_mon_thrashing: false
         enable_election_strategy_thrash: false
         enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_nfs_thrashing: false
