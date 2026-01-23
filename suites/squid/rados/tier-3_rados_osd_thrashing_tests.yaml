@@ -218,6 +218,7 @@ tests:
         enable_mgr_thrashing: false
         enable_mds_thrashing: true
         enable_nfs_thrashing: true
+        enable_cephfs_subvolume_thrashing: true
 
   - test:
       name: OSD thrashing without compression
@@ -255,6 +256,7 @@ tests:
         enable_mgr_thrashing: false
         enable_mds_thrashing: true
         enable_nfs_thrashing: true
+        enable_cephfs_subvolume_thrashing: true
 
   - test:
       name: OSD thrashing with EC error injection
@@ -292,6 +294,7 @@ tests:
         enable_mgr_thrashing: false
         enable_mds_thrashing: true
         enable_nfs_thrashing: true
+        enable_cephfs_subvolume_thrashing: true
 
   - test:
       name: OSD thrashing - minimal (quick validation)
@@ -327,3 +330,4 @@ tests:
         enable_mgr_thrashing: false
         enable_mds_thrashing: false
         enable_nfs_thrashing: false
+        enable_cephfs_subvolume_thrashing: false
