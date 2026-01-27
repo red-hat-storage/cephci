@@ -113,6 +113,7 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi.yaml
+        git_clone_configs_repo: true
   - test:
       name: STS aswi Tests to test aud claim in the web token
       desc: STS aswi Tests to test aud claim in the web token

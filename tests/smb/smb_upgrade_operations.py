@@ -1,7 +1,3 @@
-import re
-
-import requests
-import yaml
 from smb_operations import (
     check_ctdb_health,
     check_rados_clustermeta,
@@ -13,6 +9,7 @@ from smb_operations import (
 
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
+from cephci.utils.build_info import CephTestManifest
 from cli.exceptions import ConfigError
 from cli.utilities.operations import wait_for_cluster_health
 from utility.log import Log
@@ -24,46 +21,16 @@ class SmbUpgradeError(Exception):
     pass
 
 
-def fetch_build_artifacts(version, recipe_url, build_tag, build_type, custom_image=""):
-    """Fetch build
-    Args:
-        version (str): Cluster version
-        recipe_url (str): Recipe url (Build Info)
-        image_type (str): Image type (Ex: samba_image)
-        tag (str): build tag
-    """
+def fetch_build_artifacts(product, release, build_type, platform):
     try:
-        # Extract major version (e.g., '8' from '8.1')
-        major_version = version.split(".")[0]
+        manifest_obj = CephTestManifest(
+            product=product,
+            release=release,
+            build_type=build_type,
+            platform=platform,
+        )
 
-        # Fetch recipe files details
-        response = requests.get(recipe_url)
-        file_details = response.text
-
-        # Find matching build YAML filenames
-        pattern = rf"IBMCEPH-{major_version}\.\d+\.yaml"
-        matches = re.findall(pattern, file_details)
-        if not matches:
-            raise SmbUpgradeError("No matching build YAML found.")
-        latest_file = sorted(matches)[-1]
-        full_url = f"{recipe_url}{latest_file}"
-
-        # Load YAML content from the build file
-        build_response = requests.get(full_url, verify=False)
-        yml_data = yaml.safe_load(build_response.text)
-        build_info = yml_data.get(build_tag)
-        if not build_info:
-            raise SmbUpgradeError(f"Build tag '{build_tag}' not found in YAML.")
-
-        # Return based on build type
-        if build_type == "composes":
-            return build_info["composes"]["rhel-9"]
-        elif build_type == "repository":
-            return build_info["repository"]
-        elif build_type == "custom_configs":
-            return build_info["custom-configs"][custom_image]
-        else:
-            raise SmbUpgradeError("Build type not mentioned")
+        return manifest_obj
     except Exception as e:
         raise SmbUpgradeError(f"Fail to fetch build artifacts, Error {e}")
 
@@ -75,10 +42,12 @@ def deploy_smb(
     file_type,
     smb_spec,
     file_mount,
-    initial_ga_version,
+    deployment_version,
     smb_nodes,
     client,
-    recipe_url,
+    product,
+    platform,
+    deployment_release,
 ):
     """Deploy smb services
     Args:
@@ -91,22 +60,17 @@ def deploy_smb(
         initial_ga_version(str): Intial cluster GA version (Before Upgrade)
         smb_nodes (list): List of smb nodes obj
         client (obj): Client node obj
-        recipe_url (str): Recipe url (Build Info)
+        product (str): product type ibm or redhat
     """
     try:
-        # fetch smb images
-        samba_image = fetch_build_artifacts(
-            initial_ga_version, recipe_url, "rc", "custom_configs", "samba_image"
-        )
-        samba_metrics_image = fetch_build_artifacts(
-            initial_ga_version,
-            recipe_url,
-            "rc",
-            "custom_configs",
-            "samba_metrics_image",
+        # Create manifest object
+        manifest_obj = fetch_build_artifacts(
+            product, deployment_version, deployment_release, platform
         )
 
         # Configure smb images
+        samba_image = manifest_obj.images["samba_image"]
+        samba_metrics_image = manifest_obj.images["samba_metrics_image"]
         config_smb_images(installer, samba_image, samba_metrics_image)
 
         # Get smb service value from spec file
@@ -183,7 +147,13 @@ def deploy_smb(
 
 
 def upgrade(
-    installer, orch, osd_flags, upgrade_target_version, check_cluster_health, recipe_url
+    installer,
+    orch,
+    osd_flags,
+    check_cluster_health,
+    samba_image,
+    samba_metrics_image,
+    ceph_image,
 ):
     """Upgrade ceph cluster
     Args:
@@ -204,42 +174,22 @@ def upgrade(
         orch.set_tool_repo()
 
         # Update cephadm rpms
-        orch.install(**{"upgrade": True})
+        # orch.install(**{"upgrade": True})
+        orch.install()
 
         # Set osd flags
         for flag in osd_flags:
             cmd = f"cephadm shell -- ceph osd set {flag}"
             installer.exec_command(sudo=True, cmd=cmd)
 
-        # fetch smb images
-        samba_image = fetch_build_artifacts(
-            upgrade_target_version,
-            recipe_url,
-            "latest",
-            "custom_configs",
-            "samba_image",
-        )
-        samba_metrics_image = fetch_build_artifacts(
-            upgrade_target_version,
-            recipe_url,
-            "latest",
-            "custom_configs",
-            "samba_metrics_image",
-        )
-
         # Configure smb images
         config_smb_images(installer, samba_image, samba_metrics_image)
 
-        # fetch target image
-        target_image = fetch_build_artifacts(
-            upgrade_target_version, recipe_url, "latest", "repository"
-        )
-
         # Check service versions vs available and target containers
-        orch.upgrade_check(image=target_image)
+        orch.upgrade_check(image=ceph_image)
 
         # Start Upgrade
-        cmd = f"cephadm shell -- ceph orch upgrade start {target_image}"
+        cmd = f"cephadm shell -- ceph orch upgrade start {ceph_image}"
         installer.exec_command(sudo=True, cmd=cmd)
 
         # Monitor upgrade status, till completion
@@ -325,11 +275,14 @@ def run(ceph_cluster, **kw):
     # Get smb subvolume mode
     smb_subvolume_mode = config.get("smb_subvolume_mode", "0777")
 
-    # Get inital ga version
-    initial_ga_version = config.get("initial_ga_version", "8.x")
+    # Get deployment version
+    deployment_version = config.get("deployment_version", "8.1")
 
-    # Get upgrade target version
-    upgrade_target_version = config.get("upgrade_target_version", "8.x")
+    # Get inital ga version
+    deployment_version = config.get("deployment_version", "8.1")
+
+    # Get deployment release
+    deployment_release = config.get("deployment_release", "rc")
 
     # Get osd flags
     osd_flags = config.get("osd_flags", ["noout", "noscrub", "nodeep-scrub"])
@@ -337,11 +290,20 @@ def run(ceph_cluster, **kw):
     # Get check cluster health flag
     check_cluster_health = config.get("check_cluster_health", False)
 
-    # Get recipe file url
-    recipe_url = config.get(
-        "recipe_url",
-        "http://magna002.ceph.redhat.com/cephci-jenkins/latest-rhceph-container-info/",
-    )
+    # Get product details
+    product = config.get("product", "ibm")
+
+    # Get platform details
+    platform = config.get("platform", "rhel-9")
+
+    # Get upgrade samba image
+    manifest = config.get("manifest")
+    samba_image = manifest.images["samba_image"]
+    samba_metrics_image = manifest.images["samba_metrics_image"]
+
+    # Get upgrade ceph image
+    manifest = config.get("manifest")
+    ceph_image = manifest.images["ceph-base"]
 
     for operation in operations:
         if operation == "deploy_smb":
@@ -353,10 +315,12 @@ def run(ceph_cluster, **kw):
                 file_type,
                 smb_spec,
                 file_mount,
-                initial_ga_version,
+                deployment_version,
                 smb_nodes,
                 client,
-                recipe_url,
+                product,
+                platform,
+                deployment_release,
             )
         elif operation == "upgrade":
             # upgrade ceph cluster
@@ -364,9 +328,10 @@ def run(ceph_cluster, **kw):
                 installer,
                 orch,
                 osd_flags,
-                upgrade_target_version,
                 check_cluster_health,
-                recipe_url,
+                samba_image,
+                samba_metrics_image,
+                ceph_image,
             )
         elif operation == "cleanup_smb":
             # cleanup smb services

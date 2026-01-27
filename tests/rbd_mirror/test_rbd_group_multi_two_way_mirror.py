@@ -208,7 +208,7 @@ def test_multi_group_two_way_mirror(
 
             # Check group is mirrored on site-B using group info
             for group_spec in [group1_spec, group2_spec]:
-                (group_info_status, err) = rbd_secondary.group.info(
+                group_info_status, err = rbd_secondary.group.info(
                     **{"group-spec": group_spec, "format": "json"}
                 )
                 if err:
@@ -225,7 +225,7 @@ def test_multi_group_two_way_mirror(
 
             # Check group is mirrored on site-A using group info
             for group_spec in [group3_spec, group4_spec]:
-                (group_info_status, err) = rbd_primary.group.info(
+                group_info_status, err = rbd_primary.group.info(
                     **{"group-spec": group_spec, "format": "json"}
                 )
                 if err:
@@ -305,7 +305,7 @@ def compare_image_list_size(rbd_primary, rbd_secondary, group_spec):
     Returns:
         image list in the group if comparisons match, otherwise raises Exception
     """
-    (group_image_list, err) = rbd_primary.group.image.list(
+    group_image_list, err = rbd_primary.group.image.list(
         **{"group-spec": group_spec}, format="json"
     )
     if err:
@@ -382,7 +382,7 @@ def create_group_and_enable_mirroring(
     io_config["rbd_obj"] = rbd
     io_config["client"] = client
     io_config["config"]["image_spec"] = image_spec_copy
-    (io, err) = krbd_io_handler(**io_config)
+    io, err = krbd_io_handler(**io_config)
     if err:
         raise Exception("Map, mount and run IOs failed for " + str(image_specs))
     else:

@@ -1,0 +1,194 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha V3 - Sanity Tests---
+#-------------------------------------
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Sanity test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test NFS cluster and export create
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Nfs Ganesha File Lock
+      module: nfs_verify_file_lock.py
+      desc: Perform locking on same file from 2 different clients
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 2
+
+  - test:
+      name: Running single client byte lock test
+      module: nfs_single_client_byterange_filelock.py
+      desc: Running single client byte lock test
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: Running multi client byte lock test
+      module: nfs_multi_client_byterange_filelock.py
+      desc: Running multi client byte lock test
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  - test:
+      name: NFS Ganesha overlapping byte-range locks test
+      module: nfs_overlapping_locks.py
+      desc: Test overlapping byte-range locks - verify non-overlapping locks succeed simultaneously and overlapping locks block each other
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 3
+
+  - test:
+      name: NFS Ganesha conflicting byte-range locks test
+      module: nfs_conflicting_locks.py
+      desc: Test conflicting byte-range locks - verify only one client can hold conflicting/overlapping locks at a time
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  - test:
+      name: NFS Ganesha queue management locks test
+      module: nfs_queue_management_locks.py
+      desc: Test queue management for locks - verify FIFO behavior when multiple clients request the same lock
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4

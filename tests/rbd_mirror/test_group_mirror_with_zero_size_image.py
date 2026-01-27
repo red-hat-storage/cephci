@@ -108,7 +108,7 @@ def test_group_mirroring_with_zero_size(
                         image_spec.append(pool + "/" + image)
 
             # Get Group Mirroring Status
-            (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
+            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
                 if "mirroring not enabled on the group" in err:
                     mirror_state = "Disabled"
@@ -135,7 +135,7 @@ def test_group_mirroring_with_zero_size(
             )
 
             # Validate size of each image should be same on site-a and site-b
-            (group_image_list, err) = rbd_primary.group.image.list(
+            group_image_list, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -149,7 +149,7 @@ def test_group_mirroring_with_zero_size(
             )
 
             # Check group is replicated on site-b using group info
-            (group_info_status, err) = rbd_secondary.group.info(
+            group_info_status, err = rbd_secondary.group.info(
                 **group_config, format="json"
             )
             if err:
@@ -164,10 +164,10 @@ def test_group_mirroring_with_zero_size(
             log.info("Successfully verified group is present on secondary cluster")
 
             # Check whether images are part of correct group on site-b using group image-list
-            (group_image_list_primary, err) = rbd_primary.group.image.list(
+            group_image_list_primary, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
-            (group_image_list_secondary, err) = rbd_secondary.group.image.list(
+            group_image_list_secondary, err = rbd_secondary.group.image.list(
                 **group_config, format="json"
             )
             if err:
@@ -223,10 +223,10 @@ def test_group_mirroring_with_zero_size(
             enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
 
             # Check whether images are part of correct group on site-b using group image-list
-            (group_image_list_primary, err) = rbd_primary.group.image.list(
+            group_image_list_primary, err = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
-            (group_image_list_secondary, err) = rbd_secondary.group.image.list(
+            group_image_list_secondary, err = rbd_secondary.group.image.list(
                 **group_config, format="json"
             )
             if err:

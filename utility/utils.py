@@ -2071,6 +2071,30 @@ def clone_the_repo(config, node, path_to_clone):
     node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
 
 
+def clone_configs_repo(node, repo_name=None):
+    """clone the repo on to test node.
+
+    Args:
+        node: ceph node
+        repo_name: fetches the git repo details based on this repo_name from .cephci.yaml
+
+    """
+    try:
+        repo_dict = get_cephci_config()["repos"][repo_name]
+    except KeyError:
+        raise Exception(
+            f"Repo details are missing for the key {repo_name} in ~/.cephci.yaml to clone it on the node."
+        )
+    repo_url = repo_dict["git_url"]
+    log.info(f"cloning the repo {repo_url}")
+    path_to_clone = repo_dict["dest"]
+    oauth_token = repo_dict.get("oauth_token")
+    if oauth_token:
+        repo_url = repo_url.replace("https://", f"https://oauth2:{oauth_token}@")
+    git_clone_cmd = f"git clone --depth 1 {repo_url}"
+    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
+
+
 def calculate_available_storage(node):
     """
     Calculate maximum storage that is available to be used.

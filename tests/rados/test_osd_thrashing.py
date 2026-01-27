@@ -16,7 +16,7 @@ TEST WORKFLOW:
     │   ├── Enable EC optimizations for EC pools
     │   ├── Enable compression (if configured)
     │   ├── Configure aggressive recovery settings
-    │   ├── Enable debug logging: debug_osd=20/20, debug_bluestore=20/20 (if configured)
+    │   ├── Enable debug logging: debug_osd=20/20 (if configured)
     │   └── Inject EC write errors on random OSDs (if configured)
     │       ├── bluestore_debug_inject_read_err=true
     │       └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
@@ -35,7 +35,8 @@ TEST WORKFLOW:
     │   ├── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub [if enabled]
     │   ├── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW [if enabled]
     │   ├── thrash_mon: Leader failover, rolling restart, election strategy [if enabled]
-    │   └── thrash_mgr: Failover, rolling restart, random fail [if enabled]
+    │   ├── thrash_mgr: Failover, rolling restart, random fail [if enabled]
+    │   └── thrash_mds: Failover, rolling restart, random fail [if enabled]
     │
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
@@ -72,6 +73,8 @@ CONFIGURATION OPTIONS:
 - enable_rgw_thrashing: Enable RGW S3 thrashing (default: False)
 - enable_mon_thrashing: Enable MON thrashing - leader failover/restart (default: False)
 - enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
+- enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
+- enable_nfs_thrashing: Enable NFS cluster/export setup for thrashing (default: False)
 - enable_election_strategy_thrash: Enable election strategy changes during MON thrash (default: False)
 
 """
@@ -138,7 +141,10 @@ def run(ceph_cluster, **kw):
         enable_osd_thrashing (bool): Enable OSD thrashing - main thrash operation (default: True)
         enable_mon_thrashing (bool): Enable MON thrashing - leader failover/restart (default: False)
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
+        enable_mds_thrashing (bool): Enable MDS thrashing - failover/restart/random fail (default: False)
+        enable_nfs_thrashing (bool): Enable NFS cluster/export setup for thrashing (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
+        enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -177,9 +183,33 @@ def run(ceph_cluster, **kw):
     enable_osd_thrashing = config.get("enable_osd_thrashing", True)
     enable_mon_thrashing = config.get("enable_mon_thrashing", True)
     enable_mgr_thrashing = config.get("enable_mgr_thrashing", False)
+    enable_mds_thrashing = config.get("enable_mds_thrashing", False)
+    enable_nfs_thrashing = config.get("enable_nfs_thrashing", False)
     enable_election_strategy_thrash = config.get(
         "enable_election_strategy_thrash", True
     )
+    enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
+    disabled_ec_optimizations = False
+    major_version = int(rados_obj.rhbuild.split(".")[0])
+
+    if major_version < 9:
+        enable_fast_ec_config_params = False
+        log.info(
+            "Fast EC config params are not supported in this version. "
+            "Running tests without fast EC config params."
+        )
+    elif not enable_fast_ec_config_params:
+        log.info(
+            "Fast EC is enabled by default in 9.x and above. "
+            "Explicitly disabling it by setting osd_pool_default_flag_ec_optimizations to false."
+        )
+        mon_obj.set_config(
+            section="global",
+            name="osd_pool_default_flag_ec_optimizations",
+            value="false",
+        )
+        disabled_ec_optimizations = True
+
     compression_algorithms = ["snappy", "zlib"]
     rgw_config = None
 
@@ -217,8 +247,8 @@ def run(ceph_cluster, **kw):
         f"  Additional pools: {additional_pools_str}\n"
         f"  Inject errors: {inject_errors}\n"
         f"  RGW S3 thrashing: {enable_rgw_thrashing}\n"
-        f"  OSDs to inject errors: {len(inject_osds)}\n"
-        f"  Writes to inject per OSD: {num_writes_to_inject}\n"
+        f"  OSDs to inject errors: {len(inject_osds) if inject_errors else 0}\n"
+        f"  Writes to inject per OSD: {num_writes_to_inject if inject_errors else 0}\n"
         f"  FIO on CephFS: {enable_fio_cephfs}\n"
         f"  FIO on RBD: {enable_fio_rbd}\n"
         f"  CephFS snapshot thrashing: {enable_cephfs_snapshots}\n"
@@ -227,7 +257,10 @@ def run(ceph_cluster, **kw):
         f"  OSD thrashing: {enable_osd_thrashing}\n"
         f"  MON thrashing: {enable_mon_thrashing}\n"
         f"  MGR thrashing: {enable_mgr_thrashing}\n"
+        f"  MDS thrashing: {enable_mds_thrashing}\n"
+        f"  NFS thrashing: {enable_nfs_thrashing}\n"
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
+        f"  Fast EC config params: {enable_fast_ec_config_params}\n"
         f"{'=' * 60}\n"
     )
     log.info(test_params)
@@ -241,24 +274,37 @@ def run(ceph_cluster, **kw):
     created_pools = []
     test_failed = False
     fs_name = None
+    fs_names = []  # List of all filesystems created (for MDS thrashing)
     cephfs_mount_path = None
     rbd_mount_path = None
     rbd_device_path = None
+    nfs_config = None
 
     try:
         # POOL CREATION PHASE - RADOS, CephFS, RBD (Parallel)
         log.info(f"\n{'=' * 60}\nSETUP PHASE\n{'=' * 60}")
 
         osd_list = rados_obj.get_osd_list(status="up")
-        log.info(f"\nPool Creation Phase - RADOS, CephFS & RBD (Parallel)\n{'-' * 60}")
+        log.info(
+            f"\nPool Creation Phase - RADOS, CephFS, RBD, RGW & NFS (Parallel)\n{'-' * 60}"
+        )
 
         pool_workers = (
-            1 + (1 if enable_cephfs_pools else 0) + (1 if enable_rbd_pools else 0)
+            1
+            + (1 if enable_cephfs_pools else 0)
+            + (1 if enable_rbd_pools else 0)
+            + (1 if enable_rgw_thrashing else 0)
+            + (1 if enable_nfs_thrashing else 0)
         )
         with cf.ThreadPoolExecutor(max_workers=pool_workers) as pool_executor:
             log.info("Creating pools in parallel...")
 
-            rados_future = pool_executor.submit(create_rados_pools, rados_obj, config)
+            rados_future = pool_executor.submit(
+                create_rados_pools,
+                rados_obj,
+                config=config,
+                enable_fast_ec_config_params=enable_fast_ec_config_params,
+            )
 
             cephfs_future = None
             if enable_cephfs_pools:
@@ -267,12 +313,41 @@ def run(ceph_cluster, **kw):
                     rados_obj.create_cephfs_filesystem_mount,
                     client_node,
                     pool_type="erasure",
+                    enable_fast_ec_config_params=enable_fast_ec_config_params,
                 )
 
             rbd_future = None
             if enable_rbd_pools:
                 log.info("RBD workflows enabled - creating RBD pools")
-                rbd_future = pool_executor.submit(rados_obj.create_ec_rbd_pools)
+                rbd_future = pool_executor.submit(
+                    rados_obj.create_ec_rbd_pools,
+                    enable_fast_ec_config_params=enable_fast_ec_config_params,
+                )
+
+            rgw_future = None
+            if enable_rgw_thrashing:
+                log.info("RGW workflows enabled - setting up RGW S3 client")
+                rgw_future = pool_executor.submit(
+                    setup_rgw_s3_client,
+                    client_node,
+                    rados_obj,
+                    data_pool_type="erasure",
+                    ec_config={"k": 2, "m": 2},
+                    enable_fast_ec_config_params=enable_fast_ec_config_params,
+                )
+
+            nfs_future = None
+            if enable_nfs_thrashing:
+                log.info("NFS workflows enabled - creating NFS clusters and exports")
+                nfs_future = pool_executor.submit(
+                    rados_obj.create_nfs_clusters_and_exports,
+                    client_node,
+                    num_clusters=config.get("nfs_num_clusters", 3),
+                    exports_per_cluster=config.get("nfs_exports_per_cluster", 4),
+                    placement=config.get("nfs_placement", 1),
+                    pool_type="erasure",
+                    enable_fast_ec_config_params=enable_fast_ec_config_params,
+                )
 
             # Collect results
             try:
@@ -283,6 +358,7 @@ def run(ceph_cluster, **kw):
                 if cephfs_future:
                     fs_name, cephfs_mount_path, cephfs_pools = cephfs_future.result()
                     created_pools.extend(cephfs_pools)
+                    fs_names.append(fs_name)
                     log.info(f"Created CephFS: {fs_name} at {cephfs_mount_path}")
                 else:
                     log.info(
@@ -295,6 +371,31 @@ def run(ceph_cluster, **kw):
                     log.info(f"Created RBD pools at {rbd_mount_path}")
                 else:
                     log.info("RBD pool creation skipped (no RBD workflows enabled)")
+
+                if rgw_future:
+                    rgw_config = rgw_future.result()
+                    if rgw_config:
+                        log.info("RGW S3 client setup completed successfully")
+                    else:
+                        log.warning("RGW S3 setup failed, disabling RGW thrashing")
+                        enable_rgw_thrashing = False
+                else:
+                    log.info("RGW setup skipped (RGW thrashing not enabled)")
+
+                if nfs_future:
+                    nfs_config = nfs_future.result()
+                    if nfs_config:
+                        created_pools.extend(nfs_config.get("pools", []))
+                        fs_names.append(nfs_config.get("fs_name"))
+                        log.info(
+                            f"Created NFS setup: {len(nfs_config.get('clusters', []))} clusters, "
+                            f"{len(nfs_config.get('exports', []))} exports"
+                        )
+                    else:
+                        log.warning("NFS setup failed, disabling NFS thrashing")
+                        enable_nfs_thrashing = False
+                else:
+                    log.info("NFS setup skipped (NFS thrashing not enabled)")
             except Exception as e:
                 log.error(f"Failed to create pools: {e}")
                 raise
@@ -332,6 +433,59 @@ def run(ceph_cluster, **kw):
             log.info("  Type            : %s", pool_type)
             log.info("  Client          : %s", client_type)
             log.info(f"pool details: {rados_obj.get_pool_details(pool_name)}")
+            log.info("")
+
+        # Additional setup details
+        log.info("=" * 70)
+        log.info("ADDITIONAL SETUP DETAILS")
+        log.info("=" * 70)
+
+        if cephfs_mount_path:
+            log.info("CephFS Setup:")
+            log.info("  Filesystem Name : %s", fs_name)
+            log.info("  Mount Path      : %s", cephfs_mount_path)
+            log.info("")
+
+        if rbd_mount_path:
+            log.info("RBD Setup:")
+            log.info("  Mount Path      : %s", rbd_mount_path)
+            log.info("  Device Path     : %s", rbd_device_path)
+            log.info("")
+
+        if rgw_config:
+            log.info("RGW Setup:")
+            log.info("  Endpoint        : %s", rgw_config.get("endpoint", "N/A"))
+            log.info("  Bucket          : %s", rgw_config.get("bucket_name", "N/A"))
+            log.info("  Data Pool       : %s", rgw_config.get("data_pool", "N/A"))
+            log.info("")
+
+        if nfs_config:
+            log.info("NFS Setup:")
+            log.info("  Filesystem      : %s", nfs_config.get("fs_name", "N/A"))
+            log.info("  Clusters        : %d", len(nfs_config.get("clusters", [])))
+            for cluster in nfs_config.get("clusters", []):
+                log.info(
+                    "    - %s (port: %d, host: %s)",
+                    cluster["cluster_id"],
+                    cluster["port"],
+                    cluster.get("host", "N/A"),
+                )
+            exports = nfs_config.get("exports", [])
+            log.info("  Exports         : %d", len(exports))
+            # Show first 5 exports, summarize rest
+            for export in exports[:5]:
+                log.info(
+                    "    - %s on %s",
+                    export["pseudo_path"],
+                    export["cluster_id"],
+                )
+            if len(exports) > 5:
+                log.info("    ... and %d more exports", len(exports) - 5)
+            log.info("")
+
+        # MDS thrashing filesystem targets
+        if fs_names:
+            log.info("Filesystems for MDS thrashing: %s", fs_names)
             log.info("")
 
         log.info("=" * 70)
@@ -399,19 +553,6 @@ def run(ceph_cluster, **kw):
             section="global", name="osd_max_markdown_count", value="99999999"
         )
 
-        # Setup RGW S3 client if enabled (includes endpoint discovery)
-        if enable_rgw_thrashing:
-            log.info("Setting up RGW S3 client for thrashing with EC data pool...")
-            rgw_config = setup_rgw_s3_client(
-                client_node,
-                rados_obj,
-                data_pool_type="erasure",
-                ec_config={"k": 2, "m": 2},
-            )
-            if not rgw_config:
-                log.warning("RGW S3 setup failed, disabling RGW thrashing")
-                enable_rgw_thrashing = False
-
         log.info("Setup phase completed successfully")
 
         log.info(f"\n{'=' * 60}\nTHRASHING PHASE\n{'=' * 60}")
@@ -437,6 +578,7 @@ def run(ceph_cluster, **kw):
         max_workers += 1 if enable_rgw_thrashing else 0
         max_workers += 1 if enable_mon_thrashing else 0
         max_workers += 1 if enable_mgr_thrashing else 0
+        max_workers += 1 if enable_mds_thrashing else 0
         log.debug(f"ThreadPoolExecutor max_workers: {max_workers}")
 
         with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -487,6 +629,7 @@ def run(ceph_cluster, **kw):
                         workload_name="cephfs",
                         duration=duration,
                         stop_flag=stop_flag,
+                        enable_cephfs_snapshots=enable_cephfs_snapshots,
                     )
                 )
             elif enable_fio_cephfs:
@@ -503,6 +646,7 @@ def run(ceph_cluster, **kw):
                         workload_name="rbd",
                         duration=duration,
                         stop_flag=stop_flag,
+                        enable_cephfs_snapshots=enable_cephfs_snapshots,
                     )
                 )
             elif enable_fio_rbd:
@@ -639,6 +783,21 @@ def run(ceph_cluster, **kw):
                     )
                 )
 
+            # MDS thrashing (optional: failover, rolling restart, random fail)
+            if enable_mds_thrashing and fs_names:
+                log.info(f"MDS thrashing enabled for filesystems: {fs_names}")
+                futures.append(
+                    executor.submit(
+                        thrash_mds,
+                        rados_obj=rados_obj,
+                        fs_names=fs_names,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+            elif enable_mds_thrashing:
+                log.warning("MDS thrashing enabled but no CephFS filesystems available")
+
             log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
             try:
                 for future in cf.as_completed(futures, timeout=duration):
@@ -723,6 +882,8 @@ def run(ceph_cluster, **kw):
                 workflow_order.append("mon_thrashing")
             if enable_mgr_thrashing:
                 workflow_order.append("mgr_thrashing")
+            if enable_mds_thrashing and fs_names:
+                workflow_order.append("mds_thrashing")
 
             for idx, future in enumerate(futures):
                 workflow_name = (
@@ -778,6 +939,11 @@ def run(ceph_cluster, **kw):
                         cmd=f"ceph pg {pg_id} query -f json-pretty > /tmp/{pg_id}_query.txt",
                         sudo=True,
                     )
+                    client_node.exec_command(
+                        cmd=f"rados list-inconsistent-obj {pg_id} -f json-pretty "
+                        f"> /tmp/{pg_id}_inconsistent_obj.txt",
+                        sudo=True,
+                    )
                     time.sleep(5)
                     log.info(f"Running pg repair on PG: {pg_id}")
                     rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
@@ -825,6 +991,12 @@ def run(ceph_cluster, **kw):
                 section="global", name="bluestore_debug_inject_read_err"
             )
 
+        if disabled_ec_optimizations:
+            log.info("Reverting osd_pool_default_flag_ec_optimizations config...")
+            mon_obj.remove_config(
+                section="global", name="osd_pool_default_flag_ec_optimizations"
+            )
+
         # Restore any OSDs that are out or down
         log.info("Checking for OSDs that need restoration...")
         try:
@@ -863,9 +1035,9 @@ def run(ceph_cluster, **kw):
         if config.get("cleanup_pools", True):
             log.debug("Cleaning up test resources...")
 
-            # Phase 1: Unmount filesystems and cleanup RGW (parallel)
+            # Phase 1: Unmount filesystems, cleanup RGW and NFS (parallel)
             cleanup_tasks = []
-            with cf.ThreadPoolExecutor(max_workers=3) as cleanup_executor:
+            with cf.ThreadPoolExecutor(max_workers=4) as cleanup_executor:
                 if enable_cephfs_pools:
                     cleanup_tasks.append(
                         (
@@ -898,6 +1070,16 @@ def run(ceph_cluster, **kw):
                             "RGW",
                             cleanup_executor.submit(
                                 cleanup_rgw_s3, client_node, rgw_config, rados_obj
+                            ),
+                        )
+                    )
+
+                if nfs_config:
+                    cleanup_tasks.append(
+                        (
+                            "NFS",
+                            cleanup_executor.submit(
+                                rados_obj.cleanup_nfs_clusters, nfs_config
                             ),
                         )
                     )
@@ -986,14 +1168,16 @@ def run(ceph_cluster, **kw):
     return 0
 
 
-def create_rados_pools(rados_obj: RadosOrchestrator, config: Dict) -> List[Dict]:
+def create_rados_pools(
+    rados_obj: RadosOrchestrator, config: Dict, enable_fast_ec_config_params: bool
+) -> List[Dict]:
     """
     Create RADOS pools from file-based configuration.
 
     Args:
         rados_obj: RadosOrchestrator object
         config: Test configuration with pool_configs
-
+        enable_fast_ec_config_params: Whether to enable fast EC config params
     Returns:
         List of created pool configurations
     """
@@ -1035,7 +1219,7 @@ def create_rados_pools(rados_obj: RadosOrchestrator, config: Dict) -> List[Dict]
                 {
                     "name": pool_name,
                     "profile_name": f"{pool_name}-profile",
-                    "enable_fast_ec_features": True,
+                    "enable_fast_ec_features": enable_fast_ec_config_params,
                     "stripe_unit": 16384,
                 }
             )
@@ -1253,14 +1437,19 @@ def monitor_cluster_health(
 
 
 def _run_fio_workload(
-    client_node, mount_path: str, workload_name: str, duration: int, stop_flag: Dict
+    client_node,
+    mount_path: str,
+    workload_name: str,
+    duration: int,
+    stop_flag: Dict,
+    enable_cephfs_snapshots: bool,
 ) -> int:
     """
     Run comprehensive FIO workload with writes, overwrites, partial writes, reads.
 
     Performs multiple phases per iteration:
     1. Initial writes (create files)
-    2. Create snapshot (CephFS only - enables clone-on-write)
+    2. Create snapshot (CephFS only - enables clone-on-write, gated by flag)
     3. Overwrites AFTER snapshot (triggers BlueStore clones)
     4. Partial writes AFTER snapshot (triggers BlueStore clones)
     5. Mixed read/write (reads expose corruption)
@@ -1277,6 +1466,7 @@ def _run_fio_workload(
         workload_name: Name for the workload (for logging) - "cephfs" or "rbd"
         duration: Total duration in seconds
         stop_flag: Dict with 'stop' key to signal early termination
+        enable_cephfs_snapshots: Whether to create/delete CephFS snapshots (only applies when workload_name="cephfs")
 
     Returns:
         Number of FIO runs completed
@@ -1312,7 +1502,7 @@ def _run_fio_workload(
                 break
 
             # Phase 2: Create CephFS snapshot (enables clone-on-write for subsequent writes)
-            if is_cephfs:
+            if is_cephfs and enable_cephfs_snapshots:
                 snap_name = f"fio_snap_{runs}_{int(time.time())}"
                 client_node.exec_command(
                     cmd=f"mkdir -p {snap_dir}/{snap_name}", sudo=True, check_ec=False
@@ -1341,7 +1531,12 @@ def _run_fio_workload(
             )
 
             # Phase 7: Delete ~20% of snapshots (CephFS only)
-            if is_cephfs and all_snaps and random.random() < 0.2:
+            if (
+                is_cephfs
+                and enable_cephfs_snapshots
+                and all_snaps
+                and random.random() < 0.2
+            ):
                 snap = random.choice(all_snaps)
                 client_node.exec_command(
                     cmd=f"rmdir {snap_dir}/{snap} 2>/dev/null || true",
@@ -1352,7 +1547,11 @@ def _run_fio_workload(
 
             time.sleep(random.uniform(2, 5))
 
-        snap_info = f", {len(all_snaps)} snapshots" if is_cephfs else ""
+        snap_info = (
+            f", {len(all_snaps)} snapshots"
+            if is_cephfs and enable_cephfs_snapshots
+            else ""
+        )
         log.info(f"FIO {workload_name} completed: {runs} iterations{snap_info}")
         return runs
     except Exception as e:
@@ -2330,6 +2529,7 @@ def setup_rgw_s3_client(
     rados_obj: RadosOrchestrator,
     data_pool_type: str = "replicated",
     ec_config: Optional[Dict[str, Any]] = None,
+    enable_fast_ec_config_params: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Setup RGW S3 client by discovering endpoints, installing dependencies,
@@ -2350,7 +2550,7 @@ def setup_rgw_s3_client(
         ec_config: Optional EC pool configuration when data_pool_type is "erasure"
                    Example: {"k": 2, "m": 2, "plugin": "jerasure"}
                    If not provided, defaults to k=2, m=2
-
+        enable_fast_ec_config_params: Whether to enable fast EC config params
     Returns:
         Dict with access_key, secret_key, endpoints, buckets, uid, ec_pool_name or None if setup fails
     """
@@ -2410,7 +2610,9 @@ def setup_rgw_s3_client(
             ec_k = ec_config.get("k", 2)
             ec_m = ec_config.get("m", 2)
             ec_plugin = ec_config.get("plugin", "isa")
-            enable_fast_ec = ec_config.get("enable_fast_ec_features", True)
+            enable_fast_ec = ec_config.get(
+                "enable_fast_ec_features", enable_fast_ec_config_params
+            )
 
             ts = int(time.time())
             ec_pool_name = f"rgw-ec-data-pool-{ts}"
@@ -3325,6 +3527,202 @@ def _thrash_mgr_random_fail(mgr_workflow_obj: MgrWorkflows) -> bool:
 
     except Exception as e:
         log.error(f"MGR random fail failed: {e}")
+        return False
+
+
+def thrash_mds(
+    rados_obj: RadosOrchestrator,
+    fs_names: List[str],
+    duration: int,
+    stop_flag: Dict,
+) -> int:
+    """
+    Holistic MDS thrashing - randomly picks a filesystem and operation each iteration.
+
+    Operations:
+    1. Failover - Fail active MDS to trigger failover to standby
+    2. Rolling restart - Restart MDS daemons via orchestrator
+    3. Random fail - Fail a random MDS (active or standby)
+
+    Args:
+        rados_obj: RadosOrchestrator instance
+        fs_names: List of CephFS filesystem names to thrash
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+
+    Returns:
+        Number of thrash operations completed
+    """
+    ops_completed = 0
+    end_time = time.time() + duration
+    iteration = 0
+
+    operations = ["failover", "rolling_restart", "random_fail"]
+
+    log.info(
+        f"Starting MDS thrashing for filesystems: {fs_names} "
+        f"with operations: {operations} (duration: {duration}s)"
+    )
+
+    while time.time() < end_time and not stop_flag.get("stop"):
+        iteration += 1
+
+        # Randomly select a filesystem and an operation
+        fs_name = random.choice(fs_names)
+        operation = random.choice(operations)
+
+        log.info(
+            f"MDS thrash iteration {iteration}: fs={fs_name}, operation={operation}"
+        )
+
+        try:
+            if operation == "failover":
+                result = _thrash_mds_failover(rados_obj, fs_name)
+            elif operation == "rolling_restart":
+                result = _thrash_mds_rolling_restart(rados_obj, fs_name)
+            elif operation == "random_fail":
+                result = _thrash_mds_random_fail(rados_obj, fs_name)
+            else:
+                result = False
+
+            if result:
+                ops_completed += 1
+                log.info(
+                    f"MDS thrash operation '{operation}' on fs={fs_name} completed successfully"
+                )
+            else:
+                log.warning(
+                    f"MDS thrash operation '{operation}' on fs={fs_name} did not complete"
+                )
+
+        except Exception as e:
+            log.warning(f"MDS thrash iteration {iteration} failed: {e}")
+
+        # Wait between operations to allow cluster stabilization
+        time.sleep(10)
+
+    log.info(
+        f"MDS thrashing completed: {ops_completed} operations in {iteration} iterations "
+        f"across {len(fs_names)} filesystem(s)"
+    )
+    return ops_completed
+
+
+def _get_mds_info(rados_obj: RadosOrchestrator, fs_name: str) -> Dict:
+    """Get MDS active and standby info for a filesystem."""
+    try:
+        fs_status = rados_obj.run_ceph_command(cmd=f"ceph fs status {fs_name}")
+        active_mds = None
+        standby_mds = []
+
+        # Parse MDS info from mdsmap - contains both active and standby entries
+        for mds in fs_status.get("mdsmap", []):
+            mds_name = mds.get("name")
+            mds_state = mds.get("state")
+            if mds_state == "active":
+                active_mds = mds_name
+            elif mds_state == "standby":
+                standby_mds.append(mds_name)
+
+        return {"active": active_mds, "standbys": standby_mds}
+    except Exception as e:
+        log.error(f"Failed to get MDS info for {fs_name}: {e}")
+        return {"active": None, "standbys": []}
+
+
+def _thrash_mds_failover(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
+    """Fail the active MDS to trigger failover to a standby MDS."""
+    try:
+        mds_info = _get_mds_info(rados_obj, fs_name)
+        active_mds = mds_info["active"]
+        standby_mds = mds_info["standbys"]
+
+        if not active_mds:
+            log.warning(f"No active MDS found for {fs_name}")
+            return False
+
+        if not standby_mds:
+            log.warning(f"No standby MDS available for failover on {fs_name}")
+            return False
+
+        log.info(f"Current active MDS for {fs_name}: {active_mds}")
+        log.info(f"Standby MDSs available: {standby_mds}")
+        log.info(f"Failing active MDS: {active_mds}")
+
+        rados_obj.run_ceph_command(cmd=f"ceph mds fail {active_mds}")
+        time.sleep(15)
+
+        # Verify failover occurred
+        new_mds_info = _get_mds_info(rados_obj, fs_name)
+        new_active = new_mds_info["active"]
+
+        if new_active and new_active != active_mds:
+            log.info(f"MDS failover successful. New active MDS: {new_active}")
+            return True
+        else:
+            log.warning(f"MDS failover may not have occurred. Active MDS: {new_active}")
+            return False
+
+    except Exception as e:
+        log.error(f"MDS failover failed: {e}")
+        return False
+
+
+def _thrash_mds_rolling_restart(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
+    """Rolling restart of MDS daemons using orchestrator."""
+    try:
+        log.info(f"Initiating MDS rolling restart for fs={fs_name} via orchestrator")
+
+        if not rados_obj.restart_daemon_services(daemon="mds"):
+            log.warning("MDS orch restart command returned failure")
+            return False
+
+        log.info("MDS rolling restart initiated successfully")
+        time.sleep(30)  # Allow time for restart to complete
+        return True
+
+    except Exception as e:
+        log.error(f"MDS rolling restart failed: {e}")
+        return False
+
+
+def _thrash_mds_random_fail(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
+    """Randomly fail any MDS daemon (active or standby) to test recovery."""
+    try:
+        mds_info = _get_mds_info(rados_obj, fs_name)
+        active_mds = mds_info["active"]
+        standby_mds = mds_info["standbys"]
+
+        all_mds = []
+        if active_mds:
+            all_mds.append(active_mds)
+        all_mds.extend(standby_mds)
+
+        if len(all_mds) < 2:
+            log.warning(f"Need at least 2 MDSs for random fail thrashing on {fs_name}")
+            return False
+
+        # Randomly select an MDS to fail
+        target_mds = random.choice(all_mds)
+        mds_type = "active" if target_mds == active_mds else "standby"
+        log.info(f"Randomly selected {mds_type} MDS to fail: {target_mds}")
+
+        rados_obj.run_ceph_command(cmd=f"ceph mds fail {target_mds}")
+        time.sleep(15)
+
+        # Verify cluster still has an active MDS
+        new_mds_info = _get_mds_info(rados_obj, fs_name)
+        new_active = new_mds_info["active"]
+
+        if new_active:
+            log.info(f"MDS fail successful. Current active MDS: {new_active}")
+            return True
+        else:
+            log.warning(f"No active MDS for {fs_name} after fail operation")
+            return False
+
+    except Exception as e:
+        log.error(f"MDS random fail failed: {e}")
         return False
 
 

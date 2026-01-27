@@ -52,7 +52,7 @@ def run(**kw):
     lrc_config = [(4, 2, 3), (2, 1, 3), (2, 2, 2)]
 
     for conf in lrc_config:
-        (k, m, l) = conf
+        k, m, l = conf
         suffix = "{k}_{m}_{l}".format(k=k, m=m, l=l)
         prof_name = "LRCprofile{suf}".format(suf=suffix)
         if build.startswith("4"):
@@ -66,7 +66,7 @@ def run(**kw):
                 LRC=prof_name, k=k, m=m, l=l
             )
         try:
-            (outbuf, err) = helper.raw_cluster_cmd(profile)
+            outbuf, err = helper.raw_cluster_cmd(profile)
             log.info(outbuf)
             log.info("created profile {LRC}".format(LRC=prof_name))
         except Exception:

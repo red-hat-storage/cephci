@@ -85,6 +85,7 @@ def run(ceph_cluster, **kw):
     client_ceph_object = ceph_cluster.get_ceph_object("client")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
+    git_clone_configs_repo = config.get("git_clone_configs_repo", False)
     install_start_kafka_broker = config.get("install_start_kafka")
     configure_kafka_broker_security = config.get("configure_kafka_security")
     install_keystone_ldap = config.get("install_keystone_ldap")
@@ -141,6 +142,9 @@ def run(ceph_cluster, **kw):
     if not out:
         exec_from.exec_command(cmd=f"sudo mkdir {test_folder}")
         utils.clone_the_repo(config, exec_from, test_folder_path)
+    if git_clone_configs_repo:
+        utils.clone_configs_repo(rgw_node, repo_name="rgw_configs")
+        utils.clone_configs_repo(client_node, repo_name="rgw_configs")
 
     install_common = config.get("install_common", True)
     if install_common:

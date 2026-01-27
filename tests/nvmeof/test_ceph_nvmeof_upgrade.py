@@ -3,6 +3,8 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
  with supported entities like subsystems , etc.,
 """
 
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from json import loads
 
@@ -107,9 +109,21 @@ def fetch_nvme_versions(gateways):
     for gateway in gateways:
         gw, _ = gateway.gateway.info(**{"base_cmd_args": {"format": "json"}})
         gw = loads(gw)
+        # We need to extract the SPDK version from the version string
+        # "SPDK v24.09 git sha1 316ca90fec66c0d524bfef41bb8996e0b11fb655",
+        # "SPDK v25.05 git sha1 c19d07f46274d31201c0c4db3775a655d68f5f38",
+        # "24.01.1",
+        # "SPDK v24.09"
+        spdk_version = None
+        pattern = re.compile(r"(?:v)?(\d+\.\d+(?:\.\d+)?)")
+        match = pattern.search(gw["version"])
+        if match:
+            spdk_version = match.group(1)
+        else:
+            spdk_version = gw["spdk_version"]
         node_info = {
             "version": gw["version"],
-            "spdk-version": gw["spdk_version"],
+            "spdk-version": spdk_version,
         }
         info[gateway.hostname] = node_info
 
@@ -218,7 +232,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         # Configure Subsystem
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+            configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
         pre_upg_versions = fetch_nvme_versions(nvme_service.gateways)
 
@@ -238,6 +252,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             "ibm_build": ibm_build,
         }
 
+        LOG.info("Upgrade prerequisites")
         upgrade_prerequisites(ceph_cluster, orch, **upg_cfg)
 
         # Install cephadm
@@ -246,13 +261,18 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         # Check service versions vs available and target containers
         orch.upgrade_check(image=container_image)
 
+        LOG.info("Start Upgrade")
         # Start Upgrade
         config.update({"args": {"image": "latest"}})
         orch.start_upgrade(config)
 
+        LOG.info("Monitor upgrade status, till completion")
         # Monitor upgrade status, till completion
         orch.monitor_upgrade_status()
 
+        # Post upgrade nvmeof daemons are taking time to start, so wait for 60 seconds
+        time.sleep(60)
+        LOG.info("Validate upgraded versions of NVMe Gateways")
         # Validate upgraded versions of NVMe Gateways
         post_upg_versions = fetch_nvme_versions(nvme_service.gateways)
         compare_nvme_versions(pre_upg_versions, post_upg_versions)

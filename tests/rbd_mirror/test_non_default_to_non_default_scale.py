@@ -74,7 +74,7 @@ def test_namespace_scale(pri_config, sec_config, pool_types, **kw):
                 image_size = kw.get("config", {}).get(pool_type, {}).get("size")
                 image_name = "image" + str(i)
                 new_image_spec = f"{pool}/{namespace}/{image_name}"
-                (image_create_status, err) = rbd_primary.create(
+                image_create_status, err = rbd_primary.create(
                     **{"image-spec": new_image_spec, "size": image_size}
                 )
                 if err:
@@ -113,7 +113,7 @@ def test_namespace_scale(pri_config, sec_config, pool_types, **kw):
                 ns_create_kw = {}
                 ns_create_kw["namespace"] = namespace_name
                 ns_create_kw["pool-name"] = pool
-                (_, ns_create_err) = rbd_primary.namespace.create(**ns_create_kw)
+                _, ns_create_err = rbd_primary.namespace.create(**ns_create_kw)
                 if not ns_create_err:
                     log.info(
                         f"SUCCESS: Namespace {namespace_name} got created in pool {pool} "
@@ -129,7 +129,7 @@ def test_namespace_scale(pri_config, sec_config, pool_types, **kw):
                 ns_create_kw = {}
                 ns_create_kw["namespace"] = remote_namespace_name
                 ns_create_kw["pool-name"] = pool
-                (_, ns_create_err) = rbd_secondary.namespace.create(**ns_create_kw)
+                _, ns_create_err = rbd_secondary.namespace.create(**ns_create_kw)
                 if not ns_create_err:
                     log.info(
                         f"SUCCESS: Namespace {remote_namespace_name} got created in pool {pool}"
@@ -155,7 +155,7 @@ def test_namespace_scale(pri_config, sec_config, pool_types, **kw):
                 image_size = kw.get("config", {}).get(pool_type, {}).get("size")
                 image_name = "image" + str(i)
                 new_image_spec = f"{pool}/{namespace_name}/{image_name}"
-                (image_create_status, err) = rbd_primary.create(
+                image_create_status, err = rbd_primary.create(
                     **{"image-spec": new_image_spec, "size": image_size}
                 )
                 if err:
@@ -228,7 +228,7 @@ def scale(
     image_spec = []
     image_spec.append(pri_image_spec)
     io_config["config"]["image_spec"] = image_spec
-    (io, err) = krbd_io_handler(**io_config)
+    io, err = krbd_io_handler(**io_config)
     if err:
         raise Exception(
             f"Map, mount and run IOs failed for {io_config['config']['image_spec']}"

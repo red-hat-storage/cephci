@@ -105,7 +105,7 @@ def test_scale_group_snap_clone(rbd_obj, client, **kw):
                 "group": group,
                 "format": "json",
             }
-            (group_output, _) = group_info(**group_ls_kw)
+            group_output, _ = group_info(**group_ls_kw)
             log.info(group_output)
             group_output = json.loads(group_output)
             if group_output["group_id"].isalnum():
@@ -125,7 +125,7 @@ def test_scale_group_snap_clone(rbd_obj, client, **kw):
                 "snap": group_snap,
                 "format": "json",
             }
-            (snap_group_output, _) = group_snap_info(**snap_group_info)
+            snap_group_output, _ = group_snap_info(**snap_group_info)
             log.info(snap_group_output)
             snap_group_output = json.loads(snap_group_output)
             snap_id_dict = {}

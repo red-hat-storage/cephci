@@ -188,8 +188,12 @@ def clone_java_tests(node: CephNode) -> None:
 
 def install_requirements(node: CephNode) -> None:
     """Install prerequisites for running the suite"""
-
-    node.exec_command(cmd="cd /home/cephuser/java_s3tests; ./bootstrap.sh")
+    node.exec_command(
+        cmd="cd /home/cephuser/java_s3tests && "
+        "sudo sed -i 's|java-1.8.0-openjdk|java-21-openjdk|g; "
+        "s|java-1.8.0-openjdk-devel|java-21-openjdk-devel|g' bootstrap.sh"
+    )
+    node.exec_command(cmd="cd /home/cephuser/java_s3tests && bash bootstrap.sh")
     node.exec_command(cmd="export PATH=/opt/gradle/gradle-6.0.1/bin:$PATH")
 
 
@@ -330,12 +334,13 @@ def install_req(node: CephNode, data: Dict) -> None:
     """Clone the Ceph repository on the given node."""
     repo_url = "https://github.com/ceph/ceph.git"
     node.exec_command(cmd=f"git clone {repo_url}")
-    node.exec_command(cmd="yum install java-17-openjdk -y", sudo=True)
-    node.exec_command(cmd="alternatives --config java <<< '2'", sudo=True)
+    node.exec_command(cmd="yum install java-21-openjdk -y", sudo=True)
+    node.exec_command(
+        cmd="sudo alternatives --set java /usr/lib/jvm/java-21-openjdk/bin/java"
+    )
     rgw_endpoint = data["endpoint"]
     access_key = data["user1"]["access_key"]
     secret = data["user1"]["secret_key"]
-
     log.info("Executing Java Maven test suite")
     cmd = "cd ceph/qa/workunits/rgw/jcksum/; ./mvnw clean package"
     out, err = node.exec_command(cmd=cmd)
