@@ -1615,10 +1615,11 @@ def install_start_kafka(rgw_node, cloud_type):
 def install_kafka(rgw_node, cloud_type):
     """Install kafka package"""
     log.info("install kafka broker for bucket notification tests")
-    if cloud_type == "ibmc":
-        wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
-    else:
-        wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+    # if cloud_type == "ibmc":
+    #     wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
+    # else:
+    #     wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+    wget_cmd = "cp /home/cephuser/configs/rgw/kafka/kafka_2.13-2.8.0.tgz /tmp/kafka.tgz"
 
     tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
     rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
@@ -1704,13 +1705,14 @@ def configure_kafka_security(rgw_node, cloud_type):
 
 def setup_server_properties_security_configs(rgw_node, cloud_type):
     """append security types configuration into server.properties"""
-    if cloud_type == "ibmc":
-        curl_server_properties = "curl -o /tmp/kafka_server.properties https://10.245.4.89/kafka_server.properties"
-    else:
-        curl_server_properties = (
-            "curl -o /tmp/kafka_server.properties http://magna002.ceph.redhat.com/cephci-jenkins"
-            + "/kafka_server.properties"
-        )
+    # if cloud_type == "ibmc":
+    #     curl_server_properties = "curl -o /tmp/kafka_server.properties https://10.245.4.89/kafka_server.properties"
+    # else:
+    #     curl_server_properties = (
+    #         "curl -o /tmp/kafka_server.properties http://magna002.ceph.redhat.com/cephci-jenkins"
+    #         + "/kafka_server.properties"
+    #     )
+    curl_server_properties = "cp /home/cephuser/configs/rgw/kafka/kafka_server.properties /tmp/kafka_server.properties"
     rgw_node.exec_command(
         sudo=True,
         cmd=curl_server_properties,
@@ -1739,15 +1741,18 @@ def setup_server_properties_security_configs(rgw_node, cloud_type):
 
 def setup_keystore_certs(rgw_node, cloud_type):
     """download kafka_security.sh script, create certs and store them in keystore and truststore"""
-    if cloud_type == "ibmc":
-        curl_security_sh = (
-            "curl -o /tmp/kafka-security.sh https://10.245.4.89/kafka-security.sh"
-        )
-    else:
-        curl_security_sh = (
-            "curl -o /tmp/kafka-security.sh http://magna002.ceph.redhat.com/cephci-jenkins"
-            + "/kafka-security.sh"
-        )
+    # if cloud_type == "ibmc":
+    #     curl_security_sh = (
+    #         "curl -o /tmp/kafka-security.sh https://10.245.4.89/kafka-security.sh"
+    #     )
+    # else:
+    #     curl_security_sh = (
+    #         "curl -o /tmp/kafka-security.sh http://magna002.ceph.redhat.com/cephci-jenkins"
+    #         + "/kafka-security.sh"
+    #     )
+    curl_security_sh = (
+        "cp /home/cephuser/configs/rgw/kafka/kafka-security.sh /tmp/kafka-security.sh"
+    )
     rgw_node.exec_command(
         sudo=True,
         cmd=curl_security_sh,
@@ -1812,8 +1817,8 @@ def redeploy_rgw_service_for_kafka_security(rgw_node):
     out, _ = rgw_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
     log.info(out)
     rgw_node.exec_command(sudo=True, cmd="ceph orch apply -i /root/rgw_spec.yaml")
-    log.info("sleeping for 20 seconds")
-    time.sleep(20)
+    log.info("sleeping for 60 seconds")
+    time.sleep(60)
 
 
 def firewalld_add_public_ports_for_kafka(node):
@@ -2088,11 +2093,15 @@ def clone_configs_repo(node, repo_name=None):
     repo_url = repo_dict["git_url"]
     log.info(f"cloning the repo {repo_url}")
     path_to_clone = repo_dict["dest"]
+    repo_name = repo_url.split("/")[-1][:-4]
+    final_repo_path = f"{path_to_clone}/{repo_name}"
     oauth_token = repo_dict.get("oauth_token")
     if oauth_token:
         repo_url = repo_url.replace("https://", f"https://oauth2:{oauth_token}@")
     git_clone_cmd = f"git clone --depth 1 {repo_url}"
-    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
+    node.exec_command(
+        cmd=f"test -e {final_repo_path} || (cd {path_to_clone} ; {git_clone_cmd})"
+    )
 
 
 def calculate_available_storage(node):

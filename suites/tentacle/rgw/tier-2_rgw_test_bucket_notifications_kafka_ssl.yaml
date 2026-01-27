@@ -78,6 +78,7 @@ tests:
         run-on-rgw: true
         extra-pkgs:
           - jdk
+        git_clone_configs_repo: true
         install_start_kafka: true
         configure_kafka_security: true
         script-name: test_bucket_notifications.py
