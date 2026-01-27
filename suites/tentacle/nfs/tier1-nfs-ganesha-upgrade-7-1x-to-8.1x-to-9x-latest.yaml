@@ -1,7 +1,8 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-upgrade-7.1x-to-8.1x-to-9x-latest.yaml
-# Scenario: Upgrade Ceph 7.1x(GA) cluster Ceph 8.1x(GA) to Ceph 9.x(Latest) with NFS-Ganesha in RHEL9
+# Test-Suite: tier1-nfs-ganesha-upgrade-7-1x-to-8-1x-to-9x-latest.yaml
+# Scenario: Upgrade Ceph 7.1x(GA) to Ceph 8.1x(GA) and finally
+# to Ceph 9.x(Latest) with NFS-Ganesha in RHEL9
 #
 # Cluster Configuration: Conf: conf/reef/nfs/1admin-3client-7node.yaml
 #
