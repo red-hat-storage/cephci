@@ -10,14 +10,26 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin.orch import Orch
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_utils import (
+from tests.nvmeof.workflows.initiator import (
+    compare_client_namespace,
+    prepare_io_execution,
+)
+
+# from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.load_balancing import (
+    scale_down,
+    scale_up,
+    validate_auto_loadbalance,
+    validate_scaleup,
+)
+from tests.nvmeof.workflows.nvme_service import NVMeService
+from tests.nvmeof.workflows.nvme_utils import (  # deploy_nvme_service,
     check_and_set_nvme_cli_image,
     delete_nvme_service,
-    deploy_nvme_service,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -26,11 +38,11 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def configure_listeners(ha_obj, nodes, config):
+def configure_listeners(nvme_service, nodes, config):
     """Configure Listeners on subsystem."""
     lb_group_ids = {}
     for node in nodes:
-        nvmegwcli = ha_obj.check_gateway(node)
+        nvmegwcli = nvme_service.check_gateway(node)
         hostname = nvmegwcli.fetch_gateway_hostname()
         listener_config = {
             "args": {
@@ -85,12 +97,12 @@ def delete_namespaces(nvmegwcli, ns_count, subsystem):
             p.spawn(nvmegwcli.namespace.delete, **ns_args)
 
 
-def configure_subsystems(pool, ha, config):
+def configure_subsystems(pool, nvme_service, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
     ceph_cluster = config["ceph_cluster"]
 
-    nvmegwcli = ha.gateways[0]
+    nvmegwcli = nvme_service.gateways[0]
     # Add Subsystem
     nvmegwcli.subsystem.add(
         **{
@@ -113,7 +125,7 @@ def configure_subsystems(pool, ha, config):
     listeners = [nvmegwcli.node.hostname]
     if config.get("listeners"):
         listeners = config["listeners"]
-    lb_groups = configure_listeners(ha, listeners, config)
+    lb_groups = configure_listeners(nvme_service, listeners, config)
 
     # Add Host access
     nvmegwcli.host.add(
@@ -177,23 +189,27 @@ def test_ceph_83608838(ceph_cluster, config):
     rbd_obj = config["rbd_obj"]
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
-    deploy_nvme_service(ceph_cluster, config)
-    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    # deploy_nvme_service(ceph_cluster, config)
+    # ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    orch = Orch(ceph_cluster, **{})
+    nvme_service = NVMeService(config, ceph_cluster)
+    nvme_service.deploy()
+    # ha.initialize_gateways()
+    nvme_service.init_gateways()
 
     # Configure subsystems
     LOG.info("Configure subsystems")
     with parallel() as p:
         for subsys_args in config["subsystems"]:
             subsys_args["ceph_cluster"] = ceph_cluster
-            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+            p.spawn(configure_subsystems, rbd_pool, nvme_service, subsys_args)
 
     # Configure namespaces
     LOG.info("Configure namespaces")
     for subsystem in config["subsystems"]:
         for image_num in range(1, 11):
             sub_name = subsystem["nqn"]
-            nvmegwcl = ha.gateways[0]
+            nvmegwcl = nvme_service.gateways[0]
             image = f"image-{generate_unique_id(6)}-{image_num}"
             rbd_obj.create_image(rbd_pool, image, "1G")
             img_args = {
@@ -207,7 +223,7 @@ def test_ceph_83608838(ceph_cluster, config):
     # wait for 180 seconds and check for autoload balancing
     LOG.info("wait for 180 seconds and check for autoload balancing")
     time.sleep(180)
-    ha.validate_auto_loadbalance()
+    validate_auto_loadbalance(orch, nvme_service.nvme_metadata_pool, nvme_service.group)
 
     # Delete namespaces related to one load balancing group in each subsysyem
     LOG.info("Delete namespaces related to one load balancing group in each subsysyem")
@@ -234,7 +250,7 @@ def test_ceph_83608838(ceph_cluster, config):
     # wait for 180 seconds and check for autoload balancing
     LOG.info("wait for 180 seconds and check for autoload balancing")
     time.sleep(180)
-    ha.validate_auto_loadbalance()
+    validate_auto_loadbalance(orch, nvme_service.nvme_metadata_pool, nvme_service.group)
 
     LOG.info(
         "CEPH-83608838 - Test load balancing for namespace addition and deletion \
@@ -251,15 +267,19 @@ def test_ceph_83609769(ceph_cluster, config):
     config["spec_deployment"] = True
     config["rebalance_period"] = True
     config["rebalance_period_sec"] = 0
-    deploy_nvme_service(ceph_cluster, config)
-    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    # deploy_nvme_service(ceph_cluster, config)
+    # ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    orch = Orch(ceph_cluster, **{})
+    nvme_service = NVMeService(config, ceph_cluster)
+    nvme_service.deploy()
+    # ha.initialize_gateways()
 
     # Configure subsystems
     LOG.info("Configure subsystems")
     with parallel() as p:
         for subsys_args in config["subsystems"]:
             subsys_args["ceph_cluster"] = ceph_cluster
-            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+            p.spawn(configure_subsystems, rbd_pool, nvme_service, subsys_args)
 
     # Configure namespaces
     LOG.info("Configure namespaces")
@@ -267,7 +287,7 @@ def test_ceph_83609769(ceph_cluster, config):
     for subsystem in config["subsystems"]:
         for image_num in range(1, 11):
             sub_name = subsystem["nqn"]
-            nvmegwcl = ha.gateways[0]
+            nvmegwcl = nvme_service.gateways[0]
             image = f"image-{generate_unique_id(6)}-{image_num}"
             rbd_obj.create_image(rbd_pool, image, "1G")
             img_args = {
@@ -281,7 +301,7 @@ def test_ceph_83609769(ceph_cluster, config):
 
     # Check for num-namespaces is 10 in all gateways
     LOG.info("Check for num-namespaces is 10 in all gateways")
-    out, _ = ha.orch.shell(
+    out, _ = orch.shell(
         args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
     )
     out = json.loads(out)
@@ -298,7 +318,7 @@ def test_ceph_83609769(ceph_cluster, config):
 
     # Delete namespaces related to one load balancing group in each subsysyem
     LOG.info("Delete namespaces related to one load balancing group in each subsysyem")
-    nvmegwcl = ha.gateways[0]
+    nvmegwcl = nvme_service.gateways[0]
     for subsystem in config["subsystems"]:
         sub_name = subsystem["nqn"]
         img_args = {"subsystem": f"{sub_name}"}
@@ -323,7 +343,7 @@ def test_ceph_83609769(ceph_cluster, config):
     time.sleep(60)
     # Check for num-namespaces is 0 for one gateway node
     LOG.info("Check for num-namespaces is 0 for one gateway node")
-    out, _ = ha.orch.shell(
+    out, _ = orch.shell(
         args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
     )
     out = json.loads(out)
@@ -342,11 +362,13 @@ def test_ceph_83609769(ceph_cluster, config):
     LOG.info("Scale down one gateway node")
     gateway_nodes = deepcopy(config.get("gw_nodes"))
     config.update({"gw_nodes": config.get("gw_nodes")[0:3]})
-    deploy_nvme_service(ceph_cluster, config)
+    # deploy_nvme_service(ceph_cluster, config)
+    nvme_service.config = config
+    nvme_service.deploy()
 
     # Check for num-namespaces
     LOG.info("After Scale down Check for num-namespaces is 10 for every gateway node")
-    out, _ = ha.orch.shell(
+    out, _ = orch.shell(
         args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
     )
     out = json.loads(out)
@@ -363,13 +385,15 @@ def test_ceph_83609769(ceph_cluster, config):
     # Scale up one gateway node
     LOG.info("Scale up one gateway node")
     config.update({"gw_nodes": gateway_nodes})
-    deploy_nvme_service(ceph_cluster, config)
+    # deploy_nvme_service(ceph_cluster, config)
+    nvme_service.config = config
+    nvme_service.deploy()
 
     # wait for 120 seconds and check autoload balancing not happened
     LOG.info("wait for 120 seconds and check autoload balancing not happened")
     time.sleep(120)
     LOG.info("Check for num-namespaces is 0 for one gateway node")
-    out, _ = ha.orch.shell(
+    out, _ = orch.shell(
         args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
     )
     out = json.loads(out)
@@ -487,23 +511,30 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_case_run(ceph_cluster, config)
         else:
             # Deploy NVMe services
+            nvme_service = NVMeService(config, ceph_cluster)
             if config.get("install"):
-                deploy_nvme_service(ceph_cluster, config)
+                LOG.info("deploy nvme service")
+                nvme_service.deploy()
 
-            ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-            ha.initialize_gateways()
-            gw_nodes = ha.gateways
+            # ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+            nvme_service.init_gateways()
+            gw_nodes = nvme_service.gateways
             gw = gw_nodes[0]
+            orch = Orch(ceph_cluster, **{})
 
             # Configure Subsystem
             if config.get("subsystems"):
                 with parallel() as p:
                     for subsys_args in config["subsystems"]:
                         subsys_args["ceph_cluster"] = ceph_cluster
-                        p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+                        p.spawn(
+                            configure_subsystems, rbd_pool, nvme_service, subsys_args
+                        )
                 if ceph_cluster.rhcs_version > "8.0":
                     time.sleep(120)
-                    ha.validate_auto_loadbalance()
+                    validate_auto_loadbalance(
+                        orch, nvme_service.nvme_metadata_pool, nvme_service.group
+                    )
 
             # Initiate scale-down and scale-up
             if config.get("load_balancing"):
@@ -525,7 +556,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 ceph_cluster,
                             )
                         if ceph_cluster.rhcs_version > "8.0":
-                            ha.validate_auto_loadbalance()
+                            validate_auto_loadbalance(
+                                orch,
+                                nvme_service.nvme_metadata_pool,
+                                nvme_service.group,
+                            )
 
                     # namespace deletion
                     if lb_config.get("ns_del"):
@@ -534,10 +569,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         ns_del_count = ns_del_config["count"]
                         subsystems = ns_del_config["subsystems"]
                         for subsystem in subsystems:
-                            delete_namespaces(ha.gateways[0], ns_del_count, subsystem)
+                            delete_namespaces(
+                                nvme_service.gateways[0], ns_del_count, subsystem
+                            )
                         if ceph_cluster.rhcs_version > "8.0":
                             time.sleep(120)
-                            ha.validate_auto_loadbalance()
+                            validate_auto_loadbalance(
+                                orch,
+                                nvme_service.nvme_metadata_pool,
+                                nvme_service.group,
+                            )
 
                     # Scale down
                     if lb_config.get("scale_down"):
@@ -546,21 +587,33 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         LOG.info(f"Started scaling down {gateway_nodes_to_be_deployed}")
 
                         # Prepare FIO Execution
-                        namespaces = ha.fetch_namespaces(ha.gateways[0])
-                        ha.prepare_io_execution(initiators)
+                        namespaces = nvme_service.fetch_namespaces(
+                            nvme_service.gateways[0]
+                        )
+                        clients = prepare_io_execution(
+                            initiators,
+                            gateways=nvme_service.gateways,
+                            cluster=nvme_service.ceph_cluster,
+                            return_clients=True,
+                        )
+                        if not clients:
+                            raise Exception("Failed to prepare IO execution")
 
                         # Check for targets at clients
-                        ha.compare_client_namespace([i["uuid"] for i in namespaces])
+                        compare_client_namespace(
+                            clients, [i["uuid"] for i in namespaces]
+                        )
 
                         # Start IO Execution
                         LOG.info("Initiating IO before scale down")
-                        for initiator in ha.clients:
+                        for initiator in clients:
                             io_tasks_scale_down.append(
                                 executor.submit(initiator.start_fio)
                             )
                         time.sleep(20)  # time sleep for IO to Kick-in
 
-                        ha.scale_down(gateway_nodes_to_be_deployed)
+                        # Perform scale-down
+                        scale_down(nvme_service, orch, gateway_nodes_to_be_deployed)
 
                         # Wait for IO to complete and collect FIO outputs
                         fio_outputs = []
@@ -582,13 +635,22 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         LOG.info(f"Started scaling up {scaleup_nodes}")
 
                         # Prepare FIO execution for existing namespaces
-                        old_namespaces = ha.fetch_namespaces(gw)
-                        ha.prepare_io_execution(initiators)
+                        old_namespaces = nvme_service.fetch_namespaces(
+                            nvme_service.gateways[0]
+                        )
+                        clients = prepare_io_execution(
+                            initiators,
+                            gateways=nvme_service.gateways,
+                            cluster=nvme_service.ceph_cluster,
+                            return_clients=True,
+                        )
+                        if not clients:
+                            raise Exception("Failed to prepare IO execution")
 
                         # Start IO Execution into already existing namespaces/nodes
                         LOG.info("Initiating IO before scale up ")
                         executor = thread_pool_executor(num_devices, initiators)
-                        for initiator in ha.clients:
+                        for initiator in clients:
                             io_tasks_scale_up.append(
                                 executor.submit(initiator.start_fio)
                             )
@@ -600,14 +662,20 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         ):
                             # Perform scale up
                             old_namespaces = parse_namespaces(config, old_namespaces)
-                            ha.scale_up(scaleup_nodes, gw_nodes, old_namespaces)
+                            scale_up(
+                                nvme_service,
+                                orch,
+                                scaleup_nodes,
+                                gw_nodes,
+                                old_namespaces,
+                            )
 
                             # Add listeners and namespaces to newly added GWs
                             LOG.info(f"Adding listeners for {scaleup_nodes}")
                             for subsys_args in config["subsystems"]:
                                 sub_args = {"subsystem": subsys_args["nqn"]}
                                 lb_groups = configure_listeners(
-                                    ha, scaleup_nodes, subsys_args
+                                    nvme_service, scaleup_nodes, subsys_args
                                 )
 
                             # Create new namespaces to newly added GWs that will take ANA_GRP of new GWs
@@ -615,7 +683,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             for subsys_args in config["subsystems"]:
                                 sub_args = {"subsystem": subsys_args["nqn"]}
                                 configure_namespaces(
-                                    ha.gateways[-1],
+                                    nvme_service.gateways[-1],
                                     subsys_args,
                                     lb_groups,
                                     sub_args,
@@ -624,17 +692,29 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 )
 
                             # Prepare FIO Execution for new namespaces
-                            ha.prepare_io_execution(initiators)
-                            new_namespaces = ha.fetch_namespaces(ha.gateways[-1])
+                            clients = prepare_io_execution(
+                                initiators,
+                                gateways=nvme_service.gateways,
+                                cluster=nvme_service.ceph_cluster,
+                                return_clients=True,
+                            )
+                            if not clients:
+                                raise Exception("Failed to prepare IO execution")
+
+                            new_namespaces = nvme_service.fetch_namespaces(
+                                nvme_service.gateways[-1]
+                            )
 
                             # Check for targets at clients for new namespaces
-                            ha.compare_client_namespace(
-                                [i["uuid"] for i in new_namespaces]
+                            compare_client_namespace(
+                                clients, [i["uuid"] for i in new_namespaces]
                             )
 
                             # Validate IO for old namespaces
                             LOG.info("Validating IO for old namespaces post scaleup")
-                            ha.validate_scaleup(scaleup_nodes, old_namespaces)
+                            validate_scaleup(
+                                nvme_service, orch, scaleup_nodes, old_namespaces
+                            )
                             # Wait for IO to complete and collect FIO outputs
                             fio_outputs = []
                             if io_tasks_scale_up:
@@ -650,7 +730,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             # Start IO Execution for new namespaces
                             io_tasks_new_namespaces = []
                             executor = thread_pool_executor(num_devices, initiators)
-                            for initiator in ha.clients:
+                            for initiator in clients:
                                 io_tasks_new_namespaces.append(
                                     executor.submit(initiator.start_fio)
                                 )
@@ -659,7 +739,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             # Validate IO for new namespaces
                             LOG.info("Validating IO for new namespaces post scaleup")
                             namespaces = parse_namespaces(config, new_namespaces)
-                            ha.validate_scaleup(scaleup_nodes, namespaces)
+                            validate_scaleup(
+                                nvme_service, orch, scaleup_nodes, namespaces
+                            )
 
                             # Wait for IO to complete and collect FIO outputs
                             fio_outputs = []
@@ -676,8 +758,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         # Perform scale-up of old GW nodes(replacement)
                         else:
                             old_namespaces = parse_namespaces(config, old_namespaces)
-                            ha.scale_up(scaleup_nodes, gw_nodes, old_namespaces)
-                            ha.validate_scaleup(scaleup_nodes, old_namespaces)
+                            scale_up(
+                                nvme_service,
+                                orch,
+                                scaleup_nodes,
+                                gw_nodes,
+                                old_namespaces,
+                            )
+                            validate_scaleup(
+                                nvme_service, orch, scaleup_nodes, old_namespaces
+                            )
         return 0
 
     except Exception as err:

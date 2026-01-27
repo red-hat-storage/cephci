@@ -1,4 +1,5 @@
 import json
+import time
 
 from ceph.ceph import CommandFailed
 from ceph.nvmeof.initiators.linux import Initiator
@@ -482,3 +483,79 @@ def prepare_io_execution(io_clients, gateways=None, cluster=None, return_clients
             Clients.append(client)
     if return_clients:
         return Clients
+
+
+@retry(IOError, tries=3, delay=3)
+def compare_client_namespace(clients, uuids):
+    lsblk_devs = []
+    for client in clients:
+        lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
+
+    LOG.info(
+        f"Expected NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
+    )
+    if sorted(uuids) != sorted(set(lsblk_devs)):
+        raise IOError("Few Namespaces are missing!!!")
+    LOG.info("All namespaces are listed at Client(s)")
+    return True
+
+
+@retry((IOError, TimeoutError, CommandFailed), tries=7, delay=2)
+def validate_io(orch, namespaces, negative=False):
+    """Validate Continuous IO on namespaces.
+
+    - Collect rbd disk usage info for each rbd image.
+    - Validate written bytes value is incremental.
+
+    Args:
+        namespaces: list of namespaces
+    """
+
+    def io_value(ns):
+        sub_ns, pool, image = ns.rsplit("|", 2)
+        count = 3
+        samples = []
+        for _ in range(count):
+            out, _ = orch.shell(
+                args=[f"rbd --format json du {pool}/{image}"], timeout=600
+            )
+            out = json.loads(out)["images"][0]
+            samples.append(out)
+            time.sleep(6)
+        return sub_ns, f"{pool}/{image}", samples
+
+    def validate_incremetal_io(write_samples):
+        for i in range(len(write_samples) - 1):
+            if write_samples[i] >= write_samples[i + 1]:
+                return False
+        return True
+
+    with parallel() as p:
+        for namespace in namespaces:
+            p.spawn(io_value, namespace)
+
+        for result in p:
+            subsys, pool_img, samples = result
+            res = [i["used_size"] for i in samples]
+
+            LOG.info(
+                f"[ {subsys}|{pool_img} ] RBD DU Detailed - {log_json_dump(samples)}"
+            )
+            LOG.info(f"[ {subsys}|{pool_img} ] RBD DU samples - {res}")
+            if not validate_incremetal_io(res):
+                if negative:
+                    LOG.info(
+                        f"[ {subsys}|{pool_img} ] IO is not progressing as expected - {res}"
+                    )
+                    continue
+                raise IOError(f"[ {subsys}|{pool_img} ] IO is not progressing - {res}")
+            if negative:
+                LOG.error(
+                    f"[ {subsys}|{pool_img} ] IO is progressing as expected - {res}"
+                )
+                raise IOError(
+                    f"[ {subsys}|{pool_img} ] IO is progressing as expected - {res}"
+                )
+            LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
+
+    LOG.info("IO Validation is Successfull on all RBD images..")
