@@ -74,6 +74,7 @@ def run(ceph_cluster, **kw):
 
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
+            fs_util.wait_for_mds_process(client1, fs_name)
         if "5.0" in rhbuild:
             client1.exec_command(
                 sudo=True,

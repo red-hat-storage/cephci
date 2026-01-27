@@ -182,6 +182,7 @@ class FsUtils(object):
                 output_dict["fs_name"] = fs["name"]
                 output_dict["metadata_pool_name"] = fs["metadata_pool"]
                 output_dict["data_pool_name"] = fs["data_pools"][0]
+        log.debug("Fs info: %s", output_dict)
         return output_dict
 
     def get_pool_num(self, client, pool_name):
