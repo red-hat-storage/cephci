@@ -1,13 +1,13 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-ha-upgrade-ibm-7x-to-7x-latest.yaml
-# Scenario: Upgrade IBM 7(GA) cluster to IBM 7(Latest) with NFS-Ganesha in RHEL9
+# Test-Suite: tier1-nfs-ganesha-ha-upgrade-7x-to-7x-latest.yaml
+# Scenario: Upgrade Ceph 7(GA) cluster to Ceph 7(Latest) with NFS-Ganesha HA in RHEL9
 #
 # Cluster Configuration: Conf: conf/reef/nfs/1admin-3client-7node.yaml
 #
 # Test Steps:
-# - Deploy RHCS 7(GA) cluster in RHEL 9
-# - Deploy RHCS 7 client
+# - Deploy Ceph 7(GA) cluster in RHEL 9
+# - Deploy Ceph 7 client
 # - Deploy NFS-Ganesha with HA
 # - Upgrade cluster
 ################################################################################################
@@ -26,8 +26,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-7-rhel9:latest"
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-7-rhel-9.repo"
+                rhcs-version: 7.0
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -174,8 +174,8 @@ tests:
                     virtual_ip: 10.8.128.255/21
 
   - test:
-      name: Upgrade cluster to latest IBM 7.x
-      desc: Upgrade cluster to latest IBM 7.x
+      name: Upgrade cluster to latest RHCS 7.x
+      desc: Upgrade cluster to latest RHCS 7.x
       module: test_cephadm_upgrade.py
       polarion-id: CEPH-83573791,CEPH-83573790
       config:
