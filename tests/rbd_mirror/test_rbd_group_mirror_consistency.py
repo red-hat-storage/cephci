@@ -111,173 +111,291 @@ def test_mirror_group_consistency(
     """
 
     for pool_type in pool_types:
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
-        log.info("Running test CEPH-83613291  for %s", pool_type)
+        image_spec_all = []
+        mapped_devices = []
+        mount_points = []
+        try:
+            rbd_config = kw.get("config", {}).get(pool_type, {})
+            multi_pool_config = deepcopy(getdict(rbd_config))
+            log.info("Running test CEPH-83613291  for %s", pool_type)
 
-        for pool, pool_config in multi_pool_config.items():
-            group_config = {}
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
-            if "ec_pool" in pool_config.keys():
-                continue
-            group_spec = pool_config.get("group-spec")
-            group_config.update({"group-spec": group_spec})
+            for pool, pool_config in multi_pool_config.items():
+                group_config = {}
+                if "data_pool" in pool_config.keys():
+                    _ = pool_config.pop("data_pool")
+                if "ec_pool" in pool_config.keys():
+                    continue
+                group_spec = pool_config.get("group-spec")
+                group_config.update({"group-spec": group_spec})
 
-            image_spec_small = []
-            image_spec_large = []
-            for image, image_config in pool_config.items():
-                if "image" in image:
-                    if "namespace" in pool_config:
-                        pool_spec = pool + "/" + pool_config.get("namespace") + "/"
-                    else:
-                        pool_spec = pool + "/"
-                    image_spec_small.append(pool_spec + image)
-                    image_large_name = pool_spec + "image_" + random_string(len=4)
-                    # Create large size images
-                    rbd_primary.create(
-                        **{"image-spec": image_large_name, "size": "11G"}
+                image_spec_small = []
+                image_spec_large = []
+                for image, image_config in pool_config.items():
+                    if "image" in image:
+                        if "namespace" in pool_config:
+                            pool_spec = pool + "/" + pool_config.get("namespace") + "/"
+                        else:
+                            pool_spec = pool + "/"
+                        image_spec_small.append(pool_spec + image)
+                        image_large_name = pool_spec + "image_" + random_string(len=4)
+                        # Create large size images
+                        rbd_primary.create(
+                            **{"image-spec": image_large_name, "size": "11G"}
+                        )
+                        image_spec_large.append(image_large_name)
+                        if add_image_to_group_and_verify(
+                            **{
+                                "group-spec": group_spec,
+                                "image-spec": image_large_name,
+                                "client": client_primary,
+                            }
+                        ):
+                            raise Exception(
+                                "Failed to add image to group %s", group_spec
+                            )
+
+                if "namespace" in pool_config:
+                    enable_namespace_mirroring(
+                        rbd_primary, rbd_secondary, pool, **pool_config
                     )
-                    image_spec_large.append(image_large_name)
-                    if add_image_to_group_and_verify(
-                        **{
-                            "group-spec": group_spec,
-                            "image-spec": image_large_name,
-                            "client": client_primary,
-                        }
-                    ):
-                        raise Exception("Failed to add image to group %s", group_spec)
 
-            if "namespace" in pool_config:
-                enable_namespace_mirroring(
-                    rbd_primary, rbd_secondary, pool, **pool_config
+                image_spec_all = image_spec_small + image_spec_large
+
+                # Enable Group Mirroring and Verify
+                enable_group_mirroring_and_verify_state(
+                    rbd_primary, **{"group-spec": group_spec}
                 )
 
-            image_spec_all = []
-            image_spec_all = image_spec_small + image_spec_large
-
-            # Enable Group Mirroring and Verify
-            enable_group_mirroring_and_verify_state(
-                rbd_primary, **{"group-spec": group_spec}
-            )
-
-            # Wait for group mirroring to complete
-            wait_for_idle(rbd_primary, **{"group-spec": group_spec})
-            log.info(
-                "Data replay state is idle for all images in the group. Syncing completed"
-            )
-
-            md5sum_first_sync_site_b = []
-            for image in image_spec_all:
-                md5sum_first_sync_site_b.append(
-                    get_md5sum_rbd_image(
-                        image_spec=image,
-                        rbd=rbd_secondary,
-                        client=client_secondary,
-                        file_path="file" + random_string(len=5),
-                    )
+                # Wait for group mirroring to complete
+                wait_for_idle(rbd_primary, **{"group-spec": group_spec})
+                log.info(
+                    "Data replay state is idle for all images in the group. Syncing completed"
                 )
-            log.info("md5sums on site B after first sync: %s", md5sum_first_sync_site_b)
 
-            io_small_cfg = kw.get("config", {}).get("io_small", {})
-            file_random_small1 = "/mnt/mnt_" + random_string(len=5) + "/file1"
-            file_random_small2 = "/mnt/mnt_" + random_string(len=5) + "/file2"
-            io_config = {
-                "size": io_small_cfg.get("io-size_init", "20M"),
-                "do_not_create_image": True,
-                "config": {
+                md5sum_first_sync_site_b = []
+                for image in image_spec_all:
+                    md5sum_first_sync_site_b.append(
+                        get_md5sum_rbd_image(
+                            image_spec=image,
+                            rbd=rbd_secondary,
+                            client=client_secondary,
+                            file_path="file" + random_string(len=5),
+                        )
+                    )
+                log.info(
+                    "md5sums on site B after first sync: %s", md5sum_first_sync_site_b
+                )
+
+                io_small_cfg = kw.get("config", {}).get("io_small", {})
+                file_random_small1 = "/mnt/mnt_" + random_string(len=5) + "/file1"
+                file_random_small2 = "/mnt/mnt_" + random_string(len=5) + "/file2"
+                io_config = {
                     "size": io_small_cfg.get("io-size_init", "20M"),
-                    "file_path": [
-                        file_random_small1,
-                        file_random_small2,
-                    ],
-                    "get_time_taken": True,
-                    "operations": {
-                        "fs": "ext4",
-                        "io": False,
-                        "mount": True,
-                        "map": True,
-                        "nounmap": True,
+                    "do_not_create_image": True,
+                    "config": {
+                        "size": io_small_cfg.get("io-size_init", "20M"),
+                        "file_path": [
+                            file_random_small1,
+                            file_random_small2,
+                        ],
+                        "get_time_taken": True,
+                        "operations": {
+                            "fs": "ext4",
+                            "io": False,
+                            "mount": True,
+                            "map": True,
+                            "nounmap": True,
+                        },
+                        "cmd_timeout": 2400,
                     },
-                    "cmd_timeout": 2400,
-                },
-            }
-            image_spec_copy = deepcopy(image_spec_small)
-            io_config["rbd_obj"] = rbd_primary
-            io_config["client"] = client_primary
-            io_config["config"]["image_spec"] = image_spec_copy
-            io, err = krbd_io_handler(**io_config)
-            if err:
-                raise Exception(
-                    "Map, mount and run IOs failed for " + str(image_spec_small)
-                )
-            else:
-                log.info("Map, mount and IOs successful for " + str(image_spec_small))
-
-            for dev_name in [file_random_small1, file_random_small2]:
-                io_args = {
-                    "client_node": client_primary,
-                    "filename": dev_name,
-                    "size": io_small_cfg.get("io-size_init", "20M"),
-                    "num_jobs": io_small_cfg.get("num_jobs", "1"),
-                    "iodepth": io_small_cfg.get("iodepth", "16"),
-                    "io_type": io_small_cfg.get("io-type", "write"),
-                    "run_time": 30,
-                    "cmd_timeout": 2400,
                 }
-                run_fio(**io_args)
-            io_large_cfg = kw.get("config", {}).get("io_large", {})
-            file_random_large1 = "/mnt/mnt_" + random_string(len=5) + "/file3"
-            file_random_large2 = "/mnt/mnt_" + random_string(len=5) + "/file4"
-            io_config.update({"size": io_large_cfg.get("io-size_init", "1G")})
-            io_config["config"].update({"size": io_large_cfg.get("io-size_init", "1G")})
-            io_config["config"].update(
-                {"file_path": [file_random_large1, file_random_large2]}
-            )
-            image_spec_copy = deepcopy(image_spec_large)
-            io_config["config"]["image_spec"] = image_spec_copy
-            io, err = krbd_io_handler(**io_config)
-            if err:
-                raise Exception(
-                    "Map, mount and run IOs failed for " + str(image_spec_large)
+                image_spec_copy = deepcopy(image_spec_small)
+                io_config["rbd_obj"] = rbd_primary
+                io_config["client"] = client_primary
+                io_config["config"]["image_spec"] = image_spec_copy
+
+                io, err = krbd_io_handler(**io_config)
+                if err:
+                    raise Exception(
+                        "Map, mount and run IOs failed for " + str(image_spec_small)
+                    )
+                else:
+                    log.info(
+                        "Map, mount and IOs successful for " + str(image_spec_small)
+                    )
+
+                # Collect devices
+                mapped_devices.extend(io_config["config"].get("device_names", []))
+
+                # Collect mount points from file_path
+                for fp in io_config["config"].get("file_path", []):
+                    mount_points.append(fp.rsplit("/", 1)[0])
+
+                for dev_name in [file_random_small1, file_random_small2]:
+                    io_args = {
+                        "client_node": client_primary,
+                        "filename": dev_name,
+                        "size": io_small_cfg.get("io-size_init", "20M"),
+                        "num_jobs": io_small_cfg.get("num_jobs", "1"),
+                        "iodepth": io_small_cfg.get("iodepth", "16"),
+                        "io_type": io_small_cfg.get("io-type", "write"),
+                        "cmd_timeout": 2400,
+                    }
+                    run_fio(**io_args)
+
+                io_large_cfg = kw.get("config", {}).get("io_large", {})
+                file_random_large1 = "/mnt/mnt_" + random_string(len=5) + "/file3"
+                file_random_large2 = "/mnt/mnt_" + random_string(len=5) + "/file4"
+                io_config.update({"size": io_large_cfg.get("io-size_init", "1G")})
+                io_config["config"].update(
+                    {"size": io_large_cfg.get("io-size_init", "1G")}
                 )
-            else:
-                log.info("Map, mount and IOs successful for " + str(image_spec_large))
+                io_config["config"].update(
+                    {"file_path": [file_random_large1, file_random_large2]}
+                )
+                image_spec_copy = deepcopy(image_spec_large)
+                io_config["config"]["image_spec"] = image_spec_copy
+                io, err = krbd_io_handler(**io_config)
+                if err:
+                    raise Exception(
+                        "Map, mount and run IOs failed for " + str(image_spec_large)
+                    )
+                else:
+                    log.info(
+                        "Map, mount and IOs successful for " + str(image_spec_large)
+                    )
+                mapped_devices.extend(io_config["config"].get("device_names", []))
+                for fp in io_config["config"].get("file_path", []):
+                    mount_points.append(fp.rsplit("/", 1)[0])
 
-            for dev_name in [file_random_large1, file_random_large2]:
-                io_args = {
-                    "client_node": client_primary,
-                    "filename": dev_name,
-                    "size": io_large_cfg.get("io-size_init", "1G"),
-                    "num_jobs": io_large_cfg.get("num_jobs", "1"),
-                    "iodepth": io_large_cfg.get("iodepth", "16"),
-                    "io_type": io_large_cfg.get("io-type", "write"),
-                    "run_time": 100,
-                    "cmd_timeout": 2400,
-                }
-                run_fio(**io_args)
-            time.sleep(120)
+                for dev_name in [file_random_large1, file_random_large2]:
+                    io_args = {
+                        "client_node": client_primary,
+                        "filename": dev_name,
+                        "size": io_large_cfg.get("io-size_init", "1G"),
+                        "num_jobs": io_large_cfg.get("num_jobs", "1"),
+                        "iodepth": io_large_cfg.get("iodepth", "16"),
+                        "io_type": io_large_cfg.get("io-type", "write"),
+                        "cmd_timeout": 2400,
+                    }
+                    run_fio(**io_args)
+                time.sleep(120)
 
-            # Create first manual mirror group snapshot
-            out, err = rbd_primary.mirror.group.snapshot.add(
-                **{"group-spec": group_spec}
-            )
-            if err:
-                raise Exception("Failed to add manual mirror group snapshot %s", out)
+                # Create first manual mirror group snapshot
+                out, err = rbd_primary.mirror.group.snapshot.add(
+                    **{"group-spec": group_spec}
+                )
+                if err:
+                    raise Exception(
+                        "Failed to add manual mirror group snapshot %s", out
+                    )
 
-            log.info("Created first manual mirror group snapshot: %s", out)
-            snapshot_id = out.strip().split(":")[1].strip()
-            log.info("Snapshot ID is %s", snapshot_id)
-            # Wait for snapshot to sync on site-B
-            time.sleep(10)
-            snap_state = get_mirror_group_snap_copied_status(
-                rbd_secondary,
-                snapshot_id,
-                **{"group-spec": group_spec, "format": "json"},
-            )
-            log.info("Mirror group snapshot copied status on site-B is %s", snap_state)
-            while snap_state is not True:
-                time.sleep(5)
+                log.info("Created first manual mirror group snapshot: %s", out)
+                snapshot_id = out.strip().split(":")[1].strip()
+                log.info("Snapshot ID is %s", snapshot_id)
+                # Wait for snapshot to sync on site-B
+                time.sleep(10)
+
+                # waiting till 5 minutes for data to sync to secondary
+                MAX_WAIT_SEC = 300
+                POLL_INTERVAL = 5
+
+                start = time.time()
+                snap_state = False
+
+                while True:
+                    snap_state = get_mirror_group_snap_copied_status(
+                        rbd_secondary,
+                        snapshot_id,
+                        **{"group-spec": group_spec, "format": "json"},
+                    )
+
+                    log.info(
+                        "Mirror group snapshot copied status on site-B is %s",
+                        snap_state,
+                    )
+
+                    if snap_state:
+                        break
+
+                    if time.time() - start > MAX_WAIT_SEC:
+                        raise Exception(
+                            f"Timed out after {MAX_WAIT_SEC}s waiting for mirror group snapshot "
+                            f"{snapshot_id} to be copied on site-B"
+                        )
+
+                    time.sleep(POLL_INTERVAL)
+
+                log.info(
+                    "Mirror group snapshot synced on site-B after first manual snapshot"
+                )
+
+                md5sum_second_sync_site_b = []
+                for image in image_spec_all:
+                    md5sum_second_sync_site_b.append(
+                        get_md5sum_rbd_image(
+                            image_spec=image,
+                            rbd=rbd_secondary,
+                            client=client_secondary,
+                            file_path="file" + random_string(len=5),
+                        )
+                    )
+                log.info(
+                    "md5sums on site B after second sync: %s", md5sum_second_sync_site_b
+                )
+
+                for dev_name in [file_random_small1, file_random_small2]:
+                    io_args = {
+                        "client_node": client_primary,
+                        "filename": dev_name,
+                        "size": io_small_cfg.get("io-size", "40M"),
+                        "num_jobs": io_small_cfg.get("num_jobs", "1"),
+                        "iodepth": io_small_cfg.get("iodepth", "16"),
+                        "io_type": io_small_cfg.get("io-type", "write"),
+                        "cmd_timeout": 2400,
+                    }
+                    run_fio(**io_args)
+                for dev_name in [file_random_large1, file_random_large2]:
+                    io_args = {
+                        "client_node": client_primary,
+                        "filename": dev_name,
+                        "size": io_large_cfg.get("io-size", "9G"),
+                        "num_jobs": io_large_cfg.get("num_jobs", "1"),
+                        "iodepth": io_large_cfg.get("iodepth", "16"),
+                        "io_type": io_large_cfg.get("io-type", "write"),
+                        "cmd_timeout": 2400,
+                    }
+                    run_fio(**io_args)
+
+                time.sleep(120)
+                md5sum_second_write_site_a = []
+                for image in image_spec_all:
+                    md5sum_second_write_site_a.append(
+                        get_md5sum_rbd_image(
+                            image_spec=image,
+                            rbd=rbd_primary,
+                            client=client_primary,
+                            file_path="file" + random_string(len=5),
+                        )
+                    )
+                log.info(
+                    "md5sums on site A after second write: %s",
+                    md5sum_second_write_site_a,
+                )
+
+                # Create second manual mirror group snapshot
+                out, err = rbd_primary.mirror.group.snapshot.add(
+                    **{"group-spec": group_spec}
+                )
+                if err:
+                    raise Exception(
+                        "Failed to add manual mirror group snapshot %s", out
+                    )
+
+                log.info("Created second manual mirror group snapshot: %s", out)
+                snapshot_id = out.strip().split(":")[1].strip()
+                log.info("Snapshot ID is %s", snapshot_id)
+                time.sleep(10)
                 snap_state = get_mirror_group_snap_copied_status(
                     rbd_secondary,
                     snapshot_id,
@@ -286,170 +404,143 @@ def test_mirror_group_consistency(
                 log.info(
                     "Mirror group snapshot copied status on site-B is %s", snap_state
                 )
-            log.info(
-                "Mirror group snapshot synced on site-B after first manual snapshot"
-            )
 
-            md5sum_second_sync_site_b = []
-            for image in image_spec_all:
-                md5sum_second_sync_site_b.append(
-                    get_md5sum_rbd_image(
-                        image_spec=image,
-                        rbd=rbd_secondary,
-                        client=client_secondary,
-                        file_path="file" + random_string(len=5),
+                if snap_state is False:
+                    if exec_cmd(
+                        node=client_secondary,
+                        cmd="ceph orch stop rbd-mirror",
+                    ):
+                        raise Exception("Failed to stop rbd-mirror daemon on site-B")
+                    log.info("Stopped rbd-mirror daemon on site-B before force promote")
+                    mirror_node = secondary_cluster.get_nodes(role="rbd-mirror")[0]
+                    service_name = exec_cmd(
+                        node=mirror_node,
+                        cmd="systemctl list-units --all | grep rbd-mirror | grep -Ev \\.target | awk {{'print $1'}}",
+                        output=True,
                     )
-                )
-            log.info(
-                "md5sums on site B after second sync: %s", md5sum_second_sync_site_b
-            )
-
-            for dev_name in [file_random_small1, file_random_small2]:
-                io_args = {
-                    "client_node": client_primary,
-                    "filename": dev_name,
-                    "size": io_small_cfg.get("io-size", "40M"),
-                    "num_jobs": io_small_cfg.get("num_jobs", "1"),
-                    "iodepth": io_small_cfg.get("iodepth", "16"),
-                    "io_type": io_small_cfg.get("io-type", "write"),
-                    "run_time": 90,
-                    "cmd_timeout": 2400,
-                }
-                run_fio(**io_args)
-            for dev_name in [file_random_large1, file_random_large2]:
-                io_args = {
-                    "client_node": client_primary,
-                    "filename": dev_name,
-                    "size": io_large_cfg.get("io-size", "9G"),
-                    "num_jobs": io_large_cfg.get("num_jobs", "1"),
-                    "iodepth": io_large_cfg.get("iodepth", "16"),
-                    "io_type": io_large_cfg.get("io-type", "write"),
-                    "run_time": 500,
-                    "cmd_timeout": 2400,
-                }
-                run_fio(**io_args)
-
-            time.sleep(120)
-            md5sum_second_write_site_a = []
-            for image in image_spec_all:
-                md5sum_second_write_site_a.append(
-                    get_md5sum_rbd_image(
-                        image_spec=image,
-                        rbd=rbd_primary,
-                        client=client_primary,
-                        file_path="file" + random_string(len=5),
+                    # "ceph orch stop" shuts the daemon gracefully. Since, we need to stop the syncing abruptly.
+                    # we need to abruptly terminate the daemon. Hence, SIGKILL is passed
+                    # to systemctl as below.
+                    exec_cmd(
+                        node=mirror_node,
+                        cmd=f"systemctl kill --signal=SIGKILL {service_name}",
                     )
+                    log.info("Force killed rbd-mirror daemon before force promote")
+
+                time.sleep(10)
+                md5sum_third_sync_site_b = []
+                for image in image_spec_all[0:2]:
+                    md5sum_third_sync_site_b.append(
+                        get_md5sum_rbd_image(
+                            image_spec=image,
+                            rbd=rbd_secondary,
+                            client=client_secondary,
+                            file_path="file" + random_string(len=5),
+                        )
+                    )
+                log.info(
+                    "md5sums of small size images on site-B after sync : %s",
+                    md5sum_third_sync_site_b,
                 )
-            log.info(
-                "md5sums on site A after second write: %s", md5sum_second_write_site_a
-            )
-
-            # Create second manual mirror group snapshot
-            out, err = rbd_primary.mirror.group.snapshot.add(
-                **{"group-spec": group_spec}
-            )
-            if err:
-                raise Exception("Failed to add manual mirror group snapshot %s", out)
-
-            log.info("Created second manual mirror group snapshot: %s", out)
-            snapshot_id = out.strip().split(":")[1].strip()
-            log.info("Snapshot ID is %s", snapshot_id)
-
-            time.sleep(10)
-            snap_state = get_mirror_group_snap_copied_status(
-                rbd_secondary,
-                snapshot_id,
-                **{"group-spec": group_spec, "format": "json"},
-            )
-            log.info("Mirror group snapshot copied status on site-B is %s", snap_state)
-            if snap_state is False:
-                if exec_cmd(
-                    node=client_secondary,
-                    cmd="ceph orch stop rbd-mirror",
-                ):
-                    raise Exception("Failed to stop rbd-mirror daemon on site-B")
-                log.info("Stopped rbd-mirror daemon on site-B before force promote")
-                mirror_node = secondary_cluster.get_nodes(role="rbd-mirror")[0]
-                service_name = exec_cmd(
-                    node=mirror_node,
-                    cmd="systemctl list-units --all | grep rbd-mirror | grep -Ev \\.target | awk {{'print $1'}}",
-                    output=True,
+                log.info(
+                    "md5sums of small images on site-A after second write : %s",
+                    md5sum_second_write_site_a[0:2],
                 )
-                # "ceph orch stop" shuts the daemon gracefully. Since, we need to stop the syncing abruptly.
-                # we need to abruptly terminate the daemon. Hence, SIGKILL is passed
-                # to systemctl as below.
+
+                time.sleep(5)
+                out, err = rbd_secondary.mirror.group.promote(
+                    **{"group-spec": group_spec, "force": True}
+                )
+                if err:
+                    raise Exception(
+                        "Failed to force promote group on site-B: " + str(err)
+                    )
+
+                time.sleep(60)
+                md5sum_after_force_promote_site_b = []
+                for image in image_spec_all:
+                    md5sum_after_force_promote_site_b.append(
+                        get_md5sum_rbd_image(
+                            image_spec=image,
+                            rbd=rbd_secondary,
+                            client=client_secondary,
+                            file_path="file" + random_string(len=5),
+                        )
+                    )
+                log.info(
+                    "md5sums of images on site B after force promote on site-B: %s",
+                    md5sum_after_force_promote_site_b,
+                )
+
+                # Due to existing BZ Bug 2363632 on 8.1, the force promote as of now
+                # rollsback the images to the n-1 group snapshot. Hence,
+                # md5sum_after_force_promote_site_b is compared with md5sum_first_sync_site_b
+                # as of now. This BZ is planned to be fixed in 8.1z releases. So, in 8.1z
+                # md5sum_after_force_promote_site_b should be compared with md5sum_second_sync_site_b.
+                # the below line should look something like :
+                # if md5sum_after_force_promote_site_b != md5sum_second_sync_site_b:
+                if md5sum_after_force_promote_site_b != md5sum_first_sync_site_b:
+                    raise Exception(
+                        "md5sums after force promote are not consistent with previous snapshot \n"
+                        f"site-B: {md5sum_after_force_promote_site_b} \n"
+                        f"site-B: {md5sum_first_sync_site_b}"
+                    )
+                log.info(
+                    "Successfully verified that site-B data rollsback to a previous consistent "
+                    "snapshot after primary disaster"
+                )
                 exec_cmd(
-                    node=mirror_node,
-                    cmd=f"systemctl kill --signal=SIGKILL {service_name}",
+                    node=client_secondary,
+                    cmd="ceph orch start rbd-mirror",
                 )
-                log.info("Force killed rbd-mirror daemon before force promote")
+                log.info("Restored rbd-mirror daemon on site-B")
+                time.sleep(5)
 
-            time.sleep(10)
-            md5sum_third_sync_site_b = []
-            for image in image_spec_all[0:2]:
-                md5sum_third_sync_site_b.append(
-                    get_md5sum_rbd_image(
-                        image_spec=image,
-                        rbd=rbd_secondary,
-                        client=client_secondary,
-                        file_path="file" + random_string(len=5),
+        except Exception as e:
+            log.error("Test failed due to exception: %s", e)
+            raise Exception("Testcase failed")
+
+        finally:
+            # Normalize device names
+            normalized_devices = []
+            for dev in mapped_devices:
+                if isinstance(dev, tuple):
+                    normalized_devices.append(dev[0].strip())
+                else:
+                    normalized_devices.append(dev.strip())
+
+            mapped_devices = list(set(normalized_devices))
+            mount_points = list(set(mount_points))
+
+            log.info("Starting cleanup of mount points and devices")
+
+            # Unmount mount points
+            for mp in mount_points:
+                try:
+                    log.info("Unmounting %s", mp)
+                    exec_cmd(
+                        node=client_primary,
+                        cmd=f"umount -lf {mp}",
+                        sudo=True,
                     )
-                )
-            log.info(
-                "md5sums of small size images on site-B after sync : %s",
-                md5sum_third_sync_site_b,
-            )
-            log.info(
-                "md5sums of small images on site-A after second write : %s",
-                md5sum_second_write_site_a[0:2],
-            )
+                except Exception as e:
+                    log.warning("Unmount failed for %s: %s", mp, e)
 
-            time.sleep(5)
-            out, err = rbd_secondary.mirror.group.promote(
-                **{"group-spec": group_spec, "force": True}
-            )
-            if err:
-                raise Exception("Failed to force promote group on site-B: " + str(err))
+            # Unmap mapped devices
+            for dev in mapped_devices:
+                try:
+                    log.info("Unmapping %s", dev)
+                    _, err = rbd_primary.unmap(**{"image-or-snap-or-device-spec": dev})
+                    if err:
+                        raise Exception(err)
+                except Exception as e:
+                    log.warning("Unmap failed for %s: %s", dev, e)
 
-            time.sleep(60)
-            md5sum_after_force_promote_site_b = []
-            for image in image_spec_all:
-                md5sum_after_force_promote_site_b.append(
-                    get_md5sum_rbd_image(
-                        image_spec=image,
-                        rbd=rbd_secondary,
-                        client=client_secondary,
-                        file_path="file" + random_string(len=5),
-                    )
-                )
             log.info(
-                "md5sums of images on site B after force promote on site-B: %s",
-                md5sum_after_force_promote_site_b,
+                "Cleanup completed: %d mount points, %d devices",
+                len(mount_points),
+                len(mapped_devices),
             )
-
-            # Due to existing BZ Bug 2363632 on 8.1, the force promote as of now
-            # rollsback the images to the n-1 group snapshot. Hence,
-            # md5sum_after_force_promote_site_b is compared with md5sum_first_sync_site_b
-            # as of now. This BZ is planned to be fixed in 8.1z releases. So, in 8.1z
-            # md5sum_after_force_promote_site_b should be compared with md5sum_second_sync_site_b.
-            # the below line should look something like :
-            # if md5sum_after_force_promote_site_b != md5sum_second_sync_site_b:
-            if md5sum_after_force_promote_site_b != md5sum_first_sync_site_b:
-                raise Exception(
-                    "md5sums after force promote are not consistent with previous snapshot \n"
-                    f"site-B: {md5sum_after_force_promote_site_b} \n"
-                    f"site-B: {md5sum_first_sync_site_b}"
-                )
-            log.info(
-                "Successfully verified that site-B data rollsback to a previous consistent "
-                "snapshot after primary disaster"
-            )
-            exec_cmd(
-                node=client_secondary,
-                cmd="ceph orch start rbd-mirror",
-            )
-            log.info("Restored rbd-mirror daemon on site-B")
-            time.sleep(5)
 
 
 def test_mirror_group_snapshot_consistency(

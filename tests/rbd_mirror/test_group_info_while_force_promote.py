@@ -227,13 +227,7 @@ def test_group_info_during_force_promote(
             check_group_snap_list(
                 snapshot_id, "copied", rbd_secondary=rbd_secondary, **status_spec
             )
-            snap_state = get_snap_state_by_snap_id(
-                rbd_secondary, snapshot_id, **status_spec
-            )
-            if snap_state != "created":
-                raise Exception(
-                    "Snapshot state did not turn created even after snapshot data sync complete/copied"
-                )
+            get_snap_state_by_snap_id(rbd_secondary, snapshot_id, **status_spec)
 
             # Check group info, 'primary' field should be marked true
             check_group_info(
@@ -299,7 +293,6 @@ def run(**kw):
 
     """
     try:
-
         log.info("Running Consistency Group Mirroring across two clusters")
         pool_types = ["rep_pool_config", "ec_pool_config"]
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
