@@ -13,6 +13,8 @@ TEST WORKFLOW:
     │
     ├── SETUP PHASE
     │   ├── Create pools (RADOS EC/replicated, CephFS, RBD) in parallel
+    │   ├── Setup RGW S3 client with buckets (if enabled)
+    │   ├── Create NFS clusters and exports (if enabled)
     │   ├── Enable EC optimizations for EC pools
     │   ├── Enable compression (if configured)
     │   ├── Configure aggressive recovery settings
@@ -36,7 +38,9 @@ TEST WORKFLOW:
     │   ├── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW [if enabled]
     │   ├── thrash_mon: Leader failover, rolling restart, election strategy [if enabled]
     │   ├── thrash_mgr: Failover, rolling restart, random fail [if enabled]
-    │   └── thrash_mds: Failover, rolling restart, random fail [if enabled]
+    │   ├── thrash_mds: Failover, rolling restart, random fail [if enabled]
+    │   ├── thrash_nfs_fio: Mount/FIO/FS ops/unmount cycles on NFS exports [if enabled]
+    │   └── thrash_cephfs_subvolumes: Create/ops/delete subvolume groups+subvols [if enabled]
     │
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
@@ -50,6 +54,7 @@ TEST WORKFLOW:
         ├── Remove error injection configs (if enabled)
         ├── Force log rotation on all OSD hosts
         ├── Unmount and cleanup CephFS and RBD
+        ├── Cleanup NFS clusters and exports (if enabled)
         └── Delete test pools and EC profiles
 
 CONFIGURATION OPTIONS:
@@ -75,6 +80,7 @@ CONFIGURATION OPTIONS:
 - enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
 - enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
 - enable_nfs_thrashing: Enable NFS cluster/export setup for thrashing (default: False)
+- enable_cephfs_subvolume_thrashing: Enable CephFS subvolume thrashing (default: False)
 - enable_election_strategy_thrash: Enable election strategy changes during MON thrash (default: False)
 
 """
@@ -143,6 +149,7 @@ def run(ceph_cluster, **kw):
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
         enable_mds_thrashing (bool): Enable MDS thrashing - failover/restart/random fail (default: False)
         enable_nfs_thrashing (bool): Enable NFS cluster/export setup for thrashing (default: False)
+        enable_cephfs_subvolume_thrashing (bool): Enable CephFS subvolume thrashing (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
         enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
 
@@ -185,6 +192,9 @@ def run(ceph_cluster, **kw):
     enable_mgr_thrashing = config.get("enable_mgr_thrashing", False)
     enable_mds_thrashing = config.get("enable_mds_thrashing", False)
     enable_nfs_thrashing = config.get("enable_nfs_thrashing", False)
+    enable_cephfs_subvolume_thrashing = config.get(
+        "enable_cephfs_subvolume_thrashing", False
+    )
     enable_election_strategy_thrash = config.get(
         "enable_election_strategy_thrash", True
     )
@@ -259,6 +269,7 @@ def run(ceph_cluster, **kw):
         f"  MGR thrashing: {enable_mgr_thrashing}\n"
         f"  MDS thrashing: {enable_mds_thrashing}\n"
         f"  NFS thrashing: {enable_nfs_thrashing}\n"
+        f"  CephFS subvolume thrashing: {enable_cephfs_subvolume_thrashing}\n"
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
         f"  Fast EC config params: {enable_fast_ec_config_params}\n"
         f"{'=' * 60}\n"
@@ -454,9 +465,16 @@ def run(ceph_cluster, **kw):
 
         if rgw_config:
             log.info("RGW Setup:")
-            log.info("  Endpoint        : %s", rgw_config.get("endpoint", "N/A"))
+            log.info(
+                "  Endpoint        : %s", rgw_config.get("primary_endpoint", "N/A")
+            )
             log.info("  Bucket          : %s", rgw_config.get("bucket_name", "N/A"))
-            log.info("  Data Pool       : %s", rgw_config.get("data_pool", "N/A"))
+            log.info(
+                "  Versioned Bucket: %s", rgw_config.get("versioned_bucket", "N/A")
+            )
+            log.info("  Data Pool Type  : %s", rgw_config.get("data_pool_type", "N/A"))
+            if rgw_config.get("ec_pool_name"):
+                log.info("  EC Pool Name    : %s", rgw_config.get("ec_pool_name"))
             log.info("")
 
         if nfs_config:
@@ -472,15 +490,12 @@ def run(ceph_cluster, **kw):
                 )
             exports = nfs_config.get("exports", [])
             log.info("  Exports         : %d", len(exports))
-            # Show first 5 exports, summarize rest
-            for export in exports[:5]:
+            for export in exports:
                 log.info(
                     "    - %s on %s",
                     export["pseudo_path"],
                     export["cluster_id"],
                 )
-            if len(exports) > 5:
-                log.info("    ... and %d more exports", len(exports) - 5)
             log.info("")
 
         # MDS thrashing filesystem targets
@@ -579,6 +594,8 @@ def run(ceph_cluster, **kw):
         max_workers += 1 if enable_mon_thrashing else 0
         max_workers += 1 if enable_mgr_thrashing else 0
         max_workers += 1 if enable_mds_thrashing else 0
+        max_workers += 1 if (enable_nfs_thrashing and nfs_config) else 0
+        max_workers += 1 if (enable_cephfs_subvolume_thrashing and fs_names) else 0
         log.debug(f"ThreadPoolExecutor max_workers: {max_workers}")
 
         with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -798,6 +815,42 @@ def run(ceph_cluster, **kw):
             elif enable_mds_thrashing:
                 log.warning("MDS thrashing enabled but no CephFS filesystems available")
 
+            # NFS FIO thrashing (mount -> FIO -> unmount cycle)
+            if enable_nfs_thrashing and nfs_config:
+                log.info(
+                    f"NFS FIO thrashing enabled: {len(nfs_config.get('exports', []))} exports"
+                )
+                futures.append(
+                    executor.submit(
+                        thrash_nfs_fio,
+                        client_node=client_node,
+                        nfs_config=nfs_config,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+            elif enable_nfs_thrashing:
+                log.warning("NFS FIO thrashing enabled but no NFS config available")
+
+            # CephFS subvolume thrashing (create/delete subvolume groups and subvolumes)
+            if enable_cephfs_subvolume_thrashing and fs_names:
+                log.info(f"CephFS subvolume thrashing enabled for: {fs_names}")
+                futures.append(
+                    executor.submit(
+                        thrash_cephfs_subvolumes,
+                        rados_obj=rados_obj,
+                        fs_names=fs_names,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                        num_groups=config.get("subvol_num_groups", 3),
+                        num_subvols_per_group=config.get("subvol_num_per_group", 4),
+                    )
+                )
+            elif enable_cephfs_subvolume_thrashing:
+                log.warning(
+                    "CephFS subvolume thrashing enabled but no filesystems available"
+                )
+
             log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
             try:
                 for future in cf.as_completed(futures, timeout=duration):
@@ -884,6 +937,10 @@ def run(ceph_cluster, **kw):
                 workflow_order.append("mgr_thrashing")
             if enable_mds_thrashing and fs_names:
                 workflow_order.append("mds_thrashing")
+            if enable_nfs_thrashing and nfs_config:
+                workflow_order.append("nfs_fio_thrashing")
+            if enable_cephfs_subvolume_thrashing and fs_names:
+                workflow_order.append("cephfs_subvolume_thrashing")
 
             for idx, future in enumerate(futures):
                 workflow_name = (
@@ -3724,6 +3781,514 @@ def _thrash_mds_random_fail(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
     except Exception as e:
         log.error(f"MDS random fail failed: {e}")
         return False
+
+
+def thrash_nfs_fio(
+    client_node,
+    nfs_config: Dict[str, Any],
+    duration: int,
+    stop_flag: Dict,
+) -> int:
+    """
+    Thrash NFS exports with mount -> FIO -> unmount cycles.
+
+    Continuously cycles through:
+    1. Mount all NFS exports (cycling through NFSv3, NFSv4.1, NFSv4.2)
+    2. Run NFS export info/ls commands on 2 random exports
+    3. Run FIO workloads on all mounted exports (cycling through I/O patterns)
+    4. Unmount all exports
+    5. Repeat until duration expires or stop_flag is set
+
+    Args:
+        client_node: Client node to mount/unmount and run FIO
+        nfs_config: NFS configuration dict from create_nfs_clusters_and_exports
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+
+    Returns:
+        Total number of completed mount-FIO-unmount cycles across all workers
+    """
+    nfs_versions = (
+        ("3", "nfsvers=3,nolock"),
+        ("4.1", "nfsvers=4.1"),
+        ("4.2", "nfsvers=4.2"),
+    )
+
+    log.info("Starting NFS FIO thrashing (5 parallel workers)")
+
+    clusters = nfs_config.get("clusters", [])
+    exports = nfs_config.get("exports", [])
+
+    if not exports:
+        log.warning("No NFS exports available for thrashing")
+        return 0
+
+    cluster_host_map = {c["cluster_id"]: c["host"] for c in clusters}
+    cluster_port_map = {c["cluster_id"]: c["port"] for c in clusters}
+
+    num_workers = min(5, len(exports))
+    export_groups = [[] for _ in range(num_workers)]
+    for idx, export in enumerate(exports):
+        export_groups[idx % num_workers].append((idx, export))
+
+    log.info(
+        f"Distributing {len(exports)} exports across {num_workers} workers: "
+        f"{[len(g) for g in export_groups]}"
+    )
+
+    total_cycles = 0
+    with cf.ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = []
+        for worker_id, export_group in enumerate(export_groups):
+            if export_group:
+                assigned_nfs_version = nfs_versions[worker_id % len(nfs_versions)]
+                futures.append(
+                    executor.submit(
+                        _nfs_worker_thread,
+                        client_node=client_node,
+                        worker_id=worker_id,
+                        export_group=export_group,
+                        cluster_host_map=cluster_host_map,
+                        cluster_port_map=cluster_port_map,
+                        nfs_version=assigned_nfs_version,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+
+        # Collect results
+        for future in cf.as_completed(futures):
+            try:
+                cycles = future.result()
+                total_cycles += cycles
+            except Exception as e:
+                log.warning(f"NFS worker thread failed: {e}")
+
+    log.info(
+        f"NFS FIO thrashing completed: {total_cycles} total cycles across {num_workers} workers"
+    )
+    return total_cycles
+
+
+def _nfs_worker_thread(
+    client_node,
+    worker_id: int,
+    export_group: List[tuple],
+    cluster_host_map: Dict[str, str],
+    cluster_port_map: Dict[str, int],
+    nfs_version: tuple,
+    duration: int,
+    stop_flag: Dict,
+) -> int:
+    """
+    Worker thread for NFS FIO thrashing.
+
+    Each worker handles a subset of exports using a specific NFS version:
+    mount -> NFS info commands -> FIO -> unmount
+
+    Args:
+        client_node: Client node for commands
+        worker_id: Unique worker identifier
+        export_group: List of (idx, export_dict) tuples assigned to this worker
+        cluster_host_map: Cluster ID to host mapping
+        cluster_port_map: Cluster ID to port mapping
+        nfs_version: Tuple of (version_str, mount_options) e.g. ("4.1", "nfsvers=4.1")
+        duration: Total duration in seconds
+        stop_flag: Stop signal dict
+
+    Returns:
+        Number of cycles completed by this worker
+    """
+    nfs_ver_str, nfs_options = nfs_version
+
+    fio_patterns = (
+        ("seq_write", "write", "64k", "20M", 20),
+        ("seq_read", "read", "64k", "20M", 20),
+        ("rand_write", "randwrite", "4k", "10M", 15),
+        ("rand_read", "randread", "4k", "10M", 15),
+        ("mixed_rw", "randrw", "8k", "10M", 20),
+    )
+
+    end_time = time.time() + duration
+    cycle_count = 0
+    base_mount_dir = f"/mnt/nfs-thrash-w{worker_id}"
+    num_patterns = len(fio_patterns)
+
+    # Pre-build export info with mount points to avoid repeated lookups
+    export_info = []
+    for idx, export in export_group:
+        cluster_id = export["cluster_id"]
+        nfs_host = cluster_host_map.get(cluster_id)
+        nfs_port = cluster_port_map.get(cluster_id)
+        if nfs_host and nfs_port:
+            export_info.append(
+                {
+                    "mount_point": f"{base_mount_dir}/export_{idx}",
+                    "cluster_id": cluster_id,
+                    "pseudo_path": export["pseudo_path"],
+                    "host": nfs_host,
+                    "port": nfs_port,
+                }
+            )
+
+    if not export_info:
+        log.warning(f"Worker {worker_id}: No valid exports, exiting")
+        return 0
+
+    log.debug(
+        f"Worker {worker_id}: Starting with {len(export_info)} exports, NFSv{nfs_ver_str}"
+    )
+
+    while time.time() < end_time and not stop_flag.get("stop"):
+        cycle_count += 1
+        # Unpack tuple patterns: (name, rw, bs, size, runtime)
+        p_name, p_rw, p_bs, p_size, p_runtime = fio_patterns[
+            (cycle_count - 1) % num_patterns
+        ]
+
+        log.info(
+            f"Worker {worker_id} cycle {cycle_count}: NFSv{nfs_ver_str}, pattern={p_name}"
+        )
+
+        mounted_exports = []
+
+        try:
+            # Step 1: Create worker-specific mount directory
+            client_node.exec_command(cmd=f"mkdir -p {base_mount_dir}", sudo=True)
+
+            # Step 2: Mount all exports assigned to this worker
+            for exp in export_info:
+                mount_point = exp["mount_point"]
+                try:
+                    client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
+                    mount_cmd = (
+                        f"mount -t nfs -o {nfs_options},port={exp['port']} "
+                        f"{exp['host']}:{exp['pseudo_path']} {mount_point}"
+                    )
+                    client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
+                    mounted_exports.append(exp)
+                except Exception as e:
+                    log.warning(
+                        f"Worker {worker_id}: Failed to mount {exp['pseudo_path']}: {e}"
+                    )
+
+            if not mounted_exports:
+                log.warning(
+                    f"Worker {worker_id} cycle {cycle_count}: No exports mounted"
+                )
+                time.sleep(5)
+                continue
+
+            log.debug(
+                f"Worker {worker_id}: Mounted {len(mounted_exports)} exports with NFSv{nfs_ver_str}"
+            )
+
+            # Step 2.5: Run NFS export info on one random export per cycle
+            exp = random.choice(mounted_exports)
+            cid, ppath = exp["cluster_id"], exp["pseudo_path"]
+            try:
+                client_node.exec_command(
+                    cmd=f"ceph nfs export info {cid} {ppath} --format json-pretty",
+                    sudo=True,
+                )
+                log.debug(f"Worker {worker_id}: NFS export info for {cid}:{ppath}")
+                client_node.exec_command(
+                    cmd=f"ceph nfs export ls {cid} --detailed --format json-pretty",
+                    sudo=True,
+                )
+            except Exception as e:
+                log.warning(f"Worker {worker_id}: NFS info failed: {e}")
+
+            # Step 3: Run FIO on all mounted exports
+            for exp in mounted_exports:
+                if stop_flag.get("stop"):
+                    break
+
+                work_dir = f"{exp['mount_point']}/fio_c{cycle_count}"
+                try:
+                    client_node.exec_command(cmd=f"mkdir -p {work_dir}", sudo=True)
+                    fio_cmd = (
+                        f"fio --name={p_name} --directory={work_dir} "
+                        f"--rw={p_rw} --bs={p_bs} --size={p_size} "
+                        f"--numjobs=2 --time_based --runtime={p_runtime} "
+                        f"--group_reporting --minimal"
+                    )
+                    client_node.exec_command(cmd=fio_cmd, sudo=True, timeout=120)
+                except Exception as e:
+                    log.warning(
+                        f"Worker {worker_id}: FIO on {exp['mount_point']} failed: {e}"
+                    )
+
+            # Step 4: Additional filesystem operations on mounted NFS
+            for exp in mounted_exports:
+                if stop_flag.get("stop"):
+                    break
+
+                work_dir = f"{exp['mount_point']}/fs_ops_c{cycle_count}"
+                try:
+                    client_node.exec_command(cmd=f"mkdir -p {work_dir}", sudo=True)
+
+                    # Create test file
+                    client_node.exec_command(
+                        cmd=f"dd if=/dev/urandom of={work_dir}/test_file bs=4k count=10",
+                        sudo=True,
+                    )
+
+                    # Symlink
+                    client_node.exec_command(
+                        cmd=f"ln -sf {work_dir}/test_file {work_dir}/test_symlink",
+                        sudo=True,
+                    )
+
+                    # Hardlink
+                    client_node.exec_command(
+                        cmd=f"ln {work_dir}/test_file {work_dir}/test_hardlink",
+                        sudo=True,
+                    )
+
+                    # Rename
+                    client_node.exec_command(
+                        cmd=f"mv {work_dir}/test_file {work_dir}/test_renamed",
+                        sudo=True,
+                    )
+
+                    # Permission change
+                    client_node.exec_command(
+                        cmd=f"chmod 755 {work_dir}/test_renamed", sudo=True
+                    )
+
+                    # Extended attributes
+                    client_node.exec_command(
+                        cmd=f"setfattr -n user.thrash -v 'cycle{cycle_count}' "
+                        f"{work_dir}/test_renamed",
+                        sudo=True,
+                        check_ec=False,
+                    )
+
+                    # Unmount and remount to verify persistence
+                    mount_point = exp["mount_point"]
+                    client_node.exec_command(
+                        cmd=f"umount -lf {mount_point}", sudo=True, check_ec=False
+                    )
+                    time.sleep(1)
+                    mount_cmd = (
+                        f"mount -t nfs -o {nfs_options},port={exp['port']} "
+                        f"{exp['host']}:{exp['pseudo_path']} {mount_point}"
+                    )
+                    client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
+
+                    # Read back and verify after remount
+                    client_node.exec_command(
+                        cmd=f"cat {work_dir}/test_symlink > /dev/null", sudo=True
+                    )
+                    client_node.exec_command(
+                        cmd=f"cat {work_dir}/test_hardlink > /dev/null", sudo=True
+                    )
+                    client_node.exec_command(cmd=f"ls -la {work_dir}/", sudo=True)
+
+                    # Delete files
+                    client_node.exec_command(
+                        cmd=f"rm -rf {work_dir}", sudo=True, check_ec=False
+                    )
+
+                except Exception as e:
+                    log.warning(
+                        f"Worker {worker_id}: FS ops on {exp['mount_point']} failed: {e}"
+                    )
+
+        except Exception as e:
+            log.warning(f"Worker {worker_id} cycle {cycle_count} error: {e}")
+
+        finally:
+            if mounted_exports:
+                mount_paths = " ".join(e["mount_point"] for e in mounted_exports)
+                try:
+                    client_node.exec_command(
+                        cmd=f"umount -lf {mount_paths}", sudo=True, check_ec=False
+                    )
+                    client_node.exec_command(
+                        cmd=f"rm -rf {base_mount_dir}/*", sudo=True, check_ec=False
+                    )
+                except Exception:
+                    pass
+
+            log.info(
+                f"Worker {worker_id} cycle {cycle_count} complete: "
+                f"NFSv{nfs_ver_str}, mounted={len(mounted_exports)}"
+            )
+        time.sleep(5)
+
+    log.info(f"Worker {worker_id}: Completed {cycle_count} cycles")
+    return cycle_count
+
+
+def thrash_cephfs_subvolumes(
+    rados_obj: RadosOrchestrator,
+    fs_names: List[str],
+    duration: int,
+    stop_flag: Dict,
+    num_groups: int = 3,
+    num_subvols_per_group: int = 4,
+) -> int:
+    """
+    Thrash CephFS subvolume operations - create groups, subvolumes, perform ops, delete.
+
+    Operations per cycle:
+    1. Create subvolume groups
+    2. Create subvolumes under each group
+    3. Perform subvolume operations (info, resize, snapshot create/delete)
+    4. Delete subvolumes
+    5. Delete subvolume groups
+    6. Repeat until duration expires or stop_flag is set
+
+    Args:
+        rados_obj: RadosOrchestrator instance
+        fs_names: List of CephFS filesystem names to operate on
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+        num_groups: Number of subvolume groups to create per cycle
+        num_subvols_per_group: Number of subvolumes per group
+
+    Returns:
+        Number of thrash cycles completed
+    """
+    if not fs_names:
+        log.warning("No CephFS filesystems available for subvolume thrashing")
+        return 0
+
+    # Pre-define resize options (50MB, 150MB, 200MB)
+    resize_options = (52428800, 157286400, 209715200)
+
+    cycle_count = 0
+    end_time = time.time() + duration
+
+    log.info(
+        f"Starting CephFS subvolume thrashing: fs={fs_names}, "
+        f"groups={num_groups}, subvols/group={num_subvols_per_group}, duration={duration}s"
+    )
+
+    while time.time() < end_time and not stop_flag.get("stop"):
+        cycle_count += 1
+        fs_name = random.choice(fs_names)
+        ts = int(time.time())
+
+        created_groups = []
+        created_subvols = []  # List of (group_name, subvol_name)
+
+        log.info(f"Subvolume thrash cycle {cycle_count} on fs={fs_name}")
+
+        try:
+            # Step 1: Create subvolume groups
+            for g_idx in range(num_groups):
+                group_name = f"svgrp_{ts}_{g_idx}"
+                try:
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolumegroup create {fs_name} {group_name}"
+                    )
+                    created_groups.append(group_name)
+                except Exception as e:
+                    log.warning(f"Failed to create group {group_name}: {e}")
+
+            if not created_groups:
+                log.warning(f"Cycle {cycle_count}: No groups created, skipping")
+                time.sleep(5)
+                continue
+
+            # Step 2: Create subvolumes under each group
+            for group_name in created_groups:
+                if stop_flag.get("stop"):
+                    break
+                group_opt = f"--group_name {group_name}"
+                for sv_idx in range(num_subvols_per_group):
+                    subvol_name = f"sv_{ts}_{sv_idx}"
+                    try:
+                        rados_obj.run_ceph_command(
+                            cmd=f"ceph fs subvolume create {fs_name} {subvol_name} "
+                            f"{group_opt} --size 104857600"
+                        )
+                        created_subvols.append((group_name, subvol_name, group_opt))
+                    except Exception as e:
+                        log.warning(f"Failed to create subvolume {subvol_name}: {e}")
+
+            log.info(
+                f"Cycle {cycle_count}: Created {len(created_groups)} groups, "
+                f"{len(created_subvols)} subvolumes"
+            )
+
+            # Step 3: Perform subvolume operations
+            for group_name, subvol_name, group_opt in created_subvols:
+                if stop_flag.get("stop"):
+                    break
+
+                try:
+                    # Get subvolume info and path
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume info {fs_name} {subvol_name} {group_opt}"
+                    )
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume getpath {fs_name} {subvol_name} {group_opt}"
+                    )
+
+                    # Resize subvolume
+                    new_size = random.choice(resize_options)
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume resize {fs_name} {subvol_name} "
+                        f"{new_size} {group_opt}"
+                    )
+
+                    # Snapshot create -> list -> delete
+                    snap_name = f"snap_{ts}_{subvol_name}"
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume snapshot create {fs_name} {subvol_name} "
+                        f"{snap_name} {group_opt}"
+                    )
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume snapshot ls {fs_name} {subvol_name} {group_opt}"
+                    )
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume snapshot rm {fs_name} {subvol_name} "
+                        f"{snap_name} {group_opt}"
+                    )
+
+                except Exception as e:
+                    log.warning(f"Subvolume ops failed for {subvol_name}: {e}")
+
+            # Step 4: List subvolumes in each group
+            for group_name in created_groups:
+                try:
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume ls {fs_name} --group_name {group_name}"
+                    )
+                except Exception:
+                    pass  # Non-critical, skip logging
+
+        except Exception as e:
+            log.warning(f"Subvolume thrash cycle {cycle_count} error: {e}")
+
+        finally:
+            # Cleanup: Delete subvolumes first, then groups
+            for group_name, subvol_name, group_opt in created_subvols:
+                try:
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolume rm {fs_name} {subvol_name} {group_opt}"
+                    )
+                except Exception:
+                    pass  # Best-effort cleanup
+
+            time.sleep(2)  # Wait for subvolume deletion
+
+            for group_name in created_groups:
+                try:
+                    rados_obj.run_ceph_command(
+                        cmd=f"ceph fs subvolumegroup rm {fs_name} {group_name}"
+                    )
+                except Exception:
+                    pass  # Best-effort cleanup
+
+        time.sleep(5)  # Pause between cycles
+
+    log.info(f"CephFS subvolume thrashing completed: {cycle_count} cycles")
+    return cycle_count
 
 
 def cleanup_rgw_s3(
