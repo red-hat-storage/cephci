@@ -4,6 +4,7 @@ from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import (
     apply_nvme_sdk_cli_support,
     check_and_set_nvme_cli_image,
@@ -316,6 +317,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 ha = HighAvailability(
                     ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
                 )
+                # nvme_service = NVMeService(config, ceph_cluster)
+                # if config.get("install"):
+                #     LOG.info("deploy nvme service")
+                #     nvme_service.deploy()
+
+                # nvme_service.init_gateways()
+                # nvmegwcli = nvme_service.gateways[0]
                 ha.initialize_gateways()
 
             # Configure subsystems and run HA

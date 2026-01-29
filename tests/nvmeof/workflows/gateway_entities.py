@@ -8,6 +8,7 @@ from tests.nvmeof.workflows.constants import (
     DEFAULT_LISTENER_PORT,
     DEFAULT_NVME_METADATA_POOL,
 )
+from tests.nvmeof.workflows.inband_auth import create_dhchap_key
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from utility.log import Log
 from utility.utils import generate_unique_id, log_json_dump
@@ -77,6 +78,18 @@ def configure_subsystems(nvme_service):
         sub_args = {"subsystem": nqn}
         if sub_cfg.get("serial"):
             sub_args["serial-number"] = sub_cfg.get("serial")
+
+        # Configure inband authentication if specified
+        if sub_cfg.get("auth_mode"):
+            sub_cfg["gw_group"] = nvme_service.group
+
+            # Uncomment the below lines for debugging
+            gateway.gateway.set_log_level(**{"args": {"level": "DEBUG"}})
+            gateway.loglevel.set(**{"args": {"level": "DEBUG"}})
+
+            if sub_cfg.get("inband_auth"):
+                create_dhchap_key(sub_cfg, nvme_service.ceph_cluster)
+                sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
 
         # Add Subsystem
         release = nvme_service.ceph_cluster.rhcs_version
