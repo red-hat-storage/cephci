@@ -131,7 +131,7 @@ def krbd_io_handler(**kw):
                     if config.get("io_size"):
                         fio_args.update({"size": config.get("io_size")})
                     else:
-                        fio_args.update({"runtime": config.get("runtime", 30)})
+                        fio_args.update({"run_time": config.get("runtime", 30)})
                     if config.get("get_time_taken"):
                         fio_args.update(
                             {"get_time_taken": config.get("get_time_taken")}
