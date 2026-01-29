@@ -108,16 +108,6 @@ class Cluster(Cli):
         Check if the rpcbind service is running on RHEL 10.1 OS
         """
         try:
-            # Check the OS version
-            out, _ = nfs_node.exec_command(sudo=True, cmd="cat /etc/redhat-release")
-            os_ver = out.strip()
-
-            if "Red Hat Enterprise Linux release 10.1" not in os_ver:
-                log.debug(f"OS is not RHEL 10.1 (found: {os_ver})")
-                return
-
-            log.info("OS is RHEL 10.1, check rpcbind service status")
-
             # Check rpcbind service status
             out, err = nfs_node.exec_command(
                 sudo=True, cmd="systemctl is-active rpcbind", check_ec=False
