@@ -412,30 +412,60 @@ def get_snap_state_by_snap_id(rbd, snapshot_id, **status_spec):
 
 def get_mirror_group_snap_copied_status(rbd, snapshot_id, **status_spec):
     """
-    This function will return snapshot_state('Complete':True or 'Complete':False) for a given snapshot id
+    This function will return True if the mirror group snapshot identified
+    by snapshot_id is fully copied on the secondary.
+
     Args:
         rbd: rbd object
         snapshot_id: Snapshot job id
         status_spec: pool, namespace and group details
     Returns:
-        Snapshot state (str), when successful
+        True if copied, False if not copied
         raise Exception, if fails
     """
     out, err = rbd.group.snap.list(**status_spec)
     if err:
         raise Exception(
-            "Error while fetching snapshot list for group  %s, %s",
-            status_spec["group"],
-            err,
+            f"Error while fetching snapshot list for the group spec={status_spec}: {err}"
         )
+
     snapshot_list = json.loads(out)
     log.info(f"Snapshot list: {snapshot_list}")
+
     for snap in snapshot_list:
         log.info(f"Checking snapshot: {snap}")
-        if snap["namespace"]["type"] == "mirror" and snap["id"] == snapshot_id:
-            snapshot_state = snap["namespace"]["complete"]
-            break
-    return snapshot_state
+        if str(snap.get("id")) != str(snapshot_id):
+            continue
+
+        ns = snap.get("namespace", {})
+        if ns.get("type") != "mirror":
+            if ns.get("type") != "mirror":
+                raise Exception(f"Snapshot {snapshot_id} is not a mirror snapshot")
+
+        state = snap.get("state")
+        log.info(f"Snapshot {snapshot_id} state={state}")
+
+        # For Ceph 8.x state 'complete' means copied
+        if state == "complete":
+            log.info(
+                f"Ceph 8.x group mirror snap {snapshot_id}: state=complete treated as copied"
+            )
+            return True
+
+        # For Ceph 9.x state 'created' then check 'complete'
+        # field under namespace for snapshot copy status
+        if state == "created":
+            if snap["namespace"]["complete"]:
+                log.info(
+                    f"Ceph 9.x group mirror snap {snapshot_id}: namespace complete=True treated as copied"
+                )
+                return True
+
+        # Any other state
+        log.info(f"Mirror snap {snapshot_id}: state={state} treated as not copied")
+        return False
+
+    raise Exception(f"Snapshot id {snapshot_id} not found in group snapshot list")
 
 
 def get_mirror_group_snap_id(rbd, **status_spec):
