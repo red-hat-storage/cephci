@@ -11,7 +11,10 @@ from tests.nvmeof.workflows.nvme_utils import (
     nvme_gw_cli_version_adapter,
     setup_firewalld,
 )
+from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
+
+LOG = Log(__name__)
 
 
 class NVMeService:
@@ -206,3 +209,15 @@ class NVMeService:
                     gw_group=self.group,
                 )
             )
+
+    def check_gateway(self, node_id):
+        """Check node is NVMeoF Gateway node.
+
+        Args:
+            node_id: Ceph node Id (ex., node6)
+        """
+        for gw in self.gateways:
+            if gw.node.id == node_id:
+                LOG.info(f"[{node_id}] {gw.node.hostname} is NVMeoF Gateway node.")
+                return gw
+        raise Exception(f"{node_id} doesn't match to any gateways provided...")
