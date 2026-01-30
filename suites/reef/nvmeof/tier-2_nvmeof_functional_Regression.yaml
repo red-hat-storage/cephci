@@ -74,6 +74,7 @@ tests:
           - gateway
         gw_node: node2
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -103,6 +104,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -138,6 +140,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -179,6 +182,7 @@ tests:
       config:
         gw_node: node2
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -214,6 +218,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -259,6 +264,7 @@ tests:
       config:
         gw_node: node6                       # Deploying multiple gateways on the cluster
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -293,6 +299,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -310,6 +317,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -327,6 +335,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -344,6 +353,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
