@@ -89,6 +89,7 @@ tests:
       polarion-id: CEPH-83596760
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1

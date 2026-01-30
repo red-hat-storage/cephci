@@ -107,6 +107,7 @@ tests:
       config:
         node: node6
         pool: rbd
+        nvme_metadata_pool: rbd
         port: 5500
         steps:
           - config:
