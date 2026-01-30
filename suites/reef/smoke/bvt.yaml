@@ -143,3 +143,14 @@ tests:
             module: cephfs_basic_tests.py
             name: cephfs-basics
             polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+
+  - test:
+      name: Nfs Verify file mv and replace opertaion
+      module: nfs_verify_read_write_operations.py
+      desc: Verify mv is overwrites the content of the existing file with same name
+      polarion-id: CEPH-83575934
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        operation: mv_file_overwrite
