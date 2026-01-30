@@ -488,6 +488,83 @@ class CephfsMirroringUtils(object):
                 log.info(asok_file)
         return asok_files
 
+    def get_asok_file_with_connectivity_check(
+        self, cephfs_mirror_node, fsid, daemon_names
+    ):
+        """
+        Fetches the asok file of the cephfs-mirror daemon with connectivity testing.
+        Tests connectivity to each asok file and retries with remaining files if connection refused.
+        This function is useful when connection refused errors occur with the first asok file.
+
+        Args:
+            cephfs_mirror_node (CephNode or list): The CephFS mirror node(s) used to execute the command.
+            fsid (str): The FSID (File System ID) of the Ceph cluster.
+            daemon_name (str or list): The name(s) of the cephfs-mirror daemon.
+        Returns:
+            dict: Dictionary mapping hostname to [node, asok_file_path] for accessible asok files.
+        """
+        log.info(
+            "Fetch all asok files of the cephfs-mirror daemon with connectivity check."
+        )
+        accessible_asok_files = {}
+
+        for daemon_name in daemon_names:
+            # Get all asok files, not just the first one
+            cmd = f"cd /var/run/ceph/{fsid}/ ; ls -1tr ceph-client.{daemon_name}* 2>/dev/null"
+            # cephfs_mirror_node is always a list from get_ceph_objects("cephfs-mirror")
+            for node in cephfs_mirror_node:
+                # Get all asok files for this node
+                file_output, _ = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
+                asok_file_list = [
+                    f.strip() for f in file_output.split("\n") if f.strip()
+                ]
+                log.info(
+                    f"Found {len(asok_file_list)} asok file(s) for {node.node.hostname}: {asok_file_list}"
+                )
+
+                # Test each asok file until we find an accessible one for this hostname
+                for asok_file_path in asok_file_list:
+                    if not asok_file_path:
+                        continue
+                    if node.node.hostname in accessible_asok_files:
+                        break  # Already found accessible file for this hostname
+
+                    log.info(
+                        f"Testing connectivity to asok file on {node.node.hostname}: {asok_file_path}"
+                    )
+                    # test_cmd = f"cd /var/run/ceph ; ceph --admin-daemon {asok_file_path} help"
+                    test_cmd = (
+                        f"cephadm shell -- bash -c "
+                        f'"cd /var/run/ceph && ceph --admin-daemon {asok_file_path} help"'
+                    )
+
+                    out, err = node.exec_command(
+                        sudo=True, cmd=test_cmd, check_ec=False
+                    )
+
+                    # Check if "fs mirror peer status" is in the output
+                    if out and "fs mirror peer status" in out:
+                        accessible_asok_files[node.node.hostname] = [
+                            node,
+                            asok_file_path,
+                        ]
+                        log.info(
+                            f"Successfully connected to asok file on {node.node.hostname}: {asok_file_path}"
+                        )
+                        break  # Found accessible file, move to next hostname
+                    else:
+                        log.warning(
+                            f"Connection refused or error accessing asok file on {node.node.hostname}: "
+                            f"'fs mirror peer status' not found. stderr: {err}, output: {out[:200] if out else 'empty'}"
+                        )
+
+        if accessible_asok_files:
+            log.info(f"Found {len(accessible_asok_files)} accessible asok file(s)")
+            return accessible_asok_files
+        else:
+            log.warning("No accessible asok files found, returning empty dict")
+            return {}
+
     @retry(CommandFailed, tries=5, delay=30)
     def validate_synchronization(
         self, cephfs_mirror_node, source_clients, fs_name, snap_count
@@ -1825,3 +1902,44 @@ class CephfsMirroringUtils(object):
             f'"{source_path}" {target_user}@{target_ip}:"{target_path}"'
         )
         return cmd
+
+    def get_snaps_synced(
+        self, fs_name, fsid, asok_file, filesystem_id, peer_uuid, path
+    ):
+        """
+        Captures the 'snaps_synced' value for a given path in CephFS mirroring status.
+
+        Args:
+            fs_name (str): The CephFS volume name and rank (e.g., cephfs@5).
+            fsid (str): The unique CephFS file system ID.
+            asok_file (dict): A dictionary containing the node and its corresponding admin socket.
+                            (e.g., {"node1": [client_object, "ceph-client.cephfs-mirror.<host>.asok"]})
+            filesystem_id (int): The ID for the CephFS filesystem (e.g., 2).
+            peer_uuid (str): The UUID of the peer to check mirror status.
+            path (str): The absolute path for which to capture the 'snaps_synced' value
+                        (e.g., /volumes/subvolgroup_1/subvol_1).
+
+        Returns:
+            int: The 'snaps_synced' value for the specified path if found, or 1 if the path is not found.
+        """
+        log.info("Get peer mirror status")
+        for node, asok in asok_file.items():
+            asok[0].exec_command(
+                sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+            )
+        cmd = (
+            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+            f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
+        )
+        out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
+        data = json.loads(out)
+        log.info(f"Paths found in mirror status: {list(data.keys())}")
+        absolute_path = path.rstrip("/")
+
+        if absolute_path in data:
+            snaps_synced = data[absolute_path].get("snaps_synced")
+            log.info("snaps synced: %s", snaps_synced)
+            return snaps_synced
+        else:
+            log.error(f"Path '{absolute_path}' not found in the mirror status.")
+            return 1
