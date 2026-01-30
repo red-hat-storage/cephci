@@ -181,3 +181,51 @@ tests:
 #            m: 2
 #            plugin: jerasure
 #            disable_pg_autoscale: true
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# setup - setup phase for bluestore compression tests
+#     --> Cephfs - replicated & EC
+#     --> RBD - replicated & EC
+#     --> RGW - replicated
+# scenario 15 - compression required ratio tests
+# scenario 16 - compression tests post recovery
+
+  - test:
+      name: Bluestore compression v1 - setup rbd , rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_coded_pools: true
+        cleanup_objects: true
+        cleanup_pools: false
+        scenarios_to_run:
+          - setup
+
+  - test:
+      name: Bluestore compression v1 - compression required ratio tests
+      module: test_bluestore_comp_enhancements.py
+      desc: Bluestore compression v1 - compression required ratio tests
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_coded_pools: true
+        cleanup_objects: true
+        cleanup_pools: false
+        scenarios_to_run:
+          - scenario-15
+
+  - test:
+      name: Bluestore compression v1 - OSD recovery tests
+      module: test_bluestore_comp_enhancements.py
+      desc: Bluestore compression v1 - OSD recovery tests
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_coded_pools: true
+        cleanup_pools: true
+        cleanup_objects: true
+        scenarios_to_run:
+          - scenario-16
