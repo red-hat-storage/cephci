@@ -1,13 +1,16 @@
 import datetime
 import time
+import json
 
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
+from ceph.utils import find_vm_node_by_hostname
+from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def test_image_delete_from_secondary(rbd_mirror, pool_type, **kw):
+def test_image_delete_from_secondary(rbd_mirror, pool_type, ceph_cluster, **kw):
     try:
         mirror1 = rbd_mirror.get("mirror1")
         mirror2 = rbd_mirror.get("mirror2")
@@ -21,12 +24,66 @@ def test_image_delete_from_secondary(rbd_mirror, pool_type, **kw):
         count = 0
         tout = datetime.timedelta(seconds=120)
         while count < config.get("repeat_count"):
+            # Shut down primary cluster to simulate permanent failure
+            clients = ceph_cluster.get_ceph_objects("client")
+            mds_nodes = ceph_cluster.get_ceph_objects("mds")
+            mon_nodes = ceph_cluster.get_ceph_objects("mon")
+            osd_nodes_list = ceph_cluster.get_ceph_objects("osd")
+            unique_objects = []
+            for obj in osd_nodes_list:
+                if not any(object_compare(obj, u_obj) for u_obj in unique_objects):
+                    unique_objects.append(obj)
+            osd_nodes = unique_objects
+
+            log.info("Shutting down the cluster")
+            for client in clients:
+                target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("Client Nodes Powered OFF Successfully")
+
+            for mds in mds_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("MDS Nodes Powered OFF Successfully")
+
+            for mon in mon_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("Mon Nodes Powered OFF Successfully")
+
+            for osd in osd_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("OSD Nodes Powered OFF Successfully")
+
             mirror2.promote(imagespec=imagespec, force=True)
             mirror2.wait_for_status(
                 tout=tout, imagespec=imagespec, state_pattern="up+stopped"
             )
             mirror2.benchwrite(imagespec=imagespec, io=config.get("io-total"))
             time.sleep(60)
+            # Bring up the primary cluster back
+            log.info("Bringing up the primary cluster back")
+            for mon in mon_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                target_node.power_on()
+            log.info("Mon Nodes Powered ON Successfully")
+            for osd in osd_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                target_node.power_on()
+            log.info("OSD Nodes Powered OFF Successfully")
+            for mds in mds_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.power_on()
+            log.info("MDS Nodes Powered ON Successfully")
+            for client in clients:
+                target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                target_node.power_on()
+            log.info("Clients Nodes Powered ON Successfully")
+            out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
+            cluster_info = json.loads(out)
+            log.info(f"Cluster info after powering on nodes: {cluster_info}")
+
             mirror1.demote(imagespec=imagespec)
             mirror1.wait_for_status(
                 tout=tout, imagespec=imagespec, state_pattern="up+error"
@@ -66,7 +123,7 @@ def test_image_delete_from_secondary(rbd_mirror, pool_type, **kw):
         mirror1.clean_up(peercluster=mirror2, pools=[pool])
 
 
-def run(**kw):
+def run(ceph_cluster, **kw):
     log.info("Starting RBD mirroring test case - CEPH-83574741")
 
     """verification of removal of failed back images should reflect to secondary.
@@ -97,13 +154,13 @@ def run(**kw):
     if mirror_obj:
         log.info("Executing test on replicated pool")
         if test_image_delete_from_secondary(
-            mirror_obj.get("rep_rbdmirror"), "rep_pool_config", **kw
+            mirror_obj.get("rep_rbdmirror"), "rep_pool_config", ceph_cluster, **kw
         ):
             return 1
 
         log.info("Executing test on ec pool")
         if test_image_delete_from_secondary(
-            mirror_obj.get("ec_rbdmirror"), "ec_pool_config", **kw
+            mirror_obj.get("ec_rbdmirror"), "ec_pool_config", ceph_cluster, **kw
         ):
             return 1
 

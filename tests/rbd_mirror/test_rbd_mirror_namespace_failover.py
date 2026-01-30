@@ -81,10 +81,13 @@ CEPH-83613956:
 
 import random
 import time
+import json
 
 from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.utils import check_data_integrity, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
+from ceph.utils import find_vm_node_by_hostname
+from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.rbd_mirror import enable_image_mirroring, wait_for_status
 from ceph.rbd.workflows.snap_scheduling import (
@@ -715,6 +718,38 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                 time.sleep(10)
                 log.info("Primary cluster rbd mirror node is down")
 
+                # Shut down primary cluster to simulate permanent failure
+                clients = ceph_cluster.get_ceph_objects("client")
+                mds_nodes = ceph_cluster.get_ceph_objects("mds")
+                mon_nodes = ceph_cluster.get_ceph_objects("mon")
+                osd_nodes_list = ceph_cluster.get_ceph_objects("osd")
+                unique_objects = []
+                for obj in osd_nodes_list:
+                    if not any(object_compare(obj, u_obj) for u_obj in unique_objects):
+                        unique_objects.append(obj)
+                osd_nodes = unique_objects
+
+                log.info("Shutting down the cluster")
+                for client in clients:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                    target_node.shutdown(wait=True)
+                log.info("Client Nodes Powered OFF Successfully")
+
+                for mds in mds_nodes:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                    target_node.shutdown(wait=True)
+                log.info("MDS Nodes Powered OFF Successfully")
+
+                for mon in mon_nodes:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                    target_node.shutdown(wait=True)
+                log.info("Mon Nodes Powered OFF Successfully")
+
+                for osd in osd_nodes:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                    target_node.shutdown(wait=True)
+                log.info("OSD Nodes Powered OFF Successfully")
+
                 # On cluster-2, force promote the secondary image
                 log.info(
                     f"Force promoting secondary image {sec_image_spec} on Cluster-2"
@@ -750,6 +785,28 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                     )
                 else:
                     log.info(f"Successfully ran IO on promoted image {sec_image_spec}")
+
+                # Bring up the primary cluster back
+                log.info("Bringing up the primary cluster back")
+                for mon in mon_nodes:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                    target_node.power_on()
+                log.info("Mon Nodes Powered ON Successfully")
+                for osd in osd_nodes:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                    target_node.power_on()
+                log.info("OSD Nodes Powered OFF Successfully")
+                for mds in mds_nodes:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                    target_node.power_on()
+                log.info("MDS Nodes Powered ON Successfully")
+                for client in clients:
+                    target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                    target_node.power_on()
+                log.info("Clients Nodes Powered ON Successfully")
+                out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
+                cluster_info = json.loads(out)
+                log.info(f"Cluster info after powering on nodes: {cluster_info}")
 
                 # Get the primary cluster mirror daemon back online
                 log.info("Bringing primary cluster (Cluster-1) back online")
