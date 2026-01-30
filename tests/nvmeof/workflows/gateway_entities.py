@@ -79,6 +79,11 @@ def configure_subsystems(nvme_service):
             sub_args["serial-number"] = sub_cfg.get("serial")
 
         # Add Subsystem
+        release = nvme_service.ceph_cluster.rhcs_version
+        if release >= "8.0":
+            no_group_append = sub_cfg.get("no-group-append", True)
+        else:
+            no_group_append = sub_cfg.get("no-group-append", False)
         gateway.subsystem.add(
             **{
                 "args": {
@@ -86,7 +91,7 @@ def configure_subsystems(nvme_service):
                     **{
                         "max-namespaces": sub_cfg.get("max_ns", 32),
                         "enable-ha": sub_cfg.get("enable_ha", False),
-                        "no-group-append": sub_cfg.get("no-group-append", True),
+                        "no-group-append": no_group_append,
                     },
                 }
             }

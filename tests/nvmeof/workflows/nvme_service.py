@@ -138,6 +138,10 @@ class NVMeService:
 
                 return cfg
         else:
+            pos_args = [self.nvme_metadata_pool]
+            # group name is optional in 7.x so ignore it in that case
+            if self.group is not None:
+                pos_args.append(self.group)
             cfg = {
                 "no_cluster_state": False,
                 "config": {
@@ -148,7 +152,7 @@ class NVMeService:
                             self.config, self.gw_nodes
                         )
                     },
-                    "pos_args": [self.nvme_metadata_pool, self.group],
+                    "pos_args": pos_args,
                 },
             }
 
