@@ -1742,20 +1742,6 @@ class RadosOrchestrator:
                     log.error("Failed to create Pool %s", pool_name)
                     return False
 
-        # Checking if enable Fast EC features flag passed
-        if enable_fast_ec_features:
-            try:
-                if not self.enable_fast_ec_feature_on_pool(**kwargs):
-                    log.error("Could not enable fast EC features on the provided pool")
-                    return False
-                log.info("Enabled Fast EC feature on the EC pool created")
-            except Exception as err:
-                log.error(
-                    "Exception hit while enabling Fast EC features on the pool created: %s",
-                    err,
-                )
-                return False
-
         try:
             log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
             cmd = f"ceph osd crush rule dump {pool_name}"
