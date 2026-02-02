@@ -5,6 +5,8 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional
 
+from looseversion import LooseVersion
+
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
 from utility.log import Log
@@ -166,11 +168,12 @@ def run(ceph_cluster, **kw):
                     break
                 time.sleep(1)
 
-        # Start collecting expected values in parallel thread
-        expected_values_thread = threading.Thread(
-            target=collect_expected_values, daemon=True
-        )
-        expected_values_thread.start()
+        if LooseVersion(build) >= LooseVersion("9.1"):
+            # Start collecting expected values in parallel thread
+            expected_values_thread = threading.Thread(
+                target=collect_expected_values, daemon=True
+            )
+            expected_values_thread.start()
 
         # Collect metrics DURING the fio run (every 10s)
         during_snapshots = helper.poll_metrics_during_run(
@@ -182,10 +185,10 @@ def run(ceph_cluster, **kw):
             duration_sec=int(config.get("runtime_sec", 60)),
             interval_sec=int(config.get("interval_sec", 10)),
         )
-
-        # Stop expected values collection
-        stop_collection.set()
-        expected_values_thread.join(timeout=5)
+        if LooseVersion(build) >= LooseVersion("9.1"):
+            # Stop expected values collection
+            stop_collection.set()
+            expected_values_thread.join(timeout=5)
 
         # Wait for fio to finish (be tolerant if it misbehaves)
         try:
@@ -217,15 +220,15 @@ def run(ceph_cluster, **kw):
             log.error("Metrics not recorded while IO was in progress")
             return 1
         log.info("After snapshot of metrics : %s", after_snapshot)
-
-        # Create a lookup dict for expected values by timestamp (with tolerance for matching)
-        expected_values_by_t: Dict[int, Dict[str, int]] = {}
-        with expected_values_lock:
-            for ev_snap in expected_values_snapshots:
-                expected_values_by_t[ev_snap["t"]] = {
-                    "quota_bytes": ev_snap["quota_bytes"],
-                    "used_bytes": ev_snap["used_bytes"],
-                }
+        if LooseVersion(build) >= LooseVersion("9.1"):
+            # Create a lookup dict for expected values by timestamp (with tolerance for matching)
+            expected_values_by_t: Dict[int, Dict[str, int]] = {}
+            with expected_values_lock:
+                for ev_snap in expected_values_snapshots:
+                    expected_values_by_t[ev_snap["t"]] = {
+                        "quota_bytes": ev_snap["quota_bytes"],
+                        "used_bytes": ev_snap["used_bytes"],
+                    }
 
         def find_expected_values(timestamp: int) -> Optional[Dict[str, int]]:
             """Find expected values for a given timestamp (with tolerance)"""
@@ -242,87 +245,77 @@ def run(ceph_cluster, **kw):
         log.info("=== Metrics timeline (active ranks) for subvolume_1 ===")
         for snap in during_snapshots:
             t = snap["t"]
-            # Get expected values for this timestamp
-            expected_vals = find_expected_values(t)
-            if not expected_vals:
-                log.warning(
-                    "[t=%s] No expected values found for this timestamp, "
-                    "using fallback values",
-                    t,
-                )
-                expected_quota_bytes = quota_bytes_value
-                expected_used_bytes = 0
-            else:
-                expected_quota_bytes = expected_vals["quota_bytes"]
-                expected_used_bytes = expected_vals["used_bytes"]
+            if LooseVersion(build) >= LooseVersion("9.1"):
+                # Get expected values for this timestamp
+                expected_vals = find_expected_values(t)
+                if not expected_vals:
+                    log.warning(
+                        "[t=%s] No expected values found for this timestamp, "
+                        "using fallback values",
+                        t,
+                    )
+                    expected_quota_bytes = quota_bytes_value
+                    expected_used_bytes = 0
+                else:
+                    expected_quota_bytes = expected_vals["quota_bytes"]
+                    expected_used_bytes = expected_vals["used_bytes"]
 
             for mds_name, items in snap["samples"].items():
                 for it in items:
-                    # Validate required fields exist
-                    if "quota_bytes" not in it:
-                        log.error(
-                            "[t=%s] %s %s " "Missing required field: quota_bytes",
-                            t,
-                            mds_name,
-                            it["subvolume_path"],
-                        )
-                        return 1
-                    if "used_bytes" not in it:
-                        log.error(
-                            "[t=%s] %s %s " "Missing required field: used_bytes",
-                            t,
-                            mds_name,
-                            it["subvolume_path"],
-                        )
-                        return 1
+                    if LooseVersion(build) >= LooseVersion("9.1"):
+                        # Validate required fields exist
+                        if "quota_bytes" not in it:
+                            log.error(
+                                "[t=%s] %s %s " "Missing required field: quota_bytes",
+                                t,
+                                mds_name,
+                                it["subvolume_path"],
+                            )
+                            return 1
+                        if "used_bytes" not in it:
+                            log.error(
+                                "[t=%s] %s %s " "Missing required field: used_bytes",
+                                t,
+                                mds_name,
+                                it["subvolume_path"],
+                            )
+                            return 1
+                    if LooseVersion(build) >= LooseVersion("9.1"):
+                        # Validate quota_bytes value matches expected value from getattr
+                        actual_quota_bytes = it.get("quota_bytes")
+                        if actual_quota_bytes != expected_quota_bytes:
+                            log.error(
+                                "[t=%s] %s %s "
+                                "quota_bytes mismatch: expected=%s, "
+                                "actual=%s",
+                                t,
+                                mds_name,
+                                it["subvolume_path"],
+                                expected_quota_bytes,
+                                actual_quota_bytes,
+                            )
+                            return 1
 
-                    # Validate quota_bytes value matches expected value from getattr
-                    actual_quota_bytes = it.get("quota_bytes")
-                    if actual_quota_bytes != expected_quota_bytes:
-                        log.error(
-                            "[t=%s] %s %s "
-                            "quota_bytes mismatch: expected=%s, "
-                            "actual=%s",
-                            t,
-                            mds_name,
-                            it["subvolume_path"],
-                            expected_quota_bytes,
-                            actual_quota_bytes,
-                        )
-                        return 1
-
-                    # Validate used_bytes value matches expected value from subvolume info
-                    actual_used_bytes = it.get("used_bytes")
-                    if actual_used_bytes != expected_used_bytes:
-                        log.error(
-                            "[t=%s] %s %s "
-                            "used_bytes mismatch: expected=%s, "
-                            "actual=%s",
-                            t,
-                            mds_name,
-                            it["subvolume_path"],
-                            expected_used_bytes,
-                            actual_used_bytes,
-                        )
-                        return 1
-
-                    log.info(
-                        "[t=%s] %s %s "
-                        "w_iops=%s w_tp_Bps=%s "
-                        "w_lat_ms=%s "
-                        "quota_bytes=%s(exp=%s) "
-                        "used_bytes=%s(exp=%s)",
-                        t,
-                        mds_name,
-                        it["subvolume_path"],
-                        it["avg_write_iops"],
-                        it["avg_write_tp_Bps"],
-                        it["avg_write_lat_msec"],
-                        it["quota_bytes"],
-                        expected_quota_bytes,
-                        it["used_bytes"],
-                        expected_used_bytes,
-                    )
+                        # Validate used_bytes value matches expected value from subvolume info
+                        actual_used_bytes = it.get("used_bytes")
+                        if actual_used_bytes != expected_used_bytes:
+                            log.error(
+                                "[t=%s] %s %s "
+                                "used_bytes mismatch: expected=%s, "
+                                "actual=%s",
+                                t,
+                                mds_name,
+                                it["subvolume_path"],
+                                expected_used_bytes,
+                                actual_used_bytes,
+                            )
+                            return 1
+                    output_str = f"\"[t={t}] {mds_name} {it['subvolume_path']} \" \"w_iops={it['avg_write_iops']} \""
+                    output_str += f"\"w_tp_Bps={it['avg_write_tp_Bps']} \" \"w_lat_ms={it['avg_write_lat_msec']} \""
+                    if LooseVersion(build) >= LooseVersion("9.1"):
+                        output_str += f"\"quota_bytes={it['quota_bytes']} (exp={expected_quota_bytes}) \" "
+                        output_str += f"\"used_bytes={it['used_bytes']} (exp={expected_used_bytes}) \" "
+                    log.info(output_str)
         log.info("=== FIO output (full file) ===")
 
         try:
