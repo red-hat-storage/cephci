@@ -23,6 +23,7 @@ from ceph.clients import WinNode
 from ceph.utils import (
     cleanup_ceph_nodes,
     cleanup_ibmc_ceph_nodes,
+    create_aws_ceph_nodes,
     create_baremetal_ceph_nodes,
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
@@ -34,6 +35,7 @@ from cli.performance.memory_and_cpu_utils import (
     stop_logging_process,
     upload_mem_and_cpu_logger_script,
 )
+from compute.aws_ec2 import cleanup_aws_ceph_nodes
 from utility import sosreport
 from utility.log import Log
 from utility.polarion import post_to_polarion
@@ -59,7 +61,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         (--platform <name>)
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
-        [--cloud <openstack> | <ibmc> | <baremetal>]
+        [--cloud <openstack> | <ibmc> | <aws> | <baremetal>]
         [--build <name>]
         [--inventory FILE]
         [--osp-cred <file>]
@@ -107,7 +109,7 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
-  --cloud <cloud_type>              cloud type [default: openstack]
+  --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal) [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
@@ -216,6 +218,8 @@ def create_nodes(
         cleanup_ceph_nodes(osp_cred, instances_name)
     elif cloud_type == "ibmc":
         cleanup_ibmc_ceph_nodes(osp_cred, instances_name, custom_config=None)
+    elif cloud_type == "aws":
+        cleanup_aws_ceph_nodes(osp_cred, instances_name, custom_config=None)
 
     ceph_cluster_dict = {}
     clients = []
@@ -232,6 +236,10 @@ def create_nodes(
             )
         elif cloud_type == "ibmc":
             ceph_vmnodes = create_ibmc_ceph_nodes(
+                cluster, inventory, osp_cred, run_id, instances_name, custom_config
+            )
+        elif cloud_type == "aws":
+            ceph_vmnodes = create_aws_ceph_nodes(
                 cluster, inventory, osp_cred, run_id, instances_name, custom_config
             )
         elif "baremetal" in cloud_type:
@@ -259,6 +267,13 @@ def create_nodes(
                 glbs = osp_cred.get("globals")
                 ibmc = glbs.get("ibm-credentials")
                 private_key_path = ibmc.get("private_key_path")
+                private_ip = node.ip_address
+                look_for_key = True
+                ceph_nodename = node.hostname
+            elif cloud_type == "aws":
+                glbs = osp_cred.get("globals")
+                aws_cfg = glbs.get("aws-credentials")
+                private_key_path = aws_cfg.get("private_key_path", "")
                 private_ip = node.ip_address
                 look_for_key = True
                 ceph_nodename = node.hostname
@@ -458,6 +473,10 @@ def run(args):
             cleanup_ibmc_ceph_nodes(
                 osp_cred, cleanup_name, custom_config=args.get("--custom-config")
             )
+        elif cloud_type == "aws":
+            cleanup_aws_ceph_nodes(
+                osp_cred, cleanup_name, custom_config=args.get("--custom-config")
+            )
         else:
             log.warning("Unknown cloud type.")
 
@@ -466,10 +485,18 @@ def run(args):
     if glb_file is None and not reuse:
         raise Exception("Unable to gather information about cluster layout.")
 
-    if osp_cred_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
+    if (
+        osp_cred_file is None
+        and not reuse
+        and cloud_type in ["openstack", "ibmc", "aws"]
+    ):
         raise Exception("Require cloud credentials to create cluster.")
 
-    if inventory_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
+    if (
+        inventory_file is None
+        and not reuse
+        and cloud_type in ["openstack", "ibmc", "aws"]
+    ):
         raise Exception("Require system configuration information to provision.")
 
     # Required arguments to determine the test build details
@@ -1042,6 +1069,8 @@ def run(args):
                 cleanup_ceph_nodes(osp_cred, instances_name)
             elif cloud_type == "ibmc":
                 cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
+            elif cloud_type == "aws":
+                cleanup_aws_ceph_nodes(osp_cred, instances_name)
 
         if test.get("recreate-cluster") is True:
             ceph_cluster_dict, clients = create_nodes(
