@@ -541,6 +541,7 @@ tests:
       clusters:
         ceph-pri:
           config:
+            git_clone_configs_repo: true
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_cloud_transition_restore_object.yaml
       desc: test s3 object restore and download, and restore attrs
