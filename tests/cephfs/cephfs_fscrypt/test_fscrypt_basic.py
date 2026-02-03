@@ -1,6 +1,8 @@
 import random
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
@@ -46,6 +48,7 @@ def run(ceph_cluster, **kw):
         Remove FS volume if created
     """
     try:
+        global build
         test_data = kw.get("test_data")
         fs_util = FsUtilsv1(ceph_cluster, test_data=test_data)
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
@@ -100,8 +103,9 @@ def run(ceph_cluster, **kw):
         )
         mon_node_ips = [node.ip_address for node in ceph_cluster.get_nodes(role="mon")]
         mon_node_ip = ",".join(mon_node_ips)
-        log.info("Add mountpoint to fstab due to BZ 2406981")
-        add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details)
+        if LooseVersion(build) >= LooseVersion("9.0"):
+            log.info("Add mountpoint to fstab due to BZ 2406981")
+            add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details)
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
@@ -151,15 +155,16 @@ def run(ceph_cluster, **kw):
         wait_time_secs = 300
         if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
             log.error("Cluster health is not OK even after waiting for 300secs")
+        if LooseVersion(build) >= LooseVersion("9.0"):
+            for client_tmp in clients:
+                client_tmp.exec_command(
+                    sudo=True,
+                    cmd="cp -f /etc/fstab.backup /etc/fstab;rm -f /etc/fstab.backup",
+                    check_ec=False,
+                )
         if cleanup:
             cephfs_common_utils.test_cleanup(client, setup_params, mount_details)
             fs_util.remove_fs(client, fs_name)
-        for client_tmp in clients:
-            client_tmp.exec_command(
-                sudo=True,
-                cmd="cp -f /etc/fstab.backup /etc/fstab;rm -f /etc/fstab.backup",
-                check_ec=False,
-            )
 
 
 def fscrypt_test_run(fscrypt_test_params):
@@ -189,8 +194,9 @@ def fscrypt_lifecycle(fscrypt_test_params):
     fscrypt_util = fscrypt_test_params["fscrypt_util"]
     mount_details = fscrypt_test_params["mount_details"]
     test_status = 0
-
-    mnt_type = random.choice(["kernel", "fuse"])
+    mnt_type = random.choice(["fuse"])
+    if LooseVersion(build) >= LooseVersion("9.0"):
+        mnt_type = random.choice(["kernel", "fuse"])
     log.info("Create 2 test directories in each subvolume")
     for sv_name in mount_details:
         mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
@@ -408,7 +414,9 @@ def fscrypt_non_empty_dir(fscrypt_test_params):
     client1 = clients[1]
     log.info("Create test directory in one of subvolumes and add some data")
     sv_name = random.choice(list(mount_details.keys()))
-    mnt_type = random.choice(["kernel", "fuse"])
+    mnt_type = random.choice(["fuse"])
+    if LooseVersion(build) >= LooseVersion("9.0"):
+        mnt_type = random.choice(["kernel", "fuse"])
     mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
     client1 = mount_details[sv_name][mnt_type]["mnt_client"]
     encrypt_path = f"{mountpoint}/fscrypt_non_empty_dir"
@@ -469,7 +477,9 @@ def fscrypt_metadata_not_encrypted(fscrypt_test_params):
     log.info("Create test directory in one of subvolumes and add some data")
     sv_name = random.choice(list(mount_details.keys()))
     mnt_type = random.choice(list(mount_details[sv_name].keys()))
-    mnt_type = random.choice(["kernel", "fuse"])
+    mnt_type = random.choice(["fuse"])
+    if LooseVersion(build) >= LooseVersion("9.0"):
+        mnt_type = random.choice(["kernel", "fuse"])
     mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
     client1 = mount_details[sv_name][mnt_type]["mnt_client"]
     encrypt_path = f"{mountpoint}/test_encrypt_metadata"
