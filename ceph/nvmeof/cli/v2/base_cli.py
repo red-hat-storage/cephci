@@ -1,3 +1,5 @@
+import re
+
 from ceph.ceph_admin.common import config_dict_to_string
 from ceph.nvmeof.cli.v2.common import substitute_keys
 from utility.log import Log
@@ -36,10 +38,22 @@ class BaseCLI:
         """
         self.node = node
         self.shell = shell
+        self.ceph_version = None
 
     def __local_mtls_cert_path(self) -> str:
         """Currently mtls is not supported in Ceph NVMe CLI."""
         return ""
+
+    def get_ceph_version(self):
+        if self.ceph_version is None:
+            out, _ = self.shell(args=["ceph", "--format", "json", "version"])
+            match = re.search(r"[0-9]+(\.[-0-9]+)*", out)
+            if not match:
+                raise ValueError("Ceph version not found.")
+
+            self.ceph_version = match.group()
+
+        return self.ceph_version
 
     @substitute_keys(KEY_MAP)
     def run_nvme_cli(self, entity, action, **kwargs):
@@ -58,8 +72,12 @@ class BaseCLI:
             cmd_args["gw_group"] = self.gateway_group
 
         # Gateway address
-        if not cmd_args.get("traddd"):
-            cmd_args["traddr"] = self.node.ip_address
+        # TODO: Remove this once we have a proper way to determine right argument for the command.
+        if not cmd_args.get("traddr") or not cmd_args.get("server_address"):
+            if self.get_ceph_version() > "20.1.0-145":
+                cmd_args["server_address"] = self.node.ip_address
+            else:
+                cmd_args["traddr"] = self.node.ip_address
 
         command = [
             self.BASE_CMD,
