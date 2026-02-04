@@ -354,12 +354,19 @@ def run(ceph_cluster, **kw):
         if rename_error:
             log.error(f"Error during directory rename: {rename_error.strip()}")
             return 1
-
         log.info("Checking for the new snapshot presence")
-        try:
-            is_snapshot_present(target_clients[0], snapshot_path, new_snapshot_name)
-        except CommandFailed:
-            log.error("Failed to find the new snapshot after retrying.")
+        ls_command = f"ls {snapshot_path}"
+        ls_out, err = target_clients[0].exec_command(sudo=True, cmd=ls_command)
+        if new_snapshot_name in ls_out:
+            log.info(f"Snapshot Found -  {new_snapshot_name}")
+        elif original_snapshot_name in ls_out:
+            log.info(
+                f"Expected Behavior: Original Snapshot Name ({original_snapshot_name}) already restored"
+            )
+            log.info("Output: %s", ls_out)
+        else:
+            log.error("New or Old snapshot not found in the snapshot path")
+            log.info("Output: %s", ls_out)
             return 1
 
         log.info("Retry checking for the restoration of the original snapshot name")
