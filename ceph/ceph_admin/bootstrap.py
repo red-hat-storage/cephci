@@ -287,6 +287,25 @@ class BootstrapMixin:
 
         # Construct registry credentials as string or json.
         registry_url = args.pop("registry-url", None)
+        registry_json = args.pop("registry-json", None)
+
+        # Auto-detect registry from custom_image and add credentials if needed
+        if custom_image and not registry_url and not registry_json:
+            if isinstance(custom_image, str):
+                image_registry = custom_image.split("/")[0]
+            else:
+                image_registry = self.config["container_image"].split("/")[0]
+
+            # If using stage or production registry, auto-add credentials
+            if (
+                "registry.stage.redhat.io" in image_registry
+                or "registry.redhat.io" in image_registry
+            ):
+                registry_url = image_registry
+                logger.info(
+                    f"Auto-detected registry {registry_url} from custom image, adding credentials"
+                )
+
         if registry_url or manifest_obj.product == "ibm":
             cmd += construct_registry(
                 self,
@@ -294,7 +313,6 @@ class BootstrapMixin:
                 ibm_build=True if manifest_obj.product == "ibm" else False,
             )
 
-        registry_json = args.pop("registry-json", None)
         if registry_json:
             cmd += construct_registry(
                 self,
