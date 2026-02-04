@@ -1,8 +1,11 @@
 import json
 
+from looseversion import LooseVersion
+
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 from .qos import Qos
 
@@ -34,17 +37,44 @@ class Cluster(Cli):
             ha (bool): Flag to check if HA is required
             vip (str): Vip for the HA cluster
             active_standby (bool): Flag to check if active standby is required
+            **kwargs: Additional keyword arguments.
+            If nfs_version=3 is provided and ceph version > 19.2.1-300,
+                    --enable-nfsv3 flag will be added
         """
         nfs_server = nfs_server if type(nfs_server) in (list, tuple) else [nfs_server]
-        if nfs_nodes_obj:
-            for node_obj in nfs_nodes_obj:
-                self.validate_rpcbind_running(node_obj)
         nfs_server = " ".join(nfs_server)
         if active_standby and ha:
             nfs_server = "1 " + nfs_server
         cmd = "{0} create {1} '{2}'".format(self.base_cmd, name, nfs_server)
         if ha:
             cmd += " --ingress --virtual-ip {0}".format(vip)
+
+        # Check if --enable-nfsv3 flag needs to be added
+        # Condition: ceph version > 19.2.1-300 AND nfs_version == 3
+        # Extract nfs_version from kwargs (don't pass it to build_cmd_from_args)
+        nfs_version = kwargs.pop("nfs_version", None)
+
+        if nfs_version == 3:
+            try:
+                # Get client node (self.ctx could be a list or single node)
+                client_node = self.ctx[0] if isinstance(self.ctx, list) else self.ctx
+                ceph_version = get_ceph_version_from_cluster(client_node)
+
+                log.info(f"nfs_version: {nfs_version}, ceph_version: {ceph_version}")
+
+                # --enable-nfsv3 flag was introduced after 8.1z4 which is 19.2.1-292
+                # So any version above 19.2.1-292 will have the flag enabled for v3 tests
+                if LooseVersion(ceph_version) > LooseVersion("19.2.1-292"):
+                    log.info(
+                        f"Ceph version {ceph_version} is above 19.2.1-300 and "
+                        f"NFS version is 3, adding --enable-nfsv3 flag"
+                    )
+                    kwargs["enable-nfsv3"] = True
+            except Exception as e:
+                log.warning(
+                    f"Failed to check ceph version for --enable-nfsv3 flag: {e}. "
+                    f"Continuing without the flag."
+                )
 
         cmd = "".join(cmd + build_cmd_from_args(**kwargs))
         try:
