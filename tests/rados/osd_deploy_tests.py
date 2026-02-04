@@ -4,10 +4,10 @@ Module to verify OSD deployment scenarios using spec files and raw devices.
 This module tests the behavior of OSD deployment with various configurations including:
 - OSD deployment using spec file with raw device
 - OSD deployment using spec file with lvm device
-- OSD deployment using spec file with raw data and db device
 - OSD deployment using spec file with lvm data and db device
-- OSD deployment using spec file with raw data,db and wal device
 - OSD deployment using spec file with lvm data,db and wal device
+- OSD deployment using spec file with raw data and db device
+- OSD deployment using spec file with raw data,db and wal device
 - Verification of OSD deployment using bluestore tool (show-label)
 - Verification using ceph-volume lvm list
 - Validation of spec attributes in ceph orch ls output
@@ -43,38 +43,37 @@ def run(ceph_cluster, **kw):
     encrypted = config.get("encrypted", False)
     compressed = config.get("compressed", False)
     log.debug(f"Test workflow started. Start time: {start_time}")
+    deployment_type = config.get("deployment_type", "spec")
 
     # Get list of OSD IDs already used by previous test runs
 
     try:
 
         steps = """
-        Test OSD deployment using spec file and raw/lvm device method.
+        Test OSD deployment using spec file or daemon add command with raw/lvm device.
 
         Pre-Steps:
-            1. Select the osd-bak host from the cluster
+            1. Select the backup host from the cluster
             2. Create a test pool for OSD deployment verification
             3. Write data to the pool using rados bench (10K objects, 64KB)
 
-        Test Steps:
-            1. Create a YAML spec file for OSD deployment (scenario-based)
-            2. Deploy the OSD using the created spec file via ceph orch apply
+        Test Steps (per scenario):
+            1. Create LVM (PV, VG, LV) on data device if using lvm method
+            2. Deploy OSD using deploy_osd() which handles:
+               - spec method: Create YAML spec file and apply via ceph orch apply
+               - cli method: Deploy via ceph orch daemon add osd command
             3. Wait for new OSD(s) to be deployed and come up
-            4. Set compression config on newly added OSDs (if compressed flag is set)
 
         Validation Steps:
             1. Verify OSD deployment using ceph-bluestore-tool show-label
-            2. Validate OSD deployment using ceph-volume lvm list (lvm method only)
-            3. Validate OSD spec in 'ceph orch ls --export' output
-            4. Validate OSD metadata
+            2. Validate OSD spec in 'ceph orch ls --export' output
+            3. Validate OSD metadata (bluefs_dedicated_db, bluefs_dedicated_wal)
+            4. Validate OSD deployment using ceph-volume lvm list (lvm method only)
 
         OSD functionality validation steps:
             1. Verify cluster is active+clean post OSD deployment
             2. Write IOs post OSD addition (10K objects, 64KB)
             3. Verify new OSDs are part of PGs using ceph pg dump
-               - PG_SUM > 0
-               - HB_PEERS > 0
-               - USED > 0
 
         Cleanup Steps:
             1. Delete the created test pool
@@ -89,16 +88,28 @@ def run(ceph_cluster, **kw):
         osd_bak_node = ceph_cluster.get_nodes(role="osd-bak")[0]
         target_hostname = osd_bak_node.hostname
         host_node = osd_bak_node
-
-        device_paths = rados_obj.get_available_devices(
-            node_name=target_hostname,
-            device_type="hdd",
-        )
-        log.info(f"Using osd-bak host: {target_hostname}")
-        log.info(f"Available device paths: {device_paths}")
+        rhbuild = config.get("rhbuild")
 
         initial_osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"Initial OSD list: {initial_osd_list}")
+
+        for _ in range(5):
+            device_paths = rados_obj.get_available_devices(
+                node_name=target_hostname,
+                device_type="hdd",
+            )
+            if len(device_paths) > 0:
+                log.info(f"Using osd-bak host: {target_hostname}")
+                log.info(f"Available device paths: {device_paths}")
+                break
+            else:
+                log.error(f"No available device paths found on host: {target_hostname}")
+                log.info("Sleeping for 10 seconds and retrying...")
+                time.sleep(10)
+        else:
+            raise Exception(
+                f"No available device paths found on host: {target_hostname}"
+            )
 
         # Pre-steps: Create pool and write data
         log.info(
@@ -134,50 +145,24 @@ def run(ceph_cluster, **kw):
 
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 1: Creating OSD spec file with raw device method"
+                "Step 1: Create OSD spec file with raw device method and deploy OSD/Add OSD using CLI"
                 "\n ------------------------------------------- \n"
             )
 
-            service_id = "osd_scenario_1"
-            osd_spec = {
-                "service_type": "osd",
-                "service_id": service_id,
-                "placement": {"hosts": [target_hostname]},
-                "data_devices": {"paths": [device_paths[0]]},
-                "method": "raw",
-            }
-
-            if encrypted:
-                osd_spec["encrypted"] = "true"
-
-            spec_file_path = f"/tmp/{service_id}.yaml"
-            spec_content = yaml.dump(osd_spec, default_flow_style=False)
-
-            log.info(f"OSD spec content:\n{spec_content}")
-
-            # Write spec file to client node
-            client_node.exec_command(
-                sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
-            )
-            log.info(f"Created OSD spec file at: {spec_file_path}")
-
-            # Step 2: Deploy the OSD using the created spec file
-            log.info(
-                "\n ------------------------------------------- \n"
-                "Step 2: Deploying OSD using spec file via ceph orch apply"
-                "\n ------------------------------------------- \n"
-            )
-
-            apply_cmd = f"ceph orch apply -i {spec_file_path}"
-            client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
-
-            # Wait for OSD deployment to complete
-            new_osds = wait_for_osd_deployment(
+            # Deploy OSD using data device and wait till new OSD is up
+            service_id = "osd_scenario_1" if deployment_type == "spec" else "default"
+            new_osds = deploy_osd(
                 rados_obj=rados_obj,
-                osd_list_before=initial_osd_list,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=device_paths[0],
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="raw",
+                service_id=service_id,
+                encrypted=encrypted,
             )
-            if new_osds is None:
-                return 1
 
             # Select the first newly deployed OSD for verification
             test_osd_id = new_osds[0]
@@ -189,10 +174,9 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
 
-            # Step 3: Verify OSD deployment using bluestore tool show-label
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 3: Verifying OSD deployment using ceph-bluestore-tool show-label"
+                "Step 2: Verifying OSD deployment using ceph-bluestore-tool show-label"
                 "\n ------------------------------------------- \n"
             )
             if not validate_bluestore_label(
@@ -206,10 +190,9 @@ def run(ceph_cluster, **kw):
                 log.error("Bluestore label validation failed")
                 return 1
 
-            # Step 4: Validate OSD spec in 'ceph orch ls' output
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 4: Validating OSD spec in 'ceph orch ls' output"
+                "Step 3: Validating OSD spec in 'ceph orch ls' output"
                 "\n ------------------------------------------- \n"
             )
 
@@ -224,10 +207,9 @@ def run(ceph_cluster, **kw):
                 log.error("Orch ls spec validation failed")
                 return 1
 
-            # Step 5: Validate OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 5: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
+                "Step 4: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
                 "\n ------------------------------------------- \n"
             )
 
@@ -251,69 +233,38 @@ def run(ceph_cluster, **kw):
 
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 1: Creating OSD spec file with lvm device method"
+                "Step 1: Create PV, VG and LVs for data device"
                 "\n ------------------------------------------- \n"
             )
 
             # Create PV, VG and LV on the data device
             data_device_path = device_paths[0]
-            vg_name = "data_vg"
-            lv_name = "data_lv"
-
-            log.info(f"Creating PV on {data_device_path}")
-            host_node.exec_command(sudo=True, cmd=f"pvcreate -f {data_device_path}")
-
-            log.info(f"Creating VG '{vg_name}' on {data_device_path}")
-            host_node.exec_command(
-                sudo=True, cmd=f"vgcreate {vg_name} {data_device_path}"
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario2",
+                vg_prefix="scenario2",
             )
+            data_lv_path = lv_paths["block"]
 
-            log.info(f"Creating LV '{lv_name}' in VG '{vg_name}'")
-            host_node.exec_command(
-                sudo=True, cmd=f"lvcreate -l 100%FREE -n {lv_name} {vg_name}"
-            )
-
-            lv_path = f"/dev/{vg_name}/{lv_name}"
-            log.info(f"LV created at: {lv_path}")
-
-            service_id = "osd_scenario_2"
-            osd_spec = {
-                "service_type": "osd",
-                "service_id": service_id,
-                "placement": {"hosts": [target_hostname]},
-                "data_devices": {"paths": [lv_path]},
-            }
-            if encrypted:
-                osd_spec["encrypted"] = "true"
-
-            spec_file_path = f"/tmp/{service_id}.yaml"
-            spec_content = yaml.dump(osd_spec, default_flow_style=False)
-
-            log.info(f"OSD spec content:\n{spec_content}")
-
-            # Write spec file to client node
-            client_node.exec_command(
-                sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
-            )
-            log.info(f"Created OSD spec file at: {spec_file_path}")
-
-            # Step 2: Deploy the OSD using the created spec file
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 2: Deploying OSD using spec file via ceph orch apply"
+                "Step 2: Create OSD spec file with lvm device method and deploy OSD/Add OSD using CLI"
                 "\n ------------------------------------------- \n"
             )
-
-            apply_cmd = f"ceph orch apply -i {spec_file_path}"
-            client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
-
-            # Wait for OSD deployment to complete
-            new_osds = wait_for_osd_deployment(
+            service_id = "osd_scenario_2" if deployment_type == "spec" else "default"
+            new_osds = deploy_osd(
                 rados_obj=rados_obj,
-                osd_list_before=initial_osd_list,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=data_lv_path,
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="lvm",
+                service_id=service_id,
+                encrypted=encrypted,
             )
-            if new_osds is None:
-                return 1
 
             # Select the first newly deployed OSD for verification
             test_osd_id = new_osds[0]
@@ -325,7 +276,6 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
 
-            # Step 3: Verify OSD deployment using bluestore tool show-label
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 3: Verifying OSD deployment using ceph-bluestore-tool show-label"
@@ -342,7 +292,6 @@ def run(ceph_cluster, **kw):
                 log.error("Bluestore label validation failed")
                 return 1
 
-            # Step 4: Validate OSD spec in 'ceph orch ls' output
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 4: Validating OSD spec in 'ceph orch ls' output"
@@ -360,7 +309,6 @@ def run(ceph_cluster, **kw):
                 log.error("Orch ls spec validation failed")
                 return 1
 
-            # Step 5: Validate OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 5: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
@@ -377,7 +325,6 @@ def run(ceph_cluster, **kw):
                 log.error("OSD metadata validation failed")
                 return 1
 
-            # Step 6: Validate OSD deployment using ceph-volume lvm list
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 6: Validating OSD deployment using ceph-volume lvm list"
@@ -400,83 +347,48 @@ def run(ceph_cluster, **kw):
 
             log.info(
                 "\n =========================================== \n"
-                "   Scenario 3 : Starting OSD deployment using lvm data&db device - spec file"
+                "   Scenario 3 : Starting OSD deployment using lvm data&db device"
                 "\n =========================================== \n"
             )
 
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 1: Creating OSD spec file with lvm device method"
+                "Step 1: Create PV, VG and LVs for data and db device"
                 "\n ------------------------------------------- \n"
             )
 
             # Create PV, VG and LV on the data device
             data_device_path = device_paths[0]
-            vg_name = "data_vg"
-            lv_name_1 = "data_lv"
-            lv_name_2 = "db_lv"
-
-            log.info(f"Creating PV on {data_device_path}")
-            host_node.exec_command(sudo=True, cmd=f"pvcreate -f {data_device_path}")
-
-            log.info(f"Creating VG '{vg_name}' on {data_device_path}")
-            host_node.exec_command(
-                sudo=True, cmd=f"vgcreate {vg_name} {data_device_path}"
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario3",
+                vg_prefix="scenario3",
+                db_device=True,
             )
+            data_lv_path = lv_paths["block"]
+            db_lv_path = lv_paths["db"]
 
-            log.info(f"Creating LV '{lv_name_1}' in VG '{vg_name}'")
-            host_node.exec_command(
-                sudo=True, cmd=f"lvcreate -l 90%FREE -n {lv_name_1} {vg_name}"
-            )
-
-            log.info(f"Creating LV '{lv_name_2}' in VG '{vg_name}'")
-            host_node.exec_command(
-                sudo=True, cmd=f"lvcreate -l 10%FREE -n {lv_name_2} {vg_name}"
-            )
-
-            lv_path_1 = f"/dev/{vg_name}/{lv_name_1}"
-            lv_path_2 = f"/dev/{vg_name}/{lv_name_2}"
-            log.info(f"LV created at: {lv_path_1} and {lv_path_2}")
-
-            service_id = "osd_scenario_3"
-            osd_spec = {
-                "service_type": "osd",
-                "service_id": service_id,
-                "placement": {"hosts": [target_hostname]},
-                "data_devices": {"paths": [lv_path_1]},
-                "db_devices": {"paths": [lv_path_2]},
-            }
-            if encrypted:
-                osd_spec["encrypted"] = "true"
-
-            spec_file_path = f"/tmp/{service_id}.yaml"
-            spec_content = yaml.dump(osd_spec, default_flow_style=False)
-
-            log.info(f"OSD spec content:\n{spec_content}")
-
-            # Write spec file to client node
-            client_node.exec_command(
-                sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
-            )
-            log.info(f"Created OSD spec file at: {spec_file_path}")
-
-            # Step 2: Deploy the OSD using the created spec file
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 2: Deploying OSD using spec file via ceph orch apply"
+                "Step 2: Create OSD spec and deploy OSD/ Add OSD using CLI"
                 "\n ------------------------------------------- \n"
             )
-
-            apply_cmd = f"ceph orch apply -i {spec_file_path}"
-            client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
-
-            # Wait for OSD deployment to complete
-            new_osds = wait_for_osd_deployment(
+            service_id = "osd_scenario_3" if deployment_type == "spec" else "default"
+            new_osds = deploy_osd(
                 rados_obj=rados_obj,
-                osd_list_before=initial_osd_list,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=data_lv_path,
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="lvm",
+                service_id=service_id,
+                db_device_path=db_lv_path,
+                db=True,
+                encrypted=encrypted,
             )
-            if new_osds is None:
-                return 1
 
             # Select the first newly deployed OSD for verification
             test_osd_id = new_osds[0]
@@ -488,7 +400,6 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
 
-            # Step 3: Verify OSD deployment using bluestore tool show-label
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 3: Verifying OSD deployment using ceph-bluestore-tool show-label"
@@ -505,25 +416,25 @@ def run(ceph_cluster, **kw):
                 log.error("Bluestore label validation failed")
                 return 1
 
-            # Step 4: Validate OSD spec in 'ceph orch ls' output
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 4: Validating OSD spec in 'ceph orch ls' output"
                 "\n ------------------------------------------- \n"
             )
+            if deployment_type == "cli":
+                log.info("db devices are not added to OSD spec for CLI method")
+            else:
+                if not validate_orch_ls_spec(
+                    rados_obj=rados_obj,
+                    service_id=service_id,
+                    method="lvm",
+                    data_devices=True,
+                    db_device=True,
+                    wal_device=False,
+                ):
+                    log.error("Orch ls spec validation failed")
+                    return 1
 
-            if not validate_orch_ls_spec(
-                rados_obj=rados_obj,
-                service_id=service_id,
-                method="raw",
-                data_devices=True,
-                db_device=True,
-                wal_device=False,
-            ):
-                log.error("Orch ls spec validation failed")
-                return 1
-
-            # Step 5: Validate OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 5: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
@@ -540,7 +451,6 @@ def run(ceph_cluster, **kw):
                 log.error("OSD metadata validation failed")
                 return 1
 
-            # Step 6: Validate OSD deployment using ceph-volume lvm list
             log.info(
                 "\n ------------------------------------------- \n"
                 "Step 6: Validating OSD deployment using ceph-volume lvm list"
@@ -563,92 +473,49 @@ def run(ceph_cluster, **kw):
 
             log.info(
                 "\n =========================================== \n"
-                "   Scenario 4 : Starting OSD deployment using lvm data,db and wal device - spec file"
+                "   Scenario 4 : Starting OSD deployment using lvm data,db and wal device"
                 "\n =========================================== \n"
             )
 
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 1: Creating OSD spec file with lvm device method"
+                "Step 1: Create PV, VG and LVs for data, db and wal device"
                 "\n ------------------------------------------- \n"
             )
-
             # Create PV, VG and LV on the data device
             data_device_path = device_paths[0]
-            vg_name = "data_vg"
-            lv_name_1 = "data_lv"
-            lv_name_2 = "db_lv"
-            lv_name_3 = "wal_lv"
-
-            log.info(f"Creating PV on {data_device_path}")
-            host_node.exec_command(sudo=True, cmd=f"pvcreate -f {data_device_path}")
-
-            log.info(f"Creating VG '{vg_name}' on {data_device_path}")
-            host_node.exec_command(
-                sudo=True, cmd=f"vgcreate {vg_name} {data_device_path}"
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario4",
+                vg_prefix="scenario4",
+                db_device=True,
+                wal_device=True,
             )
+            service_id = "osd_scenario_4" if deployment_type == "spec" else "default"
 
-            log.info(f"Creating LV '{lv_name_1}' in VG '{vg_name}'")
-            host_node.exec_command(
-                sudo=True, cmd=f"lvcreate -l 80%FREE -n {lv_name_1} {vg_name}"
-            )
-
-            log.info(f"Creating LV '{lv_name_2}' in VG '{vg_name}'")
-            host_node.exec_command(
-                sudo=True, cmd=f"lvcreate -l 10%FREE -n {lv_name_2} {vg_name}"
-            )
-
-            log.info(f"Creating LV '{lv_name_3}' in VG '{vg_name}'")
-            host_node.exec_command(
-                sudo=True, cmd=f"lvcreate -l 10%FREE -n {lv_name_3} {vg_name}"
-            )
-
-            lv_path_1 = f"/dev/{vg_name}/{lv_name_1}"
-            lv_path_2 = f"/dev/{vg_name}/{lv_name_2}"
-            lv_path_3 = f"/dev/{vg_name}/{lv_name_3}"
-            log.info(f"LV created at: {lv_path_1}, {lv_path_2} and {lv_path_3}")
-
-            service_id = "osd_scenario_4"
-            osd_spec = {
-                "service_type": "osd",
-                "service_id": service_id,
-                "placement": {"hosts": [target_hostname]},
-                "data_devices": {"paths": [lv_path_1]},
-                "db_devices": {"paths": [lv_path_2]},
-                "wal_devices": {"paths": [lv_path_3]},
-            }
-
-            if encrypted:
-                osd_spec["encrypted"] = "true"
-
-            spec_file_path = f"/tmp/{service_id}.yaml"
-            spec_content = yaml.dump(osd_spec, default_flow_style=False)
-
-            log.info(f"OSD spec content:\n{spec_content}")
-
-            # Write spec file to client node
-            client_node.exec_command(
-                sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
-            )
-            log.info(f"Created OSD spec file at: {spec_file_path}")
-
-            # Step 2: Deploy the OSD using the created spec file
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 2: Deploying OSD using spec file via ceph orch apply"
+                "Step 2: Create OSD spec and deploy OSD/ Add OSD using CLI"
                 "\n ------------------------------------------- \n"
             )
 
-            apply_cmd = f"ceph orch apply -i {spec_file_path}"
-            client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
-
-            # Wait for OSD deployment to complete
-            new_osds = wait_for_osd_deployment(
+            new_osds = deploy_osd(
                 rados_obj=rados_obj,
-                osd_list_before=initial_osd_list,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=lv_paths["block"],
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="lvm",
+                service_id=service_id,
+                db_device_path=lv_paths["db"],
+                wal_device_path=lv_paths["wal"],
+                db=True,
+                wal=True,
+                encrypted=encrypted,
             )
-            if new_osds is None:
-                return 1
 
             # Select the first newly deployed OSD for verification
             test_osd_id = new_osds[0]
@@ -684,16 +551,21 @@ def run(ceph_cluster, **kw):
                 "\n ------------------------------------------- \n"
             )
 
-            if not validate_orch_ls_spec(
-                rados_obj=rados_obj,
-                service_id=service_id,
-                method="lvm",
-                data_devices=True,
-                db_device=True,
-                wal_device=True,
-            ):
-                log.error("Orch ls spec validation failed")
-                return 1
+            if deployment_type == "cli":
+                log.info(
+                    "db devices and wal devices are not added to OSD spec for CLI method"
+                )
+            else:
+                if not validate_orch_ls_spec(
+                    rados_obj=rados_obj,
+                    service_id=service_id,
+                    method="lvm",
+                    data_devices=True,
+                    db_device=True,
+                    wal_device=True,
+                ):
+                    log.error("Orch ls spec validation failed")
+                    return 1
 
             # Step 5: Validate OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal
             log.info(
@@ -735,55 +607,30 @@ def run(ceph_cluster, **kw):
 
             log.info(
                 "\n =========================================== \n"
-                "   Scenario 5 : Starting OSD deployment using raw data and db device - spec file"
+                "   Scenario 5 : Starting OSD deployment using raw data and db device"
                 "\n =========================================== \n"
             )
 
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 1: Creating OSD spec file with raw device method"
+                "Step 1: Create OSD spec and deploy OSD/ Add OSD using CLI"
                 "\n ------------------------------------------- \n"
             )
-
-            service_id = "osd_scenario_5"
-            osd_spec = {
-                "service_type": "osd",
-                "service_id": service_id,
-                "placement": {"hosts": [target_hostname]},
-                "data_devices": {"paths": [device_paths[0]]},
-                "db_devices": {"paths": [device_paths[1]]},
-            }
-            if encrypted:
-                osd_spec["encrypted"] = "true"
-
-            spec_file_path = f"/tmp/{service_id}.yaml"
-            spec_content = yaml.dump(osd_spec, default_flow_style=False)
-
-            log.info(f"OSD spec content:\n{spec_content}")
-
-            # Write spec file to client node
-            client_node.exec_command(
-                sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
-            )
-            log.info(f"Created OSD spec file at: {spec_file_path}")
-
-            # Step 2: Deploy the OSD using the created spec file
-            log.info(
-                "\n ------------------------------------------- \n"
-                "Step 2: Deploying OSD using spec file via ceph orch apply"
-                "\n ------------------------------------------- \n"
-            )
-
-            apply_cmd = f"ceph orch apply -i {spec_file_path}"
-            client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
-
-            # Wait for OSD deployment to complete
-            new_osds = wait_for_osd_deployment(
+            service_id = "osd_scenario_5" if deployment_type == "spec" else "default"
+            new_osds = deploy_osd(
                 rados_obj=rados_obj,
-                osd_list_before=initial_osd_list,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=device_paths[0],
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="raw",
+                service_id=service_id,
+                db_device_path=device_paths[1],
+                db=True,
+                encrypted=encrypted,
             )
-            if new_osds is None:
-                return 1
 
             # Select the first newly deployed OSD for verification
             test_osd_id = new_osds[0]
@@ -795,10 +642,9 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
 
-            # Step 3: Verify OSD deployment using bluestore tool show-label
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 3: Verifying OSD deployment using ceph-bluestore-tool show-label"
+                "Step 2: Verifying OSD deployment using ceph-bluestore-tool show-label"
                 "\n ------------------------------------------- \n"
             )
             if not validate_bluestore_label(
@@ -812,17 +658,16 @@ def run(ceph_cluster, **kw):
                 log.error("Bluestore label validation failed")
                 return 1
 
-            # Step 4: Validate OSD spec in 'ceph orch ls' output
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 4: Validating OSD spec in 'ceph orch ls' output"
+                "Step 3: Validating OSD spec in 'ceph orch ls' output"
                 "\n ------------------------------------------- \n"
             )
 
             if not validate_orch_ls_spec(
                 rados_obj=rados_obj,
                 service_id=service_id,
-                method="lvm",
+                method="raw",
                 data_devices=True,
                 db_device=True,
                 wal_device=False,
@@ -830,10 +675,9 @@ def run(ceph_cluster, **kw):
                 log.error("Orch ls spec validation failed")
                 return 1
 
-            # Step 5: Validate OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 5: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
+                "Step 4: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
                 "\n ------------------------------------------- \n"
             )
 
@@ -847,10 +691,9 @@ def run(ceph_cluster, **kw):
                 log.error("OSD metadata validation failed")
                 return 1
 
-            # Step 6: Validate OSD deployment using ceph-volume lvm list
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 6: Validating OSD deployment using ceph-volume lvm list"
+                "Step 5: Validating OSD deployment using ceph-volume lvm list"
                 "\n ------------------------------------------- \n"
             )
 
@@ -870,56 +713,32 @@ def run(ceph_cluster, **kw):
 
             log.info(
                 "\n =========================================== \n"
-                "   Scenario 6 : Starting OSD deployment using raw data,db and wal device - spec file"
+                "   Scenario 6 : Starting OSD deployment using raw data,db and wal device"
                 "\n =========================================== \n"
             )
 
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 1: Creating OSD spec file with lvm device method"
+                "Step 1: Create OSD spec and deploy OSD/ Add OSD using CLI"
                 "\n ------------------------------------------- \n"
             )
-
-            service_id = "osd_scenario_6"
-            osd_spec = {
-                "service_type": "osd",
-                "service_id": service_id,
-                "placement": {"hosts": [target_hostname]},
-                "data_devices": {"paths": [device_paths[0]]},
-                "db_devices": {"paths": [device_paths[1]]},
-                "wal_devices": {"paths": [device_paths[2]]},
-            }
-            if encrypted:
-                osd_spec["encrypted"] = "true"
-
-            spec_file_path = f"/tmp/{service_id}.yaml"
-            spec_content = yaml.dump(osd_spec, default_flow_style=False)
-
-            log.info(f"OSD spec content:\n{spec_content}")
-
-            # Write spec file to client node
-            client_node.exec_command(
-                sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
-            )
-            log.info(f"Created OSD spec file at: {spec_file_path}")
-
-            # Step 2: Deploy the OSD using the created spec file
-            log.info(
-                "\n ------------------------------------------- \n"
-                "Step 2: Deploying OSD using spec file via ceph orch apply"
-                "\n ------------------------------------------- \n"
-            )
-
-            apply_cmd = f"ceph orch apply -i {spec_file_path}"
-            client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
-
-            # Wait for OSD deployment to complete
-            new_osds = wait_for_osd_deployment(
+            service_id = "osd_scenario_6" if deployment_type == "spec" else "default"
+            new_osds = deploy_osd(
                 rados_obj=rados_obj,
-                osd_list_before=initial_osd_list,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=device_paths[0],
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="raw",
+                service_id=service_id,
+                db_device_path=device_paths[1],
+                wal_device_path=device_paths[2],
+                db=True,
+                wal=True,
+                encrypted=encrypted,
             )
-            if new_osds is None:
-                return 1
 
             # Select the first newly deployed OSD for verification
             test_osd_id = new_osds[0]
@@ -931,10 +750,9 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
 
-            # Step 3: Verify OSD deployment using bluestore tool show-label
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 3: Verifying OSD deployment using ceph-bluestore-tool show-label"
+                "Step 2: Verifying OSD deployment using ceph-bluestore-tool show-label"
                 "\n ------------------------------------------- \n"
             )
             if not validate_bluestore_label(
@@ -948,10 +766,9 @@ def run(ceph_cluster, **kw):
                 log.error("Bluestore label validation failed")
                 return 1
 
-            # Step 4: Validate OSD spec in 'ceph orch ls' output
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 4: Validating OSD spec in 'ceph orch ls' output"
+                "Step 3: Validating OSD spec in 'ceph orch ls' output"
                 "\n ------------------------------------------- \n"
             )
 
@@ -966,10 +783,9 @@ def run(ceph_cluster, **kw):
                 log.error("Orch ls spec validation failed")
                 return 1
 
-            # Step 5: Validate OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 5: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
+                "Step 4: Validating OSD metadata for bluefs_dedicated_db and bluefs_dedicated_wal"
                 "\n ------------------------------------------- \n"
             )
 
@@ -983,10 +799,9 @@ def run(ceph_cluster, **kw):
                 log.error("OSD metadata validation failed")
                 return 1
 
-            # Step 6: Validate OSD deployment using ceph-volume lvm list
             log.info(
                 "\n ------------------------------------------- \n"
-                "Step 6: Validating OSD deployment using ceph-volume lvm list"
+                "Step 5: Validating OSD deployment using ceph-volume lvm list"
                 "\n ------------------------------------------- \n"
             )
 
@@ -1085,7 +900,7 @@ def run(ceph_cluster, **kw):
 
         # Get the current OSD list to identify newly deployed OSDs
         current_osd_list = rados_obj.get_osd_list(status="up")
-        new_osd_ids = [osd for osd in current_osd_list if osd not in initial_osd_list]
+        new_osd_ids = new_osds
         log.info(f"Newly deployed OSDs: {new_osd_ids}")
 
         if new_osd_ids:
@@ -1119,7 +934,7 @@ def run(ceph_cluster, **kw):
                 )
 
                 # Verify PG_SUM > 0
-                if pg_sum == 0:
+                if pg_sum < 1:
                     log.error(f"OSD {new_osd_id} has PG_SUM={pg_sum}, expected > 0")
                     raise Exception(
                         f"OSD {new_osd_id} PG_SUM validation failed: {pg_sum} == 0"
@@ -1127,6 +942,7 @@ def run(ceph_cluster, **kw):
                 log.info(f"OSD {new_osd_id}: PG_SUM={pg_sum} > 0 - PASSED")
 
                 # Verify HB_PEERS count > 0
+                # hb_peers is a list hence comparing with 0
                 if len(hb_peers) == 0:
                     log.error(
                         f"OSD {new_osd_id} has HB_PEERS count={len(hb_peers)}, expected > 0"
@@ -1140,7 +956,7 @@ def run(ceph_cluster, **kw):
                 )
 
                 # Verify USED > 0
-                if kb_used == 0:
+                if kb_used < 1:
                     log.error(f"OSD {new_osd_id} has USED={kb_used} KB, expected > 0")
                     raise Exception(
                         f"OSD {new_osd_id} USED validation failed: {kb_used} == 0"
@@ -1179,17 +995,6 @@ def run(ceph_cluster, **kw):
         else:
             log.warning(f"Failed to delete pool: {pool_name}")
 
-        # Set all OSD services as unmanaged
-        log.info(
-            "\n ------------------------------------------- \n"
-            "Cleanup Step 2: Setting all OSD services as unmanaged"
-            "\n ------------------------------------------- \n"
-        )
-        osd_services = rados_obj.list_orch_services(service_type="osd")
-        for service in osd_services:
-            rados_obj.set_unmanaged_flag(service_type="osd", service_name=service)
-            log.info(f"Set OSD service '{service}' as unmanaged")
-
         # Drain the host to remove OSDs
         log.info(
             "\n ------------------------------------------- \n"
@@ -1223,6 +1028,9 @@ def run(ceph_cluster, **kw):
 
         out = rados_obj.run_ceph_command(cmd="ceph orch ps", print_output=True)
         log.info(out)
+
+        # Before removing drain related labels drain the host
+        rados_obj.remove_empty_service_spec(service_type="osd")
 
         # Remove the drain related labels which are added to the host during drain
         log.info(
@@ -1275,8 +1083,6 @@ def run(ceph_cluster, **kw):
 
             log.info("Compression config removed successfully from all OSDs")
 
-        rados_obj.remove_empty_service_spec(service_type="osd")
-
         # Log cluster health
         rados_obj.log_cluster_health()
 
@@ -1311,16 +1117,91 @@ def get_device_path_from_metadata(rados_obj, osd_id):
         str: The device path (bluestore_bdev_dev_node) of the OSD
         None: If the command fails or the key is not found
     """
-    cmd = f"ceph osd metadata {osd_id} -f json"
-    out, _ = rados_obj.client.exec_command(sudo=True, cmd=cmd)
-    metadata = json.loads(out)
-    device_path = metadata.get("bluestore_bdev_devices")
+    osd_metadata = rados_obj.get_daemon_metadata(
+        daemon_type="osd", daemon_id=str(osd_id)
+    )
+    log.info(f"OSD {osd_id} metadata: {json.dumps(osd_metadata, indent=2)}")
+    device_path = osd_metadata.get("bluestore_bdev_devices")
     if device_path:
         log.info(f"OSD {osd_id} device path from metadata: /dev/{device_path}")
         return f"/dev/{device_path}"
     else:
         log.error(f"bluestore_bdev_dev_node not found in OSD {osd_id} metadata")
         raise Exception(f"bluestore_bdev_dev_node not found in OSD {osd_id} metadata")
+
+
+def create_lvm_on_device(
+    host_node, device_path, lv_prefix, vg_prefix, db_device=False, wal_device=False
+):
+    """
+    Create PV, VG and LV(s) on a device for OSD deployment.
+
+    Args:
+        host_node: Node object to execute commands on
+        device_path: Device path (e.g., /dev/sdb)
+        lv_prefix: Prefix for LV names
+        vg_prefix: Prefix for VG name
+        db_device: Create DB LV if True
+        wal_device: Create WAL LV if True
+
+    Returns dict: {"block": <path>, "db": <path>|None, "wal": <path>|None}
+    """
+    vg_name = f"{vg_prefix}_vg"
+    data_lv_name = f"{lv_prefix}_data_lv"
+    db_lv_name = f"{lv_prefix}_db_lv"
+    wal_lv_name = f"{lv_prefix}_wal_lv"
+
+    log.info(f"Creating PV on {device_path}")
+    host_node.exec_command(sudo=True, cmd=f"pvcreate -f {device_path}")
+
+    log.info(f"Creating VG '{vg_name}' on {device_path}")
+    host_node.exec_command(sudo=True, cmd=f"vgcreate {vg_name} {device_path}")
+
+    data_lv_percentage = 100
+
+    if db_device and not wal_device:
+        data_lv_percentage = 90
+        db_lv_percentage = 10
+    elif db_device and wal_device:
+        data_lv_percentage = 80
+        db_lv_percentage = 10
+        wal_lv_percentage = 10
+
+    result = {"block": None, "db": None, "wal": None}
+
+    # Only data device - create 1 LV with 100% FREE
+    log.info(f"Creating LV '{data_lv_name}' in VG '{vg_name}' with 100%FREE")
+    host_node.exec_command(
+        sudo=True,
+        cmd=f"lvcreate -l {data_lv_percentage}%FREE -n {data_lv_name} {vg_name}",
+    )
+    data_lv_path = f"/dev/{vg_name}/{data_lv_name}"
+    result["block"] = data_lv_path
+    log.info(f"LV created at: {data_lv_path}")
+
+    if db_device:
+        log.info(f"Creating LV '{db_lv_name}' in VG '{vg_name}' with 10%FREE")
+        host_node.exec_command(
+            sudo=True,
+            cmd=f"lvcreate -l {db_lv_percentage}%FREE -n {db_lv_name} {vg_name}",
+        )
+        db_lv_path = f"/dev/{vg_name}/{db_lv_name}"
+        log.info(f"LVs created at: {db_lv_path}")
+
+        result["db"] = db_lv_path
+
+    if wal_device:
+        log.info(f"Creating LV '{wal_lv_name}' in VG '{vg_name}' with 100%FREE")
+        host_node.exec_command(
+            sudo=True,
+            cmd=f"lvcreate -l {wal_lv_percentage}%FREE -n {wal_lv_name} {vg_name}",
+        )
+        wal_lv_path = f"/dev/{vg_name}/{wal_lv_name}"
+        log.info(f"LVs created at: {wal_lv_path}")
+
+        result["wal"] = wal_lv_path
+
+    return result
 
 
 def validate_bluestore_label(
@@ -1724,3 +1605,128 @@ def validate_lvm_list(
             return False
 
     return True
+
+
+def deploy_osd(
+    rados_obj,
+    client_node,
+    target_hostname,
+    data_device_path,
+    initial_osd_list,
+    rhbuild,
+    deployment_type="spec",
+    method="lvm",
+    service_id=None,
+    db_device_path=None,
+    wal_device_path=None,
+    db=False,
+    wal=False,
+    encrypted=False,
+):
+    """
+    Deploy OSD using data device.
+
+    Args:
+        rados_obj: RadosOrchestrator object for running ceph commands
+        client_node: Client node for running commands
+        target_hostname: Target hostname
+        data_device_path: Path to the data device
+        deployment_type: Deployment type (spec or cli)
+        method: Device method (lvm or raw)
+        service_id: Service ID for the OSD spec
+        db_device_path: Path to the DB device (optional)
+        wal_device_path: Path to the WAL device (optional)
+        db: If True, use separate DB device
+        wal: If True, use separate WAL device
+        encrypted: If True, encrypt the OSD
+
+    Returns:
+        list: List of newly deployed OSD IDs
+    """
+
+    if deployment_type == "spec":
+        log.info(
+            f"Deploying OSD using spec method with service_id: {service_id}, method: {method}"
+        )
+        osd_spec = {
+            "service_type": "osd",
+            "service_id": service_id,
+            "placement": {"hosts": [target_hostname]},
+            "data_devices": {"paths": [data_device_path]},
+        }
+        if db:
+            osd_spec["db_devices"] = {"paths": [db_device_path]}
+
+        if wal:
+            osd_spec["wal_devices"] = {"paths": [wal_device_path]}
+
+        if method == "raw":
+            osd_spec["method"] = "raw"
+
+        if encrypted:
+            osd_spec["encrypted"] = "true"
+
+        spec_file_path = f"/tmp/{service_id}.yaml"
+        spec_content = yaml.dump(osd_spec, default_flow_style=False)
+
+        log.info(f"OSD spec content:\n{spec_content}")
+
+        # Write spec file to client node
+        client_node.exec_command(
+            sudo=True, cmd=f"cat > {spec_file_path} << 'EOF'\n{spec_content}EOF"
+        )
+        log.info(f"Created OSD spec file at: {spec_file_path}")
+
+        apply_cmd = f"ceph orch apply -i {spec_file_path}"
+        log.info(f"Applying OSD spec: {apply_cmd}")
+        client_node.exec_command(sudo=True, cmd=apply_cmd, verbose=True)
+
+    else:
+        log.info(
+            f"Deploying OSD using cli method on {target_hostname}, method: {method}"
+        )
+        deploy_cmd = f"ceph orch daemon add osd {target_hostname}:data_devices={data_device_path}"
+
+        if db:
+            deploy_cmd += f",db_devices={db_device_path}"
+
+        if wal:
+            deploy_cmd += f",wal_devices={wal_device_path}"
+
+        if encrypted:
+            deploy_cmd += ",encrypted=true"
+
+        if method == "raw":
+            deploy_cmd += " raw"
+
+        log.info(f"Running OSD deploy command: {deploy_cmd}")
+        _out, _err, _exit, _time = client_node.exec_command(
+            cmd=deploy_cmd, verbose=True
+        )
+        log.info(f"OSD deploy command output: {_out}")
+
+        ceph_version = float(rhbuild.split("-")[0])
+        if ceph_version < 9.0:
+            if "Created osd(s)".lower() in _out.lower():
+                log.info(f"OSD deployment successful: {_out}")
+            else:
+                log.error(f"OSD deployment failed: {_out}")
+                raise Exception(
+                    f"OSD deployment failed output: {_out} error: {_err} exit code: {_exit}"
+                )
+        else:
+            log.warning(f"OSD deployment command output: {_out}")
+            log.warning(f"OSD deployment command error: {_err}")
+            log.warning(
+                "BUG exists in ceph version >= 9.0 https://bugzilla.redhat.com/show_bug.cgi?id=2428857"
+            )
+
+    # Wait for OSD deployment to complete
+    new_osds = wait_for_osd_deployment(
+        rados_obj=rados_obj,
+        osd_list_before=initial_osd_list,
+    )
+    if new_osds is None:
+        raise Exception("OSD deployment failed or timed out")
+
+    return new_osds

@@ -37,7 +37,6 @@ tests:
             - node2
             - node3
             - node4
-            - node5
           attach_ip_address: true
           labels: apply-all-labels
       destroy-cluster: false
@@ -87,52 +86,6 @@ tests:
                       all: "true"
 
   - test:
-      name: MDS Service deployment with spec
-      desc: Add MDS services using spec file
-      module: test_cephadm.py
-      polarion-id: CEPH-83574728
-      config:
-        steps:
-          - config:
-              command: shell
-              args: # arguments to ceph orch
-                - ceph
-                - fs
-                - volume
-                - create
-                - cephfs
-          - config:
-              command: apply_spec
-              service: orch
-              validate-spec-services: true
-              specs:
-                - service_type: mds
-                  service_id: cephfs
-                  placement:
-                    label: mds
-          # Adding below WA to set bulk flag to false until bug fix : 2308623
-          - config:
-              command: shell
-              args: # arguments to ceph orch
-                - "ceph osd pool set cephfs.cephfs.data bulk false"
-
-  - test:
-      name: RGW Service deployment
-      desc: RGW Service deployment
-      module: test_cephadm.py
-      polarion-id: CEPH-83574728
-      config:
-        steps:
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-
-  - test:
       name: Configure client admin
       desc: Configures client admin node on cluster
       module: test_client.py
@@ -158,11 +111,31 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
+  # backup host node5 is used to test OSD deployment workflows
+  # Test modules of osd deployment workflows are expected to have host with osd-bak label
+  - test:
+      name: Add backup host node5 ( host with osd-bak label) to test OSD deployment workflows
+      desc: Add backup host node5 to test OSD deployment workflows
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node5
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
   - test:
       name: 1 - OSD deployment tests - raw data device - spec file
       module: osd_deploy_tests.py
       polarion-id: CEPH-83632255
       config:
+        deployment_type: spec
+        # encrypted: true BZ 2433160
+        # https://bugzilla.redhat.com/show_bug.cgi?id=2433160
         test_scenarios:
           - scenario1
       desc: OSD deployment tests - raw data device - spec file
@@ -172,6 +145,9 @@ tests:
       module: osd_deploy_tests.py
       polarion-id: CEPH-83632255
       config:
+        deployment_type: spec
+        encrypted: true
+        compressed: true
         test_scenarios:
           - scenario2
       desc: OSD deployment tests - lvm data device - spec file
@@ -181,6 +157,8 @@ tests:
       module: osd_deploy_tests.py
       polarion-id: CEPH-83632255
       config:
+        deployment_type: spec
+        compressed: true
         test_scenarios:
           - scenario3
       desc: OSD deployment tests -  lvm data and db device - spec file
@@ -190,24 +168,101 @@ tests:
       module: osd_deploy_tests.py
       polarion-id: CEPH-83632255
       config:
+        deployment_type: spec
         test_scenarios:
           - scenario4
       desc: OSD deployment tests - lvm data, db and wal device - spec file
 
-  - test:
-      name: 5 - OSD deployment tests - raw data and db device - spec file
-      module: osd_deploy_tests.py
-      polarion-id: CEPH-83632255
-      config:
-        test_scenarios:
-          - scenario5
-      desc: OSD deployment tests - raw data and db device - spec file
+  # - test:
+  #     name: 5 - OSD deployment tests - raw data and db device - spec file
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: spec
+  #       test_scenarios:
+  #         - scenario5
+  #     desc: OSD deployment tests - raw data and db device - spec file
+
+  # - test:
+  #     name: 6 - OSD deployment tests - raw data, db and wal device - spec file
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: spec
+  #       test_scenarios:
+  #         - scenario6
+  #     desc: OSD deployment tests - raw data, db and wal device - spec file
 
   - test:
-      name: 6 - OSD deployment tests - raw data, db and wal device - spec file
+      name: Case1_CLI - OSD deployment tests - raw data device
       module: osd_deploy_tests.py
       polarion-id: CEPH-83632255
       config:
+        deployment_type: cli
+        # encrypted: true BZ 2433160
+        # encrypted osd deployment using CLI method fails
+        # https://bugzilla.redhat.com/show_bug.cgi?id=2433160
         test_scenarios:
-          - scenario6
-      desc: OSD deployment tests - raw data, db and wal device - spec file
+          - scenario1
+      desc: OSD deployment tests - raw data device - CLI
+
+  - test:
+      name: Case2_CLI - OSD deployment tests - lvm data device
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: cli
+        encrypted: true
+        compressed: true
+        test_scenarios:
+          - scenario2
+      desc: OSD deployment tests - lvm data device - CLI
+
+  # ceph orch ls validation is skipped for CLI method as db devices and wal devices are not added to OSD spec
+  # Bugzilla -
+  - test:
+      name: Case3_CLI - OSD deployment tests - lvm data and db device
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: cli
+        compressed: true
+        test_scenarios:
+          - scenario3
+      desc: OSD deployment tests -  lvm data and db device - CLI
+
+  # ceph orch ls validation is skipped for CLI method as db devices and wal devices are not added to OSD spec
+  # Bugzilla -
+  - test:
+      name: Case4_CLI - OSD deployment tests - lvm data, db and wal device
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: cli
+        test_scenarios:
+          - scenario4
+      desc: OSD deployment tests - lvm data, db and wal device - CLI
+
+  # OSD deployment using CLI method with raw data and db device fails
+  # Bugzilla - https://bugzilla.redhat.com/show_bug.cgi?id=2428878
+  # - test:
+  #     name: Case5_CLI - OSD deployment tests - raw data and db device
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: cli
+  #       test_scenarios:
+  #         - scenario5
+  #     desc: OSD deployment tests - raw data and db device - CLI
+
+  # OSD deployment using CLI method with raw data and db device fails
+  # Bugzilla - https://bugzilla.redhat.com/show_bug.cgi?id=2428878
+  # - test:
+  #     name: Case6_CLI - OSD deployment tests - raw data, db and wal device
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: cli
+  #       test_scenarios:
+  #         - scenario6
+  #     desc: OSD deployment tests - raw data, db and wal device - CLI
