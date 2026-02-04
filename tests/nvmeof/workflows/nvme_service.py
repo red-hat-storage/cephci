@@ -11,7 +11,10 @@ from tests.nvmeof.workflows.nvme_utils import (
     nvme_gw_cli_version_adapter,
     setup_firewalld,
 )
+from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
+
+LOG = Log(__name__)
 
 
 class NVMeService:

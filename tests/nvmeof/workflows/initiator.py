@@ -482,3 +482,22 @@ def prepare_io_execution(io_clients, gateways=None, cluster=None, return_clients
             Clients.append(client)
     if return_clients:
         return Clients
+
+
+@retry(IOError, tries=3, delay=3)
+def compare_client_namespace(clients, uuids, FEWR_NAMESPACES=False):
+    lsblk_devs = []
+    for client in clients:
+        lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
+
+    LOG.info(
+        f"Expected NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
+    )
+    if FEWR_NAMESPACES:
+        if not set(uuids).issubset(lsblk_devs):
+            raise IOError("Few Namespaces are missing!!!")
+    else:
+        if sorted(uuids) != sorted(set(lsblk_devs)):
+            raise IOError("Few Namespaces are missing!!!")
+    LOG.info("All namespaces are listed at Client(s)")
+    return True
