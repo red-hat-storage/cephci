@@ -241,7 +241,7 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
                     setup_ibm_licence(node, build_type=None)
 
                 node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
-                upd_cmd = "yum update --nogpgcheck -y ceph*"
+                upd_cmd = "yum update --nogpgcheck -y 'ceph*'"
                 if kwargs.get("rpm_version", None):
                     upd_cmd = f"{upd_cmd}-{kwargs['rpm_version']}"
 
