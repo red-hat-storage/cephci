@@ -15,6 +15,7 @@ setup(
     author_email="cephci@redhat.com",
     install_requires=[
         "apache-libcloud==3.8.0",
+        "boto3>=1.34.0; python_version >= '3.12'",
         "cryptography==45.0.4",
         "docopt==0.6.2",
         "htmllistparse==0.6.1",

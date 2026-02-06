@@ -523,6 +523,185 @@ def setup_vm_node(node, ceph_nodes, **params):
         raise
 
 
+def create_aws_ceph_nodes(
+    cluster_conf,
+    inventory,
+    aws_creds,
+    run_id,
+    instances_name=None,
+    custom_config=None,
+):
+    """
+    Create EC2 instances in AWS (existing VPC/subnet).
+
+    Args:
+        cluster_conf: Configuration of cluster.
+        inventory: Instance configuration file (or path resolved from cluster).
+        aws_creds: Global configuration file with globals["aws-credentials"].
+        run_id: Unique id for the run.
+        instances_name: Optional name prefix for instances.
+        custom_config: CLI options (e.g. aws_vpc=default).
+    """
+    from compute.aws_ec2 import process_aws_custom_config
+
+    log.info("Creating AWS instances")
+    glbs = aws_creds.get("globals")
+    aws_cred = glbs.get("aws-credentials")
+    ceph_cluster = cluster_conf.get("ceph-cluster")
+    platform = process_aws_custom_config(custom_config)
+
+    params = dict()
+    ceph_nodes = dict()
+
+    if ceph_cluster.get("inventory"):
+        inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
+        with open(inventory_path, "r") as inventory_stream:
+            inventory = yaml.safe_load(inventory_stream)
+
+    node_count = 0
+
+    params["cloud-data"] = inventory.get("instance").get("setup", "")
+    params["region"] = aws_cred["region"]
+    # Strip whitespace from credentials
+    access_key = aws_cred.get("access_key")
+    secret_key = aws_cred.get("secret_key")
+    params["access_key"] = access_key.strip() if access_key else None
+    params["secret_key"] = secret_key.strip() if secret_key else None
+    params["subnet_id"] = platform.get("subnet_id") or aws_cred["subnet_id"]
+    params["security_group_ids"] = (
+        platform.get("security_group_ids") or aws_cred["security_group_ids"]
+    )
+    if isinstance(params["security_group_ids"], str):
+        params["security_group_ids"] = [params["security_group_ids"]]
+    params["key_name"] = platform.get("key_name") or aws_cred["key_name"]
+    # Prefer instance type from inventory (instance.create.instance_type or vm-size),
+    # then platform/custom_config, then osp-cred, then default
+    inv_create = inventory.get("instance", {}).get("create") or {}
+    params["instance_type"] = (
+        inv_create.get("instance_type")
+        or inv_create.get("vm-size")
+        or platform.get("instance_type")
+        or aws_cred.get("instance_type")
+        or "t3.medium"
+    )
+
+    if inventory.get("instance", {}).get("create"):
+        if ceph_cluster.get("image-name"):
+            params["image-id"] = ceph_cluster.get("image-name")
+        else:
+            params["image-id"] = (
+                inventory.get("instance").get("create").get("image-name")
+            )
+        if not params["image-id"]:
+            raise NodeError(
+                "AWS create: image-name (AMI id) is required in inventory or cluster"
+            )
+
+        params["cluster-name"] = ceph_cluster.get("name")
+        if params.get("root-login") is False:
+            params["root-login"] = False
+        else:
+            params["root-login"] = True
+
+        with parallel() as p:
+            for node in range(1, 100):
+                node_key = "node" + str(node)
+                if not ceph_cluster.get(node_key):
+                    break
+
+                node_dict = ceph_cluster.get(node_key)
+                node_params = params.copy()
+                node_params["role"] = RolesContainer(node_dict.get("role"))
+                node_params["id"] = node_dict.get("id") or node_key
+                node_params["location"] = node_dict.get("location")
+                node_params["node-name"] = generate_node_name(
+                    node_params.get("cluster-name", "ceph"),
+                    instances_name or os.getlogin(),
+                    run_id,
+                    node_key,
+                    node_params["role"],
+                )
+
+                if node_dict.get("no-of-volumes"):
+                    node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
+                    node_params["size-of-disks"] = node_dict.get("disk-size")
+                    node_params["osd-scenario"] = node_dict.get("osd-scenario")
+                else:
+                    node_params["no-of-volumes"] = 0
+                    node_params["size-of-disks"] = 0
+
+                if node_dict.get("image-name"):
+                    node_params["image-id"] = node_dict["image-name"].get(
+                        "aws", node_params["image-id"]
+                    )
+
+                if node_dict.get("cloud-data"):
+                    node_params["cloud-data"] = node_dict.get("cloud-data")
+
+                sleep(node_count * 5)
+                node_count += 1
+                p.spawn(setup_vm_node_aws, node_key, ceph_nodes, **node_params)
+
+    if node_count and len(ceph_nodes) != node_count:
+        log.error(
+            "Mismatch error in number of VMs creation. Initiated: %s  Spawned: %s",
+            node_count,
+            len(ceph_nodes),
+        )
+        raise NodeError("Required number of nodes not created")
+
+    log.info("Done creating AWS nodes")
+    return ceph_nodes
+
+
+@retry(RETRY_EXCEPTIONS, tries=3, delay=10)
+def setup_vm_node_aws(node, ceph_nodes, **params):
+    """
+    Create the VM node using AWS EC2 API.
+
+    The retry decorator will trigger a rerun when a soft error is encountered. The VM
+    node is removed in exception scope before re-raising.
+    """
+    from compute.aws_ec2 import CephVMNodeAWS
+
+    vm = None
+    try:
+        vm = CephVMNodeAWS(
+            aws_cred={
+                "region": params["region"],
+                "access_key": params.get("access_key"),
+                "secret_key": params.get("secret_key"),
+            }
+        )
+
+        vm.create(
+            node_name=params["node-name"],
+            image_id=params["image-id"],
+            subnet_id=params["subnet_id"],
+            security_group_ids=params["security_group_ids"],
+            key_name=params["key_name"],
+            instance_type=params["instance_type"],
+            userdata=params.get("cloud-data", ""),
+            size_of_disks=params.get("size-of-disks", 0),
+            no_of_volumes=params.get("no-of-volumes", 0),
+        )
+
+        vm.role = params["role"]
+        vm.root_login = params["root-login"]
+        vm.osd_scenario = params.get("osd-scenario")
+        vm.location = params.get("location")
+        vm.id = params.get("id")
+        ceph_nodes[node] = vm
+    except RETRY_EXCEPTIONS as retry_except:
+        log.warning(retry_except, exc_info=True)
+        if vm is not None:
+            vm.delete()
+        raise
+    except BaseException as be:  # noqa
+        log.error(be, exc_info=True)
+        raise
+
+
 def get_openstack_driver(yaml):
     OpenStack = get_driver(Provider.OPENSTACK)
     glbs = yaml.get("globals")

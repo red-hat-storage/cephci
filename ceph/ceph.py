@@ -1298,6 +1298,7 @@ class SSHConnectionManager(object):
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
+        self._private_key_file_path = private_key_file_path
         self.pkey = self._get_ssh_key(private_key_file_path) if look_for_keys else None
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
@@ -1395,7 +1396,20 @@ class SSHConnectionManager(object):
             del pickle_dict["_SSHConnectionManager__transport"]
         if pickle_dict.get("_SSHConnectionManager__client"):
             del pickle_dict["_SSHConnectionManager__client"]
+        # pkey (paramiko/cryptography key) is not picklable; recreated in __setstate__
+        if pickle_dict.get("pkey") is not None:
+            del pickle_dict["pkey"]
         return pickle_dict
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__client = paramiko.SSHClient()
+        self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
+        self.__transport = None
+        key_path = getattr(self, "_private_key_file_path", "") or ""
+        self.pkey = (
+            self._get_ssh_key(key_path) if self.look_for_keys and key_path else None
+        )
 
 
 class CephNode(object):
@@ -1793,7 +1807,7 @@ class CephNode(object):
         if d.get("ssh_transport"):
             del d["ssh_transport"]
 
-        if d.get("ssh_transport"):
+        if d.get("root_connection"):
             del d["root_connection"]
 
         if d.get("connection"):
