@@ -70,6 +70,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -122,6 +123,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -189,6 +191,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -243,6 +246,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -313,6 +317,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd2
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -386,6 +391,7 @@ tests:
           - node5
           - node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd2
         gw_group: gw_group1
         subsystems:
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -440,6 +446,7 @@ tests:
           - node5
           - node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         subsystems:
           - nqn: nqn.2016-06.io.spdk:cnode1
