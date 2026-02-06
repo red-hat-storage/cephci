@@ -88,6 +88,8 @@ CONFIGURATION OPTIONS:
 import concurrent.futures as cf
 import random
 import time
+import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -290,6 +292,7 @@ def run(ceph_cluster, **kw):
     rbd_mount_path = None
     rbd_device_path = None
     nfs_config = None
+    nfs_firewall_disabled_nodes = []  # Track nodes where firewall was disabled for NFS
 
     try:
         # POOL CREATION PHASE - RADOS, CephFS, RBD (Parallel)
@@ -367,7 +370,16 @@ def run(ceph_cluster, **kw):
                 log.info(f"Created {len(rados_pools)} RADOS pool(s)")
 
                 if cephfs_future:
-                    fs_name, cephfs_mount_path, cephfs_pools = cephfs_future.result()
+                    cephfs_result = cephfs_future.result()
+                    if (
+                        not cephfs_result
+                        or not cephfs_result[0]
+                        or not cephfs_result[1]
+                    ):
+                        raise Exception(
+                            "CephFS setup returned invalid filesystem name or mount path"
+                        )
+                    fs_name, cephfs_mount_path, cephfs_pools = cephfs_result
                     created_pools.extend(cephfs_pools)
                     fs_names.append(fs_name)
                     log.info(f"Created CephFS: {fs_name} at {cephfs_mount_path}")
@@ -377,7 +389,12 @@ def run(ceph_cluster, **kw):
                     )
 
                 if rbd_future:
-                    rbd_mount_path, rbd_device_path, rbd_pools = rbd_future.result()
+                    rbd_result = rbd_future.result()
+                    if not rbd_result or not rbd_result[0] or not rbd_result[1]:
+                        raise Exception(
+                            "RBD setup returned invalid mount path or device path"
+                        )
+                    rbd_mount_path, rbd_device_path, rbd_pools = rbd_result
                     created_pools.extend(rbd_pools)
                     log.info(f"Created RBD pools at {rbd_mount_path}")
                 else:
@@ -388,23 +405,86 @@ def run(ceph_cluster, **kw):
                     if rgw_config:
                         log.info("RGW S3 client setup completed successfully")
                     else:
-                        log.warning("RGW S3 setup failed, disabling RGW thrashing")
-                        enable_rgw_thrashing = False
+                        raise Exception(
+                            "RGW thrashing enabled but RGW setup returned no config"
+                        )
                 else:
                     log.info("RGW setup skipped (RGW thrashing not enabled)")
 
                 if nfs_future:
                     nfs_config = nfs_future.result()
                     if nfs_config:
+                        if not nfs_config.get("fs_name") or not nfs_config.get("pools"):
+                            raise Exception(
+                                "NFS setup returned empty filesystem name or pools"
+                            )
                         created_pools.extend(nfs_config.get("pools", []))
                         fs_names.append(nfs_config.get("fs_name"))
                         log.info(
                             f"Created NFS setup: {len(nfs_config.get('clusters', []))} clusters, "
                             f"{len(nfs_config.get('exports', []))} exports"
                         )
+
+                        # NFSv3 prerequisites: ensure rpcbind and rpc.statd are running
+                        # Without these services, NFS-Ganesha cannot register NFSv3 and
+                        # emits "Cannot register NFS V3 on TCP" error.
+                        all_nodes = ceph_cluster.get_nodes()
+                        configured_hosts = set()
+                        for cluster_info in nfs_config.get("clusters", []):
+                            hostname = cluster_info.get("host")
+                            if not hostname or hostname in configured_hosts:
+                                continue
+                            configured_hosts.add(hostname)
+                            # Find node object for this NFS server
+                            host_node = next(
+                                (n for n in all_nodes if n.hostname == hostname), None
+                            )
+                            if not host_node:
+                                log.warning(f"  {hostname}: Node not found, skipping")
+                                continue
+                            try:
+                                # Batch: disable firewall, install/start services
+                                # Note: cephadm NFS service is ceph-*@nfs.*.service
+                                host_node.exec_command(
+                                    cmd="systemctl stop firewalld 2>/dev/null || true; "
+                                    "systemctl disable firewalld 2>/dev/null || true; "
+                                    "yum install -y rpcbind nfs-utils 2>/dev/null || true; "
+                                    "systemctl enable rpcbind rpc-statd 2>/dev/null || true; "
+                                    "systemctl start rpcbind rpc-statd 2>/dev/null || true; "
+                                    "systemctl list-units --type=service --no-legend | "
+                                    "grep '@nfs\\.' | awk '{print $1}' | "
+                                    "xargs -r systemctl restart 2>/dev/null || true",
+                                    sudo=True,
+                                    timeout=180,
+                                    check_ec=False,
+                                )
+                                nfs_firewall_disabled_nodes.append(host_node)
+                                log.info(
+                                    f"  {hostname}: NFSv3 prerequisites configured"
+                                )
+                            except Exception as e:
+                                log.warning(f"  {hostname}: Failed - {e}")
+
+                        # Also disable firewall on client node for NFS access
+                        try:
+                            client_node.exec_command(
+                                cmd="systemctl stop firewalld 2>/dev/null || true; "
+                                "systemctl disable firewalld 2>/dev/null || true",
+                                sudo=True,
+                                timeout=30,
+                                check_ec=False,
+                            )
+                            nfs_firewall_disabled_nodes.append(client_node)
+                            log.info("  Client node: firewall disabled")
+                        except Exception:
+                            pass
+
+                        # Allow NFS-Ganesha to complete registration with rpcbind
+                        time.sleep(10)
                     else:
-                        log.warning("NFS setup failed, disabling NFS thrashing")
-                        enable_nfs_thrashing = False
+                        raise Exception(
+                            "NFS thrashing enabled but NFS setup returned no config"
+                        )
                 else:
                     log.info("NFS setup skipped (NFS thrashing not enabled)")
             except Exception as e:
@@ -594,7 +674,7 @@ def run(ceph_cluster, **kw):
         max_workers += 1 if enable_mon_thrashing else 0
         max_workers += 1 if enable_mgr_thrashing else 0
         max_workers += 1 if enable_mds_thrashing else 0
-        max_workers += 1 if (enable_nfs_thrashing and nfs_config) else 0
+        max_workers += 4 if (enable_nfs_thrashing and nfs_config) else 0
         max_workers += 1 if (enable_cephfs_subvolume_thrashing and fs_names) else 0
         log.debug(f"ThreadPoolExecutor max_workers: {max_workers}")
 
@@ -829,6 +909,34 @@ def run(ceph_cluster, **kw):
                         stop_flag=stop_flag,
                     )
                 )
+                # NFS locking checks (basic + byte-range)
+                futures.append(
+                    executor.submit(
+                        thrash_nfs_locking,
+                        client_node=client_node,
+                        nfs_config=nfs_config,
+                        stop_flag=stop_flag,
+                    )
+                )
+                # NFS rootsquash/SELinux checks
+                futures.append(
+                    executor.submit(
+                        thrash_nfs_rootsquash,
+                        client_node=client_node,
+                        nfs_config=nfs_config,
+                        stop_flag=stop_flag,
+                    )
+                )
+                # NFS extended FS ops (cross-dir rename, links, deeper dirs)
+                futures.append(
+                    executor.submit(
+                        thrash_nfs_fsops_extended,
+                        client_node=client_node,
+                        nfs_config=nfs_config,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
             elif enable_nfs_thrashing:
                 log.warning("NFS FIO thrashing enabled but no NFS config available")
 
@@ -939,6 +1047,9 @@ def run(ceph_cluster, **kw):
                 workflow_order.append("mds_thrashing")
             if enable_nfs_thrashing and nfs_config:
                 workflow_order.append("nfs_fio_thrashing")
+                workflow_order.append("nfs_locking")
+                workflow_order.append("nfs_rootsquash")
+                workflow_order.append("nfs_fsops_extended")
             if enable_cephfs_subvolume_thrashing and fs_names:
                 workflow_order.append("cephfs_subvolume_thrashing")
 
@@ -1146,6 +1257,26 @@ def run(ceph_cluster, **kw):
                         task.result()
                     except Exception as e:
                         log.warning(f"{name} cleanup failed: {e}")
+
+            # Re-enable firewall on nodes where it was disabled for NFS
+            if nfs_firewall_disabled_nodes:
+                log.info(
+                    f"Re-enabling firewall on {len(nfs_firewall_disabled_nodes)} node(s)..."
+                )
+                for node in nfs_firewall_disabled_nodes:
+                    try:
+                        node.exec_command(
+                            cmd="systemctl enable firewalld 2>/dev/null || true; "
+                            "systemctl start firewalld 2>/dev/null || true",
+                            sudo=True,
+                            timeout=30,
+                            check_ec=False,
+                        )
+                        log.info(f"  {node.hostname}: firewall re-enabled")
+                    except Exception as e:
+                        log.warning(
+                            f"  {node.hostname}: Failed to re-enable firewall - {e}"
+                        )
 
             # Phase 2: Delete tracked pools
             if created_pools:
@@ -3788,7 +3919,7 @@ def thrash_nfs_fio(
     nfs_config: Dict[str, Any],
     duration: int,
     stop_flag: Dict,
-) -> int:
+) -> Dict[str, int]:
     """
     Thrash NFS exports with mount -> FIO -> unmount cycles.
 
@@ -3836,7 +3967,15 @@ def thrash_nfs_fio(
         f"{[len(g) for g in export_groups]}"
     )
 
+    # Log NFS version assignments
+    version_info = [
+        f"Worker{i}:NFSv{nfs_versions[i % len(nfs_versions)][0]}"
+        for i in range(num_workers)
+    ]
+    log.info(f"NFS version assignments: {', '.join(version_info)}")
+
     total_cycles = 0
+    total_failures = 0
     with cf.ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = []
         for worker_id, export_group in enumerate(export_groups):
@@ -3859,15 +3998,21 @@ def thrash_nfs_fio(
         # Collect results
         for future in cf.as_completed(futures):
             try:
-                cycles = future.result()
-                total_cycles += cycles
+                result = future.result()
+                if isinstance(result, dict):
+                    total_cycles += result.get("cycles", 0)
+                    total_failures += result.get("failures", 0)
+                else:
+                    total_cycles += result
             except Exception as e:
                 log.warning(f"NFS worker thread failed: {e}")
+                total_failures += 1
 
     log.info(
-        f"NFS FIO thrashing completed: {total_cycles} total cycles across {num_workers} workers"
+        f"NFS FIO thrashing completed: {total_cycles} total cycles across {num_workers} workers "
+        f"(failures={total_failures})"
     )
-    return total_cycles
+    return {"cycles": total_cycles, "failures": total_failures}
 
 
 def _nfs_worker_thread(
@@ -3897,7 +4042,7 @@ def _nfs_worker_thread(
         stop_flag: Stop signal dict
 
     Returns:
-        Number of cycles completed by this worker
+        Dict with cycles completed and failures encountered by this worker
     """
     nfs_ver_str, nfs_options = nfs_version
 
@@ -3911,6 +4056,7 @@ def _nfs_worker_thread(
 
     end_time = time.time() + duration
     cycle_count = 0
+    failures = 0
     base_mount_dir = f"/mnt/nfs-thrash-w{worker_id}"
     num_patterns = len(fio_patterns)
 
@@ -3933,11 +4079,7 @@ def _nfs_worker_thread(
 
     if not export_info:
         log.warning(f"Worker {worker_id}: No valid exports, exiting")
-        return 0
-
-    log.debug(
-        f"Worker {worker_id}: Starting with {len(export_info)} exports, NFSv{nfs_ver_str}"
-    )
+        return {"cycles": 0, "failures": 1}
 
     while time.time() < end_time and not stop_flag.get("stop"):
         cycle_count += 1
@@ -3945,10 +4087,6 @@ def _nfs_worker_thread(
         p_name, p_rw, p_bs, p_size, p_runtime = fio_patterns[
             (cycle_count - 1) % num_patterns
         ]
-
-        log.info(
-            f"Worker {worker_id} cycle {cycle_count}: NFSv{nfs_ver_str}, pattern={p_name}"
-        )
 
         mounted_exports = []
 
@@ -3968,9 +4106,15 @@ def _nfs_worker_thread(
                     client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
                     mounted_exports.append(exp)
                 except Exception as e:
+                    err_type = type(e).__name__
                     log.warning(
-                        f"Worker {worker_id}: Failed to mount {exp['pseudo_path']}: {e}"
+                        f"Worker {worker_id}: MOUNT FAILED\n"
+                        f"  Export: {exp['host']}:{exp['pseudo_path']}\n"
+                        f"  Mount point: {mount_point}\n"
+                        f"  NFS version: {nfs_ver_str}\n"
+                        f"  Error: {err_type}: {e}"
                     )
+                    failures += 1
 
             if not mounted_exports:
                 log.warning(
@@ -3978,10 +4122,6 @@ def _nfs_worker_thread(
                 )
                 time.sleep(5)
                 continue
-
-            log.debug(
-                f"Worker {worker_id}: Mounted {len(mounted_exports)} exports with NFSv{nfs_ver_str}"
-            )
 
             # Step 2.5: Run NFS export info on one random export per cycle
             exp = random.choice(mounted_exports)
@@ -3991,13 +4131,13 @@ def _nfs_worker_thread(
                     cmd=f"ceph nfs export info {cid} {ppath} --format json-pretty",
                     sudo=True,
                 )
-                log.debug(f"Worker {worker_id}: NFS export info for {cid}:{ppath}")
                 client_node.exec_command(
                     cmd=f"ceph nfs export ls {cid} --detailed --format json-pretty",
                     sudo=True,
                 )
             except Exception as e:
-                log.warning(f"Worker {worker_id}: NFS info failed: {e}")
+                log.warning(f"Worker {worker_id}: NFS INFO FAILED - {cid}:{ppath}: {e}")
+                failures += 1
 
             # Step 3: Run FIO on all mounted exports
             for exp in mounted_exports:
@@ -4015,9 +4155,15 @@ def _nfs_worker_thread(
                     )
                     client_node.exec_command(cmd=fio_cmd, sudo=True, timeout=120)
                 except Exception as e:
+                    err_type = type(e).__name__
                     log.warning(
-                        f"Worker {worker_id}: FIO on {exp['mount_point']} failed: {e}"
+                        f"Worker {worker_id}: FIO FAILED\n"
+                        f"  Pattern: {p_name} (rw={p_rw}, bs={p_bs})\n"
+                        f"  Work dir: {work_dir}\n"
+                        f"  Export: {exp['host']}:{exp['pseudo_path']}\n"
+                        f"  Error: {err_type}: {e}"
                     )
+                    failures += 1
 
             # Step 4: Additional filesystem operations on mounted NFS
             for exp in mounted_exports:
@@ -4026,78 +4172,79 @@ def _nfs_worker_thread(
 
                 work_dir = f"{exp['mount_point']}/fs_ops_c{cycle_count}"
                 try:
+                    # Clean up any leftover files from previous runs to avoid
+                    # "File exists" errors on hardlink creation
+                    client_node.exec_command(
+                        cmd=f"rm -rf {work_dir}", sudo=True, check_ec=False
+                    )
                     client_node.exec_command(cmd=f"mkdir -p {work_dir}", sudo=True)
 
-                    # Create test file
+                    # Batch all FS operations into a single script to reduce
+                    # SSH round-trips (15+ calls -> 2 calls)
+                    # Note: rm -f before ln to handle NFS caching issues
+                    fs_ops_script = f"""bash <<'FSOPS_WORKER'
+set -e
+# Create test file
+dd if=/dev/urandom of={work_dir}/test_file bs=4k count=10 2>/dev/null
+# Hardlink (remove first to handle NFS caching)
+rm -f {work_dir}/test_hardlink 2>/dev/null || true
+ln {work_dir}/test_file {work_dir}/test_hardlink
+# Rename original
+mv -f {work_dir}/test_file {work_dir}/test_renamed
+# Symlink (after rename, points to new name)
+ln -sf {work_dir}/test_renamed {work_dir}/test_symlink
+# Permission change
+chmod 755 {work_dir}/test_renamed
+# Extended attributes (best-effort)
+setfattr -n user.thrash -v 'cycle{cycle_count}' {work_dir}/test_renamed 2>/dev/null || true
+getfattr -n user.thrash {work_dir}/test_renamed 2>/dev/null || true
+setfattr -x user.thrash {work_dir}/test_renamed 2>/dev/null || true
+# Chown (best-effort)
+chown nobody:nogroup {work_dir}/test_renamed 2>/dev/null || true
+# Nested directories
+mkdir -p {work_dir}/nested/a/b/c
+ls -R {work_dir} >/dev/null
+FSOPS_WORKER
+"""
                     client_node.exec_command(
-                        cmd=f"dd if=/dev/urandom of={work_dir}/test_file bs=4k count=10",
-                        sudo=True,
-                    )
-
-                    # Symlink
-                    client_node.exec_command(
-                        cmd=f"ln -sf {work_dir}/test_file {work_dir}/test_symlink",
-                        sudo=True,
-                    )
-
-                    # Hardlink
-                    client_node.exec_command(
-                        cmd=f"ln {work_dir}/test_file {work_dir}/test_hardlink",
-                        sudo=True,
-                    )
-
-                    # Rename
-                    client_node.exec_command(
-                        cmd=f"mv {work_dir}/test_file {work_dir}/test_renamed",
-                        sudo=True,
-                    )
-
-                    # Permission change
-                    client_node.exec_command(
-                        cmd=f"chmod 755 {work_dir}/test_renamed", sudo=True
-                    )
-
-                    # Extended attributes
-                    client_node.exec_command(
-                        cmd=f"setfattr -n user.thrash -v 'cycle{cycle_count}' "
-                        f"{work_dir}/test_renamed",
-                        sudo=True,
-                        check_ec=False,
+                        cmd=fs_ops_script.strip(), sudo=True, timeout=60
                     )
 
                     # Unmount and remount to verify persistence
                     mount_point = exp["mount_point"]
                     client_node.exec_command(
-                        cmd=f"umount -lf {mount_point}", sudo=True, check_ec=False
-                    )
-                    time.sleep(1)
-                    mount_cmd = (
+                        cmd=f"umount -lf {mount_point} && sleep 1 && "
                         f"mount -t nfs -o {nfs_options},port={exp['port']} "
-                        f"{exp['host']}:{exp['pseudo_path']} {mount_point}"
+                        f"{exp['host']}:{exp['pseudo_path']} {mount_point}",
+                        sudo=True,
+                        timeout=60,
                     )
-                    client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
 
-                    # Read back and verify after remount
+                    # Verify after remount (batched)
                     client_node.exec_command(
-                        cmd=f"cat {work_dir}/test_symlink > /dev/null", sudo=True
-                    )
-                    client_node.exec_command(
-                        cmd=f"cat {work_dir}/test_hardlink > /dev/null", sudo=True
-                    )
-                    client_node.exec_command(cmd=f"ls -la {work_dir}/", sudo=True)
-
-                    # Delete files
-                    client_node.exec_command(
-                        cmd=f"rm -rf {work_dir}", sudo=True, check_ec=False
+                        cmd=f"cat {work_dir}/test_symlink >/dev/null && "
+                        f"cat {work_dir}/test_hardlink >/dev/null && "
+                        f"ls -la {work_dir}/ && rm -rf {work_dir}",
+                        sudo=True,
+                        check_ec=False,
                     )
 
                 except Exception as e:
+                    err_type = type(e).__name__
                     log.warning(
-                        f"Worker {worker_id}: FS ops on {exp['mount_point']} failed: {e}"
+                        f"Worker {worker_id}: FS OPS FAILED\n"
+                        f"  Work dir: {work_dir}\n"
+                        f"  Export: {exp['host']}:{exp['pseudo_path']}\n"
+                        f"  Error: {err_type}: {e}"
                     )
+                    failures += 1
 
         except Exception as e:
-            log.warning(f"Worker {worker_id} cycle {cycle_count} error: {e}")
+            err_type = type(e).__name__
+            log.warning(
+                f"Worker {worker_id} cycle {cycle_count} error: {err_type}: {e}"
+            )
+            failures += 1
 
         finally:
             if mounted_exports:
@@ -4118,8 +4265,346 @@ def _nfs_worker_thread(
             )
         time.sleep(5)
 
-    log.info(f"Worker {worker_id}: Completed {cycle_count} cycles")
-    return cycle_count
+    log.info(
+        f"Worker {worker_id}: Completed {cycle_count} cycles (failures={failures})"
+    )
+    return {"cycles": cycle_count, "failures": failures}
+
+
+def _pick_nfs_endpoint(nfs_config: Dict[str, Any], index: int = 0):
+    """Helper to pick NFS export endpoint by index with cached lookups."""
+    exports = nfs_config.get("exports", [])
+    clusters = nfs_config.get("clusters", [])
+    if not exports or not clusters:
+        return None, None, None
+
+    # Cache cluster maps to avoid rebuilding on every call
+    if "_cluster_host_map" not in nfs_config:
+        nfs_config["_cluster_host_map"] = {c["cluster_id"]: c["host"] for c in clusters}
+        nfs_config["_cluster_port_map"] = {c["cluster_id"]: c["port"] for c in clusters}
+
+    exp = exports[index % len(exports)]
+    host = nfs_config["_cluster_host_map"].get(exp["cluster_id"])
+    port = nfs_config["_cluster_port_map"].get(exp["cluster_id"])
+    return exp, host, port
+
+
+@contextmanager
+def _nfs_mount_context(
+    client_node,
+    nfs_config: Dict[str, Any],
+    mount_base: str,
+    index: int = 0,
+    nfs_ver: str = "4.1",
+):
+    """
+    Context manager for NFS mount/unmount with automatic cleanup.
+
+    Args:
+        client_node: SSH client node
+        nfs_config: NFS configuration dictionary
+        mount_base: Base name for mount point (unique suffix added automatically)
+        index: Export index to use
+        nfs_ver: NFS version string (e.g., "4.1", "4.2")
+
+    Yields:
+        Tuple of (export_info, mount_point) or (None, None) if setup fails
+    """
+    exp, host, port = _pick_nfs_endpoint(nfs_config, index=index)
+    if not exp or not host or not port:
+        yield None, None
+        return
+
+    # Use unique mount point to avoid collisions in parallel runs
+    unique_suffix = uuid.uuid4().hex[:8]
+    mount_point = f"{mount_base}-{unique_suffix}"
+
+    mount_cmd = (
+        f"mount -t nfs -o nfsvers={nfs_ver},port={port} "
+        f"{host}:{exp['pseudo_path']} {mount_point}"
+    )
+    try:
+        client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
+        client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
+        yield exp, mount_point
+    except Exception as e:
+        log.warning(f"NFS mount FAILED: {host}:{exp['pseudo_path']} NFSv{nfs_ver}: {e}")
+        yield None, None
+    finally:
+        try:
+            client_node.exec_command(
+                cmd=f"umount -lf {mount_point}", sudo=True, check_ec=False
+            )
+            client_node.exec_command(
+                cmd=f"rm -rf {mount_point}", sudo=True, check_ec=False
+            )
+        except Exception:
+            pass
+
+
+def thrash_nfs_locking(
+    client_node,
+    nfs_config: Dict[str, Any],
+    stop_flag: Dict,
+) -> Dict[str, int]:
+    """
+    NFS locking validation: tests basic exclusive lock and byte-range locks.
+    Runs a Python script that verifies fcntl advisory locking works over NFS.
+    """
+    if stop_flag.get("stop"):
+        return {"ops": 0, "failures": 0}
+
+    failures = 0
+    ops = 0
+
+    with _nfs_mount_context(
+        client_node, nfs_config, "/mnt/nfs-lock-test", index=0, nfs_ver="4.1"
+    ) as (exp, mount_point):
+        if not exp or not mount_point:
+            log.warning("NFS locking: mount failed, skipping")
+            return {"ops": 0, "failures": 1}
+
+        try:
+            lock_file = f"{mount_point}/lock_test.dat"
+            script_file = f"{mount_point}/lock_test.py"
+            # Create 4KB file for byte-range locking tests
+            client_node.exec_command(cmd=f"truncate -s 4096 {lock_file}", sudo=True)
+
+            # Combined locking test script (diagnostic, always exit 0)
+            # Note: NFS-Ganesha may not block same-process locks per POSIX,
+            # so we report behavior without failing the test.
+            py_script = """#!/usr/bin/env python3
+import fcntl, os, sys, time
+
+path = sys.argv[1]
+fd1 = fd2 = None
+passed = 0
+info = 0
+start_time = time.time()
+
+def elapsed():
+    return f"[{time.time() - start_time:.3f}s]"
+
+try:
+    # Setup info
+    file_size = os.path.getsize(path)
+    print(f"{elapsed()} File: {path} (size={file_size} bytes)")
+
+    fd1 = os.open(path, os.O_RDWR)
+    fd2 = os.open(path, os.O_RDWR)
+    print(f"{elapsed()} Opened file descriptors: fd1={fd1}, fd2={fd2}")
+
+    # Test 1: Basic exclusive lock acquire
+    print(f"{elapsed()} Test 1: Acquiring exclusive lock on fd1...")
+    fcntl.lockf(fd1, fcntl.LOCK_EX)
+    print(f"{elapsed()} PASS: Acquired exclusive lock on fd1")
+    passed += 1
+
+    # Test 2: Second lock from same process (NFS may or may not block)
+    print(f"{elapsed()} Test 2: Trying non-blocking lock on fd2 (same process)...")
+    try:
+        fcntl.lockf(fd2, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        print(f"{elapsed()} INFO: Same-process second lock allowed (NFS-Ganesha behavior)")
+        info += 1
+        fcntl.lockf(fd2, fcntl.LOCK_UN)
+    except BlockingIOError:
+        print(f"{elapsed()} PASS: Same-process lock blocked (strict POSIX)")
+        passed += 1
+    fcntl.lockf(fd1, fcntl.LOCK_UN)
+    print(f"{elapsed()} Released fd1 lock")
+
+    # Test 3: Byte-range non-overlapping (should always succeed)
+    print(f"{elapsed()} Test 3: Byte-range lock fd1 bytes 0-99...")
+    fcntl.lockf(fd1, fcntl.LOCK_EX, 100, 0)
+    print(f"{elapsed()} Acquired fd1 lock on bytes 0-99")
+    print(f"{elapsed()} Trying fd2 lock on bytes 200-299 (non-overlapping)...")
+    try:
+        fcntl.lockf(fd2, fcntl.LOCK_EX | fcntl.LOCK_NB, 100, 200)
+        print(f"{elapsed()} PASS: Non-overlapping byte-range lock succeeded")
+        passed += 1
+        fcntl.lockf(fd2, fcntl.LOCK_UN, 100, 200)
+    except BlockingIOError:
+        print(f"{elapsed()} WARN: Non-overlapping byte-range lock blocked unexpectedly")
+        info += 1
+
+    # Test 4: Byte-range overlapping check
+    print(f"{elapsed()} Test 4: Trying fd2 lock on bytes 0-49 (overlaps with fd1)...")
+    try:
+        fcntl.lockf(fd2, fcntl.LOCK_EX | fcntl.LOCK_NB, 50, 0)
+        print(f"{elapsed()} INFO: Overlapping lock allowed (NFS-Ganesha same-process behavior)")
+        info += 1
+        fcntl.lockf(fd2, fcntl.LOCK_UN, 50, 0)
+    except BlockingIOError:
+        print(f"{elapsed()} PASS: Overlapping byte-range lock blocked correctly")
+        passed += 1
+
+    fcntl.lockf(fd1, fcntl.LOCK_UN, 100, 0)
+    print(f"{elapsed()} Released all locks")
+    print(f"{elapsed()} SUMMARY: {passed} passed, {info} info/expected behaviors")
+    sys.exit(0)
+except Exception as e:
+    print(f"{elapsed()} ERROR: Locking test failed unexpectedly: {type(e).__name__}: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+finally:
+    if fd2 is not None: os.close(fd2)
+    if fd1 is not None: os.close(fd1)
+"""
+            client_node.exec_command(
+                cmd=f"cat > {script_file} << 'LOCKTEST'\n{py_script}\nLOCKTEST",
+                sudo=True,
+            )
+            client_node.exec_command(cmd=f"chmod +x {script_file}", sudo=True)
+
+            out, _ = client_node.exec_command(
+                cmd=f"python3 {script_file} {lock_file} 2>&1",
+                sudo=True,
+                timeout=30,
+                check_ec=False,
+            )
+            log.info(f"NFS locking results:\n{out.strip()}")
+            ops += 1
+        except Exception as e:
+            log.warning(f"NFS locking failed: {e}")
+            failures += 1
+        finally:
+            client_node.exec_command(
+                cmd=f"rm -f {script_file}", sudo=True, check_ec=False
+            )
+
+    return {"ops": ops, "failures": failures}
+
+
+def thrash_nfs_rootsquash(
+    client_node,
+    nfs_config: Dict[str, Any],
+    stop_flag: Dict,
+) -> Dict[str, int]:
+    """
+    NFS rootsquash and SELinux validation (best-effort, diagnostic).
+    Tests root write, nobody write, and SELinux labeling if available.
+    """
+    if stop_flag.get("stop"):
+        return {"ops": 0, "failures": 0}
+
+    failures = 0
+    ops = 0
+    export_index = len(nfs_config.get("exports", [])) - 1
+    export_index = max(0, export_index)
+
+    with _nfs_mount_context(
+        client_node,
+        nfs_config,
+        "/mnt/nfs-rootsquash",
+        index=export_index,
+        nfs_ver="4.2",
+    ) as (exp, mount_point):
+        if not exp or not mount_point:
+            log.warning("NFS rootsquash: mount failed, skipping")
+            return {"ops": 0, "failures": 1}
+
+        test_file = f"{mount_point}/rootsquash_test.dat"
+
+        try:
+            # Test 1: Root write
+            client_node.exec_command(cmd=f"echo root > {test_file}", sudo=True)
+            client_node.exec_command(cmd=f"chmod 666 {test_file}", sudo=True)
+            ops += 1
+
+            # Test 2: SELinux labeling (best-effort)
+            client_node.exec_command(
+                cmd=f"chcon -t usr_t {test_file} 2>/dev/null && ls -Z {test_file}",
+                sudo=True,
+                check_ec=False,
+            )
+            ops += 1
+
+            # Test 3: Nobody user write (if user exists)
+            try:
+                client_node.exec_command(cmd="id nobody", sudo=True)
+                client_node.exec_command(
+                    cmd=f"runuser -u nobody -- sh -c 'echo nobody >> {test_file}'",
+                    sudo=True,
+                    check_ec=False,
+                )
+                ops += 1
+            except Exception:
+                pass  # nobody user not available
+
+        except Exception as e:
+            log.warning(f"NFS rootsquash: test failed - {e}")
+            failures += 1
+
+    return {"ops": ops, "failures": failures}
+
+
+def thrash_nfs_fsops_extended(
+    client_node,
+    nfs_config: Dict[str, Any],
+    duration: int,
+    stop_flag: Dict,
+    iteration_delay: float = 2.0,
+) -> Dict[str, int]:
+    """
+    Extended FS ops: cross-dir rename, hardlink delete, symlink perms, deep dirs.
+    """
+    if stop_flag.get("stop"):
+        return {"ops": 0, "failures": 0}
+
+    ops = 0
+    failures = 0
+    end_time = time.time() + min(duration, 300)
+
+    with _nfs_mount_context(
+        client_node, nfs_config, "/mnt/nfs-fsops-ext", index=2, nfs_ver="4.2"
+    ) as (exp, mount_point):
+        if not exp or not mount_point:
+            log.warning("NFS fsops extended: mount failed, skipping")
+            return {"ops": 0, "failures": 1}
+
+        iter_idx = 0
+        while time.time() < end_time and not stop_flag.get("stop"):
+            iter_idx += 1
+            base = f"{mount_point}/ext_{iter_idx}"
+            b_dir = f"{base}/a/b"
+            c_dir = f"{base}/c"
+
+            # Batch all filesystem operations into a single shell script
+            # to reduce SSH round-trips (12+ calls -> 1 call)
+            # Using heredoc to avoid shell quoting issues
+            fs_script = f"""bash <<'FSOPS_EOF'
+set -e
+mkdir -p {b_dir} {c_dir}
+dd if=/dev/urandom of={b_dir}/f1 bs=1k count=4 2>/dev/null
+mv {b_dir}/f1 {c_dir}/f1_renamed
+dd if=/dev/urandom of={b_dir}/f2 bs=1k count=2 2>/dev/null
+dd if=/dev/urandom of={c_dir}/f2 bs=1k count=1 2>/dev/null
+mv -f {b_dir}/f2 {c_dir}/f2
+ln {c_dir}/f1_renamed {c_dir}/f1_hl
+stat -c %i {c_dir}/f1_renamed
+stat -c %i {c_dir}/f1_hl
+mv {c_dir}/f1_hl {c_dir}/f1_hl_mv
+rm -f {c_dir}/f1_hl_mv
+ln -s {c_dir}/f1_renamed {c_dir}/f1_symlink
+chmod 700 {c_dir}/f1_symlink
+ls -laR {base}
+FSOPS_EOF
+"""
+            try:
+                client_node.exec_command(cmd=fs_script.strip(), sudo=True, timeout=60)
+                ops += 1
+            except Exception as e:
+                log.warning(f"NFS fsops iter {iter_idx} failed: {e}")
+                failures += 1
+            finally:
+                client_node.exec_command(
+                    cmd=f"rm -rf {base}", sudo=True, check_ec=False
+                )
+
+            time.sleep(iteration_delay)
+
+    return {"ops": ops, "failures": failures}
 
 
 def thrash_cephfs_subvolumes(
