@@ -22,10 +22,11 @@ def run_gateway_group_operations(
             "rbd_pool", config["rbd_pool"]
         )
 
+        gwgroup_config.update({"nvme_service": nvme_service})
         ha = HighAvailability(
             ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
         )
-        ha.initialize_gateways()
+        ha.gateways = nvme_service.gateways
 
         # Configure subsystems in GWgroups
         if gwgroup_config.get("subsystems"):
