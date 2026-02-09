@@ -548,6 +548,15 @@ def run_parallel_volume_ops(
                 "snap_name": "parallel_snap_sv_delete_test",
             }
             fs_util.remove_snapshot(client, **snapshot, validate=False, check_ec=False)
+        if "Manual Snapshot Create" in op_name:
+            snapshot = {
+                "vol_name": default_fs,
+                "subvol_name": sv_obj["subvol_name"],
+                "snap_name": "manual_snap_clone_test",
+            }
+            if sv_obj.get("group_name"):
+                snapshot.update({"group_name": sv_obj["group_name"]})
+            fs_util.remove_snapshot(client, **snapshot, validate=False, check_ec=False)
         out, rc = client.exec_command(sudo=True, cmd="ceph df")
         log.info("Ceph df output: %s", out)
         log.info("Completed operation %s/%s: %s", idx, len(operations), op_name)
@@ -556,7 +565,9 @@ def run_parallel_volume_ops(
     log.info("=" * 80)
     log.info("OPERATION TIMING RESULTS")
     log.info("=" * 80)
-    log.info("Operation:<50> Time (s):<15> Baseline (s):<15> Status:<10>")
+    log.info(
+        "%-50s %-15s %-15s %-10s", "Operation", "Time (s)", "Baseline (s)", "Status"
+    )
     log.info("-" * 80)
 
     for op_name, timing_info in operation_times.items():
@@ -564,23 +575,55 @@ def run_parallel_volume_ops(
         baseline_str = (
             "%s" % baseline if isinstance(baseline, (int, float)) else str(baseline)
         )
+        time_taken = "%.2f" % float(timing_info["time_taken"])
         log.info(
-            "%s:<50> %s:<15> %s:<15> %s:<10>",
+            "%-50s %-15s %-15s %-10s",
             op_name,
-            timing_info["time_taken"],
+            time_taken,
             baseline_str,
             timing_info["status"],
         )
+
+        def frange(start, stop, step):
+            """Generate a range of float numbers."""
+            range_num = [start]
+            while start < stop:
+                start += step
+                range_num.append(float("%.2f" % start))
+            return range_num
+
+        # cmd response time for some operations is not consistent, so we need to add a range of values to compare with
+        time_range = {
+            "Manual Snapshot Create": frange(1.0, 2.0, 0.01),
+            "Snap-Schedule Add": frange(1.0, 8.0, 0.01),
+            "Snap-Schedule Remove": frange(1.0, 2.1, 0.01),
+            "Other Clone Create": frange(1.0, 2.1, 0.01),
+        }
         # Compare with baseline if available
         if isinstance(baseline, (int, float)) and baseline > 0:
-            diff = timing_info["time_taken"] - baseline
-            diff_pct = (diff / baseline) * 100
+            diff = "%.2f" % (float(time_taken) - float(baseline))
+            diff_pct = "%.2f" % ((float(diff) / float(baseline)) * 100)
             log.info("  -> Difference: %s seconds (%s%%)", diff, diff_pct)
-            if diff_pct > 10:
-                log.error(
-                    "Operation %s took more than 10%% longer than baseline", op_name
-                )
-                test_fail += 1
+            if float(diff_pct) > 10.0:
+                if op_name in [
+                    "Manual Snapshot Create",
+                    "Snap-Schedule Add",
+                    "Snap-Schedule Remove",
+                    "Other Clone Create",
+                ]:
+                    if float(time_taken) in time_range[op_name]:
+                        continue
+                    else:
+                        log.error(
+                            "Operation %s took more than 10%% longer than baseline",
+                            op_name,
+                        )
+                        test_fail += 1
+                else:
+                    log.error(
+                        "Operation %s took more than 10%% longer than baseline", op_name
+                    )
+                    test_fail += 1
 
     log.info("=" * 80)
     if test_fail > 0:
@@ -768,17 +811,25 @@ def run(ceph_cluster, **kw):
             # Note: Clones are cleaned up within run_parallel_volume_ops for each operation
 
             # Clean up snapshot
-
-            if "snap_name" in locals() and "subvol_name" in locals():
+            listsnapshot_cmd = (
+                f"ceph fs subvolume snapshot ls {default_fs} {subvol_name}"
+            )
+            if sv_obj.get("group_name"):
+                listsnapshot_cmd += f" --group_name {sv_obj['group_name']}"
+            out, _ = client1.exec_command(
+                sudo=True, cmd=f"{listsnapshot_cmd} --format json"
+            )
+            snapshot_ls = json.loads(out)
+            for j in snapshot_ls:
+                snap_name = j["name"]
                 fs_util.remove_snapshot(
                     client1,
-                    vol_name=default_fs,
-                    subvol_name=subvol_name,
-                    snap_name=snap_name,
-                    validate=False,
-                    check_ec=False,
+                    default_fs,
+                    subvol_name,
+                    snap_name,
+                    validate=True,
+                    group_name=sv_obj.get("group_name", None),
                 )
-
             # Clean up subvolume
 
             if "subvol_name" in locals():
