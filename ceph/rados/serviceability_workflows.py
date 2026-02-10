@@ -216,7 +216,11 @@ class ServiceabilityMethods:
         )
 
     def remove_custom_host(
-        self, host_node_name: str, offline=False, rm_crush_entry=True
+        self,
+        host_node_name: str,
+        offline=False,
+        rm_crush_entry=True,
+        print_osd_list=True,
     ):
         """
         Method to remove a specific online host from the cluster
@@ -236,11 +240,12 @@ class ServiceabilityMethods:
             )
 
             # get list of osd_id on the host to be removed
-            rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
-            log.info(
-                "The OSD list to be removed from the host %s is %s"
-                % (rm_host.hostname, rm_osd_list)
-            )
+            if print_osd_list:
+                rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
+                log.info(
+                    "The OSD list to be removed from the host %s is %s"
+                    % (rm_host.hostname, rm_osd_list)
+                )
 
             if not offline:
                 daemon_check = self.rados_obj.check_daemon_exists_on_host(

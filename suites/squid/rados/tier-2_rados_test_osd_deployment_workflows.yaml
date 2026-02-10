@@ -116,16 +116,12 @@ tests:
   - test:
       name: Add backup host node5 ( host with osd-bak label) to test OSD deployment workflows
       desc: Add backup host node5 to test OSD deployment workflows
-      module: test_host.py
+      module: test_hosts.py
       config:
-        command: add_hosts
-        service: host
-        args:
-          nodes:
-            - node5
-          attach_ip_address: true
-          labels: apply-all-labels
-      destroy-cluster: false
+         deploy_osd: false
+         scenario: add_host
+         nodes:
+           - node5
       abort-on-fail: true
 
   - test:
@@ -266,3 +262,12 @@ tests:
   #       test_scenarios:
   #         - scenario6
   #     desc: OSD deployment tests - raw data, db and wal device - CLI
+
+  - test:
+      name: Remove the added backup host node5
+      desc: Remove the added backup host node5
+      module: test_hosts.py
+      config:
+        scenario: remove_host
+        nodes:
+          - node5
