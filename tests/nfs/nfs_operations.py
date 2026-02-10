@@ -67,6 +67,24 @@ def setup_nfs_cluster(
     nfs_nodes = ceph_cluster.get_nodes("nfs")
 
     # Step 2: Create an NFS cluster
+    # Extract NFS version from version parameter (could be "3", "4", "4.2", etc.)
+    nfs_version = None
+    if version:
+        # Check if version contains "3" (e.g., "3", "3.0", or list containing 3)
+        if isinstance(version, (list, tuple)):
+            nfs_version = 3 if 3 in version else None
+        elif isinstance(version, (int, str)):
+            # Convert to string and check if it starts with "3"
+            version_str = str(version)
+            if version_str.startswith("3") or version_str == "3":
+                nfs_version = 3
+                # for NFSv3, We need to run cephadm prepare-host on the nfs nodes
+                # prepare the host and check if rpcbin service is running
+                for nfs_node in nfs_nodes:
+                    nfs_node.exec_command(sudo=True, cmd="cephadm prepare-host")
+
+    create_kwargs = {"nfs_version": nfs_version}
+
     Ceph(clients[0]).nfs.cluster.create(
         name=nfs_name,
         nfs_server=nfs_server,
@@ -74,6 +92,7 @@ def setup_nfs_cluster(
         vip=vip,
         active_standby=active_standby,
         nfs_nodes_obj=nfs_nodes,
+        **create_kwargs,
     )
     sleep(3)
 
@@ -255,6 +274,22 @@ def setup_custom_nfs_cluster_multi_export_client(
     sleep(3)
 
     # Step 2: Create an NFS cluster
+    # Extract NFS version from version parameter (could be "3", "4", "4.2", etc.)
+    nfs_version = None
+    if version:
+        # Check if version contains "3" (e.g., "3", "3.0", or list containing 3)
+        if isinstance(version, (list, tuple)):
+            nfs_version = 3 if 3 in version else None
+        elif isinstance(version, (int, str)):
+            # Convert to string and check if it starts with "3"
+            version_str = str(version)
+            if version_str.startswith("3") or version_str == "3":
+                nfs_version = 3
+
+    create_kwargs = {"nfs_version": nfs_version}
+    if "in-file" in kwargs:
+        create_kwargs["in-file"] = kwargs["in-file"]
+
     Ceph(clients[0]).nfs.cluster.create(
         name=nfs_name,
         nfs_server=nfs_server,
@@ -262,7 +297,7 @@ def setup_custom_nfs_cluster_multi_export_client(
         vip=vip,
         active_standby=active_standby,
         nfs_nodes_obj=nfs_nodes,
-        **({"in-file": kwargs["in-file"]} if "in-file" in kwargs else {}),
+        **create_kwargs,
     )
     sleep(3)
 
@@ -598,7 +633,8 @@ placement:
     hosts:
         - {nfs_server_name}
 spec:
-    enable_nlm: true"""
+    enable_nlm: true
+    enable_nfsv3: true"""
 
     with open("ganesha.yaml", "w") as f:
         yaml.dump(content, f)
@@ -709,12 +745,6 @@ def create_nfs_via_file_and_verify(
         str: Path to the temporary YAML file.
     """
     temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
-
-    # Ensure rpcbind service is running on the nodes before applying the spec file
-    if nfs_nodes:
-        nfs_cluster = Ceph(installer_node).nfs.cluster
-        for nfs_node in nfs_nodes:
-            nfs_cluster.validate_rpcbind_running(nfs_node)
 
     # Handle case where installer_node is a list
     if isinstance(installer_node, list):
