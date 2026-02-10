@@ -345,8 +345,36 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"chmod {perm_list[i]} {source_files[i]}",
             )
+        snap4 = "snap_f3"
         source_clients[0].exec_command(
-            sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}{subvol1_path}.snap/snap_f3"
+            sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}{subvol1_path}.snap/{snap4}"
+        )
+
+        @retry(CommandFailed, tries=5, delay=30)
+        def get_snap_f3_status():
+            result = fs_mirroring_utils.validate_snapshot_sync_status(
+                cephfs_mirror_node[0],
+                source_fs,
+                snap4,
+                fsid,
+                asok_file,
+                filesystem_id,
+                peer_uuid,
+            )
+            if not result:
+                raise CommandFailed(f"Snapshot '{snap4}' not found or not synced.")
+            return result
+
+        result_snap_f3 = get_snap_f3_status()
+        log.info(f"Snapshot '{result_snap_f3['snapshot_name']}' has been synced:")
+        log.info(
+            f"Sync Duration: {result_snap_f3['sync_duration']} of '{result_snap_f3['snapshot_name']}'"
+        )
+        log.info(
+            f"Sync Time Stamp: {result_snap_f3['sync_time_stamp']} of '{result_snap_f3['snapshot_name']}'"
+        )
+        log.info(
+            f"Snaps Synced: {result_snap_f3['snaps_synced']} of '{result_snap_f3['snapshot_name']}'"
         )
 
         @retry(CommandFailed, tries=5, delay=10)
