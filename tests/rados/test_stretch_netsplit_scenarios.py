@@ -13,7 +13,7 @@ from collections import namedtuple
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from ceph.rados.utils import get_cluster_timestamp
+from ceph.rados.utils import get_cluster_timestamp, install_package
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.test_stretch_site_down import (
     get_stretch_site_hosts,
@@ -52,6 +52,13 @@ def run(ceph_cluster, **kw):
     start_time = get_cluster_timestamp(rados_obj.node)
     log.debug(f"Test workflow started. Start time: {start_time}")
     try:
+
+        for host in cluster_nodes:
+            # install iptables dependencies
+            install_package(
+                node=host,
+                packages=["iproute", "net-tools", "iptables-services"],
+            )
 
         if not stretch_enabled_checks(rados_obj=rados_obj):
             log.error(

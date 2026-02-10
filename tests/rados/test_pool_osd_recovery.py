@@ -22,7 +22,7 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
-from ceph.rados.utils import get_cluster_timestamp
+from ceph.rados.utils import get_cluster_timestamp, install_package
 from ceph.utils import get_node_by_id
 from tests.rados.rados_test_util import (
     get_device_path,
@@ -381,6 +381,11 @@ def run(ceph_cluster, **kw) -> int:
             # Blocks all incoming traffic on selected OSD node, except for SSH
             cluster_nodes = ceph_cluster.get_nodes()
             for node in cluster_nodes:
+                # install iptables dependencies
+                install_package(
+                    node,
+                    packages=["iproute", "net-tools", "iptables-services"],
+                )
                 rados_obj.block_in_out_packets_on_host(
                     source_host=node, target_host=fail_host
                 )

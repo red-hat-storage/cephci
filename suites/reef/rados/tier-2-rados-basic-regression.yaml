@@ -255,13 +255,13 @@ tests:
       desc: Change config options to enable logging to file
 
 # The below test is openstack only, and would need modifications to run on BM.
-# commenting the run of below test in BM pipeline
-  - test:
-      name: Verify osd heartbeat no reply
-      desc: heartbeat_check log entries should contain hostname:port
-      polarion-id: CEPH-10839
-      module: test_osd_heartbeat.py
-      destroy-cluster: false
+# commenting until MON Slow Ops is handled
+#  - test:
+#      name: Verify osd heartbeat no reply
+#      desc: heartbeat_check log entries should contain hostname:port
+#      polarion-id: CEPH-10839
+#      module: test_osd_heartbeat.py
+#      destroy-cluster: false
 
   - test:
       name: Monitor configuration - section and masks changes

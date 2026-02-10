@@ -4,7 +4,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.rados.utils import get_cluster_timestamp
+from ceph.rados.utils import get_cluster_timestamp, install_package
 from utility.log import Log
 
 log = Log(__name__)
@@ -45,6 +45,13 @@ def run(ceph_cluster, **kw):
     start_time = get_cluster_timestamp(rados_obj.node)
     log.debug(f"Test workflow started. Start time: {start_time}")
     try:
+        # install iptables dependencies
+        for node in ceph_cluster.get_nodes():
+            install_package(
+                node,
+                packages=["iproute", "net-tools", "iptables-services"],
+            )
+
         # Drop connection b/w installer node and obtained osd node
         out, _ = osd_node_2.exec_command(
             sudo=True, cmd=f"iptables -A INPUT -d {osd_heart_ip} -j REJECT"

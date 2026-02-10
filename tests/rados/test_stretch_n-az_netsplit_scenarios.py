@@ -10,7 +10,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from ceph.rados.utils import get_cluster_timestamp
+from ceph.rados.utils import get_cluster_timestamp, install_package
 from utility.log import Log
 
 log = Log(__name__)
@@ -58,6 +58,11 @@ def run(ceph_cluster, **kw):
 
         # Starting to flush IP table rules on all hosts
         for host in cluster_nodes:
+            # install iptables dependencies
+            install_package(
+                node=host,
+                packages=["iproute", "net-tools", "iptables-services"],
+            )
             log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
         time.sleep(60)
