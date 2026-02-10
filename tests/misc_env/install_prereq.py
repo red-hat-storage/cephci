@@ -57,9 +57,8 @@ rpm_packages = {
         "podman",
         "net-snmp-utils",
         "net-snmp",
-        "kernel-modules-extra",
         "iproute-tc",
-        "firewalld",
+        "firewalld --setopt=install_weak_deps=False",
     ],
 }
 deb_packages = ["wget", "git-core", "python-virtualenv", "lsb-release", "ntp"]
