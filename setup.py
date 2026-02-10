@@ -21,7 +21,7 @@ setup(
         "htmllistparse==0.6.1",
         "ibm-cloud-sdk-core==3.24.2",
         "ibm-vpc==0.29.1",
-        "ibm-cloud-networking-services==0.25.0",
+        "ibm-cloud-networking-services>=0.28.0",
         "jinja_markdown==1.210911",
         "jinja2==3.1.6",
         "junitparser==4.0.2",
