@@ -24,6 +24,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_bench import RadosBench
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.rados.utils import get_cluster_timestamp
@@ -52,6 +53,7 @@ def run(ceph_cluster, **kw):
     rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    pool_obj = PoolFunctions(node=cephadm)
     bluestore_obj = BluestoreToolWorkflows(node=cephadm, nostart=True)
     bluestore_obj_live = BluestoreToolWorkflows(node=cephadm, nostop=True)
     client = ceph_cluster.get_nodes(role="client")[0]
@@ -822,6 +824,45 @@ def run(ceph_cluster, **kw):
                 "\n\n ************ Execution begins for CBT collocated scenarios ************ \n\n"
             )
 
+            pool_cfg = config.get("pool_config", {})
+            pool_type = pool_cfg.get("pool_type", "replicated")
+            if pool_type == "erasure":
+                log.info("Create an EC data pool with default config")
+                _pool_name = pool_cfg.get("pool_name", "cbt-ec-pool")
+                default_ec_pool_config = {
+                    "pool_name": _pool_name,
+                    "profile_name": "ec_profile_cbt",
+                    "k": 4,
+                    "m": 2,
+                    "erasure_code_use_overwrites": "true",
+                    "enable_fast_ec_features": "true",
+                    "pg_num": 128,
+                    "pg_num_min": 128,
+                }
+                ec_pool_config = config.get("pool_config", default_ec_pool_config)
+                assert rados_obj.create_erasure_pool(**ec_pool_config)
+            else:
+                log.info("Create a replicated data pool with default config")
+                _pool_name = "cbt-repli-pool"
+                assert rados_obj.create_pool(
+                    pool_name=_pool_name, pg_num=128, pg_num_min=128
+                )
+
+            log.info("Write data to the pool using rados bench, 1000 objects")
+            assert rados_obj.bench_write(
+                pool_name=_pool_name,
+                rados_write_duration=200,
+                max_objs=1000,
+                verify_stats=False,
+            )
+
+            if pool_type != "erasure":
+                log.info(
+                    "Write OMAP entries to the pool using librados, 200 objects with 5 omap entries each"
+                )
+                assert pool_obj.fill_omap_entries(
+                    pool_name=_pool_name, obj_start=0, obj_end=200, num_keys_obj=5
+                )
             osd_id = pick_random_osd()
 
             for operation in all_ops:

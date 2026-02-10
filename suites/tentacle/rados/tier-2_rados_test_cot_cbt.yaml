@@ -188,6 +188,22 @@ tests:
       polarion-id: CEPH-83571692
       desc: Verify ceph-bluestore-tool functionalities
 
+  - test:
+      name: ceph-bluestore-tool utility on EC pool
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      config:
+        pool_config:
+          pool_name: cbt-ec-pool
+          pool_type: erasure
+          pg_num: 128
+          pg_num_min: 128
+          erasure_code_use_overwrites: "true"
+          enable_fast_ec_features: true
+          k: 4
+          m: 2
+      desc: Verify ceph-bluestore-tool functionalities on EC pool
+
 # after the following test is executed, one or more OSD becomes non-collocated
 # while rest are still collocated, this renders the cluster in non-homogenous state.
 # subsequent tests should be added keeping this in account
