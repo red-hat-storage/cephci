@@ -274,6 +274,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         time.sleep(60)
         LOG.info("Validate upgraded versions of NVMe Gateways")
         # Validate upgraded versions of NVMe Gateways
+        nvme_service.gateways = (
+            []
+        )  # Clear the gateways list to avoid duplicate gateways
+        # Initialize the gateways again after upgrade to get the new gateways
+        nvme_service.init_gateways()
         post_upg_versions = fetch_nvme_versions(nvme_service.gateways)
         compare_nvme_versions(pre_upg_versions, post_upg_versions)
 

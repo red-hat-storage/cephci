@@ -46,8 +46,9 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     nvme_service.deploy()
     LOG.info("Initialize gateways")
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
     ha.run()
@@ -61,9 +62,14 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     subsystem["ceph_cluster"] = ceph_cluster
 
     # Deploy/Reconfigure the service without mTLS
+    # Remove nvme_service from config
+    config.pop("nvme_service")
+    LOG.info("Deploy NVMe service without mTLS")
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
+    LOG.info("Initialize gateways without mTLS")
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
 
     @retry(IOError, tries=3, delay=3)
     def redeploy_svc():
@@ -159,8 +165,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             nvme_service.init_gateways()
 
         LOG.info("Initialize HA")
+        config.update({"nvme_service": nvme_service})
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-        ha.initialize_gateways()
+        ha.gateways = nvme_service.gateways
 
         # Configure Subsystem
         LOG.info("Configure subsystems")

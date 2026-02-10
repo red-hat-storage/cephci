@@ -18,6 +18,7 @@ from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
+    check_gateway,
     delete_nvme_service,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -171,7 +172,7 @@ def configure_listeners(ha_obj, nodes, config, action="add"):
     """
     lb_group_ids = {}
     for node in nodes:
-        nvmegwcli = ha_obj.check_gateway(node)
+        nvmegwcli = check_gateway(ha_obj.gateways, node)
         hostname = nvmegwcli.fetch_gateway_hostname()
         listener_config = {
             "args": {
@@ -210,8 +211,9 @@ def test_ceph_83611097(ceph_cluster, config):
     nvme_service.init_gateways()
 
     # Initialize High Availability
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     # Create RBD image and multiple NS with that image.
     nvmegwcli = ha.gateways[0]
@@ -319,8 +321,9 @@ def test_ceph_83610950(ceph_cluster, config):
         service.deploy()
         service.init_gateways()
         services.append(service)
+        svc.update({"nvme_service": service})
         ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
-        ha.initialize_gateways()
+        ha.gateways = service.gateways
         svcs.append(ha)
 
     # Create RBD image and multiple NS with that image.
@@ -403,8 +406,9 @@ def test_ceph_83610948(ceph_cluster, config):
     nvme_service.deploy()
     nvme_service.init_gateways()
 
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
 
@@ -491,8 +495,9 @@ def test_ceph_83611098(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     # Configure subsystems
     nvmegwcl1 = nvme_service.gateways[0]
@@ -584,8 +589,9 @@ def test_ceph_83611099(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     # Check for alert
     # NVMeoFSingleGateway prometheus alert should be firing
@@ -661,8 +667,9 @@ def test_ceph_83611306(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
 
@@ -772,8 +779,9 @@ def test_CEPH_83616917(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     # Configure subsystems, --max-namespaces is 10 and we are creating 10 namesapces
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
@@ -843,6 +851,7 @@ def test_ceph_83617544(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
 
     # Check for alert
@@ -914,8 +923,9 @@ def test_ceph_83616916(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
     nvmegwcli = ha.gateways[0]
 
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
@@ -992,8 +1002,9 @@ def test_ceph_83617404(ceph_cluster, config):
         nvme_service.deploy()
         nvme_service.init_gateways()
         services.append(nvme_service)
+        svc.update({"nvme_service": nvme_service})
         ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
-        ha.initialize_gateways()
+        ha.gateways = nvme_service.gateways
         svcs.append(ha)
 
     ha1 = svcs[0]
@@ -1083,8 +1094,9 @@ def test_ceph_83617622(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     # Configure subsystems
     nvmegwcl1 = nvme_service.gateways[0]
@@ -1160,6 +1172,7 @@ def test_ceph_83617545(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     nvmegwcl1 = nvme_service.gateways[0]
 
@@ -1233,8 +1246,9 @@ def test_ceph_83617640(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
+    ha.gateways = nvme_service.gateways
 
     # Configure subsystems
     LOG.info("Configure subsystems")
