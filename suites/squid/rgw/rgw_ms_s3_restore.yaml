@@ -115,6 +115,7 @@ tests:
             node: node5
             install_packages:
               - ceph-common
+              - git
             copy_admin_keyring: true
         ceph-sec:
           config:
@@ -123,6 +124,7 @@ tests:
             node: node5
             install_packages:
               - ceph-common
+              - git
             copy_admin_keyring: true
       desc: Configure the RGW client system
       polarion-id: CEPH-83573758

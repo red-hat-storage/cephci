@@ -255,6 +255,7 @@ tests:
             node: node4
             install_packages:
               - ceph-common
+              - git
             copy_admin_keyring: true
         ceph-sec:
           config:
@@ -263,6 +264,7 @@ tests:
             node: node4
             install_packages:
               - ceph-common
+              - git
             copy_admin_keyring: true
         ceph-ter:
           config:
@@ -271,6 +273,7 @@ tests:
             node: node4
             install_packages:
               - ceph-common
+              - git
             copy_admin_keyring: true
       desc: Configure the RGW client system
       destroy-cluster: false
