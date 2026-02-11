@@ -16,7 +16,6 @@ from tests.nvmeof.workflows.nvme_utils import (
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
 
@@ -57,19 +56,14 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     config["mtls"] = False
     service_name = get_nvme_service_name(rbd_pool, config.get("gw_group", None))
 
-    subsystem = config["subsystems"][0]
-    subsystem["nqn"] += generate_unique_id(length=2)
-    subsystem["ceph_cluster"] = ceph_cluster
-
     # Deploy/Reconfigure the service without mTLS
     # Remove nvme_service from config
     config.pop("nvme_service")
     LOG.info("Deploy NVMe service without mTLS")
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
-    LOG.info("Initialize gateways without mTLS")
-    nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+
+    LOG.info("Redeploy nvmeof service without mTLS")
 
     @retry(IOError, tries=3, delay=3)
     def redeploy_svc():
@@ -90,7 +84,22 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     for gw in ha.gateways:
         gw.mtls = False
         gw.setter("mtls", False)
+
+    LOG.info("Initialize the gateways")
+    nvme_service.init_gateways()
+    # Delete the existing subsystems
+    for sub in nvme_service.config["subsystems"]:
+        gateway = nvme_service.gateways[0]
+        out, err = gateway.subsystem.delete(
+            **{"args": {"subsystem": sub["nqn"], "force": True}}
+        )
+        if "success" not in out.lower():
+            raise Exception(
+                f"Failed to delete subsystem {sub['nqn']}: {out} with error {err}"
+            )
+    # Configure gateway entities
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    config["nvme_service"] = nvme_service
 
 
 testcases = {"CEPH-83595464": test_ceph_83595464}
@@ -146,6 +155,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Starting Ceph Ceph NVMEoF deployment.")
     config = kwargs["config"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+    nvme_service = None
 
     custom_config = kwargs.get("test_data", {}).get("custom-config")
     check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
@@ -155,6 +165,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("test_case"):
             test_case_run = testcases[config["test_case"]]
             test_case_run(ceph_cluster, config, rbd_obj)
+            nvme_service = config.get("nvme_service")
             return 0
 
         if config.get("install"):
@@ -182,7 +193,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     except Exception as err:
         LOG.error(err)
     finally:
-        if config.get("cleanup"):
+        if config.get("cleanup") and nvme_service is not None:
             teardown(nvme_service, rbd_obj)
 
     return 1
