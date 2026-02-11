@@ -12,6 +12,7 @@ import json
 import os
 import random
 import re
+import signal
 import string
 import subprocess
 import time
@@ -377,7 +378,7 @@ class FsUtils(object):
     def deamon_name(node, service):
         out, rc = node.exec_command(
             sudo=True,
-            cmd=f"systemctl list-units --type=service | grep {service} | awk {{'print $1'}}",
+            cmd=f"systemctl list-units --type=service --all | grep {service} | awk {{'print $1'}}",
         )
         service_deamon = out.strip().split()[0]
         return service_deamon
@@ -2357,6 +2358,50 @@ class FsUtils(object):
             raise CommandFailed(
                 f"PID Kill Operation Failed pid Before : {out}, PID After : {out_2}"
             )
+        return 0
+
+    def pid_signal(
+        self,
+        node,
+        daemon,
+        sig=signal.SIGTERM,
+        expect_exit=True,
+        wait=10,
+    ):
+        out, rc = node.exec_command(
+            cmd=f"pgrep {daemon}",
+            container_exec=False,
+            check_ec=False,
+        )
+        if rc:
+            log.info(f"No running process found for {daemon}")
+            return 0
+        pids_before = [pid for pid in out.splitlines() if pid]
+        log.info(f"PIDs before {sig.name}: {pids_before}")
+        for pid in pids_before:
+            node.exec_command(
+                sudo=True,
+                cmd=f"kill -{sig.value} {pid}",
+                container_exec=False,
+                check_ec=False,
+            )
+        sleep(wait)
+        out_after, rc_after = node.exec_command(
+            cmd=f"pgrep {daemon}",
+            container_exec=False,
+            check_ec=False,
+        )
+        pids_after = out_after.splitlines() if not rc_after else []
+        log.info(f"PIDs after {sig.name}: {pids_after}")
+        if expect_exit:
+            if set(pids_before) & set(pids_after):
+                raise CommandFailed(
+                    f"{sig.name} failed. PIDs still running: "
+                    f"{set(pids_before) & set(pids_after)}"
+                )
+        else:
+            if not pids_after:
+                raise CommandFailed(f"{sig.name} failed. {daemon} exited unexpectedly")
         return 0
 
     def network_disconnect(self, ceph_object, sleep_time=20):
