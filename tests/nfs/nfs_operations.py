@@ -69,6 +69,9 @@ def setup_nfs_cluster(
 
     nfs_nodes = ceph_cluster.get_nodes("nfs")
 
+    # Get the mount versions specific to clients
+    mount_versions = _get_client_specific_mount_versions(version, clients)
+
     # Step 2: Create an NFS cluster
     # Extract NFS version from version parameter (could be "3", "4", "4.2", etc.)
     nfs_version = None
@@ -120,9 +123,6 @@ def setup_nfs_cluster(
             )
         export_list.append(export_name)
         sleep(1)
-
-    # Get the mount versions specific to clients
-    mount_versions = _get_client_specific_mount_versions(version, clients)
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
