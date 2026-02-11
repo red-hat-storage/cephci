@@ -4,6 +4,7 @@ from collections import namedtuple
 from ceph.ceph import CephNode
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
+from ceph.rados.utils import install_package
 from tests.rados.monitor_configurations import MonElectionStrategies
 from tests.rados.test_election_strategies import check_mon_status
 from tests.rados.test_stretch_site_down import get_stretch_site_hosts
@@ -586,6 +587,11 @@ def simulate_netsplit_between_hosts(rados_obj, group1, group2):
             err_msg = f"target host : {host1} not found . Exiting..."
             log.error(err_msg)
             raise Exception("Test execution Failed")
+        # install iptables dependencies
+        install_package(
+            node=target_host_obj,
+            packages=["iproute", "net-tools", "iptables-services"],
+        )
         debug_msg = f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1} "
         log.debug(debug_msg)
         for host2 in group2:
@@ -595,6 +601,11 @@ def simulate_netsplit_between_hosts(rados_obj, group1, group2):
                 f". Applying rules on host : {host2}"
             )
             log.debug(debug_msg)
+            # install iptables dependencies
+            install_package(
+                node=source_host_obj,
+                packages=["iproute", "net-tools", "iptables-services"],
+            )
             if not source_host_obj:
                 err_msg = f"Source host : {host2} not found . Exiting..."
                 log.error(err_msg)
@@ -619,6 +630,11 @@ def flush_ip_table_rules_on_all_hosts(rados_obj, hosts):
     log.info("Proceeding to flush IP table rules on all hosts")
     for hostname in hosts:
         host = get_host_obj_from_hostname(hostname=hostname, rados_obj=rados_obj)
+        # install iptables dependencies
+        install_package(
+            node=host,
+            packages=["iproute", "net-tools", "iptables-services"],
+        )
         debug_msg = f"Proceeding to flush iptable rules on host : {host.hostname}"
         log.debug(debug_msg)
         host.exec_command(sudo=True, cmd="iptables -F", long_running=True)

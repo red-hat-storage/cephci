@@ -17,7 +17,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.rados.utils import get_cluster_timestamp
+from ceph.rados.utils import get_cluster_timestamp, install_package
 from utility.log import Log
 
 log = Log(__name__)
@@ -35,6 +35,13 @@ def run(ceph_cluster, **kw):
     test_start_time = get_cluster_timestamp(rados_object.node)
     log.debug(f"Test workflow started. Start time: {test_start_time}")
     try:
+        # install iptables dependencies
+        for node in ceph_cluster.get_nodes():
+            install_package(
+                node,
+                packages=["iproute", "net-tools", "iptables-services"],
+            )
+
         for node in ceph_nodes:
             if node.role == "mon":
                 mon_hosts.append(node)

@@ -335,3 +335,20 @@ def get_cluster_timestamp(node) -> str:
     timestamp = out.strip().strip("'")
     log.debug(f"Collected cluster timestamp: {timestamp}")
     return timestamp
+
+
+def install_package(node, packages: list):
+    """
+    Method to install list of input packages on a node
+    Args:
+        node: ceph node object
+        packages: list of packages
+
+    Returns:
+        None if success | Exception if failed
+    """
+    try:
+        node.exec_command(cmd=f'dnf -y install {" ".join(packages)}', sudo=True)
+    except Exception:
+        log.error("Failed to install packages %s on node %s", packages, node)
+        raise
