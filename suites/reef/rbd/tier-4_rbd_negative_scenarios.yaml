@@ -100,3 +100,17 @@ tests:
           clone_formats:
             - 1
             - 2
+
+  - test:
+      desc: Verify data consistency after interrupted flatten operation
+      config:
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1
+        iterations: 5
+      module: test_interrupted_flatten.py
+      name: Test interrupted flattens resulting in corrupted rbd cloned data
+      polarion-id: CEPH-83606284
