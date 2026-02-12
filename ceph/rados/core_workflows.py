@@ -14,6 +14,7 @@ import concurrent.futures as cf
 import datetime
 import json
 import math
+import random
 import re
 import time
 from collections import namedtuple
@@ -5029,13 +5030,21 @@ EOF"""
         Returns: After converting the object in to inconsistent,method returns the pg id and object count
                  If it fail returns None
         """
+        obj_list = []
         # Creating more number of objects
         for obj_num in range(no_of_objects):
             object_name = f"object_{obj_num}"
+            obj_list.append(object_name)
             cmd_create_obj = f"rados -p {pool_name} put {object_name} /etc/group"
             client_node.exec_command(cmd=cmd_create_obj, sudo=True)
+            cmd_set_attr = (
+                f"rados -p {pool_name} setxattr {object_name} test_attr test_value"
+            )
+            client_node.exec_command(cmd=cmd_set_attr, sudo=True)
 
-        osd_map_output = self.get_osd_map(pool=pool_name, obj="object_1")
+        object_name = random.choice(obj_list)
+
+        osd_map_output = self.get_osd_map(pool=pool_name, obj=object_name)
         log.debug(
             f"\nThe acting set details for the object : {object_name}"
             f" on pool : {pool_name} is {osd_map_output}\n"
@@ -5047,6 +5056,7 @@ EOF"""
         log.info(f"The object {object_name} is created in the pg-{pg_id}")
 
         acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
+
         # stoping the OSD
         if not self.change_osd_state(action="stop", target=target_osd):
             log.error(f"Unable to stop the OSD : {target_osd}")
@@ -5066,7 +5076,7 @@ EOF"""
 
             cmd = (
                 f"cephadm shell --name osd.{target_osd} -- ceph-objectstore-tool --data-path "
-                f"/var/lib/ceph/osd/ceph-{target_osd} --pgid {ec_pg_id}  '{json_str}' rm-attr hinfo_key"
+                f"/var/lib/ceph/osd/ceph-{target_osd} --pgid {ec_pg_id}  '{json_str}' rm-attr _test_attr"
             )
             acting_osd_node.exec_command(sudo=True, cmd=cmd)
 
@@ -5074,10 +5084,11 @@ EOF"""
             log.error(f"Unable to stop the OSD : {target_osd}")
             return None
         log.info(f"Performing the scrub on the pg-{pg_id}")
-        self.run_scrub(pgid=pg_id)
-        self.start_check_scrub_complete(
+        self.run_deep_scrub(pgid=pg_id)
+        self.start_check_deep_scrub_complete(
             pg_id=pg_id, user_initiated=True, wait_time=1800
         )
+
         inconsistent_details = self.get_inconsistent_object_details(pg_id)
         obj_count = len(inconsistent_details["inconsistents"])
         log.info(f"The inconsistent object count is -{obj_count}")
