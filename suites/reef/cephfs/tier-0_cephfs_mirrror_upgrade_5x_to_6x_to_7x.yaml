@@ -153,23 +153,6 @@ tests:
       name: configure client
 
   - test:
-      abort-on-fail: false
-      desc: "Pre-upgrade validate snapdiff perf on 10MB X 100 Files"
-      clusters:
-        ceph1:
-          config:
-            name: Pre-upgrade validate snapdiff perf on 10MB X 100 Files
-            cloud_type: "openstack"
-            source_fs: "cephfs_snapdiff_pre"
-            target_fs: "cephfs_rem_snapdiff_pre"
-            result_file: "snapshot_sync_info_10mb_100files_v8_0.csv"
-            num_of_files: 100
-            file_size: 10
-      module: cephfs_mirroring.snapdiff_perf_improvements_across_releases.py
-      name: Pre-upgrade validate snapdiff perf on 10MB X 100 Files
-      polarion-id: "CEPH-83595260"
-
-  - test:
       abort-on-fail: true
       desc: Configure CephFS Mirroring
       clusters:
@@ -282,32 +265,3 @@ tests:
       name: Validate the Synchronisation is successful upon upgrade.
       polarion-id: CEPH-83575336
 
-  - test:
-      abort-on-fail: false
-      desc: "Post-upgrade validate snapdiff perf on 10MB X 100 Files"
-      clusters:
-        ceph1:
-          config:
-            name: Post-upgrade validate snapdiff perf on 10MB X 100 Files
-            cloud_type: "openstack"
-            source_fs: "cephfs_snapdiff_pre"
-            target_fs: "cephfs_rem_snapdiff_pre"
-            result_file: "snapshot_sync_info_10mb_100files_v8_1.csv"
-            num_of_files: 100
-            file_size: 10
-      module: cephfs_mirroring.snapdiff_perf_improvements_across_releases.py
-      name: Post-upgrade validate snapdiff perf on 10MB X 100 Files
-      polarion-id: "CEPH-83595260"
-
-  - test:
-      abort-on-fail: false
-      desc: "Validate sync duration of 10MB X 100 Files by comparing between 2 releases"
-      clusters:
-        ceph1:
-          config:
-            name: Validate sync duration of 10MB X 100 Files by comparing between 2 releases
-            result_file_v_n_1: "snapshot_sync_info_10mb_100files_v8_0.csv"
-            result_file_v_n: "snapshot_sync_info_10mb_100files_v8_1.csv"
-      module: cephfs_mirroring.validate_snapdiff_perf_results.py
-      name: Validate sync duration of 10MB X 100 Files by comparing between 2 releases
-      polarion-id: "CEPH-83595260"
