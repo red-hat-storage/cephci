@@ -20,6 +20,7 @@ the resources when complete.
    source/contribution_guidelines.rst
    source/getting_started.rst
    source/github_guidelines.rst
+   source/multi_registry_auth.rst
 
 
 Indices and tables
