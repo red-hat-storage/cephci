@@ -524,13 +524,18 @@ def catogorize(nvme_service, gws):
 def ana_states(nvme_service, orch, gw_group=""):
     """Fetch ANA states and convert into python dict."""
 
+    # For 7.1 ceph version group name is not required
+    group_name = repr(nvme_service.group)
+    if nvme_service.ceph_cluster.rhcs_version == "7.1":
+        group_name = repr("")
+
     out, _ = orch.shell(
         args=[
             "ceph",
             "nvme-gw",
             "show",
             nvme_service.nvme_metadata_pool,
-            repr(nvme_service.group),
+            group_name,
         ]
     )
     states = {}
