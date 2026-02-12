@@ -9,6 +9,7 @@ import json
 import random
 import secrets
 import string
+import time
 
 from looseversion import LooseVersion
 
@@ -1055,6 +1056,131 @@ class CephfsMirroringUtils(object):
             return token
         except Exception as e:
             log.error(f"Error deploying CephFS mirroring setup: {e}")
+
+    def deploy_cephfs_mirroring_peer_add(
+        self,
+        source_fs,
+        source_client,
+        target_fs,
+        target_client,
+        target_user,
+        target_site_name,
+        target_mon_host,
+        build,
+    ):
+        """
+        Deploy CephFS mirroring setup between source and target filesystems using peer_add.
+
+        NOTE: The 'peer_add' command is deprecated and will be removed in a future release.
+        Use 'deploy_cephfs_mirroring' with peer_bootstrap instead for production use.
+        This method is provided for testing/validation purposes.
+
+        Args:
+        - source_fs (str): Name of the source filesystem.
+        - source_client: Client object for the source.
+        - target_fs (str): Name of the target filesystem.
+        - target_client: Client object for the target.
+        - target_user (str): User to be authorized for the target filesystem.
+        - target_site_name (str): Name of the target site.
+        - target_mon_host (str): Monitor host IP address of the target cluster.
+        Raises:
+        - Exception: If any step fails during the setup process.
+
+        Returns:
+            dict: Dictionary containing peer information including UUID if successful.
+        """
+        try:
+            log.info("Enable mirroring module on source")
+            if self.enable_mirroring_module(source_client) != 0:
+                raise Exception("Failed to enable mirroring module on Source.")
+
+            log.info("Enable mirroring module on target")
+            if self.enable_mirroring_module(target_client) != 0:
+                raise Exception("Failed to enable mirroring module on Target.")
+
+            log.info("Create and authorize user for the target filesystem")
+            if self.create_authorize_user(target_fs, target_user, target_client) != 0:
+                raise Exception(
+                    "Failed to create/authorize user for the target filesystem."
+                )
+
+            log.info("Enable snapshot mirroring on the source filesystem")
+            self.enable_snapshot_mirroring(source_fs, source_client)
+
+            log.info("Adding peer using peer_add command (DEPRECATED)")
+            log.warning(
+                "The 'peer_add' command is deprecated and will be removed in a future release. "
+                "Use 'peer_bootstrap' instead."
+            )
+            target_key, _ = target_client.exec_command(
+                sudo=True, cmd=f"ceph auth get-key client.{target_user}"
+            )
+            target_key = target_key.rstrip("\n")
+
+            # Format: ceph fs snapshot mirror peer_add <fs_name> <remote_cluster_spec> <target_fs> <mon_host> <key>
+            remote_cluster_spec = f"client.{target_user}@{target_site_name}"
+            command = (
+                f"ceph fs snapshot mirror peer_add {source_fs} "
+                f"{remote_cluster_spec} {target_fs} {target_mon_host} {target_key}"
+            )
+            log.info(f"Executing peer_add command: {command}")
+
+            # Execute command and capture both stdout and stderr to check for warning
+            out, err = source_client.exec_command(
+                sudo=True, cmd=command, check_ec=False
+            )
+
+            # Validate that the deprecation warning is present
+            warning_message = (
+                "The 'peer_add' command is deprecated and will be removed in a future release. "
+                "Use 'peer_bootstrap' instead."
+            )
+            if warning_message in out or warning_message in err:
+                log.warning(
+                    "Deprecation warning detected as expected: %s", warning_message
+                )
+            #     if LooseVersion(build) >= LooseVersion("9.0"):
+            # log.info("Add mountpoint to fstab due to BZ 2406981")
+            # add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details)
+            elif LooseVersion(build) >= LooseVersion("9.1"):
+                log.warning(
+                    "Deprecation warning not found in output. "
+                    "Command output: %s, stderr: %s",
+                    out,
+                    err,
+                )
+                return 1
+            else:
+                log.info("LooseVersion(build) %s", LooseVersion(build))
+                log.warning(
+                    "Deprecation warning not found in output. "
+                    "Command output: %s, stderr: %s",
+                    out,
+                    err,
+                )
+            # Check if command succeeded (return code 0)
+            if err and "error" in err.lower():
+                log.error(f"peer_add command failed with error: {err}")
+                raise Exception(f"Failed to add peer using peer_add: {err}")
+
+            log.info("Peer added successfully using peer_add command")
+
+            # Wait a moment for peer to be registered
+            time.sleep(5)
+
+            log.info("Validate peer connection")
+            if (
+                self.validate_peer_connection(
+                    source_client, source_fs, target_site_name, target_user, target_fs
+                )
+                != 0
+            ):
+                raise Exception("Peer connection validation failed.")
+
+            return 0
+        except Exception as e:
+            log.error(f"Error deploying CephFS mirroring setup with peer_add: {e}")
+            raise
 
     def destroy_cephfs_mirroring(
         self, source_fs, source_client, target_fs, target_client, target_user, peer_uuid
