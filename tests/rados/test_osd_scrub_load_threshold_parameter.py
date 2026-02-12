@@ -57,7 +57,7 @@ Case 6: High CPU load with stress-ng
 Initial Setup:
 - Verifies default osd_scrub_load_threshold value is 10.0
 - Disables PG autoscaler
-- Creates a replicated pool and writes test data (10,000 objects, 5K each)
+- Creates a replicated pool or EC pool (based on config) and writes test data (10,000 objects, 5K each)
 - Retrieves PG ID and acting OSD set
 - Installs stress-ng package on OSD nodes
 
@@ -99,7 +99,7 @@ def run(ceph_cluster, **kw):
     1. Initial Setup:
        - Enables file logging for OSD daemons
        - Disables PG autoscaler
-       - Creates a replicated pool and writes test data (10,000 objects, 5K each)
+       - Creates a replicated pool or EC pool (based on config) and writes test data (10,000 objects, 5K each)
        - Retrieves PG ID and acting OSD set
        - Verifies default osd_scrub_load_threshold value is 10.0
 
@@ -154,7 +154,8 @@ def run(ceph_cluster, **kw):
         ceph_cluster: Ceph cluster object
         **kw: Keyword arguments containing test configuration
             - config: Test configuration dictionary
-                - replicated_pool: Pool configuration
+                - replicated_pool: Pool configuration (for replicated pools)
+                - EC_pool or ec_pool: Pool configuration (for erasure coded pools)
                 - case_to_run: List of test cases to execute (case1-case6)
 
     Returns:
@@ -177,8 +178,23 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     wait_time = 120
     osd_nodes = ceph_cluster.get_nodes(role="osd")
-    replicated_config = config.get("replicated_pool")
-    pool_name = replicated_config["pool_name"]
+
+    # Check if config contains "replicated_pool" or "EC_pool"/"ec_pool"
+    is_ec_pool = False
+
+    if config.get("replicated_pool"):
+        pool_config = config.get("replicated_pool")
+        pool_name = pool_config["pool_name"]
+        is_ec_pool = False
+        log.info("Using replicated_pool configuration")
+    elif config.get("ec_pool"):
+        pool_config = config.get("ec_pool")
+        pool_name = pool_config["pool_name"]
+        log.info("Using ec_pool configuration")
+    else:
+        log.error("Config must contain either 'replicated_pool' or ec_pool'")
+        return 1
+
     acting_pg_set = ""
     start_time = get_cluster_timestamp(rados_object.node)
     log.debug("Test workflow started. Start time: {}".format(start_time))
@@ -203,9 +219,15 @@ def run(ceph_cluster, **kw):
             section="global", name="osd_pool_default_pg_autoscale_mode", value="off"
         ), "Could not set pg_autoscale mode to OFF"
 
-        if not rados_object.create_pool(**replicated_config):
-            log.error("Failed to create the replicated Pool")
-            return 1
+        # Create pool based on type
+        if is_ec_pool:
+            if not rados_object.create_erasure_pool(name=pool_name, **pool_config):
+                log.error("Failed to create the EC Pool")
+                return 1
+        else:
+            if not rados_object.create_pool(**pool_config):
+                log.error("Failed to create the replicated Pool")
+                return 1
 
         rados_object.bench_write(pool_name=pool_name, byte_size="5K", max_objs=10000)
         msg_data_push = f"The data pushed into the {pool_name} pool"
@@ -1272,7 +1294,7 @@ def start_stress_ng_and_generate_load(node, target_load_threshold, cpu_percentag
         bool: True if target threshold reached successfully, False otherwise
     """
     # Default values for monitoring
-    max_wait_time = 300  # Maximum time to wait in seconds
+    max_wait_time = 900  # Maximum time to wait in seconds
     check_interval = 5  # Interval between load checks in seconds
 
     log.info(
