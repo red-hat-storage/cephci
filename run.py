@@ -713,6 +713,7 @@ def run(args):
                 enable_eus=enable_eus,
                 custom_config=custom_config,
             )
+
         except Exception as err:
             log.error(err)
             tests = suite.get("tests")
@@ -892,6 +893,9 @@ def run(args):
 
                 if "enable-firewall" in custom_config_dict:
                     config["enable_firewall"] = custom_config_dict["enable-firewall"]
+
+                if "podman-auth-file" in custom_config_dict:
+                    config["podman_auth_file"] = custom_config_dict["podman-auth-file"]
 
             config["ceph_docker_registry"] = docker_registry
             config["ceph_docker_image"] = docker_image
