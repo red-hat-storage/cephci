@@ -44,8 +44,11 @@ Step 28: Cleanup the images, file and pools
 import random
 import time
 from copy import deepcopy
+import json
 
 from ceph.rbd.initial_config import initial_mirror_config
+from ceph.utils import find_vm_node_by_hostname
+from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from ceph.rbd.utils import get_md5sum_rbd_image, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
@@ -68,6 +71,7 @@ def test_group_mirroring_failover(
     primary_cluster,
     secondary_cluster,
     pool_types,
+    ceph_cluster,
     **kw,
 ):
     """
@@ -328,6 +332,39 @@ def test_group_mirroring_failover(
                         file_path="file" + random_string(len=5),
                     )
                 )
+            
+            # Shut down primary cluster to simulate permanent failure
+            clients = ceph_cluster.get_ceph_objects("client")
+            mds_nodes = ceph_cluster.get_ceph_objects("mds")
+            mon_nodes = ceph_cluster.get_ceph_objects("mon")
+            osd_nodes_list = ceph_cluster.get_ceph_objects("osd")
+            unique_objects = []
+            for obj in osd_nodes_list:
+                if not any(object_compare(obj, u_obj) for u_obj in unique_objects):
+                    unique_objects.append(obj)
+            osd_nodes = unique_objects
+
+            log.info("Shutting down the cluster")
+            for client in clients:
+                target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("Client Nodes Powered OFF Successfully")
+
+            for mds in mds_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("MDS Nodes Powered OFF Successfully")
+
+            for mon in mon_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("Mon Nodes Powered OFF Successfully")
+
+            for osd in osd_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("OSD Nodes Powered OFF Successfully")
+
             # 25: force promote on site-b
             out, err = rbd_secondary.mirror.group.promote(
                 **{"group-spec": group_spec, "force": True}
@@ -359,6 +396,28 @@ def test_group_mirroring_failover(
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
                 log.info("Map, mount and IOs successful for " + str(image_spec))
+
+            # Bring up the primary cluster back
+            log.info("Bringing up the primary cluster back")
+            for mon in mon_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                target_node.power_on()
+            log.info("Mon Nodes Powered ON Successfully")
+            for osd in osd_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                target_node.power_on()
+            log.info("OSD Nodes Powered OFF Successfully")
+            for mds in mds_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.power_on()
+            log.info("MDS Nodes Powered ON Successfully")
+            for client in clients:
+                target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                target_node.power_on()
+            log.info("Clients Nodes Powered ON Successfully")
+            out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
+            cluster_info = json.loads(out)
+            log.info(f"Cluster info after powering on nodes: {cluster_info}")
 
             # 28: demote site-b
             out, err = rbd_secondary.mirror.group.demote(**{"group-spec": group_spec})
@@ -436,7 +495,7 @@ def test_group_mirroring_failover(
                 )
 
 
-def run(**kw):
+def run(ceph_cluster, **kw):
     """
     This test verifies failover failback during orderly and non-orderly shutdown
     Args:
@@ -475,6 +534,7 @@ def run(**kw):
             primary_cluster,
             secondary_cluster,
             pool_types,
+            ceph_cluster,
             **kw,
         )
         log.info(

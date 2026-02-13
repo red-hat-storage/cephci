@@ -38,6 +38,8 @@ import time
 from copy import deepcopy
 
 from ceph.parallel import parallel
+from ceph.utils import find_vm_node_by_hostname
+from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.utils import getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
@@ -64,6 +66,7 @@ def test_group_info_during_force_promote(
     primary_cluster,
     secondary_cluster,
     pool_types,
+    ceph_cluster,
     **kw,
 ):
     """
@@ -197,6 +200,38 @@ def test_group_info_during_force_promote(
             wait_till_image_sync_percent(rbd_primary, 50, **group_config)
             log.info("Successfully waited for 50 percent sync completion")
 
+            # Shut down primary cluster to simulate failure during force promote
+            clients = ceph_cluster.get_ceph_objects("client")
+            mds_nodes = ceph_cluster.get_ceph_objects("mds")
+            mon_nodes = ceph_cluster.get_ceph_objects("mon")
+            osd_nodes_list = ceph_cluster.get_ceph_objects("osd")
+            unique_objects = []
+            for obj in osd_nodes_list:
+                if not any(object_compare(obj, u_obj) for u_obj in unique_objects):
+                    unique_objects.append(obj)
+            osd_nodes = unique_objects
+
+            log.info("Shutting down the cluster")
+            for client in clients:
+                target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("Client Nodes Powered OFF Successfully")
+
+            for mds in mds_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("MDS Nodes Powered OFF Successfully")
+
+            for mon in mon_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("Mon Nodes Powered OFF Successfully")
+
+            for osd in osd_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                target_node.shutdown(wait=True)
+            log.info("OSD Nodes Powered OFF Successfully")
+
             """ Perform Force promote, group info and group snapshot list parallelly to verify
             group info primary should be false and snapshot list should show incomplete snapshot """
             with parallel() as p:
@@ -227,12 +262,41 @@ def test_group_info_during_force_promote(
             check_group_snap_list(
                 snapshot_id, "copied", rbd_secondary=rbd_secondary, **status_spec
             )
-            get_snap_state_by_snap_id(rbd_secondary, snapshot_id, **status_spec)
+            snap_state = get_snap_state_by_snap_id(
+                rbd_secondary, snapshot_id, **status_spec
+            )
+            if snap_state != "created":
+                raise Exception(
+                    "Snapshot state did not turn created even after snapshot data sync complete/copied"
+                )
 
             # Check group info, 'primary' field should be marked true
             check_group_info(
                 expected_primary_field=True, rbd_secondary=rbd_secondary, **group_config
             )
+
+            # Bring up the primary cluster back
+            log.info("Bringing up the primary cluster back")
+            for mon in mon_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+                target_node.power_on()
+            log.info("Mon Nodes Powered ON Successfully")
+            for osd in osd_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+                target_node.power_on()
+            log.info("OSD Nodes Powered OFF Successfully")
+            for mds in mds_nodes:
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.power_on()
+            log.info("MDS Nodes Powered ON Successfully")
+            for client in clients:
+                target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+                target_node.power_on()
+            log.info("Clients Nodes Powered ON Successfully")
+            out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
+            cluster_info = json.loads(out)
+            log.info(f"Cluster info after powering on nodes: {cluster_info}")
+
 
 
 def force_promote_secondary(group_spec, rbd_secondary):
@@ -283,7 +347,7 @@ def check_group_info(expected_primary_field, rbd_secondary, **group_config):
     )
 
 
-def run(**kw):
+def run(ceph_cluster, **kw):
     """
     This test verifies Group info should verify snapshot completion before marking the group as primary
     Args:
@@ -293,6 +357,7 @@ def run(**kw):
 
     """
     try:
+
         log.info("Running Consistency Group Mirroring across two clusters")
         pool_types = ["rep_pool_config", "ec_pool_config"]
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
@@ -323,6 +388,7 @@ def run(**kw):
             primary_cluster,
             secondary_cluster,
             pool_types,
+            ceph_cluster,
             **kw,
         )
         log.info("Test group info verification during force promote passed")

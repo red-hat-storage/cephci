@@ -1,13 +1,16 @@
 import time
+import json
 
 from ceph.parallel import parallel
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
+from ceph.utils import find_vm_node_by_hostname
+from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def run(**kw):
+def run(ceph_cluster, **kw):
     """
     Multiple rbd-mirroring daemons per cluster - configuration and verification of daemon failure
     Args:
@@ -110,6 +113,38 @@ def run(**kw):
             service_names.append(cluster.get_rbd_service_name("rbd-mirror"))
             cluster.change_service_state(service_names[-1], "stop")
 
+        # Shut down primary cluster to simulate permanent failure
+        clients = ceph_cluster.get_ceph_objects("client")
+        mds_nodes = ceph_cluster.get_ceph_objects("mds")
+        mon_nodes = ceph_cluster.get_ceph_objects("mon")
+        osd_nodes_list = ceph_cluster.get_ceph_objects("osd")
+        unique_objects = []
+        for obj in osd_nodes_list:
+            if not any(object_compare(obj, u_obj) for u_obj in unique_objects):
+                unique_objects.append(obj)
+        osd_nodes = unique_objects
+
+        log.info("Shutting down the cluster")
+        for client in clients:
+            target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+            target_node.shutdown(wait=True)
+        log.info("Client Nodes Powered OFF Successfully")
+
+        for mds in mds_nodes:
+            target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+            target_node.shutdown(wait=True)
+        log.info("MDS Nodes Powered OFF Successfully")
+
+        for mon in mon_nodes:
+            target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+            target_node.shutdown(wait=True)
+        log.info("Mon Nodes Powered OFF Successfully")
+
+        for osd in osd_nodes:
+            target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+            target_node.shutdown(wait=True)
+        log.info("OSD Nodes Powered OFF Successfully")
+
         # Failover: force promote both images on cluster1
         for imagespec in image_spec_list:
             mirror1.promote(imagespec=imagespec, force=True)
@@ -128,6 +163,28 @@ def run(**kw):
         with parallel() as p:
             p.spawn(mirror1.benchwrite, imagespec=rep_image_spec, io="1G")
             p.spawn(mirror1.benchwrite, imagespec=ec_image_spec, io="1G")
+
+        # Bring up the primary cluster back
+        log.info("Bringing up the primary cluster back")
+        for mon in mon_nodes:
+            target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+            target_node.power_on()
+        log.info("Mon Nodes Powered ON Successfully")
+        for osd in osd_nodes:
+            target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+            target_node.power_on()
+        log.info("OSD Nodes Powered OFF Successfully")
+        for mds in mds_nodes:
+            target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+            target_node.power_on()
+        log.info("MDS Nodes Powered ON Successfully")
+        for client in clients:
+            target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+            target_node.power_on()
+        log.info("Clients Nodes Powered ON Successfully")
+        out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
+        cluster_info = json.loads(out)
+        log.info(f"Cluster info after powering on nodes: {cluster_info}")
 
         # Failover: demote images at cluster2 and initiate resync
         for imagespec in image_spec_list:
