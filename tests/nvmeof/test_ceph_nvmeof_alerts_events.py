@@ -11,14 +11,16 @@ import requests
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
+from ceph.utils import get_node_by_id
 from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
-from tests.nvmeof.workflows.ha import HighAvailability, get_node_by_id
+from tests.nvmeof.workflows.ha import HighAvailability
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
     check_gateway,
+    check_gateway_availability,
     delete_nvme_service,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -423,7 +425,9 @@ def test_ceph_83610948(ceph_cluster, config):
                 LOG.info(
                     f"NVMEOF_GATEWAY_DOWN health check warning alerted disappeared - {health}."
                 )
-                if ha.check_gateway_availability(gw.ana_group_id, state="AVAILABLE"):
+                if check_gateway_availability(
+                    nvme_service, gw.ana_group_id, ha.orch, state="AVAILABLE"
+                ):
                     return True
             raise ValueError(f"NVMEOF_GATEWAY_DOWN warning still appears!!! - {health}")
 
@@ -433,7 +437,9 @@ def test_ceph_83610948(ceph_cluster, config):
                 LOG.info(
                     f"NVMEOF_GATEWAY_DOWN health check warning alerted SUCCESSFULLY - {nvme_gw_down}."
                 )
-                if ha.check_gateway_availability(gw.ana_group_id, state="UNAVAILABLE"):
+                if check_gateway_availability(
+                    nvme_service, gw.ana_group_id, ha.orch, state="UNAVAILABLE"
+                ):
                     return True
             raise ValueError(
                 f"NVMEOF_GATEWAY_DOWN is alerted, but different messages - {nvme_gw_down}"

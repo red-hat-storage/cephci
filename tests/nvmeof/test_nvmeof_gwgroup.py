@@ -54,9 +54,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
+    cleanup_dict = {}
 
     try:
-        cleanup_dict = {}
         if config.get("parallel"):
             with parallel() as p:
                 for gwgroup_config in config["gw_groups"]:

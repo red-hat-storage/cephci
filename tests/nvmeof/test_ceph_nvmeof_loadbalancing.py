@@ -31,7 +31,10 @@ from tests.nvmeof.workflows.load_balancing import (
     validate_scaleup,
 )
 from tests.nvmeof.workflows.nvme_service import NVMeService
-from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    check_gateway,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -43,7 +46,7 @@ def fetch_lb_groups(nvme_service, nodes):
     """Fetch Load balancing group ids for given nodes."""
     lb_group_ids = {}
     for node in nodes:
-        nvmegwcli = nvme_service.check_gateway(node)
+        nvmegwcli = check_gateway(nvme_service.gateways, node)
         hostname = nvmegwcli.fetch_gateway_hostname()
         lb_group_ids.update({hostname: nvmegwcli.ana_group_id})
     return lb_group_ids
