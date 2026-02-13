@@ -10,7 +10,7 @@ class Qos(Cli):
         super().__init__(nodes)
         self.base_cmd = "%s qos" % base_cmd
 
-    def get(self, nfs_name: str, export: int, **kwargs):
+    def get(self, nfs_name: str, export: str, **kwargs):
         cmd = " ".join(
             [self.base_cmd, "get", nfs_name, str(export), build_cmd_from_args(**kwargs)]
         )
@@ -20,46 +20,61 @@ class Qos(Cli):
     def enable_per_share(
         self,
         nfs_name: str,
-        export: int,
+        export: str,
+        operation: str,
         max_export_combined_bw: str = None,
         max_export_write_bw: str = None,
         max_export_read_bw: str = None,
+        max_export_iops: int = None,
     ) -> str:
-
-        params = self._build_share_params(
-            max_export_combined_bw, max_export_write_bw, max_export_read_bw
-        )
-        return self._execute_qos_cmd(
-            "enable", "bandwidth_control", nfs_name, export, params
-        )
+        if operation == "ops_control":
+            if max_export_iops is None:
+                raise ValueError("max_export_iops is required for export ops_control")
+            params = [str(max_export_iops)]
+        else:
+            params = self._build_share_params(
+                max_export_combined_bw, max_export_write_bw, max_export_read_bw
+            )
+        return self._execute_qos_cmd("enable", operation, nfs_name, export, params)
 
     def enable_per_share_per_client(
         self,
         nfs_name: str,
-        export: int,
+        export: str,
+        operation: str,
         max_export_combined_bw: str = None,
         max_export_write_bw: str = None,
         max_export_read_bw: str = None,
         max_client_combined_bw: str = None,
         max_client_write_bw: str = None,
         max_client_read_bw: str = None,
+        max_export_iops: int = None,
+        max_client_iops: int = None,
     ) -> str:
-        share_params = self._build_share_params(
-            max_export_combined_bw, max_export_write_bw, max_export_read_bw
-        )
-        client_params = self._build_client_params(
-            max_client_combined_bw, max_client_write_bw, max_client_read_bw
-        )
+        if operation == "ops_control":
+            if max_export_iops is None or max_client_iops is None:
+                raise ValueError(
+                    "Both max_export_iops and max_client_iops are required for export ops_control"
+                )
+            params = [str(max_export_iops), str(max_client_iops)]
+        else:
+            share_params = self._build_share_params(
+                max_export_combined_bw, max_export_write_bw, max_export_read_bw
+            )
+            client_params = self._build_client_params(
+                max_client_combined_bw, max_client_write_bw, max_client_read_bw
+            )
+            params = share_params + client_params
         return self._execute_qos_cmd(
             "enable",
-            "bandwidth_control",
+            operation,
             nfs_name,
             export,
-            share_params + client_params,
+            params,
         )
 
     def disable(
-        self, cluster_id: str, export: int, operation: str = "bandwidth_control"
+        self, cluster_id: str, export: str, operation: str = "bandwidth_control"
     ) -> str:
         cmd = " ".join([self.base_cmd, "disable", operation, cluster_id, str(export)])
 
@@ -101,7 +116,7 @@ class Qos(Cli):
         )
 
     def _execute_qos_cmd(
-        self, action: str, operation: str, nfs_name: str, export: int, params: list
+        self, action: str, operation: str, nfs_name: str, export: str, params: list
     ) -> str:
         # Ensure --combined-rw-bw-ctrl is not duplicated
         if len([x for x in params if x.startswith("--combined")]) > 1:

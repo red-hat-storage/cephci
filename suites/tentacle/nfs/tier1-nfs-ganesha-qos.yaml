@@ -135,7 +135,7 @@ tests:
 
   - test:
       name: Qos PerShare enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos Pershare enablement on cluster level
       polarion-id: CEPH-83611390
       abort-on-fail: false
@@ -151,7 +151,7 @@ tests:
 
   - test:
       name: Qos PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerClient enablement on cluster level
       polarion-id: CEPH-83614246
       abort-on-fail: false
@@ -167,7 +167,7 @@ tests:
 
   - test:
       name: Qos PerShare_PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerShare_PerClient enablement on cluster level
       polarion-id: CEPH-83614247
       abort-on-fail: false
@@ -182,8 +182,30 @@ tests:
         operation: restart
 
   - test:
+      name: Qos enablement PerShare-PerClient on export level with nfs service with restart
+      module: qos.test_nfs_qos_on_export_level_enablement.py
+      desc: Verify qos PerShare-PerClient enablement on export level
+      polarion-id: CEPH-83613691
+      abort-on-fail: false
+      config:
+        cephfs_volume : cephfs
+        cluster_name : cephfs-nfs
+        cluster_bw :
+          - max_export_write_bw : 100MB
+            max_export_read_bw : 100MB
+            max_client_write_bw : 100MB
+            max_client_read_bw: 100MB
+        export_bw:
+          - max_export_write_bw: 8MB
+            max_export_read_bw: 8MB
+            max_client_write_bw: 8MB
+            max_client_read_bw: 8MB
+        qos_type : PerShare_PerClient
+        operation : restart
+
+  - test:
       name: Qos enablement PerShare on export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
+      module: qos.test_nfs_qos_on_export_level_enablement.py
       desc: Verify qos Pershare enablement on export level
       polarion-id: CEPH-83614248
       abort-on-fail: false
@@ -205,7 +227,7 @@ tests:
 
   - test:
       name: Qos enablement PerShare-combined_bw value for export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
+      module: qos.test_nfs_qos_on_export_level_enablement.py
       desc: Verify qos PerShare-combined_bw value enablement on export level
       polarion-id: CEPH-83616913
       abort-on-fail: false
@@ -221,7 +243,7 @@ tests:
 
   - test:
       name: Qos enablement PerShare_PerClient-combined_bw value for export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
+      module: qos.test_nfs_qos_on_export_level_enablement.py
       desc: Verify qos PerShare_PerClient-combined_bw value enablement on export level
       polarion-id: CEPH-83616914
       abort-on-fail: false
@@ -239,7 +261,7 @@ tests:
 
   - test:
       name: Qos PerShare-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerShare-combined_bw enablement on cluster level
       polarion-id: CEPH-83616910
       abort-on-fail: false
@@ -252,7 +274,7 @@ tests:
 
   - test:
       name: Qos PerClient-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerClient-combined_bw enablement on cluster level
       polarion-id: CEPH-83616911
       abort-on-fail: false
@@ -265,7 +287,7 @@ tests:
 
   - test:
       name: Qos PerShare_PerClient-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerShare_PerClient-combined_bw enablement on cluster level
       polarion-id: CEPH-83616912
       abort-on-fail: false
@@ -276,3 +298,267 @@ tests:
         max_client_combined_bw: 8MB
         qos_type: PerShare_PerClient
         operation: restart
+
+  - test:
+      name: deploy nfs ganesha with qos per share using spec file
+      desc: Deploy nfs ganesha with qos per share using spec file and verify
+      polarion-id: CEPH-83621553
+      module: qos.nfs_verify_qos_via_specfile_PerShare.py
+      config:
+        nfs_version: 4.2
+        clients: 4
+        port: 2049
+        spec:
+          service_type: nfs
+          service_id: nfs
+          placement:
+            label: nfs
+          spec:
+              cluster_qos_config:
+                combined_rw_bw_control: false
+                enable_bw_control: true
+                enable_qos: true
+                max_export_read_bw: 20MB
+                max_export_write_bw: 20MB
+                qos_type: PerShare
+
+# ----------------------- Cluster QoS tests -------------------------
+  - test:
+      name: Clusterwide QoS PerShare enablement - cluster level
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify clusterwide QoS Pershare enablement
+      polarion-id: CEPH-83632257
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume : cephfs
+        cluster_name : cephfs-nfs
+        max_export_write_bw : 8MB
+        max_export_read_bw : 8MB
+        max_client_write_bw : 8MB
+        max_client_read_bw: 8MB
+        qos_type : PerShare
+        operation : restart
+
+  - test:
+      name: Clusterwide QoS PerClient enablement - cluster level
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify clusterwide QoS PerClient enablement
+      polarion-id: CEPH-83632258
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        max_export_write_bw: 8MB
+        max_export_read_bw: 8MB
+        max_client_write_bw: 8MB
+        max_client_read_bw: 8MB
+        qos_type: PerClient
+        operation: restart
+
+  - test:
+      name: Clusterwide Qos Export level PerShare - export level
+      module: qos.test_nfs_qos_on_export_level_enablement.py
+      desc: Verify cluster qos Pershare enablement on export level
+      polarion-id: CEPH-83632260
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          - max_export_write_bw: 100MB
+            max_export_read_bw: 100MB
+            max_client_write_bw: 100MB
+            max_client_read_bw: 100MB
+        export_bw:
+          - max_export_write_bw: 8MB
+            max_export_read_bw: 8MB
+            max_client_write_bw: 8MB
+            max_client_read_bw: 8MB
+        qos_type: PerShare
+        operation: restart
+
+  - test:
+      name: Clusterwide Qos enablement PerShare-combined_bw - export level
+      module: qos.test_nfs_qos_on_export_level_enablement.py
+      desc: Verify Clusterwideqos PerShare-combined_bw value enablement on export level
+      polarion-id: CEPH-83632261
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          - max_export_combined_bw: 100MB
+        export_bw:
+          - max_export_combined_bw: 8MB
+        qos_type: PerShare
+        operation: restart
+
+  - test:
+      name: Clusterwide Qos enablement PerShare_PerClient-combined_bw - export level
+      module: qos.test_nfs_qos_on_export_level_enablement.py
+      desc: Verify Clusterwide qos PerShare_PerClient-combined_bw value enablement on export level
+      polarion-id: CEPH-83632262
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          - max_client_combined_bw: 100MB
+            max_export_combined_bw: 100MB
+        export_bw:
+          - max_client_combined_bw: 8MB
+            max_export_combined_bw: 8MB
+        qos_type: PerShare_PerClient
+        operation: restart
+
+  - test:
+      name: Clusterwide QoS PerShare-combined_bw enablement - cluster level
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify clusterwide QoS PerShare-combined_bw enablement
+      polarion-id: CEPH-83632263
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume : cephfs
+        cluster_name : cephfs-nfs
+        max_export_combined_bw: 8MB
+        qos_type : PerShare
+        operation : restart
+
+  - test:
+      name: Clusterwide QoS PerClient-combined_bw enablement - cluster level
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify clusterwide QoS PerClient-combined_bw enablement
+      polarion-id: CEPH-83632264
+      abort-on-fail: false
+      config:
+        control: bandwidth_control
+        clients: 3
+        cluster_qos: true
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        max_client_combined_bw: 8MB
+        qos_type: PerClient
+        operation: restart
+
+# ================================= ops control ==================================
+  - test:
+      name: Cluster_QoS ops PerShare control test - cluster level
+      module: qos.test_nfs_qos_ops_control.py
+      desc: Verify QoS ops control at cluster level - PerShare
+      polarion-id:
+      abort-on-fail: false
+      config:
+          cephfs_volume: cephfs
+          cluster_name: cephfs-nfs
+          nfs_version: 4.2
+          port: "2049"
+          qos_type: PerShare
+          control: ops_control
+          clients: 3
+          operation: restart
+          cluster_qos: True
+          cluster_ops:
+              max_export_iops: 60
+              max_client_iops: 60
+          dd_parameters:
+              block_size: "1M"
+              count: 64
+              input_file: "/dev/zero"
+              iterations: 3
+
+  - test:
+      name: NFS Cluster_QoS ops PerClient control test - cluster level
+      module: qos.test_nfs_qos_ops_control.py
+      desc: Verify QoS ops control at cluster level - PerClient
+      polarion-id:
+      abort-on-fail: false
+      config:
+          cephfs_volume: cephfs
+          cluster_name: cephfs-nfs
+          nfs_version: 4.2
+          port: "2049"
+          qos_type: PerClient
+          control: ops_control
+          clients: 3
+          operation: restart
+          cluster_qos: True
+          cluster_ops:
+              max_export_iops: 60
+              max_client_iops: 60
+          dd_parameters:
+              block_size: "1M"
+              count: 64
+              input_file: "/dev/zero"
+              iterations: 3
+
+  - test:
+      name: NFS QoS ops control test - export level
+      module: qos.test_nfs_qos_ops_control.py
+      desc: Verify QoS ops control at export level overrides cluster level
+      polarion-id:
+      abort-on-fail: false
+      config:
+          cephfs_volume: cephfs
+          cluster_name: cephfs-nfs
+          nfs_version: 4.2
+          port: "2049"
+          qos_type: PerShare
+          operation: restart
+          cluster_qos: True
+          control: ops_control
+          cluster_ops:
+              max_export_iops: 60
+              max_client_iops: 60
+          export_ops:
+              max_export_iops: 40
+              max_client_iops: 40
+          dd_parameters:
+              block_size: "2M"
+              count: 32
+              input_file: "/dev/zero"
+              iterations: 3
+
+  - test:
+      name: NFS QoS ops control test - export level
+      module: qos.test_nfs_qos_ops_control.py
+      desc: Verify QoS ops control at export level overrides cluster level
+      polarion-id:
+      abort-on-fail: false
+      config:
+          cephfs_volume: cephfs
+          cluster_name: cephfs-nfs
+          nfs_version: 4.2
+          port: "2049"
+          qos_type: PerClient
+          control: ops_control
+          operation: restart
+          cluster_qos: True
+          cluster_ops:
+              max_export_iops: 60
+              max_client_iops: 60
+          export_ops:
+              max_export_iops: 40
+              max_client_iops: 40
+          dd_parameters:
+              block_size: "2M"
+              count: 32
+              input_file: "/dev/zero"
+              iterations: 3

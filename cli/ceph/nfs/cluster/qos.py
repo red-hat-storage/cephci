@@ -18,56 +18,86 @@ class Qos(Cli):
 
     def enable_per_share(
         self,
-        qos_type: str,
         cluster_id: str,
-        max_export_combined_bw=None,
-        max_export_write_bw=None,
-        max_export_read_bw=None,
+        qos_type: str,
+        operation: str = "bandwidth_control",
+        max_export_combined_bw: str = None,
+        max_export_write_bw: str = None,
+        max_export_read_bw: str = None,
+        max_export_iops: int = None,
     ) -> str:
-        params = self._build_per_share_params(
-            max_export_combined_bw, max_export_write_bw, max_export_read_bw
-        )
+        if operation == "ops_control":
+            if max_export_iops is None:
+                raise ValueError("max_export_iops is required for PerShare ops_control")
+            params = [f"--max_export_iops={max_export_iops}"]
+        else:
+            params = self._build_per_share_params(
+                max_export_combined_bw, max_export_write_bw, max_export_read_bw
+            )
         return self._execute_qos_cmd(
-            "enable", "bandwidth_control", cluster_id, params, qos_type=qos_type
+            "enable", operation, cluster_id, params, qos_type=qos_type
         )
 
     def enable_per_client(
         self,
         cluster_id: str,
         qos_type: str,
+        operation: str = "bandwidth_control",
         max_client_combined_bw: str = None,
         max_client_write_bw: str = None,
         max_client_read_bw: str = None,
+        max_client_iops: int = None,
     ) -> str:
-        params = self._build_client_params(
-            max_client_combined_bw, max_client_write_bw, max_client_read_bw
-        )
+        if operation == "ops_control":
+            if max_client_iops is None:
+                raise ValueError(
+                    "max_client_iops is required for PerClient ops_control"
+                )
+            params = [f"--max_client_iops={max_client_iops}"]
+        else:
+            params = self._build_client_params(
+                max_client_combined_bw, max_client_write_bw, max_client_read_bw
+            )
         return self._execute_qos_cmd(
-            "enable", "bandwidth_control", cluster_id, params, qos_type=qos_type
+            "enable", operation, cluster_id, params, qos_type=qos_type
         )
 
     def enable_per_share_per_client(
         self,
         cluster_id: str,
         qos_type: str,
+        operation: str = "bandwidth_control",
         max_export_combined_bw: str = None,
         max_export_write_bw: str = None,
         max_export_read_bw: str = None,
         max_client_combined_bw: str = None,
         max_client_write_bw: str = None,
         max_client_read_bw: str = None,
+        max_export_iops: int = None,
+        max_client_iops: int = None,
     ) -> str:
-        share_params = self._build_per_share_params(
-            max_export_combined_bw, max_export_write_bw, max_export_read_bw
-        )
-        client_params = self._build_client_params(
-            max_client_combined_bw, max_client_write_bw, max_client_read_bw
-        )
+        if operation == "ops_control":
+            if max_export_iops is None or max_client_iops is None:
+                raise ValueError(
+                    "Both max_export_iops and max_client_iops are required for PerShare_PerClient ops_control"
+                )
+            params = [
+                f"--max_export_iops={max_export_iops}",
+                f"--max_client_iops={max_client_iops}",
+            ]
+        else:
+            share_params = self._build_per_share_params(
+                max_export_combined_bw, max_export_write_bw, max_export_read_bw
+            )
+            client_params = self._build_client_params(
+                max_client_combined_bw, max_client_write_bw, max_client_read_bw
+            )
+            params = share_params + client_params
         return self._execute_qos_cmd(
             "enable",
-            "bandwidth_control",
+            operation,
             cluster_id,
-            share_params + client_params,
+            params,
             qos_type=qos_type,
         )
 
@@ -76,7 +106,7 @@ class Qos(Cli):
         cluster_id: str,
         qos_type: str = None,
         operation: str = "bandwidth_control",
-        **kwargs
+        **kwargs,
     ) -> str:
         cmd_parts = [self.base_cmd, "disable", operation, cluster_id]
 
