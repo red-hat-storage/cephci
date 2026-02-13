@@ -161,6 +161,7 @@ tests:
         install_common: false
         extra-pkgs:
           - jdk
+        git_clone_configs_repo: true
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_empty_bucket_notification_kafka_broker.yaml

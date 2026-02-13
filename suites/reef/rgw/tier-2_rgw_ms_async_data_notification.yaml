@@ -464,6 +464,7 @@ tests:
             run-on-rgw: true
             extra-pkgs:
               - jdk
+            git_clone_configs_repo: true
             install_start_kafka: true
             script-name: test_bucket_notifications.py
             config-file-name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard.yaml
