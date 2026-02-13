@@ -143,6 +143,9 @@ def test_ceph_83575467(ceph_cluster, rbd, nvme_service, pool, config):
             },
         }
         test_orch.run(ceph_cluster, **restart_cfg)
+        # Once restart is completed, wait for 30 seconds to ensure the service is restarted
+        # We are observing issues while cleanup constantly failed to connect to all addresses
+        sleep(30)
 
         gw_info = list_subsystems(**sub_args)
         gw_info = json.loads(gw_info.strip())["subsystems"]
