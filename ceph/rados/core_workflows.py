@@ -162,6 +162,7 @@ class RadosOrchestrator:
         timeout: int = 300,
         client_exec: bool = False,
         print_output: bool = False,
+        return_err: bool = False,
     ):
         """
         Runs ceph commands with json tag for the action specified otherwise treats action as command
@@ -189,6 +190,8 @@ class RadosOrchestrator:
         if print_output:
             log.info("out: " + out + "\n")
             log.info("err: " + err + "\n")
+        if return_err:
+            return status, err
         return status
 
     def pool_inline_compression(self, pool_name: str, **kwargs) -> bool:
