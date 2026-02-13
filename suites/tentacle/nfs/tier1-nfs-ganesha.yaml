@@ -411,3 +411,63 @@ tests:
           client01 : create_files
           client02 : setuid_bit
           client03 : perform_lookups
+
+  - test:
+      name: NFS LDAP User Mapping Test
+      desc: Verify NFS-Ganesha correctly resolves LDAP users and maps UID/GID
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575001
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_mapping
+
+  - test:
+      name: NFS LDAP Group Permissions Test
+      desc: Validate enforcement of file permissions using LDAP group membership
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575002
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_group_permissions
+
+  - test:
+      name: NFS LDAP User Attribute Change Test
+      desc: Validate NFS behavior when LDAP user attributes change or users are removed
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575003
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_user_change
+
+  - test:
+      name: NFS LDAP Outage Test
+      desc: Validate NFS behavior during LDAP server outage
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575004
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_ldap_outage
+
+  - test:
+      name: NFS LDAP Performance Test
+      desc: Validate LDAP identity resolution performance under concurrent NFS load
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575005
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_performance
+
+  - test:
+      name: NFS LDAP NFSv3 Access Test
+      desc: Verify LDAP user mapping works correctly over NFSv3
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83632304
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        test_case: verify_mapping

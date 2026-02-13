@@ -15,6 +15,7 @@ from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import FuseMount, Mount, Unmount
+from cli.utilities.packages import Package
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
 from utility.retry import retry
@@ -957,6 +958,9 @@ def fuse_mount_retry(client, mount, **kwargs):
         mount: Mount point path.
         **kwargs: Additional arguments for the Mount method.
     """
+    Package(client).install(
+        "ceph-fuse",
+    )
     if FuseMount(client).mount(
         client_hostname=client.hostname, mount_point=mount, **kwargs
     ):
