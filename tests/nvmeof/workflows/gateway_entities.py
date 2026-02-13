@@ -1,4 +1,5 @@
 import json
+import pdb
 from copy import deepcopy
 
 from ceph.nvmeof.initiators.linux import Initiator
@@ -8,6 +9,7 @@ from tests.nvmeof.workflows.constants import (
     DEFAULT_LISTENER_PORT,
     DEFAULT_NVME_METADATA_POOL,
 )
+from tests.nvmeof.workflows.inband_auth import create_dhchap_key
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from utility.log import Log
 from utility.utils import generate_unique_id, log_json_dump
@@ -42,9 +44,8 @@ def validate_subsystems(nvme_service, subsystem_config):
         )
 
     for i, sub_cfg in enumerate(subsystem_config):
-        if sub_cfg.get("nqn") in subsystem_list[i].get("nqn") or sub_cfg.get(
-            "subnqn"
-        ) in subsystem_list[i].get("subnqn"):
+        nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
+        if nqn in subsystem_list[i].get("nqn", subsystem_list[i].get("subnqn")):
             continue
         raise ValueError(
             f"Subsystem {sub_cfg.get('nqn') or sub_cfg.get('subnqn')} not found in configured subsystems"
@@ -78,6 +79,20 @@ def configure_subsystems(nvme_service):
         if sub_cfg.get("serial"):
             sub_args["serial-number"] = sub_cfg.get("serial")
 
+        # Configure inband authentication if specified
+        if sub_cfg.get("inband_auth"):
+            sub_cfg["gw_group"] = nvme_service.group
+
+            # Uncomment the below lines for debugging
+            gateway.gateway.set_log_level(**{"args": {"level": "DEBUG"}})
+            gateway.loglevel.set(**{"args": {"level": "DEBUG"}})
+
+            # if sub_cfg.get("inband_auth"):
+            sub_cfg.update(
+                {"initiators": create_dhchap_key(sub_cfg, nvme_service.ceph_cluster)}
+            )
+            sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
+
         # Add Subsystem
         release = nvme_service.ceph_cluster.rhcs_version
         if release >= "8.0":
@@ -104,6 +119,12 @@ def configure_subsystems(nvme_service):
 
     # Validate subsystems
     validate_subsystems(nvme_service, subsystem_config)
+    pdb.set_trace()
+    initiators = []
+    for sub_cfg in subsystem_config:
+        if sub_cfg.get("initiators", []):
+            initiators.append(sub_cfg["initiators"])
+    return initiators
 
 
 def validate_hosts(gateway, expected_hosts, nqn):
@@ -156,15 +177,23 @@ def configure_hosts(gateway, config: dict, ceph_cluster=None):
             hosts = sub_cfg["hosts"]
             if not isinstance(hosts, list):
                 hosts = [hosts]
-
+            initiators = []
             for host in hosts:
                 node_id = host.get("node") if isinstance(host, dict) else host
                 initiator_node = get_node_by_id(ceph_cluster, node_id)
                 initiator = NVMeInitiator(initiator_node)
+                # # Generate key for host NQN
+                sub_cfg.pop("dhchap-key", None)
+                if host.get("inband_auth"):
+                    # initiators.append(create_dhchap_key(sub_cfg, ceph_cluster, update_host_key=True))
+                    create_dhchap_key(sub_cfg, ceph_cluster, update_host_key=True)
+                    sub_cfg["dhchap-key"] = host["dhchap-key"]
+                    sub_args["dhchap-key"] = host["dhchap-key"]
                 initiator_nqn = initiator.initiator_nqn()
-                gateway.host.add(**{"args": {"subsystem": nqn, "host": initiator_nqn}})
+                gateway.host.add(**{"args": {**sub_args, "host": initiator_nqn}})
 
             validate_hosts(gateway, [initiator_nqn], nqn)
+            return initiators
 
 
 def validate_namespaces(gateway, expected_namespaces, nqn):
@@ -315,8 +344,9 @@ def configure_listeners(gateways, config: dict, listeners=None):
     """
     # Configure listeners if specified
     subsystem_config = config.get("subsystems", [])
-    expected_listeners = []
+
     for sub_cfg in subsystem_config:
+        expected_listeners = []
         nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
         if not listeners:
             listeners = sub_cfg.get("listeners", [])
@@ -383,7 +413,23 @@ def configure_gw_entities(nvme_service, rbd_obj=None, cluster=None):
         )
 
 
-def teardown(nvme_service, rbd_obj):
+def disconnect_initiators(nvme_service, node=None):
+    """
+    Disconnect all initiators from the NVMe service gateways.
+    Args:
+        nvme_service: NvmeService instance
+    """
+    if node:
+        initiator = Initiator(node)
+        initiator.disconnect_all()
+        return
+    for initiator_cfg in nvme_service.config.get("initiators", []):
+        node = get_node_by_id(nvme_service.ceph_cluster, initiator_cfg["node"])
+        initiator = Initiator(node)
+        initiator.disconnect_all()
+
+
+def teardown(nvme_service, rbd_obj, cleanup_config=None):
     """
     Cleanup NVMeoF gateways, initiators, and pools for the given config.
     Handles both single and multiple gateway groups.
@@ -391,13 +437,11 @@ def teardown(nvme_service, rbd_obj):
         nvme_service: NvmeService instance
         rbd_obj: RBD object for pool cleanup
     """
+    pdb.set_trace()
     rc = 0
     # Disconnect initiators
     if "initiators" in nvme_service.config.get("cleanup", []):
-        for initiator_cfg in nvme_service.config.get("initiators", []):
-            node = get_node_by_id(nvme_service.ceph_cluster, initiator_cfg["node"])
-            initiator = Initiator(node)
-            initiator.disconnect_all()
+        disconnect_initiators(nvme_service)
 
     # Delete the multiple subsystems across multiple gateways
     if "subsystems" in nvme_service.config["cleanup"]:

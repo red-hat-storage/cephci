@@ -7,7 +7,7 @@ from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import log_json_dump, run_fio
+from utility.utils import config_dict_to_string, log_json_dump, run_fio
 
 LOG = Log(__name__)
 Initiators = {}
@@ -136,6 +136,17 @@ class NVMeInitiator(Initiator):
             _conn_cmd = {**cmd_args, **conn_port, **sub_args}
 
             LOG.debug(self.connect(**_conn_cmd))
+
+    def gen_dhchap_key(self, **kwargs):
+        """Generates the TLS key.
+        Example::
+            kwargs:
+                subsystem: NQN of subsystem
+        """
+        return self.execute(
+            cmd=f"nvme gen-dhchap-key {config_dict_to_string(kwargs)}",
+            sudo=True,
+        )
 
     @retry((NoDevicesFound))
     def list_devices(self):

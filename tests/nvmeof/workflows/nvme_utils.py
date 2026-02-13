@@ -682,3 +682,13 @@ def validate_io(orch, namespaces, negative=False):
             LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
 
     LOG.info("IO Validation is Successfull on all RBD images..")
+
+
+def fetch_lb_groups(gateways, nodes):
+    """Fetch Load balancing group ids for given nodes."""
+    lb_group_ids = {}
+    for node in nodes:
+        nvmegwcli = check_gateway(gateways, node)
+        hostname = nvmegwcli.fetch_gateway_hostname()
+        lb_group_ids.update({hostname: nvmegwcli.ana_group_id})
+    return lb_group_ids

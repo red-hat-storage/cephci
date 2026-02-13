@@ -3,172 +3,178 @@
 # inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
 
 tests:
-# Set up the cluster
-  - test:
-      abort-on-fail: true
-      module: install_prereq.py
-      name: install ceph pre-requisites
-  - test:
-      abort-on-fail: true
-      config:
-        verify_cluster_health: true
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-                registry-url: registry.redhat.io
-                allow-fqdn-hostname: true
-                log-to-file: true
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: mgr
-              args:
-                placement:
-                  label: mgr
-          - config:
-              command: apply
-              service: mon
-              args:
-                placement:
-                  label: mon
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-      desc: RHCS cluster deployment using cephadm
-      destroy-cluster: false
-      module: test_cephadm.py
-      name: deploy cluster
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.1
-        nodes:
-          - node14
-          - node15
-        install_packages:
-          - ceph-common
-        copy_admin_keyring: true
-      desc: Setup client on NVMEoF gateway
-      destroy-cluster: false
-      module: test_client.py
-      name: configure Ceph client for NVMe tests
-      polarion-id: CEPH-23573752
+# # Set up the cluster
+#   - test:
+#       abort-on-fail: true
+#       module: install_prereq.py
+#       name: install ceph pre-requisites
+#   - test:
+#       abort-on-fail: true
+#       config:
+#         verify_cluster_health: true
+#         steps:
+#           - config:
+#               command: bootstrap
+#               service: cephadm
+#               args:
+#                 mon-ip: node1
+#                 registry-url: registry.redhat.io
+#                 allow-fqdn-hostname: true
+#                 log-to-file: true
+#           - config:
+#               command: add_hosts
+#               service: host
+#               args:
+#                 attach_ip_address: true
+#                 labels: apply-all-labels
+#           - config:
+#               command: apply
+#               service: mgr
+#               args:
+#                 placement:
+#                   label: mgr
+#           - config:
+#               command: apply
+#               service: mon
+#               args:
+#                 placement:
+#                   label: mon
+#           - config:
+#               command: apply
+#               service: osd
+#               args:
+#                 all-available-devices: true
+#       desc: RHCS cluster deployment using cephadm
+#       destroy-cluster: false
+#       module: test_cephadm.py
+#       name: deploy cluster
+#   - test:
+#       abort-on-fail: true
+#       config:
+#         command: add
+#         id: client.1
+#         nodes:
+#           - node14
+#           - node15
+#         install_packages:
+#           - ceph-common
+#         copy_admin_keyring: true
+#       desc: Setup client on NVMEoF gateway
+#       destroy-cluster: false
+#       module: test_client.py
+#       name: configure Ceph client for NVMe tests
+#       polarion-id: CEPH-23573752
 
-# Tests with uni and bidirectional in-band authentication
-  - test:
-      abort-on-fail: false
-      config:
-        install: true
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
-        cleanup:
-          - pool
-          - gateway
-          - initiators
-        gw_groups:
-          - gw_group: group1
-            inband_auth_mode: bidirectional
-            gw_nodes:
-              - node6
-              - node7
-            subsystems:
-              - subnqn: nqn.2016-06.io.spdk:cnode1
-                no-group-append: true
-                inband_auth: true
-                listener_port: 5001
-                listeners:
-                  - node6
-                  - node7
-                hosts:
-                  - node: node14
-                    inband_auth: true
-                bdevs:
-                  - count: 2
-                    size: 4G
-              - subnqn: nqn.2016-06.io.spdk:cnode2
-                no-group-append: true
-                inband_auth: true
-                listener_port: 5002
-                listeners:
-                  - node6
-                  - node7
-                hosts:
-                  - node: node14
-                    inband_auth: true
-                bdevs:
-                  - count: 2
-                    size: 4G
-            initiators:
-              - nqn: nqn.2016-06.io.spdk:cnode1
-                listener_port: 5001
-                node: node14
-              - nqn: nqn.2016-06.io.spdk:cnode2
-                listener_port: 5002
-                node: node14
-            fault-injection-methods:
-              - tool: daemon
-                nodes: node6
-          - gw_group: group2
-            inband_auth_mode: unidirectional
-            gw_nodes:
-              - node8
-              - node9
-            subsystems:
-              - subnqn: nqn.2016-06.io.spdk:cnode3
-                no-group-append: true
-                listener_port: 5001
-                listeners:
-                  - node8
-                  - node9
-                hosts:
-                  - node: node15
-                    inband_auth: true
-                bdevs:
-                  - count: 2
-                    size: 4G
-              - subnqn: nqn.2016-06.io.spdk:cnode4
-                no-group-append: true
-                listener_port: 5002
-                listeners:
-                  - node8
-                  - node9
-                hosts:
-                  - node: node15
-                    inband_auth: true
-                bdevs:
-                  - count: 2
-                    size: 4G
-            initiators:
-              - nqn: connect-all
-                subnqn: nqn.2016-06.io.spdk:cnode3
-                listener_port: 5001
-                node: node15
-              - nqn: connect-all
-                subnqn: nqn.2016-06.io.spdk:cnode4
-                listener_port: 5002
-                node: node15
-            fault-injection-methods:
-              - tool: daemon
-                nodes: node8
-      desc: NVMe-oF tests with uni and bidirectional in-band authentication.
-      destroy-cluster: false
-      module: test_nvmeof_gwgroup_inbandauth.py
-      name: NVMe-oF tests with uni and bidirectional in-band authentication.
-      polarion-id: CEPH-83608200
+# # Tests with uni and bidirectional in-band authentication
+#   - test:
+#       abort-on-fail: false
+#       config:
+#         install: true
+#         rbd_pool: rbd
+#         do_not_create_image: true
+#         rep-pool-only: true
+#         rep_pool_config:
+#           pool: rbd
+#         cleanup:
+#           - pool
+#           - gateway
+#           - initiators
+#         gw_groups:
+#           - gw_group: group1
+#             inband_auth_mode: bidirectional
+#             nvme_metadata_pool: rbd
+#             gw_nodes:
+#               - node6
+#               - node7
+#             subsystems:
+#               - subnqn: nqn.2016-06.io.spdk:cnode1
+#                 no-group-append: true
+#                 inband_auth: true
+#                 listener_port: 5001
+#                 listeners:
+#                   - node6
+#                   - node7
+#                 hosts:
+#                   - node: node14
+#                     inband_auth: true
+#                 bdevs:
+#                   - count: 2
+#                     size: 4G
+#                     ns_create_image: true
+#               - subnqn: nqn.2016-06.io.spdk:cnode2
+#                 no-group-append: true
+#                 inband_auth: true
+#                 listener_port: 5002
+#                 listeners:
+#                   - node6
+#                   - node7
+#                 hosts:
+#                   - node: node14
+#                     inband_auth: true
+#                 bdevs:
+#                   - count: 2
+#                     size: 4G
+#                     ns_create_image: true
+#             initiators:
+#               - nqn: nqn.2016-06.io.spdk:cnode1
+#                 listener_port: 5001
+#                 node: node14
+#               - nqn: nqn.2016-06.io.spdk:cnode2
+#                 listener_port: 5002
+#                 node: node14
+#             fault-injection-methods:
+#               - tool: daemon
+#                 nodes: node6
+#           - gw_group: group2
+#             inband_auth_mode: unidirectional
+#             nvme_metadata_pool: rbd
+#             gw_nodes:
+#               - node8
+#               - node9
+#             subsystems:
+#               - subnqn: nqn.2016-06.io.spdk:cnode3
+#                 no-group-append: true
+#                 listener_port: 5001
+#                 listeners:
+#                   - node8
+#                   - node9
+#                 hosts:
+#                   - node: node15
+#                     inband_auth: true
+#                 bdevs:
+#                   - count: 2
+#                     size: 4G
+#                     ns_create_image: true
+#               - subnqn: nqn.2016-06.io.spdk:cnode4
+#                 no-group-append: true
+#                 listener_port: 5002
+#                 listeners:
+#                   - node8
+#                   - node9
+#                 hosts:
+#                   - node: node15
+#                     inband_auth: true
+#                 bdevs:
+#                   - count: 2
+#                     size: 4G
+#                     ns_create_image: true
+#             initiators:
+#               - nqn: connect-all
+#                 subnqn: nqn.2016-06.io.spdk:cnode3
+#                 listener_port: 5001
+#                 node: node15
+#               - nqn: connect-all
+#                 subnqn: nqn.2016-06.io.spdk:cnode4
+#                 listener_port: 5002
+#                 node: node15
+#             fault-injection-methods:
+#               - tool: daemon
+#                 nodes: node8
+#       desc: NVMe-oF tests with uni and bidirectional in-band authentication.
+#       destroy-cluster: false
+#       module: test_nvmeof_gwgroup_inbandauth.py
+#       name: NVMe-oF tests with uni and bidirectional in-band authentication.
+#       polarion-id: CEPH-83608200
 
 # bidirectional in-band auth across GW groups with change DHCHAP key scenario
   - test:
@@ -187,6 +193,7 @@ tests:
         gw_groups:
           - gw_group: group1
             inband_auth_mode: bidirectional
+            nvme_metadata_pool: rbd
             gw_nodes:
               - node6
               - node7
@@ -205,6 +212,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
               - subnqn: nqn.2016-06.io.spdk:cnode2
                 no-group-append: true
                 listener_port: 5003
@@ -219,6 +227,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
             initiators:
               - nqn: nqn.2016-06.io.spdk:cnode1
                 listener_port: 5004

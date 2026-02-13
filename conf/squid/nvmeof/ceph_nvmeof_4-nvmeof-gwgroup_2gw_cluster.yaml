@@ -74,11 +74,11 @@ globals:
         id: node15
         role:
           - client
-      node16:
-        id: node16
-        role:
-          - client
-      node17:
-        id: node17
-        role:
-          - client
+      # node16:
+      #   id: node16
+      #   role:
+      #     - client
+      # node17:
+      #   id: node17
+      #   role:
+      #     - client
