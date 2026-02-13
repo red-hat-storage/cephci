@@ -8,6 +8,7 @@ from threading import Thread
 from time import sleep
 
 import yaml
+from looseversion import LooseVersion
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
@@ -627,14 +628,23 @@ def permission(client, nfs_name, nfs_export, old_permission, new_permission):
 
 def enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name):
     # Enable the NLM support for v3 Locking
+    # # --enable-nfsv3 flag was introduced after 8.1z4 (19.2.1-292); only add for newer
+    ceph_version = get_ceph_version(installer, prefix_cephadm=True)
+    log.info(f"ceph_version: {ceph_version}")
+    spec_lines = ["    enable_nlm: true"]
+    if LooseVersion(ceph_version) > LooseVersion("19.2.1-292"):
+        log.info(
+            f"Ceph version {ceph_version} is above 19.2.1-292, adding enable_nfsv3: true"
+        )
+        spec_lines.append("    enable_nfsv3: true")
+    spec_block = "\n".join(spec_lines)
     content = f"""service_type: nfs
 service_id: {nfs_name}
 placement:
     hosts:
         - {nfs_server_name}
 spec:
-    enable_nlm: true
-    enable_nfsv3: true"""
+{spec_block}"""
 
     with open("ganesha.yaml", "w") as f:
         yaml.dump(content, f)
@@ -822,6 +832,7 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
         )
 
 
+@retry(OperationFailedError, tries=4, delay=5, backoff=2)
 def open_mandatory_v3_ports(nfs_node, ports_to_open):
     """
     Open the required ports for v3 mount (portmapper, mountd, nlockmgr) based on rpcinfo output.
@@ -832,6 +843,7 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
     # Execute rpcinfo command to get the port information
     cmd = "sudo rpcinfo -p"
     out, _ = nfs_node.exec_command(sudo=True, cmd=cmd)
+    log.debug(f"rpcinfo output: {out}")
     if not out:
         log.error(f"Failed to execute rpcinfo -p on {nfs_node}")
         return
@@ -870,7 +882,7 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
             )
             log.info(f"Opened {service} port: {port_to_open}")
         else:
-            log.warning(f"{service} port not found or not needed.")
+            raise OperationFailedError(f"{service} port not found")
 
     # Reload the firewall to apply the changes
     nfs_node.exec_command(sudo=True, cmd="sudo firewall-cmd --reload")
@@ -1361,3 +1373,41 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
                 log.info(
                     "Since we are collecting logs, ignoring the exception will not fail the test"
                 )
+
+
+def get_ceph_version(client, prefix_cephadm=False):
+    """
+    Retrieve the Ceph version installed on a cluster using the provided client.
+
+    Args:
+        client : An instance of the client used for executing commands.
+
+    Returns:
+        str or None: The Ceph version if installed, or None if Ceph is not installed.
+
+    Raises:
+        ValueError: If the JSON output does not contain the expected version information.
+    """
+    if prefix_cephadm:
+        cmd = "cephadm shell -- ceph version -f json"
+    else:
+        cmd = "ceph version -f json"
+    out, rc = client.exec_command(
+        sudo=True,
+        cmd=cmd,
+        check_ec=False,
+    )
+    log.info(out)
+    ceph_version = json.loads(out)
+    version_string = ceph_version.get("version", None)
+    log.info(version_string)
+    if not version_string:
+        log.error("Ceph is not installed please install ceph")
+        return None
+    version_pattern = r"ceph version (\S+).*"
+    match = re.search(version_pattern, version_string)
+    re.search(version_pattern, version_string)
+    if not match:
+        raise RuntimeError("Failed to get ceph version from cluster")
+    ceph_version_installed = match.group(1)
+    return ceph_version_installed
