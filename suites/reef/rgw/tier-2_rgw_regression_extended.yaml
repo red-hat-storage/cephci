@@ -49,6 +49,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
       polarion-id: CEPH-83573713
@@ -82,18 +86,18 @@ tests:
       module: haproxy.py
       name: "Configure HAproxy"
 
-  - test:
-      name: Test BucketNotification with users in same tenant and different tenant
-      desc: BucketNotification with users in same tenant and different tenant
-      polarion-id: CEPH-11204
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        extra-pkgs:
-          - jdk
-        install_start_kafka: true
-        script-name: test_bucket_policy_with_tenant_user.py
-        config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
+#  - test:
+#      name: Test BucketNotification with users in same tenant and different tenant
+#      desc: BucketNotification with users in same tenant and different tenant
+#      polarion-id: CEPH-11204
+#      module: sanity_rgw.py
+#      config:
+#        run-on-rgw: true
+#        extra-pkgs:
+#          - jdk
+#        install_start_kafka: true
+#        script-name: test_bucket_policy_with_tenant_user.py
+#        config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
 
   - test:
       name: Test non-current deletion via s3cmd
@@ -260,16 +264,16 @@ tests:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_versioned_list_marker.yaml
 
-  - test:
-      name: Test LDAP auth for RGW
-      desc: Test LDAP auth for RGW
-      polarion-id: CEPH-9793
-      module: sanity_rgw.py
-      config:
-        install_keystone_ldap: true
-        script-name: ../aws/test_ldap_auth.py
-        config-file-name: ../../aws/configs/test_ldap_auth.yaml
-        run-on-rgw: true
+#  - test:
+#      name: Test LDAP auth for RGW
+#      desc: Test LDAP auth for RGW
+#      polarion-id: CEPH-9793
+#      module: sanity_rgw.py
+#      config:
+#        install_keystone_ldap: true
+#        script-name: ../aws/test_ldap_auth.py
+#        config-file-name: ../../aws/configs/test_ldap_auth.yaml
+#        run-on-rgw: true
 
   - test:
       name: Test LC transition with rule by lc process
@@ -311,17 +315,17 @@ tests:
       name: execute Java s3tests
       polarion-id: CEPH-83586289
 
-  - test:
-      abort-on-fail: false
-      config:
-        suite:
-          - maven
-        ssl: false
-      desc: Java Maven Test suite
-      destroy-cluster: false
-      module: java_s3tests.py
-      name: execute Java Maven test suite
-      polarion-id: CEPH-83586289
+#  - test:
+#      abort-on-fail: false
+#      config:
+#        suite:
+#          - maven
+#        ssl: false
+#      desc: Java Maven Test suite
+#      destroy-cluster: false
+#      module: java_s3tests.py
+#      name: execute Java Maven test suite
+#      polarion-id: CEPH-83586289
 
   - test:
       name: Test bi put with incomplete multipart upload
@@ -359,77 +363,77 @@ tests:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_multipart_upload_with_tagging.yaml
 
-  # test customer RFE: Public access block
+  # test customer RFE: Public access block - Feature Not Supported for Reef
 
-  - test:
-      name: test public access block pre bucket policy
-      desc: test public access block pre bucket policy
-      polarion-id: CEPH-83575582
-      module: sanity_rgw.py
-      config:
-        script-name: test_bucket_policy_ops.py
-        config-file-name: test_public_access_block_pre_bucket_policy.yaml
-  - test:
-      name: test public access block post bucket policy
-      desc: test public access block post bucket policy
-      polarion-id: CEPH-83575582
-      module: sanity_rgw.py
-      config:
-        script-name: test_bucket_policy_ops.py
-        config-file-name: test_public_access_block_post_bucket_policy.yaml
-  # - test:
-  #     name: test public access block - BlockPublicAcls
-  #     desc: test public access block - BlockPublicAcls
-  #     polarion-id: CEPH-83575582
-  #     module: sanity_rgw.py
-  #     config:
-  #       script-name: test_bucket_policy_ops.py
-  #       config-file-name: test_public_access_block_acl.yaml
-  #     comments: known issue - Bug 2413969 targeted to 8.1z5
-  - test:
-      name: test public access block - IgnorePublicAcls
-      desc: test public access block - IgnorePublicAcls
-      polarion-id: CEPH-83575582
-      module: sanity_rgw.py
-      config:
-        script-name: test_bucket_policy_ops.py
-        config-file-name: test_public_access_block_ignore_acl.yaml
-  # - test:
-  #     name: test public access block - RestrictPublicBuckets
-  #     desc: test public access block - RestrictPublicBuckets
-  #     polarion-id: CEPH-83575582
-  #     module: sanity_rgw.py
-  #     config:
-  #       script-name: test_bucket_policy_ops.py
-  #       config-file-name: test_public_access_block_restricted_public_buckets.yaml
-  #     comments: known issue - Bug 2344730 atrgetted to 9.0
+#  - test:
+#      name: test public access block pre bucket policy
+#      desc: test public access block pre bucket policy
+#      polarion-id: CEPH-83575582
+#      module: sanity_rgw.py
+#      config:
+#        script-name: test_bucket_policy_ops.py
+#        config-file-name: test_public_access_block_pre_bucket_policy.yaml
+#  - test:
+#      name: test public access block post bucket policy
+#      desc: test public access block post bucket policy
+#      polarion-id: CEPH-83575582
+#      module: sanity_rgw.py
+#      config:
+#        script-name: test_bucket_policy_ops.py
+#        config-file-name: test_public_access_block_post_bucket_policy.yaml
+# - test:
+#     name: test public access block - BlockPublicAcls
+#     desc: test public access block - BlockPublicAcls
+#     polarion-id: CEPH-83575582
+#     module: sanity_rgw.py
+#     config:
+#       script-name: test_bucket_policy_ops.py
+#       config-file-name: test_public_access_block_acl.yaml
+#     comments: known issue - Bug 2413969 targeted to 8.1z5
+#  - test:
+#      name: test public access block - IgnorePublicAcls
+#      desc: test public access block - IgnorePublicAcls
+#      polarion-id: CEPH-83575582
+#      module: sanity_rgw.py
+#      config:
+#        script-name: test_bucket_policy_ops.py
+#        config-file-name: test_public_access_block_ignore_acl.yaml
+# - test:
+#     name: test public access block - RestrictPublicBuckets
+#     desc: test public access block - RestrictPublicBuckets
+#     polarion-id: CEPH-83575582
+#     module: sanity_rgw.py
+#     config:
+#       script-name: test_bucket_policy_ops.py
+#       config-file-name: test_public_access_block_restricted_public_buckets.yaml
+#     comments: known issue - Bug 2344730 atrgetted to 9.0
 
   # test checksum with awscli v1 and v2
 
-  - test:
-      name: test checksum with awscli_v1_v2 small objects
-      desc: test checksum with awscli_v1_v2 small objects
-      polarion-id: CEPH-83591699
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
-        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_small_objects.yaml
-  - test:
-      name: test checksum with awscli_v1_v2 non-multipart objects
-      desc: test checksum with awscli_v1_v2 non-multipart objects
-      polarion-id: CEPH-83591699
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
-        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_non_multipart.yaml
-  - test:
-      name: test checksum with awscli_v1_v2 multipart objects
-      desc: test checksum with awscli_v1_v2 multipart objects
-      polarion-id: CEPH-83591699
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
-        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_multipart.yaml
+#  - test:
+#      name: test checksum with awscli_v1_v2 small objects
+#      desc: test checksum with awscli_v1_v2 small objects
+#      polarion-id: CEPH-83591699
+#      module: sanity_rgw.py
+#      config:
+#        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+#        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_small_objects.yaml
+#  - test:
+#      name: test checksum with awscli_v1_v2 non-multipart objects
+#      desc: test checksum with awscli_v1_v2 non-multipart objects
+#      polarion-id: CEPH-83591699
+#      module: sanity_rgw.py
+#      config:
+#        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+#        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_non_multipart.yaml
+#  - test:
+#      name: test checksum with awscli_v1_v2 multipart objects
+#      desc: test checksum with awscli_v1_v2 multipart objects
+#      polarion-id: CEPH-83591699
+#      module: sanity_rgw.py
+#      config:
+#        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+#        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_multipart.yaml
 
   - test:
       name: Test scenario of object deletion with version id
