@@ -41,7 +41,6 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
         config = kw.get("config")
-        test_data = kw.get("test_data")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
@@ -488,8 +487,8 @@ def run(ceph_cluster, **kw):
                 {"active_mds": mds_list, "standby_mds": standby_list}
             )
         ceph_version_2 = get_ceph_version_from_cluster(clients[0])
-        ibm_build = fs_util.get_custom_config_value(test_data, "ibm-build")
-        if LooseVersion(ceph_version_2) >= LooseVersion("18.2.1") and ibm_build:
+        product = config.get("product")
+        if LooseVersion(ceph_version_2) >= LooseVersion("18.2.1") and product == "ibm":
             nfs_server = ceph_cluster.get_ceph_objects("nfs")
             nfs_client = ceph_cluster.get_ceph_objects("client")
             fs_util.auth_list(nfs_client, recreate=False)
