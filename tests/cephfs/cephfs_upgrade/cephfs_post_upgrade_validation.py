@@ -319,11 +319,29 @@ def snap_sched_test(snap_req_params):
     for sv in sv_snap:
         snap_client = sv_snap[sv]["mnt_client_new"]
         for mnt_pt in [sv_snap[sv]["mnt_kernel"], sv_snap[sv]["mnt_fuse"]]:
-            cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
-            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            try:
+                cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
+                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            except CommandFailed as ex:
+                log.info(ex)
+                retry_exec = retry(CommandFailed, tries=3, delay=20)(
+                    snap_client.exec_command
+                )
+                cmd = f"cd {mnt_pt}/.snap/;ls -l ./*"
+                out1, _ = retry_exec(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                log.info(out1)
+                cmd = f"ls {mnt_pt}/.snap/_{sv_snap[sv]['snap_list'][0]}*/dd_test_file"
+                out, _ = retry_exec(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                log.info(out)
             file_path = out.strip()
             cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
-            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            out, rc = retry_exec(sudo=True, cmd=cmd)
 
     log.info("Verified that existing snapshots are accessible and read op suceeds")
 
@@ -1574,7 +1592,6 @@ def run(ceph_cluster, **kw):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         config = kw.get("config")
         build = config.get("rhbuild")
-        test_data = kw.get("test_data")
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
         cg_snap_io = CG_snap_IO(ceph_cluster)
         common_util = CephFSCommonUtils(ceph_cluster)
@@ -1603,9 +1620,9 @@ def run(ceph_cluster, **kw):
             "fs_name": default_fs,
         }
         f.close()
-        ibm_build = fs_util.get_custom_config_value(test_data, "ibm-build")
+        product = config.get("product")
         space_str = "\t\t\t\t\t\t\t\t\t"
-        if pre_upgrade_config.get("NFS") and ibm_build:
+        if pre_upgrade_config.get("NFS") and product == "ibm":
             log.info(
                 "\n\n %s Test1 CEPH-83575098 : Post-upgrade NFS Validation\n",
                 space_str,
@@ -1616,7 +1633,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Skipped NFS test,Either Setup is not IBM Ceph cluster or IBMCEPH version is <7.1"
             )
-            log.info("IBM build : %s", ibm_build)
+            log.info("Product : %s", product)
         log.info(
             f"\n\n {space_str}Test2 : Post-upgrade Snapshot and Schedule Validation\n"
         )
