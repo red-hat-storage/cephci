@@ -272,3 +272,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_with_snap_schedule.py
       name: Validate snapshot synchronisation using SnapSchedul
       polarion-id: "CEPH-83598968"
+  - test:
+      abort-on-fail: false
+      desc: "Configure CephFS Mirroring using peer_add"
+      clusters:
+        ceph1:
+          config:
+            name: Validate the Synchronisation is successful upon enabling fs mirroring using peer_add
+      module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring_peer_add.py
+      name: Validate the Synchronisation is successful upon enabling fs mirroring using peer_add.
+      polarion-id: "CEPH-83632297"
