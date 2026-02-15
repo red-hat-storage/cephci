@@ -574,13 +574,14 @@ def create_aws_ceph_nodes(
     if isinstance(params["security_group_ids"], str):
         params["security_group_ids"] = [params["security_group_ids"]]
     params["key_name"] = platform.get("key_name") or aws_cred["key_name"]
-    # Prefer instance type from inventory (instance.create.instance_type or vm-size),
-    # then platform/custom_config, then osp-cred, then default
+    # Prefer instance type from platform/custom_config (--custom-config aws_instance_type=...),
+    # then inventory (instance.create.instance_type or vm-size),
+    # then osp-cred, then default
     inv_create = inventory.get("instance", {}).get("create") or {}
     params["instance_type"] = (
-        inv_create.get("instance_type")
+        platform.get("instance_type")
+        or inv_create.get("instance_type")
         or inv_create.get("vm-size")
-        or platform.get("instance_type")
         or aws_cred.get("instance_type")
         or "t3.medium"
     )

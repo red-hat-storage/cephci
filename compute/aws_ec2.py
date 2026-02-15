@@ -22,36 +22,34 @@ def process_aws_custom_config(custom_config):
     details are loaded from conf/aws/{vpc_name}.yaml (e.g. conf/aws/default.yaml).
 
     Arguments:
-        custom_config(list): List of <key>=<value> (e.g. aws_vpc=default, aws_instance_type=t3.medium)
+        custom_config(list): List of <key>=<value> (e.g. aws_vpc=default, instance_type=t3.medium)
 
     Returns:
         A dictionary containing the platform information (subnet_id, security_group_ids, etc.)
     """
     repo_dir = Path(__file__).resolve().parent.parent
     vpc_name = "default"
+    overrides = {}
 
     if custom_config:
-        overrides = dict(
-            item.split("=") for item in custom_config if item.startswith("aws_")
-        )
+        overrides = dict(item.split("=", 1) for item in custom_config if "=" in item)
         if "aws_vpc" in overrides:
             vpc_name = overrides["aws_vpc"]
 
     platform_conf = repo_dir.joinpath(f"conf/aws/{vpc_name}.yaml")
-    if not platform_conf.exists():
-        return {"vpc_name": vpc_name}
+    if platform_conf.exists():
+        with platform_conf.open() as fh:
+            platform_dict = yaml.safe_load(fh) or {}
+    else:
+        platform_dict = {"vpc_name": vpc_name}
 
-    with platform_conf.open() as fh:
-        platform_dict = yaml.safe_load(fh) or {}
-
-    if custom_config:
-        overrides = dict(
-            item.split("=") for item in custom_config if item.startswith("aws_")
-        )
-        if "aws_instance_type" in overrides:
-            platform_dict["instance_type"] = overrides["aws_instance_type"]
-        if "aws_subnet_id" in overrides:
-            platform_dict["subnet_id"] = overrides["aws_subnet_id"]
+    # Apply custom_config overrides (these take precedence over conf file values)
+    if "instance_type" in overrides:
+        platform_dict["instance_type"] = overrides["instance_type"]
+    elif "aws_instance_type" in overrides:
+        platform_dict["instance_type"] = overrides["aws_instance_type"]
+    if "aws_subnet_id" in overrides:
+        platform_dict["subnet_id"] = overrides["aws_subnet_id"]
 
     return platform_dict
 
