@@ -335,9 +335,6 @@ def install_req(node: CephNode, data: Dict) -> None:
     repo_url = "https://github.com/ceph/ceph.git"
     node.exec_command(cmd=f"git clone {repo_url}")
     node.exec_command(cmd="yum install java-21-openjdk -y", sudo=True)
-    node.exec_command(
-        cmd="sudo alternatives --set java /usr/lib/jvm/java-21-openjdk/bin/java"
-    )
     rgw_endpoint = data["endpoint"]
     access_key = data["user1"]["access_key"]
     secret = data["user1"]["secret_key"]
