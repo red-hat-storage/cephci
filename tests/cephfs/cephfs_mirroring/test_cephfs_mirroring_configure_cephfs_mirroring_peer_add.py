@@ -5,6 +5,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -32,7 +33,6 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         test_data = kw.get("test_data")
-        # fs_util = FsUtils(ceph_cluster, test_data=test_data)
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -40,6 +40,7 @@ def run(ceph_cluster, **kw):
         )
         fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
         fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"), test_data=test_data)
+        common_util_ceph1 = CephFSCommonUtils(ceph_cluster_dict.get("ceph1"))
 
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
@@ -54,7 +55,7 @@ def run(ceph_cluster, **kw):
 
         log.info("checking Pre-requisites")
         if not source_clients or not target_clients:
-            log.info(
+            log.error(
                 "This test requires a minimum of 1 client node on both ceph1 and ceph2."
             )
             return 1
@@ -120,9 +121,11 @@ def run(ceph_cluster, **kw):
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util_ceph1.get_mon_node_ips()
         log.info("Get the path of subvolume1 on  filesystem")
-        subvol_path1, rc = source_clients[0].exec_command(
-            sudo=True,
-            cmd=f"ceph fs subvolume getpath {source_fs} subvol_1 subvolgroup_1",
+        subvol_path1 = common_util_ceph1.subvolume_get_path(
+            source_clients[0],
+            source_fs,
+            subvolume_name="subvol_1",
+            subvolume_group="subvolgroup_1",
         )
         index = subvol_path1.find("subvol_1/")
         if index != -1:
@@ -139,9 +142,11 @@ def run(ceph_cluster, **kw):
         )
         log.info("Get the path of subvolume2 on filesystem")
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        subvol_path2, rc = source_clients[0].exec_command(
-            sudo=True,
-            cmd=f"ceph fs subvolume getpath {source_fs} subvol_2 subvolgroup_1",
+        subvol_path2 = common_util_ceph1.subvolume_get_path(
+            source_clients[0],
+            source_fs,
+            subvolume_name="subvol_2",
+            subvolume_group="subvolgroup_1",
         )
         index = subvol_path2.find("subvol_2/")
         if index != -1:
