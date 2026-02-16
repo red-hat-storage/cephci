@@ -984,7 +984,8 @@ def run(ceph_cluster, **kw):
                         return sync_id_after
                     else:
                         raise Exception(
-                            f"last_synced_snap.id did not increase for {path} after {test_name}: before={sync_id_before}, after={sync_id_after}"
+                            f"last_synced_snap.id did not increase for {path} "
+                            f"after {test_name}: before={sync_id_before}, after={sync_id_after}"
                         )
                 else:
                     raise Exception(
@@ -994,7 +995,7 @@ def run(ceph_cluster, **kw):
             for idx, path in enumerate(subvolume_paths):
                 sync_id_b = snap_sync_id_before[idx]
                 try:
-                    sync_id_after = wait_for_sync_id_increase(idx, path, sync_id_b)
+                    wait_for_sync_id_increase(idx, path, sync_id_b)
                 except Exception as e:
                     log.error(str(e))
                     # Do not return or raise, just continue to next test/subvolume.

@@ -183,7 +183,7 @@ tests:
       module: cephfs_mirroring_system.test_cephfs_mirroring_system_mds.py
       name: Perform mds failure operations during active mirroring
       polarion-id: "CEPH-83632241"
-  
+
   - test:
       abort-on-fail: false
       desc: "Perform mirror-daemon failure operations during active mirroring"
