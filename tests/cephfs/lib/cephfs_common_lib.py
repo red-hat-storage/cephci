@@ -52,12 +52,16 @@ class CephFSCommonUtils(FsUtils):
             "Slow OSD heartbeats",
             "stray daemon(s) not managed by cephadm",
         ]
+        non_accepted_list = ["OSD_DOWN", "OSD_HOST_DOWN"]
         while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
             if self.check_ceph_status(client, "HEALTH_OK"):
                 ceph_healthy = 1
             else:
                 out, _ = client.exec_command(sudo=True, cmd="ceph health detail")
-                if any(msg in str(out) for msg in accepted_list):
+                if any(msg in str(out) for msg in non_accepted_list):
+                    log.error("Non-accepted errors found in ceph health: %s", out)
+                    time.sleep(5)
+                elif any(msg in str(out) for msg in accepted_list):
                     log.info(
                         "Ignoring the known warning for Bluestore Slow ops and OSD heartbeats"
                     )

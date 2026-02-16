@@ -2,7 +2,7 @@
 # Tier-level: 1
 # Test-Suite: tier-1_cephfs_mirror.yaml
 # Test-Case: Configure CephFS Mirror setup and run IOs
-# Conf file : conf/tentacle/cephfs/tier-1_cephfs_mirror.yaml
+# Conf file : conf/tentacle/cephfs/tier-1_cephfs_mirror_system.yaml
 # Cluster Configuration:
 #    No of Clusters : 2
 #    Cluster 1 :
@@ -182,4 +182,15 @@ tests:
             name: Perform mds operations during active mirroring
       module: cephfs_mirroring_system.test_cephfs_mirroring_system_mds.py
       name: Perform mds failure operations during active mirroring
+      polarion-id: "CEPH-83632241"
+
+  - test:
+      abort-on-fail: false
+      desc: "Perform mirror-daemon failure operations during active mirroring"
+      clusters:
+        ceph1:
+          config:
+            name: Perform mirror-daemon operations during active mirroring
+      module: cephfs_mirroring_system.test_cephfs_mirroring_system_mirror_daemon.py
+      name: Perform mirror-daemon failure operations during active mirroring
       polarion-id: "CEPH-83632241"
