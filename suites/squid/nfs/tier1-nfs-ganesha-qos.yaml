@@ -135,7 +135,7 @@ tests:
 
   - test:
       name: Qos PerShare enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos Pershare enablement on cluster level
       polarion-id: CEPH-83611390
       abort-on-fail: false
@@ -151,7 +151,7 @@ tests:
 
   - test:
       name: Qos PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerClient enablement on cluster level
       polarion-id: CEPH-83614246
       abort-on-fail: false
@@ -167,7 +167,7 @@ tests:
 
   - test:
       name: Qos PerShare_PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
+      module: qos.test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerShare_PerClient enablement on cluster level
       polarion-id: CEPH-83614247
       abort-on-fail: false
@@ -183,7 +183,7 @@ tests:
 
   - test:
       name: Qos enablement PerShare-PerClient on export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
+      module: qos.test_nfs_qos_on_export_level_enablement.py
       desc: Verify qos PerShare-PerClient enablement on export level
       polarion-id: CEPH-83613691
       abort-on-fail: false
