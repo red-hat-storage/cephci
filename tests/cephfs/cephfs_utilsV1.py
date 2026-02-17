@@ -5514,7 +5514,7 @@ os.system('sudo systemctl start  network')
             returns status,data_avail,data_used,meta_avail,meta_used and mds name from ceph fs status in dict format
         """
         fs_status_dict = {}
-        fs_status_info = self.get_fs_status_dump(client)
+        fs_status_info = self.get_fs_status_dump(client, vol_name=fs_name)
         log.debug(f"Output: {fs_status_info}")
 
         status = self.fetch_value_from_json_output(
@@ -5753,7 +5753,7 @@ os.system('sudo systemctl start  network')
         for key in keys_to_check:
             # Find dictionaries that contain the key
             dicts_with_key = [d for d in dicts if key in d]
-
+            log.info("dicts_with_key: %s for key %s", dicts_with_key, key)
             if len(dicts_with_key) == 0:
                 log.error(f"Key '{key}' not found in any dictionary")
                 return False
@@ -5763,7 +5763,7 @@ os.system('sudo systemctl start  network')
             else:
                 # Collect values for the key
                 values = [d[key] for d in dicts_with_key]
-
+                log.info("Collect values for the key: %s: values: %s", key, values)
                 # Check if values are lists
                 if all(isinstance(v, list) for v in values):
                     # Compare list contents

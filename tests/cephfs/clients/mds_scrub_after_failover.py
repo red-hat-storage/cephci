@@ -26,6 +26,44 @@ Test steps for 83573489
 """
 
 
+def get_health_check_keys(client):
+    """
+    Get the current set of health check keys from the Ceph cluster.
+
+    Args:
+        client: Client node to execute the command.
+
+    Returns:
+        set: A set of health check keys (e.g., {"CEPHADM_FAILED_DAEMON", "PG_DEGRADED"}).
+    """
+    out, _ = client.exec_command(sudo=True, cmd="ceph -s -f json")
+    health_data = json.loads(out)
+    checks = health_data.get("health", {}).get("checks", {})
+    return set(checks.keys())
+
+
+def validate_no_new_health_warnings(client, pre_existing_warnings):
+    """
+    Check that no new health warnings have been introduced.
+    Raises CommandFailed if new warnings are found, allowing retry decorator to handle retries.
+
+    Args:
+        client: Client node to execute the command.
+        pre_existing_warnings (set): Health check keys captured before the test.
+    """
+    post_test_warnings = get_health_check_keys(client)
+    new_warnings = post_test_warnings - pre_existing_warnings
+    if new_warnings:
+        raise CommandFailed(
+            f"New health warnings introduced by this test: {new_warnings}"
+        )
+    if post_test_warnings:
+        log.info(
+            f"Pre-existing health warnings still present (ignored): "
+            f"{post_test_warnings}"
+        )
+
+
 def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
@@ -45,6 +83,13 @@ def run(ceph_cluster, **kw):
         # Check if there is file system created
         client1 = clients[0]
         client2 = clients[1]
+
+        # Capture pre-existing health warnings before the test
+        pre_existing_warnings = get_health_check_keys(client1)
+        if pre_existing_warnings:
+            log.info(
+                f"Pre-existing health warnings detected: {pre_existing_warnings}"
+            )
         # count number of file systems
         rc, ec = client1.exec_command(sudo=True, cmd="ceph fs ls --format json-pretty")
         result = json.loads(rc)
@@ -166,10 +211,12 @@ def run(ceph_cluster, **kw):
         if result["return_code"] != 0:
             log.error("Error while scrubbing")
             return 1
-        retry_health = retry(CommandFailed, tries=4, delay=30)(
-            fs_util.get_ceph_health_status
+        # Validate health: only fail if there are NEW warnings introduced by this test
+        # Retry to allow transient warnings (e.g., PG_DEGRADED after MDS failover) to clear
+        retry_new_warnings_check = retry(CommandFailed, tries=6, delay=30)(
+            validate_no_new_health_warnings
         )
-        retry_health(client1)
+        retry_new_warnings_check(client1, pre_existing_warnings)
         # check if there is damaged metadata from ceph -s
         rc, ec = client1.exec_command(sudo=True, cmd="ceph -s")
         log.info(rc)
