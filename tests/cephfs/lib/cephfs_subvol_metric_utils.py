@@ -311,18 +311,16 @@ class MDSMetricsHelper:
                 f' | map(select(.labels.subvolume_path | startswith("{path_prefix}")))'
             )
 
-        pipeline = (
+        cmd = (
             f"ceph tell mds.{mds_name} counter dump -f json 2>/dev/null | "
             r"sed -n '/^{/,$p' | "
             f"jq -c '{jq_filter}'"
         )
-        # Wrap with GNU timeout and bash -lc to ensure the whole pipeline is bounded
-        timed_cmd = f"timeout {self.tell_timeout_s}s bash -lc {json.dumps(pipeline)}"
 
         last_err: Optional[Exception] = None
         for attempt in range(self.tell_retries + 1):
             try:
-                out, _ = client.exec_command(sudo=True, cmd=timed_cmd, check_ec=False)
+                out, _ = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
                 s = (out or "").strip()
                 if not s:
                     raise RuntimeError("empty output from ceph tell/jq")
