@@ -375,7 +375,7 @@ def run(ceph_cluster, **kw):
 
         try:
             if fs_created:
-                fs_util.remove_fs(client, fs_name=default_fs)
+                fs_util.remove_fs(client, vol_name=default_fs)
         except Exception as e:
             log.error("Filesystem cleanup failed: %s", e)
             cleanup_fail = True
