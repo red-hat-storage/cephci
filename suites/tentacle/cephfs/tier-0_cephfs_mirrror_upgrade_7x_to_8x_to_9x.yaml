@@ -16,7 +16,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
+                    # registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 7.1
                     release: rc
@@ -76,7 +76,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
+                    # registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 7.1
                     release: rc

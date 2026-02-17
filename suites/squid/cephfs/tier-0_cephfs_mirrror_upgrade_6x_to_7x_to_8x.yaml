@@ -16,7 +16,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
+                    # registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 6.1
                     release: rc
@@ -76,7 +76,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    registry-url: registry.redhat.io
+                    # registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 6.1
                     release: rc
@@ -122,7 +122,7 @@ tests:
                         - node4
                         - node5
       desc: CephFS Mirror cluster deployment using cephadm
-      destroy-clster: false
+      destroy-cluster: false
       module: test_cephadm.py
       polarion-id: CEPH-83574114
       name: deploy cephfs-mirror

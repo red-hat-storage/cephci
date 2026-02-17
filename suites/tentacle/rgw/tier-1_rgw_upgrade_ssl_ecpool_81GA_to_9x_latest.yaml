@@ -20,7 +20,7 @@ tests:
               args:
                 rhcs-version: 8.1
                 release: released
-                registry-url: registry.redhat.io
+                # registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true

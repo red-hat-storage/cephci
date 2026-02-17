@@ -28,7 +28,7 @@ tests:
                 release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
-                registry-url: registry.redhat.io
+                # registry-url: registry.redhat.io
                 skip-monitoring-stack: true
               base_cmd_args:
                 verbose: true

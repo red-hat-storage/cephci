@@ -36,7 +36,7 @@ tests:
               args:
                 custom_repo: "cdn"
                 custom_image: false
-                rhcs-version: "8.0"
+                rhcs-version: 8.0
                 mon-ip: node1
                 log-to-file: true
           - config:

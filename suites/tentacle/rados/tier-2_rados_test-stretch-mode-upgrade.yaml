@@ -28,7 +28,7 @@ tests:
           platform: rhel-9
           mon-ip: node1
           orphan-initial-daemons: true
-          registry-url: registry.redhat.io
+          # registry-url: registry.redhat.io
           skip-monitoring-stack: true
           registry-json: registry.redhat.io
           skip-dashboard: true

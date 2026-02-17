@@ -24,7 +24,7 @@ tests:
                   args:
                     rhcs-version: 6.1
                     release: released
-                    registry-url: registry.redhat.io
+                    # registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
@@ -80,7 +80,7 @@ tests:
                   args:
                     rhcs-version: 6.1
                     release: released
-                    registry-url: registry.redhat.io
+                    # registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123

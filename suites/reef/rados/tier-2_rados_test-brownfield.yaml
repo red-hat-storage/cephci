@@ -26,7 +26,7 @@ tests:
                 release: z6     # deploying old build to verify obj snap deletion
                 mon-ip: node1
                 orphan-initial-daemons: true
-                registry-url: registry.redhat.io
+                # registry-url: registry.redhat.io
                 allow-fqdn-hostname: true
           - config:
               command: add_hosts

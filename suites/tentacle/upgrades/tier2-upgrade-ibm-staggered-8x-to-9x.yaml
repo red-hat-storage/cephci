@@ -1,7 +1,7 @@
 #################################################################################
 # Tier-level: 1
 # Test-Suite: tier-2-upgrade-ibm-staggered-8x-to-9x.yaml
-# Test-Case: Automation support for staggered upgrade from IBBSC 8 to IBMSC 9 in RHEL9
+# Test-Case: Automation support for staggered upgrade from IBMSC 8 to IBMSC 9 in RHEL9
 #
 # Cluster Configuration:
 #     conf/tentacle/upgrades/1admin-3node-1client-upgrade.yaml
@@ -37,7 +37,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 8.1
-                release: "rc"
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
