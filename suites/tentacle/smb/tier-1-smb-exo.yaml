@@ -1,0 +1,420 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      clusters:
+        ceph-pri:
+          config:
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    skip-monitoring-stack: true
+                    orphan-initial-daemons: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph fs volume create cephfs"
+                  command: shell
+              - config:
+                  args:
+                    placement:
+                      label: mds
+                  base_cmd_args:
+                    verbose: true
+                  command: apply
+                  pos_args:
+                    - cephfs
+                  service: mds
+        ceph-sec:
+          config:
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    skip-monitoring-stack: true
+                    orphan-initial-daemons: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node4
+            install_packages:
+              - ceph-common
+              - samba-client
+              - cifs-utils
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node4
+            install_packages:
+              - ceph-common
+              - samba-client
+              - cifs-utils
+            copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy Samba services with an external secondary cluster (Samba service separation)
+      desc: Deploy Samba services with an external secondary cluster (Samba service separation)
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632305
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
+
+  - test:
+      name: Deploy Samba services with user mode on an external secondary cluster
+      desc: Deploy Samba services with user mode on an external secondary cluster
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632309
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - client_connection
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
+
+  - test:
+      name: Deploy Samba services with a share configured using an absolute path on an external secondary cluster
+      desc: Deploy Samba services with a share configured using an absolute path on an external secondary cluster.
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632306
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - client_connection
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
+
+  - test:
+      name: Verify Samba service client connectivity with an external secondary cluster
+      desc: Verify Samba service client connectivity with an external secondary cluster
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632307
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - client_connection
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
+
+  - test:
+      name: Deploy Samba services with a multiple shares on an external secondary cluster
+      desc: Deploy Samba services with a multiple shares on an external secondary cluster.
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632311
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - client_connection
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share2
+                name: share2
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv2/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share3
+                name: share3
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv3/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
+
+  - test:
+      name: Verify Samba service cross cluster access with an external secondary cluster
+      desc: Verify Samba service cross cluster access with an external secondary cluster
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632310
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - client_connection
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
