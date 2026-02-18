@@ -5674,6 +5674,59 @@ os.system('sudo systemctl start  network')
         )
         return fs_dump_info_dict
 
+    def collect_fs_dump_for_validation_1(self, client, fs_name):
+        """
+        Gets the output using fs dump and collected required info
+        Args:
+            client: client node
+            fs_name: File system name
+        Return:
+            returns status, fs_name, fsid, rank and mds name from ceph fs dump in dict format
+        """
+        fs_dump_info_dict = {}
+        fs_dump = self.get_fs_dump(client)
+        log.debug(fs_dump)
+
+        target_fs = None
+        for fs_entry in fs_dump.get("filesystems", []):
+            mdsmap = fs_entry.get("mdsmap", {})
+            if mdsmap.get("fs_name") == fs_name:
+                target_fs = fs_entry
+                break
+
+        if target_fs is None:
+            log.error(f"Filesystem '{fs_name}' not found in fs dump")
+            return fs_dump_info_dict
+
+        mdsmap = target_fs["mdsmap"]
+        fsname = mdsmap["fs_name"]
+        fsid = target_fs["id"]
+
+        active_mds = None
+        for gid_info in mdsmap.get("info", {}).values():
+            if "active" in gid_info.get("state", ""):
+                active_mds = gid_info
+                break
+
+        if active_mds is None:
+            log.error(f"No active MDS found for filesystem '{fs_name}' in fs dump")
+            return fs_dump_info_dict
+
+        status = active_mds["state"].split(":", 1)[1]
+        rank = active_mds["rank"]
+        mds_name = active_mds["name"]
+
+        fs_dump_info_dict.update(
+            {
+                "status": status,
+                "fsname": fsname,
+                "fsid": fsid,
+                "rank": rank,
+                "mds_name": mds_name,
+            }
+        )
+        return fs_dump_info_dict
+
     @retry(CommandFailed, tries=3, delay=10)
     def collect_fs_get_for_validation(self, client, fs_name):
         """

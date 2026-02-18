@@ -87,9 +87,7 @@ def run(ceph_cluster, **kw):
         # Capture pre-existing health warnings before the test
         pre_existing_warnings = get_health_check_keys(client1)
         if pre_existing_warnings:
-            log.info(
-                f"Pre-existing health warnings detected: {pre_existing_warnings}"
-            )
+            log.info(f"Pre-existing health warnings detected: {pre_existing_warnings}")
         # count number of file systems
         rc, ec = client1.exec_command(sudo=True, cmd="ceph fs ls --format json-pretty")
         result = json.loads(rc)
