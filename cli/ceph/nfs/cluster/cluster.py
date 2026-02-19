@@ -7,7 +7,6 @@ from cli.utilities.utils import build_cmd_from_args
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
 
-from .cluster_qos import Cluster_qos
 from .qos import Qos
 
 log = Log(__name__)
@@ -18,7 +17,6 @@ class Cluster(Cli):
         super(Cluster, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} cluster"
         self.qos = Qos(nodes, self.base_cmd)
-        self.cluster_qos = Cluster_qos(nodes, self.base_cmd)
 
     def create(
         self,

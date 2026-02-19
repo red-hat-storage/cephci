@@ -222,7 +222,6 @@ def enable_disable_qos_for_cluster(
     cluster_name,
     qos_type=None,
     operation=None,
-    cluster_qos=False,
     **qos_parameters,
 ):
     # Common validation
@@ -244,7 +243,6 @@ def enable_disable_qos_for_cluster(
 
     try:
         if enable_flag:
-
             if qos_type == "PerShare":
                 ceph_cluster_nfs_obj.qos.enable_per_share(
                     qos_type=qos_type,
@@ -279,24 +277,7 @@ def enable_disable_qos_for_cluster(
                     max_export_iops=qos_parameters.get("max_export_iops"),
                     max_client_iops=qos_parameters.get("max_client_iops"),
                 )
-            if not cluster_qos:
-                ceph_cluster_nfs_obj.cluster_qos.disable(cluster_id=cluster_name)
-                qos_data = ceph_cluster_nfs_obj.qos.get(
-                    cluster_id=cluster_name, format="json"
-                )
-                log.info(f"Qos Data after disabling the cluster_qoS {str(qos_data)}")
-                if json.loads(qos_data).get("enable_cluster_qos") is True:
-                    raise OperationFailedError("Cluster_qos is not disabled")
         else:
-            if cluster_qos:
-                ceph_cluster_nfs_obj.cluster_qos.disable(cluster_id=cluster_name)
-                qos_data = ceph_cluster_nfs_obj.qos.get(
-                    cluster_id=cluster_name, format="json"
-                )
-                log.info(f"Qos Data after disabling the cluster_qoS {str(qos_data)}")
-                if json.loads(qos_data).get("enable_cluster_qos") is True:
-                    raise OperationFailedError("Cluster_qos is not disabled")
-
             ceph_cluster_nfs_obj.qos.disable(
                 cluster_id=cluster_name, operation=operation
             )
@@ -793,6 +774,9 @@ def run(ceph_cluster, **kw):
     # rpc bind need to be enabled in installer
     CephAdm(installer).ceph.nfs.cluster.validate_rpcbind_running(installer[0])
 
+    if cluster_qos:
+        log.info("-" * 20 + "cluster_qos feature test" + "-" * 20)
+
     try:
         # Setup nfs cluster
         setup_nfs_cluster(
@@ -937,7 +921,6 @@ def run(ceph_cluster, **kw):
             qos_type=qos_type,
             ceph_cluster_nfs_obj=ceph_nfs_client.cluster,
             cluster_name=cluster_name,
-            cluster_qos=cluster_qos,
         )
         return 0
     except (ConfigError, OperationFailedError, RuntimeError) as e:
