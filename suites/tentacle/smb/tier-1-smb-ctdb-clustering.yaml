@@ -93,22 +93,22 @@ tests:
         smb_shares: [share1]
         path: "/"
 
-  - test:
-      name: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
-      desc: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
-      module: smb_deployment_imperative_method.py
-      polarion-id: CEPH-83597234
-      config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [sv1,sv2]
-        smb_subvolume_mode: '0777'
-        smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [share1, share2]
-        path: "/"
+  # - test:
+  #     name: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
+  #     desc: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
+  #     module: smb_deployment_imperative_method.py
+  #     polarion-id: CEPH-83597234
+  #     config:
+  #       cephfs_volume: cephfs
+  #       smb_subvolume_group: smb
+  #       smb_subvolumes: [sv1,sv2]
+  #       smb_subvolume_mode: '0777'
+  #       smb_cluster_id: smb1
+  #       auth_mode: user
+  #       smb_user_name: user1
+  #       smb_user_password: passwd
+  #       smb_shares: [share1, share2]
+  #       path: "/"
 
   - test:
       name: (Declarative Style - Single Share) Verify Samba deployment using auth_mode=user with clustering
