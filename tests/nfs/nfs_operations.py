@@ -131,7 +131,8 @@ def setup_nfs_cluster(
     if 3 in mount_versions.keys():
         ports_to_open = ["portmapper", "mountd"]
         for nfs_node in nfs_nodes:
-            open_mandatory_v3_ports(nfs_node, ports_to_open)
+            if nfs_node.hostname in nfs_server:
+                open_mandatory_v3_ports(nfs_node, ports_to_open)
 
     mount_servers = []
     if ha:
