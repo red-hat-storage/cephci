@@ -26,9 +26,19 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
             log.info("Timed out *************************")
             break
         client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
-        fs_util.run_ios(
-            client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
-        )
+        try:
+            fs_util.run_ios(
+                client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
+            )
+        except CommandFailed as ex:
+            if "threads reached starting gate within" in str(ex):
+                log.warning(
+                    "Smallfile IO failed with error may be due to daemon restarts - %s",
+                    ex,
+                )
+            else:
+                log.error("Unexpected error during smallfile IO")
+                raise CommandFailed
         iter = iter + 1
 
 

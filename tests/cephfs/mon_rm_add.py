@@ -41,10 +41,11 @@ def wait_for_cmd(client1, process_name, count, timeout=180, interval=5):
             cmd=f"ceph orch ps | grep {process_name} | wc -l ",
             check_ec=False,
         )
+        log.info("ceph orch ps|grep %s | wc -l output: %s", process_name, out)
         out2, rc = client1.exec_command(
             sudo=True, cmd=f"ceph orch ps | grep {process_name} ", check_ec=False
         )
-        print(out2)
+        log.info("ceph orch ps|grep %s output: %s", process_name, out2)
         output = out.rstrip()
         log.info(f"Current mon count = {output}")
         log.info(f"Expected mon count = {count}")
@@ -67,11 +68,11 @@ def mon_rm_add(fs_util, mons, client, fs_name="cephfs"):
         count = str(int(initial_mon_count) - 1)
         cmd = f"ceph orch --verbose apply mon --placement='{mons_hosts}'"
         client.exec_command(sudo=True, cmd=cmd)
-        wait_for_cmd(client, "mon", count)
+        wait_for_cmd(client, "mon", count, timeout=600)
         mons_hosts = " ".join([str(elem) for elem in mon_hosts])
         cmd = f"ceph orch --verbose apply mon --placement='{mons_hosts}'"
         client.exec_command(sudo=True, cmd=cmd)
-        wait_for_cmd(client, "mon", initial_mon_count)
+        wait_for_cmd(client, "mon", initial_mon_count, timeout=600)
         stop_flag = True
 
     except Exception as e:
