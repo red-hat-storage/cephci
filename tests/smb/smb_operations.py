@@ -425,6 +425,7 @@ def create_smb_share(
     """
     try:
         for i in range(0, len(smb_shares)):
+            sleep(15)
             CephAdm(installer).ceph.smb.share.create(
                 smb_cluster_id,
                 smb_shares[i],
