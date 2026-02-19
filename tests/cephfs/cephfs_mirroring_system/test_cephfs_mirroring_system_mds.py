@@ -3,7 +3,6 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
-from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.cephfs_mirroring_system.cephfs_mirroring_system_utils import (
     cleanup_mirroring_test_environment,
     run_container_restart,
@@ -15,6 +14,7 @@ from tests.cephfs.cephfs_mirroring_system.cephfs_mirroring_system_utils import (
     start_background_ios,
     wait_for_snaps_synced_increase,
 )
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
