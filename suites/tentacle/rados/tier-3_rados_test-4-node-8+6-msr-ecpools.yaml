@@ -25,6 +25,7 @@ tests:
                 rhcs-version: 8.1
                 release: rc
                 platform: rhel-9
+                skip-monitoring-stack: true
 
   - test:
       name: Add host
@@ -141,7 +142,10 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node6                     # client node
+        nodes:                            # client node
+          - node6:
+              release: 8.1
+              tag: rc
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node

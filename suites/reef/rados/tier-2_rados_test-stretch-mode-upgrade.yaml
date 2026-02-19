@@ -151,9 +151,10 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        nodes:
+        nodes:                            # client node
           - node8:
-              release: 5
+              release: 6.1
+              tag: rc
         install_packages:
           - ceph-common
           - ceph-base

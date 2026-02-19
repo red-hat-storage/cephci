@@ -99,7 +99,10 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node7                       # client node
+        nodes:                            # client node
+          - node7:
+              release: 7.1
+              tag: rc
         install_packages:
           - ceph-common
           - ceph-base
