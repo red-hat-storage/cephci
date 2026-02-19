@@ -666,16 +666,32 @@ def permission(client, nfs_name, nfs_export, old_permission, new_permission):
 
 
 def enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name):
-    # Enable the NLM support for v3 Locking
-    # # --enable-nfsv3 flag was introduced after 8.1z4 (19.2.1-292); only add for newer
+    """
+    Enable NLM (Network Lock Manager) support for NFSv3 locking.
+
+    Args:
+        installer: Ceph installer node
+        nfs_name: Name of the NFS cluster
+        nfs_node: NFS server node
+        nfs_server_name: Hostname of the NFS server
+    """
+    log.info(f"Enabling v3 locking for NFS cluster: {nfs_name}")
+
+    # Get Ceph version to determine which flags to add
     ceph_version = get_ceph_version(installer, prefix_cephadm=True)
-    log.info(f"ceph_version: {ceph_version}")
+    log.info(f"Detected Ceph version: {ceph_version}")
+
+    # Build spec lines - enable_nlm is always required for v3 locking
     spec_lines = ["    enable_nlm: true"]
+    log.info("Adding enable_nlm: true to NFS spec")
+
+    # --enable-nfsv3 flag was introduced after 8.1z4 (19.2.1-292); only add for newer
     if LooseVersion(ceph_version) > LooseVersion("19.2.1-292"):
         log.info(
             f"Ceph version {ceph_version} is above 19.2.1-292, adding enable_nfsv3: true"
         )
         spec_lines.append("    enable_nfsv3: true")
+
     spec_block = "\n".join(spec_lines)
     content = f"""service_type: nfs
 service_id: {nfs_name}
@@ -685,15 +701,20 @@ placement:
 spec:
 {spec_block}"""
 
+    log.info(f"Generated NFS Ganesha spec:\n{content}")
+
+    # Write spec to local file
     with open("ganesha.yaml", "w") as f:
         yaml.dump(content, f)
-    log.info(content)
+    log.debug("Spec file written to local ganesha.yaml")
 
-    # Adding the configurations into the ganesha.yaml file.
+    # Adding the configurations into the ganesha.yaml file inside cephadm shell
+    log.info("Creating ganesha.yaml inside cephadm shell")
     cmd = f"echo '{content}' >> ganesha.yaml"
     CephAdm(installer).shell(cmd=cmd)
 
-    # Mount the export file inside shell and apply changes
+    # Mount the spec file inside shell and apply changes
+    log.info("Applying NFS Ganesha spec using ceph orch apply")
     cmd = (
         "--mount ganesha.yaml:/var/lib/ceph/ganesha.yaml -- "
         "ceph orch apply -i /var/lib/ceph/ganesha.yaml"
@@ -701,21 +722,40 @@ spec:
     CephAdm(installer).shell(cmd=cmd)
 
     # Restart the NFS Ganesha service
+    log.info(f"Redeploying NFS Ganesha service: nfs.{nfs_name}")
     CephAdm(installer).ceph.orch.redeploy(service=f"nfs.{nfs_name}")
 
     # Wait till the NFS daemons are up
+    log.info("Waiting for NFS daemons to be ready...")
     sleep(10)
 
     verify_nfs_ganesha_service(node=installer, timeout=300)
-    log.info("NFS Ganesha spec file applied successfully.")
+    log.info("NFS Ganesha service is up and running")
 
-    # Start the rpc-statd service on server
+    # Verify the NFS spec has enable_nlm set after applying config
+    log.info("Verifying NFS service spec contains enable_nlm configuration")
+    cmd = f"cephadm shell -- ceph orch ls --service-name nfs.{nfs_name} --export"
+    out, _ = installer.exec_command(sudo=True, cmd=cmd)
+    log.debug(f"NFS service spec after apply:\n{out}")
+    if "enable_nlm: true" not in out:
+        log.error("enable_nlm: true not found in NFS service spec")
+        log.error(f"Exported spec output: {out}")
+        raise OperationFailedError(
+            "NFS service spec does not contain enable_nlm: true after applying config"
+        )
+    log.info("NFS service spec verified: enable_nlm is set to true")
+
+    # Start the rpc-statd service on server for NLM support
+    log.info(f"Starting rpc-statd service on NFS node: {nfs_node.hostname}")
     cmd = "sudo systemctl start rpc-statd"
     nfs_node.exec_command(cmd=cmd)
+    log.info("rpc-statd service started successfully")
 
-    # Open the NLM port
+    # Open the NLM port in firewall
+    log.info("Opening NLM (nlockmgr) port in firewall")
     ports_to_open = ["nlockmgr"]
     open_mandatory_v3_ports(nfs_node, ports_to_open)
+    log.info("NFSv3 locking (NLM) enabled successfully")
 
 
 def getfattr(client, file_path, attribute_name=None):
@@ -874,18 +914,33 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
 def open_mandatory_v3_ports(nfs_node, ports_to_open):
     """
-    Open the required ports for v3 mount (portmapper, mountd, nlockmgr) based on rpcinfo output.
+    Open the required ports for NFSv3 mount based on rpcinfo output.
+    (portmapper, mountd, nlockmgr) and opens them in the firewall.
+
+    Args:
+        nfs_node: NFS server node where ports need to be opened
+        ports_to_open: List of service names to open (e.g., ["nlockmgr", "mountd"])
+
+    Raises:
+        OperationFailedError: If rpcinfo fails or required service port is not found
     """
+    log.info(f"Opening NFSv3 ports on node: {nfs_node.hostname}")
+    log.info(f"Services to open: {ports_to_open}")
+
     # Initialize the service_ports_mapping dictionary to store the port lists
     service_ports_mapping = {"portmapper": None, "mountd": None, "nlockmgr": None}
 
     # Execute rpcinfo command to get the port information
+    log.info("Querying rpcinfo for service ports")
     cmd = "sudo rpcinfo -p"
     out, _ = nfs_node.exec_command(sudo=True, cmd=cmd)
-    log.debug(f"rpcinfo output: {out}")
+    log.debug(f"rpcinfo output:\n{out}")
+
     if not out:
-        log.error(f"Failed to execute rpcinfo -p on {nfs_node}")
-        return
+        log.error(f"Failed to execute rpcinfo -p on {nfs_node.hostname}")
+        raise OperationFailedError(
+            f"rpcinfo -p returned empty output on {nfs_node.hostname}"
+        )
 
     # Split the output into lines and iterate over them
     lines = out.splitlines()
@@ -909,23 +964,29 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
         elif service == "nlockmgr":
             service_ports_mapping["nlockmgr"] = port
 
+    log.debug(f"Discovered service ports: {service_ports_mapping}")
+
     # Open firewall ports based on services in ports_to_open
     for service in ports_to_open:
         port_to_open = service_ports_mapping.get(service)
 
         if port_to_open:
             # Open the port using the firewall command
+            log.info(f"Opening firewall port {port_to_open}/tcp for {service}")
             nfs_node.exec_command(
                 sudo=True,
                 cmd=f"sudo firewall-cmd --zone=public --add-port={port_to_open}/tcp --permanent",
             )
-            log.info(f"Opened {service} port: {port_to_open}")
+            log.info(f"Successfully opened {service} port: {port_to_open}")
         else:
-            raise OperationFailedError(f"{service} port not found")
+            log.error(f"{service} port not found in rpcinfo output")
+            log.error(f"Available services: {service_ports_mapping}")
+            raise OperationFailedError(f"{service} port not found in rpcinfo output")
 
     # Reload the firewall to apply the changes
+    log.info("Reloading firewall to apply changes")
     nfs_node.exec_command(sudo=True, cmd="sudo firewall-cmd --reload")
-    log.info("Firewall rules reloaded.")
+    log.info("Firewall rules reloaded successfully")
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)

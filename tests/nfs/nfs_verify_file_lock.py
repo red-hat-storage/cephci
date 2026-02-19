@@ -90,42 +90,53 @@ def run(ceph_cluster, **kw):
             raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
     log.info("Mount succeeded on client")
 
-    # Check the mount protocol
+    # Enable v3 locking if required (must be done before creating export and mounting)
     if version == 3:
         enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
 
     # Create a file on Client 1
     file_path = f"{nfs_lock_mount}/sample_file"
+    log.info(f"Creating test file: {file_path}")
     clients[0].exec_command(cmd=f"touch {file_path}", sudo=True)
 
     # Perform File Lock from client 1
+    log.info(f"Client 1 ({clients[0].hostname}) acquiring exclusive file lock...")
     c1 = Thread(target=get_file_lock, args=(clients[0],))
     c1.start()
 
+    log.info("Waiting 5 seconds before Client 2 attempts to acquire lock...")
+
     # Adding a constant sleep as its required for the thread call to start the lock process
     sleep(5)
+    log.info(
+        f"Client 2 ({clients[1].hostname}) attempting to acquire lock (should fail)..."
+    )
     try:
         get_file_lock(clients[1])
         log.error(
-            "Unexpected: Client 2 was able to access file lock while client 1 lock was active"
+            "Unexpected: Client 2 was able to acquire file lock while Client 1 lock was active"
         )
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
-    except Exception as e:
+    except Exception:
         log.info(
-            f"Expected: Failed to acquire lock from client 2 while client 1 lock is in on {e}"
+            f"Expected: Client 2 ({clients[1].hostname}) failed to acquire lock - "
+            f"Client 1 ({clients[0].hostname}) is holding exclusive lock"
         )
 
     c1.join()
+    log.info(f"Client 1 ({clients[0].hostname}) released the file lock")
 
     try:
         get_file_lock(clients[1])
         log.info(
-            "Expected: Successfully acquired lock from client 2 while client 1 lock is released"
+            f"Expected: Client 2 ({clients[1].hostname}) successfully acquired lock "
+            f"after Client 1 released it"
         )
     except Exception as e:
         log.error(
-            f"Unexpected: Failed to acquire lock from client 2 while client 1 lock is in removed {e}"
+            f"Unexpected: Client 2 ({clients[1].hostname}) failed to acquire lock "
+            f"after Client 1 released it. Error: {e}"
         )
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
