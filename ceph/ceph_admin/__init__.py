@@ -155,12 +155,15 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
 
         if ctm is None:
             ctm = self.config["manifest"]
+            logger.debug(
+                f"Retrieved Build info from manifest file :\n {ctm.build_info}"
+            )
 
         cmd = f"subscription-manager repos --enable={ctm.repo_id}"
         if ctm.product == "ibm":
             # Pick the customer facing repositories as it would be
             # CDN testing.
-            _repo = ctm.build_info["released"]["repositories"]["default"]
+            _repo = ctm.build_info["repositories"]["default"][self.config["platform"]]
             cmd = f"dnf config-manager --add-repo {_repo}"
 
         for node in self.cluster.get_nodes(ignore="client"):
