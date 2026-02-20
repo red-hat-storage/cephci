@@ -160,6 +160,9 @@ def run(ceph_cluster, **kw):
     )  # supports mutliple nfs
     CephAdm(installer).ceph.nfs.cluster.validate_rpcbind_running(installer[0])
 
+    if cluster_qos:
+        log.info("-" * 20 + "cluster_qos feature test" + "-" * 20)
+
     try:
         # Setup nfs cluster
         setup_nfs_cluster(
@@ -395,7 +398,6 @@ def run(ceph_cluster, **kw):
             qos_type=qos_type,
             ceph_cluster_nfs_obj=ceph_nfs_client.cluster,
             cluster_name=cluster_name,
-            cluster_qos=cluster_qos,
         )
         return 0
     except (ConfigError, OperationFailedError, RuntimeError) as e:

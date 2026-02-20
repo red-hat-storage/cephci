@@ -141,6 +141,7 @@ tests:
       polarion-id: CEPH-83613691
       abort-on-fail: false
       config:
+        control: bandwidth_control
         cephfs_volume : cephfs
         cluster_name : cephfs-nfs
         cluster_bw :
@@ -163,6 +164,7 @@ tests:
       polarion-id: CEPH-83611390
       abort-on-fail: false
       config:
+        control: bandwidth_control
         cephfs_volume : cephfs
         cluster_name : cephfs-nfs
         max_export_write_bw : 8MB
@@ -171,29 +173,6 @@ tests:
         max_client_read_bw: 8MB
         qos_type : PerShare
         operation : restart
-
-  - test:
-      name: deploy nfs ganesha with qos per share using spec file
-      desc: Deploy nfs ganesha with qos per share using spec file and verify
-      polarion-id: CEPH-83621553
-      module: qos.nfs_verify_qos_via_specfile_PerShare.py
-      config:
-        nfs_version: 4.2
-        clients: 4
-        port: 2049
-        spec:
-          service_type: nfs
-          service_id: nfs
-          placement:
-            label: nfs
-          spec:
-              cluster_qos_config:
-                combined_rw_bw_control: false
-                enable_bw_control: true
-                enable_qos: true
-                max_export_read_bw: 20MB
-                max_export_write_bw: 20MB
-                qos_type: PerShare
 
   - test:
       name: NFS gRPC - Verify ID Updates After Client Unmount

@@ -107,6 +107,9 @@ def run(ceph_cluster, **kw):
         Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
         CephAdm(installer).ceph.nfs.cluster.validate_rpcbind_running(installer[0])
 
+        if cluster_qos:
+            log.info("-" * 20 + "cluster_qos feature test" + "-" * 20)
+
         # Setup NFS cluster
         setup_nfs_cluster(
             clients=clients,
@@ -147,7 +150,6 @@ def run(ceph_cluster, **kw):
                 cluster_name=cluster_name,
                 qos_type=qos_type,
                 operation=control,
-                cluster_qos=cluster_qos,
                 **cluster_ops,
             )
 
@@ -282,7 +284,6 @@ def run(ceph_cluster, **kw):
                 cluster_name=cluster_name,
                 qos_type=qos_type,
                 operation=control,
-                cluster_qos=cluster_qos,
             )
 
         if export_ops:
