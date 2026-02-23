@@ -23,6 +23,7 @@ tests:
           release: rc
           platform: rhel-9
           ssh-user: cephuser
+          skip-monitoring-stack: true
           apply-spec:
             - service_type: host
               address: true
@@ -155,13 +156,16 @@ tests:
       polarion-id:
       config:
         command: add
-        id: client.1 # client Id (<type>.<Id>)
-        node: node10
+        id: client.1                            # client Id (<type>.<Id>)
+        nodes:                                  # client node
+          - node10:
+              release: 8.1
+              tag: rc
         install_packages:
           - ceph-common
           - ceph-base
-        copy_admin_keyring: true # Copy admin keyring to node
-        caps: # authorize client capabilities
+        copy_admin_keyring: true                # Copy admin keyring to node
+        caps:                                   # authorize client capabilities
           mon: "allow *"
           osd: "allow *"
           mds: "allow *"

@@ -135,8 +135,8 @@ tests:
       name: Configure client admin
       desc: Configures client admin node on cluster
       module: test_client.py
-      polarion-id:  CEPH-83573758
       abort-on-fail: true
+      polarion-id:  CEPH-83573758
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
