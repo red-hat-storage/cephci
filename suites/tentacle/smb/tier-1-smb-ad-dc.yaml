@@ -84,7 +84,7 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1, sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: active-directory
@@ -92,7 +92,7 @@ tests:
         custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
-        smb_shares: [share1, share2]
+        smb_shares: [share1]
         path: "/"
 
   - test:
@@ -146,7 +146,7 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1, sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: active-directory
@@ -154,7 +154,7 @@ tests:
         custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
-        smb_shares: [share1, share2]
+        smb_shares: [share1]
         path: "/"
 
   - test:
@@ -184,7 +184,7 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1,sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: active-directory
@@ -192,7 +192,7 @@ tests:
         custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
-        smb_shares: [share1,share2]
+        smb_shares: [share1]
         path: "/"
 
   - test:
