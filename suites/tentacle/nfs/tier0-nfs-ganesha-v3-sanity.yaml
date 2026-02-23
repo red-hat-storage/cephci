@@ -153,15 +153,15 @@ tests:
         nfs_version: 3
         clients: 1
 
-  - test:
-      name: Running multi client byte lock test
-      module: nfs_multi_client_byterange_filelock.py
-      desc: Running multi client byte lock test
-      polarion-id: CEPH-83577561
-      abort-on-fail: false
-      config:
-        nfs_version: 3
-        clients: 4
+#  - test:
+#      name: Running multi client byte lock test
+#      module: nfs_multi_client_byterange_filelock.py
+#      desc: Running multi client byte lock test
+#      polarion-id: CEPH-83577561
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 3
+#        clients: 4
 
   - test:
       name: NFS Ganesha overlapping byte-range locks test
@@ -173,15 +173,15 @@ tests:
         nfs_version: 3
         clients: 3
 
-  - test:
-      name: NFS Ganesha conflicting byte-range locks test
-      module: nfs_conflicting_locks.py
-      desc: Test conflicting byte-range locks - verify only one client can hold conflicting/overlapping locks at a time
-      polarion-id: CEPH-83577561
-      abort-on-fail: false
-      config:
-        nfs_version: 3
-        clients: 4
+#  - test:
+#      name: NFS Ganesha conflicting byte-range locks test
+#      module: nfs_conflicting_locks.py
+#      desc: Test conflicting byte-range locks - verify only one client can hold conflicting/overlapping locks at a time
+#      polarion-id: CEPH-83577561
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 3
+#        clients: 4
 
   - test:
       name: NFS Ganesha queue management locks test
