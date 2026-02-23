@@ -269,8 +269,12 @@ class BootstrapMixin:
         else:
             _os_major = manifest_obj.platform.split("-")[-1]
             _ceph_version = manifest_obj.ceph_version
-            # * is to enable any test hotfix provided
-            _rpm_version = f"2:{_ceph_version}*.el{_os_major}cp"
+            if build_type == "upstream" or manifest_obj.product == "community":
+                _rpm_version = f"{_ceph_version}*"
+            else:
+                # * is to enable any test hotfix provided
+                _rpm_version = f"2:{_ceph_version}.el{_os_major}cp"
+
             self.install(**{"rpm_version": _rpm_version})
 
         cmd = "cephadm"
