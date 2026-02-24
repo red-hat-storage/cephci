@@ -510,7 +510,6 @@ def run(args):
     if upstream_build:
         product = "community"
         release = upstream_build
-        build = "nightly"
 
     # FixMe: We should be using product for differentiation.
     ibm_build = False

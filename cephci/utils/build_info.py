@@ -20,6 +20,7 @@ class CephTestManifest:
         "https://raw.githubusercontent.com/ibmstorage/qe-ceph-manifest/refs/heads/main/"
     )
     SUPPORTED_PRODUCTS = ["community", "redhat", "ibm"]
+    RELEASE_MAP = {"reef": 7, "squid": 8, "tentacle": 9}
 
     def __init__(
         self,
@@ -69,6 +70,9 @@ class CephTestManifest:
 
     @property
     def release(self) -> str:
+        if self.product == "community":
+            return self.RELEASE_MAP[self._release]
+
         return self._release
 
     @release.setter
@@ -193,11 +197,13 @@ class CephTestManifest:
             }
             }
         """
-        _msg = f"Retreving build details of {self.product} - {self.release}. "
+        # Please ensure to use _release instead of release, since release is a
+        # property and can be overridden.
+        _msg = f"Retreving build details of {self.product} - {self._release}. "
         _msg += f"Looking up {self.build_type} section."
         logger.debug(_msg)
 
-        manifest_file: str = f"{self.release}.yaml"
+        manifest_file: str = f"{self._release}.yaml"
         manifest_url: str = self.URI
 
         if self.product.lower() == "community":
