@@ -79,9 +79,11 @@ def run(ceph_cluster, **kw):
                     cmd=f"ceph orch host ls --host_pattern {osd_node_heart.hostname}"
                 )
                 assert "HEALTH_WARN" in ceph_health
+                assert "Slow OSD heartbeats" in ceph_health
                 assert host_ls[0]["status"] == "Offline"
+                # add buffer of 30 seconds
                 endtime, _ = installer_node.exec_command(
-                    cmd="sudo date '+%Y-%m-%d %H:%M:%S'"
+                    cmd="sudo date '+%Y-%m-%d %H:%M:%S' -d '+30 seconds'"
                 )
                 log.info(endtime)
                 break
