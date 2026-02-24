@@ -132,6 +132,19 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+#_--------------------- non-root user tests ------------------------
+  - test:
+      name: Create NFS run user (optional)
+      module: nfs_create_run_user.py
+      desc: >
+        When config has 'user: <name>', creates that OS user on installer and
+        all client nodes, copies the Ceph keyring/conf into the user home, and
+        stores the username in test_data["nfs_run_user"] for all subsequent NFS
+        tests to run as that user. No-op (returns 0) if 'user' is not set —
+        all tests then run as root (default behaviour)
+      abort-on-fail: true
+      config:
+        user: nfsuser
 
   - test:
       name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
@@ -140,51 +153,56 @@ tests:
       polarion-id: CEPH-83575975
       abort-on-fail: false
       config:
+        nfs_run_user: nfsuser
         nfs_version: 4.2
         clients: 1
 
   - test:
-      name: Verify owner of a symbolic link and the owner of the target file can be different users
-      module: nfs_verify_symbolic_links_users.py
-      desc: Verify owner of a symbolic link and the owner of the target file can be different users
-      polarion-id: CEPH-83575972
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+     name: Verify owner of a symbolic link and the owner of the target file can be different users
+     module: nfs_verify_symbolic_links_users.py
+     desc: Verify owner of a symbolic link and the owner of the target file can be different users
+     polarion-id: CEPH-83575972
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
 
   - test:
-      name: Nfs Verify file mv operation
-      module: nfs_verify_read_write_operations.py
-      desc: Verify mv is denied with a permission error when tried on readonly nfs share
-      polarion-id: CEPH-83575932
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-        operation: mv_file
+     name: Nfs Verify file mv operation
+     module: nfs_verify_read_write_operations.py
+     desc: Verify mv is denied with a permission error when tried on readonly nfs share
+     polarion-id: CEPH-83575932
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
+       operation: mv_file
 
   - test:
-      name: Nfs Verify file mv and replace opertaion
-      module: nfs_verify_read_write_operations.py
-      desc: Verify mv is overwrites the content of the existing file with same name
-      polarion-id: CEPH-83575934
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-        operation: mv_file_overwrite
+     name: Nfs Verify file mv and replace opertaion
+     module: nfs_verify_read_write_operations.py
+     desc: Verify mv is overwrites the content of the existing file with same name
+     polarion-id: CEPH-83575934
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
+       operation: mv_file_overwrite
 
   - test:
-      name: Nfs Verify symbolic links create to file on other file system
-      module: nfs_verify_symbolic_links_file_other_file_system.py
-      desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
-      polarion-id: CEPH-83575969
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
+     name: Nfs Verify symbolic links create to file on other file system
+     module: nfs_verify_symbolic_links_file_other_file_system.py
+     desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
+     polarion-id: CEPH-83575969
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
+#_--------------------- non-root user tests ------------------------
   - test:
       name: Nfs Verify hard links correctly reference the same inode as the original file.
       module: nfs_verify_hard_links_inode.py
@@ -314,16 +332,16 @@ tests:
             port: 50000
             monitoring_port: 60000
 
-#   Skipping the test for failure analysis
-#  - test:
-#      name: Nfs Ganesha Bonnie
-#      module: nfs_verify_bonnie.py
-#      desc: Perform bonnie tests on the Nfs cluster
-#      polarion-id: CEPH-83581050
-#      abort-on-fail: false
-#      config:
-#        nfs_version: 4.2
-#        clients: 4
+ #   Skipping the test for failure analysis
+ #  - test:
+ #      name: Nfs Ganesha Bonnie
+ #      module: nfs_verify_bonnie.py
+ #      desc: Perform bonnie tests on the Nfs cluster
+ #      polarion-id: CEPH-83581050
+ #      abort-on-fail: false
+ #      config:
+ #        nfs_version: 4.2
+ #        clients: 4
 
   - test:
       name: Nfs Verify Readdir Ops
@@ -437,16 +455,16 @@ tests:
         nfs_version: 4.2
         clients: 2
 
-# ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
-#  - test:
-#      name: Nfs access file from  with root-squash enabled
-#      module: nfs_verify_file_access_with_rootsquash.py
-#      desc: Test NFS file access with root-squash enabled
-#      polarion-id: CEPH-83577604
-#      abort-on-fail: false
-#      config:
-#        nfs_version: 4.2
-#        clients: 4
+ # ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
+ #  - test:
+ #      name: Nfs access file from  with root-squash enabled
+ #      module: nfs_verify_file_access_with_rootsquash.py
+ #      desc: Test NFS file access with root-squash enabled
+ #      polarion-id: CEPH-83577604
+ #      abort-on-fail: false
+ #      config:
+ #        nfs_version: 4.2
+ #        clients: 4
 
   - test:
       name: Nfs verify multiple extended attribute with parallel clients access

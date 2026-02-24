@@ -37,24 +37,25 @@ class Export(Cli):
             squash (str) : value to squash
             client-addr (str) : Authorized client hostname/IP
         """
+        run_user = kwargs.pop("run_user", None)
         # Step 1: Check if the subvolume group is present.If not, create subvolume group
         cmd = "ceph fs subvolumegroup ls cephfs"
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if "ganeshagroup" not in out[0]:
             cmd = "ceph fs subvolumegroup create cephfs ganeshagroup "
-            self.execute(sudo=True, cmd=cmd)
+            self.execute(sudo=True, cmd=cmd, run_user=run_user)
             log.info("Subvolume group created successfully")
         subvol_name = nfs_export.replace("/", "")
 
         # Step 2: Create subvolume
         cmd = f"ceph fs subvolume create cephfs {subvol_name} --group_name ganeshagroup --namespace-isolated "
         cmd = "".join(cmd + build_cmd_from_args(**kwargs))
-        self.execute(sudo=True, cmd=cmd)
+        self.execute(sudo=True, cmd=cmd, run_user=run_user)
         # Get volume path
         cmd = (
             f"ceph fs subvolume getpath cephfs {subvol_name} --group_name ganeshagroup "
         )
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         path = out[0].strip()
 
         # Step 3: Create export
@@ -68,12 +69,12 @@ class Export(Cli):
             cmd += f" --squash={squash}"
         if client_addr:
             cmd += f" --client-addr={client_addr}"
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if isinstance(out, tuple):
             return out[0].strip()
         return out
 
-    def delete(self, cluster, export):
+    def delete(self, cluster, export, run_user=None):
         """
         Deletes a given nfs export
         Args:
@@ -81,7 +82,7 @@ class Export(Cli):
             export (str): Nfs export name
         """
         cmd = f"{self.base_cmd} delete {cluster} {export}"
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if isinstance(out, tuple):
             return out[0].strip()
         return out
@@ -93,14 +94,15 @@ class Export(Cli):
             nfs_name (str): Name of nfs cluster
             nfs_export (str): Name of nfs export
         """
+        run_user = kwargs.pop("run_user", None)
         cmd = f"{self.base_cmd} get {nfs_name} {nfs_export} "
         cmd = "".join(cmd + build_cmd_from_args(**kwargs))
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if isinstance(out, tuple):
             return out[0].strip()
         return out
 
-    def apply(self, nfs_name, export_conf):
+    def apply(self, nfs_name, export_conf, run_user=None):
         """
         apply a given nfs export
         Args:
@@ -108,7 +110,7 @@ class Export(Cli):
             export_conf (str): Export conf file name
         """
         cmd = f"{self.base_cmd} apply {nfs_name} -i {export_conf}"
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if isinstance(out, tuple):
             return out[0].strip()
         return out
@@ -119,10 +121,11 @@ class Export(Cli):
         Args:
             nfs_name (str): Name of nfs cluster
         """
+        run_user = kwargs.pop("run_user", None)
         cmd = f"{self.base_cmd} ls"
         if nfs_name:
             cmd += f" {nfs_name} " + build_cmd_from_args(**kwargs)
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if isinstance(out, tuple):
             return out[0].strip()
         return out
