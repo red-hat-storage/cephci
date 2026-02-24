@@ -1,6 +1,6 @@
 from time import sleep
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import cleanup_cluster, run_as_user, setup_nfs_cluster
 
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
@@ -9,7 +9,7 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-    """Verify symbolic links scenarios
+    """Verify NFS behavior when creating symbolic links to files on other file systems.
     Args:
         **kw: Key/value pairs of configuration information to be used in the test.
     """
@@ -20,6 +20,9 @@ def run(ceph_cluster, **kw):
     port = config.get("port", "2049")
     version = config.get("nfs_version", "4.0")
     no_clients = int(config.get("clients", "2"))
+
+    # Optional non-root user (set by nfs_create_run_user step; None = run as root)
+    run_user = kw.get("test_data", {}).get("nfs_run_user")
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -47,15 +50,16 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            run_user=run_user,
         )
 
-        # Create file in local file system
-        cmd = "touch /tmp/test_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        # Create file in local file system (/tmp is world-writable, no user restriction)
+        clients[0].exec_command(cmd="touch /tmp/test_file", sudo=True)
 
         # Create symbolic links to files residing on local file systems with NFS
-        cmd = f"ln -s /tmp/test_file {nfs_mount}/link_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        run_as_user(
+            clients[0], f"ln -s /tmp/test_file {nfs_mount}/link_file", run_user
+        )
 
         # Check symbolic links created successfully with local file system
         out = (
@@ -69,7 +73,6 @@ def run(ceph_cluster, **kw):
             raise OperationFailedError(
                 "Failed to created symbolic links to files from local file systems to NFS"
             )
-            return 1
         else:
             log.info(
                 "Successfully created symbolic links to files from local file systems to NFS"
@@ -80,5 +83,12 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleaning up")
         sleep(3)
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
+        cleanup_cluster(
+            clients,
+            nfs_mount,
+            nfs_name,
+            nfs_export,
+            nfs_nodes=nfs_node,
+            run_user=run_user,
+        )
         log.info("Cleaning up successfull")

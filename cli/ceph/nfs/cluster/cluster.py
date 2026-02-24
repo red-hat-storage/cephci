@@ -53,6 +53,7 @@ class Cluster(Cli):
         # Condition: ceph version > 19.2.1-300 AND nfs_version == 3
         # Extract nfs_version from kwargs (don't pass it to build_cmd_from_args)
         nfs_version = kwargs.pop("nfs_version", None)
+        run_user = kwargs.pop("run_user", None)
 
         if nfs_version == 3:
             try:
@@ -78,31 +79,31 @@ class Cluster(Cli):
 
         cmd = "".join(cmd + build_cmd_from_args(**kwargs))
         try:
-            out = self.execute(sudo=True, cmd=cmd, check_ec=check_ec)
+            out = self.execute(sudo=True, cmd=cmd, check_ec=check_ec, run_user=run_user)
         except Exception as e:
             raise RuntimeError(f"Failed to create NFS cluster: {e}")
         if isinstance(out, tuple):
             return out[0].strip()
         return out
 
-    def delete(self, name):
+    def delete(self, name, run_user=None):
         """
         Perform delete operation for nfs cluster
         Args:
             name (str): Name of the cluster
         """
         cmd = "{0} delete {1}".format(self.base_cmd, name)
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
         if isinstance(out, tuple):
             return out[0].strip()
         return out
 
-    def ls(self):
+    def ls(self, run_user=None):
         """
         List the NFS clusters and return as a Python list
         """
         cmd = f"{self.base_cmd} ls --format json"
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
 
         # Extract stdout if tuple (output, err)
         if isinstance(out, tuple):
@@ -114,14 +115,14 @@ class Cluster(Cli):
         except json.JSONDecodeError:
             raise ValueError("Failed to parse JSON output")
 
-    def info(self, name):
+    def info(self, name, run_user=None):
         """
         Get information about a specific NFS cluster
         Args:
             name (str): Name of the cluster
         """
         cmd = "{0} info {1} --format json".format(self.base_cmd, name)
-        out = self.execute(sudo=True, cmd=cmd)
+        out = self.execute(sudo=True, cmd=cmd, run_user=run_user)
 
         # Extract stdout if tuple (output, err)
         if isinstance(out, tuple):
