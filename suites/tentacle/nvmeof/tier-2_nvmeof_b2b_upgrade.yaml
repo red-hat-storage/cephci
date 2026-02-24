@@ -3,14 +3,14 @@
 # Test-Suite: tier-2_nvmeof_b2b_upgrade.yaml
 # Scenario: Build to build Upgrade,
 #       - Any GAed to next development build
-#       - Currently, 8.0 cluster to  8.0(Latest dev) Build
+#       - Currently, 9.0 cluster to  9.0(Latest dev) Build
 #
 # Cluster Configuration: conf/squid/nvmeof/ceph_nvmeof_ha_cluster_4nodes.yaml
 #
 # Test Steps:
-# - Deploy RHCS/IBM 8(GA) cluster in RHEL 9.
+# - Deploy RHCS/IBM 9(GA) cluster in RHEL 9/10.
 # - Configure NVMeoF gateways and Run IOs in background.
-# - Upgrade cluster from 8.0 to 8.0(Latest dev) with NVMe IO in background.
+# - Upgrade cluster from 9.0 to 9.0(Latest dev) with NVMe IO in background.
 # - Validate cluster status
 # - Add more namespaces and run IO again.
 # - Perform HA failover and failback.
@@ -34,11 +34,11 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: "cdn"
-                custom_image: false
-                rhcs-version: "8.0"
+                rhcs-version: 9.0
+                release: released
                 mon-ip: node1
-                log-to-file: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
           - config:
               command: add_hosts
               service: host
@@ -89,6 +89,7 @@ tests:
       polarion-id: CEPH-83576090
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1
@@ -133,12 +134,13 @@ tests:
       abort-on-fail: true
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1
         rep_pool_config:
           pool: rbd
-        install: true                           # Run SPDK with all pre-requisites
+        install: true
         cleanup:
           - pool
           - gateway
@@ -148,12 +150,13 @@ tests:
           - node7
           - node8
           - node9
-        subsystems:                             # Configure subsystems with all sub-entities
+        subsystems: # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 3
+            no-group-append: True
+            serial: 2
             bdevs:
-            - count: 8
-              size: 5G
+              - count: 8
+                size: 5G
             listener_port: 4420
             listeners:
               - node6
@@ -162,7 +165,7 @@ tests:
               - node9
             hosts:
               - node11
-        initiators:                             # Configure Initiators with all pre-req
+        initiators: # Configure Initiators with all pre-req
           - nqn: connect-all
             listener_port: 4420
             node: node11
@@ -171,7 +174,7 @@ tests:
             nodes: node7
           - tool: systemctl
             nodes: node9
-      desc: NVMeOF 4GW post upgrade HA test
+      desc: 4GW HA test post upgrade
       destroy-cluster: false
       module: test_ceph_nvmeof_high_availability.py
       name: NVMeoF 4-GW HA test Single failure
