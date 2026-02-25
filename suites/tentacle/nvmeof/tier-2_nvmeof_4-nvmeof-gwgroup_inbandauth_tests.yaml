@@ -82,6 +82,7 @@ tests:
         gw_groups:
           - gw_group: group1
             inband_auth_mode: bidirectional
+            nvme_metadata_pool: rbd
             gw_nodes:
               - node6
               - node7
@@ -99,6 +100,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
               - subnqn: nqn.2016-06.io.spdk:cnode2
                 no-group-append: true
                 inband_auth: true
@@ -112,6 +114,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
             initiators:
               - nqn: nqn.2016-06.io.spdk:cnode1
                 listener_port: 5001
@@ -124,6 +127,7 @@ tests:
                 nodes: node6
           - gw_group: group2
             inband_auth_mode: unidirectional
+            nvme_metadata_pool: rbd
             gw_nodes:
               - node8
               - node9
@@ -140,6 +144,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
               - subnqn: nqn.2016-06.io.spdk:cnode4
                 no-group-append: true
                 listener_port: 5002
@@ -152,6 +157,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
             initiators:
               - nqn: connect-all
                 subnqn: nqn.2016-06.io.spdk:cnode3
@@ -187,6 +193,7 @@ tests:
         gw_groups:
           - gw_group: group1
             inband_auth_mode: bidirectional
+            nvme_metadata_pool: rbd
             gw_nodes:
               - node6
               - node7
@@ -205,6 +212,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
               - subnqn: nqn.2016-06.io.spdk:cnode2
                 no-group-append: true
                 listener_port: 5003
@@ -219,6 +227,7 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
+                    ns_create_image: true
             initiators:
               - nqn: nqn.2016-06.io.spdk:cnode1
                 listener_port: 5004

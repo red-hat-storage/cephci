@@ -7,11 +7,10 @@ from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import log_json_dump, run_fio
+from utility.utils import config_dict_to_string, log_json_dump, run_fio
 
 LOG = Log(__name__)
 Initiators = {}
-Clients = []
 
 
 class NVMeInitiator(Initiator):
@@ -99,9 +98,28 @@ class NVMeInitiator(Initiator):
 
         # connect-all
         connect_all = {}
-        if config["nqn"] == "connect-all" or self.auth_mode == "unidirectional":
+        if config["nqn"] == "connect-all":
             connect_all = {"ctrl-loss-tmo": 3600}
-            if self.auth_mode == "unidirectional":
+            # Add authentication parameters based on auth_mode
+            if self.auth_mode == "bidirectional":
+                if not self.host_key or not self.subsys_key:
+                    raise Exception(
+                        f"Bidirectional auth requires both host_key and subsys_key. "
+                        f"host_key={'set' if self.host_key else 'missing'}, "
+                        f"subsys_key={'set' if self.subsys_key else 'missing'}"
+                    )
+                cmd_args.update(
+                    {
+                        "dhchap-secret": self.host_key,
+                        "dhchap-ctrl-secret": self.subsys_key,
+                    }
+                )
+            elif self.auth_mode == "unidirectional":
+                if not self.host_key:
+                    raise Exception(
+                        "Unidirectional auth requires host_key but it is not set. "
+                        "Please ensure initiator is configured with authentication keys."
+                    )
                 cmd_args.update({"dhchap-secret": self.host_key})
             cmd = {**discovery_port, **cmd_args, **connect_all}
             self.connect_all(**cmd)
@@ -111,31 +129,97 @@ class NVMeInitiator(Initiator):
         # Connect to individual targets of a subsystem
         subsystem = config["nqn"]
         sub_endpoints = []
+        discovered_records = json.loads(nqns_discovered)["records"]
 
-        for nqn in json.loads(nqns_discovered)["records"]:
+        # Log what was discovered for debugging
+        LOG.debug(
+            f"Looking for subsystem: {subsystem}, listener_port: {config.get('listener_port')}"
+        )
+        LOG.debug(f"Discovered records: {discovered_records}")
+
+        # First, try to find exact match (both subnqn and trsvcid match)
+        for nqn in discovered_records:
             if nqn["subnqn"] == subsystem and nqn["trsvcid"] == str(
                 config["listener_port"]
             ):
                 sub_endpoints.append(nqn)
 
+        # If no exact match, try matching by subnqn only (in case port differs)
         if not sub_endpoints:
-            raise Exception(f"Subsystem not found -- {cmd_args}")
+            for nqn in discovered_records:
+                if nqn["subnqn"] == subsystem:
+                    LOG.warning(
+                        f"Found subsystem {subsystem} but with different port "
+                        f"(discovered: {nqn['trsvcid']}, expected: {config.get('listener_port')}). "
+                        f"Using discovered port."
+                    )
+                    sub_endpoints.append(nqn)
+
+        if not sub_endpoints:
+            # Provide more detailed error message showing what was discovered
+            discovered_subsystems = [r["subnqn"] for r in discovered_records]
+            discovered_ports = [r["trsvcid"] for r in discovered_records]
+            raise Exception(
+                f"Subsystem {subsystem} not found. "
+                f"Discovered subsystems: {discovered_subsystems}, "
+                f"Discovered ports: {discovered_ports}, "
+                f"Gateway: {gateway.node.ip_address}"
+            )
 
         for sub_endpoint in sub_endpoints:
             conn_port = {"trsvcid": config["listener_port"]}
             sub_args = {"nqn": sub_endpoint["subnqn"]}
             cmd_args.update({"traddr": sub_endpoint["traddr"]})
 
+            # Fallback: If auth is required but not configured, try to find auth from another
+            # initiator on the same node (safety net in case prepare_io_execution didn't handle it)
+            if (self.auth_mode or config.get("inband_auth")) and not self.host_key:
+                for (node_id, nqn), initiator in Initiators.items():
+                    if node_id == self.node.id and initiator.host_key:
+                        LOG.warning(
+                            f"Auth required but missing. Copying from existing initiator "
+                            f"(node={node_id}, nqn={nqn})"
+                        )
+                        self.host_key = initiator.host_key
+                        self.subsys_key = initiator.subsys_key
+                        if not self.auth_mode and initiator.auth_mode:
+                            self.auth_mode = initiator.auth_mode
+                        break
+
             if self.auth_mode == "bidirectional":
+                if not self.host_key or not self.subsys_key:
+                    raise Exception(
+                        f"Bidirectional auth requires both host_key and subsys_key. "
+                        f"host_key={'set' if self.host_key else 'missing'}, "
+                        f"subsys_key={'set' if self.subsys_key else 'missing'}"
+                    )
                 sub_args.update(
                     {
                         "dhchap-secret": self.host_key,
                         "dhchap-ctrl-secret": self.subsys_key,
                     }
                 )
+            elif self.auth_mode == "unidirectional":
+                if not self.host_key:
+                    raise Exception(
+                        "Unidirectional auth requires host_key but it is not set. "
+                        "Please ensure initiator is configured with authentication keys."
+                    )
+                sub_args.update({"dhchap-secret": self.host_key})
             _conn_cmd = {**cmd_args, **conn_port, **sub_args}
 
             LOG.debug(self.connect(**_conn_cmd))
+
+    def gen_dhchap_key(self, **kwargs):
+        """Generates the TLS key.
+        Example::
+            kwargs:
+                subsystem: NQN of subsystem
+        """
+        return self.execute(
+            cmd=f"nvme gen-dhchap-key {config_dict_to_string(kwargs)}",
+            sudo=True,
+        )
 
     @retry((NoDevicesFound))
     def list_devices(self):
@@ -427,26 +511,28 @@ def validate_initiator(clients, gateway, namespaces_gw, failed_gw=None):
     for client in clients:
         devices = client.fetch_lsblk_nvme_devices_dict()
         if not devices:
-            raise Exception(f"NVMe devices are not available at {client} initiator")
+            raise Exception(
+                f"NVMe devices are not available at {client.node.hostname} initiator"
+            )
         gw_paths = fetch_paths_for_namespaces(client, namespaces_gw, devices)
         for paths in gw_paths:
             if len(paths.get("paths").get("optimized")) > 1:
                 raise Exception(
                     f"Namespace {paths.get('namespace')} has more than one at optimized paths \
-                        {client} initiator"
+                        {client.node.hostname} initiator"
                 )
             gw_ip = gateway.node.ip_address
             if paths.get("paths").get("optimized")[0] != gw_ip:
                 raise Exception(
                     f"Namespace {paths.get('namespace')} is not optimized for {gw_ip} at \
-                        {client} initiator"
+                        {client.node.hostname} initiator"
                 )
             if failed_gw and failed_gw.node.ip_address not in paths.get("paths").get(
                 "inaccessible"
             ):
                 raise Exception(
                     f"Namespace {paths.get('namespace')} is not inaccessible for {failed_gw.node.ip_address} \
-                    at {client} initiator"
+                    at {client.node.hostname} initiator"
                 )
     LOG.info(
         f"All namespaces are optimized for all initiators for gateway {gateway.node.ip_address}"
@@ -464,24 +550,93 @@ def get_or_create_initiator(node_id, nqn, cluster):
     return Initiators[key]
 
 
-def prepare_io_execution(io_clients, gateways=None, cluster=None, return_clients=False):
+def prepare_io_execution(
+    io_clients,
+    gateways=None,
+    cluster=None,
+    return_clients=False,
+    pre_configured_initiators=None,
+):
     """Prepare FIO Execution.
 
-    initiators:                             # Configure Initiators with all pre-req
-        - nqn: connect-all
-        listener_port: 4420
-        node: node10
+    Args:
+        io_clients: List of IO client configurations
+        gateways: List of gateway objects
+        cluster: Ceph cluster object
+        return_clients: Whether to return the clients list
+        pre_configured_initiators: Optional list of pre-configured NVMeInitiator objects.
+                                   If provided, these will be used instead of creating new ones.
+
+    Example:
+        initiators:                             # Configure Initiators with all pre-req
+            - nqn: connect-all
+              listener_port: 4420
+              node: node10
     """
+    # Use a local list to avoid mixing clients from different gateway groups
+    local_clients = []
+
     for io_client in io_clients:
         nqn = io_client.get("nqn")
         if io_client.get("subnqn"):
             nqn = io_client.get("subnqn")
-        client = get_or_create_initiator(io_client["node"], nqn, cluster)
+
+        client = None
+
+        # If pre-configured initiators are provided, try to find a matching one
+        if pre_configured_initiators:
+            # Try to find an initiator matching (node, nqn)
+            for initiator in pre_configured_initiators:
+                if initiator.node.id == io_client["node"] and (
+                    initiator.nqn == nqn or nqn == "connect-all"
+                ):
+                    client = initiator
+                    LOG.info(
+                        f"Using pre-configured initiator for node={io_client['node']}, nqn={nqn}"
+                    )
+                    # Update nqn if needed (for connect-all case)
+                    if nqn and client.nqn != nqn:
+                        client.nqn = nqn
+                    break
+
+            # If no exact match, try to find any initiator on the same node
+            if not client:
+                for initiator in pre_configured_initiators:
+                    if initiator.node.id == io_client["node"]:
+                        client = initiator
+                        LOG.info(
+                            f"Reusing pre-configured initiator for node={io_client['node']} "
+                            f"(nqn={initiator.nqn}, requested nqn={nqn})"
+                        )
+                        # Update nqn if needed
+                        if nqn and client.nqn != nqn:
+                            client.nqn = nqn
+                        break
+
+        # If no pre-configured initiator found, fall back to existing logic
+        if not client:
+            client = get_or_create_initiator(io_client["node"], nqn, cluster)
+            # Try to copy auth from any existing initiator on the same node
+            if not client.host_key:
+                for (node_id, _), init in Initiators.items():
+                    if node_id == io_client["node"] and init.host_key:
+                        LOG.info(
+                            f"Copying auth configuration from existing initiator "
+                            f"for node={node_id}"
+                        )
+                        client.host_key = init.host_key
+                        client.subsys_key = init.subsys_key
+                        if init.auth_mode:
+                            client.auth_mode = init.auth_mode
+                        break
+
         client.connect_targets(gateways[0], io_client)
-        if client not in Clients:
-            Clients.append(client)
+        # Add to local list instead of global Clients to avoid mixing between groups
+        if client not in local_clients:
+            local_clients.append(client)
+
     if return_clients:
-        return Clients
+        return local_clients
 
 
 @retry(IOError, tries=3, delay=3)

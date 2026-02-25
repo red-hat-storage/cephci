@@ -59,7 +59,6 @@ class HighAvailability:
         self.nvme_pool = config["rbd_pool"]
         self.nvme_service = config.get("nvme_service")
         self.clients = []
-        self.initiators = {}
         self.fail_ops = {
             "systemctl": self.system_control,
             "daemon": self.ceph_daemon,
@@ -546,11 +545,14 @@ class HighAvailability:
             namespaces = fetch_namespaces(self.gateways[0])
 
             LOG.info("Preparing IO execution")
+            # Get pre-configured initiators if available
+            pre_configured = self.config.get("pre_configured_initiators")
             clients = prepare_io_execution(
                 initiators,
                 gateways=self.gateways,
                 cluster=self.cluster,
                 return_clients=True,
+                pre_configured_initiators=pre_configured,
             )
             # Raise exception if clients are not found
             if not clients:
@@ -700,7 +702,6 @@ class HighAvailability:
                     # Fail Back
                     if fail_tool != "daemon_redeploy":
                         with parallel() as p:
-
                             initiators = self.config["initiators"]
                             io_tasks = []
                             if len(namespaces) >= 1:
