@@ -293,6 +293,7 @@ tests:
         max_client_combined_bw: 8MB
         qos_type: PerClient
         operation: restart
+        comments: Per-client tests will fail due to issue IBMCEPH-13099
 
   - test:
       name: Qos PerShare_PerClient-combined_bw enablement on Cluster level with nfs with service restart
