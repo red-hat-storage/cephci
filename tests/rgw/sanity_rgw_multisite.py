@@ -101,6 +101,7 @@ def run(**kw):
 
     set_env = config.get("set-env", False)
     extra_pkgs = config.get("extra-pkgs")
+    git_clone_configs_repo = config.get("git_clone_configs_repo", False)
     install_start_kafka_broker = config.get("install_start_kafka")
     configure_kafka_broker_security = config.get("configure_kafka_security")
     cloud_type = config.get("cloud-type")
@@ -201,6 +202,21 @@ def run(**kw):
             ms_clusters = [primary_client_node, secondary_client_node]
             for cluster_node in ms_clusters:
                 set_config_param(cluster_node)
+
+    if git_clone_configs_repo:
+        for i in range(0, len(primary_rgw_nodes)):
+            utils.clone_configs_repo(primary_rgw_nodes[i].node, repo_name="rgw_configs")
+        for i in range(0, len(secondary_rgw_nodes)):
+            utils.clone_configs_repo(
+                secondary_rgw_nodes[i].node, repo_name="rgw_configs"
+            )
+        if archive_cluster_exists:
+            utils.clone_configs_repo(archive_rgw_node, repo_name="rgw_configs")
+            utils.clone_configs_repo(archive_client_node, repo_name="rgw_configs")
+        if tertiary_cluster_exists:
+            utils.clone_configs_repo(tertiary_rgw_node, repo_name="rgw_configs")
+            utils.clone_configs_repo(tertiary_client_node, repo_name="rgw_configs")
+
     # run the test
     script_name = config.get("script-name")
     config_file_name = config.get("config-file-name")
