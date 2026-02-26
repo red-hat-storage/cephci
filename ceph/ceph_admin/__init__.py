@@ -175,12 +175,6 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         Args:
             repo_url: repo file URL link (default: None)
         """
-        EPEL_REPOS = {
-            "7": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
-            "8": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
-            "9": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-        }
-
         if not repo_url:
             repo_url = self.config["base_url"]
 
@@ -191,18 +185,32 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
             )
             node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
+            # Install EPEL based on RHEL version
+            epel_repo = ""
+            version_id = node.distro_info["VERSION_ID"]
+            if version_id.startswith("8."):
+                epel_repo = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
+                version_id = "8"
+            elif version_id.startswith("9."):
+                epel_repo = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
+                version_id = "9"
+            elif version_id.startswith("10."):
+                epel_repo = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm"
+                version_id = "10"
+            else:
+                raise ValueError(f"Unsupported RHEL version: {version_id}")
+
             # Epel Repo
             node.exec_command(
                 sudo=True,
-                cmd=f"dnf install {EPEL_REPOS[node.distro_info['VERSION_ID'][0]]} -y",
+                cmd=f"dnf install {epel_repo} -y",
                 check_ec=False,
             )
 
             # public repo: needed to compensate for dependencies required during
             # installation of ceph-common and other pkg RPMs
             public_repo_url = (
-                f"https://dl.fedoraproject.org/pub/epel/"
-                f"{node.distro_info['VERSION_ID'][0]}/Everything/x86_64/"
+                f"https://dl.fedoraproject.org/pub/epel/{version_id}/Everything/x86_64/"
             )
             node.exec_command(
                 sudo=True,
