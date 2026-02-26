@@ -2069,3 +2069,55 @@ class CephfsMirroringUtils(object):
         else:
             log.error(f"Path '{absolute_path}' not found in the mirror status.")
             return 1
+
+    def get_last_synced_snap_id(
+        self, fs_name, fsid, asok_file, filesystem_id, peer_uuid, path
+    ):
+        """
+        Captures the 'id' of the last synced snapshot for a given path in CephFS mirroring status.
+
+        Args:
+            fs_name (str): The CephFS volume name (e.g., cephfs).
+            fsid (str): The unique CephFS file system ID.
+            asok_file (dict): A dictionary containing the node and its corresponding admin socket.
+                            (e.g., {"node1": [client_object, "ceph-client.cephfs-mirror.<host>.asok"]})
+            filesystem_id (int): The ID for the CephFS filesystem (e.g., 2).
+            peer_uuid (str): The UUID of the peer to check mirror status.
+            path (str): The absolute path for which to capture the last synced snapshot ID
+                        (e.g., /volumes/subvolgroup_1/subvol_1).
+
+        Returns:
+            int or None: The 'id' of the last synced snapshot for the specified path if found,
+                        or None if the path is not found or no snapshot has been synced yet.
+        """
+        log.info("Get peer mirror status to retrieve last synced snapshot ID")
+        for node, asok in asok_file.items():
+            asok[0].exec_command(
+                sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+            )
+        cmd = (
+            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+            f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
+        )
+        out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
+        data = json.loads(out)
+        log.info(f"Paths found in mirror status: {list(data.keys())}")
+        absolute_path = path.rstrip("/")
+
+        if absolute_path in data:
+            status = data[absolute_path]
+            last_synced_snap = status.get("last_synced_snap")
+            if last_synced_snap:
+                snap_id = last_synced_snap.get("id")
+                log.info("Last synced snapshot ID for %s: %s", absolute_path, snap_id)
+                return snap_id
+            else:
+                log.warning(
+                    "No last_synced_snap found for path '%s'. "
+                    "This may indicate no snapshots have been synced yet.",
+                    absolute_path,
+                )
+                return None
+        else:
+            log.error(f"Path '{absolute_path}' not found in the mirror status.")
+            return None

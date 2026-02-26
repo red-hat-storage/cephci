@@ -1065,6 +1065,24 @@ class Ceph(object):
         node_list = [node for node in self.get_nodes() if node.hostname == hostname]
         return node_list[0] if len(node_list) > 0 else None
 
+    def get_ceph_objects_by_hostname(self, hostname):
+        """
+        Get Ceph Objects by hostname.
+
+        Returns all ceph objects present on the node matching the given hostname.
+        Ceph object can be Ceph demon, client, installer or generic entity.
+
+        Args:
+            hostname (str): hostname of the node
+
+        Returns:
+            list: ceph objects on the matching node, empty list if node not found
+        """
+        node = self.get_node_by_hostname(hostname)
+        if node:
+            return node.get_ceph_objects()
+        return []
+
     def get_osd_data_partition_path(self, osd_id, client=None):
         """
         Returns data partition path by given osd id
