@@ -57,7 +57,7 @@ Case 6: High CPU load with stress-ng
 Initial Setup:
 - Verifies default osd_scrub_load_threshold value is 10.0
 - Disables PG autoscaler
-- Creates a replicated pool and writes test data (10,000 objects, 5K each)
+- Creates a replicated pool or EC pool (based on config) and writes test data (10,000 objects, 5K each)
 - Retrieves PG ID and acting OSD set
 - Installs stress-ng package on OSD nodes
 
@@ -99,7 +99,7 @@ def run(ceph_cluster, **kw):
     1. Initial Setup:
        - Enables file logging for OSD daemons
        - Disables PG autoscaler
-       - Creates a replicated pool and writes test data (10,000 objects, 5K each)
+       - Creates a replicated pool or EC pool (based on config) and writes test data (10,000 objects, 5K each)
        - Retrieves PG ID and acting OSD set
        - Verifies default osd_scrub_load_threshold value is 10.0
 
@@ -154,7 +154,8 @@ def run(ceph_cluster, **kw):
         ceph_cluster: Ceph cluster object
         **kw: Keyword arguments containing test configuration
             - config: Test configuration dictionary
-                - replicated_pool: Pool configuration
+                - replicated_pool: Pool configuration (for replicated pools)
+                - EC_pool or ec_pool: Pool configuration (for erasure coded pools)
                 - case_to_run: List of test cases to execute (case1-case6)
 
     Returns:
@@ -173,12 +174,28 @@ def run(ceph_cluster, **kw):
     rados_object = RadosOrchestrator(node=cephadm)
     scrub_object = RadosScrubber(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_object)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
     objectstore_obj = objectstoreToolWorkflows(node=cephadm, nostart=True)
     installer = ceph_cluster.get_nodes(role="installer")[0]
     wait_time = 120
     osd_nodes = ceph_cluster.get_nodes(role="osd")
-    replicated_config = config.get("replicated_pool")
-    pool_name = replicated_config["pool_name"]
+
+    # Check if config contains "replicated_pool" or "EC_pool"
+
+    if config.get("replicated_pool"):
+        pool_config = config.get("replicated_pool")
+        pool_name = pool_config["pool_name"]
+        is_ec_pool = False
+        log.info("Using replicated_pool configuration")
+    elif config.get("ec_pool"):
+        pool_config = config.get("ec_pool")
+        pool_name = pool_config["pool_name"]
+        is_ec_pool = True
+        log.info("Using ec_pool configuration")
+    else:
+        log.error("Config must contain either 'replicated_pool' or ec_pool'")
+        return 1
+
     acting_pg_set = ""
     start_time = get_cluster_timestamp(rados_object.node)
     log.debug("Test workflow started. Start time: {}".format(start_time))
@@ -202,12 +219,17 @@ def run(ceph_cluster, **kw):
         assert mon_obj.set_config(
             section="global", name="osd_pool_default_pg_autoscale_mode", value="off"
         ), "Could not set pg_autoscale mode to OFF"
+        # Create pool based on type
+        if is_ec_pool:
+            if not rados_object.create_erasure_pool(name=pool_name, **pool_config):
+                log.error("Failed to create the EC Pool")
+                return 1
+        else:
+            if not rados_object.create_pool(**pool_config):
+                log.error("Failed to create the replicated Pool")
+                return 1
 
-        if not rados_object.create_pool(**replicated_config):
-            log.error("Failed to create the replicated Pool")
-            return 1
-
-        rados_object.bench_write(pool_name=pool_name, byte_size="5K", max_objs=10000)
+        # rados_object.bench_write(pool_name=pool_name, byte_size="5K", max_objs=10000)
         msg_data_push = f"The data pushed into the {pool_name} pool"
         log.info(msg_data_push)
 
@@ -242,7 +264,7 @@ def run(ceph_cluster, **kw):
             osd_node = rados_object.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
 
             acting_osd_hosts.append(osd_node)
-            log.info(f"OSD {osd_id} is on host {osd_node.hostname}")
+            log.info(f"The acting OSD {osd_id} is on host {osd_node.hostname}")
 
         msg_acting_hosts = (
             f"The acting set host list: {[host.hostname for host in acting_osd_hosts]}"
@@ -252,6 +274,10 @@ def run(ceph_cluster, **kw):
         primary_osd_host = rados_object.fetch_host_node(
             daemon_type="osd", daemon_id=acting_pg_set[0]
         )
+        msg_primary_osd = (
+            f" The primary osd -{acting_pg_set[0]} is on the {primary_osd_host} host"
+        )
+        log.info(msg_primary_osd)
 
         # Get case_to_run from config, default to all cases if not specified
         case_to_run = config.get("case_to_run")
@@ -271,7 +297,8 @@ def run(ceph_cluster, **kw):
                 if not start_stress_ng_and_generate_load(
                     node=primary_osd_host,
                     target_load_threshold=3,
-                    cpu_percentage=20,
+                    cpu_threads=64,
+                    cpu_percentage=40,
                 ):
                     log.error(
                         "Scenario 1: Failed to generate load and reach target threshold"
@@ -357,13 +384,20 @@ def run(ceph_cluster, **kw):
                     "===Scenario 2: Verification of the inconsistent of object repair when "
                     "the osd_scrub_load_threshold is 0==="
                 )
+                scrub_object.set_osd_flags("set", "nodeep-scrub")
+                scrub_object.set_osd_flags("set", "noscrub")
 
                 no_of_objects = 6
+                if is_ec_pool:
+                    result = rados_object.create_ecpool_inconsistent_obj(
+                        objectstore_obj, client_node, pool_name, no_of_objects
+                    )
 
-                obj_pg_map = rados_object.create_inconsistent_object(
-                    objectstore_obj, pool_name, no_of_objects
-                )
-                if obj_pg_map is None:
+                else:
+                    result = rados_object.create_inconsistent_object(
+                        objectstore_obj, pool_name, no_of_objects
+                    )
+                if result is None:
                     log.error(
                         "Inconsistent objects are not created.Not executing the further test"
                     )
@@ -386,7 +420,8 @@ def run(ceph_cluster, **kw):
                 if not start_stress_ng_and_generate_load(
                     node=primary_osd_host,
                     target_load_threshold=3,
-                    cpu_percentage=20,
+                    cpu_threads=64,
+                    cpu_percentage=40,
                 ):
                     log.error(
                         "Scenario 2: Failed to generate load and reach target threshold"
@@ -414,6 +449,9 @@ def run(ceph_cluster, **kw):
                     return 1
 
                 set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
+
+                scrub_object.set_osd_flags("unset", "nodeep-scrub")
+                scrub_object.set_osd_flags("unset", "noscrub")
 
                 try:
                     if rados_object.start_check_deep_scrub_complete(
@@ -485,14 +523,29 @@ def run(ceph_cluster, **kw):
                     "value which is 10.0"
                 )
                 no_of_objects = 6
-                obj_pg_map = rados_object.create_inconsistent_object(
-                    objectstore_obj, pool_name, no_of_objects
-                )
-                if obj_pg_map is None:
-                    log.error(
-                        "Inconsistent objects are not created.Not executing the further test"
+
+                if is_ec_pool:
+                    pg_id, no_of_inconsistent_objects = (
+                        rados_object.create_ecpool_inconsistent_obj(
+                            objectstore_obj, client_node, pool_name, no_of_objects
+                        )
                     )
-                    return 1
+                    if no_of_inconsistent_objects == 0:
+                        log.error(
+                            "Inconsistent objects are not created.Not executing the further test"
+                        )
+                        return 1
+
+                else:
+                    result = rados_object.create_inconsistent_object(
+                        objectstore_obj, pool_name, no_of_objects
+                    )
+                    if result is None:
+                        log.error(
+                            "Inconsistent objects are not created.Not executing the further test"
+                        )
+                        return 1
+
                 before_tst_scrub_inconsistent_count = get_pg_inconsistent_object_count(
                     rados_object, pg_id
                 )
@@ -503,7 +556,8 @@ def run(ceph_cluster, **kw):
                 if not start_stress_ng_and_generate_load(
                     node=primary_osd_host,
                     target_load_threshold=3,
-                    cpu_percentage=20,
+                    cpu_threads=64,
+                    cpu_percentage=30,
                 ):
                     log.error(
                         "Scenario 3: Failed to generate load and reach target threshold"
@@ -525,6 +579,12 @@ def run(ceph_cluster, **kw):
                 configure_log_level(mon_obj, acting_pg_set, set_to_default=False)
 
                 set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
+                # Stop stress-ng
+                log.info("Scenario 3: Stopping stress-ng process")
+                if not kill_stress_ng(primary_osd_host):
+                    log.warning("Scenario 3: Failed to stop stress-ng process")
+                else:
+                    log.info("Scenario 3: stress-ng process stopped successfully")
                 wait_time = 900
                 try:
                     if not rados_object.start_check_deep_scrub_complete(
@@ -547,12 +607,6 @@ def run(ceph_cluster, **kw):
                 end_time = end_time.strip()
                 configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
                 remove_parameter_configuration(mon_obj)
-                # Stop stress-ng
-                log.info("Scenario 3: Stopping stress-ng process")
-                if not kill_stress_ng(primary_osd_host):
-                    log.warning("Scenario 3: Failed to stop stress-ng process")
-                else:
-                    log.info("Scenario 3: stress-ng process stopped successfully")
 
                 if (
                     rados_object.lookup_log_message(
@@ -609,6 +663,16 @@ def run(ceph_cluster, **kw):
                 )
                 if not wait_for_clean_pg_sets(rados_object, timeout=900):
                     log.error("Cluster cloud not reach active+clean state within 900")
+                if not start_stress_ng_and_generate_load(
+                    node=primary_osd_host,
+                    target_load_threshold=2,
+                    cpu_threads=64,
+                    cpu_percentage=40,
+                ):
+                    log.error(
+                        "Scenario 4.1: Failed to generate load and reach target threshold"
+                    )
+                    return 1
                 load_threshold = get_node_avg_load(primary_osd_host)
 
                 # Rotate the osd logs
@@ -660,6 +724,15 @@ def run(ceph_cluster, **kw):
                 )
                 end_time = end_time.strip()
                 configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
+                log.info("Scenario 4.1:Killing the stress-ng process")
+                if not kill_stress_ng(primary_osd_host):
+                    log.warning("Scenario 4.1: Failed to stop stress-ng process")
+                else:
+                    log.info("Scenario 4.1: stress-ng process stopped successfully")
+                log.info("Setting nodeep and noscrub flags")
+                scrub_object.set_osd_flags("set", "nodeep-scrub")
+                scrub_object.set_osd_flags("set", "noscrub")
+
                 remove_parameter_configuration(mon_obj)
                 log.info(
                     "Scenario 4.1: The OSD log debug level has been configured to its default value."
@@ -702,7 +775,7 @@ def run(ceph_cluster, **kw):
 
                 # Rotate the osd logs
                 rados_object.rotate_logs(acting_osd_hosts)
-
+                decrease_parameter = 3
                 load_threshold = get_node_avg_load(primary_osd_host)
                 new_scrub_load_threshold_vale = round(
                     load_threshold + (load_threshold * decrease_parameter), 3
@@ -727,6 +800,8 @@ def run(ceph_cluster, **kw):
                 log.info("Scenario 4.2: The osd  logs are set to 20")
 
                 set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
+                scrub_object.set_osd_flags("unset", "nodeep-scrub")
+                scrub_object.set_osd_flags("unset", "noscrub")
                 wait_time = 1000
                 try:
                     rados_object.start_check_deep_scrub_complete(
@@ -789,6 +864,17 @@ def run(ceph_cluster, **kw):
                     "===== Scenario 5:Verification of user initiated scrub as higher priority than "
                     "scheduled scrub for the osd_scrub_load_threshold parameter"
                 )
+
+                if not rados_object.set_pool_property(
+                    pool=pool_name, props="pg_autoscale_mode", value="on"
+                ):
+                    log.error(
+                        f"failed to set pg_autoscale_mode on on the clay pool : {pool_name}"
+                    )
+
+                if not wait_for_clean_pg_sets(rados_object, timeout=300):
+                    log.error("Cluster cloud not reach active+clean state within 300")
+
                 # Rotate the osd logs
                 rados_object.rotate_logs(acting_osd_hosts)
                 log.info("Scenario 5: The logs are rotated")
@@ -798,7 +884,8 @@ def run(ceph_cluster, **kw):
                 if not start_stress_ng_and_generate_load(
                     node=primary_osd_host,
                     target_load_threshold=target_load_threshold,
-                    cpu_percentage=30,
+                    cpu_threads=64,
+                    cpu_percentage=40,
                 ):
                     log.error(
                         "Scenario 5: Failed to generate load and reach target threshold"
@@ -817,19 +904,8 @@ def run(ceph_cluster, **kw):
                 log.info("Scenario 5: Setting the scrub parameters")
                 set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
                 log.info("Initiating the user initiated scrub")
-                time.sleep(60)
-                try:
-                    rados_object.start_check_deep_scrub_complete(
-                        pg_id=pg_id, user_initiated=True, wait_time=wait_time
-                    )
-                    log.info("The user initiated scrub is completed")
-                except Exception:
-                    log.info(
-                        "Scenario 5: The user initiated scrub operation not started after setting the "
-                        "osd_scrub_load_threshold value to 0"
-                    )
-                    return 1
-
+                rados_object.run_deep_scrub(pool=pool_name)
+                time.sleep(180)
                 end_time, _ = installer.exec_command(
                     cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
                 )
@@ -847,7 +923,6 @@ def run(ceph_cluster, **kw):
                 log_msgs = [
                     log_line_scrub,
                     "operator-requested",
-                    f'"{pg_id} deep-scrub starts"',
                 ]
                 for log_line in log_msgs:
                     msg_info = (
@@ -892,13 +967,14 @@ def run(ceph_cluster, **kw):
                 rados_object.rotate_logs(acting_osd_hosts)
                 log.info("Scenario 6: OSD log content removed")
 
-                # Target load threshold: 15
+                # Target load threshold: 12
                 # calculate load threshold using = loadavg / online CPUs
-                target_load_threshold = 15
+                target_load_threshold = 12
                 if not start_stress_ng_and_generate_load(
                     node=primary_osd_host,
                     target_load_threshold=target_load_threshold,
-                    cpu_percentage=80,
+                    cpu_threads=100,
+                    cpu_percentage=100,
                 ):
                     log.error(
                         "Scenario 6: Failed to generate load and reach target threshold"
@@ -1052,8 +1128,8 @@ def set_scheduled_scrub_parameters(scrub_object, acting_pg_set):
 
     """
     osd_scrub_min_interval = 120
-    osd_scrub_max_interval = 900
-    osd_deep_scrub_interval = 900
+    osd_scrub_max_interval = 600
+    osd_deep_scrub_interval = 600
     (
         scrub_begin_hour,
         scrub_begin_weekday,
@@ -1255,7 +1331,9 @@ def kill_stress_ng(node):
         return False
 
 
-def start_stress_ng_and_generate_load(node, target_load_threshold, cpu_percentage=80):
+def start_stress_ng_and_generate_load(
+    node, target_load_threshold, cpu_threads=16, cpu_percentage=80
+):
     """
     Start stress-ng and monitor load until the target load threshold is reached.
 
@@ -1267,12 +1345,13 @@ def start_stress_ng_and_generate_load(node, target_load_threshold, cpu_percentag
         node: Node where stress-ng should run
         target_load_threshold: Target load threshold (loadavg / online CPUs) to reach
         cpu_percentage: CPU percentage for stress-ng (default 80)
+        cpu_threads: Number of threads for stress-ng (default 16)
 
     Returns:
         bool: True if target threshold reached successfully, False otherwise
     """
     # Default values for monitoring
-    max_wait_time = 300  # Maximum time to wait in seconds
+    max_wait_time = 1800  # Maximum time to wait in seconds
     check_interval = 5  # Interval between load checks in seconds
 
     log.info(
@@ -1284,7 +1363,8 @@ def start_stress_ng_and_generate_load(node, target_load_threshold, cpu_percentag
         # Start stress-ng in background
         node.exec_command(
             sudo=True,
-            cmd=f"nohup stress-ng --cpu {cpu_percentage} --timeout 0 > /tmp/stress-ng.log 2>&1 &",
+            cmd=f"nohup stress-ng --cpu {cpu_threads}  --cpu-load  {cpu_percentage} --timeout 0 > "
+            f"/tmp/stress-ng.log 2>&1 &",
         )
         log.info(f"stress-ng started in background on {node.hostname}")
         time.sleep(5)  # Wait a bit for process to start
@@ -1321,7 +1401,7 @@ def start_stress_ng_and_generate_load(node, target_load_threshold, cpu_percentag
             time.sleep(check_interval)
             elapsed_time += check_interval
 
-            if continuous_count == 13:
+            if continuous_count == 26:
                 error_msg = (
                     f"stress-ng is not working properly on {node.hostname} "
                     f"(load did not increase for past 1 minute)"
