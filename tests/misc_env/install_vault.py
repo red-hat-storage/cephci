@@ -31,7 +31,7 @@ from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.utils import clone_configs_repo, get_cephci_config
 
 LOG = Log(__name__)
 
@@ -167,55 +167,14 @@ def _install_vault_packages(node: CephNode, *, cloud_type: str) -> None:
     ('ibmc' or 'openstack') selection from cephci.yaml instead of heuristics.
     """
     try:
-        if cloud_type == "ibmc":
-            LOG.info(
-                f"{node.shortname}: Using HashiCorp official repo for IBM-Ceph (cloud_type=ibmc)"
-            )
-            repo_cmd = r"""
-cat <<'EOF' | sudo tee /etc/yum.repos.d/hashicorp.repo
-[hashicorp]
-name=Hashicorp Stable - $basearch
-baseurl=https://rpm.releases.hashicorp.com/RHEL/9/$basearch/stable
-enabled=1
-gpgcheck=1
-gpgkey=https://rpm.releases.hashicorp.com/gpg
-
-[hashicorp-test]
-name=Hashicorp Test - $basearch
-baseurl=https://rpm.releases.hashicorp.com/RHEL/9/$basearch/test
-enabled=0
-gpgcheck=1
-gpgkey=https://rpm.releases.hashicorp.com/gpg
-EOF
-""".strip()
-            node.exec_command(sudo=True, cmd=repo_cmd, check_ec=False)
-
-        elif cloud_type == "openstack":
-            LOG.debug(
-                f"{node.shortname}: Using enterprise-internal repo for RH-Ceph/OpenStack (cloud_type=openstack)"
-            )
-            wget_cmd = (
-                "curl -fsSL -o /etc/yum.repos.d/hashicorp.repo "
-                "http://magna002.ceph.redhat.com/cephci-jenkins/hashicorp.repo"
-            )
-            node.exec_command(sudo=True, cmd=wget_cmd, check_ec=False)
-
-        else:
-            # Fallback: default to HashiCorp official repo if an unknown cloud_type is given
-            LOG.warning(
-                f"{node.shortname}: Unknown cloud_type='{cloud_type}', defaulting to HashiCorp official repo"
-            )
-            repo_cmd = r"""
-cat <<'EOF' | sudo tee /etc/yum.repos.d/hashicorp.repo
-[hashicorp]
-name=Hashicorp Stable - $basearch
-baseurl=https://rpm.releases.hashicorp.com/RHEL/9/$basearch/stable
-enabled=1
-gpgcheck=1
-gpgkey=https://rpm.releases.hashicorp.com/gpg
-EOF
-""".strip()
-            node.exec_command(sudo=True, cmd=repo_cmd, check_ec=False)
+        LOG.debug(f"cloning ceph-qe-ng/configs repo on {node.shortname}")
+        clone_configs_repo(node, repo_name="rgw_configs")
+        LOG.debug(f"{node.shortname}: Using enterprise-internal repo")
+        node.exec_command(
+            sudo=True,
+            cmd="cp /home/cephuser/configs/rgw/vault/hashicorp.repo /etc/yum.repos.d/hashicorp.repo",
+            check_ec=False,
+        )
 
         install_cmd = "yum install -y vault"
         node.exec_command(sudo=True, cmd=install_cmd, check_ec=False)
