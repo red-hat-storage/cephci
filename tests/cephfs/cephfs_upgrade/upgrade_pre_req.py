@@ -47,7 +47,7 @@ def run(ceph_cluster, **kw):
         active_mds_cnt = config.get("max_mds", 5)
         log.info("checking Pre-requisites")
         if len(clients) < 2:
-            log.info(
+            log.error(
                 f"This test requires minimum 2 client nodes.This has only {len(clients)} clients"
             )
             return 1
@@ -105,12 +105,20 @@ def run(ceph_cluster, **kw):
         log.info("Adding %s MDS to cluster", mds_cnt)
         out, rc = clients[0].exec_command(sudo=True, cmd=cmd)
         if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error(
+                "Cluster health check failed after applying MDS daemons. "
+                "Cluster did not reach HEALTH_OK within 300 seconds."
+            )
             return 1
         clients[0].exec_command(
             sudo=True,
             cmd=f"ceph fs set {default_fs} max_mds {active_mds_cnt}",
         )
         if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error(
+                f"Cluster health check failed after setting max_mds to {active_mds_cnt}. "
+                "Cluster did not reach HEALTH_OK within 300 seconds."
+            )
             return 1
         upgrade_config = None
         vol_list = [default_fs, "cephfs-ec"]
@@ -628,6 +636,6 @@ def run(ceph_cluster, **kw):
         return 0
 
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1

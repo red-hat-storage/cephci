@@ -38,6 +38,26 @@ class SnapUtils(object):
         self.clients = ceph_cluster.get_ceph_objects("client")
         self.cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
 
+    def list_snapshots(self, client, sv_obj, **kwargs):
+        """
+        Returns all snapshot names for a given subvolume.
+        Args:
+            client: ceph client to run cmd
+            sv_obj: dict with keys vol_name, subvol_name, and optionally group_name
+            **kwargs: check_ec (bool) - passed to exec_command, default True
+        Returns:
+            list of snapshot name strings
+        """
+        cmd = f"ceph fs subvolume snapshot ls {sv_obj['vol_name']} {sv_obj['subvol_name']}"
+        if sv_obj.get("group_name"):
+            cmd += f" --group_name {sv_obj['group_name']}"
+        cmd += " --format json"
+        out, _ = client.exec_command(
+            sudo=True, cmd=cmd, check_ec=kwargs.get("check_ec", True)
+        )
+        snapshot_ls = json.loads(out)
+        return [i["name"] for i in snapshot_ls]
+
     def get_snapshot(self, client, sv_obj):
         """
         This method gets a snapshot for given subvolume test object

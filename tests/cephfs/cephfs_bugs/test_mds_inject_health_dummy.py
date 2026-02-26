@@ -46,6 +46,10 @@ def run(ceph_cluster, **kw):
         mds_nodes = ceph_cluster.get_nodes("mds")
         host_list = [node.hostname for node in mds_nodes]
         hosts = " ".join(host_list)
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            log.error("Cluster health is not OK before starting the test")
+            return 1
         client1.exec_command(
             sudo=True,
             cmd=f"ceph orch apply mds {fs_name} --placement='2 {hosts}'",
@@ -158,10 +162,11 @@ def run(ceph_cluster, **kw):
         )
         fs_util.remove_fs(client1, fs_name)
         if test_fail == 1:
-            raise Exception(
+            log.error(
                 "Cluster health is not OK even after waiting for %s secs ",
                 wait_time_secs,
             )
+            return 1
 
 
 def get_info(json_output, fs_name):
