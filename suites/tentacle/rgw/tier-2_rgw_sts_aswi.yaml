@@ -108,6 +108,37 @@ tests:
         script-name: swift_stats.py
         config-file-name: swift_stats.yaml
 
+  # AssumeRoleWithWebIdentity with N+E Signature Checking
+  - test:
+      name: test N+E Signature Checking with AssumeRoleWithWebIdentity
+      desc: Test N+E Signature Checking with AssumeRoleWithWebIdentity
+      polarion-id: CEPH-83607049
+      module: sanity_rgw.py
+      config:
+        script-name: test_n+e_signature_check.py
+        config-file-name: test_n+e_signature_check.yaml
+        ibm_cloud_api_key_required: true
+
+  - test:
+      name: test N+E Signature Checking with AssumeRoleWithWebIdentity having deny in role policy
+      desc: Test N+E Signature Checking with AssumeRoleWithWebIdentity having deny in role policy
+      polarion-id: CEPH-83607049
+      module: sanity_rgw.py
+      config:
+        script-name: test_n+e_signature_check.py
+        config-file-name: test_n+e_signature_check_deny.yaml
+        ibm_cloud_api_key_required: true
+
+  - test:
+      name: test N+E Signature Checking with AssumeRoleWithWebIdentity having wrong thumbprint in the web token
+      desc: Test N+E Signature Checking with AssumeRoleWithWebIdentity having wrong thumbprint in the web token
+      polarion-id: CEPH-83607049
+      module: sanity_rgw.py
+      config:
+        script-name: test_n+e_signature_check.py
+        config-file-name: test_n+e_signature_check_negative.yaml
+        ibm_cloud_api_key_required: true
+
   # STS aswi tests with Keycloak
 
   - test:
