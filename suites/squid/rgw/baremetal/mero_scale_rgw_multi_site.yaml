@@ -611,6 +611,7 @@ tests:
       clusters:
         ceph-pri:
           config:
+            git_clone_configs_repo: true
             script-name: test_rgw_account_management.py
             config-file-name: test_scale_aws_transition_retain_true.yaml
 
