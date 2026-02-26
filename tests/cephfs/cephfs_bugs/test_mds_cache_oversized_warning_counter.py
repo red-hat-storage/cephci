@@ -32,19 +32,18 @@ Steps to Reproduce:
 
 
 def run(ceph_cluster, **kw):
+    mds_health_cache_threshold_def = None
+    mds_cache_memory_limit_def = None
+    fuse_mounting_dir_1 = None
     try:
         tc = "CEPH-83594160"
         log.info(f"Running CephFS tests for ceph tracker - {tc}")
-        # Initialize the utility class for CephFS
         fs_util = FsUtils(ceph_cluster)
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
-        # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
-        # Authenticate the clients
         fs_util.auth_list(clients)
         build = config.get("build", config.get("rhbuild"))
-        # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
         fs_details = fs_util.get_fs_info(client1, "cephfs")
@@ -52,6 +51,10 @@ def run(ceph_cluster, **kw):
             fs_util.remove_fs(client1, "cephfs")
         fs_util.create_fs(client1, "cephfs")
         fs_util.wait_for_mds_process(client1, "cephfs")
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         # Generate random string for directory names
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
@@ -116,23 +119,20 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        # Cleanup
         wait_time_secs = 300
         test_fail = 0
-        # Reset to defaults
-        # set to default mds_health_cache_threshold
-        cmd = f"ceph config set mds mds_health_cache_threshold {mds_health_cache_threshold_def}"
-        client1.exec_command(sudo=True, cmd=cmd)
-        # get default mds_cache_memory_limit
-        cmd = f"ceph config set mds mds_cache_memory_limit {mds_cache_memory_limit_def}"
-        client1.exec_command(sudo=True, cmd=cmd)
+        if mds_health_cache_threshold_def is not None:
+            cmd = f"ceph config set mds mds_health_cache_threshold {mds_health_cache_threshold_def}"
+            client1.exec_command(sudo=True, cmd=cmd)
+        if mds_cache_memory_limit_def is not None:
+            cmd = f"ceph config set mds mds_cache_memory_limit {mds_cache_memory_limit_def}"
+            client1.exec_command(sudo=True, cmd=cmd)
         if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
             test_fail = 1
-
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
-        )
-        # remove fs
+        if fuse_mounting_dir_1 is not None:
+            fs_util.client_clean_up(
+                "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
+            )
         fs_util.remove_fs(client1, "cephfs")
         if test_fail == 1:
             raise Exception(
