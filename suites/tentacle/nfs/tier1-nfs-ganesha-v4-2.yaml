@@ -11,549 +11,567 @@
 #
 #===============================================================================================
 tests:
-  - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
+#  - test:
+#      abort-on-fail: true
+#      desc: Install software pre-requisites for cluster deployment.
+#      module: install_prereq.py
+#      name: setup pre-requisites
 
-  - test:
+#  - test:
+#      abort-on-fail: true
+#      config:
+#        steps:
+#          - config:
+#              command: bootstrap
+#              service: cephadm
+#              args:
+#                mon-ip: node1
+#          - config:
+#              command: add_hosts
+#              service: host
+#              args:
+#                attach_ip_address: true
+#                labels: apply-all-labels
+#          - config:
+#              command: apply
+#              service: osd
+#              args:
+#                all-available-devices: true
+#          - config:
+#              command: apply
+#              service: rgw
+#              pos_args:
+#                - rgw.1
+#              args:
+#                placement:
+#                  label: rgw
+#          - config:
+#              args:
+#                - "ceph fs volume create cephfs"
+#              command: shell
+#          - config:
+#              args:
+#                placement:
+#                  label: mds
+#              base_cmd_args:
+#                verbose: true
+#              command: apply
+#              pos_args:
+#                - cephfs
+#              service: mds
+#          - config:
+#              args:
+#                - "ceph osd pool create rbd"
+#              command: shell
+#          - config:
+#              args:
+#                - "rbd pool init rbd"
+#              command: shell
+#      desc: bootstrap and deploy services.
+#      destroy-cluster: false
+#      polarion-id: CEPH-83573713
+#      module: test_cephadm.py
+#      name: Deploy cluster using cephadm
+
+#  - test:
+#      abort-on-fail: true
+#      config:
+#        command: add
+#        id: client.1
+#        node: node4
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+#        copy_admin_keyring: true
+#      desc: Configure the RGW,RBD client system
+#      destroy-cluster: false
+#      module: test_client.py
+#      name: configure client
+
+#  - test:
+#      abort-on-fail: true
+#      config:
+#        command: add
+#        id: client.2
+#        node: node5
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+#        copy_admin_keyring: true
+#      desc: Configure the RGW,RBD client system
+#      destroy-cluster: false
+#      module: test_client.py
+#      name: configure client
+
+#  - test:
+#      abort-on-fail: true
+#      config:
+#        command: add
+#        id: client.3
+#        node: node6
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+#        copy_admin_keyring: true
+#      desc: Configure the RGW,RBD client system
+#      destroy-cluster: false
+#      module: test_client.py
+#      name: configure client
+
+#  - test:
+#      abort-on-fail: true
+#      config:
+#        command: add
+#        id: client.4
+#        node: node7
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+#        copy_admin_keyring: true
+#      desc: Configure the RGW,RBD client system
+#      destroy-cluster: false
+#      module: test_client.py
+#      name: configure client
+
+ - test:
+      name: Create NFS run user (optional)
+      module: nfs_create_run_user.py
+      desc: >
+        When config has 'user: <name>', creates that OS user on installer and
+        all client nodes, copies the Ceph keyring/conf into the user home, and
+        stores the username in test_data["nfs_run_user"] for all subsequent NFS
+        tests to run as that user. No-op (returns 0) if 'user' is not set —
+        all tests then run as root (default behaviour)
       abort-on-fail: true
       config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
-      destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
+        user: nfsuser
 
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.1
-        node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.2
-        node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.4
-        node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
+ - test:
       name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
       module: nfs_verify_symbolic_links_permissions.py
       desc: Verify symbolic links inherit appropriate permissions and not allow unauthorized access
       polarion-id: CEPH-83575975
       abort-on-fail: false
       config:
+        nfs_run_user: nfsuser
         nfs_version: 4.2
         clients: 1
 
-  - test:
-      name: Verify owner of a symbolic link and the owner of the target file can be different users
-      module: nfs_verify_symbolic_links_users.py
-      desc: Verify owner of a symbolic link and the owner of the target file can be different users
-      polarion-id: CEPH-83575972
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+ - test:
+     name: Verify owner of a symbolic link and the owner of the target file can be different users
+     module: nfs_verify_symbolic_links_users.py
+     desc: Verify owner of a symbolic link and the owner of the target file can be different users
+     polarion-id: CEPH-83575972
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
 
-  - test:
-      name: Nfs Verify file mv operation
-      module: nfs_verify_read_write_operations.py
-      desc: Verify mv is denied with a permission error when tried on readonly nfs share
-      polarion-id: CEPH-83575932
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-        operation: mv_file
+ - test:
+     name: Nfs Verify file mv operation
+     module: nfs_verify_read_write_operations.py
+     desc: Verify mv is denied with a permission error when tried on readonly nfs share
+     polarion-id: CEPH-83575932
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
+       operation: mv_file
 
-  - test:
-      name: Nfs Verify file mv and replace opertaion
-      module: nfs_verify_read_write_operations.py
-      desc: Verify mv is overwrites the content of the existing file with same name
-      polarion-id: CEPH-83575934
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-        operation: mv_file_overwrite
+ - test:
+     name: Nfs Verify file mv and replace opertaion
+     module: nfs_verify_read_write_operations.py
+     desc: Verify mv is overwrites the content of the existing file with same name
+     polarion-id: CEPH-83575934
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
+       operation: mv_file_overwrite
 
-  - test:
-      name: Nfs Verify symbolic links create to file on other file system
-      module: nfs_verify_symbolic_links_file_other_file_system.py
-      desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
-      polarion-id: CEPH-83575969
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+ - test:
+     name: Nfs Verify symbolic links create to file on other file system
+     module: nfs_verify_symbolic_links_file_other_file_system.py
+     desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
+     polarion-id: CEPH-83575969
+     abort-on-fail: false
+     config:
+       nfs_run_user: nfsuser
+       nfs_version: 4.2
+       clients: 1
 
-  - test:
-      name: Nfs Verify hard links correctly reference the same inode as the original file.
-      module: nfs_verify_hard_links_inode.py
-      desc: Verify creation of hard links within an NFS share and verify that they correctly reference the same inode as the original file.
-      polarion-id: CEPH-83575960
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: Nfs Verify multi depth dir creations
-      module: nfs_verify_multi_depth_dir_and_permissions.py
-      desc: Verify creating nested mutli depth directories on nfs share
-      polarion-id: CEPH-83575983
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-        dir_depth: 10
-        dirs_per_depth: 5
-
-  - test:
-      name: Nfs Verify default permissions
-      module: nfs_verify_multi_depth_dir_and_permissions.py
-      desc: Verify newly created files and dirs on an NFS share inherit default permissions.
-      polarion-id: CEPH-83576012
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-        operation: default_permissions
-
-  - test:
-      name: Verify that hard links remain valid after an NFS server reboot.
-      module: nfs_hard_links_server_reboot.py
-      desc: Verify that hard links remain valid after an NFS server reboot.
-      polarion-id: CEPH-83575971
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: Verify renaming a file that has one or more hard or symbolic links associated with it.
-      module: nfs_hard_symbolic_links_rename.py
-      desc: Test NFS behavior when renaming a file that has one or more hard or symbolic links associated with it.
-      polarion-id: CEPH-83575974
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: Verify when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
-      module: nfs_hard_links_delete_file.py
-      desc: Test NFS behavior when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
-      polarion-id: CEPH-83575964
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: Delete the old earmark and set the "nfs". Create NFS export out of it
-      desc: Delete the old earmark and set the "nfs". Create NFS export out of it
-      module: test_earmark_feature.py
-      polarion-id: CEPH-83604500
-      config:
-        cephfs_volume: cephfs
-        subvolume_group: nfsgroup
-        earmark: smb
-        operation: rename_earmark
-
-  - test:
-      name: creating volume and setting earmark
-      desc: creating volume and setting earmark
-      module: test_earmark_feature.py
-      polarion-id: CEPH-83604497
-      config:
-        cephfs_volume: cephfs
-        subvolume_group: nfsgroup
-        earmark: nfs
-        operation: verify_earmark
-
-  - test:
-      name: Override the earmark and try to create nfs export. It should fail
-      desc: Override the earmark and try to create nfs export. It should fail
-      module: test_earmark_feature.py
-      polarion-id: CEPH-83604499
-      config:
-        cephfs_volume: cephfs
-        subvolume_group: nfsgroup
-        earmark: nfs
-        operation: override_earmark
-
-  - test:
-      name: Set the earmark as "smb" and try to use the same subvolume for nfs export
-      desc: Set the earmark as "smb" and try to use the same subvolume for nfs export
-      module: test_earmark_feature.py
-      polarion-id: CEPH-83604498
-      config:
-        cephfs_volume: cephfs
-        subvolume_group: nfsgroup
-        nfs_version: 4.2
-        earmark: smb
-        operation: wrong_earmark
-
-  - test:
-      name: deploy multiple nfs ganesha servers concurrently
-      desc: Deploy multiple nfs ganesha servers concurrently and verify
-      polarion-id: CEPH-83621553
-      module: test_deploy_multiple_nfs_ganesha_concurrently.py
-      config:
-        nfs_version: 4.2
-        clients: 4
-        port: 2049
-        number_of_clusters : 2
-        timeout : 100
-        nfs_instance_number: 6
-        spec:
-          service_type: nfs
-          service_id: nfs
-          placement:
-            label: nfs
-          spec:
-            port: 50000
-            monitoring_port: 60000
-
-#   Skipping the test for failure analysis
 #  - test:
-#      name: Nfs Ganesha Bonnie
-#      module: nfs_verify_bonnie.py
-#      desc: Perform bonnie tests on the Nfs cluster
-#      polarion-id: CEPH-83581050
+#      name: Nfs Verify hard links correctly reference the same inode as the original file.
+#      module: nfs_verify_hard_links_inode.py
+#      desc: Verify creation of hard links within an NFS share and verify that they correctly reference the same inode as the original file.
+#      polarion-id: CEPH-83575960
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: Nfs Verify multi depth dir creations
+#      module: nfs_verify_multi_depth_dir_and_permissions.py
+#      desc: Verify creating nested mutli depth directories on nfs share
+#      polarion-id: CEPH-83575983
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+#        dir_depth: 10
+#        dirs_per_depth: 5
+
+#  - test:
+#      name: Nfs Verify default permissions
+#      module: nfs_verify_multi_depth_dir_and_permissions.py
+#      desc: Verify newly created files and dirs on an NFS share inherit default permissions.
+#      polarion-id: CEPH-83576012
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+#        operation: default_permissions
+
+#  - test:
+#      name: Verify that hard links remain valid after an NFS server reboot.
+#      module: nfs_hard_links_server_reboot.py
+#      desc: Verify that hard links remain valid after an NFS server reboot.
+#      polarion-id: CEPH-83575971
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: Verify renaming a file that has one or more hard or symbolic links associated with it.
+#      module: nfs_hard_symbolic_links_rename.py
+#      desc: Test NFS behavior when renaming a file that has one or more hard or symbolic links associated with it.
+#      polarion-id: CEPH-83575974
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: Verify when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+#      module: nfs_hard_links_delete_file.py
+#      desc: Test NFS behavior when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+#      polarion-id: CEPH-83575964
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: Delete the old earmark and set the "nfs". Create NFS export out of it
+#      desc: Delete the old earmark and set the "nfs". Create NFS export out of it
+#      module: test_earmark_feature.py
+#      polarion-id: CEPH-83604500
+#      config:
+#        cephfs_volume: cephfs
+#        subvolume_group: nfsgroup
+#        earmark: smb
+#        operation: rename_earmark
+
+#  - test:
+#      name: creating volume and setting earmark
+#      desc: creating volume and setting earmark
+#      module: test_earmark_feature.py
+#      polarion-id: CEPH-83604497
+#      config:
+#        cephfs_volume: cephfs
+#        subvolume_group: nfsgroup
+#        earmark: nfs
+#        operation: verify_earmark
+
+#  - test:
+#      name: Override the earmark and try to create nfs export. It should fail
+#      desc: Override the earmark and try to create nfs export. It should fail
+#      module: test_earmark_feature.py
+#      polarion-id: CEPH-83604499
+#      config:
+#        cephfs_volume: cephfs
+#        subvolume_group: nfsgroup
+#        earmark: nfs
+#        operation: override_earmark
+
+#  - test:
+#      name: Set the earmark as "smb" and try to use the same subvolume for nfs export
+#      desc: Set the earmark as "smb" and try to use the same subvolume for nfs export
+#      module: test_earmark_feature.py
+#      polarion-id: CEPH-83604498
+#      config:
+#        cephfs_volume: cephfs
+#        subvolume_group: nfsgroup
+#        nfs_version: 4.2
+#        earmark: smb
+#        operation: wrong_earmark
+
+#  - test:
+#      name: deploy multiple nfs ganesha servers concurrently
+#      desc: Deploy multiple nfs ganesha servers concurrently and verify
+#      polarion-id: CEPH-83621553
+#      module: test_deploy_multiple_nfs_ganesha_concurrently.py
+#      config:
+#        nfs_version: 4.2
+#        clients: 4
+#        port: 2049
+#        number_of_clusters : 2
+#        timeout : 100
+#        nfs_instance_number: 6
+#        spec:
+#          service_type: nfs
+#          service_id: nfs
+#          placement:
+#            label: nfs
+#          spec:
+#            port: 50000
+#            monitoring_port: 60000
+
+# #   Skipping the test for failure analysis
+# #  - test:
+# #      name: Nfs Ganesha Bonnie
+# #      module: nfs_verify_bonnie.py
+# #      desc: Perform bonnie tests on the Nfs cluster
+# #      polarion-id: CEPH-83581050
+# #      abort-on-fail: false
+# #      config:
+# #        nfs_version: 4.2
+# #        clients: 4
+
+#  - test:
+#      name: Nfs Verify Readdir Ops
+#      module: nfs_verify_readdir_ops.py
+#      desc: Perform readir operation from clients
+#      polarion-id: CEPH-83577590
 #      abort-on-fail: false
 #      config:
 #        nfs_version: 4.2
 #        clients: 4
 
-  - test:
-      name: Nfs Verify Readdir Ops
-      module: nfs_verify_readdir_ops.py
-      desc: Perform readir operation from clients
-      polarion-id: CEPH-83577590
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 4
-
-  - test:
-      name: Verify create file, create soflink and lookups from nfs clients
-      module: nfs_verify_file_ops_soft_links.py
-      desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id: CEPH-83577596
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-
-  - test:
-      name: Verify create file, create soflink and lookups from nfs clients
-      module: nfs_verify_file_ops_soft_links.py
-      desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id: CEPH-83577596
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-
-  - test:
-      name: Nfs Verify File Operations
-      module: nfs_verify_file_operations.py
-      desc: Change the ownership (user and group) of files within the NFS export
-      polarion-id: CEPH-83577601
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-        operations:
-          client01 : create_files
-          client02 : change_ownership
-          client03 : perform_lookups
-
-  - test:
-      name: Nfs Verify File Operations
-      module: nfs_verify_file_operations.py
-      desc: Set different file permissions (read, write, execute) for files within the NFS
-      polarion-id: CEPH-83577602
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-        operations:
-          client01 : create_files
-          client02 : change_permission
-          client03 : perform_lookups
-
-  - test:
-      name: Nfs export Readonly parameter
-      module: test_export_readonly.py
-      desc: Test NFS export with Readonly
-      polarion-id: CEPH-83578392
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: Nfs export rootsquash permission
-      module: test_export_rootsquash.py
-      desc: Test NFS export with rootsquash
-      polarion-id: CEPH-83578393
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: Nfs Verify locks over nfs mount with root_squash enabled
-      module: nfs_verify_file_lock_root_squash.py
-      desc: Perform lock on file with root_squash enabled
-      polarion-id: CEPH-83578386
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 4
-
-  - test:
-      name: NFS-Ganesha export config to mount with RO
-      desc: Verify edit export config to mount with RO
-      module: nfs_edit_export_config_with_ro.py
-      polarion-id: CEPH-83578395
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: NFS-Ganesha export config to mount with 1 client access
-      desc: Verify edit the export config to mount with allow access to only 1 client
-      module: nfs_edit_export_config_with_1client_access.py
-      polarion-id: CEPH-83578397
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
-
-# ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
 #  - test:
-#      name: Nfs access file from  with root-squash enabled
-#      module: nfs_verify_file_access_with_rootsquash.py
-#      desc: Test NFS file access with root-squash enabled
-#      polarion-id: CEPH-83577604
+#      name: Verify create file, create soflink and lookups from nfs clients
+#      module: nfs_verify_file_ops_soft_links.py
+#      desc: Verify create file, create soflink and lookups from nfs clients
+#      polarion-id: CEPH-83577596
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 3
+#        file_count: 100
+
+#  - test:
+#      name: Verify create file, create soflink and lookups from nfs clients
+#      module: nfs_verify_file_ops_soft_links.py
+#      desc: Verify create file, create soflink and lookups from nfs clients
+#      polarion-id: CEPH-83577596
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 3
+#        file_count: 100
+
+#  - test:
+#      name: Nfs Verify File Operations
+#      module: nfs_verify_file_operations.py
+#      desc: Change the ownership (user and group) of files within the NFS export
+#      polarion-id: CEPH-83577601
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 3
+#        file_count: 100
+#        operations:
+#          client01 : create_files
+#          client02 : change_ownership
+#          client03 : perform_lookups
+
+#  - test:
+#      name: Nfs Verify File Operations
+#      module: nfs_verify_file_operations.py
+#      desc: Set different file permissions (read, write, execute) for files within the NFS
+#      polarion-id: CEPH-83577602
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 3
+#        file_count: 100
+#        operations:
+#          client01 : create_files
+#          client02 : change_permission
+#          client03 : perform_lookups
+
+#  - test:
+#      name: Nfs export Readonly parameter
+#      module: test_export_readonly.py
+#      desc: Test NFS export with Readonly
+#      polarion-id: CEPH-83578392
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: Nfs export rootsquash permission
+#      module: test_export_rootsquash.py
+#      desc: Test NFS export with rootsquash
+#      polarion-id: CEPH-83578393
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: Nfs Verify locks over nfs mount with root_squash enabled
+#      module: nfs_verify_file_lock_root_squash.py
+#      desc: Perform lock on file with root_squash enabled
+#      polarion-id: CEPH-83578386
 #      abort-on-fail: false
 #      config:
 #        nfs_version: 4.2
 #        clients: 4
 
-  - test:
-      name: Nfs verify multiple extended attribute with parallel clients access
-      module: nfs_set_retrieve_xattr_multi_client.py
-      desc: Test multiple extended attribute with multiple clients
-      polarion-id: CEPH-83592377
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+#  - test:
+#      name: NFS-Ganesha export config to mount with RO
+#      desc: Verify edit export config to mount with RO
+#      module: nfs_edit_export_config_with_ro.py
+#      polarion-id: CEPH-83578395
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: Nfs verify extended attributes are preserved across filesystem operations
-      module: nfs_test_xattr_across_file_operations.py
-      desc: Test the extended attributes are preserved across filesystem operations copy and move file
-      polarion-id: CEPH-83592378
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+#  - test:
+#      name: NFS-Ganesha export config to mount with 1 client access
+#      desc: Verify edit the export config to mount with allow access to only 1 client
+#      module: nfs_edit_export_config_with_1client_access.py
+#      polarion-id: CEPH-83578397
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
 
-  - test:
-      name: Nfs verify extended attributes on readonly file
-      module: nfs_verify_xattr_readonly_file.py
-      desc: Test the extended attributes on the readonly file
-      polarion-id: CEPH-83592397
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+# # ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
+# #  - test:
+# #      name: Nfs access file from  with root-squash enabled
+# #      module: nfs_verify_file_access_with_rootsquash.py
+# #      desc: Test NFS file access with root-squash enabled
+# #      polarion-id: CEPH-83577604
+# #      abort-on-fail: false
+# #      config:
+# #        nfs_version: 4.2
+# #        clients: 4
 
-  - test:
-      name: NFS-Ganesha test setting selinux context on file
-      desc: Verify selinux label is set on NFS mount
-      module: nfs_test_setting_selinux_context.py
-      polarion-id: CEPH-83593098
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+#  - test:
+#      name: Nfs verify multiple extended attribute with parallel clients access
+#      module: nfs_set_retrieve_xattr_multi_client.py
+#      desc: Test multiple extended attribute with multiple clients
+#      polarion-id: CEPH-83592377
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
 
-  - test:
-      name: NFS-Ganesha test selinux lable with move operation
-      desc: Verify selinux label is preserved when file is moved
-      module: nfs_test_selinux_context_moving_files.py
-      polarion-id: CEPH-83593099
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+#  - test:
+#      name: Nfs verify extended attributes are preserved across filesystem operations
+#      module: nfs_test_xattr_across_file_operations.py
+#      desc: Test the extended attributes are preserved across filesystem operations copy and move file
+#      polarion-id: CEPH-83592378
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test selinux context with hardlink and softlink file
-      desc: Verify selinux label on hardlink and softlink file
-      module: test_nfs_selinux_context_symlinks.py
-      polarion-id: CEPH-83593151
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+#  - test:
+#      name: Nfs verify extended attributes on readonly file
+#      module: nfs_verify_xattr_readonly_file.py
+#      desc: Test the extended attributes on the readonly file
+#      polarion-id: CEPH-83592397
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test selinux context set via mount command
-      desc: Verify selinux label set directly on NFS mount point
-      module: test_nfs_selinux_label_while_mounting.py
-      polarion-id: CEPH-83593152
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+#  - test:
+#      name: NFS-Ganesha test setting selinux context on file
+#      desc: Verify selinux label is set on NFS mount
+#      module: nfs_test_setting_selinux_context.py
+#      polarion-id: CEPH-83593098
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
 
-  - test:
-      name: NFS-Ganesha test disk utilization with different file sizes
-      desc: Verify space allocation with different file sizes
-      module: nfs_test_space_allocation_diff_sizes.py
-      polarion-id: CEPH-83593414
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+#  - test:
+#      name: NFS-Ganesha test selinux lable with move operation
+#      desc: Verify selinux label is preserved when file is moved
+#      module: nfs_test_selinux_context_moving_files.py
+#      polarion-id: CEPH-83593099
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
 
-  - test:
-      name: NFS-Ganesha system correctly handles allocation requests beyond the current EOF
-      desc: Verify space allocation beyond file size
-      module: nfs_test_allocation_beyond_size.py
-      polarion-id: CEPH-83593489
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+#  - test:
+#      name: NFS-Ganesha test selinux context with hardlink and softlink file
+#      desc: Verify selinux label on hardlink and softlink file
+#      module: test_nfs_selinux_context_symlinks.py
+#      polarion-id: CEPH-83593151
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test cmount_path param in export file
-      desc: Verify cmount_path entry in export file
-      module: nfs_validate_cmount_path_export_conf.py
-      polarion-id: CEPH-83593816
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+#  - test:
+#      name: NFS-Ganesha test selinux context set via mount command
+#      desc: Verify selinux label set directly on NFS mount point
+#      module: test_nfs_selinux_label_while_mounting.py
+#      polarion-id: CEPH-83593152
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test partial deallocation
-      desc: Verify space deallocation operation via truncate
-      module: test_nfs_partial_deallocation.py
-      polarion-id: CEPH-83594590
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+#  - test:
+#      name: NFS-Ganesha test disk utilization with different file sizes
+#      desc: Verify space allocation with different file sizes
+#      module: nfs_test_space_allocation_diff_sizes.py
+#      polarion-id: CEPH-83593414
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: NFS-Ganesha system correctly handles allocation requests beyond the current EOF
+#      desc: Verify space allocation beyond file size
+#      module: nfs_test_allocation_beyond_size.py
+#      polarion-id: CEPH-83593489
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: NFS-Ganesha test cmount_path param in export file
+#      desc: Verify cmount_path entry in export file
+#      module: nfs_validate_cmount_path_export_conf.py
+#      polarion-id: CEPH-83593816
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+#  - test:
+#      name: NFS-Ganesha test partial deallocation
+#      desc: Verify space deallocation operation via truncate
+#      module: test_nfs_partial_deallocation.py
+#      polarion-id: CEPH-83594590
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
