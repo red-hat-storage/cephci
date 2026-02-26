@@ -219,9 +219,8 @@ def install_prereq(
         if distro_ver.startswith("7"):
             rpm_all_packages = " ".join(rpm_packages.get("7"))
 
-        ceph.exec_command(
-            cmd=f"sudo yum install -y {rpm_all_packages}", long_running=True
-        )
+        cmd = f"sudo dnf install --setopt install_weak_deps=False -y {rpm_all_packages}"
+        ceph.exec_command(cmd=cmd, long_running=True)
 
         # Restarting the node for qdisc filter to be loaded. This is required for
         # RHEL-8
