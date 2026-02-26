@@ -476,15 +476,20 @@ def registry_login(ceph, distro_ver, test_data=None):
         }
     ]
 
+    build_type = config.get("build_type", "rh")
+    registry_credentials = config.get(
+        f"{build_type}_registry_credentials", config.get("registry_credentials")
+    )
+    log.info(f"Resolved registry credentials: {registry_credentials}")
     if (
-        config.get("registry_credentials")
-        and config["registry_credentials"]["registry"] != "registry.redhat.io"
+        registry_credentials
+        and registry_credentials["registry"] != "registry.redhat.io"
     ):
         registries.append(
             {
-                "registry": config["registry_credentials"]["registry"],
-                "user": config["registry_credentials"]["username"],
-                "passwd": config["registry_credentials"]["password"],
+                "registry": registry_credentials["registry"],
+                "user": registry_credentials["username"],
+                "passwd": registry_credentials["password"],
             }
         )
     auths = {}
