@@ -1,3 +1,4 @@
+import json
 import random
 import string
 import traceback
@@ -187,13 +188,23 @@ def clone_ops(clone_list, fs_util, client1, default_fs, rmclone_list):
             cmd=f"ceph fs clone status {default_fs} {clone['target_subvol_name']}",
         )
     for clone in clone_list:
-        get_clone_status(
-            client1,
-            cmd=f"ceph fs clone cancel {default_fs} {clone['target_subvol_name']}",
+        clone_name = clone["target_subvol_name"]
+        out, rc = client1.exec_command(
+            sudo=True,
+            cmd=f"ceph fs clone status {default_fs} {clone_name} --format json",
         )
+        status = json.loads(out)
+        state = status.get("status", {}).get("state", "")
+        if state in ("pending", "in-progress"):
+            get_clone_status(
+                client1,
+                cmd=f"ceph fs clone cancel {default_fs} {clone_name}",
+            )
+        else:
+            log.info(f"Skipping cancel for {clone_name} - already in state: {state}")
         get_clone_status(
             client1,
-            cmd=f"ceph fs clone status {default_fs} {clone['target_subvol_name']}",
+            cmd=f"ceph fs clone status {default_fs} {clone_name}",
         )
 
     for clonevolume in rmclone_list:
