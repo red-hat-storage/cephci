@@ -1,0 +1,309 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_nvmeof_rbd_mirror.yaml
+#
+# Cluster Configuration:
+#    Two Ceph clusters (primary and secondary) with RBD snapshot-based mirroring
+#    Each cluster configuration:
+#    5-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MGR, 3 OSD, 1 RBD MIRROR service daemon(s), NVMeoF Gateway(s) and 1 Client
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client
+#     Node3 - OSD, MON, MGR
+#     Node4 - OSD, MON, NVMeoF Gateway
+#     Node5 - OSD, RBD Mirror, NVMeoF Gateway
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisites for both clusters
+      desc: Setup phase to deploy the required pre-requisites for running the tests on both clusters.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm for both primary and secondary clusters
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy primary and secondary clusters
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the client system on both clusters
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client on both clusters
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: Deploy RBD mirror service on both clusters
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror service
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            rep-pool-only: true
+            poolname: rbd
+            mode: image
+            mirrormode: snapshot
+            way: two-way
+            peer_mode: bootstrap
+            rbd_client: client.admin
+            image_config:
+              count: 3
+              secondary_count: 2
+              size: 2G
+              snapshot_interval: 2m
+              snapshot_level: image
+            primary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode1
+                  serial: 1
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+            secondary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode1
+                  serial: 1
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+        ceph-rbd2:
+          config:
+            rep-pool-only: true
+            poolname: rbd
+            mode: image
+            mirrormode: snapshot
+            way: two-way
+            peer_mode: bootstrap
+            rbd_client: client.admin
+            image_config:
+              count: 3
+              secondary_count: 2
+              size: 2G
+              snapshot_interval: 2m
+              snapshot_level: image
+            primary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode2
+                  serial: 1
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+            secondary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode2
+                  serial: 1
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+      desc: NVMeoF deployment with RBD snapshot-based mirroring between two clusters
+      destroy-cluster: false
+      module: test_nvmeof_rbd_mirror.py
+      name: NVMeoF RBD Mirror test with snapshot-based mirroring
+      polarion-id: CEPH-XXXXX
