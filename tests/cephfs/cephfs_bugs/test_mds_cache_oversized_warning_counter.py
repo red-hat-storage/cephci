@@ -55,9 +55,7 @@ def run(ceph_cluster, **kw):
         orig_cache_threshold, _ = client1.exec_command(
             sudo=True, cmd="ceph config get mds mds_health_cache_threshold"
         )
-        orig_fs_dump, _ = client1.exec_command(
-            sudo=True, cmd="ceph fs dump -f json"
-        )
+        orig_fs_dump, _ = client1.exec_command(sudo=True, cmd="ceph fs dump -f json")
         fs_dump = json.loads(orig_fs_dump)
         for fs in fs_dump["filesystems"]:
             if fs["mdsmap"]["fs_name"] == "cephfs":
@@ -134,7 +132,7 @@ def run(ceph_cluster, **kw):
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs set cephfs allow_standby_replay false --yes-i-really-mean-it",
+            cmd="ceph fs set cephfs allow_standby_replay false --yes-i-really-mean-it",
             check_ec=False,
         )
         client1.exec_command(

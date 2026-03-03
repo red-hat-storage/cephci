@@ -196,10 +196,19 @@ def clone_ops(clone_list, fs_util, client1, default_fs, rmclone_list):
         status = json.loads(out)
         state = status.get("status", {}).get("state", "")
         if state in ("pending", "in-progress"):
-            get_clone_status(
-                client1,
-                cmd=f"ceph fs clone cancel {default_fs} {clone_name}",
-            )
+            try:
+                get_clone_status(
+                    client1,
+                    cmd=f"ceph fs clone cancel {default_fs} {clone_name}",
+                )
+            except CommandFailed as e:
+                if "clone finished" in str(e) or "cannot cancel" in str(e):
+                    log.info(
+                        f"Clone {clone_name} completed between status check and "
+                        f"cancel (race condition). Continuing."
+                    )
+                else:
+                    raise
         else:
             log.info(f"Skipping cancel for {clone_name} - already in state: {state}")
         get_clone_status(
