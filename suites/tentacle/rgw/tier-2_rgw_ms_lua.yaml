@@ -403,3 +403,39 @@ tests:
             script-name: ../aws/test_lua_script_prerequest.py
             config-file-name: ../../aws/configs/test_aws_lua_object_placement_on_stoarge_class.yaml
             verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua script prerequest basic test with object lock
+      desc: Test Lua script prerequest basic test with object lock
+      polarion-id: CEPH-83632330
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_script_prerequest.py
+            config-file-name: ../../aws/configs/test_aws_lua_object_lock_minimal.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua script prerequest test with object lock
+      desc: Test Lua script prerequest test with object lock
+      polarion-id: CEPH-83632330
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_script_prerequest.py
+            config-file-name: ../../aws/configs/test_aws_lua_object_lock.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua script prerequest test with object lock governance
+      desc: Test Lua script prerequest test with object lock governance
+      polarion-id: CEPH-83632330
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_script_prerequest.py
+            config-file-name: ../../aws/configs/test_aws_lua_object_lock_governance.yaml
+            verify-io-on-site: ["ceph-sec"]
