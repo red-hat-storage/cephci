@@ -129,7 +129,7 @@ class FsUtils(object):
             out, rc = client.node.exec_command(sudo=True, cmd="ls /home/cephuser")
             if "smallfile" not in out:
                 client.node.exec_command(
-                    cmd="git clone https://github.com/bengland2/smallfile.git"
+                    cmd="git clone https://github.com/distributed-system-analysis/smallfile.git"
                 )
             if "iozone" not in out:
                 cmd_list = [
@@ -3493,7 +3493,7 @@ os.system('sudo systemctl start  network')
 
                 if "smallfile" not in out:
                     node.exec_command(
-                        cmd="git clone https://github.com/bengland2/" "smallfile.git"
+                        cmd="git clone https://github.com/distributed-system-analysis/smallfile.git"
                     )
 
                 out, rc = node.exec_command(sudo=True, cmd="rpm -qa")
@@ -3527,7 +3527,8 @@ os.system('sudo systemctl start  network')
                 out, rc = node.exec_command(sudo=True, cmd="ls /home/cephuser")
                 if "smallfile" not in out:
                     node.exec_command(
-                        cmd="git clone " "https://github.com/bengland2/smallfile.git"
+                        cmd="git clone "
+                        "https://github.com/distributed-system-analysis/smallfile.git"
                     )
         self.mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)

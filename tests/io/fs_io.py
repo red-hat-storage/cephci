@@ -41,7 +41,7 @@ class fs_io:
             self.fsutils.create_fs(client=client, vol_name=self.file_system)
         if self.io_tool == "smallfile":
             self.client.exec_command(
-                cmd="git clone https://github.com/bengland2/smallfile.git",
+                cmd="git clone https://github.com/distributed-system-analysis/smallfile.git",
                 check_ec=False,
             )
         self.mount = fs_config.get("mount", "fuse")
