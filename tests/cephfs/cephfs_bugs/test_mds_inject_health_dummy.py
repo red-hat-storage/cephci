@@ -6,6 +6,7 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 from utility.retry import retry
 
@@ -33,7 +34,7 @@ def run(ceph_cluster, **kw):
         log.info("Running cephfs %s test case" % (tc))
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
-
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -47,32 +48,38 @@ def run(ceph_cluster, **kw):
         hosts = " ".join(host_list)
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
+            cmd=f"ceph orch apply mds {fs_name} --placement='2 {hosts}'",
             check_ec=False,
         )
-        client1.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} max_mds 1")
+        client1.exec_command(
+            sudo=True, cmd=f"ceph fs set {fs_name} max_mds 1 --yes-i-really-mean-it"
+        )
         client1.exec_command(
             sudo=True, cmd=f"ceph fs set {fs_name} allow_standby_replay 1"
         )
         fs_util.wait_for_standby_replay_mds(client1, fs_name)
+        standby_replay_mds = retry_get_standby_reply(fs_util, client1, fs_name=fs_name)
 
         stanby_replay_before, rc = client1.exec_command(
             sudo=True, cmd="ceph fs dump -f json"
         )
         info_before = get_info(json.loads(stanby_replay_before), fs_name)
+        log.info("fs_dump_before : %s", info_before)
+        standby_replay_list_before = fs_util.get_standby_replay_mdss(
+            client1, fs_name=fs_name
+        )
+        log.info("standby_replay_list_before : %s", standby_replay_list_before)
         standby_replay_dict_before = {
             key: value
             for key, value in info_before.items()
-            if "standby-replay" in value["state"]
+            if ("standby-replay" in value["state"])
+            and (value["name"] in standby_replay_list_before)
         }
 
-        standby_replay_mds = retry_get_standby_reply(fs_util, client1, fs_name=fs_name)
-        log.info(f"standby_replay_mds : {standby_replay_mds}")
         standby_replay_mdss_obj = [
             ceph_cluster.get_node_by_hostname(i.split(".")[1])
             for i in standby_replay_mds
         ]
-        log.info(f"standby_replay_mdss_obj : {standby_replay_mdss_obj}")
         out, rc = client1.exec_command(sudo=True, cmd="ceph orch ps -f json")
         output = json.loads(out)
         deamon_dict = fs_util.filter_daemons(output, "mds", fs_name)
@@ -103,15 +110,20 @@ def run(ceph_cluster, **kw):
         stanby_replay_after, rc = client1.exec_command(
             sudo=True, cmd="ceph fs dump -f json"
         )
-
         info_after = get_info(json.loads(stanby_replay_after), fs_name)
+        log.info("fs_dump_after: %s", info_after)
+        standby_replay_list_after = fs_util.get_standby_replay_mdss(
+            client1, fs_name=fs_name
+        )
+        log.info("standby_replay_list_after: %s", standby_replay_list_after)
         standby_replay_dict_after = {
             key: value
             for key, value in info_after.items()
-            if "standby-replay" in value["state"]
+            if ("standby-replay" in value["state"])
+            and (value["name"] in standby_replay_list_after)
         }
-        log.info(standby_replay_dict_before)
-        log.info(standby_replay_dict_after)
+        log.info("BEFORE:%s", standby_replay_dict_before)
+        log.info("AFTER:%s", standby_replay_dict_after)
         gid_before = [value["gid"] for value in standby_replay_dict_before.values()]
         gid_after = [value["gid"] for value in standby_replay_dict_after.values()]
 
@@ -132,6 +144,10 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        wait_time_secs = 300
+        test_fail = 0
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            test_fail = 1
         client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False)
         client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}", check_ec=False)
         client1.exec_command(
@@ -141,6 +157,11 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
         )
         fs_util.remove_fs(client1, fs_name)
+        if test_fail == 1:
+            raise Exception(
+                "Cluster health is not OK even after waiting for %s secs ",
+                wait_time_secs,
+            )
 
 
 def get_info(json_output, fs_name):
