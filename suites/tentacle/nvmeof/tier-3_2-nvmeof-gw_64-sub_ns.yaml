@@ -119,8 +119,13 @@ tests:
       config:
         node: node7
         rbd_pool: rbd
+        nvme_metadata_pool: pool1
+        gw_group: group1
         do_not_create_image: true
         rep-pool-only: true
+        gw_nodes:
+          - node7
+          - node8
         steps:
           - config:
               service: subsystem
@@ -155,8 +160,13 @@ tests:
       config:
         node: node7
         rbd_pool: rbd
+        nvme_metadata_pool: pool1
+        gw_group: group1
         do_not_create_image: true
         rep-pool-only: true
+        gw_nodes:
+          - node7
+          - node8
         steps:
           - config:
               service: namespace
