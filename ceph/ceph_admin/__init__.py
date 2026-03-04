@@ -217,6 +217,11 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
                 cmd=f"yum-config-manager --add-repo {public_repo_url}",
                 check_ec=False,
             )
+            node.exec_command(
+                sudo=True,
+                cmd="dnf config-manager --set-enabled crb",
+                check_ec=False,
+            )
 
     def install(self, **kwargs: Dict) -> None:
         """Install the cephadm package in all node(s).
