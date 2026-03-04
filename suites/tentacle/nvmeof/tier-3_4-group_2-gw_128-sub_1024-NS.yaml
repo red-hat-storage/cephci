@@ -1,5 +1,5 @@
 ##############################################################################################
-# Test suite to scale to 4 GW groups with 2 GWs having 128 subsystems to 1024 namespaces
+# Test suite to scale to 4 GW groups with 2 GWs having 128 subsystems to 2048 namespaces
 # Tier-Level: 3
 # Cluster Configuration: conf/squid/nvmeof/ceph_nvmeof_4-group_2-gws_scale.yaml
 # Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
@@ -116,7 +116,12 @@ tests:
       config:
         node: node3
         rbd_pool: rbd1
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group1
         do_not_create_image: true
+        gw_nodes:
+          - node3
+          - node4
         rep-pool-only: true
         steps:
           - config:
@@ -174,8 +179,13 @@ tests:
       config:
         node: node3
         rbd_pool: rbd1
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group1
         do_not_create_image: true
         rep-pool-only: true
+        gw_nodes:
+          - node3
+          - node4
         steps:
           - config:
               service: namespace
@@ -226,8 +236,13 @@ tests:
       config:
         node: node5
         rbd_pool: rbd2
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group2
         do_not_create_image: true
         rep-pool-only: true
+        gw_nodes:
+          - node5
+          - node6
         steps:
           - config:
               service: subsystem
@@ -276,9 +291,14 @@ tests:
       abort-on-fail: false
       config:
         node: node3
-        rbd_pool: rbd1
+        rbd_pool: rbd2
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group2
         do_not_create_image: true
         rep-pool-only: true
+        gw_nodes:
+          - node5
+          - node6
         steps:
           - config:
               service: namespace
@@ -331,6 +351,11 @@ tests:
         rbd_pool: rbd3
         do_not_create_image: true
         rep-pool-only: true
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group3
+        gw_nodes:
+          - node7
+          - node8
         steps:
           - config:
               service: subsystem
@@ -379,7 +404,12 @@ tests:
       abort-on-fail: false
       config:
         node: node3
-        rbd_pool: rbd1
+        rbd_pool: rbd3
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group3
+        gw_nodes:
+          - node7
+          - node8
         do_not_create_image: true
         rep-pool-only: true
         steps:
@@ -434,6 +464,11 @@ tests:
         rbd_pool: rbd4
         do_not_create_image: true
         rep-pool-only: true
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group4
+        gw_nodes:
+          - node9
+          - node10
         steps:
           - config:
               service: subsystem
@@ -482,8 +517,13 @@ tests:
       abort-on-fail: false
       config:
         node: node3
-        rbd_pool: rbd1
+        rbd_pool: rbd4
         do_not_create_image: true
+        nvme_metadata_pool: nvmeof_pool
+        gw_group: group4
+        gw_nodes:
+          - node9
+          - node10
         rep-pool-only: true
         steps:
           - config:

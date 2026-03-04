@@ -1,17 +1,21 @@
+"""
+Test suite that verifies the deployment of Ceph NVMeoF Gateway at scale
+ with supported entities like subsystems, namespaces, etc.,
+
+"""
+
 import json
 from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.ceph_admin.orch import Orch
-from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
-    nvme_gw_cli_version_adapter,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -30,9 +34,14 @@ def fetch_drive(node, uuid):
 
 
 def initiators(ceph_cluster, gateway, config):
-    """Configure NVMe Initiators."""
+    """Configure NVMe Initiators and connect to subsystems.
+    Args:
+        ceph_cluster: Ceph cluster
+        gateway: Ceph-NVMeoF Gateway.
+        config: Initiator config
+    """
     client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
+    initiator = NVMeInitiator(client)
     initiator.disconnect_all()
 
     connect_cmd_args = {
@@ -74,9 +83,9 @@ def configure_subsystems(config, _cls, command):
         args_copy = config["args"].copy()
         args_copy.update(
             {
-                "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
-                "s": f"{num}",
-                "m": max_ns,
+                "nqn": f"nqn.2016-06.io.spdk:cnode{num}",
+                "serial_number": f"{num}",
+                "max_namespaces": max_ns,
             }
         )
         subsystem_func = fetch_method(_cls, command)
@@ -88,14 +97,14 @@ def configure_subsystems(config, _cls, command):
             p.spawn(configure_subsystem, num)
 
 
-def configure_listeners(config, _cls, command, ceph_cluster):
+def configure_listeners(config, nvme_service, command, ceph_cluster):
     port = config["args"].pop("port")
     subsystems = config["args"].pop("subsystems")
     nodes = config["args"].pop("nodes")
     group = config["args"].pop("group", None)
     LOG.info(nodes)
 
-    def configure_listener(num, listener_node):
+    def configure_listener(num, listener_node, _cls):
         subnqn = (
             f"nqn.2016-06.io.spdk:cnode{num}{f'.{group}' if group is not None else ''}"
         )
@@ -103,25 +112,23 @@ def configure_listeners(config, _cls, command, ceph_cluster):
         args_copy = config["args"].copy()
         args_copy.update(
             {
-                "subsystem": subnqn,
-                "host-name": listener_node.hostname,
+                "nqn": subnqn,
+                "host_name": listener_node.hostname,
                 "traddr": listener_node.ip_address,
                 "trsvcid": port,
             }
         )
 
-        base_cmd_args_copy = {"server-address": listener_node.ip_address}
-
         listener_func = fetch_method(_cls, command)
-        listener_func(**{"args": args_copy, "base_cmd_args": base_cmd_args_copy})
+        listener_func(**{"args": args_copy})
 
     # Configure listeners in parallel
     with parallel() as p:
-        for node in nodes:
-            LOG.info(node)
-            listener_node = get_node_by_id(ceph_cluster, node)
+        for node in nvme_service.gateways:
+            _cls = fetch_method(node, "listener")
+            listener_node = get_node_by_id(ceph_cluster, node.node.id)
             for num in range(1, subsystems + 1):
-                p.spawn(configure_listener, num, listener_node)
+                p.spawn(configure_listener, num, listener_node, _cls)
 
 
 def configure_hosts(config, _cls, command):
@@ -137,8 +144,8 @@ def configure_hosts(config, _cls, command):
         args_copy = config["args"].copy()
         args_copy.update(
             {
-                "subsystem": subnqn,
-                "host": hostnqn,
+                "nqn": subnqn,
+                "host_nqn": hostnqn,
             }
         )
 
@@ -160,9 +167,9 @@ def set_qos(namespaces_sub, sub_num, group, _cls):
         namespace_list = fetch_method(_cls, "list")
         _config = {
             "base_cmd_args": {"format": "json"},
-            "args": {"subsystem": subnqn, "nsid": nsid},
+            "args": {"nqn": subnqn, "nsid": nsid},
         }
-        _, namespace = namespace_list(**_config)
+        namespace, _ = namespace_list(**_config)
         namespace_data = json.loads(namespace)["namespaces"][0]
 
         def transform_rw_ios(value):
@@ -202,13 +209,13 @@ def set_qos(namespaces_sub, sub_num, group, _cls):
         ]
         for _, qos_values in enumerate(qos_settings):
             subnqn = f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group else ''}"
-            config = {"args": {"nsid": num, "subsystem": subnqn, **qos_values}}
+            config = {"args": {"nsid": num, "nqn": subnqn, **qos_values}}
 
             apply_qos(config)
-            LOG.info(f"Applied QoS for NSID {num} on subsystem {subnqn}")
+            LOG.info(f"Applied QoS for NSID {num} on nqn {subnqn}")
 
             verify_qos(subnqn, qos_values, num)
-            LOG.info(f"Updated QoS for NSID {num} on subsystem {subnqn}")
+            LOG.info(f"Updated QoS for NSID {num} on nqn {subnqn}")
 
 
 def configure_namespaces(
@@ -240,9 +247,9 @@ def configure_namespaces(
                 config = {
                     "base_cmd_args": {"format": "json"},
                     "args": {
-                        "rbd-image": f"{name}-image{num}",
-                        "rbd-pool": pool,
-                        "subsystem": subnqn,
+                        "rbd_image_name": f"{name}-image{num}",
+                        "rbd_pool": pool,
+                        "nqn": subnqn,
                         "force": True,
                     },
                 }
@@ -252,7 +259,7 @@ def configure_namespaces(
 
                 _config = {
                     "base_cmd_args": {"format": "json"},
-                    "args": {"subsystem": subnqn, "nsid": nsid},
+                    "args": {"nqn": subnqn, "nsid": nsid},
                 }
                 namespace_list = fetch_method(_cls, "list")
                 namespace, _ = namespace_list(**_config)
@@ -299,6 +306,54 @@ def execute_and_log_results(node, rbd_pool):
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
+    """Return the status of the Ceph NVMEof test execution at scale.
+
+    - Configure SPDK and install with control interface.
+    - Configures Initiators and Run FIO on NVMe targets.
+    - Scale subsystems and namespaces
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        kwargs: Key/value pairs of configuration information to be used in the test.
+
+    Returns:
+        int - 0 when the execution is successful else 1 (for failure).
+
+    Example:
+
+        # Execute the nvmeof GW scale test
+            - test:
+                name: Ceph NVMeoF deployment at scale
+                desc: Configure NVMEoF gateways and initiators at scale
+                config:
+                    node: node7
+                    rbd_pool: rbd
+                    do_not_create_image: true
+                    rep-pool-only: true
+                    steps:
+                      - config:
+                          service: subsystem
+                          command: add
+                          args:
+                            subsystems: 2
+                            max-namespaces: 1024
+                      - config:
+                          service: listener
+                          command: add
+                          args:
+                            group: group1
+                            subsystems: 2
+                            port: 4420
+                            nodes:
+                              - node7
+                              - node8
+                    initiators:
+                      listener_port: 4420
+                      node: node11
+                    run_io:
+                      - node: node11
+                        io_type: write
+    """
     LOG.info("Configure Ceph NVMeoF entities at scale over CLI.")
     config = deepcopy(kwargs["config"])
     node = get_node_by_id(ceph_cluster, config["node"])
@@ -312,21 +367,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     )
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
-    ceph = Orch(ceph_cluster, **{})
-    nvmegwcli = None
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
-
-    nvmegwcli = create_gateway(
-        nvme_gw_cli_version_adapter(ceph_cluster),
-        node,
-        mtls=config.get("mtls"),
-        shell=getattr(ceph, "shell"),
-        port=config.get("gw_port", 5500),
-        gw_group=config.get("gw_group"),
-    )
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
     try:
+        check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
+        nvme_service = NVMeService(config, ceph_cluster)
+
+        nvme_service.init_gateways()
+        nvmegwcli = nvme_service.gateways[0]
+
         steps = config.get("steps", [])
         init_config = config.get("initiators")
         io = config.get("run_io")
@@ -341,7 +391,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             if service == "subsystem":
                 configure_subsystems(cfg, _cls, command)
             elif service == "listener":
-                configure_listeners(cfg, _cls, command, ceph_cluster)
+                configure_listeners(cfg, nvme_service, command, ceph_cluster)
             elif service == "host":
                 configure_hosts(cfg, _cls, command)
             elif service == "namespace":
@@ -358,19 +408,18 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         instance = CephAdmin(cluster=ceph_cluster, **config)
         execute_and_log_results(instance, rbd_pool)
-
-    except BaseException as be:
-        LOG.error(be, exc_info=True)
+        return 0
+    except Exception as err:
+        LOG.error(err, exc_info=True)
         instance = CephAdmin(cluster=ceph_cluster, **config)
         execute_and_log_results(instance, rbd_pool)
-        mem_usage, _ = node.exec_command(
-            cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
-            sudo=True,
-        )
-        LOG.info(mem_usage)
-        top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
-        LOG.info(top_usage)
+        if node:
+            mem_usage, _ = node.exec_command(
+                cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
+                sudo=True,
+            )
+            LOG.info(mem_usage)
+            top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
+            LOG.info(top_usage)
 
-        return 1
-
-    return 0
+    return 1
