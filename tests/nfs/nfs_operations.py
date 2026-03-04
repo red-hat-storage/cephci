@@ -805,20 +805,27 @@ def check_nfs_daemons_removed(client):
     Check if NFS daemons are removed.
     Wait until there are no NFS daemons listed by 'ceph orch ls'.
     """
-    while True:
-        try:
-            cmd = "ceph orch ls | grep nfs"
-            out = client.exec_command(sudo=True, cmd=cmd)
+    check_nfs_daemons_removed_retry(client)
 
-            if out:
-                log.info("NFS daemons are still present. Waiting...")
-                sleep(10)  # Wait before checking again
-            else:
-                log.info("All NFS daemons have been removed.")
-                break
-        except Exception as e:
-            log.error(f"Unexpected error: {e}")
-            break
+
+@retry(OperationFailedError, tries=30, delay=10, backoff=1)
+def check_nfs_daemons_removed_retry(client):
+    """
+    Helper function to check if NFS daemons are removed.
+    Raises OperationFailedError if daemons are still present (to trigger retry).
+    Returns True if all daemons are removed.
+    """
+    try:
+        out = client.exec_command(sudo=True, cmd="ceph orch ls | grep nfs")
+        # if there are no nfs daemons, then grep exit code is 1
+        # hence we check if not err, and not if err
+        if out:
+            raise OperationFailedError("NFS daemons are still present")
+    except Exception as e:
+        log.warning(f"Caugt Exception: {e}")
+
+    log.info("All NFS daemons have been removed.")
+    return True
 
 
 def create_nfs_via_file_and_verify(
