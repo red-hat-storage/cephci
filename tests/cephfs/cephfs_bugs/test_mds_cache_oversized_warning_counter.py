@@ -45,6 +45,8 @@ def run(ceph_cluster, **kw):
         # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
+        log.info("Check ceph Health before starting the test")
+        cephfs_common_utils.wait_for_healthy_ceph(client1)
         fs_details = fs_util.get_fs_info(client1)
         if not fs_details:
             fs_util.create_fs(client1, "cephfs")

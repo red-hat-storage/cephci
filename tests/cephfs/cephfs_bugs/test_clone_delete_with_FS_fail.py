@@ -69,6 +69,11 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait false",
         )
+        log.info("Simulate clone create delay")
+        clients[0].exec_command(
+            sudo=True,
+            cmd="ceph config set mgr mgr/volumes/snapshot_clone_delay 2",
+        )
         default_fs = "cephfs_clone"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -78,6 +83,7 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(client1, fs_name=default_fs)
         if not fs_details:
             fs_util.create_fs(client1, default_fs)
+        fs_util.wait_for_mds_process(client1, default_fs)
         subvolumegroup_list = [
             {"vol_name": default_fs, "group_name": "subvolgroup_clone_cancel_1"}
         ]
@@ -150,13 +156,24 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait true"
         )
+        clients[0].exec_command(
+            sudo=True,
+            cmd="ceph config set mgr mgr/volumes/snapshot_clone_delay 0",
+        )
         fs_util.remove_snapshot(client1, **snapshot)
         fs_util.remove_subvolume(client1, **subvolume)
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            test_fail = 1
         for subvolumegroup in subvolumegroup_list:
             fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
         client1.exec_command(
             sudo=True, cmd=f"ceph fs volume rm {default_fs} --yes-i-really-mean-it"
         )
+        if test_fail == 1:
+            raise Exception(
+                "Cluster health is not OK even after waiting for %s secs ",
+                wait_time_secs,
+            )
 
 
 def fail_mds(client, fs_util, default_fs):
@@ -196,19 +213,10 @@ def clone_ops(clone_list, fs_util, client1, default_fs, rmclone_list):
         status = json.loads(out)
         state = status.get("status", {}).get("state", "")
         if state in ("pending", "in-progress"):
-            try:
-                get_clone_status(
-                    client1,
-                    cmd=f"ceph fs clone cancel {default_fs} {clone_name}",
-                )
-            except CommandFailed as e:
-                if "clone finished" in str(e) or "cannot cancel" in str(e):
-                    log.info(
-                        f"Clone {clone_name} completed between status check and "
-                        f"cancel (race condition). Continuing."
-                    )
-                else:
-                    raise
+            get_clone_status(
+                client1,
+                cmd=f"ceph fs clone cancel {default_fs} {clone_name}",
+            )
         else:
             log.info(f"Skipping cancel for {clone_name} - already in state: {state}")
         get_clone_status(
