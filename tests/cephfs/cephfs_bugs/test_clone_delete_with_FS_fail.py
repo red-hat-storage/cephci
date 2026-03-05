@@ -2,7 +2,7 @@ import json
 import random
 import string
 import traceback
-
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -58,6 +58,7 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         log.info("checking Pre-requisites")
         if len(clients) < 1:
             log.info(
@@ -65,15 +66,19 @@ def run(ceph_cluster, **kw):
             )
             return 1
         log.info("setting 'snapshot_clone_no_wait' to false")
-        clients[0].exec_command(
+        client1 = clients[0]
+        client1.exec_command(
             sudo=True,
             cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait false",
         )
         log.info("Simulate clone create delay")
-        clients[0].exec_command(
+        client1.exec_command(
             sudo=True,
             cmd="ceph config set mgr mgr/volumes/snapshot_clone_delay 2",
         )
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         default_fs = "cephfs_clone"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -151,18 +156,19 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        wait_time_secs = 300
         log.info("Clean Up in progess")
         log.info("setting 'snapshot_clone_no_wait' to true")
-        clients[0].exec_command(
+        client1.exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait true"
         )
-        clients[0].exec_command(
+        client1.exec_command(
             sudo=True,
             cmd="ceph config set mgr mgr/volumes/snapshot_clone_delay 0",
         )
         fs_util.remove_snapshot(client1, **snapshot)
         fs_util.remove_subvolume(client1, **subvolume)
-        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
             test_fail = 1
         for subvolumegroup in subvolumegroup_list:
             fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)

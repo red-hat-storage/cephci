@@ -5,6 +5,7 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -36,6 +37,7 @@ def run(ceph_cluster, **kw):
         log.info(f"Running CephFS tests for ceph tracker - {tc}")
         # Initialize the utility class for CephFS
         fs_util = FsUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -45,33 +47,16 @@ def run(ceph_cluster, **kw):
         # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
+        fs_details = fs_util.get_fs_info(client1, "cephfs")
+        if fs_details:
+            fs_util.remove_fs(client1, "cephfs")
+        fs_util.create_fs(client1, "cephfs")
+        fs_util.wait_for_mds_process(client1, "cephfs")
         log.info("Check ceph Health before starting the test")
-        cephfs_common_utils.wait_for_healthy_ceph(client1)
-        fs_details = fs_util.get_fs_info(client1)
-        if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
-
-        orig_cache_limit, _ = client1.exec_command(
-            sudo=True, cmd="ceph config get mds mds_cache_memory_limit"
-        )
-        orig_cache_threshold, _ = client1.exec_command(
-            sudo=True, cmd="ceph config get mds mds_health_cache_threshold"
-        )
-        orig_fs_dump, _ = client1.exec_command(sudo=True, cmd="ceph fs dump -f json")
-        fs_dump = json.loads(orig_fs_dump)
-        for fs in fs_dump["filesystems"]:
-            if fs["mdsmap"]["fs_name"] == "cephfs":
-                orig_max_mds = fs["mdsmap"]["max_mds"]
-                orig_standby_count = fs["mdsmap"].get("standby_count_wanted", 0)
-                break
-        orig_cache_limit = orig_cache_limit.strip()
-        orig_cache_threshold = orig_cache_threshold.strip()
-        log.info(
-            f"Original values - mds_cache_memory_limit: {orig_cache_limit}, "
-            f"mds_health_cache_threshold: {orig_cache_threshold}, "
-            f"max_mds: {orig_max_mds}, standby_count_wanted: {orig_standby_count}"
-        )
-
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         # Generate random string for directory names
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
@@ -79,15 +64,30 @@ def run(ceph_cluster, **kw):
         # Define mount directories
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}"
         # Mount CephFS using ceph-fuse and kernel
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1],
+            fuse_mounting_dir_1,
+            extra_params=" --client_fs cephfs",
+        )
+        # get default mds_cache_memory_limit
+        cmd = "ceph config get mds mds_cache_memory_limit"
+        mds_cache_memory_limit_def, _ = client1.exec_command(sudo=True, cmd=cmd)
+        # cache limit 2 to 1K
         fs_util.config_set_runtime(client1, "mds", "mds_cache_memory_limit", 1024)
+        # get default mds_health_cache_threshold
+        cmd = "ceph config get mds mds_health_cache_threshold"
+        mds_health_cache_threshold_def, _ = client1.exec_command(sudo=True, cmd=cmd)
+        # mds_health_cache_threshold to 1.000001
         fs_util.config_set_runtime(
             client1, "mds", "mds_health_cache_threshold", 1.000001
         )
+        # set max_mad to 1
         client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 1")
+        # stand_replay true
         client1.exec_command(
             sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
         )
+        # standby replay 1 mds
         client1.exec_command(sudo=True, cmd="ceph fs set cephfs standby_count_wanted 1")
         # wait untirl standby mds is created
         client1.exec_command(
@@ -121,27 +121,26 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        fs_util.config_set_runtime(
-            client1, "mds", "mds_cache_memory_limit", orig_cache_limit
-        )
-        fs_util.config_set_runtime(
-            client1, "mds", "mds_health_cache_threshold", orig_cache_threshold
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs set cephfs max_mds {orig_max_mds} --yes-i-really-mean-it",
-            check_ec=False,
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd="ceph fs set cephfs allow_standby_replay false --yes-i-really-mean-it",
-            check_ec=False,
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs set cephfs standby_count_wanted {orig_standby_count} --yes-i-really-mean-it",
-            check_ec=False,
-        )
+        # Cleanup
+        wait_time_secs = 300
+        test_fail = 0
+        # Reset to defaults
+        # set to default mds_health_cache_threshold
+        cmd = f"ceph config set mds mds_health_cache_threshold {mds_health_cache_threshold_def}"
+        client1.exec_command(sudo=True, cmd=cmd)
+        # get default mds_cache_memory_limit
+        cmd = f"ceph config set mds mds_cache_memory_limit {mds_cache_memory_limit_def}"
+        client1.exec_command(sudo=True, cmd=cmd)
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            test_fail = 1
+
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
         )
+        # remove fs
+        fs_util.remove_fs(client1, "cephfs")
+        if test_fail == 1:
+            raise Exception(
+                "Cluster health is not OK even after waiting for %s secs ",
+                wait_time_secs,
+            )

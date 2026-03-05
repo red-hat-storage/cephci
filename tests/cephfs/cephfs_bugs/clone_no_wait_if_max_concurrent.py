@@ -366,9 +366,10 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        log.info("Check ceph Health before starting the test")
-        cephfs_common_utils.wait_for_healthy_ceph(client1)
         client1 = clients[0]
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         log.info("Verify the pre-requisites for Clone_no_wait_if_max_concurrent test")
         if clone_test_prechecks(client1) == 1:
             return 1

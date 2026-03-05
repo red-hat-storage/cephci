@@ -47,7 +47,8 @@ def run(ceph_cluster, **kw):
         host_list = [node.hostname for node in mds_nodes]
         hosts = " ".join(host_list)
         log.info("Check ceph Health before starting the test")
-        cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs)
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         client1.exec_command(
             sudo=True,
             cmd=f"ceph orch apply mds {fs_name} --placement='2 {hosts}'",
