@@ -51,6 +51,50 @@ class OsdOkToUpgradeCommandOutput:
             f"bad_no_version: {self.bad_no_version}\n"
         )
 
+    def __getitem__(self, key):
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(key)
+
+    def __eq__(self, other):
+        if not isinstance(other, OsdOkToUpgradeCommandOutput):
+            return NotImplemented
+
+        log.info("\nComparing expected and actual objects...")
+        log.info(f"\nExpected:\n{self}")
+        log.info(f"\nActual:\n{other}")
+
+        # Compare simple fields first
+        if self.ok_to_upgrade != other.ok_to_upgrade:
+            log.warning("Mismatch: ok_to_upgrade")
+            return False
+
+        if self.all_osds_upgraded != other.all_osds_upgraded:
+            log.warning("Mismatch: all_osds_upgraded")
+            return False
+
+        # Compare list fields
+        list_fields = [
+            "osds_in_crush_bucket",
+            "osds_ok_to_upgrade",
+            "osds_upgraded",
+            "bad_no_version",
+        ]
+        for field in list_fields:
+            self_val = getattr(self, field)
+            other_val = getattr(other, field)
+            self_val.sort()
+            other_val.sort()
+            if self_val != other_val:
+                log.warning(
+                    f"Mismatch in {field}: expected={self_val}, actual={other_val}"
+                )
+                return False
+
+        # All fields matched
+        return True
+
 
 class OsdOkToUpgradeCommand:
     """
@@ -71,29 +115,19 @@ class OsdOkToUpgradeCommand:
     """
 
     def __init__(
-        self, crush_bucket: str, ceph_version: str, rados_obj: RadosOrchestrator
+        self,
+        crush_bucket: str,
+        ceph_version: str,
+        rados_obj: RadosOrchestrator,
+        max: str = "",
     ):
-        self.command = f"ceph osd ok-to-upgrade {crush_bucket} {ceph_version}"
+        self.command = f"ceph osd ok-to-upgrade {crush_bucket} {ceph_version} {max}"
         self.rados_obj: RadosOrchestrator = rados_obj
         log.debug(
             "OsdOkToUpgradeCommand initialized: crush_bucket=%s, ceph_version=%s",
             crush_bucket,
             ceph_version,
         )
-
-    def add_max(self, max: int):
-        """
-        Add optional max OSD count to the command (fluent interface).
-
-        Args:
-            max: Maximum number of OSDs to consider for upgrade.
-
-        Returns:
-            self for chaining (e.g. .add_max(30).execute()).
-        """
-        self.command += f" {max}"
-        log.debug("Added max=%s to ok-to-upgrade command", max)
-        return self
 
     def execute(self):
         """
