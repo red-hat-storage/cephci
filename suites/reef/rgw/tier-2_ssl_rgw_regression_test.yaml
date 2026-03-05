@@ -63,7 +63,7 @@ tests:
                       - node5
                   spec:
                     ssl: true
-                    rgw_frontend_ssl_certificate: create-cert
+                    generate_cert: true
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
