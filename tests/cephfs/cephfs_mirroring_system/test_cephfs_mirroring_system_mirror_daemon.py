@@ -1,3 +1,4 @@
+import json
 import signal
 import time
 import traceback
@@ -112,6 +113,15 @@ def run(ceph_cluster, **kw):
         asok_file = env["asok_file"]
         filesystem_id = env["filesystem_id"]
         peer_uuid = env["peer_uuid"]
+
+        # Record original cephfs-mirror daemon host before any tests
+        out, _ = source_clients[0].exec_command(
+            sudo=True,
+            cmd="ceph orch ps --daemon_type=cephfs-mirror --format json",
+            check_ec=False,
+        )
+        original_mirror_host = json.loads(out)[0].get("hostname")
+        log.info("Original cephfs-mirror daemon host: %s", original_mirror_host)
 
         log.info(f"Starting background IOs for {io_runtime} minutes")
         io_threads = start_background_ios(
@@ -312,7 +322,7 @@ def run(ceph_cluster, **kw):
             # Verify mount points are responsive after test
             log.info("Verifying mount points are responsive after %s", test_name)
             if not CephfsMirroringUtils.verify_mount_points_responsive(
-                source_clients[0], mounting_dirs
+                source_clients[0], mounting_dirs, 120
             ):
                 log.error("Mount points are hung after %s", test_name)
                 return 1
@@ -381,6 +391,34 @@ def run(ceph_cluster, **kw):
         for t in io_threads:
             t.join()
         log.info("All IO threads have completed")
+
+        # Redeploy cephfs-mirror back to the original host so that
+        # subsequent tests find the daemon on the expected node.
+        out, _ = source_clients[0].exec_command(
+            sudo=True,
+            cmd="ceph orch ps --daemon_type=cephfs-mirror --format json",
+            check_ec=False,
+        )
+        current_mirror_host = json.loads(out)[0].get("hostname")
+        if current_mirror_host != original_mirror_host:
+            log.info(
+                "cephfs-mirror moved from %s to %s, redeploying back",
+                original_mirror_host,
+                current_mirror_host,
+            )
+            source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"ceph orch apply cephfs-mirror "
+                f"--placement='1 {original_mirror_host}'",
+                check_ec=False,
+            )
+            time.sleep(30)
+            log.info("cephfs-mirror redeployed back to %s", original_mirror_host)
+        else:
+            log.info(
+                "cephfs-mirror still on original host %s, no redeploy needed",
+                original_mirror_host,
+            )
 
         log.info(
             "Test Completed Successfully. All signal tests passed. "
