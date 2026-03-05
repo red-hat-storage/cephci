@@ -114,6 +114,7 @@ def add(cls, config: Dict) -> None:
                     "6": ["rhceph-6-tools-for-rhel-9-x86_64-rpms"],
                     "7": ["rhceph-7-tools-for-rhel-9-x86_64-rpms"],
                     "8": ["rhceph-8-tools-for-rhel-9-x86_64-rpms"],
+                    "9": ["rhceph-9-tools-for-rhel-9-x86_64-rpms"],
                 },
             }
 
@@ -153,6 +154,13 @@ def add(cls, config: Dict) -> None:
                         f"Failed to disable the repos enabled on the host: {_node.hostname}"
                         f"Error : {err}. Continuing without the repos disabled."
                     )
+
+                # Unset release preference before enabling repos so that
+                # repos are not filtered by the pinned minor release
+                _node.exec_command(
+                    sudo=True, cmd="subscription-manager release --unset"
+                )
+
                 # Enabling the required CDN repos
                 for repos in rhel_repos[rhel_version]:
                     _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
@@ -166,11 +174,7 @@ def add(cls, config: Dict) -> None:
                     else:
                         _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
-                # Clearing the release preference set and cleaning all yum repos
-                # Observing selinux package dependency issues for ceph-base
-                wa_cmds = ["subscription-manager release --unset", "yum clean all"]
-                for wa_cmd in wa_cmds:
-                    _node.exec_command(sudo=True, cmd=wa_cmd)
+                _node.exec_command(sudo=True, cmd="yum clean all")
 
             # Copy the keyring to client
             _node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
