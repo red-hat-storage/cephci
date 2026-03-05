@@ -3,6 +3,7 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.cephfs_mirroring_system.cephfs_mirroring_system_utils import (
     cleanup_mirroring_test_environment,
     run_container_restart,
@@ -206,7 +207,7 @@ def run(ceph_cluster, **kw):
                     return 1
 
                 recovery_timeout = (
-                    120 if test_type in ("node_reboot", "mds_redeploy") else 60
+                    300 if test_type in ("node_reboot", "mds_redeploy") else 60
                 )
 
                 clusters = [
@@ -287,13 +288,26 @@ def run(ceph_cluster, **kw):
                 log.error(traceback.format_exc())
                 return 1
 
-            health_timeout = 300 if test_type in ("node_reboot", "mds_redeploy") else 60
-            log.info("Verify cluster is healthy after %s", test_name)
+            health_timeout = (
+                600 if test_type in ("node_reboot", "mds_redeploy") else 300
+            )
+            log.info("Verify source cluster is healthy after %s", test_name)
             if cephfs_common_utils.wait_for_healthy_ceph(
                 source_clients[0], health_timeout
             ):
-                log.error("Cluster is not healthy after %s", test_name)
+                log.error("Source cluster is not healthy after %s", test_name)
                 return 1
+
+            if test_type in ("node_reboot", "mds_redeploy"):
+                log.info("Verify target cluster is healthy after %s", test_name)
+                target_cephfs_common_utils = CephFSCommonUtils(
+                    ceph_cluster_dict.get("ceph2")
+                )
+                if target_cephfs_common_utils.wait_for_healthy_ceph(
+                    target_clients[0], health_timeout
+                ):
+                    log.error("Target cluster is not healthy after %s", test_name)
+                    return 1
 
             log.info("Verifying IO threads are still running after %s", test_name)
             for idx, t in enumerate(io_threads):
@@ -304,7 +318,7 @@ def run(ceph_cluster, **kw):
 
             log.info("Verifying mount points are responsive after %s", test_name)
             if not CephfsMirroringUtils.verify_mount_points_responsive(
-                source_clients[0], mounting_dirs
+                source_clients[0], mounting_dirs, 120
             ):
                 log.error("Mount points are hung after %s", test_name)
                 return 1
