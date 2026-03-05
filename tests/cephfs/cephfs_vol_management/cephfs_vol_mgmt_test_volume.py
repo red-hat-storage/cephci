@@ -448,7 +448,7 @@ def run(ceph_cluster, **kw):
         log.debug(f"Output of FS_1 volume: {fs_volume_dict}")
 
         # Get ceph fs dump output
-        fs_dump_dict = fs_util.collect_fs_dump_for_validation(client1, fs_name_1)
+        fs_dump_dict = fs_util.collect_fs_dump_for_validation_1(client1, fs_name_1)
         log.debug(f"Output of FS_1 dump: {fs_dump_dict}")
 
         # Get ceph fs get of specific volume
@@ -517,7 +517,7 @@ def run(ceph_cluster, **kw):
         log.debug(f"Output of FS_2 volume: {fs_volume_dict_2}")
 
         # Get ceph fs dump output
-        fs_dump_dict_2 = fs_util.collect_fs_dump_for_validation(client1, fs_name_2)
+        fs_dump_dict_2 = fs_util.collect_fs_dump_for_validation_1(client1, fs_name_2)
         log.debug(f"Output of FS_2 dump: {fs_dump_dict_2}")
 
         # Get ceph fs get of specific volume
