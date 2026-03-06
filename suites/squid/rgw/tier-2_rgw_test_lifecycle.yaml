@@ -298,3 +298,13 @@ tests:
         test-version: v2
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_suspended_delete.yaml
+
+  - test:
+      name: Test LC Expiration of expired-delete-marker for version suspended bucket
+      desc: Test LC Expiration of expired-delete-marker for version suspended bucket
+      polarion-id: CEPH-83573543
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_lifecycle_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_lc_version_suspended_expired_delete_marker.yaml
+
