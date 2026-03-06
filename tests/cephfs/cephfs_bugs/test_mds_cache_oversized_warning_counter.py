@@ -52,6 +52,11 @@ def run(ceph_cluster, **kw):
             fs_util.remove_fs(client1, "cephfs")
         fs_util.create_fs(client1, "cephfs")
         fs_util.wait_for_mds_process(client1, "cephfs")
+        log.info("Check ceph Health before starting the test")
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         # Generate random string for directory names
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)

@@ -8,6 +8,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -356,6 +357,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
@@ -365,6 +367,9 @@ def run(ceph_cluster, **kw):
             )
             return 1
         client1 = clients[0]
+        log.info("Check ceph Health before starting the test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1):
+            raise Exception("Cluster health is not OK before starting the test")
         log.info("Verify the pre-requisites for Clone_no_wait_if_max_concurrent test")
         if clone_test_prechecks(client1) == 1:
             return 1
@@ -441,6 +446,8 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        wait_time_secs = 300
+        test_fail = 0
         log.info("Setting back the max concurrent clones to default value 4")
         client1.exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 4"
@@ -475,4 +482,11 @@ def run(ceph_cluster, **kw):
         fs_util.remove_subvolumegroup(
             client1, default_fs, "subvolgroup_1", validate=True
         )
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            test_fail = 1
         fs_util.remove_fs(client1, default_fs)
+        if test_fail == 1:
+            raise Exception(
+                "Cluster health is not OK even after waiting for %s secs ",
+                wait_time_secs,
+            )
