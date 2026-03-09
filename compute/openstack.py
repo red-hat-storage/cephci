@@ -1,5 +1,6 @@
 """Support VM lifecycle operation in an OpenStack Cloud."""
 
+import ipaddress
 import socket
 from datetime import datetime, timedelta
 from time import sleep
@@ -574,6 +575,7 @@ class CephVMNodeV2:
         """Return the CIDR information of the given subnet id."""
         url = f"{self.driver._subnets_url_prefix}/{id_}"
         object_ = self.driver.network_connection.request(url).object
+        object_ = object_.get("subnet") or object_
         subnet = self.driver._to_subnet(object_)
 
         if not subnet:
@@ -629,23 +631,84 @@ class CephVMNodeV2:
             for vol in self.node.extra.get("volumes_attached", [])
         ]
 
+    def _first_ip_by_version(self, version: int) -> Optional[str]:
+        """Return the first IP of the given version (4 or 6) from node addresses."""
+        if self.node is None:
+            return None
+        for ip in self.node.private_ips + self.node.public_ips:
+            try:
+                if ipaddress.ip_address(ip).version == version:
+                    return ip
+            except ValueError:
+                continue
+        return None
+
+    def _first_subnet_by_version(self, version: int) -> Optional[str]:
+        """Return the first subnet CIDR of the given version (4 or 6) from _subnet."""
+        for cidr in self._subnet:
+            try:
+                if ipaddress.ip_network(cidr).version == version:
+                    return cidr
+            except ValueError:
+                continue
+        return None
+
     @property
     def subnet(self) -> str:
-        """Return the subnet information."""
+        """Return the subnet information (IPv4 preferred for backward compatibility)."""
         if self.node is None:
             return ""
 
         if self._subnet:
-            return self._subnet[0]
+            return self._first_subnet_by_version(4) or self._subnet[0]
 
-        networks = self.node.extra.get("addresses")
+        networks = self.node.extra.get("addresses") or {}
         for network in networks:
-            net = self._get_network_by_name(name=network)
-            subnet_id = net.extra.get("subnets")
-            self._subnet.append(self._get_subnet_cidr(subnet_id))
+            try:
+                net = self._get_network_by_name(name=network)
+                subnet_ids = net.extra.get("subnets")
+                for sid in (
+                    subnet_ids
+                    if isinstance(subnet_ids, list)
+                    else ([subnet_ids] if subnet_ids is not None else [])
+                ):
+                    self._subnet.append(self._get_subnet_cidr(sid))
+            except Exception:  # noqa: S110
+                continue
 
-        # Fixme: The CIDR returned needs to be part of the required network.
-        return self._subnet[0]
+        # Prefer IPv4 for backward compatibility when both exist
+        return self._first_subnet_by_version(4) or (
+            self._subnet[0] if self._subnet else ""
+        )
+
+    @property
+    def ipv6_address(self) -> Optional[str]:
+        """Return the node's IPv6 address if available; None otherwise (OpenStack dual-stack only)."""
+        return self._first_ip_by_version(6)
+
+    @property
+    def ipv6_subnet(self) -> Optional[str]:
+        """Return the node's IPv6 subnet CIDR from the networks attached to this node; None if not dual-stack."""
+        if self.node is None:
+            return None
+        addresses = self.node.extra.get("addresses") or {}
+        for network_name in addresses:
+            try:
+                net = self._get_network_by_name(name=network_name)
+                subnet_ids = (
+                    net.extra.get("subnets")
+                    if isinstance(net.extra, dict)
+                    else getattr(net.extra, "subnets", None) or []
+                )
+                if not isinstance(subnet_ids, list):
+                    subnet_ids = [subnet_ids] if subnet_ids else []
+                for sid in subnet_ids:
+                    cidr = self._get_subnet_cidr(sid)
+                    if cidr and ipaddress.ip_network(cidr).version == 6:
+                        return cidr
+            except Exception:  # noqa: S110
+                continue
+        return None
 
     @property
     def shortname(self) -> str:

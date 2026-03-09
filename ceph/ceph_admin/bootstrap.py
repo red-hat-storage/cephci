@@ -8,7 +8,12 @@ from typing import Dict
 from looseversion import LooseVersion
 
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
-from ceph.utils import get_node_by_id, get_public_network, setup_repos
+from ceph.utils import (
+    get_node_by_id,
+    get_public_network,
+    get_public_network_ipv6,
+    setup_repos,
+)
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
 from utility.utils import get_cephci_config
@@ -346,7 +351,12 @@ class BootstrapMixin:
         )
         if not mon_node:
             raise ResourceNotFoundError(f"Unknown {mon_node} node name.")
-        cmd += f" --mon-ip {mon_node.ip_address}"
+        # Use IPv6 for mon only when requested and available (OpenStack dual-stack)
+        use_ipv6 = getattr(self.cluster, "use_ipv6", False)
+        mon_ip = getattr(mon_node, "ipv6_address", None) if use_ipv6 else None
+        if mon_ip is None:
+            mon_ip = mon_node.ip_address
+        cmd += f" --mon-ip {mon_ip}"
 
         # Bootstrap with Ceph service specification
         specs = args.get("apply-spec")
@@ -438,6 +448,11 @@ class BootstrapMixin:
             public_nws = ",".join(
                 [public_nws, get_public_network(self.cluster.get_nodes())]
             )
+            # Append IPv6 public networks only when requested and available
+            if getattr(self.cluster, "use_ipv6", False):
+                ipv6_nws = get_public_network_ipv6(self.cluster.get_nodes())
+                if ipv6_nws:
+                    public_nws = ",".join([public_nws, ipv6_nws])
             public_nws = ",".join(filter(lambda x: x, list(set(public_nws.split(",")))))
 
         if public_nws:
