@@ -141,8 +141,10 @@ def run(ceph_cluster, **kw):
                 + "".join(random.choices(string.ascii_letters, k=6)),
                 failure_domain=failure_domain,
                 crushtool=crushtool,
+                rados_obj=rados_obj,
             )
             crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
             rados_obj.create_pool(
                 pool_name=pool_name,
                 pg_num=pg_num,
@@ -243,8 +245,10 @@ def run(ceph_cluster, **kw):
                 + "".join(random.choices(string.ascii_letters, k=6)),
                 failure_domain=failure_domain,
                 crushtool=crushtool,
+                rados_obj=rados_obj,
             )
             crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
             rados_obj.create_pool(
                 pool_name=pool_name,
                 pg_num=pg_num,
@@ -343,8 +347,10 @@ def run(ceph_cluster, **kw):
                 + "".join(random.choices(string.ascii_letters, k=6)),
                 failure_domain=failure_domain,
                 crushtool=crushtool,
+                rados_obj=rados_obj,
             )
             crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
             rados_obj.create_pool(
                 pool_name=pool_name,
                 pg_num=pg_num,
@@ -443,8 +449,10 @@ def run(ceph_cluster, **kw):
                 + "".join(random.choices(string.ascii_letters, k=6)),
                 failure_domain=failure_domain,
                 crushtool=crushtool,
+                rados_obj=rados_obj,
             )
             crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
             rados_obj.create_pool(
                 pool_name=pool_name,
                 pg_num=pg_num,
@@ -547,10 +555,11 @@ def run(ceph_cluster, **kw):
                 + "".join(random.choices(string.ascii_letters, k=6)),
                 failure_domain=failure_domain,
                 crushtool=crushtool,
+                rados_obj=rados_obj,
             )
 
             crush_rule.create()
-
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
             rados_obj.create_pool(
                 pool_name=pool_name,
                 pg_num=pg_num,
@@ -668,10 +677,11 @@ def run(ceph_cluster, **kw):
                 + "".join(random.choices(string.ascii_letters, k=6)),
                 failure_domain=failure_domain,
                 crushtool=crushtool,
+                rados_obj=rados_obj,
             )
 
             crush_rule.create()
-
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
             rados_obj.create_pool(
                 pool_name=pool_name,
                 pg_num=pg_num,
@@ -747,6 +757,491 @@ def run(ceph_cluster, **kw):
                     time.sleep(5)
                 log.info("Restarted all OSDs on host %s", host_to_stop.hostname)
             log.info("Scenario 6 passed: convergence factor checks")
+
+        elif "scenario7" in scenarios:
+            log.info("===========================================")
+            log.info(
+                "Scenario 7: Rack failure domain with max=100 - osd, host, rack, chassis buckets"
+            )
+            log.info(
+                "  Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean"
+            )
+            log.info(
+                "  Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            log.info(
+                "  Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            log.info(
+                "  Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            log.info(
+                "  Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            log.info("===========================================")
+            log.info("Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean")
+            pool_name = "ok-to-upgrade-rack-fd"
+            failure_domain = "rack"
+            crush_rule = CrushRule(
+                crush_rule_name=f"{failure_domain}_failure_domain"
+                + "".join(random.choices(string.ascii_letters, k=6)),
+                failure_domain=failure_domain,
+                crushtool=crushtool,
+                rados_obj=rados_obj,
+            )
+            crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
+            rados_obj.create_pool(
+                pool_name=pool_name,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                crush_rule=crush_rule.crush_rule_name,
+            ), "Failed to create pool"
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(osd_hosts[0].hostname)
+            osd_id = all_osds_host0[0]
+            all_osds_rack0 = rados_obj.collect_osd_daemon_ids("rack0")
+            all_osds_chassis0 = rados_obj.collect_osd_daemon_ids("chassis0")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=all_osds_rack0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=osd_hosts[0].hostname,
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=all_osds_rack0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack0,
+                osds_ok_to_upgrade=all_osds_rack0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis0,
+                osds_ok_to_upgrade=all_osds_rack0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Scenario 7 passed: rack FD with max=100 (osd, host, rack, chassis buckets)"
+            )
+
+        elif "scenario8" in scenarios:
+            log.info("===========================================")
+            log.info(
+                "Scenario 8: Chassis failure domain with max=100 - osd, host, rack, chassis"
+            )
+            log.info(
+                "  Step 1: Create CRUSH rule (chassis FD) and pool, wait for PGs clean"
+            )
+            log.info(
+                "  Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            log.info(
+                "  Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            log.info(
+                "  Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            log.info(
+                "  Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            log.info("===========================================")
+            log.info(
+                "Step 1: Create CRUSH rule (chassis FD) and pool, wait for PGs clean"
+            )
+            pool_name = "ok-to-upgrade-chassis-fd-max"
+            failure_domain = "chassis"
+            crush_rule = CrushRule(
+                crush_rule_name=f"{failure_domain}_failure_domain"
+                + "".join(random.choices(string.ascii_letters, k=6)),
+                failure_domain=failure_domain,
+                crushtool=crushtool,
+                rados_obj=rados_obj,
+            )
+            crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
+            rados_obj.create_pool(
+                pool_name=pool_name,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                crush_rule=crush_rule.crush_rule_name,
+                rados_obj=rados_obj,
+            ), "Failed to create pool"
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(osd_hosts[0].hostname)
+            osd_id = all_osds_host0[0]
+            all_osds_rack0 = rados_obj.collect_osd_daemon_ids("rack0")
+            all_osds_chassis0 = rados_obj.collect_osd_daemon_ids("chassis0")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=all_osds_chassis0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=osd_hosts[0].hostname,
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=all_osds_chassis0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max=100,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack0,
+                osds_ok_to_upgrade=all_osds_chassis0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max=100,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis0,
+                osds_ok_to_upgrade=all_osds_chassis0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info("Scenario 8 passed: chassis failure domain with max=100")
+
+        elif "scenario9" in scenarios:
+            log.info("===========================================")
+            log.info(
+                "Scenario 9: Host failure domain with max=100 - osd, host, rack, chassis"
+            )
+            log.info(
+                "  Step 1: Create CRUSH rule (host FD) and pool, wait for PGs clean"
+            )
+            log.info(
+                "  Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            log.info(
+                "  Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            log.info(
+                "  Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            log.info(
+                "  Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            log.info("===========================================")
+            log.info("Step 1: Create CRUSH rule (host FD) and pool, wait for PGs clean")
+            pool_name = "ok-to-upgrade-host-fd-max"
+            failure_domain = "host"
+            crush_rule = CrushRule(
+                crush_rule_name=f"{failure_domain}_failure_domain"
+                + "".join(random.choices(string.ascii_letters, k=6)),
+                failure_domain=failure_domain,
+                crushtool=crushtool,
+                rados_obj=rados_obj,
+            )
+            crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
+            rados_obj.create_pool(
+                pool_name=pool_name,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                crush_rule=crush_rule.crush_rule_name,
+            ), "Failed to create pool"
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(osd_hosts[0].hostname)
+            osd_id = all_osds_host0[0]
+            all_osds_rack0 = rados_obj.collect_osd_daemon_ids("rack0")
+            all_osds_chassis0 = rados_obj.collect_osd_daemon_ids("chassis0")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=osd_hosts[0].hostname,
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack0,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis0,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info("Scenario 9 passed: host failure domain with max=100")
+
+        elif "scenario10" in scenarios:
+            log.info("===========================================")
+            log.info(
+                "Scenario 10: OSD failure domain with max=100 - osd, host, rack, chassis"
+            )
+            log.info(
+                "  Step 1: Create CRUSH rule (OSD FD) and pool, wait for PGs clean"
+            )
+            log.info(
+                "  Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            log.info(
+                "  Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            log.info(
+                "  Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            log.info(
+                "  Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            log.info("===========================================")
+            log.info("Step 1: Create CRUSH rule (OSD FD) and pool, wait for PGs clean")
+            pool_name = "ok-to-upgrade-osd-fd-max"
+            failure_domain = "osd"
+            crush_rule = CrushRule(
+                crush_rule_name=f"{failure_domain}_failure_domain"
+                + "".join(random.choices(string.ascii_letters, k=6)),
+                failure_domain=failure_domain,
+                crushtool=crushtool,
+                rados_obj=rados_obj,
+            )
+            crush_rule.create()
+            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
+            rados_obj.create_pool(
+                pool_name=pool_name,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                crush_rule=crush_rule.crush_rule_name,
+            ), "Failed to create pool"
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(osd_hosts[0].hostname)
+            osd_id = all_osds_host0[0]
+            all_osds_rack0 = rados_obj.collect_osd_daemon_ids("rack0")
+            all_osds_chassis0 = rados_obj.collect_osd_daemon_ids("chassis0")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[actual.osds_in_crush_bucket[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=osd_hosts[0].hostname,
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=[actual.osds_in_crush_bucket[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack0,
+                osds_ok_to_upgrade=[actual.osds_in_crush_bucket[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis0",
+                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                rados_obj=rados_obj,
+                max="100",
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis0,
+                osds_ok_to_upgrade=[actual.osds_in_crush_bucket[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info("Scenario 10 passed: OSD failure domain with max=100")
 
         elif "negative" in scenarios:
             log.info("=" * 80)
@@ -894,6 +1389,7 @@ class CrushRule:
         crush_rule_name: str,
         failure_domain: str,
         crushtool: CrushToolWorkflows,
+        rados_obj: RadosOrchestrator,
         pool_type: str = "replicated",
     ):
         self.crush_rule_name: str = crush_rule_name
@@ -903,6 +1399,7 @@ class CrushRule:
         self.target_bin: str = "/etc/ceph"
         self.type: str = pool_type
         self.backup_original_crush_map_txt: str = ""
+        self.rados_obj = rados_obj
 
     def create(self) -> None:
         """Add this rule to the crush map (backup of original map is kept for remove())."""
@@ -948,6 +1445,34 @@ class CrushRule:
             source_loc=self.backup_original_crush_map_txt
         )
         assert self.crushtool.set_crush_map_bin(bin)
+
+    def modify_all_failure_domains(
+        self,
+        new_failure_domain: str,
+    ):
+        """
+        Modify the failure domain in all CRUSH rules' choose/chooseleaf steps.
+        """
+        crush_map_dir: str = "/tmp"
+        _, loc = self.crushtool.generate_crush_map_bin(loc=crush_map_dir)
+        _, loc = self.crushtool.decompile_crush_map_txt(
+            source_loc=loc, target_loc=crush_map_dir
+        )
+
+        cmd = f"sed -i 's/\\(step chooseleaf [^ ]* [^ ]* type \\)[^ ]*/\\1{new_failure_domain}/' {loc}"
+        self.rados_obj.client.exec_command(sudo=True, cmd=cmd)
+
+        res = self.crushtool.compile_crush_map_txt(
+            source_loc=loc, target_loc=crush_map_dir
+        )
+        if not res or (isinstance(res, tuple) and not res[0]):
+            raise Exception("Failed to compile crush map binary")
+
+        _, loc = res
+        if not self.crushtool.set_crush_map_bin(loc=loc):
+            raise Exception("Failed to set crush map binary")
+
+        log.info("Modified crush rule failure domains to %s", new_failure_domain)
 
 
 def validate_convergence_factor(log_lines, convergence_factor, osds_in_crush_bucket):
