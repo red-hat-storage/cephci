@@ -1,0 +1,287 @@
+# Suite is to be used to verify osd ok-to-upgrade feature
+# to be run in regression conf: 4-node-ec-cluster-1-client.yaml
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83575289
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          # registry-json: registry.redhat.io
+          mon-ip: node1
+          orphan-initial-daemons: true
+          skip-dashboard: true
+          ssh-user: cephuser
+          # 6 racks × 2 chassis; each chassis has exactly one host (node1–node12)
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+              location:
+                root: default
+                rack: rack1
+                chassis: chassis1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node2
+              location:
+                root: default
+                rack: rack1
+                chassis: chassis2
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node3
+              location:
+                root: default
+                rack: rack2
+                chassis: chassis3
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node4
+              location:
+                root: default
+                rack: rack2
+                chassis: chassis4
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node5
+              location:
+                root: default
+                rack: rack3
+                chassis: chassis5
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node6
+              location:
+                root: default
+                rack: rack3
+                chassis: chassis6
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node7
+              location:
+                root: default
+                rack: rack4
+                chassis: chassis7
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node8
+              location:
+                root: default
+                rack: rack4
+                chassis: chassis8
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node9
+              location:
+                root: default
+                rack: rack5
+                chassis: chassis9
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node10
+              location:
+                root: default
+                rack: rack5
+                chassis: chassis10
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node11
+              location:
+                root: default
+                rack: rack6
+                chassis: chassis11
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node12
+              location:
+                root: default
+                rack: rack6
+                chassis: chassis12
+            - service_type: mon
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true" # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1 # client Id (<type>.<Id>)
+        nodes:
+          - node17:
+              release: 8.1
+              tag: rc
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  # - test:
+  #     name: Upgrade cluster to latest 9.1 ceph version
+  #     desc: Upgrade cluster to latest 9.1 version
+  #     module: test_upgrade_warn.py
+  #     polarion-id: CEPH-83574934
+  #     config:
+  #       command: start
+  #       service: upgrade
+  #       base_cmd_args:
+  #         verbose: true
+  #       args:
+  #         #          daemon_types: mgr,crash,mon
+  #         rhcs-version: 9.1
+  #         release: nightly
+  #         platform: rhel-9
+  #     abort-on-fail: false
+
+  - test:
+      name: scenario 1 - ok-to-upgrade-rack-failure-domain
+      desc: Rack failure domain - ok-to-upgrade for osd, host, rack, chassis buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario1
+
+  - test:
+      name: scenario 2 - ok-to-upgrade-chassis-failure-domain
+      desc: Chassis failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario2
+
+  - test:
+      name: scenario 3 - ok-to-upgrade-host-failure-domain
+      desc: Host failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario3
+
+  - test:
+      name: scenario 4 - ok-to-upgrade-osd-failure-domain
+      desc: OSD failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario4
+
+  - test:
+      name: scenario 5 - ok-to-upgrade-all-osds-upgraded
+      desc: All OSDs already upgraded - verify ok_to_upgrade=False, all_osds_upgraded=True
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario5
+
+  - test:
+      name: scenario 6 - ok-to-upgrade-convergence-factor
+      desc: Convergence factor - verify mgr log convergence for host bucket
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario6
