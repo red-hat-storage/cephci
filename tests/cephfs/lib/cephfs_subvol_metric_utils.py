@@ -1,7 +1,7 @@
 import json
 import re
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
@@ -281,6 +281,325 @@ class MDSMetricsHelper:
         if parts and self._UUID_RE.match(parts[-1]):
             return "/" + "/".join(parts[:-1])
         return p
+
+    def _mds_trace_dump_json(self, client, mds_name: str) -> Dict[str, Any]:
+        """
+        Run 'ceph tell mds.<name> trace dump -f json' and parse strictly.
+        Returns raw JSON (dict or list) from the MDS trace dump.
+        """
+        cmd = f"ceph tell mds.{mds_name} trace dump -f json"
+        out, _ = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+        return json.loads(out)
+
+    # Op-type to allowed first-span names for trace validation
+    _OP_TYPE_ALLOWED_FIRST_SPANS: Dict[str, Set[str]] = {
+        "getattr": {
+            "handle_client_getattr",
+            "handle_client_setattr",
+            "handle_client_lookup_ino",
+            "handle_client_open",
+        },
+        "setattr": {
+            "handle_client_getattr",
+            "handle_client_setattr",
+            "handle_client_lookup_ino",
+            "handle_client_open",
+        },
+        "mkdir": {
+            "handle_client_mkdir",
+            "handle_client_rmdir",
+            "handle_client_mksnap",
+            "handle_client_rmsnap",
+        },
+        "rmdir": {
+            "handle_client_mkdir",
+            "handle_client_rmdir",
+            "handle_client_mksnap",
+            "handle_client_rmsnap",
+        },
+        "make snap dir": {
+            "handle_client_mkdir",
+            "handle_client_rmdir",
+            "handle_client_mksnap",
+            "handle_client_rmsnap",
+        },
+        "rm snap dir": {
+            "handle_client_mkdir",
+            "handle_client_rmdir",
+            "handle_client_mksnap",
+            "handle_client_rmsnap",
+        },
+        "create symlink": {
+            "handle_client_symlink",
+            "handle_client_link",
+            "handle_client_unlink",
+        },
+        "rm symlink": {
+            "handle_client_symlink",
+            "handle_client_link",
+            "handle_client_unlink",
+        },
+        "ls on file": {
+            "handle_client_lookup_ino",
+            "handle_client_lssnap",
+            "path_traverse",
+        },
+        "dir": {
+            "handle_client_lookup_ino",
+            "handle_client_lssnap",
+            "path_traverse",
+        },
+        "snapdir": {
+            "handle_client_lookup_ino",
+            "handle_client_lssnap",
+            "path_traverse",
+        },
+        "rename dir": {
+            "handle_client_rename",
+            "handle_client_renamesnap",
+        },
+        "snapdir rename": {
+            "handle_client_rename",
+            "handle_client_renamesnap",
+        },
+        "create file": {
+            "handle_client_open",
+            "handle_client_file_setlock",
+            "handle_client_file_readlock",
+            "handle_client_setlayout",
+            "handle_client_fsync",
+            "acquire_locks",
+            "journal_wait",
+        },
+        "write data": {
+            "handle_client_open",
+            "handle_client_file_setlock",
+            "handle_client_file_readlock",
+            "handle_client_setlayout",
+            "handle_client_fsync",
+            "acquire_locks",
+            "journal_wait",
+        },
+        "read data": {
+            "handle_client_open",
+            "handle_client_file_setlock",
+            "handle_client_file_readlock",
+            "handle_client_setlayout",
+            "handle_client_fsync",
+            "acquire_locks",
+            "journal_wait",
+        },
+        "overwrite from other client mount": {
+            "handle_client_open",
+            "handle_client_file_setlock",
+            "handle_client_file_readlock",
+            "handle_client_setlayout",
+            "handle_client_fsync",
+            "acquire_locks",
+            "journal_wait",
+        },
+        # Common MDS op_name values that may appear in attributes
+        "unlink": {
+            "handle_client_symlink",
+            "handle_client_link",
+            "handle_client_unlink",
+        },
+        "symlink": {
+            "handle_client_symlink",
+            "handle_client_link",
+            "handle_client_unlink",
+        },
+        "link": {
+            "handle_client_symlink",
+            "handle_client_link",
+            "handle_client_unlink",
+        },
+        "open": {
+            "handle_client_open",
+            "handle_client_file_setlock",
+            "handle_client_file_readlock",
+            "handle_client_setlayout",
+            "handle_client_fsync",
+            "acquire_locks",
+            "journal_wait",
+        },
+        "mksnap": {
+            "handle_client_mkdir",
+            "handle_client_rmdir",
+            "handle_client_mksnap",
+            "handle_client_rmsnap",
+        },
+        "rmsnap": {
+            "handle_client_mkdir",
+            "handle_client_rmdir",
+            "handle_client_mksnap",
+            "handle_client_rmsnap",
+        },
+        "rename": {
+            "handle_client_rename",
+            "handle_client_renamesnap",
+        },
+        "renamesnap": {
+            "handle_client_rename",
+            "handle_client_renamesnap",
+        },
+    }
+
+    def parse_trace_dump_to_events(
+        self, trace_dump_output: Any
+    ) -> List[Dict[str, Any]]:
+        """
+        Normalize MDS trace dump output into a list of trace-event dicts.
+
+        Each event dict has the shape:
+          trace_id, name, start_time, end_time, duration_ms, result,
+          attributes (e.g. mds.op_name, mds.path), spans (list of span dicts).
+
+        Handles output that is a list, a single object, or nested under a key.
+        """
+        if trace_dump_output is None:
+            return []
+        if isinstance(trace_dump_output, list):
+            events = trace_dump_output
+        elif isinstance(trace_dump_output, dict):
+            if "spans" in trace_dump_output and "trace_id" in trace_dump_output:
+                events = [trace_dump_output]
+            elif "events" in trace_dump_output:
+                events = trace_dump_output["events"]
+            elif "traces" in trace_dump_output:
+                events = trace_dump_output["traces"]
+            else:
+                events = [trace_dump_output]
+        else:
+            return []
+        result: List[Dict[str, Any]] = []
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            result.append(
+                {
+                    "trace_id": ev.get("trace_id", ""),
+                    "name": ev.get("name", ""),
+                    "start_time": ev.get("start_time", ""),
+                    "end_time": ev.get("end_time", ""),
+                    "duration_ms": ev.get("duration_ms", 0),
+                    "result": ev.get("result", 0),
+                    "attributes": ev.get("attributes") or {},
+                    "spans": ev.get("spans") or [],
+                }
+            )
+        return result
+
+    def validate_trace_op_and_first_span(
+        self,
+        op_type: str,
+        trace_dump_output: Any,
+    ) -> Tuple[bool, str]:
+        """
+        Verify that trace dump contains at least one event where:
+          - attributes["mds.op_name"] matches op_type (case-insensitive),
+          - spans[0]["name"] is in the allowed set for that op_type.
+
+        Returns (success: bool, message: str).
+        """
+        events = self.parse_trace_dump_to_events(trace_dump_output)
+        if not events:
+            return False, "no trace events in dump output"
+
+        op_key = op_type.strip().lower()
+        allowed = self._OP_TYPE_ALLOWED_FIRST_SPANS.get(op_key)
+        if allowed is None:
+            return False, f"unknown op_type: {op_type!r} (no allowed first-span list)"
+
+        for ev in events:
+            attrs = ev.get("attributes") or {}
+            mds_op = (attrs.get("mds.op_name") or "").strip().lower()
+            if mds_op != op_key:
+                continue
+            spans = ev.get("spans") or []
+            if not spans:
+                return False, (
+                    f"op_type {op_type!r}: event has no spans "
+                    f"(trace_id={ev.get('trace_id', '')!r})"
+                )
+            first_span_name = (spans[0].get("name") or "").strip()
+            if first_span_name not in allowed:
+                return (
+                    False,
+                    f"op_type {op_type!r}: first span name {first_span_name!r} not in "
+                    f"allowed set {sorted(allowed)!r}",
+                )
+            return True, "ok"
+
+        return False, f"no event with attributes['mds.op_name'] == {op_type!r}"
+
+    # ---------------------------------------------------------------------
+    # MDS tracing config (jaeger_tracing_enable, mds_trace_sliding_window_sec)
+    # ---------------------------------------------------------------------
+
+    def get_mds_tracing_config(self, client) -> Tuple[int, Optional[Dict[str, str]]]:
+        """
+        Get current MDS tracing config values:
+          - jaeger_tracing_enable
+          - mds_trace_sliding_window_sec
+
+        Returns (status, values_dict). status is 0 on success; values_dict has
+        keys 'jaeger_tracing_enable' and 'mds_trace_sliding_window_sec' with
+        string values. On failure returns (non-zero, None).
+        """
+        try:
+            out_jaeger, rc_jaeger = client.exec_command(
+                sudo=True,
+                cmd="ceph config get mds jaeger_tracing_enable",
+                check_ec=False,
+            )
+            out_window, rc_window = client.exec_command(
+                sudo=True,
+                cmd="ceph config get mds mds_trace_sliding_window_sec",
+                check_ec=False,
+            )
+            if rc_jaeger != 0 or rc_window != 0:
+                return (1, None)
+            values = {
+                "jaeger_tracing_enable": (out_jaeger or "").strip(),
+                "mds_trace_sliding_window_sec": (out_window or "").strip(),
+            }
+            return (0, values)
+        except Exception as e:
+            log.error("get_mds_tracing_config failed: %s", e)
+            return (1, None)
+
+    def set_mds_tracing_config(
+        self,
+        client,
+        jaeger_tracing_enable: Optional[str] = None,
+        mds_trace_sliding_window_sec: Optional[str] = None,
+    ) -> int:
+        """
+        Set MDS tracing config. Only provided options are set.
+        Returns 0 on success, non-zero on failure.
+        """
+        try:
+            if jaeger_tracing_enable is not None:
+                _, rc = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config set mds jaeger_tracing_enable {jaeger_tracing_enable}",
+                    check_ec=False,
+                )
+                if rc != 0:
+                    return rc
+            if mds_trace_sliding_window_sec is not None:
+                _, rc = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config set mds mds_trace_sliding_window_sec {mds_trace_sliding_window_sec}",
+                    check_ec=False,
+                )
+                if rc != 0:
+                    return rc
+            return 0
+        except Exception as e:
+            log.error("set_mds_tracing_config failed: %s", e)
+            return 1
 
     def _mds_counter_dump_json(self, client, mds_name: str) -> Dict[str, Any]:
         """
