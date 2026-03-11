@@ -1,0 +1,224 @@
+# Suite is to be used to verify osd ok-to-upgrade feature
+# to be run in regression conf: 4-node-ec-cluster-1-client.yaml
+
+tests:
+   - test:
+       name: setup install pre-requisistes
+       desc: Setup phase to deploy the required pre-requisites for running the tests.
+       module: install_prereq.py
+       abort-on-fail: true
+
+   - test:
+       name: cluster deployment
+       desc: Execute the cluster deployment workflow.
+       module: test_cephadm.py
+       abort-on-fail: true
+       config:
+         verify_cluster_health: true
+         steps:
+           - config:
+               command: bootstrap
+               service: cephadm
+               base_cmd_args:
+                 verbose: true
+               args:
+                 rhcs-version: 9.0
+                 release: released
+                 mon-ip: node1
+
+   - test:
+       name: Add host
+       desc: Add new host node with IP address
+       module: test_host.py
+       config:
+         command: add_hosts
+         service: host
+         args:
+           nodes:
+             - node1
+             - node2
+             - node3
+             - node4
+             - node5
+           attach_ip_address: true
+           labels: apply-all-labels
+       destroy-cluster: false
+       abort-on-fail: true
+
+   - test:
+       name: Mgr and Mon deployment
+       desc: Add Mgr and Mon daemons
+       module: test_cephadm.py
+       polarion-id: CEPH-83573746
+       abort-on-fail: true
+       config:
+         steps:
+           - config:
+               command: apply
+               service: mgr
+               args:
+                 placement:
+                   label: mgr
+           - config:
+               command: apply
+               service: mon
+               args:
+                 placement:
+                   label: mon
+
+   - test:
+       name: OSD deployment
+       desc: Add OSD services using spec file.
+       module: test_cephadm.py
+       polarion-id: CEPH-83573746
+       abort-on-fail: true
+       config:
+         steps:
+           - config:
+               command: apply_spec
+               service: orch
+               validate-spec-services: true
+               specs:
+                 - service_type: osd
+                   service_id: osds
+                   encrypted: "true" # boolean as string
+                   placement:
+                     label: osd
+                   spec:
+                     data_devices:
+                       all: "true"
+
+   - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+   - test:
+       name: Enable logging to file
+       module: rados_prep.py
+       config:
+         log_to_file: true
+       desc: Change config options to enable logging to file
+
+   - test:
+      name: Upgrade cluster to latest 9.1 ceph version
+      desc: Upgrade cluster to latest 9.1 version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        args:
+#          daemon_types: mgr,crash,mon
+          rhcs-version: 9.1
+          release: nightly
+          platform: rhel-9
+      abort-on-fail: false
+
+   - test:
+       name: scenario 1 - ok-to-upgrade-rack-failure-domain
+       desc: Rack failure domain - ok-to-upgrade for osd, host, rack, chassis buckets
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632277
+       config:
+         crush_hierarchy_setup: true
+         scenarios:
+           - scenario1
+
+   - test:
+       name: scenario 2 - ok-to-upgrade-chassis-failure-domain
+       desc: Chassis failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632277
+       config:
+         scenarios:
+           - scenario2
+
+   - test:
+       name: scenario 3 - ok-to-upgrade-host-failure-domain
+       desc: Host failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632277
+       config:
+         scenarios:
+           - scenario3
+
+   - test:
+       name: scenario 4 - ok-to-upgrade-osd-failure-domain
+       desc: OSD failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632277
+       config:
+         scenarios:
+           - scenario4
+
+   - test:
+       name: scenario 5 - ok-to-upgrade-all-osds-upgraded
+       desc: All OSDs already upgraded - verify ok_to_upgrade=False, all_osds_upgraded=True
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632278
+       config:
+         scenarios:
+           - scenario5
+
+   - test:
+       name: scenario 6 - ok-to-upgrade-convergence-factor
+       desc: Convergence factor - verify mgr log convergence for host bucket
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632278
+       config:
+         scenarios:
+           - scenario6
+
+   - test:
+      name: scenario 7 - ok-to-upgrade-rack-failure-domain-max100
+      desc: Rack failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario7
+
+   - test:
+       name: scenario 8 - ok-to-upgrade-chassis-failure-domain-max100
+       desc: Chassis failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632278
+       config:
+         scenarios:
+           - scenario8
+
+   - test:
+       name: scenario 9 - ok-to-upgrade-host-failure-domain-max100
+       desc: Host failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632278
+       config:
+         scenarios:
+           - scenario9
+
+   - test:
+       name: scenario 10 - ok-to-upgrade-osd-failure-domain-max100
+       desc: OSD failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+       module: test_ok_to_upgrade.py
+       polarion-id: CEPH-83632278
+       config:
+         scenarios:
+           - scenario10
