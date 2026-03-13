@@ -161,6 +161,14 @@ tests:
         module: test_client.py
         name: configure client
   - test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+        crash_setup: 1
+        daemon_list: [ 'mds','osd','mgr','mon' ]
+  - test:
       name: Change pg size of cephfs pools
       module: cephfs_bugs.test_cephfs_pool_size_change.py
       polarion-id: CEPH-11260
@@ -300,3 +308,13 @@ tests:
       polarion-id: CEPH-83593402
       desc: volume_ops_parallel_to_clone
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
+
+

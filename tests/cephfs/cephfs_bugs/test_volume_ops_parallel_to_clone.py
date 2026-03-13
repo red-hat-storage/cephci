@@ -656,6 +656,12 @@ def run(ceph_cluster, **kw):
     5. Remove subvolumegroups
     6. Reset max_concurrent_clones to default
     """
+    sv_obj = {}
+    subvol_name = None
+    fuse_mounting_dir = None
+    default_fs = None
+    client1 = None
+    clients = []
     try:
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
@@ -805,45 +811,52 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Starting Clean Up")
-        client1 = clients[0] if clients else None
+        test_fail = 0
+        if not client1 and clients:
+            client1 = clients[0]
 
-        if client1:
-            # Note: Clones are cleaned up within run_parallel_volume_ops for each operation
-
-            # Clean up snapshot
-            listsnapshot_cmd = (
-                f"ceph fs subvolume snapshot ls {default_fs} {subvol_name}"
-            )
-            if sv_obj.get("group_name"):
-                listsnapshot_cmd += f" --group_name {sv_obj['group_name']}"
-            out, _ = client1.exec_command(
-                sudo=True, cmd=f"{listsnapshot_cmd} --format json"
-            )
-            snapshot_ls = json.loads(out)
-            for j in snapshot_ls:
-                snap_name = j["name"]
-                fs_util.remove_snapshot(
-                    client1,
-                    default_fs,
-                    subvol_name,
-                    snap_name,
-                    validate=True,
-                    group_name=sv_obj.get("group_name", None),
+        if client1 and default_fs:
+            if subvol_name:
+                listsnapshot_cmd = (
+                    f"ceph fs subvolume snapshot ls {default_fs} {subvol_name}"
                 )
-            # Clean up subvolume
-
-            if "subvol_name" in locals():
-                fs_util.remove_subvolume(
-                    client1,
-                    vol_name=default_fs,
-                    subvol_name=subvol_name,
-                    validate=True,
+                if sv_obj.get("group_name"):
+                    listsnapshot_cmd += f" --group_name {sv_obj['group_name']}"
+                out, _ = client1.exec_command(
+                    sudo=True,
+                    cmd=f"{listsnapshot_cmd} --format json",
                     check_ec=False,
                 )
+                try:
+                    snapshot_ls = json.loads(out)
+                    for j in snapshot_ls:
+                        snap_name = j["name"]
+                        fs_util.remove_snapshot(
+                            client1,
+                            default_fs,
+                            subvol_name,
+                            snap_name,
+                            validate=False,
+                            group_name=sv_obj.get("group_name", None),
+                            check_ec=False,
+                        )
+                except (json.JSONDecodeError, Exception):
+                    log.error("Could not list/remove snapshots during cleanup")
+                    test_fail = 1
 
-            # Unmount
+                try:
+                    fs_util.remove_subvolume(
+                        client1,
+                        vol_name=default_fs,
+                        subvol_name=subvol_name,
+                        validate=False,
+                        check_ec=False,
+                    )
+                except Exception:
+                    log.error("Could not remove subvolume during cleanup")
+                    test_fail = 1
 
-            if "fuse_mounting_dir" in locals():
+            if fuse_mounting_dir:
                 client1.exec_command(
                     sudo=True,
                     cmd=f"umount {fuse_mounting_dir}",
@@ -854,8 +867,6 @@ def run(ceph_cluster, **kw):
                     sudo=True, cmd=f"rm -rf {fuse_mounting_dir}", check_ec=False
                 )
 
-            # Reset max_concurrent_clones to default (4)
-
             client1.exec_command(
                 sudo=True,
                 cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 4",
@@ -863,7 +874,9 @@ def run(ceph_cluster, **kw):
             )
             log.info("Reset max_concurrent_clones to default value 4")
 
-            # Remove FS volume
             fs_util.remove_fs(client1, default_fs)
             log.info("FS volume removed")
         log.info("Clean Up completed")
+        if test_fail:
+            log.info("Test failed due to errors encountered during cleanup")
+            return 1

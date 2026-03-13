@@ -1139,9 +1139,6 @@ class CephfsMirroringUtils(object):
                 log.warning(
                     "Deprecation warning detected as expected: %s", warning_message
                 )
-            #     if LooseVersion(build) >= LooseVersion("9.0"):
-            # log.info("Add mountpoint to fstab due to BZ 2406981")
-            # add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details)
             elif LooseVersion(build) >= LooseVersion("9.1"):
                 log.warning(
                     "Deprecation warning not found in output. "
