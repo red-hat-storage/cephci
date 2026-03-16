@@ -1,0 +1,14 @@
+# OneCloud credentials for osp-cred file (e.g. ~/osp-cred-ci-2.yaml)
+# Add under globals.
+#
+# Hardened images (IBM CISO) only allows publickey. Use:
+# 1) private_key_path - file from "step ssh certificate <key-id> ~/.ssh/id_ecdsa_ciso"
+# 2) private_key_password - if key is encrypted (step prompts for password)
+
+globals:
+  onecloud-credentials:
+    api_key: "<JWT_TOKEN>"
+    site: POK  # AUS, POK, RCH, TUC
+    private_key_path: "~/.ssh/id_ciso_key"
+    private_key_password: "<key-passphrase>"  # Required if key is encrypted (step prompts)
+    # verify_ssl: false  # If corporate CA causes SSL errors
