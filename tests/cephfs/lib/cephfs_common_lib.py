@@ -71,9 +71,15 @@ class CephFSCommonUtils(FsUtils):
                     time.sleep(5)
 
         if ceph_healthy == 0:
-            client.exec_command(
+            out, _ = client.exec_command(
                 sudo=True,
                 cmd="ceph fs status;ceph -s;ceph health detail",
+            )
+            log.error(
+                "Cluster did not reach HEALTH_OK within %d seconds. "
+                "Final cluster state:\n%s",
+                wait_time,
+                out,
             )
             return 1
         return 0
