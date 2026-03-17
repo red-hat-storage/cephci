@@ -367,6 +367,18 @@ class BootstrapMixin:
         if rhbuild.split("-")[0] in ["5.1", "5.2"]:
             cmd += " --yes-i-know"
 
+        # IBM Storage Ceph 9.1 and greater would require to accept the license
+        # There is '--automatically-accept-license' option
+        if manifest_obj.product == "ibm" and LooseVersion(
+            manifest_obj.release
+        ) >= LooseVersion("9.1"):
+            cmd += " --automatically-accept-license"
+
+            # By default, call home is disabled when no call home options are
+            # are found
+            if "call-home" not in cmd:
+                cmd += " --disable-ibm-call-home"
+
         out, err = self.installer.exec_command(
             sudo=True,
             cmd=cmd,
