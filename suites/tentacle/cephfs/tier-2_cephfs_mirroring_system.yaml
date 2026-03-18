@@ -2,7 +2,7 @@
 # Tier-level: 1
 # Test-Suite: tier-1_cephfs_mirror.yaml
 # Test-Case: Configure CephFS Mirror setup and run IOs
-# Conf file : conf/tentacle/cephfs/tier-1_cephfs_mirror_system.yaml
+# Conf file : conf/tentacle/cephfs/tier-1_cephfs_mirror.yaml
 # Cluster Configuration:
 #    No of Clusters : 2
 #    Cluster 1 :

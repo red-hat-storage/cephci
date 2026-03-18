@@ -19,21 +19,21 @@ globals:
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 60
       node4:
         role:
           - osd
           - mds
           - nfs
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 60
       node5:
         role:
           - osd
           - mds
           - nfs
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 60
       node6:
         role:
           - cephfs-mirror
@@ -59,20 +59,20 @@ globals:
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 60
       node4:
         role:
           - osd
           - mds
           - nfs
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 60
       node5:
         role:
           - osd
           - mds
           - nfs
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 60
       node6:
         role: client
