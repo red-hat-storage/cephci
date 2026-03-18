@@ -1675,6 +1675,7 @@ class CephNode(object):
                 "Execution of %s on %s took %s seconds",
                 cmd,
                 self.ip_address,
+                channel.get_transport().get_username(),
                 str(_time),
             )
 

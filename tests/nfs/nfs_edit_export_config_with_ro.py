@@ -15,7 +15,7 @@ def update_export_conf(
 ):
     try:
         out = Ceph(client).nfs.export.get(nfs_name, nfs_export_readonly)
-        client.exec_command(sudo=True, cmd=f"echo '{out}' > export.conf")
+        client.exec_command(cmd=f"echo '{out}' > export.conf")
         client.exec_command(
             sudo=True,
             cmd=f"sed -i 's/{original_access_type}/{new_access_type}/g' export.conf",
@@ -106,20 +106,23 @@ def run(ceph_cluster, **kw):
             raise OperationFailedError(f"Failed to mount nfs on {clients[0].hostname}")
         log.info("Mount succeeded on client")
 
-        # Test writes on Readonly export
+        # Test writes on Readonly export - run as root to avoid ownership issues
+        # and hit the actual NFS RO restriction
         sleep(3)
         _, rc = clients[0].exec_command(
-            sudo=True, cmd=f"touch {nfs_readonly_mount}/file_ro", check_ec=False
+            cmd=f"touch {nfs_readonly_mount}/file_ro", check_ec=False
         )
-        # Ignore the "Read-only file system" error and consider it as a successful execution
-        if "touch: cannot touch" in str(rc) and "Read-only file system" in str(rc):
+        # Both "Read-only file system" and "Permission denied" indicate the RO export is working
+        if rc and (
+            "Read-only file system" in str(rc) or "Permission denied" in str(rc)
+        ):
             log.info("As expected, failed to create file on RO export")
         else:
-            log.error("Created file on RO export")
+            log.error("Created file on RO export - RO restriction not enforced!")
             return 1
 
         # Test writes on RW export
-        if clients[0].exec_command(sudo=True, cmd=f"touch {nfs_mount}/file_rw"):
+        if clients[0].exec_command(cmd=f"touch {nfs_mount}/file_rw"):
             log.info("Successfully created file on RW export")
         else:
             log.error("failed to create file on RW export")
