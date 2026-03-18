@@ -15,6 +15,7 @@ from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import get_ceph_version_from_cluster
@@ -43,6 +44,100 @@ class CephfsMirroringUtils(object):
         self.source_mirrors = source_ceph_cluster.get_ceph_objects("cephfs-mirror")
         self.fs_util_ceph1 = FsUtils(source_ceph_cluster)
         self.fs_util_ceph2 = FsUtils(target_ceph_cluster)
+
+    @staticmethod
+    def verify_mount_points_responsive(client, mounting_dirs, timeout=30):
+        """Verify mount points are not hung by touching a file on each.
+
+        Uses retry to allow transient failures during daemon recovery.
+
+        Args:
+            client: Client node to run touch commands on
+            mounting_dirs: List of mount directory paths
+            timeout: Seconds to wait per mount point before giving up
+
+        Returns:
+            bool: True if all mount points are responsive, False otherwise
+        """
+        test_filename = ".daemon_health_check"
+
+        @retry(Exception, tries=3, delay=10)
+        def _touch_mount(mount_dir):
+            client.exec_command(
+                sudo=True,
+                cmd=f"touch {mount_dir}/{test_filename}",
+                timeout=timeout,
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"rm -f {mount_dir}/{test_filename}",
+                timeout=timeout,
+            )
+
+        for mount_dir in mounting_dirs:
+            try:
+                _touch_mount(mount_dir)
+                log.info("Mount point %s is responsive", mount_dir)
+            except Exception:
+                log.error("Mount point %s is hung or unresponsive", mount_dir)
+                return False
+        return True
+
+    @staticmethod
+    def wait_for_mds_active(
+        fs_util_v1, client, filesystem_name, timeout=60, interval=10
+    ):
+        """Wait until at least one MDS is active for the given filesystem.
+
+        Args:
+            fs_util_v1: FsUtilsV1 object for the cluster
+            client: Client node to check MDS status on
+            filesystem_name: Name of the filesystem (e.g., "cephfs" or "cephfs-ec")
+            timeout: Maximum seconds to wait for an active MDS
+            interval: Seconds between status checks
+
+        Returns:
+            int: 0 if active MDS found, 1 if timed out
+        """
+        import time as _time
+
+        end_time = _time.time() + timeout
+        while _time.time() < end_time:
+            active = fs_util_v1.get_active_mdss(client, filesystem_name)
+            if active:
+                log.info("Active MDS daemons for %s: %s", filesystem_name, active)
+                return 0
+            log.info(
+                "No active MDS for %s yet, retrying in %ss", filesystem_name, interval
+            )
+            _time.sleep(interval)
+        log.error("No active MDS found for %s within %ss", filesystem_name, timeout)
+        return 1
+
+    @staticmethod
+    def wait_for_daemon_recovery(client, daemon_name, context, timeout=60, interval=5):
+        """Wait for a daemon to recover after a disruptive operation.
+
+        Args:
+            client: Client node to check daemon status on
+            daemon_name: Name of the daemon process (e.g., "cephfs-mirror", "mds")
+            context: Description of the operation that triggered recovery
+            timeout: Maximum seconds to wait for recovery
+            interval: Seconds between status checks
+
+        Returns:
+            int: 0 if daemon recovered, 1 if timed out
+        """
+        log.info("Waiting for %s to recover after %s", daemon_name, context)
+        if not wait_for_process(
+            client=client,
+            process_name=daemon_name,
+            timeout=timeout,
+            interval=interval,
+        ):
+            log.error("%s daemon did not recover after %s", daemon_name, context)
+            return 1
+        return 0
 
     def enable_mirroring_module(self, client):
         """
@@ -2066,3 +2161,55 @@ class CephfsMirroringUtils(object):
         else:
             log.error(f"Path '{absolute_path}' not found in the mirror status.")
             return 1
+
+    def get_last_synced_snap_id(
+        self, fs_name, fsid, asok_file, filesystem_id, peer_uuid, path
+    ):
+        """
+        Captures the 'id' of the last synced snapshot for a given path in CephFS mirroring status.
+
+        Args:
+            fs_name (str): The CephFS volume name (e.g., cephfs).
+            fsid (str): The unique CephFS file system ID.
+            asok_file (dict): A dictionary containing the node and its corresponding admin socket.
+                            (e.g., {"node1": [client_object, "ceph-client.cephfs-mirror.<host>.asok"]})
+            filesystem_id (int): The ID for the CephFS filesystem (e.g., 2).
+            peer_uuid (str): The UUID of the peer to check mirror status.
+            path (str): The absolute path for which to capture the last synced snapshot ID
+                        (e.g., /volumes/subvolgroup_1/subvol_1).
+
+        Returns:
+            int or None: The 'id' of the last synced snapshot for the specified path if found,
+                        or None if the path is not found or no snapshot has been synced yet.
+        """
+        log.info("Get peer mirror status to retrieve last synced snapshot ID")
+        for node, asok in asok_file.items():
+            asok[0].exec_command(
+                sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+            )
+        cmd = (
+            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+            f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
+        )
+        out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
+        data = json.loads(out)
+        log.info(f"Paths found in mirror status: {list(data.keys())}")
+        absolute_path = path.rstrip("/")
+
+        if absolute_path in data:
+            status = data[absolute_path]
+            last_synced_snap = status.get("last_synced_snap")
+            if last_synced_snap:
+                snap_id = last_synced_snap.get("id")
+                log.info("Last synced snapshot ID for %s: %s", absolute_path, snap_id)
+                return snap_id
+            else:
+                log.warning(
+                    "No last_synced_snap found for path '%s'. "
+                    "This may indicate no snapshots have been synced yet.",
+                    absolute_path,
+                )
+                return None
+        else:
+            log.error(f"Path '{absolute_path}' not found in the mirror status.")
+            return None
