@@ -1,5 +1,6 @@
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
+from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
 
@@ -30,6 +31,7 @@ def run(ceph_cluster, **kw):
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
     filename = "Testfile"
+    Ceph(clients[0]).fs.sub_volume_group.create(group="ganeshagroup", volume=fs_name)
 
     try:
         # Setup nfs cluster
@@ -49,11 +51,11 @@ def run(ceph_cluster, **kw):
         # Create a file
         for i in range(1, 6):
             cmd = f"dd if=/dev/urandom of={nfs_mount}/{filename}{i} bs=1G count=3"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd)
 
             # Verify the file's size are allocated correctly
             cmd = f"du -sh {nfs_mount}/{filename}{i}"
-            out = clients[0].exec_command(cmd=cmd, sudo=True)
+            out = clients[0].exec_command(cmd=cmd)
             print(out)
             file_size = out[0].strip().split()[0]
             print(file_size)
@@ -67,11 +69,11 @@ def run(ceph_cluster, **kw):
         # Truncate all the files to 1GB
         for i in range(1, 6):
             cmd = f"truncate -s 1G {nfs_mount}/{filename}{i}"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd)
 
             # Verify all files are truncated  correctly
             cmd = f"du -sh {nfs_mount}/{filename}{i}"
-            out = clients[0].exec_command(cmd=cmd, sudo=True)
+            out = clients[0].exec_command(cmd=cmd)
             print(out)
             file_size = out[0].strip().split()[0]
             print(file_size)

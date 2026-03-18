@@ -17,6 +17,56 @@ from utility.utils import setup_cluster_access
 
 log = Log(__name__)
 
+# Dedicated nft table so we do not clash with firewalld-managed rules.
+_NFT_LDAP_BLOCK_TABLE = "cephci_ldap_block"
+
+
+def _ldap_egress_block_backend(nfs_node):
+    """Return 'iptables' or 'nft' depending on what is available on the NFS node."""
+    out, _ = nfs_node.exec_command(sudo=True, cmd="command -v iptables", check_ec=False)
+    if out and str(out).strip():
+        return "iptables"
+    out_nft, _ = nfs_node.exec_command(sudo=True, cmd="command -v nft", check_ec=False)
+    if out_nft and str(out_nft).strip():
+        return "nft"
+    raise OperationFailedError(
+        "Neither iptables nor nft found on NFS node {}; cannot simulate LDAP outage "
+        "(install iptables-nft or nftables).".format(nfs_node.hostname)
+    )
+
+
+def _block_ldap_egress_to_ip(nfs_node, ldap_ip, backend):
+    if backend == "iptables":
+        nfs_node.exec_command(
+            sudo=True, cmd="iptables -A OUTPUT -d {} -j DROP".format(ldap_ip)
+        )
+        return
+    nfs_node.exec_command(
+        sudo=True,
+        cmd=(
+            "nft delete table inet {tbl} 2>/dev/null; "
+            "nft add table inet {tbl}; "
+            "nft add chain inet {tbl} output "
+            "'{{ type filter hook output priority 0; policy accept; }}'; "
+            "nft add rule inet {tbl} output ip daddr {ip} drop"
+        ).format(tbl=_NFT_LDAP_BLOCK_TABLE, ip=ldap_ip),
+    )
+
+
+def _unblock_ldap_egress(nfs_node, ldap_ip, backend):
+    if backend == "iptables":
+        nfs_node.exec_command(
+            sudo=True,
+            cmd="iptables -D OUTPUT -d {} -j DROP".format(ldap_ip),
+            check_ec=False,
+        )
+        return
+    nfs_node.exec_command(
+        sudo=True,
+        cmd="nft delete table inet {}".format(_NFT_LDAP_BLOCK_TABLE),
+        check_ec=False,
+    )
+
 
 def configure_sssd(node, ldap_ip, ldap_setup):
     """Configure SSSD to use the LDAP server."""
@@ -282,10 +332,13 @@ def verify_user_change(client_node, nfs_node, nfs_mount, ldap_setup):
 def verify_ldap_outage(client_node, nfs_node, nfs_mount, ldap_setup):
     """Verify NFS behavior during LDAP outage."""
     ldap_ip = ldap_setup.node.ip_address
-    log.info("Simulating LDAP outage by blocking {} on NFS node...".format(ldap_ip))
-    nfs_node.exec_command(
-        sudo=True, cmd="iptables -A OUTPUT -d {} -j DROP".format(ldap_ip)
+    backend = _ldap_egress_block_backend(nfs_node)
+    log.info(
+        "Simulating LDAP outage by blocking {} on NFS node {} (using {})...".format(
+            ldap_ip, nfs_node.hostname, backend
+        )
     )
+    _block_ldap_egress_to_ip(nfs_node, ldap_ip, backend)
 
     try:
         # Force cache clear to ensure lookup attempts
@@ -307,9 +360,7 @@ def verify_ldap_outage(client_node, nfs_node, nfs_mount, ldap_setup):
 
     finally:
         log.info("Restoring network connectivity...")
-        nfs_node.exec_command(
-            sudo=True, cmd="iptables -D OUTPUT -d {} -j DROP".format(ldap_ip)
-        )
+        _unblock_ldap_egress(nfs_node, ldap_ip, backend)
 
     # Verify recovery
     time.sleep(5)

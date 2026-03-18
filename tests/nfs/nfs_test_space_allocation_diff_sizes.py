@@ -9,7 +9,7 @@ log = Log(__name__)
 def create_file(count, mount_point, filename, client):
     log.info(f"Creating file of : {count}G")
     cmd = f"dd if=/dev/urandom of={mount_point}/{filename} bs=1G count={count}"
-    client.exec_command(cmd=cmd, sudo=True)
+    client.exec_command(cmd=cmd)
 
 
 def verify_disk_usage(client, mount_point, size, filename=None):
@@ -17,7 +17,7 @@ def verify_disk_usage(client, mount_point, size, filename=None):
         cmd = f"du -sh {mount_point}/{filename}"
     else:
         cmd = f"du -sh {mount_point}"
-    out = client.exec_command(cmd=cmd, sudo=True)
+    out = client.exec_command(cmd=cmd)
     size_str = out[0].strip().split()[0]
     numeric_part = size_str.rstrip("G")
     size_rounded = f"{int(float(numeric_part))}G"

@@ -12,7 +12,6 @@ def create_files(client, mount_point, file_count):
     for i in range(1, file_count + 1):
         try:
             client.exec_command(
-                sudo=True,
                 cmd=f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1",
             )
         except Exception:
@@ -23,7 +22,7 @@ def create_soft_link(client, mount_point, file_count):
     for i in range(1, file_count + 1):
         try:
             client.exec_command(
-                sudo=True, cmd=f"ln -s {mount_point}/file{i} {mount_point}/link_file{i}"
+                cmd=f"ln -s {mount_point}/file{i} {mount_point}/link_file{i}"
             )
         except Exception:
             raise OperationFailedError(f"failed to create softlink file{i}")
@@ -34,7 +33,6 @@ def perform_lookups(client, mount_point, num_files):
         try:
             log.info(
                 client.exec_command(
-                    sudo=True,
                     cmd=f"ls -laRt {mount_point}/",
                 )
             )
