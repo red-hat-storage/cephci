@@ -55,13 +55,13 @@ def run(ceph_cluster, **kw):
             for i in range(depth):
                 dir = f"{dir}/test_dir{i}"
                 cmd = f"mkdir -p {dir}"
-                clients[0].exec_command(cmd=cmd, sudo=True)
+                clients[0].exec_command(cmd=cmd)
                 # Make a file inside the dir
                 cmd = f"touch {dir}/test_file{i}"
-                clients[0].exec_command(cmd=cmd, sudo=True)
+                clients[0].exec_command(cmd=cmd)
                 for j in range(dirs_per_depth):
                     cmd = f"mkdir -p {dir}/test_dir{j}"
-                    clients[0].exec_command(cmd=cmd, sudo=True)
+                    clients[0].exec_command(cmd=cmd)
         except Exception as e:
             raise OperationFailedError(f"Failed to create multi depth dirs {str(e)}")
 
@@ -74,7 +74,7 @@ def run(ceph_cluster, **kw):
                 # Check default dir permission
                 dir = f"{dir}/test_dir{i}"
                 cmd = f"ls -lrt {dir}"
-                out, _ = clients[0].exec_command(cmd=cmd, sudo=True)
+                out, _ = clients[0].exec_command(cmd=cmd)
                 if default_dir_permission not in out:
                     raise OperationFailedError(
                         f"Dir permission is different than default {out}"
@@ -82,7 +82,7 @@ def run(ceph_cluster, **kw):
 
                 # Check default file permission
                 cmd = f"ls -lrt {dir}/test_file{i}"
-                out, _ = clients[0].exec_command(cmd=cmd, sudo=True)
+                out, _ = clients[0].exec_command(cmd=cmd)
                 if default_file_permission not in out:
                     raise OperationFailedError(
                         f"File permission is different than default {out}"

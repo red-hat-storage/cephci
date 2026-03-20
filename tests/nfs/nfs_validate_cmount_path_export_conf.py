@@ -27,6 +27,7 @@ def run(ceph_cluster, **kw):
     nfs_server_name = nfs_nodes[0].hostname
     fs_name = "cephfs"
     export_name = "/export_1"
+    Ceph(clients[0]).fs.sub_volume_group.create(group="ganeshagroup", volume=fs_name)
 
     if no_clients > len(clients):
         raise ConfigError("The test requires more clients than available")

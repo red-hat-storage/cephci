@@ -174,6 +174,12 @@ def setup_nfs_cluster(
                     "Mount succeeded on %s using server %s and export %s"
                     % (client.hostname, current_server, current_export)
                 )
+                # Transfer ownership of the mount directory to cephuser so that
+                # non-root test operations can write to the mount without sudo
+                client.exec_command(
+                    sudo=True, cmd=f"chown cephuser:cephuser {nfs_mount}"
+                )
+                log.info("Transferred ownership of %s to cephuser" % nfs_mount)
             i += 1
             server_idx += 1
             sleep(1)
@@ -390,6 +396,12 @@ def setup_custom_nfs_cluster_multi_export_client(
                     raise OperationFailedError(
                         "Failed to mount nfs on %s" % clients[client_num].hostname
                     )
+                # Transfer ownership of the mount directory to cephuser so that
+                # non-root test operations can write to the mount without sudo
+                clients[client_num].exec_command(
+                    sudo=True, cmd=f"chown cephuser:cephuser {mount_name}"
+                )
+                log.info("Transferred ownership of %s to cephuser" % mount_name)
                 sleep(1)
         log.info("Mount succeeded on all clients")
 

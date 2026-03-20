@@ -51,31 +51,27 @@ def run(ceph_cluster, **kw):
 
         # Create file in local file system
         cmd = f"touch {nfs_mount}/test_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Create hard and symbolic links
         cmd = f"ln {nfs_mount}/test_file {nfs_mount}/hard_link_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
         cmd = f"ln -s {nfs_mount}/test_file {nfs_mount}/symbolic_link_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Rename file having hard and symbolic links
         cmd = f"mv {nfs_mount}/test_file {nfs_mount}/test_file_rename"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Verify hard link after rename
         original_file_inode = (
             clients[0]
-            .exec_command(
-                cmd="ls -i /mnt/nfs/test_file_rename | awk '{print $1}'", sudo=True
-            )[0]
+            .exec_command(cmd="ls -i /mnt/nfs/test_file_rename | awk '{print $1}'")[0]
             .strip()
         )
         hard_link_file_inode = (
             clients[0]
-            .exec_command(
-                cmd="ls -i /mnt/nfs/hard_link_file | awk '{print $1}'", sudo=True
-            )[0]
+            .exec_command(cmd="ls -i /mnt/nfs/hard_link_file | awk '{print $1}'")[0]
             .strip()
         )
         if original_file_inode != hard_link_file_inode:
@@ -89,9 +85,9 @@ def run(ceph_cluster, **kw):
         # Verify symbolic link after rename
         out = (
             clients[0]
-            .exec_command(
-                cmd="ls -l /mnt/nfs/symbolic_link_file | awk '{print $10}'", sudo=True
-            )[0]
+            .exec_command(cmd="ls -l /mnt/nfs/symbolic_link_file | awk '{print $10}'")[
+                0
+            ]
             .strip()
         )
         if "->" not in out:

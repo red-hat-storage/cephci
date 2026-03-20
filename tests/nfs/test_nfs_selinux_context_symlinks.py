@@ -48,19 +48,19 @@ def run(ceph_cluster, **kw):
 
         # Create a file on mount point
         cmd = f"touch {nfs_mount}/{filename}"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Set the selinux label for file
         chcon_cmd = f"chcon -t public_content_t {nfs_mount}/{filename}"
-        clients[0].exec_command(cmd=chcon_cmd, sudo=True)
+        clients[0].exec_command(cmd=chcon_cmd)
 
         # Create a file with soft link
         cmd = f"ln -s {nfs_mount}/{filename} {nfs_mount}/{filename}_soft"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Check the selinux label for the softlink file
         cmd = f"ls -Z {nfs_mount}/{filename}_soft"
-        out = clients[0].exec_command(cmd=cmd, sudo=True)
+        out = clients[0].exec_command(cmd=cmd)
         if "public_content_t" not in out[0]:
             log.info(f"selinux lable is set correctly for softlink file: {out[0]}")
         else:
@@ -70,11 +70,11 @@ def run(ceph_cluster, **kw):
 
         # Create a file with hard link
         cmd = f"ln {nfs_mount}/{filename} {nfs_mount}/{filename}_hard"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Check the selinux label for the hardlink file
         cmd = f"ls -Z {nfs_mount}/{filename}_hard"
-        out = clients[0].exec_command(cmd=cmd, sudo=True)
+        out = clients[0].exec_command(cmd=cmd)
         if "public_content_t" in out[0]:
             log.info(f"selinux lable is set correctly for hardlink file: {out[0]}")
         else:
