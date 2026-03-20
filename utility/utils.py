@@ -992,6 +992,52 @@ def yaml_to_dict(file_name):
     return content
 
 
+# -----------------------------------------------------------------------------
+# Custom config helpers (--custom-config key=value)
+# Used by run.py and any caller that needs to resolve options from CLI custom_config.
+# -----------------------------------------------------------------------------
+
+
+def parse_custom_config_list(custom_config):
+    """
+    Parse a list of 'key=value' strings (from --custom-config) into a dict.
+
+    Args:
+        custom_config: List of strings like ["use_ipv6=true", "k=v"].
+
+    Returns:
+        Dict of key -> value. Empty dict if custom_config is None or empty.
+    """
+    if not custom_config:
+        return {}
+    return dict(item.split("=", 1) for item in custom_config if "=" in item)
+
+
+def resolve_use_ipv6(custom_config, cloud_type=None, osp_cred=None):
+    """
+    Resolve whether to use IPv6 from custom_config and optionally from infra credentials.
+
+    Uses --custom-config use_ipv6=true (or 1/yes). Works for any infrastructure;
+    custom_config overrides credentials when both are present.
+
+    Args:
+        custom_config: List of key=value strings from CLI (--custom-config).
+        cloud_type: Optional; e.g. "openstack". If "openstack", cred use_ipv6 is used as base.
+        osp_cred: Optional; global creds dict. For openstack, openstack-credentials.use_ipv6 is read.
+
+    Returns:
+        bool: True if IPv6 should be used, else False.
+    """
+    use_ipv6 = False
+    if cloud_type == "openstack" and osp_cred:
+        os_cred = osp_cred.get("globals", {}).get("openstack-credentials", {})
+        use_ipv6 = os_cred.get("use_ipv6", False)
+    overrides = parse_custom_config_list(custom_config)
+    if overrides.get("use_ipv6", "").lower() in ("true", "1", "yes"):
+        use_ipv6 = True
+    return use_ipv6
+
+
 def custom_ceph_config(suite_config, custom_config, custom_config_file):
     """
     Combines and returns custom configuration overrides for ceph.

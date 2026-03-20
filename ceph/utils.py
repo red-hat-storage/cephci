@@ -22,7 +22,7 @@ from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import generate_node_name
+from utility.utils import generate_node_name, parse_custom_config_list
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
@@ -408,16 +408,20 @@ def create_ceph_nodes(
         params["cluster-name"] = ceph_cluster.get("name")
         params["vm-network"] = inventory.get("instance").get("create").get("vm-network")
 
-        # Process the VM flavor. Highest precedence goes to custom-config
+        # Process the VM flavor and network. Highest precedence goes to custom-config
         params["vm-size"] = inventory.get("instance").get("create").get("vm-size")
-        if custom_config:
-            _custom_dict = dict(
-                item.split("=")
-                for item in custom_config
-                if item.startswith("openstack")
-            )
-            if "openstack_vm_profile" in _custom_dict:
-                params["vm-size"] = _custom_dict["openstack_vm_profile"]
+        overrides = parse_custom_config_list(custom_config)
+        if overrides.get("openstack_vm_profile"):
+            params["vm-size"] = overrides["openstack_vm_profile"]
+        openstack_network_override = None
+        if overrides.get("openstack_networks"):
+            _nets = [
+                n.strip()
+                for n in overrides["openstack_networks"].split(",")
+                if n.strip()
+            ]
+            if _nets:
+                openstack_network_override = _nets
 
         if params.get("root-login") is False:
             params["root-login"] = False
@@ -445,7 +449,11 @@ def create_ceph_nodes(
                     node_params["role"],
                 )
 
-                node_params["networks"] = node_dict.get("networks", [])
+                node_params["networks"] = (
+                    openstack_network_override
+                    if openstack_network_override is not None
+                    else node_dict.get("networks", [])
+                )
                 if node_dict.get("no-of-volumes"):
                     node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
                     node_params["size-of-disks"] = node_dict.get("disk-size")
@@ -1280,6 +1288,24 @@ def get_public_network(nodes):
     for node in nodes:
         if node.subnet not in subnets:
             subnets.append(node.subnet)
+    return ",".join(subnets)
+
+
+def get_public_network_ipv6(nodes):
+    """Get IPv6 public network subnet(s) from nodes that have ipv6_subnet.
+    Used only when cluster.use_ipv6 is True (OpenStack dual-stack).
+
+    Args:
+        nodes: cluster nodes (CephNode with optional ipv6_subnet)
+
+    Returns:
+        (str) comma-separated IPv6 CIDRs, or empty string if none
+    """
+    subnets = []
+    for node in nodes:
+        ipv6_sub = getattr(node, "ipv6_subnet", None)
+        if ipv6_sub and ipv6_sub not in subnets:
+            subnets.append(ipv6_sub)
     return ",".join(subnets)
 
 

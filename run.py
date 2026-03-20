@@ -47,6 +47,7 @@ from utility.utils import (  # ReportPortal,
     email_results,
     generate_unique_id,
     magna_url,
+    resolve_use_ipv6,
     setup_cluster_access,
     validate_conf,
     validate_image,
@@ -207,8 +208,11 @@ def create_nodes(
             --custom-config ibmc_vpc=ci-vpc-01
             --custom-config ibmc_profile=bx2-2x8
             --custom-config openstack_vm_profile=c1.standard.xl
+            --custom-config openstack_networks=provider_net_cci_1
+            --custom-config use_ipv6=true
 
         If these values are not provided then the defaults would be used.
+        openstack_networks (single or comma-separated) overrides cluster conf for all OpenStack VMs.
         The defaults are the ones used in the example.
     """
 
@@ -248,6 +252,9 @@ def create_nodes(
             log.error(f"Unknown cloud type: {cloud_type}")
             raise AssertionError("Unsupported test environment.")
 
+        # Resolve use_ipv6 before building nodes so CephNode can use it for SSH when requested
+        use_ipv6 = resolve_use_ipv6(custom_config, cloud_type, osp_cred)
+
         ceph_nodes = []
         root_password = None
         for node in ceph_vmnodes.values():
@@ -283,6 +290,9 @@ def create_nodes(
                     WinNode(ip_address=node.ip_address, private_ip=private_ip)
                 )
             else:
+                # IPv6 attrs only when available (OpenStack dual-stack); other envs have no ipv6_* on node
+                ipv6_address = getattr(node, "ipv6_address", None)
+                ipv6_subnet = getattr(node, "ipv6_subnet", None)
                 ceph = CephNode(
                     username="cephuser",
                     password="cephuser",
@@ -292,18 +302,24 @@ def create_nodes(
                     root_login=node.root_login,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
-                    ip_address=node.ip_address,
-                    subnet=node.subnet,
+                    ipv4_address=node.ip_address,
+                    ipv4_subnet=node.subnet,
                     private_ip=private_ip,
                     hostname=node.hostname,
                     ceph_vmnode=node,
                     ceph_nodename=ceph_nodename,
                     id=node.id,
+                    ipv6_address=ipv6_address,
+                    ipv6_subnet=ipv6_subnet,
+                    use_ipv6=use_ipv6,
                 )
                 ceph_nodes.append(ceph)
 
         cluster_name = cluster.get("ceph-cluster").get("name", "ceph")
         ceph_cluster_dict[cluster_name] = Ceph(cluster_name, ceph_nodes)
+
+        # Drive IPv6 when requested via --custom-config use_ipv6=true (any infra)
+        ceph_cluster_dict[cluster_name].use_ipv6 = use_ipv6
 
         # Set the network attributes of the cluster
         # ToDo: Support other providers like openstack and IBM-C
