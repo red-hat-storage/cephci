@@ -129,7 +129,7 @@ def run(ceph_cluster, **kw):
                 "Upgrading the cluster from ceph version %s to %s-%s "
                 % (curr_ver, _rhcs_version, _rhcs_release)
             )
-            product: str = args.get("--product", "redhat")
+            product: str = args.get("--product", config["product"])
             ctm: CephTestManifest = CephTestManifest(
                 product=product,
                 release=_rhcs_version,
