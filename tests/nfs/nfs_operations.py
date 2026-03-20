@@ -87,7 +87,10 @@ def setup_nfs_cluster(
                 # for NFSv3, We need to run cephadm prepare-host on the nfs nodes
                 # prepare the host and check if rpcbin service is running
                 for nfs_node in nfs_nodes:
-                    nfs_node.exec_command(sudo=True, cmd="cephadm prepare-host")
+                    nfs_node.exec_command(
+                        sudo=True,
+                        cmd="cephadm prepare-host --install-service-dependencies",
+                    )
 
     create_kwargs = {"nfs_version": nfs_version}
 
