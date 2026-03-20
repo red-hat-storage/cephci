@@ -561,7 +561,7 @@ def teardown(nvme_service, rbd_obj, cleanup_config=None):
                     else:
                         pools_to_delete.add(nvme_service.rbd_pool)
         pools_to_delete.add(nvme_service.rbd_pool)
-        if DEFAULT_NVME_METADATA_POOL not in nvme_service.nvme_metadata_pool:
+        if DEFAULT_NVME_METADATA_POOL == nvme_service.nvme_metadata_pool:
             pools_to_delete.add(nvme_service.nvme_metadata_pool)
         rbd_obj.clean_up(pools=list(pools_to_delete))
     return rc
