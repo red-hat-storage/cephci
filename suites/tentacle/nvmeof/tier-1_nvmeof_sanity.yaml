@@ -95,6 +95,10 @@ tests:
               pos_args:
                 - rbd
                 - gw_group1
+          - config: # Remove nvmeof service because next test we are deploying without pool
+              command: shell
+              args:
+                - ceph orch rm nvmeof.rbd.gw_group1
       desc: NVMeoF Gateway deployment using cephadm
       destroy-cluster: false
       do-not-skip-tc: true

@@ -2,6 +2,8 @@
 NVMe Service, Gateway Group, and Gateway classes for NVMeoF workflows.
 """
 
+from looseversion import LooseVersion
+
 from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_nodes_by_ids
 from tests.cephadm import test_nvmeof
@@ -31,6 +33,7 @@ class NVMeService:
         self.clients = self.ceph_cluster.get_nodes(role="client")
         if not self.clients:
             raise ValueError("No client nodes found in the cluster")
+        self.ceph_version = self._get_ceph_version()
         self.nvme_metadata_pool = self._determine_nvme_metadata_pool()
         self.rbd_pool = config.get("rbd_pool")
         if not self.rbd_pool:
@@ -47,16 +50,23 @@ class NVMeService:
         if self.inband_auth_mode:
             self.is_spec_or_mtls = True
 
+    def _get_ceph_version(self):
+        return get_ceph_version_from_cluster(self.clients[0])
+
     def _determine_nvme_metadata_pool(self):
         """
         Determine the NVMe metadata pool name based on ceph_version.
-        If ceph_version < 20.0, use config['nvme_metadata_pool'].
-        If ceph_version >= 20.0, use DEFAULT_NVME_RBD_POOL.
+        If ceph_version >= 20.2.1, use DEFAULT_NVME_METADATA_POOL (.nvmeof).
+        If ceph_version < 20.2.1, use config['nvme_metadata_pool'].
         """
-        current_ceph_version = get_ceph_version_from_cluster(self.clients[0])
-        if current_ceph_version.startswith("20.0"):
+        if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
+            # print the nvmeof metadata pool
+            LOG.info(f"Using NVMeoF metadata pool: {DEFAULT_NVME_METADATA_POOL}")
             return DEFAULT_NVME_METADATA_POOL
         else:
+            LOG.info(
+                f"Using NVMe metadata pool: {self.config.get('nvme_metadata_pool')}"
+            )
             if not self.config.get("nvme_metadata_pool"):
                 raise ValueError("Please provide RBD pool name via nvme_metadata_pool")
             return self.config.get("nvme_metadata_pool")
@@ -67,7 +77,10 @@ class NVMeService:
 
         gw_group = self.group
         pool = self.nvme_metadata_pool
-        service_name = f"nvmeof.{pool}"
+        if pool == DEFAULT_NVME_METADATA_POOL:
+            service_name = f"nvmeof{pool}"
+        else:
+            service_name = f"nvmeof.{pool}"
         service_name = f"{service_name}.{gw_group}" if gw_group else service_name
         cfg = {
             "no_cluster_state": False,
@@ -96,6 +109,10 @@ class NVMeService:
                 "enable_auth": self.config.get("mtls", False),
             },
         }
+
+        # Delete pool key from spec if ceph_version >= 20.2.1
+        if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
+            spec["spec"].pop("pool")
 
         # Add encryption if specified
         if self.inband_auth_mode:
@@ -130,7 +147,10 @@ class NVMeService:
                     ] = f"{self.nvme_metadata_pool}.{self.group}"
                     cfg["config"]["specs"][0]["spec"]["group"] = self.group
                 else:
-                    cfg["config"]["pos_args"].append(self.group)
+                    if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
+                        cfg["config"]["args"].update({"group": self.group})
+                    else:
+                        cfg["config"]["pos_args"].append(self.group)
 
                 # Add rebalance period if specified
                 if self.config.get("rebalance_period", False):
@@ -158,6 +178,11 @@ class NVMeService:
                     "pos_args": pos_args,
                 },
             }
+
+            if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
+                cfg["config"]["args"].update({"group": self.group})
+                # Delete pos_args key from cfg
+                cfg["config"].pop("pos_args")
 
         return cfg
 
