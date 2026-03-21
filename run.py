@@ -27,6 +27,7 @@ from ceph.utils import (
     create_baremetal_ceph_nodes,
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
+    create_onecloud_ceph_nodes,
 )
 from cephci.cluster_info import collect_ceph_coredumps, get_ceph_var_logs
 from cephci.utils.build_info import CephTestManifest
@@ -36,6 +37,7 @@ from cli.performance.memory_and_cpu_utils import (
     upload_mem_and_cpu_logger_script,
 )
 from compute.aws_ec2 import cleanup_aws_ceph_nodes
+from compute.onecloud import cleanup_onecloud_ceph_nodes, expand_private_key_path
 from utility import sosreport
 from utility.log import Log
 from utility.polarion import post_to_polarion
@@ -62,7 +64,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         (--platform <name>)
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
-        [--cloud <openstack> | <ibmc> | <aws> | <baremetal>]
+        [--cloud <openstack> | <ibmc> | <aws> | <baremetal> | <onecloud>]
         [--build <name>]
         [--inventory FILE]
         [--osp-cred <file>]
@@ -110,7 +112,7 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
-  --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal) [default: openstack]
+  --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal|onecloud) [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
@@ -187,6 +189,7 @@ def create_nodes(
     instances_name=None,
     enable_eus=False,
     custom_config=None,
+    platform=None,
 ):
     """Creates the system under test environment.
 
@@ -199,6 +202,7 @@ def create_nodes(
         instances_name  system names
         enable_eus      Extended OS support
         custom_config   list of <key>=<value>
+        platform        RHEL platform (e.g. rhel-9, rhel-10) for OneCloud image selection
 
     Notes:
         use custom_config to specify the environments or configuration to
@@ -224,6 +228,10 @@ def create_nodes(
         cleanup_ibmc_ceph_nodes(osp_cred, instances_name, custom_config=None)
     elif cloud_type == "aws":
         cleanup_aws_ceph_nodes(osp_cred, instances_name, custom_config=None)
+    elif cloud_type == "onecloud":
+        cleanup_onecloud_ceph_nodes(
+            osp_cred, instances_name, custom_config=custom_config
+        )
 
     ceph_cluster_dict = {}
     clients = []
@@ -246,6 +254,16 @@ def create_nodes(
             ceph_vmnodes = create_aws_ceph_nodes(
                 cluster, inventory, osp_cred, run_id, instances_name, custom_config
             )
+        elif cloud_type == "onecloud":
+            ceph_vmnodes = create_onecloud_ceph_nodes(
+                cluster,
+                inventory,
+                osp_cred,
+                run_id,
+                instances_name,
+                custom_config,
+                platform=platform,
+            )
         elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
         else:
@@ -257,9 +275,28 @@ def create_nodes(
 
         ceph_nodes = []
         root_password = None
+        # OneCloud creds: globals.onecloud-credentials (osp-cred) or credentials.cloud.onecloud (cephci.yaml)
+        onecloud_cfg = {}
+        if cloud_type == "onecloud":
+            glbs = osp_cred.get("globals") or {}
+            onecloud_cfg = (
+                (glbs.get("onecloud-credentials") if isinstance(glbs, dict) else {})
+                or ((osp_cred.get("credentials") or {}).get("cloud") or {}).get(
+                    "onecloud"
+                )
+                or {}
+            )
+            log.info(
+                "OneCloud auth: private_key_path=%s",
+                onecloud_cfg.get("private_key_path", "(none)"),
+            )
         for node in ceph_vmnodes.values():
             look_for_key = False
             private_key_path = ""
+            private_key_password = None
+            cephuser_password = "cephuser"
+            ssh_username = "cephuser"
+            root_username = None  # None = use default "root"
 
             if cloud_type == "openstack":
                 private_ip = node.get_private_ip()
@@ -284,6 +321,29 @@ def create_nodes(
                 private_ip = node.ip_address
                 look_for_key = True
                 ceph_nodename = node.hostname
+            elif cloud_type == "onecloud":
+                private_ip = node.ip_address
+                ceph_nodename = node.hostname
+                # Auth: 1) private_key_path -> connect as onecloud-user (bootstrap), setup cephuser, switch
+                # Hardened images only allow publickey; onecloud-user has our key from cloud-init.
+                # 2) root+passwd (userData) for non-hardened images
+                if onecloud_cfg.get("private_key_path"):
+                    ssh_username = "onecloud-user"
+                    root_username = "onecloud-user"
+                    root_password = ""
+                    look_for_key = True
+                    private_key_path = onecloud_cfg.get("private_key_path", "")
+                    private_key_password = onecloud_cfg.get("private_key_password")
+                else:
+                    ssh_username = "root"
+                    root_username = "root"
+                    root_password = "passwd"
+                    look_for_key = False
+                    private_key_path = ""
+
+            private_key_path = (
+                expand_private_key_path(private_key_path) if private_key_path else ""
+            )
 
             if node.role == "win-iscsi-clients":
                 clients.append(
@@ -293,12 +353,24 @@ def create_nodes(
                 # IPv6 attrs only when available (OpenStack dual-stack); other envs have no ipv6_* on node
                 ipv6_address = getattr(node, "ipv6_address", None)
                 ipv6_subnet = getattr(node, "ipv6_subnet", None)
+                pwd = (
+                    (root_password or "passwd")
+                    if ssh_username == "root"
+                    else cephuser_password
+                )
+                root_pwd = (
+                    ""
+                    if (ssh_username == "onecloud-user" and look_for_key)
+                    else (root_password or "passwd")
+                )
                 ceph = CephNode(
-                    username="cephuser",
-                    password="cephuser",
-                    root_password="passwd" if not root_password else root_password,
+                    username=ssh_username,
+                    password=pwd,
+                    root_password=root_pwd,
+                    root_username=root_username,
                     look_for_key=look_for_key,
                     private_key_path=private_key_path,
+                    private_key_password=private_key_password,
                     root_login=node.root_login,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
@@ -331,8 +403,14 @@ def create_nodes(
     # TODO: refactor cluster dict to cluster list
     log.info("Done creating osp instances")
     log.info("Waiting for Floating IPs to be available")
-    log.info("Sleeping 15 Seconds")
-    time.sleep(15)
+    if cloud_type == "onecloud":
+        # Always wait for cloud-init when userData is injected (both key and root+passwd paths)
+        wait_sec = 75
+        log.info("OneCloud: sleeping %ds for cloud-init", wait_sec)
+        time.sleep(wait_sec)
+    else:
+        log.info("Sleeping 15 Seconds")
+        time.sleep(15)
 
     for cluster_name, cluster in ceph_cluster_dict.items():
         for instance in cluster:
@@ -444,7 +522,14 @@ def run(args):
     inventory_file = args.get("--inventory")
     osp_cred_file = args.get("--osp-cred")
 
+    # OneCloud: default to osp-cred-ci-2.yaml when --osp-cred not provided
+    if cloud_type == "onecloud" and osp_cred_file is None:
+        default_osp_cred = os.path.expanduser("~/osp-cred-ci-2.yaml")
+        if os.path.exists(default_osp_cred):
+            osp_cred_file = default_osp_cred
+
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
+
     cleanup_name = args.get("--cleanup")
 
     # Set log directory and get absolute path
@@ -493,6 +578,10 @@ def run(args):
             cleanup_aws_ceph_nodes(
                 osp_cred, cleanup_name, custom_config=args.get("--custom-config")
             )
+        elif cloud_type == "onecloud":
+            cleanup_onecloud_ceph_nodes(
+                osp_cred, cleanup_name, custom_config=args.get("--custom-config")
+            )
         else:
             log.warning("Unknown cloud type.")
 
@@ -507,11 +596,16 @@ def run(args):
         and cloud_type in ["openstack", "ibmc", "aws"]
     ):
         raise Exception("Require cloud credentials to create cluster.")
+    if not reuse and cloud_type == "onecloud" and not osp_cred:
+        raise Exception(
+            "OneCloud requires credentials. Use --osp-cred <file> or place "
+            "globals.onecloud-credentials in ~/osp-cred-ci-2.yaml."
+        )
 
     if (
         inventory_file is None
         and not reuse
-        and cloud_type in ["openstack", "ibmc", "aws"]
+        and cloud_type in ["openstack", "ibmc", "aws", "onecloud"]
     ):
         raise Exception("Require system configuration information to provision.")
 
@@ -634,10 +728,11 @@ def run(args):
         if osp_image and inventory.get("instance", {}).get("create"):
             inventory.get("instance").get("create").update({"image-name": osp_image})
 
-        image_name = inventory.get("instance", {}).get("create", {}).get("image-name")
+        inv_create = inventory.get("instance", {}).get("create", {})
+        image_name = inv_create.get("image-name") or inv_create.get("image_id")
 
-        if inventory.get("instance", {}).get("create"):
-            distro.append(inventory.get("instance").get("create").get("image-name"))
+        if inv_create and image_name is not None:
+            distro.append(str(image_name).replace(".iso", ""))
 
     for cluster in conf.get("globals"):
         if cluster.get("ceph-cluster").get("inventory"):
@@ -646,10 +741,10 @@ def run(args):
             )
             with open(cluster_inventory_path, "r") as inventory_stream:
                 cluster_inventory = yaml.safe_load(inventory_stream)
-            image_name = (
-                cluster_inventory.get("instance").get("create").get("image-name")
-            )
-            distro.append(image_name.replace(".iso", ""))
+            inv_create = cluster_inventory.get("instance", {}).get("create", {})
+            image_name = inv_create.get("image-name") or inv_create.get("image_id")
+            if image_name is not None:
+                distro.append(str(image_name).replace(".iso", ""))
 
         # Find the Ceph version
         if build not in ["released", "cvp", "upstream", None]:
@@ -674,7 +769,6 @@ def run(args):
     ceph_version = ", ".join(list(set(ceph_version)))
     log.info("Testing Ceph Version: %s" % (ceph_version))
 
-    service = None
     suite_name = "::".join(suite_files)
 
     def fetch_test_details(var) -> dict:
@@ -727,6 +821,7 @@ def run(args):
                 instances_name,
                 enable_eus=enable_eus,
                 custom_config=custom_config,
+                platform=platform,
             )
 
         except Exception as err:
@@ -1090,6 +1185,10 @@ def run(args):
                 cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
             elif cloud_type == "aws":
                 cleanup_aws_ceph_nodes(osp_cred, instances_name)
+            elif cloud_type == "onecloud":
+                cleanup_onecloud_ceph_nodes(
+                    osp_cred, instances_name, custom_config=custom_config
+                )
 
         if test.get("recreate-cluster") is True:
             ceph_cluster_dict, clients = create_nodes(
@@ -1098,9 +1197,9 @@ def run(args):
                 osp_cred,
                 run_id,
                 cloud_type,
-                service,
                 instances_name,
                 enable_eus=enable_eus,
+                platform=platform,
             )
 
         tcs.append(tc)
@@ -1185,7 +1284,12 @@ def run(args):
                 setup_cluster_access(ceph_cluster_dict[cluster], node)
 
             installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
-            sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
+            sosreport.run(
+                installer.ip_address,
+                installer.username,
+                installer.password or "cephuser",
+                run_dir,
+            )
             # This can be Removed as sos report will have this details as well
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
 
