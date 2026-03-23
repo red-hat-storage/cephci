@@ -32,6 +32,7 @@ EPEL_REPOS = {
     "rhel-7": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
     "rhel-8": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
     "rhel-9": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
+    "rhel-10": "https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm",
 }
 
 
