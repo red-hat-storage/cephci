@@ -153,6 +153,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
                             port=_port,
                             nfs_server=_cluster_nfs_server,
                             export_name=export_name,
+                            **kwargs,
                         ):
                             log.info(f"Mount failed, {mount_name}")
                             raise OperationFailedError(
@@ -205,6 +206,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
                     port=port,
                     nfs_server=_nfs_server,
                     export_name=export_name,
+                    **kwargs,
                 ):
                     log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
