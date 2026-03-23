@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -158,6 +159,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         wait_time_secs = 300
+        test_fail = 0
         log.info("Clean Up in progess")
         log.info("setting 'snapshot_clone_no_wait' to true")
         client1.exec_command(
@@ -173,9 +175,8 @@ def run(ceph_cluster, **kw):
             test_fail = 1
         for subvolumegroup in subvolumegroup_list:
             fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
-        client1.exec_command(
-            sudo=True, cmd=f"ceph fs volume rm {default_fs} --yes-i-really-mean-it"
-        )
+        log.info(f"Cleaning up the Filesystem {default_fs}")
+        fs_util.remove_fs(clients[0], default_fs, validate=True)
         if test_fail == 1:
             log.error(
                 "Cluster health is not OK even after waiting for %s secs ",
@@ -204,11 +205,22 @@ def clone_ops(clone_list, fs_util, client1, default_fs, rmclone_list):
 
     for clone in clone_list:
         clone_name = clone["target_subvol_name"]
-        out, rc = fs_util.get_clone_status(client1, default_fs, clone_name)
-        status = json.loads(out)
-        state = status.get("status", {}).get("state", "")
+        state = ""
+        for attempt in range(3):
+            out, rc = fs_util.get_clone_status(client1, default_fs, clone_name)
+            if out and out.strip():
+                status = json.loads(out)
+                state = status.get("status", {}).get("state", "")
+                break
+            log.info(f"Empty clone status for {clone_name}, retrying ({attempt + 1}/3)")
+            time.sleep(2)
         if state in ("pending", "in-progress"):
-            fs_util.clone_cancel(client1, default_fs, clone_name)
+            try:
+                fs_util.clone_cancel(client1, default_fs, clone_name)
+            except CommandFailed:
+                log.info(
+                    f"Clone cancel failed for {clone_name}, clone may have completed"
+                )
         else:
             log.info(f"Skipping cancel for {clone_name} - already in state: {state}")
         out, rc = fs_util.get_clone_status(client1, default_fs, clone_name)
