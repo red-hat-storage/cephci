@@ -862,7 +862,10 @@ def create_nfs_via_file_and_verify(
     Returns:
         str: Path to the temporary YAML file.
     """
+    import os
+
     temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+    remote_path = f"/tmp/{os.path.basename(temp_file.name)}"
 
     # Handle case where installer_node is a list
     if isinstance(installer_node, list):
@@ -1024,13 +1027,14 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
-def mount_retry(client, mount_name, version, port, nfs_server, export_name):
+def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kwargs):
     if Mount(client).nfs(
         mount=mount_name,
         version=version,
         port=port,
         server=nfs_server,
         export=export_name,
+        **kwargs,
     ):
         raise OperationFailedError("Failed to mount nfs on %s" % {export_name.hostname})
     return True
