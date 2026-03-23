@@ -68,6 +68,8 @@ def run(ceph_cluster, **kw):
             fuse_mounting_dir_1,
             extra_params=" --client_fs cephfs",
         )
+        # set max_mds to 1
+        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 1")
         # get default mds_cache_memory_limit
         cmd = "ceph config get mds mds_cache_memory_limit"
         mds_cache_memory_limit_def, _ = client1.exec_command(sudo=True, cmd=cmd)
@@ -80,8 +82,7 @@ def run(ceph_cluster, **kw):
         fs_util.config_set_runtime(
             client1, "mds", "mds_health_cache_threshold", 1.000001
         )
-        # set max_mad to 1
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 1")
+
         # stand_replay true
         client1.exec_command(
             sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
@@ -128,6 +129,10 @@ def run(ceph_cluster, **kw):
         if mds_cache_memory_limit_def is not None:
             cmd = f"ceph config set mds mds_cache_memory_limit {mds_cache_memory_limit_def}"
             client1.exec_command(sudo=True, cmd=cmd)
+        client1.exec_command(sudo=True, cmd="ceph fs set cephfs standby_count_wanted 0")
+        client1.exec_command(
+            sudo=True, cmd="ceph fs set cephfs allow_standby_replay false"
+        )
         if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
             test_fail = 1
         if fuse_mounting_dir_1 is not None:
