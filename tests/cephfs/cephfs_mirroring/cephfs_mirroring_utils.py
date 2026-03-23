@@ -868,16 +868,14 @@ class CephfsMirroringUtils(object):
                 sudo=True,
                 cmd=f"ceph-fuse -n {target_client_user} {target_mount_path} --client_fs {target_fs_name}",
             )
-            snapshot_list_command = f"ls {target_mount_path}{source_path}/.snap"
+            snapshot_list_command = f"ls {target_mount_path}{source_path}.snap"
             snapshots, _ = target_clients.exec_command(
                 sudo=True, cmd=snapshot_list_command
             )
             snapshots = snapshots.strip().split()
             log.info(f"Available Snapshots : {snapshots}")
             if snapshot_name in snapshots:
-                snapshot_path = (
-                    f"{target_mount_path}{source_path}/.snap/{snapshot_name}"
-                )
+                snapshot_path = f"{target_mount_path}{source_path}.snap/{snapshot_name}"
                 snapshot_files_command = f"ls {snapshot_path}"
                 snapshot_files, _ = target_clients.exec_command(
                     sudo=True, cmd=snapshot_files_command
@@ -934,7 +932,7 @@ class CephfsMirroringUtils(object):
                 sudo=True,
                 cmd=f"ceph-fuse -n {target_client_user} {target_mount_path} --client_fs {target_fs_name}",
             )
-            snapshot_list_command = f"ls {target_mount_path}{source_path}/.snap"
+            snapshot_list_command = f"ls {target_mount_path}{source_path}.snap"
             retry_cmd = retry(CommandFailed, tries=3, delay=30)(
                 target_clients.exec_command
             )
@@ -1423,12 +1421,12 @@ class CephfsMirroringUtils(object):
             sudo=True,
             cmd=f"ceph-fuse -n {target_client_user} {target_mount_path} --client_fs {target_fs_name}",
         )
-        snapshot_list = f"ls {target_mount_path}{source_path}/.snap"
+        snapshot_list = f"ls {target_mount_path}{source_path}.snap"
         log.info(f"Existing list of snaps : {snapshot_list}")
         target_clients.exec_command(
-            sudo=True, cmd=f"mkdir {target_mount_path}{source_path}/.snap/{snap_target}"
+            sudo=True, cmd=f"mkdir {target_mount_path}{source_path}.snap/{snap_target}"
         )
-        snapshot_list_after_sync_failure = f"ls {target_mount_path}{source_path}/.snap"
+        snapshot_list_after_sync_failure = f"ls {target_mount_path}{source_path}.snap"
         log.info(
             f"List of snaps after injecting failure : {snapshot_list_after_sync_failure}"
         )

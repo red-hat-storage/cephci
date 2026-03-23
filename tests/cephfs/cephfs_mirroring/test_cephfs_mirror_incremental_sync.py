@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
         repo = "ceph-qa-suite"
         repo_dir = "ceph_repo"
         repo_path = f"{repo_dir}/{repo}"
-        mirror_path = f"/{repo_path}"
+        mirror_path = f"/{repo_path}/"
         abs_repo_dir = f"{kernel_mounting_dir}{repo_dir}"
         abs_repo_path = f"{kernel_mounting_dir}{repo_path}"
 
@@ -178,8 +178,8 @@ def run(ceph_cluster, **kw):
         log.info("Verifying snap_a data on target cluster")
         out, rc = fs_mirroring_utils.list_and_verify_remote_snapshots_and_data_checksum(
             target_clients[0],
-            "client.admin",
-            f"/{repo_path}",
+            f"client.{target_clients[0].node.hostname}",
+            mirror_path,
             source_clients[0],
             kernel_mounting_dir,
             target_fs,
@@ -231,8 +231,8 @@ def run(ceph_cluster, **kw):
         log.info("Verifying snap_b data on target cluster")
         out, rc = fs_mirroring_utils.list_and_verify_remote_snapshots_and_data_checksum(
             target_clients[0],
-            "client.admin",
-            f"/{repo_path}",
+            f"client.{target_clients[0].node.hostname}",
+            mirror_path,
             source_clients[0],
             kernel_mounting_dir,
             target_fs,
@@ -301,8 +301,8 @@ def run(ceph_cluster, **kw):
         log.info("Verifying snap_c data on target cluster")
         out, rc = fs_mirroring_utils.list_and_verify_remote_snapshots_and_data_checksum(
             target_clients[0],
-            "client.admin",
-            f"/{repo_path}",
+            f"client.{target_clients[0].node.hostname}",
+            mirror_path,
             source_clients[0],
             kernel_mounting_dir,
             target_fs,
