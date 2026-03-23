@@ -1,8 +1,11 @@
 import json
-import os
+
+# import os
 import random
 import secrets
 import string
+
+# import time
 import traceback
 
 from tests.cephfs.cephfs_scale.cephfs_scale_utils import CephfsScaleUtils
@@ -40,9 +43,14 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         cephfs_config = {}
         build = config.get("build", config.get("rhbuild"))
-        systest_monitor = config.get("systest_monitor", 1)
+        # systest_monitor = config.get("systest_monitor", 1)
         clients_orig = ceph_cluster.get_ceph_objects("client")
-        clients = clients_orig[1:11]
+        clients_tmp = clients_orig[1:11]
+        clients = []
+        for client_tmp in clients_tmp:
+            if "osv-vm-master07" in client_tmp.node.hostname:
+                continue
+            clients.append(client_tmp)
         nfs_nodes = ceph_cluster.get_nodes("nfs")
         installer = ceph_cluster.get_nodes(role="installer")[0]
         fs_util_v1.prepare_clients(clients, build)
@@ -53,7 +61,6 @@ def run(ceph_cluster, **kw):
         client1 = clients[0]
         ephemeral_pin = config.get("ephemeral_pin", 1)
         nfs_name = "cephfs_systest_nfs_byok"
-
         client1.upload_file(
             sudo=True,
             src=f"tests/cephfs/cephfs_system/{file}",
@@ -65,7 +72,6 @@ def run(ceph_cluster, **kw):
             file_mode="r",
         )
         cephfs_config = json.load(f)
-
         # BYOK Setup
         # ------------------- Retrieving GKLM DATA -------------------
         custom_data = kw.get("test_data", None)
@@ -75,6 +81,7 @@ def run(ceph_cluster, **kw):
         #
         gklm_params = load_gklm_config(custom_data, config, cephci_data)
         nfs_nodes_1 = get_free_nodes_for_nfs(client1, nfs_nodes)
+        # nfs_nodes_1 = nfs_nodes
         for nfs_node in nfs_nodes_1:
             log.info(nfs_node.hostname)
         byok_setup_params = {
@@ -93,6 +100,13 @@ def run(ceph_cluster, **kw):
         _, enctag, _, _ = nfs_byok_test_setup(byok_setup_params)
         nfs_node = byok_setup_params["nfs_nodes"][0]
         nfs_server = nfs_node.hostname
+        nfs_node = nfs_nodes_1[0]
+        nfs_server = nfs_node.hostname
+        fs_util_v1.create_nfs(
+            client1,
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=nfs_server,
+        )
         for i in cephfs_config:
             cephfs_config[i].update(
                 {
@@ -103,6 +117,7 @@ def run(ceph_cluster, **kw):
                     "nfs": {"nfs_name": nfs_name},
                 }
             )
+
         if wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")
             nfs_export = "/export_" + "".join(
@@ -110,9 +125,8 @@ def run(ceph_cluster, **kw):
             )
             nfs_export_list = []
         if ephemeral_pin == 1:
-            log.info("Setup Ephemeral Random pinning")
-            cmd = "ceph config set mds mds_export_ephemeral_random true;"
-            cmd += "ceph config set mds mds_export_ephemeral_random_max 0.1"
+            log.info("Setup Ephemeral Distributed pinning")
+            cmd = "ceph config set mds mds_export_ephemeral_distributed true"
             client1.exec_command(sudo=True, cmd=cmd)
 
         log.info("Enable snap-schedule config")
@@ -120,17 +134,16 @@ def run(ceph_cluster, **kw):
         snap_util.allow_minutely_schedule(client1)
 
         for i in cephfs_config:
-            mds_pin_cnt = 1
             fs_details = fs_util_v1.get_fs_info(client1, fs_name=i)
             if not fs_details:
                 log.info(f"Creating FileSystem {i}")
                 fs_util_v1.create_fs(client1, i)
-                active_mds_cnt = cephfs_config[i]["mds"]["active"]
-                standby_replay = cephfs_config[i]["mds"]["standby_replay"]
-                cmd = f'ceph orch apply mds {i} --placement="label:mds";'
-                cmd += f"ceph fs set {i} max_mds {active_mds_cnt};"
-                cmd += f"ceph fs set {i} allow_standby_replay {standby_replay}"
-                client1.exec_command(sudo=True, cmd=cmd)
+            active_mds_cnt = cephfs_config[i]["mds"]["active"]
+            standby_replay = cephfs_config[i]["mds"]["standby_replay"]
+            cmd = f'ceph orch apply mds {i} --placement="label:mds";'
+            cmd += f"ceph fs set {i} max_mds {active_mds_cnt};"
+            cmd += f"ceph fs set {i} allow_standby_replay {standby_replay}"
+            client1.exec_command(sudo=True, cmd=cmd)
             for j in cephfs_config[i]["group"]:
                 if "default" not in j:
                     svg_iter = {"vol_name": i, "group_name": j}
@@ -167,6 +180,7 @@ def run(ceph_cluster, **kw):
                                 "enc_tag": enctag,
                                 "group_name": sv_iter.get("group_name", None),
                                 "fs_name": sv_iter["vol_name"],
+                                "add_suffix": False,
                             }
                             cephfs_common_utils.enc_tag(
                                 client1, "set", sv_iter["subvol_name"], **enc_args
@@ -241,23 +255,6 @@ def run(ceph_cluster, **kw):
                                     "nfs_server": nfs_server,
                                 }
                             )
-                        if (
-                            (ephemeral_pin == 1)
-                            and (mds_pin_cnt < 5)
-                            and (mnt_type != "nfs")
-                        ):
-                            log.info(f"Configure MDS pinning : {mds_pin_cnt}")
-                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.1 {mounting_dir1}"
-                            mnt_client1.exec_command(
-                                sudo=True,
-                                cmd=cmd,
-                            )
-                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.1 {mounting_dir2}"
-                            mnt_client2.exec_command(
-                                sudo=True,
-                                cmd=cmd,
-                            )
-                            mds_pin_cnt += 1
 
         log.info(f"CephFS System Test config : {cephfs_config}")
         for client in clients:
@@ -270,28 +267,19 @@ def run(ceph_cluster, **kw):
             f.write("\n")
             f.flush()
 
-        log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-
+        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        """
+        log_base_dir = config.get("log-dir")
         log_dir = f"{log_base_dir}/cephfs_systest_data"
         file_path = f"{log_dir}/cephfs_systest_config.json"
         os.mkdir(log_dir)
         cmd = f"touch {file_path}"
         os.system(cmd)
-
         src_path = f"/home/cephuser/{file}"
         dst_path = file_path
         client1.download_file(src=src_path, dst=dst_path, sudo=True)
         log.info(f"Downloaded {src_path} to {dst_path}")
-        if systest_monitor == 1:
-            cmd_list = [
-                "ceph crash ls-new",
-                "ceph fs status",
-                "ceph fs dump",
-                "ceph -s",
-                "ceph df",
-            ]
-            log.info("Start logging the Ceph Cluster Cluster status to a log dir")
-            fs_scale_utils.start_logging(clients[0], cmd_list, log_dir)
+        """
         return 0
     except Exception as e:
         log.error(e)
@@ -322,4 +310,5 @@ def get_free_nodes_for_nfs(client, nfs_nodes):
     for nfs_node in nfs_nodes:
         if nfs_node.hostname not in alloted_nodes:
             unalloted_nodes.append(nfs_node)
+    log.info(unalloted_nodes)
     return unalloted_nodes
