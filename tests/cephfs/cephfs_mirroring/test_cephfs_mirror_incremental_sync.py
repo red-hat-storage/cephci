@@ -66,7 +66,7 @@ def run(ceph_cluster, **kw):
         )
 
         if not source_clients or not target_clients:
-            log.info("Requires at least 1 client on both ceph1 and ceph2.")
+            log.error("Requires at least 1 client on both ceph1 and ceph2.")
             return 1
 
         fs_util_ceph1.prepare_clients(source_clients, build)
@@ -78,8 +78,10 @@ def run(ceph_cluster, **kw):
         target_fs = "cephfs" if not erasure else "cephfs-ec"
         if not fs_util_ceph1.get_fs_info(source_clients[0], source_fs):
             fs_util_ceph1.create_fs(source_clients[0], source_fs)
+            fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs)
         if not fs_util_ceph2.get_fs_info(target_clients[0], target_fs):
             fs_util_ceph2.create_fs(target_clients[0], target_fs)
+            fs_util_ceph2.wait_for_mds_process(target_clients[0], target_fs)
 
         log.info("Deploy CephFS Mirroring Configuration")
         fs_mirroring_utils.deploy_cephfs_mirroring(
@@ -111,7 +113,7 @@ def run(ceph_cluster, **kw):
         abs_repo_dir = f"{kernel_mounting_dir}{repo_dir}"
         abs_repo_path = f"{kernel_mounting_dir}{repo_path}"
 
-        log.info(f"Cloning {repo} (branch giant) into {abs_repo_path}")
+        log.info("Cloning %s (branch giant) into %s", repo, abs_repo_path)
         source_clients[0].exec_command(sudo=True, cmd=f"mkdir -p {abs_repo_dir}")
         source_clients[0].exec_command(
             sudo=True,
@@ -119,7 +121,6 @@ def run(ceph_cluster, **kw):
                 f"git clone --branch giant "
                 f"http://github.com/ceph/{repo} {abs_repo_path}"
             ),
-            long_running=True,
         )
 
         log.info("Add directory for mirroring")
@@ -154,7 +155,7 @@ def run(ceph_cluster, **kw):
         # ==================== SNAP_A: Full sync ====================
         snap_a = "snap_a"
         snap_names.append(snap_a)
-        log.info(f"Creating snapshot '{snap_a}' (full sync)")
+        log.info("Creating snapshot '%s' (full sync)", snap_a)
         source_clients[0].exec_command(
             sudo=True,
             cmd=f"mkdir {abs_repo_path}/.snap/{snap_a}",
@@ -170,8 +171,9 @@ def run(ceph_cluster, **kw):
             peer_uuid,
         )
         log.info(
-            f"snap_a synced: duration={result_a['sync_duration']} "
-            f"snaps_synced={result_a['snaps_synced']}"
+            "snap_a synced: duration=%s snaps_synced=%s",
+            result_a["sync_duration"],
+            result_a["snaps_synced"],
         )
         full_sync_duration = float(result_a["sync_duration"])
 
@@ -190,12 +192,12 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"bash /root/{md5sum_script} {abs_repo_path}/.snap/{snap_a}",
         )
-        log.info(f"snap_a checksum:\n{snap_a_checksum}")
+        log.info("snap_a checksum:\n%s", snap_a_checksum)
         log.info("snap_a: full sync completed and verified")
 
         # ==================== SNAP_B: Incremental sync (git reset) ====================
         num = random.randint(5, 10)
-        log.info(f"Creating diff: git reset --hard HEAD~{num}")
+        log.info("Creating diff: git reset --hard HEAD~%s", num)
         source_clients[0].exec_command(
             sudo=True,
             cmd=(
@@ -207,7 +209,7 @@ def run(ceph_cluster, **kw):
 
         snap_b = "snap_b"
         snap_names.append(snap_b)
-        log.info(f"Creating snapshot '{snap_b}' (incremental sync)")
+        log.info("Creating snapshot '%s' (incremental sync)", snap_b)
         source_clients[0].exec_command(
             sudo=True,
             cmd=f"mkdir {abs_repo_path}/.snap/{snap_b}",
@@ -223,8 +225,9 @@ def run(ceph_cluster, **kw):
             peer_uuid,
         )
         log.info(
-            f"snap_b synced: duration={result_b['sync_duration']} "
-            f"snaps_synced={result_b['snaps_synced']}"
+            "snap_b synced: duration=%s snaps_synced=%s",
+            result_b["sync_duration"],
+            result_b["snaps_synced"],
         )
         inc_sync_duration_1 = float(result_b["sync_duration"])
 
@@ -238,12 +241,12 @@ def run(ceph_cluster, **kw):
             target_fs,
         )
         if not out:
-            raise CommandFailed(f"snap_b checksum verification failed: {rc}")
+            log.error("snap_b checksum verification failed: %s", rc)
         snap_b_checksum, _ = source_clients[0].exec_command(
             sudo=True,
             cmd=f"bash /root/{md5sum_script} {abs_repo_path}/.snap/{snap_b}",
         )
-        log.info(f"snap_b checksum:\n{snap_b_checksum}")
+        log.info("snap_b checksum:\n%s", snap_b_checksum)
         if snap_a_checksum == snap_b_checksum:
             log.error(
                 "snap_b checksum must differ from snap_a after git reset, "
@@ -253,13 +256,16 @@ def run(ceph_cluster, **kw):
         log.info("Cross-snapshot check: snap_a != snap_b — PASSED")
 
         log.info(
-            f"snap_b: incremental sync duration ({inc_sync_duration_1:.3f}s) vs "
-            f"full sync duration ({full_sync_duration:.3f}s)"
+            "snap_b: incremental sync duration (%.3fs) vs full sync duration (%.3fs)",
+            inc_sync_duration_1,
+            full_sync_duration,
         )
         if full_sync_duration < inc_sync_duration_1:
             log.error(
-                f"Incremental sync (snap_b) took longer than full sync: "
-                f"{inc_sync_duration_1:.3f}s > {full_sync_duration:.3f}s"
+                "Incremental sync (snap_b) took longer than full sync: "
+                "%.3fs > %.3fs",
+                inc_sync_duration_1,
+                full_sync_duration,
             )
             return 1
 
@@ -277,7 +283,7 @@ def run(ceph_cluster, **kw):
 
         snap_c = "snap_c"
         snap_names.append(snap_c)
-        log.info(f"Creating snapshot '{snap_c}' (incremental sync)")
+        log.info("Creating snapshot '%s' (incremental sync)", snap_c)
         source_clients[0].exec_command(
             sudo=True,
             cmd=f"mkdir {abs_repo_path}/.snap/{snap_c}",
@@ -293,8 +299,9 @@ def run(ceph_cluster, **kw):
             peer_uuid,
         )
         log.info(
-            f"snap_c synced: duration={result_c['sync_duration']} "
-            f"snaps_synced={result_c['snaps_synced']}"
+            "snap_c synced: duration=%s snaps_synced=%s",
+            result_c["sync_duration"],
+            result_c["snaps_synced"],
         )
         inc_sync_duration_2 = float(result_c["sync_duration"])
 
@@ -313,7 +320,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"bash /root/{md5sum_script} {abs_repo_path}/.snap/{snap_c}",
         )
-        log.info(f"snap_c checksum:\n{snap_c_checksum}")
+        log.info("snap_c checksum:\n%s", snap_c_checksum)
         if snap_b_checksum == snap_c_checksum:
             log.error(
                 "snap_c checksum must differ from snap_b after git pull, "
@@ -331,13 +338,16 @@ def run(ceph_cluster, **kw):
         )
 
         log.info(
-            f"snap_c: incremental sync duration ({inc_sync_duration_2:.3f}s) vs "
-            f"full sync duration ({full_sync_duration:.3f}s)"
+            "snap_c: incremental sync duration (%.3fs) vs full sync duration (%.3fs)",
+            inc_sync_duration_2,
+            full_sync_duration,
         )
         if full_sync_duration < inc_sync_duration_2:
             log.error(
-                f"Incremental sync (snap_c) took longer than full sync: "
-                f"{inc_sync_duration_2:.3f}s > {full_sync_duration:.3f}s"
+                "Incremental sync (snap_c) took longer than full sync: "
+                "%.3fs > %.3fs",
+                inc_sync_duration_2,
+                full_sync_duration,
             )
             return 1
 
@@ -345,9 +355,9 @@ def run(ceph_cluster, **kw):
         log.info("=" * 70)
         log.info("INCREMENTAL SYNC TEST RESULTS")
         log.info("=" * 70)
-        log.info(f"  snap_a (full sync):        {full_sync_duration:.3f}s")
-        log.info(f"  snap_b (incremental, reset): {inc_sync_duration_1:.3f}s")
-        log.info(f"  snap_c (incremental, pull):  {inc_sync_duration_2:.3f}s")
+        log.info("  snap_a (full sync):        %.3fs", full_sync_duration)
+        log.info("  snap_b (incremental, reset): %.3fs", inc_sync_duration_1)
+        log.info("  snap_c (incremental, pull):  %.3fs", inc_sync_duration_2)
         log.info(
             "All incremental syncs completed faster than full sync "
             "and data verified on target"

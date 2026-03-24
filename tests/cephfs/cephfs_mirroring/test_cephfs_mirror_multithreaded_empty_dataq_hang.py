@@ -93,7 +93,7 @@ def run(ceph_cluster, **kw):
 
         log.info("Checking pre-requisites")
         if not source_clients or not target_clients:
-            log.info(
+            log.error(
                 "This test requires a minimum of 1 client node on both ceph1 and ceph2."
             )
             return 1
@@ -109,9 +109,11 @@ def run(ceph_cluster, **kw):
         fs_details_source = fs_util_ceph1.get_fs_info(source_clients[0], source_fs)
         if not fs_details_source:
             fs_util_ceph1.create_fs(source_clients[0], source_fs)
+            fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs)
         fs_details_target = fs_util_ceph2.get_fs_info(target_clients[0], target_fs)
         if not fs_details_target:
             fs_util_ceph2.create_fs(target_clients[0], target_fs)
+            fs_util_ceph2.wait_for_mds_process(target_clients[0], target_fs)
 
         log.info("Deploy CephFS Mirroring Configuration")
         fs_mirroring_utils.deploy_cephfs_mirroring(
