@@ -152,8 +152,7 @@ def verify_qos_with_testparm(aio_rate_limit_conf, smb_cluster_id, smb_nodes):
         cmd = f"cephadm ls --no-detail | jq -r 'map(select(.name | startswith(\"smb.{smb_cluster_id}\")))[-1].name'"
         out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0].strip()
         cmd = f'cephadm enter -n {out} -- bash -c "testparm -s"'
-        out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)
-        out = out[0] + "\n" + out[1]
+        out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0]
         testparm_shares_qos = {}
         current_share = None
         for line in out.splitlines():
@@ -214,9 +213,11 @@ def update_qos_value(
                         ],
                         read_bw_limit=aio_rate_limit_conf[smb_share]["read_bw_limit"],
                         write_bw_limit=aio_rate_limit_conf[smb_share]["write_bw_limit"],
-                        read_delay_max=aio_rate_limit_conf[smb_share]["read_delay_max"],
-                        write_delay_max=aio_rate_limit_conf[smb_share][
-                            "write_delay_max"
+                        read_burst_mult=aio_rate_limit_conf[smb_share][
+                            "read_burst_mult"
+                        ],
+                        write_burst_mult=aio_rate_limit_conf[smb_share][
+                            "write_burst_mult"
                         ],
                     )
     except Exception as e:
@@ -317,8 +318,8 @@ def disable_qos_values(
                         write_iops_limit=0,
                         read_bw_limit=0,
                         write_bw_limit=0,
-                        read_delay_max=0,
-                        write_delay_max=0,
+                        read_burst_mult=0,
+                        write_burst_mult=0,
                     )
     except Exception as e:
         raise ConfigError(f"Fail to disable qos, Error {e}")
