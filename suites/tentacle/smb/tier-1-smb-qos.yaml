@@ -100,8 +100,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -136,15 +136,15 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
           share2:
             read_iops_limit: 100
             write_iops_limit: 200
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -216,8 +216,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         file_type: yaml
         file_mount: /tmp
         deployment_method: declarative
@@ -248,8 +248,8 @@ tests:
                 write_iops_limit: 300
                 read_bw_limit: 1048576
                 write_bw_limit: 2097152
-                read_delay_max: 30
-                write_delay_max: 30
+                read_burst_mult: 30
+                write_burst_mult: 30
 
   - test:
       name: Verify SMB QoS via spec file with multiple shares (Declarative Style)
@@ -274,15 +274,15 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
           share2:
             read_iops_limit: 100
             write_iops_limit: 200
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         file_type: yaml
         file_mount: /tmp
         deployment_method: declarative
@@ -313,8 +313,8 @@ tests:
                 write_iops_limit: 300
                 read_bw_limit: 1048576
                 write_bw_limit: 2097152
-                read_delay_max: 30
-                write_delay_max: 30
+                read_burst_mult: 30
+                write_burst_mult: 30
           - resource_type: ceph.smb.share
             cluster_id: smb1
             share_id: share2
@@ -328,8 +328,8 @@ tests:
                 write_iops_limit: 200
                 read_bw_limit: 1048576
                 write_bw_limit: 2097152
-                read_delay_max: 30
-                write_delay_max: 30
+                read_burst_mult: 30
+                write_burst_mult: 30
 
   - test:
       name: Verify SMB QoS using spec file with two shares - one configured with QoS and one without. (Declarative Style)
@@ -354,8 +354,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         file_type: yaml
         file_mount: /tmp
         deployment_method: declarative
@@ -386,8 +386,8 @@ tests:
                 write_iops_limit: 300
                 read_bw_limit: 1048576
                 write_bw_limit: 2097152
-                read_delay_max: 30
-                write_delay_max: 30
+                read_burst_mult: 30
+                write_burst_mult: 30
           - resource_type: ceph.smb.share
             cluster_id: smb1
             share_id: share2
@@ -419,8 +419,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -455,15 +455,15 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
           share2:
             read_iops_limit: 100
             write_iops_limit: 200
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -498,8 +498,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -534,8 +534,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -570,8 +570,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -608,8 +608,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -646,8 +646,8 @@ tests:
             write_iops_limit: 300
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
         mount_type: cifs
         io_tool: fio
         fio:
@@ -665,5 +665,5 @@ tests:
             write_iops_limit: 500
             read_bw_limit: 1048576
             write_bw_limit: 2097152
-            read_delay_max: 30
-            write_delay_max: 30
+            read_burst_mult: 30
+            write_burst_mult: 30
