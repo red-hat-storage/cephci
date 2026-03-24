@@ -379,9 +379,8 @@ class BootstrapMixin:
 
         # IBM Storage Ceph 9.1 and greater would require to accept the license
         # There is '--automatically-accept-license' option
-        if manifest_obj.product == "ibm" and LooseVersion(
-            str(manifest_obj.release)
-        ) >= LooseVersion("9.1"):
+        # FixMe: Unblocking RH build testing - IBMCEPH-13427
+        if LooseVersion(str(manifest_obj.release)) >= LooseVersion("9.1"):
             if "automatically-accept-license" not in cmd:
                 cmd += " --automatically-accept-license"
 
