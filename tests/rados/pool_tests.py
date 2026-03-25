@@ -1801,7 +1801,7 @@ def run(ceph_cluster, **kw):
                     "Successfully set mon election strategy to connectivity for enabling stretch pools"
                 )
 
-            if pool_name:
+            if pool_name and pool_name != "ALL":
                 rados_obj.create_pool(pool_name=pool_name)
                 rados_obj.bench_write(pool_name=pool_name, rados_write_duration=30)
                 time.sleep(10)
@@ -1864,6 +1864,12 @@ def run(ceph_cluster, **kw):
                 raise Exception(
                     "Post execution checks failed on the Stretch pools cluster"
                 )
+
+            if test_conf.get("stretch_mode_only"):
+                log.info(
+                    "stretch_mode_only flag set. Skipping further IO and validation steps. Pass"
+                )
+                return 0
 
             # Collecting the init no of objects on the pool, before site down
             pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
