@@ -163,6 +163,7 @@ tests:
       desc: Verify qos Pershare enablement on cluster level
       polarion-id: CEPH-83611390
       abort-on-fail: false
+      comments: IBMCEPH-13575
       config:
         control: bandwidth_control
         cephfs_volume : cephfs
