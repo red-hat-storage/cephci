@@ -134,32 +134,17 @@ def full_tls_stack_cleanup(
 
     sleep(20)
 
+    ceph_cli = Ceph(client_node)
     try:
-        out = client_node.exec_command(
-            sudo=True,
-            cmd=f"ceph fs subvolume ls {fs_name} --group_name {subvolume_group}",
-        )
-        json_string, _ = out
-        for item in json.loads(json_string):
+        raw = ceph_cli.fs.sub_volume.ls(fs_name, group_name=subvolume_group)
+        items = json.loads(raw) if raw else []
+        for item in items:
             subvol = item["name"]
-            client_node.exec_command(
-                sudo=True,
-                cmd=(
-                    f"ceph fs subvolume rm {fs_name} {subvol} "
-                    f"--group_name {subvolume_group}"
-                ),
-            )
+            ceph_cli.fs.sub_volume.rm(fs_name, subvol, group_name=subvolume_group)
     except Exception as ex:
         log.warning("Subvolume cleanup: %s", ex)
 
-    try:
-        client_node.exec_command(
-            sudo=True,
-            cmd=f"ceph fs subvolumegroup rm {fs_name} {subvolume_group} --force",
-            check_ec=False,
-        )
-    except Exception:
-        pass
+    ceph_cli.fs.sub_volume_group.rm(fs_name, subvolume_group, force=True)
 
 
 def verify_ceph_orch_nfs_running(client, nfs_name_substring="nfs"):

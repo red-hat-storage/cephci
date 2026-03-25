@@ -46,8 +46,8 @@ class Export(Cli):
             log.info("Subvolume group created successfully")
         subvol_name = nfs_export.replace("/", "")
 
-        enctag = kwargs.pop("enctag", None)
-        xprtsec = kwargs.pop("xprtsec", None)
+        enctag = kwargs.get("enctag", None)
+        xprtsec = kwargs.get("xprtsec", None)
 
         # Step 2: Create subvolume
         cmd = f"ceph fs subvolume create cephfs {subvol_name} --group_name ganeshagroup --namespace-isolated "

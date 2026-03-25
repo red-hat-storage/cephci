@@ -474,7 +474,7 @@ tests:
 
   - test:
       name: TLS deploy, mount verify, and basic IO
-      module: security.test_tls_fearure.py
+      module: security.test_tls_feature.py
       desc: >
         TLS deploy, orch check, tlshd, TLS mount, log checks, basic IO.
       abort-on-fail: false
@@ -491,7 +491,7 @@ tests:
 
   - test:
       name: TLS export enforcement (plain vs TLS-only exports)
-      module: security.test_tls_fearure.py
+      module: security.test_tls_feature.py
       desc: >
         Plain NFS export then TLS-only export; insecure mount must fail; IO with sudo.
       abort-on-fail: false
@@ -504,7 +504,7 @@ tests:
 
   - test:
       name: TLS logs and openssl handshake probe
-      module: security.test_tls_fearure.py
+      module: security.test_tls_feature.py
       desc: >
         Ganesha log substring check and openssl probes (optional redeploy for TLS 1.2 min).
       abort-on-fail: false

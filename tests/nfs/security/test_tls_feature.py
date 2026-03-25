@@ -3,7 +3,7 @@ from time import sleep
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
-from cli.utilities.filesys import Mount, Unmount
+from cli.utilities.filesys import Mount, MountFailedError, Unmount
 from tests.nfs.security.security_utils import (
     check_mount_fails,
     full_tls_stack_cleanup,
@@ -203,19 +203,21 @@ def op_tls_export_enforcement(client_node, nfs_node, config, nfs_name):
     client_node.create_dirs(dir_path=tls_mount, sudo=True)
     cmd_insecure = f"mount {mount_opts} {nfs_node.hostname}:{tls_export} {tls_mount}"
     if not check_mount_fails(client_node, cmd_insecure):
-        raise OperationFailedError(
-            "TLS export allowed insecure mount (expected failure)."
-        )
+        log.error("TLS export allowed insecure mount (expected failure).")
+        raise MountFailedError("TLS export allowed insecure mount (expected failure).")
 
-    if Mount(client_node).nfs(
-        mount=tls_mount,
-        version=version,
-        port=port,
-        server=nfs_node.hostname,
-        export=tls_export,
-        xprtsec="tls",
-    ):
-        raise OperationFailedError("TLS mount with xprtsec=tls failed.")
+    try:
+        Mount(client_node).nfs(
+            mount=tls_mount,
+            version=version,
+            port=port,
+            server=nfs_node.hostname,
+            export=tls_export,
+            xprtsec="tls",
+        )
+    except MountFailedError as err:
+        log.error("TLS mount with xprtsec=tls failed: %s", err)
+        raise
     lookup_in_directory(client_node, tls_mount)
     create_file(client_node, tls_mount, "tls_ok")
     log.info("TLS export: IO with sudo completed.")
