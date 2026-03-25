@@ -1,7 +1,7 @@
 import json
-from time import sleep
 
 from ceph.ceph import CommandFailed
+from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
 from cli.utilities.packages import Package
@@ -17,6 +17,204 @@ TLS_TEST_MOUNT_CANDIDATES = [
     "/mnt/tls_tc2",
     "/mnt/tls_tc1_0",
 ]
+
+
+def _nfs_ls_to_cluster_names(clusters):
+    """Normalize ``ceph nfs cluster ls`` JSON to a list of cluster/service id strings."""
+    if not clusters:
+        return []
+    names = []
+    for c in clusters:
+        if isinstance(c, str):
+            names.append(c)
+        elif isinstance(c, dict):
+            for key in ("name", "service_id", "nfs_cluster"):
+                if c.get(key):
+                    names.append(str(c[key]))
+                    break
+    return names
+
+
+def _nfs_cluster_names(client_node):
+    try:
+        clusters = Ceph(client_node).nfs.cluster.ls()
+    except Exception as ex:
+        log.debug("nfs cluster ls failed: %s", ex)
+        return None
+    return _nfs_ls_to_cluster_names(clusters)
+
+
+def _orch_nfs_daemon_count(client_node, nfs_name):
+    """Return count of cephadm NFS daemons for ``nfs.<nfs_name>``, or -1 if query failed."""
+    try:
+        raw, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph orch ps --service_name nfs.{nfs_name} --format json",
+            timeout=60,
+            check_ec=False,
+        )
+        if raw is None:
+            text = ""
+        elif isinstance(raw, str):
+            text = raw.strip()
+        else:
+            text = raw.read().decode().strip()
+        if not text:
+            return 0
+        data = json.loads(text)
+        if isinstance(data, list):
+            return len(data)
+        return 0
+    except Exception as ex:
+        log.debug("orch ps nfs.%s: %s", nfs_name, ex)
+        return -1
+
+
+def wait_until_nfs_cluster_teardown(client_node, nfs_name, timeout=300, interval=5):
+    """
+    Wait until the NFS cluster is gone from ``ceph nfs cluster ls`` and no daemons remain
+    in ``ceph orch ps`` for ``nfs.<nfs_name>`` (replaces a fixed sleep after cluster delete).
+    """
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        names = _nfs_cluster_names(client_node)
+        if names is None:
+            continue
+        n_daemons = _orch_nfs_daemon_count(client_node, nfs_name)
+        if nfs_name not in names and n_daemons == 0:
+            log.info(
+                "NFS cluster %r teardown complete (mgr + orch) after ~%s s",
+                nfs_name,
+                w._attempt * w.interval,
+            )
+            return True
+        if nfs_name not in names and n_daemons < 0:
+            log.info(
+                "NFS cluster %r absent from mgr ls; orch ps unavailable after ~%s s",
+                nfs_name,
+                w._attempt * w.interval,
+            )
+            return True
+        log.debug(
+            "Waiting for nfs.%s teardown (in_ls=%s, daemon_count=%s)",
+            nfs_name,
+            nfs_name in names,
+            n_daemons,
+        )
+    log.warning(
+        "Timed out after %ss waiting for NFS cluster %r to drain; continuing cleanup.",
+        timeout,
+        nfs_name,
+    )
+    return False
+
+
+def wait_until_nfs_export_visible(
+    client_node, nfs_name, export_path, timeout=180, interval=3
+):
+    """
+    Poll until ``export_path`` appears in ``ceph nfs export ls <nfs_name>``.
+    """
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        try:
+            raw = Ceph(client_node).nfs.export.ls(nfs_name)
+            if not raw or not isinstance(raw, str):
+                continue
+            try:
+                exports = json.loads(raw)
+            except json.JSONDecodeError:
+                if export_path in raw:
+                    log.info(
+                        "Export %r visible for %r after ~%s s (non-JSON ls)",
+                        export_path,
+                        nfs_name,
+                        w._attempt * w.interval,
+                    )
+                    return True
+                continue
+            if isinstance(exports, list):
+                if export_path in exports:
+                    log.info(
+                        "Export %r listed for %r after ~%s s",
+                        export_path,
+                        nfs_name,
+                        w._attempt * w.interval,
+                    )
+                    return True
+                for e in exports:
+                    if e == export_path or export_path in str(e):
+                        log.info(
+                            "Export %r listed for %r after ~%s s",
+                            export_path,
+                            nfs_name,
+                            w._attempt * w.interval,
+                        )
+                        return True
+        except Exception as ex:
+            log.debug("export ls wait: %s", ex)
+    raise OperationFailedError(
+        f"Timed out after {timeout}s waiting for export {export_path!r} on {nfs_name!r}"
+    )
+
+
+def wait_for_tls_strings_in_nfs_logs(
+    client,
+    nfs_node,
+    nfs_cluster_service_id,
+    expect_list,
+    timeout=120,
+    interval=3,
+):
+    """
+    Poll Ganesha logs until all ``expect_list`` substrings are found (same check as
+    ``verify_tls_strings_in_nfs_logs``), instead of sleeping before a single check.
+    """
+    if not expect_list:
+        return True
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        if verify_tls_strings_in_nfs_logs(
+            client,
+            nfs_node,
+            nfs_cluster_service_id,
+            expect_list,
+            expect_quiet=True,
+        ):
+            log.info(
+                "TLS log substrings matched after ~%s s",
+                w._attempt * w.interval,
+            )
+            return True
+    return False
+
+
+def wait_until_ceph_orch_nfs_ps_ready(
+    client_node, nfs_name_substring, timeout=300, interval=5
+):
+    """
+    Poll ``ceph orch ps | grep <substring>`` until NFS service lines appear (e.g. after redeploy).
+
+    Uses the same success criteria as ``verify_ceph_orch_nfs_running`` without logging an error
+    on every poll.
+    """
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        out, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph orch ps | grep {nfs_name_substring}",
+            check_ec=False,
+        )
+        if out and "nfs" in out.lower():
+            log.info(
+                "ceph orch ps shows NFS (%r) after ~%s s",
+                nfs_name_substring,
+                w._attempt * w.interval,
+            )
+            log.info("NFS orch ps (filtered):\n%s", out)
+            return True
+    log.warning(
+        "Timed out after %ss waiting for NFS in `ceph orch ps | grep %s`",
+        timeout,
+        nfs_name_substring,
+    )
+    return False
 
 
 def tls_config_get(config, *keys, default=None):
@@ -132,34 +330,19 @@ def full_tls_stack_cleanup(
     except Exception as ex:
         log.warning("NFS cluster delete %s: %s", nfs_name, ex)
 
-    sleep(20)
+    wait_until_nfs_cluster_teardown(client_node, nfs_name)
 
+    ceph_cli = Ceph(client_node)
     try:
-        out = client_node.exec_command(
-            sudo=True,
-            cmd=f"ceph fs subvolume ls {fs_name} --group_name {subvolume_group}",
-        )
-        json_string, _ = out
-        for item in json.loads(json_string):
+        raw = ceph_cli.fs.sub_volume.ls(fs_name, group_name=subvolume_group)
+        items = json.loads(raw) if raw else []
+        for item in items:
             subvol = item["name"]
-            client_node.exec_command(
-                sudo=True,
-                cmd=(
-                    f"ceph fs subvolume rm {fs_name} {subvol} "
-                    f"--group_name {subvolume_group}"
-                ),
-            )
+            ceph_cli.fs.sub_volume.rm(fs_name, subvol, group_name=subvolume_group)
     except Exception as ex:
         log.warning("Subvolume cleanup: %s", ex)
 
-    try:
-        client_node.exec_command(
-            sudo=True,
-            cmd=f"ceph fs subvolumegroup rm {fs_name} {subvolume_group} --force",
-            check_ec=False,
-        )
-    except Exception:
-        pass
+    ceph_cli.fs.sub_volume_group.rm(fs_name, subvolume_group, force=True)
 
 
 def verify_ceph_orch_nfs_running(client, nfs_name_substring="nfs"):
@@ -180,7 +363,7 @@ def verify_ceph_orch_nfs_running(client, nfs_name_substring="nfs"):
 
 
 def verify_tls_strings_in_nfs_logs(
-    client, nfs_node, nfs_cluster_service_id, expect_list
+    client, nfs_node, nfs_cluster_service_id, expect_list, expect_quiet=False
 ):
     """
     Wrapper around nfs_operations.nfs_log_parser for TLS-related log assertions.
@@ -190,6 +373,7 @@ def verify_tls_strings_in_nfs_logs(
         nfs_node: Host where the nfs container runs.
         nfs_cluster_service_id: Ceph NFS cluster name (service_id), e.g. cephfs-nfs-tls.
         expect_list: Substrings that must appear in cephadm nfs daemon logs.
+        expect_quiet: If True, omit summary error log (for polling waiters).
 
     Returns:
         True if all strings found, False otherwise.
@@ -197,14 +381,19 @@ def verify_tls_strings_in_nfs_logs(
     if not expect_list:
         return True
     rc = nfs_log_parser(
-        client, nfs_node, nfs_cluster_service_id, expect_list=expect_list
+        client,
+        nfs_node,
+        nfs_cluster_service_id,
+        expect_list=expect_list,
+        expect_quiet=expect_quiet,
     )
     if rc != 0:
-        log.error(
-            "TLS log verification failed for cluster %s; expected substrings: %s",
-            nfs_cluster_service_id,
-            expect_list,
-        )
+        if not expect_quiet:
+            log.error(
+                "TLS log verification failed for cluster %s; expected substrings: %s",
+                nfs_cluster_service_id,
+                expect_list,
+            )
         return False
     return True
 

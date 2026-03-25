@@ -14,7 +14,7 @@ from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
-from cli.utilities.filesys import FuseMount, Mount, Unmount
+from cli.utilities.filesys import FuseMount, Mount, MountFailedError, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
 from utility.retry import retry
@@ -862,7 +862,6 @@ def create_nfs_via_file_and_verify(
     Returns:
         str: Path to the temporary YAML file.
     """
-    import os
 
     temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
     remote_path = f"/tmp/{os.path.basename(temp_file.name)}"
@@ -1026,17 +1025,16 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
     log.info("Firewall rules reloaded successfully")
 
 
-@retry(OperationFailedError, tries=4, delay=5, backoff=2)
+@retry((OperationFailedError, MountFailedError), tries=8, delay=5, backoff=2)
 def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kwargs):
-    if Mount(client).nfs(
+    Mount(client).nfs(
         mount=mount_name,
         version=version,
         port=port,
         server=nfs_server,
         export=export_name,
         **kwargs,
-    ):
-        raise OperationFailedError("Failed to mount nfs on %s" % {export_name.hostname})
+    )
     return True
 
 
@@ -1410,7 +1408,7 @@ def get_ganesha_info_from_container(installer, nfs_service_name, nfs_host_node):
         return (None, None)
 
 
-def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
+def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None, expect_quiet=False):
     """
     This method parses the nfs debug log for given list of strings and returns 0 on Success
     and 1 on failure
@@ -1444,9 +1442,14 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
             if exp_str not in results["expect"]:
                 expect_not_found.append(exp_str)
         if len(expect_not_found):
-            log.error(
-                f"Some of expected strings not found in debug logs for {nfs_daemon_name}:{expect_not_found}"
+            msg = (
+                f"Some of expected strings not found in debug logs for "
+                f"{nfs_daemon_name}:{expect_not_found}"
             )
+            if expect_quiet:
+                log.debug(msg)
+            else:
+                log.error(msg)
             return 1
         return 0
 

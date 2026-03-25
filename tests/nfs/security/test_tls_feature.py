@@ -1,9 +1,8 @@
 import traceback
-from time import sleep
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
-from cli.utilities.filesys import Mount, Unmount
+from cli.utilities.filesys import Mount, MountFailedError, Unmount
 from tests.nfs.security.security_utils import (
     check_mount_fails,
     full_tls_stack_cleanup,
@@ -13,6 +12,9 @@ from tests.nfs.security.security_utils import (
     tls_config_get,
     verify_ceph_orch_nfs_running,
     verify_tls_strings_in_nfs_logs,
+    wait_for_tls_strings_in_nfs_logs,
+    wait_until_ceph_orch_nfs_ps_ready,
+    wait_until_nfs_export_visible,
 )
 from tests.nfs.test_nfs_io_operations_during_upgrade import (
     create_export_and_mount_for_existing_nfs_cluster,
@@ -111,22 +113,38 @@ def op_tls_deploy_mount_verify(client_node, nfs_node, config, nfs_name):
     # exports_mounts_perclient uses "{nfs_mount}_{i}" e.g. /mnt/tls_tc1_0
     mount_path = client_export_mount_dict[client_node]["mount"][0]
 
-    sleep(
-        int(
-            tls_config_get(
-                config,
-                "post_mount_sleep_sec",
-                "tc_01_post_mount_sleep",
-                default=3,
-            )
+    wait_timeout = int(
+        tls_config_get(
+            config,
+            "post_mount_tls_log_wait_timeout_sec",
+            "tc_01_post_mount_tls_log_wait_timeout_sec",
+            "post_mount_sleep_sec",
+            "tc_01_post_mount_sleep",
+            default=120,
         )
     )
-    if not verify_tls_strings_in_nfs_logs(client_node, nfs_node, nfs_name, expect_logs):
+    wait_interval = int(
+        tls_config_get(
+            config,
+            "post_mount_tls_log_wait_interval_sec",
+            "tc_01_post_mount_tls_log_wait_interval_sec",
+            default=3,
+        )
+    )
+    if not wait_for_tls_strings_in_nfs_logs(
+        client_node,
+        nfs_node,
+        nfs_name,
+        expect_logs,
+        timeout=wait_timeout,
+        interval=wait_interval,
+    ):
         if tls_config_get(
             config, "strict_tls_log_check", "tc_01_strict_logs", default=True
         ):
             raise OperationFailedError(
-                f"Expected TLS-related log substrings not found after mount: {expect_logs}"
+                f"Expected TLS-related log substrings not found within {wait_timeout}s "
+                f"after mount: {expect_logs}"
             )
         log.warning("Post-mount TLS log verification failed (non-strict); continuing.")
 
@@ -171,7 +189,7 @@ def op_tls_export_enforcement(client_node, nfs_node, config, nfs_name):
         nfs_export=plain_export,
         fs=fs_name,
     )
-    sleep(5)
+    wait_until_nfs_export_visible(client_node, nfs_name, plain_export)
 
     client_node.create_dirs(dir_path=plain_mount, sudo=True)
     # TLS-enabled Ganesha still negotiates TLS on the wire; omitting xprtsec fails with e.g.
@@ -198,24 +216,26 @@ def op_tls_export_enforcement(client_node, nfs_node, config, nfs_name):
         fs=fs_name,
         xprtsec="tls",
     )
-    sleep(5)
+    wait_until_nfs_export_visible(client_node, nfs_name, tls_export)
 
     client_node.create_dirs(dir_path=tls_mount, sudo=True)
     cmd_insecure = f"mount {mount_opts} {nfs_node.hostname}:{tls_export} {tls_mount}"
     if not check_mount_fails(client_node, cmd_insecure):
-        raise OperationFailedError(
-            "TLS export allowed insecure mount (expected failure)."
-        )
+        log.error("TLS export allowed insecure mount (expected failure).")
+        raise MountFailedError("TLS export allowed insecure mount (expected failure).")
 
-    if Mount(client_node).nfs(
-        mount=tls_mount,
-        version=version,
-        port=port,
-        server=nfs_node.hostname,
-        export=tls_export,
-        xprtsec="tls",
-    ):
-        raise OperationFailedError("TLS mount with xprtsec=tls failed.")
+    try:
+        Mount(client_node).nfs(
+            mount=tls_mount,
+            version=version,
+            port=port,
+            server=nfs_node.hostname,
+            export=tls_export,
+            xprtsec="tls",
+        )
+    except MountFailedError as err:
+        log.error("TLS mount with xprtsec=tls failed: %s", err)
+        raise
     lookup_in_directory(client_node, tls_mount)
     create_file(client_node, tls_mount, "tls_ok")
     log.info("TLS export: IO with sudo completed.")
@@ -279,8 +299,21 @@ def op_tls_logs_openssl_probe(installer_node, client_node, nfs_node, config, nfs
             tls_ktls=config.get("tls_ktls", True),
             tls_debug=config.get("tls_debug", True),
         )
-        sleep(30)
-        verify_ceph_orch_nfs_running(client_node, nfs_name)
+        redeploy_wait = int(
+            tls_config_get(
+                config,
+                "redeploy_orch_wait_timeout_sec",
+                "tc_03_redeploy_orch_wait_timeout_sec",
+                default=300,
+            )
+        )
+        if not wait_until_ceph_orch_nfs_ps_ready(
+            client_node, nfs_name, timeout=redeploy_wait, interval=5
+        ):
+            raise OperationFailedError(
+                f"NFS service {nfs_name} not visible in ceph orch ps after TLSv1.2 redeploy "
+                f"(waited {redeploy_wait}s)"
+            )
 
     log.info("tls_logs_openssl_probe completed.")
 

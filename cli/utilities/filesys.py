@@ -22,7 +22,7 @@ class Mount(Cli):
         if not out.strip():
             self.execute(cmd="dnf install -y nfs-utils", sudo=True, timeout=600)
 
-    def nfs(self, mount, version, port, server, export):
+    def nfs(self, mount, version, port, server, export, **kwargs):
         """
         Perform nfs mount
         Args:
