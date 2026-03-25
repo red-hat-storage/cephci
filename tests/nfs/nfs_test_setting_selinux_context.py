@@ -44,6 +44,7 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            single_export=True,
         )
 
         # Create a file on Mount point from client 1
