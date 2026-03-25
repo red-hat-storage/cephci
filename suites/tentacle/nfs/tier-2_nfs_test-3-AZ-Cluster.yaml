@@ -1,0 +1,322 @@
+#===============================================================================================
+#---    Test Suite for 3 AZ NFS-Ganesha Cluster Deployment and Stretch Mode   ---
+#===============================================================================================
+# Conf: conf/tentacle/nfs/3AZ-NFS-cluster-rhos-d.yaml
+#
+# Cluster layout:
+#   - 9 OSD nodes across 3 datacenters (DC1, DC2, DC3), 3 nodes per DC
+#   - 3 client nodes (node10, node11, node12)
+#
+# Test workflow:
+#   - Bootstrap with host location attributes across 3 AZs
+#   - Deploy MON, MGR, OSD services
+#   - Create 3 CephFS filesystems (cephfs-DC1, cephfs-DC2, cephfs-DC3)
+#   - Deploy MDS per site using labels (mds-DC1, mds-DC2, mds-DC3)
+#   - Deploy NFS-Ganesha clusters per site using labels (nfs-DC1, nfs-DC2, nfs-DC3)
+#   - Enable 3 AZ stretch mode on all pools
+#   - Upgrade cluster to latest version
+#
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83609796
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          mon-ip: node1
+          rhcs-version: 8.1
+          release: rc
+          platform: rhel-9
+          ssh-user: cephuser
+          skip-monitoring-stack: true
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+                - node2
+                - node3
+              location:
+                root: default
+                datacenter: DC1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node4
+                - node5
+                - node6
+              location:
+                root: default
+                datacenter: DC2
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node7
+                - node8
+                - node9
+              location:
+                root: default
+                datacenter: DC3
+            - service_type: mon
+              spec:
+                crush_locations:
+                  node1:
+                    - datacenter=DC1
+                  node2:
+                    - datacenter=DC1
+                  node3:
+                    - datacenter=DC1
+                  node4:
+                    - datacenter=DC2
+                  node5:
+                    - datacenter=DC2
+                  node6:
+                    - datacenter=DC2
+                  node7:
+                    - datacenter=DC3
+                  node8:
+                    - datacenter=DC3
+                  node9:
+                    - datacenter=DC3
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Service deployment with spec
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true" # boolean as string
+          - config:
+              command: shell
+              args: # display OSD tree
+                - "ceph osd tree"
+
+  - test:
+      name: MDS site-1 deployment with spec
+      desc: Add MDS services using spec file for site-1
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs-DC1
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs-DC1
+                  placement:
+                    label: mds-DC1
+
+  - test:
+      name: MDS site-2 deployment with spec
+      desc: Add MDS services using spec file for site-2
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs-DC2
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs-DC2
+                  placement:
+                    label: mds-DC2
+
+  - test:
+      name: MDS site-3 deployment with spec
+      desc: Add MDS services using spec file for site-3
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs-DC3
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs-DC3
+                  placement:
+                    label: mds-DC3
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                            # client Id (<type>.<Id>)
+        nodes:                                  # client node
+          - node10:
+              release: 8.1
+              tag: rc
+          - node11:
+              release: 8.1
+              tag: rc
+          - node12:
+              release: 8.1
+              tag: rc
+        install_packages:
+          - ceph-common
+          - ceph-base
+          - ceph-fuse
+          - fio
+        copy_admin_keyring: true                # Copy admin keyring to node
+        caps:                                   # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: NFS-Ganesha site-1 deployment with spec
+      desc: Deploy NFS-Ganesha cluster for site-1 using cephfs-DC1
+      module: test_cephadm.py
+      polarion-id: CEPH-83577555
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-DC1
+                  placement:
+                    label: nfs-DC1
+                    count: 1 # Active-standby deployment
+                  spec:
+                    port: 2049
+
+  - test:
+      name: NFS-Ganesha site-2 deployment with spec
+      desc: Deploy NFS-Ganesha cluster for site-2 using cephfs-DC2
+      module: test_cephadm.py
+      polarion-id: CEPH-83577555
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-DC2
+                  placement:
+                    label: nfs-DC2
+                    count: 1 # Active-standby deployment
+                  spec:
+                    port: 2049
+
+  - test:
+      name: NFS-Ganesha site-3 deployment with spec
+      desc: Deploy NFS-Ganesha cluster for site-3 using cephfs-DC3
+      module: test_cephadm.py
+      polarion-id: CEPH-83577555
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-DC3
+                  placement:
+                    count: 1 # Active-standby deployment
+                    label: nfs-DC3
+                  spec:
+                    port: 2049
+
+  - test:
+      name: Enable Stretch mode on pools
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      config:
+        enable_3AZ_stretch_pools:
+          pool_name: ALL
+          stretch_bucket: datacenter
+          rule_name: 3az_rule
+          stretch_mode_only: true
+      desc: Enable 3 AZ stretch mode on all pools of the cluster
+
+  - test:
+      name: Upgrade ceph cluster
+      desc: Upgrade cluster to latest version and check health warn
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83609797
+      config:
+        verify_warning: false
+        verify_daemons: true
+        verify_cluster_usage: false
+      abort-on-fail: true
+
