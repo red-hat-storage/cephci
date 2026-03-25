@@ -4,6 +4,7 @@ import re
 import time
 from typing import Type, Union
 
+from looseversion import LooseVersion
 from packaging.version import Version
 
 from ceph.ceph import Ceph, CommandFailed
@@ -78,6 +79,35 @@ def setup_firewalld(nodes) -> None:
         for cmd in firewalld_cmds:
             node.exec_command(cmd=cmd, sudo=True)
         LOG.info("Configured firewalld to allow port range: %s", port_range)
+
+
+def check_and_enable_nvmeof_module(**kwargs):
+    """Check and enable NVMeoF module if not enabled."""
+    ceph_cluster = kwargs.get("ceph_cluster")
+    orch = Orch(ceph_cluster, **{})
+    ceph_version = kwargs.get("ceph_version")
+    if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+        LOG.info(
+            f"Checking and enabling NVMeoF module for ceph version: {ceph_version}"
+        )
+        out, _ = orch.shell(args=["ceph", "mgr", "module", "ls", "--format", "json"])
+        modules = json.loads(out)
+        if "nvmeof" not in modules["enabled_modules"]:
+            LOG.info(f"Enabling NVMeoF module for ceph version: {ceph_version}")
+            out, _ = orch.shell(args=["ceph", "mgr", "module", "enable", "nvmeof"])
+            out, _ = orch.shell(
+                args=["ceph", "mgr", "module", "ls", "--format", "json"]
+            )
+            modules = json.loads(out)
+            if "nvmeof" not in modules["enabled_modules"]:
+                raise Exception(
+                    f"Failed to enable NVMeoF module for ceph version: {ceph_version}"
+                )
+            LOG.info(
+                f"NVMeoF module enabled successfully for ceph version: {ceph_version}"
+            )
+        else:
+            LOG.info(f"NVMeoF module already enabled for ceph version: {ceph_version}")
 
 
 def apply_nvme_sdk_cli_support(ceph_cluster, config):
