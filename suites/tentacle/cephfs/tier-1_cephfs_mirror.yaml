@@ -268,9 +268,9 @@ tests:
       clusters:
         ceph1:
           config:
-            name: Validate snapshot synchronisation using SnapSchedul
+            name: Validate snapshot synchronisation using SnapSchedule
       module: cephfs_mirroring.test_cephfs_mirroring_with_snap_schedule.py
-      name: Validate snapshot synchronisation using SnapSchedul
+      name: Validate snapshot synchronisation using SnapSchedule
       polarion-id: "CEPH-83598968"
   - test:
       abort-on-fail: false
@@ -282,3 +282,26 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring_peer_add.py
       name: Validate the Synchronisation is successful upon enabling fs mirroring using peer_add.
       polarion-id: "CEPH-83632297"
+  - test:
+      abort-on-fail: false
+      desc: "empty data queue on source cluster"
+      clusters:
+        ceph1:
+          config:
+            name: empty data queue on source cluster
+      module: cephfs_mirroring.test_cephfs_mirror_multithreaded_empty_dataq_hang.py
+      name: empty data queue on source cluster.
+      polarion-id: "CEPH-83632392"
+      comments:  Yet to file issue
+
+  - test:
+      abort-on-fail: false
+      desc: "Test incremental snapshot sync is faster than full sync using git repo diffs"
+      clusters:
+        ceph1:
+          config:
+            name: Test incremental snapshot synchronization
+      module: cephfs_mirroring.test_cephfs_mirror_incremental_sync.py
+      name: Test incremental snapshot synchronization
+      polarion-id: "CEPH-83632393"
+      comments:  Upstream tracker 74984
