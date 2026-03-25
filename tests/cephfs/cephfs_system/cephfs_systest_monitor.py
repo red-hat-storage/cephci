@@ -41,8 +41,8 @@ def run(ceph_cluster, **kw):
         for mds in mds_nodes:
             mds_names_hostname.append(mds.node.hostname)
 
-        log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-
+        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        log_base_dir = config.get("log-dir")
         mds_list = fs_scale_utils.get_daemon_names(clients[0], "mds")
         cmd_list = [
             "ceph mgr module enable stats",

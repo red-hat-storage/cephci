@@ -63,7 +63,8 @@ def run(ceph_cluster, **kw):
         proc_status_list = []
         write_procs = []
         mds_test_fail = 0
-        log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        log_base_dir = config.get("log-dir")
         log_path = f"{log_base_dir}/mds_subtests"
         try:
             os.mkdir(log_path)

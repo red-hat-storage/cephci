@@ -17,6 +17,7 @@ from tests.cephfs.cephfs_IO_lib import FSIO
 
 # from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_system.cephfs_system_utils import CephFSSystemUtils
+from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
 log = Log(__name__)
@@ -55,7 +56,9 @@ def run(ceph_cluster, **kw):
         byok_run = config.get("byok_run", 0)
         clients_orig = ceph_cluster.get_ceph_objects("client")
         clients = clients_orig[1:11]
-
+        build = config.get("build", config.get("rhbuild"))
+        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        fs_util_v1.prepare_clients(clients, build)
         file = "cephfs_systest_data.json"
 
         client1 = clients[0]
@@ -73,7 +76,7 @@ def run(ceph_cluster, **kw):
             "io_test_workflow_2": "Overwrite and Read to same file from different client sessions",
             "io_test_workflow_3": "Truncate & Read to same file from different client sessions",
             "io_test_workflow_4": "Random Read to same file from different client sessions",
-            "io_test_workflow_5": "Perform continuous overwrites on large files to generate Fragmented data",
+            "io_test_workflow_5": "Continuous overwrites on large files in to generate Fragmented data",
             "io_test_workflow_6": "Read(find) and delete(rm) in parallel to same file and concurrently to many files",
             "io_test_workflow_7": "Scale number of requests/sec to an MDS until 6k",
             "io_test_workflow_8": "unlink and rename to same file in parallel",
@@ -91,7 +94,8 @@ def run(ceph_cluster, **kw):
         proc_status_list = []
         write_procs = []
         io_test_fail = 0
-        log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        log_base_dir = config.get("log-dir")
         log_path = f"{log_base_dir}/client_io_subtests"
         try:
             os.mkdir(log_path)
@@ -227,6 +231,7 @@ def io_test_runner(
             )
         if io_test == "io_test_workflow_7":
             log.info("Setup Ephemeral Random pinning")
+            cmd = "ceph config set mds mds_export_ephemeral_distributed false;"
             cmd = "ceph config set mds mds_export_ephemeral_random true;"
             cmd += "ceph config set mds mds_export_ephemeral_random_max 0.75"
             clients[0].exec_command(sudo=True, cmd=cmd)
@@ -275,6 +280,14 @@ def io_test_workflow_1(
             client2.exec_command(sudo=True, cmd=cmd)
         except BaseException as ex:
             log1.info(ex)
+        if sv_info[sv_name]["mnt_type"] != "nfs":
+            log1.info("Enable Distributed Ephemeral Pinning for %s", dir_path1)
+            cmd = f"setfattr -n ceph.dir.pin.distributed -v 1 {dir_path1}"
+            client1.exec_command(sudo=True, cmd=cmd)
+        # create 15 child directories in dir_path1 to pin across active mdss
+        for i in range(15):
+            cmd = f"mkdir -p {dir_path1}/io_test_dir_{i}"
+            client1.exec_command(sudo=True, cmd=cmd)
         sv_info_objs.update(
             {
                 sv_name: {
@@ -285,6 +298,7 @@ def io_test_workflow_1(
                 }
             }
         )
+
     # Run Read,Write and getattr in parallel
     log1.info(
         f"Run write,read and getattr in parallel, Repeat test until {run_time}hrs"
@@ -302,33 +316,41 @@ def io_test_workflow_1(
                 dir_path1 = sv_info_objs[sv_name]["dir_path1"]
                 client2 = sv_info_objs[sv_name]["client2"]
                 dir_path2 = sv_info_objs[sv_name]["dir_path2"]
+                for child_dir in range(15):
+                    file_path1 = (
+                        f"{dir_path1}/io_test_dir_{child_dir}/wf1_file_{rand_str}"
+                    )
+                    file_path2 = (
+                        f"{dir_path2}/io_test_dir_{child_dir}/wf1_file_{rand_str}"
+                    )
+                    read_cmd = f"fio --name={file_path2} --ioengine=libaio --size 10M --rw=read --direct=0"
+                    read_cmd += " --startdelay=1"
+                    file_ops = {
+                        "write": f"fio --name={file_path1} --ioengine=libaio --size 10M --rw=write --direct=0",
+                        "read": read_cmd,
+                    }
+                    get_attr_cmds1 = "sleep 2;"
+                    get_attr_cmds2 = "sleep 2;"
 
-                file_path1 = f"{dir_path1}/io_test_workflow_1_{rand_str}"
-                file_path2 = f"{dir_path2}/io_test_workflow_1_{rand_str}"
-                file_ops = {
-                    "write": f"fio --name={file_path1} --ioengine=libaio --size 10M --rw=write --direct=0",
-                    "read": f"fio --name={file_path2} --ioengine=libaio --size 10M --rw=read --direct=0 --startdelay=1",
-                }
-                get_attr_cmds1 = "sleep 2;"
-                get_attr_cmds2 = "sleep 2;"
-                for attr in attr_list:
-                    get_attr_cmds1 += f"getfattr -n {attr} {file_path1}*;"
-                    get_attr_cmds2 += f"getfattr -n {attr} {file_path2}*;"
-                if "nfs" not in mnt_pt1:
-                    file_ops.update({"getattr1": f"{get_attr_cmds1}"})
-                if "nfs" not in mnt_pt2:
-                    file_ops.update({"getattr2": f"{get_attr_cmds2}"})
-                client_op = {
-                    "write": client1,
-                    "read": client2,
-                    "getattr1": client1,
-                    "getattr2": client2,
-                }
-                for io_type in file_ops:
-                    cmd = file_ops[io_type]
-                    client = client_op[io_type]
-                    p.spawn(run_cmd, cmd, client, log1)
-
+                    for attr in attr_list:
+                        get_attr_cmds1 += f"getfattr -n {attr} {file_path1}*;"
+                        get_attr_cmds2 += f"getfattr -n {attr} {file_path2}*;"
+                    if "nfs" not in mnt_pt1:
+                        file_ops.update({"getattr1": f"{get_attr_cmds1}"})
+                    if "nfs" not in mnt_pt2:
+                        file_ops.update({"getattr2": f"{get_attr_cmds2}"})
+                    client_op = {
+                        "write": client1,
+                        "read": client2,
+                        "getattr1": client1,
+                        "getattr2": client2,
+                    }
+                    for io_type in file_ops:
+                        cmd = file_ops[io_type]
+                        client = client_op[io_type]
+                        p.spawn(run_cmd, cmd, client, log1)
+        out, _ = clients[0].exec_command(sudo=True, cmd="ceph fs status")
+        log.info(out)
         if cleanup == 1:
             with parallel() as p:
                 for sv_name in sv_info_objs:
@@ -591,7 +613,7 @@ def io_test_workflow_4(
                 client2 = sv_info_objs[sv_name]["client2"]
                 dir_path2 = sv_info_objs[sv_name]["dir_path2"]
 
-                for i in range(0, 5):
+                for i in range(0, 25):
                     client = random.choice([client1, client2])
                     dir_path = (
                         dir_path1
@@ -1096,8 +1118,20 @@ def io_test_workflow_10(
                 client = i
                 break
         mnt_pt = sv_info[sv_name]["mnt_pt1"]
-        dir_path = f"{mnt_pt}/io_test_workflow_10"
+        dir_path = f"{mnt_pt}/client_io"
         sv_info_objs.update({sv_name: {"dir_path": dir_path, "client": client}})
+        if sv_info[sv_name]["mnt_type"] != "nfs":
+            log1.info("Enable Distributed Ephemeral Pinning for %s", dir_path)
+            cmd = f"setfattr -n ceph.dir.pin.distributed -v 1 {dir_path}"
+            try:
+                client.exec_command(sudo=True, cmd=cmd)
+            except BaseException as ex:
+                log1.info(ex)
+        for i in range(15):
+            dir_path_tmp = f"{dir_path}/io_test_dir_{i}"
+            cmd = f"mkdir -p {dir_path_tmp}"
+            client.exec_command(sudo=True, cmd=cmd)
+
     log1.info(
         f"Run continuous io and check request seq num test, Repeat test until {run_time}hrs"
     )
@@ -1114,20 +1148,27 @@ def io_test_workflow_10(
                 dir_path = sv_info_objs[sv_name]["dir_path"]
                 dir_path += f"_{rand_str}"
                 client = sv_info_objs[sv_name]["client"]
-                cmd = f"mkdir {dir_path};"
-                cmd += "for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
-                cmd += f"create symlink stat chmod ls-l delete cleanup ;do {smallfile_cmd} --operation $i --thread 2 "
-                cmd += f"--file-size 2048 --files 10000 --dirs-per-dir 50 --same-dir false --top {dir_path}; done"
-                log1.info(f"Executing cmd {cmd}")
-                p.spawn(run_cmd, cmd, client, log1)
+                for i in range(15):
+                    dir_path_tmp = f"{dir_path}/io_test_dir_{i}"
+                    cmd = "for i in create read append read delete create overwrite rename delete-renamed mkdir"
+                    cmd += f" rmdir create symlink stat chmod ls-l delete cleanup ;do {smallfile_cmd} --operation $i"
+                    cmd += " --thread 2 --file-size 2048 --files 10000 --dirs-per-dir 50 --same-dir false"
+                    cmd += f" --top {dir_path_tmp}; done"
+                    log1.info(f"Executing cmd {cmd}")
+                    p.spawn(run_cmd, cmd, client, log1)
         if cleanup == 1:
             with parallel() as p:
                 for sv_name in sv_info_objs:
                     dir_path = sv_info_objs[sv_name]["dir_path"]
                     dir_path += f"_{rand_str}"
                     client = sv_info_objs[sv_name]["client"]
-                    cmd = f"rm -rf {dir_path}"
-                    p.spawn(run_cmd, cmd, client, log1)
+                    for i in range(15):
+                        dir_path_tmp = f"{dir_path}/io_test_dir_{i}"
+                        cmd = f"{smallfile_cmd} --operation cleanup --thread 2 --file-size 2048 --files 10000"
+                        cmd += (
+                            f" --dirs-per-dir 50 --same-dir false --top {dir_path_tmp}"
+                        )
+                        p.spawn(run_cmd, cmd, client, log1)
         cluster_healthy = is_cluster_healthy(clients[0])
         log1.info(f"cluster_health{cluster_healthy}")
     log1.info("io_test_workflow_10 completed")
@@ -1161,7 +1202,8 @@ def io_test_workflow_11(run_time, log_path, cleanup, clients, fs_system_utils, s
         dir_path = f"{mnt_pt}/io_test_workflow_11_{rand_str}"
         cmd = f"mkdir {dir_path};touch {dir_path}/tmp_workflow11_data"
         client.exec_command(sudo=True, cmd=cmd)
-        cmd = f"cd {dir_path};wget -O linux.tar.xz http://download.ceph.com/qa/linux-5.4.tar.gz > tmp_workflow11_data"
+        cmd = f"cd {dir_path};wget -O linux.tar.xz http://download.ceph.com/qa/linux-5.4.tar.gz"
+        cmd += " > tmp_workflow11_data"
         log1.info(f"Executing cmd {cmd}")
         client.exec_command(
             sudo=True,
