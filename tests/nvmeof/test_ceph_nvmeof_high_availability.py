@@ -186,9 +186,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
         # HA failover and failback
-        LOG.info("Run HA failover and failback")
-        ha.run()
-        LOG.info("HA failover and failback completed")
+        if config.get("iodepth"):
+            iodepth = [int(iodepth) for iodepth in config["iodepth"]]
+            for iodepth in iodepth:
+                LOG.info(f"Running HA failover and failback with IO depth: {iodepth}")
+                ha.run(iodepth=iodepth)
+                LOG.info(f"HA failover and failback with IO depth: {iodepth} completed")
+        else:
+            LOG.info("Running HA failover and failback")
+            ha.run()
+            LOG.info("HA failover and failback completed")
         return 0
     except Exception as err:
         LOG.error(err)
