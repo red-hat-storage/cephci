@@ -27,6 +27,10 @@ utility/generate_frag_objs.py	             @neha-gangadhar @pdhiran
 cephfs/             @neha-gangadhar @AmarnatReddy @Manimaran-MM
 cli/ceph/fs/        @neha-gangadhar @AmarnatReddy @Manimaran-MM
 
+# for NFS
+nfs/                @neha-gangadhar @Manimaran-MM @pdhiran @aravindrrh
+cli/ceph/nfs/       @neha-gangadhar @Manimaran-MM @pdhiran @aravindrrh
+
 # smb
 smb/                @vdas-redhat @pranavprakash20
 
@@ -34,5 +38,4 @@ smb/                @vdas-redhat @pranavprakash20
 ceph_volume/        @vdas-redhat @pranavprakash20
 cephadm/            @vdas-redhat @pranavprakash20
 mgr/                @vdas-redhat @pranavprakash20
-nfs/                @vdas-redhat @pranavprakash20
 upgrades/           @vdas-redhat @pranavprakash20
