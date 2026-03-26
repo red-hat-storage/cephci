@@ -228,6 +228,10 @@ def run(ceph_cluster, **kw):
                     extra_params=f"-r {subvol_path.strip()} --client_fs {sv['vol_name']}",
                 )
                 mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
+                # Enable quota on fuse mount path (4 GiB bytes, 1000 files)
+                fs_util.set_quota_attrs(
+                    mnt_client, "10000", 4294967296, fuse_mounting_dir_1
+                )
                 mnt_params = {
                     "mnt_pt": fuse_mounting_dir_1,
                     "mnt_client": mnt_client.node.hostname,
@@ -243,6 +247,10 @@ def run(ceph_cluster, **kw):
                         extra_params=f"-r {subvol_path.strip()} ",
                     )
                     mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
+                    # Enable quota on fuse mount path (4 GiB bytes, 1000 files)
+                    fs_util.set_quota_attrs(
+                        mnt_client, "10000", 4294967296, fuse_mounting_dir_1
+                    )
                     mnt_params = {
                         "mnt_pt": fuse_mounting_dir_1,
                         "mnt_client": mnt_client.node.hostname,
