@@ -117,7 +117,19 @@ def run(ceph_cluster, **kw):
         )
         sleep(10)
 
-        open_mandatory_v3_ports(nfs_node, ["portmapper", "mountd"])
+        nfs_version = None
+        if version:
+            # Check if version contains "3" (e.g., "3", "3.0", or list containing 3)
+            if isinstance(version, (list, tuple)):
+                nfs_version = 3 if 3 in version else None
+            elif isinstance(version, (int, str)):
+                # Convert to string and check if it starts with "3"
+                version_str = str(version)
+                if version_str.startswith("3") or version_str == "3":
+                    nfs_version = 3
+
+        if nfs_version == 3:
+            open_mandatory_v3_ports(nfs_node, ["portmapper", "mountd"])
 
         # Mount the export on client1 which is unauthorized.Mount should fail
         clients[1].create_dirs(dir_path=nfs_client_mount, sudo=True)
