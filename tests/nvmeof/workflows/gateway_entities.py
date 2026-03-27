@@ -36,18 +36,27 @@ def validate_subsystems(nvme_service, subsystem_config):
     if not subsystem_list:
         raise ValueError("No subsystems found after configuration")
 
-    if len(subsystem_list) != len(subsystem_config):
-        raise ValueError(
-            f"Mismatch in number of configured subsystems: "
-            f"expected {len(subsystem_config)}, found {len(subsystem_list)}"
-        )
-
-    for i, sub_cfg in enumerate(subsystem_config):
+    actual_nqns = {
+        s.get("nqn") or s.get("subnqn")
+        for s in subsystem_list
+        if s.get("nqn") or s.get("subnqn")
+    }
+    for sub_cfg in subsystem_config:
         nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
-        if nqn in subsystem_list[i].get("nqn", subsystem_list[i].get("subnqn")):
-            continue
-        raise ValueError(
-            f"Subsystem {sub_cfg.get('nqn') or sub_cfg.get('subnqn')} not found in configured subsystems"
+        if not nqn:
+            raise ValueError("Subsystem NQN not provided in subsystem_config")
+        if nqn not in actual_nqns:
+            raise ValueError(
+                f"Subsystem {nqn} not found in configured subsystems "
+                f"(have {sorted(actual_nqns)})"
+            )
+
+    if len(subsystem_list) > len(subsystem_config):
+        LOG.info(
+            "More subsystems present on gateway than in this test config "
+            "(%s from config, %s total); treating extras as pre-existing",
+            len(subsystem_config),
+            len(subsystem_list),
         )
 
 
