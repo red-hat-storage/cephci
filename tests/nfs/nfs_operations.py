@@ -90,7 +90,7 @@ def setup_nfs_cluster(
                 # on older version we do not have the support for
                 # --install-service-dependencies. Instead of verion check
                 # we are getting it from command help.
-                prepare_host_help_output = nfs_nodes[0].exec_command(
+                prepare_host_help_output, _ = nfs_nodes[0].exec_command(
                     sudo=True, cmd="cephadm prepare-host --help"
                 )
                 cmd = "cephadm prepare-host"
