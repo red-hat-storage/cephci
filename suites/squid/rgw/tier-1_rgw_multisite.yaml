@@ -303,6 +303,7 @@ tests:
             copy-user-info-to-site: ceph-sec
       desc: create non-tenanted user
       polarion-id: CEPH-83575199
+      comments: Intemittent failure - IBMCEPH-11930 or IBMCEPH-9871
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
 
