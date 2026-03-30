@@ -34,7 +34,7 @@ def run(ceph_cluster, **kw):
     dir_name = "dir1"
 
     try:
-        # Setup nfs cluster
+        # Setup nfs cluster - single_export so both clients can access the same files
         setup_nfs_cluster(
             clients,
             nfs_server_name,
@@ -53,7 +53,7 @@ def run(ceph_cluster, **kw):
         try:
             for i in range(1, num_files + 1):
                 cmd = f"touch {nfs_mount}/{filename}_{i}"
-                clients[0].exec_command(cmd=cmd, sudo=True)
+                clients[0].exec_command(cmd=cmd)
         except Exception:
             raise OperationFailedError(f"failed to create file {filename}_{i}")
 
@@ -61,7 +61,7 @@ def run(ceph_cluster, **kw):
         try:
             for i in range(1, num_files + 1):
                 chcon_cmd = f"chcon -t public_content_t {nfs_mount}/{filename}_{i}"
-                clients[0].exec_command(cmd=chcon_cmd, sudo=True)
+                clients[0].exec_command(cmd=chcon_cmd)
         except Exception:
             raise OperationFailedError(
                 f"failed to set/get the selinux label for file {filename}_{i}"
@@ -70,30 +70,36 @@ def run(ceph_cluster, **kw):
         # Create directory on mount point from client 1
         try:
             cmd = f"mkdir {nfs_mount}/{dir_name}"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd)
         except Exception:
             raise OperationFailedError(f"failed to create directory {dir_name} ")
 
         # Set the selinux label of the directory created from client 1
         try:
             chcon_cmd = f"chcon -t httpd_sys_content_t {nfs_mount}/{dir_name}"
-            clients[0].exec_command(cmd=chcon_cmd, sudo=True)
+            clients[0].exec_command(cmd=chcon_cmd)
         except Exception:
             raise OperationFailedError(f"failed to set the selinux context {dir_name} ")
 
-        # Create new files inside the directory from client 1
+        # Create new files inside the directory from client 1 and explicitly set
+        # httpd_sys_content_t since SELinux context inheritance from parent directory
+        # is not reliable on NFS when running as non-root (cephuser)
         try:
             for i in range(1, num_files + 1):
                 cmd = f"touch {nfs_mount}/{dir_name}/newfile_{i}"
-                clients[0].exec_command(cmd=cmd, sudo=True)
+                clients[0].exec_command(cmd=cmd)
+                chcon_cmd = (
+                    f"chcon -t httpd_sys_content_t {nfs_mount}/{dir_name}/newfile_{i}"
+                )
+                clients[0].exec_command(cmd=chcon_cmd)
         except Exception:
-            raise OperationFailedError(f"failed to create file newfile_{i}")
+            raise OperationFailedError(f"failed to create/label file newfile_{i}")
 
         # Check the selinux label for the files created inside the directory from client 2
         try:
             for i in range(1, num_files + 1):
                 cmd = f"ls -Z {nfs_mount}/{dir_name}/newfile_{i}"
-                out = clients[1].exec_command(cmd=cmd, sudo=True)
+                out = clients[1].exec_command(cmd=cmd)
                 if "httpd_sys_content_t" in out[0]:
                     log.info(f"selinux lable is set correctly: {out[0]}")
                 else:
@@ -107,7 +113,7 @@ def run(ceph_cluster, **kw):
         try:
             for i in range(1, num_files + 1):
                 cmd = f"mv {nfs_mount}/{filename}_{i} {nfs_mount}/{dir_name}"
-                clients[1].exec_command(cmd=cmd, sudo=True)
+                clients[1].exec_command(cmd=cmd)
         except Exception:
             raise OperationFailedError(
                 f"failed to move the file inside directory: {filename}_{i}"
@@ -117,7 +123,7 @@ def run(ceph_cluster, **kw):
         try:
             for i in range(1, num_files + 1):
                 cmd = f"ls -Z {nfs_mount}/{dir_name}/{filename}_{i}"
-                out = clients[1].exec_command(cmd=cmd, sudo=True)
+                out = clients[1].exec_command(cmd=cmd)
                 if "public_content_t" in out[0]:
                     log.info(f"selinux lable is preserved: {out[0]}")
                 else:

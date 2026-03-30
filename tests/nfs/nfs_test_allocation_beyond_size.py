@@ -1,5 +1,6 @@
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
+from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
 
@@ -30,6 +31,7 @@ def run(ceph_cluster, **kw):
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
     filename = "Testfile"
+    Ceph(clients[0]).fs.sub_volume_group.create(group="ganeshagroup", volume=fs_name)
 
     try:
         # Setup nfs cluster
@@ -48,15 +50,15 @@ def run(ceph_cluster, **kw):
 
         # Create a file
         cmd = f"dd if=/dev/urandom of={nfs_mount}/{filename} bs=1G count=1"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Simulate allocation beyond EOF
         cmd = f"dd if=/dev/urandom of={nfs_mount}/{filename} bs=1G count=1 seek=9 conv=notrunc"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Verify the file size is allocated correctly
         cmd = f"du -sh {nfs_mount}/{filename}"
-        out = clients[0].exec_command(cmd=cmd, sudo=True)
+        out = clients[0].exec_command(cmd=cmd)
         file_size = out[0].strip().split()[0]
         if file_size == "10G":
             log.info(f"File created with correct space: {file_size}")

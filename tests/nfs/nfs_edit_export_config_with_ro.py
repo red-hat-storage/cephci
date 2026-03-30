@@ -15,12 +15,12 @@ def update_export_conf(
 ):
     try:
         out = Ceph(client).nfs.export.get(nfs_name, nfs_export_readonly)
-        client.exec_command(sudo=True, cmd=f"echo '{out}' > export.conf")
+        client.exec_command(sudo=True, cmd=f"echo '{out}' > /tmp/export.conf")
         client.exec_command(
             sudo=True,
-            cmd=f"sed -i 's/{original_access_type}/{new_access_type}/g' export.conf",
+            cmd=f"sed -i 's/{original_access_type}/{new_access_type}/g' /tmp/export.conf",
         )
-        Ceph(client).nfs.export.apply(nfs_name, "export.conf")
+        Ceph(client).nfs.export.apply(nfs_name, "/tmp/export.conf")
     except Exception:
         raise OperationFailedError("failed to edit access type in export conf file")
 
