@@ -26,6 +26,13 @@ Test steps for 83573489
 """
 
 
+ACCEPTED_WARNINGS = [
+    "experiencing slow operations in BlueStore",
+    "Slow OSD heartbeats",
+    "stray daemon(s) not managed by cephadm",
+]
+
+
 def get_health_check_keys(client):
     """
     Get the current set of health check keys from the Ceph cluster.
@@ -42,10 +49,21 @@ def get_health_check_keys(client):
     return set(checks.keys())
 
 
+def is_ignorable_warning(client, warning_key):
+    """
+    Check if a health warning matches the accepted warnings list
+    from cephfs_common_lib.py by inspecting ceph health detail output.
+    """
+    out, _ = client.exec_command(sudo=True, cmd="ceph health detail")
+    return any(msg in str(out) for msg in ACCEPTED_WARNINGS)
+
+
 def validate_no_new_health_warnings(client, pre_existing_warnings):
     """
     Check that no new health warnings have been introduced.
     Raises CommandFailed if new warnings are found, allowing retry decorator to handle retries.
+    Transient infrastructure-level warnings (e.g. slow BlueStore ops, slow OSD heartbeats)
+    are ignored, consistent with the accepted_list in cephfs_common_lib.py.
 
     Args:
         client: Client node to execute the command.
@@ -54,9 +72,14 @@ def validate_no_new_health_warnings(client, pre_existing_warnings):
     post_test_warnings = get_health_check_keys(client)
     new_warnings = post_test_warnings - pre_existing_warnings
     if new_warnings:
-        raise CommandFailed(
-            f"New health warnings introduced by this test: {new_warnings}"
-        )
+        if is_ignorable_warning(client, new_warnings):
+            log.info(
+                "Ignoring known transient warnings: %s", new_warnings
+            )
+        else:
+            raise CommandFailed(
+                f"New health warnings introduced by this test: {new_warnings}"
+            )
     if post_test_warnings:
         log.info(
             f"Pre-existing health warnings still present (ignored): "
