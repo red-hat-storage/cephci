@@ -91,6 +91,7 @@ tests:
         run-on-rgw: true
         extra-pkgs:
           - jdk
+        git_clone_configs_repo: true
         install_start_kafka: true
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
