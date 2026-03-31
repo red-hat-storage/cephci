@@ -227,7 +227,7 @@ def configure_hosts(gateway, config: dict, ceph_cluster=None, initiators=None):
 
                 # Generate key for host NQN if inband_auth is enabled and key doesn't exist
                 sub_cfg.pop("dhchap-key", None)
-                if host.get("inband_auth"):
+                if sub_cfg.get("inband_auth"):
                     if not initiator or not initiator.host_key:
                         # Key doesn't exist, generate it
                         # create_dhchap_key returns initiators with auth_mode set
