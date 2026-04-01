@@ -11,7 +11,7 @@ Pre-requisites :
    conf and keyring files
 
 TC#1: Test Case Flow:
-Step1: Deploy Two ceph cluster on version 8.1 or later 	Deployment should be successful
+Step1: Deploy Two ceph cluster on version 8.1 or later  Deployment should be successful
 Step 2: Create RBD pool 'pool_1' on both sites
 Step 3: Enable Image mode mirroring on pool_1 on both sites
 Step 4: Bootstrap the storage cluster peers (Two-way)
@@ -110,7 +110,12 @@ def test_group_mirroring_with_zero_size(
             # Get Group Mirroring Status
             group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
-                if "mirroring not enabled on the group" in err:
+                # 8.x and 9.x has different mirror status output
+                known_messages = [
+                    "mirroring disabled",
+                    "mirroring not enabled on the group",
+                ]
+                if any(msg in err for msg in known_messages):
                     mirror_state = "Disabled"
                 else:
                     raise Exception("Getting group mirror status failed : " + str(err))
