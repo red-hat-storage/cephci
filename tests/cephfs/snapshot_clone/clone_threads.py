@@ -136,11 +136,11 @@ def run(ceph_cluster, **kw):
             extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
-        if LooseVersion(ceph_version) > LooseVersion("20.1.1"):
+        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=True
             )
-            log.info("Ceph version >= 20.1 detected. Creating referent inode setup.")
+            log.info("Ceph version >= 20.3 detected. Creating referent inode setup.")
             ref_base_path = fuse_mounting_dir_1
             ref_inode_utils.create_directories(
                 client1, ref_base_path, ["dirA", "dirA/dirB"]
@@ -252,7 +252,7 @@ def run(ceph_cluster, **kw):
                 )
             log.info(f"Iteration {iteration} has been completed")
 
-        if LooseVersion(ceph_version) > LooseVersion("20.1.1"):
+        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=False
             )
