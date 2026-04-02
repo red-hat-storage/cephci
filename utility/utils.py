@@ -25,6 +25,7 @@ from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 
+from cli.exceptions import ConfigError
 from utility.log import Log
 
 log = Log(__name__)
@@ -2006,8 +2007,20 @@ def configure_kafka_cluster_with_security(ceph_cluster, cloud_type):
 
 def config_keystone_ldap(rgw_node, cloud_type):
     """Set the keystone config option on the cluster at startup"""
-    keystone_server = get_cephci_config()["keystone"][cloud_type].get("url")
-    ldap_url = get_cephci_config()["ldap"][cloud_type].get("url")
+    cephci_config = get_cephci_config()
+    keystone_cfg = cephci_config.get("keystone", {})
+    ldap_cfg = cephci_config.get("ldap", {})
+    # OneCloud may share keystone/ldap with openstack; fallback if onecloud not configured
+    lookup = cloud_type if cloud_type in keystone_cfg else "openstack"
+    keystone_server = keystone_cfg.get(lookup, keystone_cfg.get("openstack", {})).get(
+        "url"
+    )
+    ldap_url = ldap_cfg.get(lookup, ldap_cfg.get("openstack", {})).get("url")
+    if not keystone_server or not ldap_url:
+        raise ConfigError(
+            f"keystone/ldap config missing for cloud_type '{cloud_type}'. "
+            "Add keystone.{cloud} and ldap.{cloud} to cephci config."
+        )
 
     out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
     rgw_name = out[0].split()[0]

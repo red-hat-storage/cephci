@@ -208,7 +208,7 @@ def get_custom_repo_url(base_url, cloud_type="openstack"):
     """Add the given custom repo on every node part of the cluster.
 
     Args:
-        cloud_type (str): cloudtype (openstack|ibmc)
+        cloud_type (str): cloudtype (openstack|ibmc|aws|onecloud)
         base_url (str): base URL of repository
     """
     if base_url.endswith(".repo"):
