@@ -1,0 +1,107 @@
+# 17-host cluster: 12 OSD nodes, 2 osd-bak, 2 nodes without OSDs, last node is client
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node2:
+        role:
+          - osd
+          - rgw
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - rgw
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - mon
+          - mgr
+          - osd
+          - nfs
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        role:
+          - osd
+          - rgw
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node7:
+        role:
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node8:
+        role:
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node9:
+        role:
+          - osd
+          - mon
+          - mgr
+        no-of-volumes: 4
+        disk-size: 15
+      node10:
+        role:
+          - osd
+          - nfs
+        no-of-volumes: 4
+        disk-size: 15
+      node11:
+        role:
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node12:
+        role:
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node13:
+        role:
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node14:
+        role:
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node15:
+        role:
+          - rgw
+          - mds
+      node16:
+        role:
+          - nfs
+      node17:
+        role:
+          - client
