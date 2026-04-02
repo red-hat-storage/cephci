@@ -36,6 +36,38 @@ instance:
         - name: root
           password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
 
+    write_files:
+      - content: |
+          {
+              "default": [
+                  {
+                      "type": "insecureAcceptAnything"
+                  }
+              ],
+              "transports": {
+                  "docker": {
+                      "registry.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "registry.stage.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "quay.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ]
+                  }
+              }
+          }
+        path: /etc/containers/policy.json
+        owner: root:root
+        permissions: '0644'
+
     runcmd:
       - timedatectl set-timezone Etc/UTC
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
