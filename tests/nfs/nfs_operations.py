@@ -862,14 +862,17 @@ def create_nfs_via_file_and_verify(
     Returns:
         str: Path to the temporary YAML file.
     """
+    import os
+
     temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+    remote_path = f"/tmp/{os.path.basename(temp_file.name)}"
 
     # Handle case where installer_node is a list
     if isinstance(installer_node, list):
         installer_node = installer_node[0]
 
     spec_file = installer_node.remote_file(
-        sudo=True, file_name=temp_file.name, file_mode="wb"
+        sudo=True, file_name=remote_path, file_mode="wb"
     )
     spec = yaml.dump_all(nfs_objects, sort_keys=False, indent=2).encode("utf-8")
     spec_file.write(spec)
@@ -878,7 +881,7 @@ def create_nfs_via_file_and_verify(
     try:
         pos_args = []
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
-            input=temp_file.name, check_ec=True, pos_args=pos_args
+            input=remote_path, check_ec=True, pos_args=pos_args
         )
         verify_nfs_ganesha_service(node=installer_node, timeout=timeout)
         log.info("NFS Ganesha spec file applied successfully.")
@@ -1019,13 +1022,14 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
-def mount_retry(client, mount_name, version, port, nfs_server, export_name):
+def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kwargs):
     if Mount(client).nfs(
         mount=mount_name,
         version=version,
         port=port,
         server=nfs_server,
         export=export_name,
+        **kwargs,
     ):
         raise OperationFailedError("Failed to mount nfs on %s" % {export_name.hostname})
     return True
