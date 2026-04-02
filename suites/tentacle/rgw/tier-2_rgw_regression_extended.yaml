@@ -257,3 +257,11 @@ tests:
         script-name: ../aws/test_ldap_auth.py
         config-file-name: ../../aws/configs/test_ldap_auth.yaml
         run-on-rgw: true
+  - test:
+      name: test_bypass_gc server side copy data loss
+      desc: test_bypass_gc server side copy data loss#73138,#73348
+      polarion-id: CEPH-83632389
+      module: sanity_rgw.py
+      config:
+        script-name: test_bypass_gc_corruption.py
+        config-file-name: test_bypass_gc_versioned_multipart.yaml
