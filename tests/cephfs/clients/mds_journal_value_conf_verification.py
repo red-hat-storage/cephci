@@ -16,6 +16,12 @@ def run(ceph_cluster, **kw):
     1. set the mds conf journal values
     2. verify the mds conf journal values
     """
+    conf_default = []
+    conf_set = "ceph config set mds"
+    client1 = None
+    fs_util = None
+    fuse_mounting_dir_1 = ""
+    kernel_mounting_dir_1 = ""
     try:
         tc = "CEPH-11331"
         log.info(f"Running CephFS tests for -{tc}")
@@ -127,12 +133,16 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Resetting the client config values to default")
-        for default in conf_default:
-            client_conf = default[0]
-            value = default[1]
-            client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
-        log.info("Successfully reset all the client config values to default")
-        log.info("Unmounting the clients")
-        fs_util.client_clean_up(client1, [fuse_mounting_dir_1, kernel_mounting_dir_1])
-        log.info("Successfully unmounted the clients")
+        if client1 and conf_default:
+            log.info("Resetting the client config values to default")
+            for default in conf_default:
+                client_conf = default[0]
+                value = default[1]
+                client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
+            log.info("Successfully reset all the client config values to default")
+        if fs_util and client1:
+            log.info("Unmounting the clients")
+            fs_util.client_clean_up(
+                client1, [fuse_mounting_dir_1, kernel_mounting_dir_1]
+            )
+            log.info("Successfully unmounted the clients")
