@@ -305,3 +305,186 @@ tests:
       module: test_nvmeof_rbd_mirror.py
       name: NVMeoF RBD Mirror test with snapshot-based mirroring
       polarion-id: CEPH-XXXXX
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            rep-pool-only: true
+            poolname: rbd
+            mode: image
+            mirrormode: snapshot
+            way: two-way
+            peer_mode: bootstrap
+            rbd_client: client.admin
+            image_config:
+              count: 2
+              secondary_count: 0
+              size: 8G
+              snapshot_interval: 2m
+              snapshot_level: image
+            failover_test:
+              pre_failover_fio_size: 512M
+              pre_failover_fio_runtime_sec: 45
+              secondary_fio_size: 512M
+              secondary_fio_runtime_sec: 30
+              mirror_sync_wait_sec: 90
+              post_failback_md5_wait_sec: 30
+              user_snap_mirror_wait_sec: 120
+              clone_verify_fio_size: 256M
+              clone_verify_fio_runtime_sec: 30
+              pre_failover_io_type: rw
+              secondary_io_type: rw
+              secondary_initiator:
+                node: node2
+                listener_port: 4420
+              primary_initiator:
+                node: node2
+                listener_port: 4420
+            primary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - subsystems
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode1
+                  serial: 1
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+            secondary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - subsystems
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode1
+                  serial: 1
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+        ceph-rbd2:
+          config:
+            rep-pool-only: true
+            poolname: rbd
+            mode: image
+            mirrormode: snapshot
+            way: two-way
+            peer_mode: bootstrap
+            rbd_client: client.admin
+            image_config:
+              count: 2
+              secondary_count: 0
+              size: 8G
+              snapshot_interval: 2m
+              snapshot_level: image
+            failover_test:
+              pre_failover_fio_size: 512M
+              pre_failover_fio_runtime_sec: 45
+              secondary_fio_size: 512M
+              secondary_fio_runtime_sec: 30
+              mirror_sync_wait_sec: 90
+              post_failback_md5_wait_sec: 30
+              user_snap_mirror_wait_sec: 120
+              clone_verify_fio_size: 256M
+              clone_verify_fio_runtime_sec: 30
+              pre_failover_io_type: rw
+              secondary_io_type: rw
+              secondary_initiator:
+                node: node2
+                listener_port: 4420
+              primary_initiator:
+                node: node2
+                listener_port: 4420
+            primary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - subsystems
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode2
+                  serial: 2
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+            secondary_nvme_config:
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - subsystems
+                - pool
+                - gateway
+                - initiators
+              gw_nodes:
+                - node4
+                - node5
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode2
+                  serial: 2
+                  listener_port: 4420
+                  listeners:
+                    - node4
+                    - node5
+                  allow_host: "*"
+                  bdevs:
+                    - count: 0
+                      size: 2G
+      desc: Planned RBD mirror failover/failback with NVMe namespace read-write verification
+      destroy-cluster: false
+      module: test_nvmeof_rbd_mirror_failover.py
+      name: NVMeoF RBD Mirror planned failover and failback
+      polarion-id: CEPH-83632385
