@@ -868,17 +868,22 @@ def create_nfs_via_file_and_verify(
     if isinstance(installer_node, list):
         installer_node = installer_node[0]
 
+    # Use a stable remote path in /tmp/ instead of the local temp file name,
+    # which can contain platform-specific nested paths (e.g. /var/folders on macOS)
+    # that don't exist on the remote Linux node.
+    remote_path = f"/tmp/{os.path.basename(temp_file.name)}"
     spec_file = installer_node.remote_file(
-        sudo=True, file_name=temp_file.name, file_mode="wb"
+        sudo=True, file_name=remote_path, file_mode="wb"
     )
     spec = yaml.dump_all(nfs_objects, sort_keys=False, indent=2).encode("utf-8")
     spec_file.write(spec)
     spec_file.flush()
 
     try:
+        # Apply the spec by mounting the remote file into the orchestrator shell
         pos_args = []
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
-            input=temp_file.name, check_ec=True, pos_args=pos_args
+            input=remote_path, check_ec=True, pos_args=pos_args
         )
         verify_nfs_ganesha_service(node=installer_node, timeout=timeout)
         log.info("NFS Ganesha spec file applied successfully.")
