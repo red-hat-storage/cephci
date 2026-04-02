@@ -285,3 +285,39 @@ tests:
       config:
         scenarios:
           - scenario6
+
+  - test:
+      name: scenario 7 - ok-to-upgrade-rack-failure-domain-max100
+      desc: Rack failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario7
+
+  - test:
+      name: scenario 8 - ok-to-upgrade-chassis-failure-domain-max100
+      desc: Chassis failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario8
+
+  - test:
+      name: scenario 9 - ok-to-upgrade-host-failure-domain-max100
+      desc: Host failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario9
+
+  - test:
+      name: scenario 10 - ok-to-upgrade-osd-failure-domain-max100
+      desc: OSD failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario10
