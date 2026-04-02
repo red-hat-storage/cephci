@@ -343,7 +343,8 @@ tests:
             service: upgrade
             verify_cluster_health: true
       polarion-id: CEPH-83574647
-      comments: Upgrade may fail if nightly and stable build paths are incorrect, identical, or if the nightly build version is lower than the stable build.
+      comments: IBMCEPH-13589
+      # Upgrade may fail if nightly and stable build paths are incorrect, identical, or if the nightly build version is lower than the stable build.
 
   - test:
       abort-on-fail: true
