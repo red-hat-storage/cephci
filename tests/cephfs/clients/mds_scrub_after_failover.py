@@ -73,9 +73,7 @@ def validate_no_new_health_warnings(client, pre_existing_warnings):
     new_warnings = post_test_warnings - pre_existing_warnings
     if new_warnings:
         if is_ignorable_warning(client, new_warnings):
-            log.info(
-                "Ignoring known transient warnings: %s", new_warnings
-            )
+            log.info("Ignoring known transient warnings: %s", new_warnings)
         else:
             raise CommandFailed(
                 f"New health warnings introduced by this test: {new_warnings}"

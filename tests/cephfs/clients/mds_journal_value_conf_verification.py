@@ -138,9 +138,7 @@ def run(ceph_cluster, **kw):
             for default in conf_default:
                 client_conf = default[0]
                 value = default[1]
-                client1.exec_command(
-                    sudo=True, cmd=f"{conf_set} {client_conf} {value}"
-                )
+                client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
             log.info("Successfully reset all the client config values to default")
         if fs_util and client1:
             log.info("Unmounting the clients")
