@@ -775,7 +775,7 @@ spec:
 
     # Open the NLM port in firewall
     log.info("Opening NLM (nlockmgr) port in firewall")
-    ports_to_open = ["nlockmgr"]
+    ports_to_open = ["nlockmgr", "mountd"]
     open_mandatory_v3_ports(nfs_node, ports_to_open)
     log.info("NFSv3 locking (NLM) enabled successfully")
 
