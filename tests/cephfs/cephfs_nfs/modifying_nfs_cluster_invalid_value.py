@@ -15,7 +15,7 @@ log = Log(__name__)
 def run(ceph_cluster, **kw):
     """
     Test operation:
-    1. change the access_type to RW
+    1. change the access_type to an invalid value
     2. apply the changes
     3. check if it throws an error with invalid value
     4. try to change other values using steps above
@@ -110,7 +110,7 @@ def run(ceph_cluster, **kw):
         # changing access type to invalid value
         client1.exec_command(
             sudo=True,
-            cmd=f"sed -i 's/{access_type_value}/{access_type}{access_type_fault}/g' export1.conf",
+            cmd=f"sed -i 's/{access_type_value}/{access_type}{access_type_fault}/gI' export1.conf",
         )
         out, rc = client1.exec_command(
             sudo=True,
@@ -130,7 +130,7 @@ def run(ceph_cluster, **kw):
         log.info("changing squash to invalid value")
         client1.exec_command(
             sudo=True,
-            cmd=f"sed -i 's/{squash_value}/{squash}{squash_fault}/g' export2.conf",
+            cmd=f"sed -i 's/{squash_value}/{squash}{squash_fault}/gI' export2.conf",
         )
         out, rc = client1.exec_command(
             sudo=True,
@@ -153,7 +153,7 @@ def run(ceph_cluster, **kw):
 
         client1.exec_command(
             sudo=True,
-            cmd=f"sed -i 's/{security_value}/{security_label}{security_fault}/g' export3.conf",
+            cmd=f"sed -i 's/{security_value}/{security_label}{security_fault}/gI' export3.conf",
         )
         out, rc = client1.exec_command(
             sudo=True,

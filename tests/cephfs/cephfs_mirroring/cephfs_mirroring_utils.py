@@ -1327,10 +1327,35 @@ class CephfsMirroringUtils(object):
             if self.disable_mirroring_module(target_client) != 0:
                 raise Exception("Failed to disable mirroring module on Target.")
 
+            log.info(
+                "Waiting for mgr to stabilize and volumes module to be available "
+                "after disabling mirroring modules"
+            )
+            self._ensure_volumes_module(source_client)
+
             log.info("CephFS mirroring setup destroyed successfully.")
 
         except Exception as e:
             log.error(f"Error destroying CephFS mirroring setup: {e}")
+
+    @retry(Exception, tries=10, delay=15)
+    def _ensure_volumes_module(self, client):
+        """
+        Ensure the 'volumes' mgr module is loaded after a mgr restart.
+
+        Disabling mgr modules (like mirroring) triggers a mgr restart, which
+        temporarily unloads all modules including 'volumes'. Subsequent commands
+        such as 'ceph fs subvolume rm' will fail with ENOTSUP until the module
+        is re-loaded. This polls using the same pattern as enable_mirroring_module
+        / disable_mirroring_module until the volumes module is available.
+        """
+        out, _ = client.exec_command(
+            sudo=True, cmd="ceph mgr module ls --format json-pretty"
+        )
+        module_status = json.loads(out)
+        if "volumes" not in module_status.get("enabled_modules", []):
+            raise Exception("volumes mgr module is not yet available")
+        log.info("volumes mgr module is available")
 
     def add_files_and_validate(
         self,

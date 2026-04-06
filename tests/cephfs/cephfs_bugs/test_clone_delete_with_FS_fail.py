@@ -52,6 +52,10 @@ def run(ceph_cluster, **kw):
     2. ceph fs subvolume rm <vol_name> <subvol_name> [--group_name <subvol_group_name>]
     3. ceph fs subvolumegroup rm <vol_name> <group_name>
     """
+    snapshot = None
+    subvolume = None
+    subvolumegroup_list = []
+    default_fs = None
     try:
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
@@ -169,14 +173,17 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd="ceph config set mgr mgr/volumes/snapshot_clone_delay 0",
         )
-        fs_util.remove_snapshot(client1, **snapshot)
-        fs_util.remove_subvolume(client1, **subvolume)
+        if snapshot:
+            fs_util.remove_snapshot(client1, **snapshot)
+        if subvolume:
+            fs_util.remove_subvolume(client1, **subvolume)
         if cephfs_common_utils.wait_for_healthy_ceph(client1):
             test_fail = 1
         for subvolumegroup in subvolumegroup_list:
             fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
-        log.info(f"Cleaning up the Filesystem {default_fs}")
-        fs_util.remove_fs(clients[0], default_fs, validate=True)
+        if default_fs:
+            log.info(f"Cleaning up the Filesystem {default_fs}")
+            fs_util.remove_fs(clients[0], default_fs, validate=True)
         if test_fail == 1:
             log.error(
                 "Cluster health is not OK even after waiting for %s secs ",

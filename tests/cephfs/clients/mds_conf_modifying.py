@@ -7,6 +7,7 @@ from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
 
@@ -235,6 +236,8 @@ def run(ceph_cluster, **kw):
             value = default[1]
             client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
         log.info("Successfully reset all the client config values to default")
+        log.info("Waiting for MDS to recover after config reset")
+        CephFSCommonUtils(ceph_cluster).wait_for_healthy_ceph(client1, wait_time=300)
 
 
 def set_balance_automate_and_validate(client, fs_name="cephfs"):
