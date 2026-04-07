@@ -1,14 +1,14 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-upgrade-ibm-7x-to-8x-latest.yaml
-# Scenario: Upgrade IBM 7.1(GA) cluster to IBM 8(Latest) with NFS-Ganesha in RHEL9
+# Test-Suite: tier1-nfs-ganesha-upgrade-8x-to-8x-latest.yaml
+# Scenario: Upgrade IBM 8.1(GA) cluster to IBM 8.1(Latest) with NFS-Ganesha in RHEL9
 #
 # Cluster Configuration: Conf: conf/reef/nfs/1admin-3client-7node.yaml
 #
 # Test Steps:
-# - Deploy IBM 7.1(GA) cluster in RHEL 9
-# - Deploy IBM 7.1 client
-# - Upgrade cluster along with NFS-Ganesha IOs parllel
+# - Deploy IBM 8.1(latest) cluster in RHEL 9
+# - Deploy IBM 8.1 client
+# - Upgrade cluster along with NFS-Ganesha IOs parllel on IBM 8.1
 ################################################################################################
 tests:
   - test:
@@ -18,8 +18,8 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Bootstrap IBM 7.1(GA) cluster and deploy services with label placements.
-      desc: Bootstrap IBM 7.1(GA) cluster and deploy services with label placements.
+      name: Bootstrap Ceph 8.x(latest) cluster and deploy services with label placements.
+      desc: Bootstrap Ceph 8.x(latest) cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -29,8 +29,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-7-rhel9:latest"
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-7-rhel-9.repo"
+                rhcs-version: 8.1
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -161,7 +161,7 @@ tests:
       polarion-id: CEPH-83581304
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 4
         io: false
         cleanup: false
@@ -173,7 +173,7 @@ tests:
       polarion-id: CEPH-83581304
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 4
         setup: false
 
