@@ -20,6 +20,7 @@ def run(ceph_cluster, **kw):
     port = config.get("port", "2049")
     version = config.get("nfs_version", "4.2")
     no_clients = int(config.get("clients", "2"))
+    sudo = config.get("sudo", True)
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
         raise ConfigError("The test requires more clients than available")
@@ -59,7 +60,7 @@ def run(ceph_cluster, **kw):
         # Create a file on Mount point
         for i in range(1, 11):
             cmd = f"touch {nfs_mount}/{filename}{i}"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd, sudo=sudo)
 
         # Set multiple extended attribute on the file from client 1
         set_attributes = []

@@ -16,6 +16,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     clients = ceph_cluster.get_nodes("client")
+    sudo = kw.get("sudo", True)
 
     port = config.get("port", "2049")
     version = config.get("nfs_version")
@@ -75,7 +76,7 @@ def run(ceph_cluster, **kw):
 
         # Test writes on Readonly export
         _, rc = clients[0].exec_command(
-            sudo=True, cmd=f"touch {nfs_readonly_mount}/file_ro", check_ec=False
+            sudo=sudo, cmd=f"touch {nfs_readonly_mount}/file_ro", check_ec=False
         )
         # Ignore the "Read-only file system" error and consider it as a successful execution
         if "touch: cannot touch" in str(rc) and "Read-only file system" in str(rc):
@@ -86,7 +87,7 @@ def run(ceph_cluster, **kw):
 
         # Test writes on RW export
         clients[0].exec_command(
-            sudo=True,
+            sudo=sudo,
             cmd=f"touch {nfs_mount}/file_rw",
         )
         return 0

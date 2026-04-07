@@ -145,6 +145,7 @@ tests:
         clients: 3
         num_files: 1000
         num_dirs: 1000
+        sudo: false
 
   - test:
       name: Running nfstest lock suite
@@ -165,6 +166,7 @@ tests:
       config:
         nfs_version: 3
         clients: 1
+        sudo: false
 
   - test:
       name: Nfs export rootsquash permission

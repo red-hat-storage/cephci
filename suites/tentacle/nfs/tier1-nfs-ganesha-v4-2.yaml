@@ -142,6 +142,7 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+        sudo: false
 
   - test:
       name: Verify owner of a symbolic link and the owner of the target file can be different users
@@ -152,6 +153,7 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+        sudo: true
 
   - test:
       name: Nfs Verify file mv operation
@@ -396,6 +398,7 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+        sudo: false
 
   - test:
       name: Nfs export rootsquash permission
@@ -406,6 +409,7 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+        sudo: true
 
   - test:
       name: Nfs Verify locks over nfs mount with root_squash enabled
@@ -457,6 +461,7 @@ tests:
       config:
         nfs_version: 4.2
         clients: 2
+        sudo: false
 
   - test:
       name: Nfs verify extended attributes are preserved across filesystem operations

@@ -18,7 +18,7 @@ def update_export_conf(
         client.exec_command(sudo=True, cmd=f"echo '{out}' > /tmp/export.conf")
         client.exec_command(
             sudo=True,
-            cmd=f"sed -i 's/{original_access_type}/{new_access_type}/g' /tmp/export.conf",
+            cmd=f"sed -i 's/{original_access_type}/{new_access_type}/gI' /tmp/export.conf",
         )
         Ceph(client).nfs.export.apply(nfs_name, "/tmp/export.conf")
     except Exception:
@@ -51,8 +51,8 @@ def run(ceph_cluster, **kw):
     # Export Conf Parameter
     nfs_export_readonly = "/exportRO"
     nfs_readonly_mount = "/mnt/nfs_readonly"
-    original_access_type = '"access_type": "RW"'
-    new_access_type = '"access_type": "RO"'
+    original_access_type = '"access_type": "rw"'
+    new_access_type = '"access_type": "ro"'
 
     try:
         # Setup nfs cluster
@@ -109,7 +109,7 @@ def run(ceph_cluster, **kw):
         # Test writes on Readonly export
         sleep(3)
         _, rc = clients[0].exec_command(
-            sudo=True, cmd=f"touch {nfs_readonly_mount}/file_ro", check_ec=False
+            cmd=f"touch {nfs_readonly_mount}/file_ro", check_ec=False
         )
         # Ignore the "Read-only file system" error and consider it as a successful execution
         if "touch: cannot touch" in str(rc) and "Read-only file system" in str(rc):
@@ -119,7 +119,7 @@ def run(ceph_cluster, **kw):
             return 1
 
         # Test writes on RW export
-        if clients[0].exec_command(sudo=True, cmd=f"touch {nfs_mount}/file_rw"):
+        if clients[0].exec_command(cmd=f"touch {nfs_mount}/file_rw"):
             log.info("Successfully created file on RW export")
         else:
             log.error("failed to create file on RW export")
