@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from time import sleep
 
+from looseversion import LooseVersion
+
 from ceph.ceph import Ceph, SocketTimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
@@ -40,7 +42,7 @@ from tests.nvmeof.workflows.nvme_utils import (
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import generate_unique_id
+from utility.utils import generate_unique_id, get_ceph_version_from_cluster
 
 LOG = Log(__name__)
 cli_image = str()
@@ -976,7 +978,25 @@ def test_ceph_83608266(
             test_nvmeof.run(ceph_cluster, **cfg)
         else:
             del conf["nqn"]
-            CephAdm(admin_node).ceph.orch.apply(service_name="nvmeof", **conf)
+            # Apply NVMe service using args format for Ceph >= 20.2.1
+            ceph_version = get_ceph_version_from_cluster(
+                ceph_cluster.get_nodes(role="client")[0]
+            )
+            if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+                nvme_service.group = conf["pos_args"][-1]
+                if nvme_service.group == "gw_group1":
+                    nvme_service.deploy()
+                elif nvme_service.group == "gw_group2":
+                    # While deploying same gw nodes in different gw groups, we need to use args format
+                    # and we won't get service is up and running after deployment, so we need to use
+                    # orch apply to deploy the service again.
+                    pos_args = conf.pop("pos_args")
+                    conf["pool"] = pos_args[0]
+                    conf["group"] = pos_args[1]
+                    conf["pos_args"] = " "
+                    CephAdm(admin_node).ceph.orch.apply(service_name="nvmeof", **conf)
+            else:
+                CephAdm(admin_node).ceph.orch.apply(service_name="nvmeof", **conf)
         out = CephAdm(admin_node).ceph.orch.ls(service_type="nvmeof", format="json")
         service_details = json.loads(out)[0]
 
@@ -1167,12 +1187,14 @@ def test_ceph_83608266(
             f"Deployment failed as you are trying to have same GW node in different GWgroups: {e}"
         )
     finally:
+        # Delete the NVME service for gw_group2
+        CephAdm(admin_node).ceph.orch.rm(
+            service_name="nvmeof.rbd.gw_group2", force=True
+        )
         nvme_service.config["gw_node"] = gw_node.id
-        teardown(nvme_service, rbd)
-        nvme_service.group = "gw_group2"
-        rc = nvme_service.delete_nvme_service()
-        if rc != 0:
-            LOG.warning("Failed to delete NVMe gateways")
+        nvme_service.group = "gw_group1"
+        if nvme_service.gateways:
+            teardown(nvme_service, rbd)
         return 0
 
 
@@ -1234,6 +1256,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             if operation == "CEPH-83608266":
                 placements = config["args"]["placement_options"]
                 for placement_cfg in placements:
+                    nvme_service = NVMeService(config, ceph_cluster)
                     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
                     test_ceph_83608266(
                         ceph_cluster,
