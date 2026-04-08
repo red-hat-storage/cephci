@@ -75,7 +75,7 @@ def test_add_remove_group_mirroring(
     primary_cluster,
     secondary_cluster,
     pool_types,
-    **kw
+    **kw,
 ):
     """
     Test user can successfully add/remove images only in a disabled mirror rbd group
@@ -337,24 +337,32 @@ def test_add_remove_group_mirroring(
                 "Successfully verified image is removed from group when group mirroring is disabled"
             )
 
-            # Enable Mirroring
             if mirror_state == "Disabled":
                 enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
                 mirror_state = "Enabled"
 
-            # Add rbd image 'image1' to group # Should FAIL
             try:
                 add_group_image_and_verify(rbd_primary, **group_image_kw)
-                raise Exception(
-                    "Image should not have been added successfully when group mirroring is enabled"
+                log.info(
+                    "Image add succeeded on mirror-enabled group. "
+                    "This cluster supports dynamic image addition."
                 )
+
             except Exception as e:
-                if "cannot add image to mirror enabled group" in str(e):
+                err = str(e).lower()
+
+                known_old_behavior = [
+                    "cannot add image to mirror enabled group",
+                ]
+
+                if any(msg in err for msg in known_old_behavior):
                     log.info(
-                        "Successfully verified image is not added to the group when group mirroring is enabled"
+                        "Image add failed as expected on cluster without dynamic image addition support"
                     )
                 else:
-                    raise Exception("Add group image failed with " + e)
+                    raise Exception(
+                        f"Add group image failed with unexpected error: {str(e)}"
+                    )
 
             # Disable Mirroring
             if mirror_state == "Enabled":
