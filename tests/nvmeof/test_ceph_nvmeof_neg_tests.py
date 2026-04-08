@@ -24,6 +24,7 @@ from ceph.utils import get_node_by_id, get_nodes_by_ids
 from cli.cephadm.cephadm import CephAdm
 from cli.utilities.utils import get_running_containers, reboot_node
 from tests.cephadm import test_nvmeof, test_orch
+from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL
 from tests.nvmeof.workflows.gateway_entities import (
     configure_gw_entities,
     configure_hosts,
@@ -625,7 +626,20 @@ def test_ceph_83576093(ceph_cluster, rbd, nvme_service, pool, config):
         if not reboot_node(gw_node):
             raise Exception("Host did not started post reboot!!!!!")
 
-        service_name = f"nvmeof.{pool}"
+        # check the ceph version and if it is >= 20.2.1 and if the nvme_metadata_pool is DEFAULT_NVME_METADATA_POOL,
+        # then the service name should be "nvmeof.nvmeof"
+        # else the service name should be "nvmeof.{nvme_metadata_pool}"
+        ceph_version = get_ceph_version_from_cluster(
+            ceph_cluster.get_nodes(role="client")[0]
+        )
+        service_name = ""
+        if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+            if nvme_service.nvme_metadata_pool == DEFAULT_NVME_METADATA_POOL:
+                service_name = f"nvmeof{DEFAULT_NVME_METADATA_POOL}"
+            else:
+                service_name = f"nvmeof.{nvme_service.nvme_metadata_pool}"
+        else:
+            service_name = f"nvmeof.{nvme_service.nvme_metadata_pool}"
         gw_group = config.get("gw_group")
         service_name = f"{service_name}.{gw_group}" if gw_group else service_name
         check_service_exists(
