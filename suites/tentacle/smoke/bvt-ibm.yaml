@@ -82,6 +82,7 @@ tests:
         install_packages:
           - ceph-common
           - samba-client
+          - nfs-utils
         copy_admin_keyring: true
       desc: Configure the client system
       destroy-cluster: false
