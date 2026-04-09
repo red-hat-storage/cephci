@@ -1,4 +1,5 @@
 import ast
+import ipaddress
 import json
 import re
 import time
@@ -722,3 +723,23 @@ def fetch_lb_groups(gateways, nodes):
         hostname = nvmegwcli.fetch_gateway_hostname()
         lb_group_ids.update({hostname: nvmegwcli.ana_group_id})
     return lb_group_ids
+
+
+def get_network_mask(gateways):
+    ips = []
+
+    for gateway in gateways:
+        gw_ip = getattr(gateway.node, "ip_address", None)
+        if gw_ip:
+            ips.append(ipaddress.ip_address(gw_ip))
+    if not ips:
+        return None
+
+    ip_ints = [int(ip) for ip in ips]
+    min_ip = min(ip_ints)
+    max_ip = max(ip_ints)
+    diff = min_ip ^ max_ip  # XOR min & max → find differing bits → derive prefix length
+    prefix_len = 32 - diff.bit_length()  # Build subnet from first IP + prefix length
+
+    network = ipaddress.ip_network(f"{ips[0]}/{prefix_len}", strict=False)
+    return str(network)

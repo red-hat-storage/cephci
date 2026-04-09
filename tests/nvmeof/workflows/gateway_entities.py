@@ -1,6 +1,8 @@
 import json
 from copy import deepcopy
 
+from looseversion import LooseVersion
+
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
@@ -10,8 +12,13 @@ from tests.nvmeof.workflows.constants import (
 )
 from tests.nvmeof.workflows.inband_auth import create_dhchap_key
 from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.nvme_utils import get_network_mask
 from utility.log import Log
-from utility.utils import generate_unique_id, log_json_dump
+from utility.utils import (
+    generate_unique_id,
+    get_ceph_version_from_cluster,
+    log_json_dump,
+)
 
 LOG = Log(__name__)
 
@@ -51,7 +58,7 @@ def validate_subsystems(nvme_service, subsystem_config):
         )
 
 
-def configure_subsystems(nvme_service):
+def configure_subsystems(nvme_service, ceph_cluster=None):
     """
     Configure subsystems, hosts, and namespaces for this gateway group.
     This is done once per group, not per gateway.
@@ -104,18 +111,21 @@ def configure_subsystems(nvme_service):
             no_group_append = sub_cfg.get("no-group-append", True)
         else:
             no_group_append = sub_cfg.get("no-group-append", False)
-        gateway.subsystem.add(
-            **{
-                "args": {
-                    **sub_args,
-                    **{
-                        "max-namespaces": sub_cfg.get("max_ns", 32),
-                        "enable-ha": sub_cfg.get("enable_ha", False),
-                        "no-group-append": no_group_append,
-                    },
-                }
-            }
+
+        ceph_version = get_ceph_version_from_cluster(
+            ceph_cluster.get_nodes(role="client")[0]
         )
+        args = {
+            **sub_args,
+            "max-namespaces": sub_cfg.get("max_ns", 32),
+            "enable-ha": sub_cfg.get("enable_ha", False),
+            "no-group-append": no_group_append,
+        }
+
+        if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+            args["network-mask"] = get_network_mask(nvme_service.gateways)
+
+        gateway.subsystem.add(**{"args": args})
 
     subsystem_config = nvme_service.config.get("subsystems", [])
     for sub_cfg in subsystem_config:
@@ -484,9 +494,11 @@ def configure_gw_entities(nvme_service, rbd_obj=None, cluster=None):
                        (default: False, sequential execution)
     """
     subsystem_config = nvme_service.config.get("subsystems", [])
+    ceph_version = get_ceph_version_from_cluster(cluster.get_nodes(role="client")[0])
     if subsystem_config:
-        configure_subsystems(nvme_service)
-        configure_listeners(nvme_service.gateways, nvme_service.config)
+        configure_subsystems(nvme_service, ceph_cluster=cluster)
+        if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+            configure_listeners(nvme_service.gateways, nvme_service.config)
         configure_hosts(
             nvme_service.gateways[0], nvme_service.config, ceph_cluster=cluster
         )
