@@ -1,3 +1,4 @@
+import random
 import time
 import traceback
 from functools import wraps
@@ -7,7 +8,7 @@ from utility.log import Log
 logger = Log(__name__)
 
 
-def retry(exception_to_check, tries=4, delay=3, backoff=2):
+def retry(exception_to_check, tries=4, delay=3, backoff=2, jitter=False):
     """
     Retry calling the decorated function using exponential backoff.
 
@@ -16,6 +17,7 @@ def retry(exception_to_check, tries=4, delay=3, backoff=2):
         tries: number of times to try (not retry) before giving up
         delay: initial delay between retries in seconds
         backoff: backoff multiplier e.g. value of 2 will double the delay each retry
+        jitter: if True, add random jitter (0-50% of delay) to avoid retry storms
     """
 
     def deco_retry(f):
@@ -64,7 +66,10 @@ def retry(exception_to_check, tries=4, delay=3, backoff=2):
                             f"Exception in {caller_info}: {exception_name} - {str(e)}"
                         )
 
-                    time.sleep(mdelay)
+                    sleep_time = mdelay
+                    if jitter:
+                        sleep_time += random.uniform(0, mdelay * 0.5)
+                    time.sleep(sleep_time)
                     mtries -= 1
                     mdelay *= backoff
             return f(*args, **kwargs)

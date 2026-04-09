@@ -263,6 +263,19 @@ def install_prereq(
 
         ceph.exec_command(cmd="sudo yum clean all")
         config_ntp(ceph, cloud_type)
+    
+    if cloud_type.lower() == "aws":
+        ceph.exec_command(sudo=True, cmd="mkdir -p /etc/containers")
+        ceph.exec_command(
+            sudo=True,
+            cmd=(
+                "echo -e '[engine]\\n"
+                'cgroup_manager="cgroupfs"'
+                "'"
+                " > /etc/containers/containers.conf"
+            ),
+        )
+        log.info(f"Configured cgroupfs cgroup manager for AWS on {ceph.hostname}")
 
     registry_login(ceph, distro_ver, test_data)
     update_iptables(ceph)
