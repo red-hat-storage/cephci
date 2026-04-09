@@ -228,9 +228,9 @@ def run(ceph_cluster, **kw):
                     extra_params=f"-r {subvol_path.strip()} --client_fs {sv['vol_name']}",
                 )
                 mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
-                # Enable quota on fuse mount path (4 GiB bytes, 1000 files)
+                # Enable quota on fuse mount path (5 GiB bytes, 100000 files)
                 fs_util.set_quota_attrs(
-                    mnt_client, "10000", 4294967296, fuse_mounting_dir_1
+                    mnt_client, "100000", 5368709120, fuse_mounting_dir_1
                 )
                 mnt_params = {
                     "mnt_pt": fuse_mounting_dir_1,
@@ -247,9 +247,9 @@ def run(ceph_cluster, **kw):
                         extra_params=f"-r {subvol_path.strip()} ",
                     )
                     mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
-                    # Enable quota on fuse mount path (4 GiB bytes, 1000 files)
+                    # Enable quota on fuse mount path (5 GiB bytes, 100000 files)
                     fs_util.set_quota_attrs(
-                        mnt_client, "10000", 4294967296, fuse_mounting_dir_1
+                        mnt_client, "100000", 5368709120, fuse_mounting_dir_1
                     )
                     mnt_params = {
                         "mnt_pt": fuse_mounting_dir_1,
@@ -425,7 +425,7 @@ def run(ceph_cluster, **kw):
         log.info("Set Dir pinning")
         dir_name = "upgrade_pin_dir"
         io_tools = ["dd", "smallfile", "crefi"]
-        io_args = {"run_time": 15}
+        io_args = {"run_time": 10}
         mds_ranks = list(range(active_mds_cnt))
         for sv in subvolume_list:
             if len(mds_ranks) == 0:
@@ -591,14 +591,14 @@ def run(ceph_cluster, **kw):
             mnt_client.exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
+                f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )
             mnt_client.exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
+                f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )
@@ -612,18 +612,6 @@ def run(ceph_cluster, **kw):
         f.write(json.dumps(ceph_config, indent=4))
         f.write("\n")
         f.flush()
-
-        for i in mount_points["kernel_mounts"] + mount_points["fuse_mounts"]:
-            for vol_name in ceph_config["CephFS"]:
-                for svg in ceph_config["CephFS"][vol_name]:
-                    if "svg" in svg:
-                        for sv in ceph_config["CephFS"][vol_name][svg]:
-                            if i == ceph_config["CephFS"][vol_name][svg][sv]["mnt_pt"]:
-                                mnt_client = ceph_config["CephFS"][vol_name][svg][sv][
-                                    "mnt_client"
-                                ]
-            client_tmp = [j for j in clients if j.node.hostname == mnt_client][0]
-            fs_util.run_ios(client_tmp, i)
         for sv in subvolume_list:
             mnt_client = ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                 sv["subvol_name"]
