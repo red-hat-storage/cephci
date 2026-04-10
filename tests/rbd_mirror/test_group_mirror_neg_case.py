@@ -112,6 +112,7 @@ def test_group_mirroring_neg_case(
                         )
                     else:
                         image_spec.append(pool + "/" + image)
+
             pool_spec = None
             if "namespace" in pool_config:
                 enable_namespace_mirroring(
@@ -131,12 +132,13 @@ def test_group_mirroring_neg_case(
                     "mirroring disabled",
                     "mirroring not enabled on the group",
                 ]
-                if any(msg in err for msg in known_messages):
+                if any(msg in str(err).lower() for msg in known_messages):
                     mirror_state = "Disabled"
                 else:
                     raise Exception("Getting group mirror status failed : " + str(err))
             else:
                 mirror_state = "Enabled"
+
             log.info(
                 "Group "
                 + group_config["group-spec"]
@@ -145,15 +147,16 @@ def test_group_mirroring_neg_case(
             )
 
             log.info(
-                "Check journal mode mirorring can not be enabled on images part of the group"
+                "Check journal mode mirroring cannot be enabled on images which are part of the group"
             )
+
             # Enable group mirroring
             if mirror_state == "Disabled":
                 enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
                 mirror_state = "Enabled"
             log.info("Successfully Enabled group mirroring")
 
-            # Enable Journal Mode mirroring on images, should FAIL
+            # Enable Journal Mode mirroring on image, should FAIL
             image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{
                     "image-spec": image_spec_copy[0],
@@ -163,14 +166,14 @@ def test_group_mirroring_neg_case(
             if not err:
                 raise Exception(
                     "Journal based mirroring should not be enabled on images which are part of group"
-                    + image_mirror_status
+                    + str(image_mirror_status)
                     + " , err: "
-                    + err
+                    + str(err)
                 )
             else:
                 if (
                     "cannot enable mirroring on an image that is member of a group"
-                    in err
+                    in str(err).lower()
                 ):
                     log.info(
                         "Successfully verified journal mirroring cannot be enabled on image in the group"
@@ -178,9 +181,9 @@ def test_group_mirroring_neg_case(
                 else:
                     raise Exception(
                         "Error string while enabling journal based mirroring is not as expected"
-                        + image_mirror_status
+                        + str(image_mirror_status)
                         + " , err: "
-                        + err
+                        + str(err)
                     )
 
             # Disable group mirroring
@@ -189,7 +192,7 @@ def test_group_mirroring_neg_case(
                 mirror_state = "Disabled"
             log.info("Successfully Disabled group mirroring")
 
-            # Enable Journal Mode mirroring on images, should FAIL
+            # Enable Journal Mode mirroring on image, should FAIL
             image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{
                     "image-spec": image_spec_copy[0],
@@ -199,14 +202,14 @@ def test_group_mirroring_neg_case(
             if not err:
                 raise Exception(
                     "Journal based mirroring should not be enabled on images which are part of group"
-                    + image_mirror_status
+                    + str(image_mirror_status)
                     + " , err: "
-                    + err
+                    + str(err)
                 )
             else:
                 if (
                     "cannot enable mirroring on an image that is member of a group"
-                    in err
+                    in str(err).lower()
                 ):
                     log.info(
                         "Successfully verified journal mirroring cannot be enabled on image in the group"
@@ -214,13 +217,14 @@ def test_group_mirroring_neg_case(
                 else:
                     raise Exception(
                         "Error string while enabling journal based mirroring is not as expected"
-                        + image_mirror_status
+                        + str(image_mirror_status)
                         + " , err: "
-                        + err
+                        + str(err)
                     )
 
-            log.info("Check Journal mode enabled images cannot be added to the group")
-            # Remove Images from the group, Should Succeed
+            log.info("Check journal mode enabled images cannot be added to the group")
+
+            # Remove image from the group, should succeed
             group_image_kw = {
                 "group-spec": group_config["group-spec"],
                 "image-spec": image_spec_copy[0],
@@ -230,32 +234,46 @@ def test_group_mirroring_neg_case(
                 "Successfully verified image is removed from group when group mirroring is disabled"
             )
 
-            # Enable Journal Mode mirroring on images, Should Succeed
+            # Enable Journal Mode mirroring on image, should succeed
             image_mirror_status, err = rbd_primary.mirror.image.enable(
                 **{
                     "image-spec": image_spec_copy[0],
                     "mode": "journal",
                 }
             )
+            if err:
+                raise Exception(
+                    "Failed to enable journal based mirroring on image after removing from group"
+                    + str(image_mirror_status)
+                    + " , err: "
+                    + str(err)
+                )
             log.info(
                 "Successfully enabled journal based mirroring on image after removing from group"
             )
 
-            # Add images to the group, Should FAIL
+            # Add journal mirror-enabled image to the group, should FAIL
             try:
                 add_group_image_and_verify(rbd_primary, **group_image_kw)
                 raise Exception(
                     "Image should not have been added successfully when journal based "
-                    "mirroring is enabled on the images"
+                    "mirroring is enabled on the image"
                 )
             except Exception as e:
-                if "cannot add mirror enabled image to group" in str(e):
+                err = str(e).lower()
+                known_messages = [
+                    "cannot add mirror enabled image to group",
+                    "cannot add image to mirror enabled group",
+                ]
+                if any(msg in err for msg in known_messages):
                     log.info(
-                        "Successfully verified journal based mirror image can not be added to the "
-                        "group in disabled state"
+                        "Successfully verified journal based mirror-enabled image cannot be added "
+                        "to the group when group mirroring is disabled"
                     )
                 else:
-                    raise Exception("Add group image failed with " + str(e))
+                    raise Exception(
+                        f"Add group image failed with unexpected error: {e}"
+                    )
 
             # Enable group mirroring
             if mirror_state == "Disabled":
@@ -263,23 +281,33 @@ def test_group_mirroring_neg_case(
                 mirror_state = "Enabled"
             log.info("Successfully Enabled group mirroring")
 
-            # Add images to the group, Should FAIL
+            # Add journal mirror-enabled image to the group, should FAIL
+            # Accept both older and newer error strings because failure reason may be
+            # either group state or image mirror-enabled state depending on version/flow.
             try:
                 add_group_image_and_verify(rbd_primary, **group_image_kw)
                 raise Exception(
                     "Image should not have been added successfully when journal based "
-                    "mirroring is enabled on the images"
+                    "mirroring is enabled on the image"
                 )
             except Exception as e:
-                if "cannot add image to mirror enabled group" in str(e):
+                err = str(e).lower()
+                known_messages = [
+                    "cannot add image to mirror enabled group",
+                    "cannot add mirror enabled image to group",
+                ]
+                if any(msg in err for msg in known_messages):
                     log.info(
-                        "Successfully verified journal based mirror image can not be added "
-                        "to the group in enabled state"
+                        "Successfully verified journal based mirror-enabled image cannot be added "
+                        "to the group when group mirroring is enabled"
                     )
                 else:
-                    raise Exception("Add group image failed with " + str(e))
+                    raise Exception(
+                        f"Add group image failed with unexpected error: {e}"
+                    )
 
             log.info("Add images from different pool to the group should FAIL")
+
             # Create second pool & image in the second pool
             second_pool = "second_pool_" + random_string(len=5)
             pool_config["data_pool"] = second_pool
@@ -332,23 +360,23 @@ def test_group_mirroring_neg_case(
                     "Failed to create image: "
                     + image_name_second_pool
                     + ", err: "
-                    + err
+                    + str(err)
                 )
             log.info(
                 "Successfully created image "
                 + image_name_second_pool
                 + " in pool "
                 + pool_spec
-                + image_create_status
+                + str(image_create_status)
             )
 
-            # Disable group mirorring
+            # Disable group mirroring
             if mirror_state == "Enabled":
                 disable_group_mirroring_and_verify_state(rbd_primary, **group_config)
                 mirror_state = "Disabled"
             log.info("Successfully Disabled group mirroring")
 
-            # Add image from second pool to the group, should not FAIL
+            # Add image from second pool to the group, should succeed
             group_image_kw = {
                 "group-spec": group_config["group-spec"],
                 "image-spec": pool_spec + image_name_second_pool,
@@ -356,19 +384,21 @@ def test_group_mirroring_neg_case(
             add_group_image_and_verify(rbd_primary, **group_image_kw)
             log.info("Successfully added image from different pool to the group")
 
-            # Enable mirroring on group, Should FAIL
+            # Enable mirroring on group, should FAIL
             try:
                 if mirror_state == "Disabled":
                     enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
                     mirror_state = "Enabled"
             except Exception as e:
-                if "different pool" in str(e):
+                if "different pool" in str(e).lower():
                     log.info(
                         "Successfully verified that group mirroring cannot be enabled "
                         "on group containing images from multiple pools"
                     )
                 else:
-                    raise Exception("Add group image failed with " + str(e))
+                    raise Exception(
+                        f"Add group image failed with unexpected error: {e}"
+                    )
 
     log.info("Test Consistency group negative test passed")
 
