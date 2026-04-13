@@ -18,6 +18,7 @@ import random
 import re
 import time
 from collections import namedtuple
+from typing import Optional
 
 from ceph.ceph import CommandFailed, SocketTimeoutException, TimeoutException
 from ceph.ceph_admin import CephAdmin
@@ -28,6 +29,8 @@ from utility import utils
 from utility.log import Log
 
 log = Log(__name__)
+
+NFS_RDMA_DEFAULT_BASE_PORT = 20049
 
 
 class RadosOrchestrator:
@@ -5551,16 +5554,23 @@ EOF"""
 
     def get_host_label(self, host_name):
         """
-        Method is used to get the labels list of the host
+        Return the ceph orch labels for ``host_name`` (inventory hostname).
+
         Args:
-            host_name: Host name
+            host_name: Host name as in ``ceph orch host ls``
 
-        Returns: List of labels of the host
+        Returns:
+            List of label strings (may be empty).
         """
-
         cmd_get_labels = f"ceph orch host ls --host_pattern {host_name}"
         host_output = self.run_ceph_command(cmd=cmd_get_labels)
-        return host_output[0]["labels"]
+        if not host_output or not isinstance(host_output, list) or len(host_output) < 1:
+            log.warning("get_host_label: no orch host data for %s", host_name)
+            return []
+        labels = host_output[0].get("labels")
+        if not labels:
+            return []
+        return list(labels)
 
     def remove_host_label(self, host_name, label):
         """
@@ -7118,6 +7128,10 @@ EOF"""
         nfs_fs_name: str = "nfs-cephfs",
         pool_type: str = "erasure",
         enable_fast_ec_config_params: bool = False,
+        enable_rdma: bool = False,
+        rdma_port: Optional[int] = None,
+        enable_nfsv3: bool = False,
+        nfs_placement_label: Optional[str] = None,
     ) -> dict:
         """
         Create NFS clusters with a dedicated CephFS filesystem and exports.
@@ -7130,13 +7144,30 @@ EOF"""
             nfs_fs_name: CephFS filesystem name for NFS (default: "nfs-cephfs")
             pool_type: Pool type for CephFS - "erasure" or "replicated"
             enable_fast_ec_config_params: Whether to enable fast EC config params
+            enable_rdma: Pass --enable-rdma to ceph nfs cluster create
+            rdma_port: Optional base RDMA port; per-cluster port is
+                rdma_port + cluster_index (same pattern as NFS TCP 2049+i).
+                If omitted when enable_rdma is True, uses ``NFS_RDMA_DEFAULT_BASE_PORT``
+                (20049), i.e. 20049, 20050, … for multi-cluster.
+            enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create
+            nfs_placement_label: If set, prefer orch hosts whose ``labels`` include
+                this string. If no orch host has the label, fall back to all orch hosts.
+                If unset, use all orch hosts.
 
         Returns:
             Dict with nfs_config containing clusters, exports, fs_name, and pool info
         """
+        rdma_base = (
+            (rdma_port if rdma_port is not None else NFS_RDMA_DEFAULT_BASE_PORT)
+            if enable_rdma
+            else None
+        )
+
         log.info(
             f"Creating NFS setup: {num_clusters} clusters, "
             f"{exports_per_cluster} exports each"
+            f"{', RDMA enabled' if enable_rdma else ''}"
+            f"{', NFSv3 enabled on cluster' if enable_nfsv3 else ''}"
         )
 
         # Step 1: Create CephFS filesystem for NFS
@@ -7148,9 +7179,48 @@ EOF"""
             enable_fast_ec_config_params=enable_fast_ec_config_params,
         )
 
-        # Get OSD hosts for NFS placement
-        available_hosts = self.get_osd_hosts()
-        log.info(f"Available OSD hosts for NFS placement: {available_hosts}")
+        lbl = nfs_placement_label
+        raw = self.run_ceph_command(cmd="ceph orch host ls")
+        if isinstance(raw, dict):
+            rows = raw.get("hosts", [])
+        elif isinstance(raw, list):
+            rows = raw
+        else:
+            rows = []
+            if raw:
+                log.warning(
+                    "create_nfs_clusters_and_exports: unexpected orch host ls output type %s",
+                    type(raw).__name__,
+                )
+
+        orch_hosts = list(
+            dict.fromkeys(
+                e["hostname"] for e in rows if isinstance(e, dict) and e.get("hostname")
+            )
+        )
+        if lbl:
+            labeled_hosts = list(
+                dict.fromkeys(
+                    e["hostname"]
+                    for e in rows
+                    if e.get("hostname") and lbl in (e.get("labels") or [])
+                )
+            )
+            available_hosts = labeled_hosts or orch_hosts
+            if not labeled_hosts:
+                log.warning(
+                    "create_nfs_clusters_and_exports: no orch host with label %r; "
+                    "using all orch hosts",
+                    lbl,
+                )
+        else:
+            available_hosts = orch_hosts
+
+        if not available_hosts:
+            raise ValueError(
+                "create_nfs_clusters_and_exports: no hosts available for NFS placement"
+            )
+        log.info("NFS cluster placement hosts: %s", available_hosts)
 
         # Step 2: Create NFS clusters with unique ports starting from 2049
         clusters = []
@@ -7164,15 +7234,29 @@ EOF"""
             selected_host = available_hosts[host_idx]
             placement_str = f'"{placement} {selected_host}"'
 
+            cluster_rdma_port = (rdma_base + i) if enable_rdma else None
             log.info(
                 f"Creating NFS cluster: {cluster_id} on port {port}, host {selected_host}"
+                + (
+                    f", rdma_port {cluster_rdma_port}"
+                    if cluster_rdma_port is not None
+                    else ""
+                )
             )
 
             cmd = f"ceph nfs cluster create {cluster_id} {placement_str} --port={port}"
+            if enable_nfsv3:
+                cmd += " --enable-nfsv3"
+            if enable_rdma:
+                cmd += f" --enable-rdma --rdma_port {cluster_rdma_port}"
             self.client.exec_command(cmd=cmd, sudo=True)
-            clusters.append(
-                {"cluster_id": cluster_id, "port": port, "host": selected_host}
-            )
+            cluster_entry = {
+                "cluster_id": cluster_id,
+                "port": port,
+                "host": selected_host,
+                "rdma_port": cluster_rdma_port,
+            }
+            clusters.append(cluster_entry)
             time.sleep(5)  # Allow cluster to initialize
 
         log.info(f"Created {len(clusters)} NFS clusters")
@@ -7225,6 +7309,8 @@ EOF"""
             "clusters": clusters,
             "exports": exports,
             "pools": created_pools,
+            "enable_rdma": enable_rdma,
+            "enable_nfsv3": enable_nfsv3,
         }
 
     def cleanup_nfs_clusters(self, nfs_config: dict) -> None:
