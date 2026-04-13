@@ -101,7 +101,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             return 0
 
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+            configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
         if config.get("initiators"):
             with parallel() as p:
