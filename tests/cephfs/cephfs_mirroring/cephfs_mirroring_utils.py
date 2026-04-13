@@ -1319,7 +1319,6 @@ class CephfsMirroringUtils(object):
             log.error(f"Error destroying CephFS mirroring setup: {e}")
 
     @retry(Exception, tries=10, delay=15, backoff=1)
-    
     def add_files_and_validate(
         self,
         source_clients,
