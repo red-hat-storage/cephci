@@ -160,7 +160,6 @@ tests:
           - ceph-common
           - ceph-base
           - ceph-fuse
-          - fio
 #          - ceph-test  # Not packaged downstream, need test changes to install it via upstream repos
         copy_admin_keyring: true
         caps:
@@ -168,6 +167,15 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+
+  - test:
+      desc: Install fio
+      module: exec.py
+      name: Install FIO
+      config:
+        sudo: true
+        commands:
+          - "dnf install fio -y"
 
   - test:
       name: Enable logging to file
