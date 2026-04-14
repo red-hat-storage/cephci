@@ -240,6 +240,7 @@ tests:
   - test:
       name: Test Conditional Put MPU if match
       desc: Test Conditional Put MPU if match
+      comments: Failure expected in 9.0x series
       polarion-id: CEPH-83632219
       module: sanity_rgw.py
       config:
@@ -250,6 +251,7 @@ tests:
       name: Test Conditional Put MPU if-none match
       desc: Test Conditional Put MPU if-none match
       polarion-id: CEPH-83632219
+      comments: Failure expected in 9.0x series
       module: sanity_rgw.py
       config:
         script-name: ../aws/test_conditional_delete.py
