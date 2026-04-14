@@ -1,84 +1,58 @@
 # Tier1: RBD build evaluation
 #
 # This test suite evaluates the build to determine the execution of identified
-# regression test suites.
-# This suite requires node2 to be a client node with mons, mgrs and osds
+# RBD regression tests.
+# This suite requires node4 to be a client node with mons, mgrs and osds
 # Example config - conf/squid/rbd/4-node-cluster-with-1-client.yaml
+
 ---
 tests:
-  -
-    test:
+  - test:
       abort-on-fail: true
       module: install_prereq.py
       name: "install ceph pre-requisites"
-  -
-    test:
-      name: Cephadm Bootstrap with custom user option
-      desc: cephadm cluster bootstrap with ssh-user(cephuser) option
-      module: test_bootstrap.py
-      polarion-id: CEPH-83573724
-      config:
-        command: bootstrap
-        base_cmd_args:
-          verbose: true
-        args:
-          ssh-user: cephuser
-          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide with ssh-user
-          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
-          registry-json: registry.redhat.io
-          custom_image: true
-          mon-ip: node1
-      destroy-cluster: false
-      abort-on-fail: true
-  -
-    test:
+
+  - test:
       abort-on-fail: true
       config:
+        verify_cluster_health: true
         steps:
-          -
-            config:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
               args:
                 attach_ip_address: true
                 labels: apply-all-labels
-              command: add_hosts
-              service: host
-          -
-            config:
+          - config:
+              command: apply
+              service: mgr
               args:
                 placement:
                   label: mgr
+          - config:
               command: apply
-              service: mgr
-          -
-            config:
+              service: mon
               args:
                 placement:
                   label: mon
-              command: apply
-              service: mon
-          -
-            config:
-              args:
-                all-available-devices: true
+          - config:
               command: apply
               service: osd
-          -
-            config:
               args:
-                - "ceph osd pool create rbd"
-              command: shell
-          -
-            config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-        verify_cluster_health: true
-      desc: "RHCS cluster deployment using cephadm"
-      destroy-clster: false
+                all-available-devices: true
+      desc: Ceph cluster deployment using cephadm
+      destroy-cluster: false
       module: test_cephadm.py
-      name: "deploy cluster"
-  -
-    test:
+      name: deploy cluster
+
+  - test:
       abort-on-fail: true
       config:
         command: add
@@ -106,8 +80,7 @@ tests:
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
 
-  -
-    test:
+  - test:
       config:
         script: rbd_groups.sh
         script_path: qa/workunits/rbd
@@ -115,8 +88,8 @@ tests:
       module: test_rbd.py
       name: 1_rbd_cli_groups
       polarion-id: CEPH-83574239
-  -
-    test:
+
+  - test:
       config:
         script: import_export.sh
         script_path: qa/workunits/rbd
@@ -133,6 +106,7 @@ tests:
       module: test_rbd.py
       name: 5_librbd_python
       polarion-id: CEPH-83574524
+
   - test:
       config:
         script_path: qa/workunits/rbd
@@ -141,6 +115,7 @@ tests:
       module: test_rbd.py
       name: 6_rbd_permissions
       polarion-id: CEPH-83574525
+
   - test:
       config:
         script_path: qa/workunits/rbd
@@ -149,6 +124,7 @@ tests:
       module: test_rbd.py
       name: 7_rbd_read_flags
       polarion-id: CEPH-83574526
+
   - test:
       config:
         script_path: qa/workunits/rbd
@@ -157,6 +133,7 @@ tests:
       module: test_rbd.py
       name: 9_journal
       polarion-id: CEPH-83574527
+
   - test:
       config:
         script_path: qa/workunits/rbd
@@ -165,6 +142,7 @@ tests:
       module: test_rbd.py
       name: 10_rbd_kernel
       polarion-id: CEPH-83574528
+
   - test:
       config:
         script_path: qa/workunits/rbd
@@ -199,6 +177,6 @@ tests:
       name: RBD image creation in the namespace
       polarion-id: CEPH-83582476
       config:
-        rep-pool-only: True
+        rep-pool-only: true
         rep_pool_config:
           rbd: {}
