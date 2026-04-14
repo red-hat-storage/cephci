@@ -80,8 +80,18 @@ CONFIGURATION OPTIONS:
 - enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
 - enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
 - enable_nfs_thrashing: Enable NFS cluster/export setup for thrashing (default: False)
+- nfs_num_clusters: Number of ``ceph nfs cluster create`` instances (default: 3)
+- nfs_exports_per_cluster: Exports per cluster (default: 4)
+- nfs_placement: Placement daemon count argument to cluster create (default: 1)
 - enable_cephfs_subvolume_thrashing: Enable CephFS subvolume thrashing (default: False)
 - enable_election_strategy_thrash: Enable election strategy changes during MON thrash (default: False)
+- enable_nfs_rdma: Create NFS clusters with ceph nfs cluster create --enable-rdma
+  (default: False). Optional nfs_rdma_port overrides default RDMA base 20049.
+- nfs_rdma_port: Base RDMA port for ``--rdma_port`` (per-cluster: base + index).
+  If unset, ``NFS_RDMA_DEFAULT_BASE_PORT`` (20049) in core_workflows is used.
+- enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
+- nfs_placement_label: Prefer orch hosts with this **ceph orch host label**. If no host
+  has the label, fallback uses all orch hosts.
 
 """
 
@@ -96,7 +106,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from ceph.ceph_admin import CephAdmin
-from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.core_workflows import NFS_RDMA_DEFAULT_BASE_PORT, RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
@@ -151,9 +161,17 @@ def run(ceph_cluster, **kw):
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
         enable_mds_thrashing (bool): Enable MDS thrashing - failover/restart/random fail (default: False)
         enable_nfs_thrashing (bool): Enable NFS cluster/export setup for thrashing (default: False)
+        nfs_num_clusters (int): How many NFS clusters to create (default: 3)
+        nfs_exports_per_cluster (int): Exports per cluster (default: 4)
+        nfs_placement (int): ``ceph nfs cluster create`` placement count (default: 1)
         enable_cephfs_subvolume_thrashing (bool): Enable CephFS subvolume thrashing (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
         enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
+        enable_nfs_rdma (bool): Use --enable-rdma on ceph nfs cluster create (default: False)
+        nfs_rdma_port (int|None): Optional base --rdma_port; if unset, 20049 + index
+        enable_nfsv3 (bool): Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
+        nfs_placement_label (str|None): Prefer orch hosts with this label; if no
+            matches, use all orch hosts (default: None).
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -194,6 +212,14 @@ def run(ceph_cluster, **kw):
     enable_mgr_thrashing = config.get("enable_mgr_thrashing", False)
     enable_mds_thrashing = config.get("enable_mds_thrashing", False)
     enable_nfs_thrashing = config.get("enable_nfs_thrashing", False)
+    enable_nfs_rdma = config.get("enable_nfs_rdma", False)
+    nfs_rdma_port_raw = config.get("nfs_rdma_port")
+    nfs_rdma_port = int(nfs_rdma_port_raw) if nfs_rdma_port_raw is not None else None
+    enable_nfsv3 = config.get("enable_nfsv3", False)
+    nfs_placement_label = config.get("nfs_placement_label") or None
+    nfs_num_clusters = config.get("nfs_num_clusters", 3)
+    nfs_exports_per_cluster = config.get("nfs_exports_per_cluster", 4)
+    nfs_placement = config.get("nfs_placement", 1)
     enable_cephfs_subvolume_thrashing = config.get(
         "enable_cephfs_subvolume_thrashing", False
     )
@@ -243,6 +269,13 @@ def run(ceph_cluster, **kw):
         additional_pools.append("RBD (2 pools)")
     additional_pools_str = " + ".join(additional_pools) if additional_pools else "None"
 
+    rdma_suffix = ""
+    if enable_nfs_rdma:
+        if nfs_rdma_port is not None:
+            rdma_suffix = f" (rdma_port base={nfs_rdma_port})"
+        else:
+            rdma_suffix = f" (rdma default base {NFS_RDMA_DEFAULT_BASE_PORT})"
+
     test_params = (
         f"\n{'=' * 60}\n"
         f"OSD THRASHING TEST WITH CONCURRENT I/O\n"
@@ -271,6 +304,15 @@ def run(ceph_cluster, **kw):
         f"  MGR thrashing: {enable_mgr_thrashing}\n"
         f"  MDS thrashing: {enable_mds_thrashing}\n"
         f"  NFS thrashing: {enable_nfs_thrashing}\n"
+        + (
+            f"  NFS clusters / exports per cluster / placement count: "
+            f"{nfs_num_clusters} / {nfs_exports_per_cluster} / {nfs_placement}\n"
+            if enable_nfs_thrashing
+            else ""
+        )
+        + f"  NFS RDMA (cluster + mounts): {enable_nfs_rdma}{rdma_suffix}\n"
+        f"  NFS cluster NFSv3 enabled: {enable_nfsv3}\n"
+        f"  NFS placement orch label: {nfs_placement_label or '(none)'}\n"
         f"  CephFS subvolume thrashing: {enable_cephfs_subvolume_thrashing}\n"
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
         f"  Fast EC config params: {enable_fast_ec_config_params}\n"
@@ -356,11 +398,15 @@ def run(ceph_cluster, **kw):
                 nfs_future = pool_executor.submit(
                     rados_obj.create_nfs_clusters_and_exports,
                     client_node,
-                    num_clusters=config.get("nfs_num_clusters", 3),
-                    exports_per_cluster=config.get("nfs_exports_per_cluster", 4),
-                    placement=config.get("nfs_placement", 1),
+                    num_clusters=nfs_num_clusters,
+                    exports_per_cluster=nfs_exports_per_cluster,
+                    placement=nfs_placement,
                     pool_type="erasure",
                     enable_fast_ec_config_params=enable_fast_ec_config_params,
+                    enable_rdma=enable_nfs_rdma,
+                    rdma_port=nfs_rdma_port,
+                    enable_nfsv3=enable_nfsv3,
+                    nfs_placement_label=nfs_placement_label,
                 )
 
             # Collect results
@@ -425,43 +471,49 @@ def run(ceph_cluster, **kw):
                             f"{len(nfs_config.get('exports', []))} exports"
                         )
 
-                        # NFSv3 prerequisites: ensure rpcbind and rpc.statd are running
-                        # Without these services, NFS-Ganesha cannot register NFSv3 and
-                        # emits "Cannot register NFS V3 on TCP" error.
+                        # Per NFS host: always drop host firewall (TCP + RDMA). When the
+                        # cluster has v3 enabled, also install/start rpcbind and statd.
                         all_nodes = ceph_cluster.get_nodes()
                         configured_hosts = set()
+                        v3_extra = (
+                            "yum install -y rpcbind nfs-utils 2>/dev/null || true; "
+                            "systemctl enable rpcbind rpc-statd 2>/dev/null || true; "
+                            "systemctl start rpcbind rpc-statd 2>/dev/null || true; "
+                            "systemctl list-units --type=service --no-legend | "
+                            "grep '@nfs\\.' | awk '{print $1}' | "
+                            "xargs -r systemctl restart 2>/dev/null || true"
+                        )
                         for cluster_info in nfs_config.get("clusters", []):
                             hostname = cluster_info.get("host")
                             if not hostname or hostname in configured_hosts:
                                 continue
                             configured_hosts.add(hostname)
-                            # Find node object for this NFS server
                             host_node = next(
-                                (n for n in all_nodes if n.hostname == hostname), None
+                                (n for n in all_nodes if n.hostname == hostname),
+                                None,
                             )
                             if not host_node:
                                 log.warning(f"  {hostname}: Node not found, skipping")
                                 continue
                             try:
-                                # Batch: disable firewall, install/start services
-                                # Note: cephadm NFS service is ceph-*@nfs.*.service
+                                fw = (
+                                    "systemctl stop firewalld 2>/dev/null || true; "
+                                    "systemctl disable firewalld 2>/dev/null || true"
+                                )
+                                if nfs_config.get("enable_nfsv3"):
+                                    cmd = fw + "; " + v3_extra
+                                    log_note = "firewall disabled + NFSv3 prerequisites"
+                                else:
+                                    cmd = fw
+                                    log_note = "firewall disabled for NFS/RDMA"
                                 host_node.exec_command(
-                                    cmd="systemctl stop firewalld 2>/dev/null || true; "
-                                    "systemctl disable firewalld 2>/dev/null || true; "
-                                    "yum install -y rpcbind nfs-utils 2>/dev/null || true; "
-                                    "systemctl enable rpcbind rpc-statd 2>/dev/null || true; "
-                                    "systemctl start rpcbind rpc-statd 2>/dev/null || true; "
-                                    "systemctl list-units --type=service --no-legend | "
-                                    "grep '@nfs\\.' | awk '{print $1}' | "
-                                    "xargs -r systemctl restart 2>/dev/null || true",
+                                    cmd=cmd,
                                     sudo=True,
                                     timeout=180,
                                     check_ec=False,
                                 )
                                 nfs_firewall_disabled_nodes.append(host_node)
-                                log.info(
-                                    f"  {hostname}: NFSv3 prerequisites configured"
-                                )
+                                log.info(f"  {hostname}: {log_note}")
                             except Exception as e:
                                 log.warning(f"  {hostname}: Failed - {e}")
 
@@ -560,14 +612,35 @@ def run(ceph_cluster, **kw):
         if nfs_config:
             log.info("NFS Setup:")
             log.info("  Filesystem      : %s", nfs_config.get("fs_name", "N/A"))
-            log.info("  Clusters        : %d", len(nfs_config.get("clusters", [])))
-            for cluster in nfs_config.get("clusters", []):
+            log.info(
+                "  RDMA mounts     : %s",
+                (
+                    "yes (client uses rdma,port= per cluster)"
+                    if nfs_config.get("enable_rdma")
+                    else "no (TCP port= only)"
+                ),
+            )
+            if nfs_config.get("enable_rdma"):
                 log.info(
-                    "    - %s (port: %d, host: %s)",
-                    cluster["cluster_id"],
-                    cluster["port"],
-                    cluster.get("host", "N/A"),
+                    "  NFSv3 on cluster: %s", nfs_config.get("enable_nfsv3", False)
                 )
+            for cluster in nfs_config.get("clusters", []):
+                rp = cluster.get("rdma_port")
+                if nfs_config.get("enable_rdma") and rp is not None:
+                    log.info(
+                        "    - %s (NFS TCP port: %d, RDMA port: %d, host: %s)",
+                        cluster["cluster_id"],
+                        cluster["port"],
+                        rp,
+                        cluster.get("host", "N/A"),
+                    )
+                else:
+                    log.info(
+                        "    - %s (port: %d, host: %s)",
+                        cluster["cluster_id"],
+                        cluster["port"],
+                        cluster.get("host", "N/A"),
+                    )
             exports = nfs_config.get("exports", [])
             log.info("  Exports         : %d", len(exports))
             for export in exports:
@@ -1010,6 +1083,12 @@ def run(ceph_cluster, **kw):
                 "rgw_s3_thrashing": None,
                 "mon_thrashing": None,
                 "mgr_thrashing": None,
+                "mds_thrashing": None,
+                "nfs_fio_thrashing": None,
+                "nfs_locking": None,
+                "nfs_rootsquash": None,
+                "nfs_fsops_extended": None,
+                "cephfs_subvolume_thrashing": None,
             }
             # Map futures to workflow names based on their index
             workflow_order = []
@@ -3924,7 +4003,8 @@ def thrash_nfs_fio(
     Thrash NFS exports with mount -> FIO -> unmount cycles.
 
     Continuously cycles through:
-    1. Mount all NFS exports (cycling through NFSv3, NFSv4.1, NFSv4.2)
+    1. Mount all NFS exports (cycling NFSv4.0/4.1/4.2, and NFSv3 only if the
+       cluster was created with enable_nfsv3)
     2. Run NFS export info/ls commands on 2 random exports
     3. Run FIO workloads on all mounted exports (cycling through I/O patterns)
     4. Unmount all exports
@@ -3939,11 +4019,21 @@ def thrash_nfs_fio(
     Returns:
         Total number of completed mount-FIO-unmount cycles across all workers
     """
-    nfs_versions = (
-        ("3", "nfsvers=3,nolock"),
+    nfs_versions_v4 = (
+        ("4.0", "nfsvers=4.0"),
         ("4.1", "nfsvers=4.1"),
         ("4.2", "nfsvers=4.2"),
     )
+    if nfs_config.get("enable_nfsv3"):
+        nfs_versions = (("3", "nfsvers=3,nolock"),) + nfs_versions_v4
+        log.info(
+            "NFS FIO thrashing includes NFSv3 (cluster was created with --enable-nfsv3)"
+        )
+    else:
+        nfs_versions = nfs_versions_v4
+        log.info(
+            "NFS FIO thrashing skips NFSv3 (cluster was created without --enable-nfsv3)"
+        )
 
     log.info("Starting NFS FIO thrashing (5 parallel workers)")
 
@@ -3992,6 +4082,7 @@ def thrash_nfs_fio(
                         nfs_version=assigned_nfs_version,
                         duration=duration,
                         stop_flag=stop_flag,
+                        nfs_config=nfs_config,
                     )
                 )
 
@@ -4024,7 +4115,8 @@ def _nfs_worker_thread(
     nfs_version: tuple,
     duration: int,
     stop_flag: Dict,
-) -> int:
+    nfs_config: Dict[str, Any],
+) -> Dict[str, int]:
     """
     Worker thread for NFS FIO thrashing.
 
@@ -4036,10 +4128,11 @@ def _nfs_worker_thread(
         worker_id: Unique worker identifier
         export_group: List of (idx, export_dict) tuples assigned to this worker
         cluster_host_map: Cluster ID to host mapping
-        cluster_port_map: Cluster ID to port mapping
+        cluster_port_map: Cluster ID to TCP NFS port mapping (informational)
         nfs_version: Tuple of (version_str, mount_options) e.g. ("4.1", "nfsvers=4.1")
         duration: Total duration in seconds
         stop_flag: Stop signal dict
+        nfs_config: Full NFS setup dict (enable_rdma, clusters with rdma_port, etc.)
 
     Returns:
         Dict with cycles completed and failures encountered by this worker
@@ -4099,8 +4192,11 @@ def _nfs_worker_thread(
                 mount_point = exp["mount_point"]
                 try:
                     client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
+                    mount_opts = _nfs_client_mount_option_string(
+                        nfs_config, exp["cluster_id"], nfs_options
+                    )
                     mount_cmd = (
-                        f"mount -t nfs -o {nfs_options},port={exp['port']} "
+                        f"mount -t nfs -o {mount_opts} "
                         f"{exp['host']}:{exp['pseudo_path']} {mount_point}"
                     )
                     client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
@@ -4212,9 +4308,12 @@ FSOPS_WORKER
 
                     # Unmount and remount to verify persistence
                     mount_point = exp["mount_point"]
+                    remount_opts = _nfs_client_mount_option_string(
+                        nfs_config, exp["cluster_id"], nfs_options
+                    )
                     client_node.exec_command(
                         cmd=f"umount -lf {mount_point} && sleep 1 && "
-                        f"mount -t nfs -o {nfs_options},port={exp['port']} "
+                        f"mount -t nfs -o {remount_opts} "
                         f"{exp['host']}:{exp['pseudo_path']} {mount_point}",
                         sudo=True,
                         timeout=60,
@@ -4271,6 +4370,34 @@ FSOPS_WORKER
     return {"cycles": cycle_count, "failures": failures}
 
 
+def _nfs_client_mount_option_string(
+    nfs_config: Dict[str, Any],
+    cluster_id: str,
+    nfs_options_base: str,
+) -> str:
+    """
+    Build mount -o string for NFS client: nfsvers/... plus port= and optional rdma.
+
+    When nfs_config['enable_rdma'] is True, uses per-cluster rdma_port from
+    create_nfs_clusters_and_exports and appends the rdma mount option.
+    """
+    clusters = nfs_config.get("clusters", [])
+    port = None
+    for c in clusters:
+        if c["cluster_id"] == cluster_id:
+            if nfs_config.get("enable_rdma") and c.get("rdma_port") is not None:
+                port = c["rdma_port"]
+                return f"{nfs_options_base},rdma,port={port}"
+            port = c.get("port")
+            break
+    if port is None:
+        log.warning(
+            "_nfs_client_mount_option_string: no port for cluster_id=%s", cluster_id
+        )
+        return nfs_options_base
+    return f"{nfs_options_base},port={port}"
+
+
 def _pick_nfs_endpoint(nfs_config: Dict[str, Any], index: int = 0):
     """Helper to pick NFS export endpoint by index with cached lookups."""
     exports = nfs_config.get("exports", [])
@@ -4285,7 +4412,15 @@ def _pick_nfs_endpoint(nfs_config: Dict[str, Any], index: int = 0):
 
     exp = exports[index % len(exports)]
     host = nfs_config["_cluster_host_map"].get(exp["cluster_id"])
-    port = nfs_config["_cluster_port_map"].get(exp["cluster_id"])
+    cid = exp["cluster_id"]
+    if nfs_config.get("enable_rdma"):
+        if "_cluster_rdma_port_map" not in nfs_config:
+            nfs_config["_cluster_rdma_port_map"] = {
+                c["cluster_id"]: c.get("rdma_port") for c in clusters
+            }
+        port = nfs_config["_cluster_rdma_port_map"].get(cid)
+    else:
+        port = nfs_config["_cluster_port_map"].get(cid)
     return exp, host, port
 
 
@@ -4319,9 +4454,11 @@ def _nfs_mount_context(
     unique_suffix = uuid.uuid4().hex[:8]
     mount_point = f"{mount_base}-{unique_suffix}"
 
+    mount_opts = _nfs_client_mount_option_string(
+        nfs_config, exp["cluster_id"], f"nfsvers={nfs_ver}"
+    )
     mount_cmd = (
-        f"mount -t nfs -o nfsvers={nfs_ver},port={port} "
-        f"{host}:{exp['pseudo_path']} {mount_point}"
+        f"mount -t nfs -o {mount_opts} " f"{host}:{exp['pseudo_path']} {mount_point}"
     )
     try:
         client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)

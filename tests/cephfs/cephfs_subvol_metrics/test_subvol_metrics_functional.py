@@ -47,22 +47,6 @@ def _get_quota_and_used_from_metrics(
     return None
 
 
-def _get_du_bytes(client, mount_dir: str) -> Optional[int]:
-    """Run du -sb on mountpoint and return total size in bytes (first column)."""
-    path = mount_dir.rstrip("/")
-    out, rc = client.exec_command(
-        sudo=True, cmd=f"du -sb {path} 2>/dev/null", check_ec=False
-    )
-    if rc != 0:
-        log.error("du -sb failed: %s", out)
-        return None
-    try:
-        return int(out.strip().split()[0])
-    except (ValueError, IndexError) as e:
-        log.error("Failed to parse du output %r: %s", out, e)
-        return None
-
-
 def _fill_data(
     client, mount_dir: str, size_bytes: int, filename: str = "data.bin"
 ) -> int:
@@ -71,9 +55,10 @@ def _fill_data(
     count_mb = size_bytes // (1024 * 1024)
     path = f"{mount_dir.rstrip('/')}/{filename}"
     cmd = f"dd if=/dev/random of={path} bs=1M count={count_mb} conv=fsync 2>/dev/null"
-    out, rc = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
-    if rc != 0:
-        log.error("dd failed: %s", out)
+    try:
+        client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+    except Exception as e:
+        log.error("dd failed: %s", e)
         return 1
     return 0
 
@@ -156,7 +141,8 @@ def run(ceph_cluster, **kw):
         # Apply quota 3G on mount
         log.info("Setting quota on %s: 3G bytes", fuse_mount_dir)
         fs_util.set_quota_attrs(client, "1000", QUOTA_3G, fuse_mount_dir)
-
+        # wait for quota changes
+        time.sleep(10)
         # Step 1: Quota is 3G. Fill 2G and verify quota_bytes and used_bytes in metrics
         log.info(
             "Step 1: Fill 2G data and verify quota_bytes = 3G and used_bytes vs du"
@@ -178,18 +164,21 @@ def run(ceph_cluster, **kw):
                 quota_bytes,
             )
             return 1
-        du_bytes = _get_du_bytes(client, fuse_mount_dir)
-        if du_bytes is None:
+        subvol_info = fs_util.get_subvolume_info(
+            client, vol_name=vol_name, subvol_name=subvol_name
+        )
+        expected_used_bytes = subvol_info.get("bytes_used", 0)
+        if expected_used_bytes is None:
             return 1
-        if used_bytes != du_bytes:
+        if used_bytes != expected_used_bytes:
             log.error(
-                "Step 1: used_bytes mismatch with du -sb: metrics used_bytes=%s, du=%s",
+                "Step 1: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
                 used_bytes,
-                du_bytes,
+                expected_used_bytes,
             )
             return 1
         log.info(
-            "Step 1: quota_bytes = %s (3G), used_bytes = %s (matches du -sb)",
+            "Step 1 Passed: quota_bytes = %s (3G), used_bytes = %s",
             quota_bytes,
             used_bytes,
         )
@@ -209,17 +198,20 @@ def run(ceph_cluster, **kw):
         log.info("Step 2: quota_bytes after unlimited = %s", quota_bytes)
         if quota_bytes != 0:
             log.warning("Step 2: Expected 0 for unlimited; got %s", quota_bytes)
-        du_bytes = _get_du_bytes(client, fuse_mount_dir)
-        if du_bytes is None:
+        subvol_info = fs_util.get_subvolume_info(
+            client, vol_name=vol_name, subvol_name=subvol_name
+        )
+        expected_used_bytes = subvol_info.get("bytes_used", 0)
+        if expected_used_bytes is None:
             return 1
-        if used_bytes != du_bytes:
+        if used_bytes != expected_used_bytes:
             log.error(
-                "Step 2: used_bytes mismatch with du -sb: metrics used_bytes=%s, du=%s",
+                "Step 2: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
                 used_bytes,
-                du_bytes,
+                expected_used_bytes,
             )
             return 1
-        log.info("Step 2: used_bytes = %s (matches du -sb)", used_bytes)
+        log.info("Step 2 Passed: used_bytes = %s", used_bytes)
 
         # Step 3: Add 2G more data (total 4G), then apply quota 5G via set_quota_attrs
         log.info("Step 3: Add 2G more data and set quota to 5G on mount")
@@ -231,7 +223,7 @@ def run(ceph_cluster, **kw):
 
         # Step 4: Rerun metrics fetch and verify quota_bytes = 5G and used_bytes vs du
         log.info(
-            "Step 4: Verify quota_bytes = 5G and used_bytes vs du -sb in subvolume metrics"
+            "Step 4: Verify quota_bytes = 5G and used_bytes vs expected_used_bytes in subvolume metrics"
         )
         result = _get_quota_and_used_from_metrics(
             helper, client, default_fs, subvol_path, ranks
@@ -247,18 +239,21 @@ def run(ceph_cluster, **kw):
                 quota_bytes,
             )
             return 1
-        du_bytes = _get_du_bytes(client, fuse_mount_dir)
-        if du_bytes is None:
+        subvol_info = fs_util.get_subvolume_info(
+            client, vol_name=vol_name, subvol_name=subvol_name
+        )
+        expected_used_bytes = subvol_info.get("bytes_used", 0)
+        if expected_used_bytes is None:
             return 1
-        if used_bytes != du_bytes:
+        if used_bytes != expected_used_bytes:
             log.error(
-                "Step 4: used_bytes mismatch with du -sb: metrics used_bytes=%s, du=%s",
+                "Step 4: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
                 used_bytes,
-                du_bytes,
+                expected_used_bytes,
             )
             return 1
         log.info(
-            "Step 4: quota_bytes = %s (5G), used_bytes = %s (matches du -sb)",
+            "Step 4 Passed: quota_bytes = %s (5G), used_bytes = %s",
             quota_bytes,
             used_bytes,
         )

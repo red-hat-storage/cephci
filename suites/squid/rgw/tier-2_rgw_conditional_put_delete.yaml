@@ -182,3 +182,57 @@ tests:
       config:
         script-name: ../aws/test_conditional_delete.py
         config-file-name: ../../aws/configs/test_cond_delete_size.yaml
+
+  - test:
+      name: Test Conditional delete objects with ETag
+      desc: Test Conditional delete with ETag
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete_objects.py
+        config-file-name: ../../aws/configs/test_cond_deletes_etag.yaml
+
+  - test:
+      name: Test Conditional delete objects with LMT
+      desc: Test Conditional delete with LMT
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete_objects.py
+        config-file-name: ../../aws/configs/test_cond_delete_objects_lmt.yaml
+
+  - test:
+      name: Test Conditional delete objects with Size
+      desc: Test Conditional delete with Size
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete_objects.py
+        config-file-name: ../../aws/configs/test_cond_delete_objects_size.yaml
+
+  - test:
+      name: Test Conditional delete versioned objects with ETag
+      desc: Test Conditional delete versioned objects with ETag
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete_objects.py
+        config-file-name: ../../aws/configs/test_cond_delete_objects_versioned_bucket_etag.yaml
+
+  - test:
+      name: Test Conditional delete versioned objects with LMT
+      desc: Test Conditional delete versioned objects with LMT
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete_objects.py
+        config-file-name: ../../aws/configs/test_cond_delete_objects_versioned_bucket_lmt.yaml
+
+  - test:
+      name: Test Conditional delete versioned objects with Size
+      desc: Test Conditional delete versioned objects with Size
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete_objects.py
+        config-file-name: ../../aws/configs/test_cond_delete_objects_versioned_bucket_size.yaml

@@ -1,14 +1,14 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-upgrade-rhcs-8x-to-8x-latest.yaml
-# Scenario: Upgrade RHCS 8.0(GA) cluster to RHCS 8(Latest) with NFS-Ganesha in RHEL9
+# Test-Suite: tier1-nfs-ganesha-upgrade-7x-to-8x-latest.yaml
+# Scenario: Upgrade IBM 7.1(GA) cluster to IBM 8(Latest) with NFS-Ganesha in RHEL9
 #
 # Cluster Configuration: Conf: conf/reef/nfs/1admin-3client-7node.yaml
 #
 # Test Steps:
-# - Deploy RHCS 8.0(GA) cluster in RHEL 9
-# - Deploy RHCS 8.0 client
-# - Upgrade cluster along with NFS-Ganesha IOs parllel on 8.1 builds
+# - Deploy IBM 7.1(GA) cluster in RHEL 9
+# - Deploy IBM 7.1 client
+# - Upgrade cluster along with NFS-Ganesha IOs parllel
 ################################################################################################
 tests:
   - test:
@@ -18,8 +18,8 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Bootstrap RHCS 8.0 (N-1) cluster and deploy services with label placements.
-      desc: Bootstrap RHCS 8.0 (N-1) cluster and deploy services with label placements.
+      name: Bootstrap Ceph 7.1(GA) cluster and deploy services with label placements.
+      desc: Bootstrap Ceph 7.1(GA) cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -29,8 +29,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 8.0
-                release: latest
+                rhcs-version: 7.1
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -167,7 +167,7 @@ tests:
         cleanup: false
 
   - test:
-      name: Nfs Verify multiple parallel io and lookups
+      name: Nfs Verify multiple io and lookups
       module: nfs_verify_multiple_parallel_io_and_lookups.py
       desc: Perform look ups while multiple parallel io are in progress
       polarion-id: CEPH-83581304
@@ -191,10 +191,11 @@ tests:
         dd_command_size_in_M: 10
         operation: before_upgrade
 
+
   - test:
-      name: Upgrade along with IOs for nfs - parallel module
+      name: Upgrade along with IOs for nfs
       module: test_parallel.py
-      desc: Upgrade along with IOs for nfs - parallel module
+      desc: Upgrade along with IOs for nfs in parallel
       parallel:
         - test:
             name: Upgrade cluster to latest RHCS 8.x
@@ -206,6 +207,7 @@ tests:
               service: upgrade
               base_cmd_args:
                 verbose: true
+
         - test:
             name: nfs operations during upgrade
             module: test_nfs_io_operations_during_upgrade.py

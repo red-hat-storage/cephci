@@ -340,6 +340,9 @@ def snap_sched_test(snap_req_params):
                 )
                 log.info(out)
             file_path = out.strip()
+            retry_exec = retry(CommandFailed, tries=3, delay=20)(
+                snap_client.exec_command
+            )
             cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
             out, rc = retry_exec(sudo=True, cmd=cmd)
 

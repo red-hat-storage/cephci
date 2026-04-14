@@ -14,6 +14,14 @@ class Mount(Cli):
         super(Mount, self).__init__(nodes)
         self.base_cmd = "mount"
 
+    def _ensure_nfs_utils(self):
+        """Check if nfs-utils is installed on the client and install it if missing."""
+        out = self.execute(cmd="rpm -qa nfs-utils", sudo=True)
+        if isinstance(out, tuple):
+            out = out[0]
+        if not out.strip():
+            self.execute(cmd="dnf install -y nfs-utils", sudo=True, timeout=600)
+
     def nfs(self, mount, version, port, server, export):
         """
         Perform nfs mount
@@ -24,6 +32,8 @@ class Mount(Cli):
             server (str): Nfs server hostname
             export (str): nfs export path)
         """
+        self._ensure_nfs_utils()
+
         # Check if mount dir is present, else create
         out = self.execute(cmd=f"ls {mount}", sudo=True)
         if not out[0]:

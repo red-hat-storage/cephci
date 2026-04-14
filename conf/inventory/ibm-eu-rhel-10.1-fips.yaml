@@ -1,9 +1,9 @@
 ---
-version_id: 9.7
+version_id: 10.1
 id: rhel
 instance:
   create:
-    image-name: rhel-97-server-amd64-kvm
+    image-name: rhel-101-server-amd64-fips
     private_key: ceph-qe-sa-svc
 
   setup: |
@@ -19,19 +19,19 @@ instance:
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/1/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/BaseOS/
-        gpcheck: false
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/1/BaseOS/
+        gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/CRB/
-        gpcheck: false
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/1/CRB/
+        gpgcheck: false
         enabled: true
 
     # write the mirror registry details
@@ -113,7 +113,4 @@ instance:
       - dnf clean all
       - dnf install -yq lvm2 chrony yum-utils podman net-snmp-utils net-snmp python3-devel wget
       - dnf update -y
-      - mkdir -p /root/rgw_rpms
-      - curl --fail -L -k -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm
-      - curl --fail -L -k -o /root/rgw_rpms/oathtool.rpm https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
       - touch /ceph-qa-ready

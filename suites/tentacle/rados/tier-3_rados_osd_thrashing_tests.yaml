@@ -392,3 +392,51 @@ tests:
         pool_name: bug-2423971-long
         cleanup_pool: true
         fail_on_crash: false
+
+# RDMA thrash test, to to run on specific hardware
+#  - test:
+#      name: Fast EC OSD thrashing with compression
+#      desc: Aggressive OSD thrashing with compression & Fast EC enabled
+#      module: test_osd_thrashing.py
+#      polarion-id: CEPH-83632230
+#      config:
+#        pool_configs:
+#          - pool_type: erasure
+#            sample_pool_id: sample-pool-7
+#          - pool_type: erasure
+#            sample_pool_id: sample-pool-9
+#          - pool_type: replicated
+#            sample_pool_id: sample-pool-2
+#        iterations: 120
+#        duration: 600
+#        aggressive: true
+#        enable_crush_thrashing: true
+#        enable_pg_thrashing: true
+#        enable_rgw_thrashing: false
+#        compression: false
+#        cleanup_pools: true
+#        enable_debug_logs: false
+#        inject_errors: false
+#        # Workload controls (all default to true)
+#        enable_fio_cephfs: true
+#        enable_fio_rbd: false
+#        enable_cephfs_snapshots: true
+#        enable_rbd_snapshots: false
+#        enable_ec_snapshots: false
+#        enable_osd_thrashing: true
+#        enable_mon_thrashing: false
+#        enable_election_strategy_thrash: false
+#        enable_mgr_thrashing: false
+#        enable_mds_thrashing: true
+#        enable_nfs_thrashing: true
+#        nfs_num_clusters: 1
+#        nfs_exports_per_cluster: 4
+#        nfs_placement: 1
+#        # NFS-over-RDMA: requires RDMA-capable clients and MDS/NFS hosts
+#        enable_nfs_rdma: true
+#        nfs_rdma_port: 13456
+#        enable_nfsv3: true
+#        # Prefer NFS daemon placement on orch hosts labeled nfs-rdma
+#        nfs_placement_label: nfs-rdma
+#        enable_cephfs_subvolume_thrashing: true
+
