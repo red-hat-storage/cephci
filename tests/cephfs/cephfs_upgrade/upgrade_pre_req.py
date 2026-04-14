@@ -228,9 +228,9 @@ def run(ceph_cluster, **kw):
                     extra_params=f"-r {subvol_path.strip()} --client_fs {sv['vol_name']}",
                 )
                 mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
-                # Enable quota on fuse mount path (5 GiB bytes, 100000 files)
+                # Enable quota on fuse mount path (10 GiB bytes, 100000 files)
                 fs_util.set_quota_attrs(
-                    mnt_client, "100000", 5368709120, fuse_mounting_dir_1
+                    mnt_client, "100000", 10737418240, fuse_mounting_dir_1
                 )
                 mnt_params = {
                     "mnt_pt": fuse_mounting_dir_1,
@@ -247,9 +247,9 @@ def run(ceph_cluster, **kw):
                         extra_params=f"-r {subvol_path.strip()} ",
                     )
                     mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
-                    # Enable quota on fuse mount path (5 GiB bytes, 100000 files)
+                    # Enable quota on fuse mount path (10 GiB bytes, 100000 files)
                     fs_util.set_quota_attrs(
-                        mnt_client, "100000", 5368709120, fuse_mounting_dir_1
+                        mnt_client, "100000", 10737418240, fuse_mounting_dir_1
                     )
                     mnt_params = {
                         "mnt_pt": fuse_mounting_dir_1,
@@ -392,9 +392,9 @@ def run(ceph_cluster, **kw):
                 else ["2M", "10h", "7d", "4w"]
             )
             snap_params["retention"] = (
-                "5m5h5d4w"
+                "3m5h5d4w"
                 if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
-                else "5M5h5d4w"
+                else "3M5h5d4w"
             )
             cmd = f"ceph fs subvolume getpath {sv['vol_name']} {sv['subvol_name']} "
             cmd += f"{sv['group_name']}"
@@ -425,7 +425,12 @@ def run(ceph_cluster, **kw):
         log.info("Set Dir pinning")
         dir_name = "upgrade_pin_dir"
         io_tools = ["dd", "smallfile", "crefi"]
-        io_args = {"run_time": 10}
+        io_args = {
+            "run_time": 5,
+            "threads": 4,
+            "file-size": 100,
+            "files": 5,
+        }
         mds_ranks = list(range(active_mds_cnt))
         for sv in subvolume_list:
             if len(mds_ranks) == 0:
@@ -590,15 +595,15 @@ def run(ceph_cluster, **kw):
             )
             mnt_client.exec_command(
                 sudo=True,
-                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
-                f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
+                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 3 --file-size 4 "
+                f"--files 10 --files-per-dir 5 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )
             mnt_client.exec_command(
                 sudo=True,
-                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
-                f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
+                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 3 --file-size 4 "
+                f"--files 10 --files-per-dir 5 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )

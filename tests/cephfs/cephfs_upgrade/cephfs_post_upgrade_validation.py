@@ -374,7 +374,13 @@ def snap_sched_test(snap_req_params):
                         duration_min = int(temp_list[1]) * int(value)
                 log.info("Run IO for %s minutes on %s", duration_min, snap_path)
                 io_path = snap_path.replace("..", "")
-                fs_util.run_ios_V1(cephfs_client, io_path, run_time=duration_min)
+                kw_args = {
+                    "threads": 4,
+                    "file-size": 10,
+                    "files": 5,
+                    "run_time": duration_min,
+                }
+                fs_util.run_ios_V1(cephfs_client, io_path, **kw_args)
                 wait_retention_check = int(temp_list[1]) * 60 + 60
                 log.info(
                     f"Wait for additional time {wait_retention_check}secs to validate retention"
@@ -390,13 +396,13 @@ def snap_sched_test(snap_req_params):
     log.info(
         "Verified that snapshot schedule for existing subvolumes works as expected"
     )
-
+    kw_args = {"threads": 4, "file-size": 10, "files": 5}
     log.info("Run IO, Create new manual snapshots on subvolumes")
     for sv in sv_snap:
         sv_data = sv_snap[sv]
         mnt_pt = random.choice([sv_data["mnt_kernel"], sv_data["mnt_fuse"]])
         mnt_client = sv_data["mnt_client_new"]
-        fs_util.run_ios_V1(mnt_client, mnt_pt)
+        fs_util.run_ios_V1(mnt_client, mnt_pt, **kw_args)
         snapshot = {
             "vol_name": vol_name,
             "subvol_name": sv,
@@ -566,7 +572,12 @@ def clone_test(clone_req_params):
         out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
 
         log.info("Create snapshot on existing clone")
-        fs_util.run_ios_V1(mnt_client, fuse_mounting_dir_1)
+        kw_args = {
+            "threads": 4,
+            "file-size": 10,
+            "files": 5,
+        }
+        fs_util.run_ios_V1(mnt_client, fuse_mounting_dir_1, **kw_args)
         snapshot = {
             "vol_name": vol_name,
             "subvol_name": clone,
@@ -686,9 +697,14 @@ def dir_pin_test(dir_pin_req_params):
             mds_dirs_before = mds["dirs"]
             break
     log.info("Run IO on pinned dirs")
+    kw_args = {
+        "threads": 4,
+        "file-size": 10,
+        "files": 5,
+    }
     for client_tmp in dir_pin_req_params["clients"]:
         if client_tmp.node.hostname == mnt_client:
-            fs_util.run_ios_V1(client_tmp, io_path)
+            fs_util.run_ios_V1(client_tmp, io_path, **kw_args)
     out, rc = client.exec_command(
         sudo=True,
         cmd=f"ceph fs status {vol_name} --format json",
