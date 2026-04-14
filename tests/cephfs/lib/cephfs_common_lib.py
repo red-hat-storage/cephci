@@ -690,3 +690,58 @@ class CephFSCommonUtils(FsUtils):
             raise CommandFailed(
                 "Failed to identify subscription status \n error: {0}".format(e)
             )
+
+    def cleanup_cephfs(self, clients):
+        """
+        This method will cleanup the cephfs resources
+        Args:
+            clients: List of client nodes
+        Returns:
+            0 on success, 1 on failure
+        """
+        log.info("Unmount Ceph-related mounts on all client nodes")
+        for client in clients:
+            log.info(
+                "Checking and unmounting Ceph-related mounts on %s",
+                client.node.hostname,
+            )
+            mount_types = {
+                "ceph-fuse": "grep -E 'fuse\\.ceph-fuse|fuse\\.ceph' || true",
+                "kernel-ceph": "grep ' type ceph ' || true",
+                "nfs": "grep -E ' type nfs| type nfs4' || true",
+            }
+            for label, grep_cmd in mount_types.items():
+                try:
+                    out, _ = client.exec_command(
+                        sudo=True, cmd=f"mount | {grep_cmd}", check_ec=False
+                    )
+                    mount_points = [
+                        line.split()[2] for line in out.splitlines() if line.strip()
+                    ]
+                    for mp in mount_points:
+                        log.info("Unmounting %s mount: %s", label, mp)
+                        client.exec_command(
+                            sudo=True, cmd=f"umount -f {mp}", check_ec=False
+                        )
+                except Exception as ex:
+                    log.warning(
+                        "Error while processing %s mounts on %s: %s",
+                        label,
+                        client.node.hostname,
+                        ex,
+                    )
+
+        log.info("Remove existing CephFS volumes")
+        try:
+            out, _ = clients[0].exec_command(
+                sudo=True, cmd="ceph fs ls --format json", check_ec=False
+            )
+            for fs_entry in json.loads(out or "[]"):
+                vol = fs_entry["name"]
+                log.info("Removing filesystem volume: %s", vol)
+                self.remove_fs(clients[0], vol, validate=False, check_ec=False)
+            time.sleep(5)
+        except Exception as ex:
+            log.warning("Filesystem volume cleanup skipped or partial: %s", ex)
+            return 1
+        return 0

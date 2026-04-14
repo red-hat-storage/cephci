@@ -5,6 +5,7 @@ import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.exceptions import ValueMismatchError
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 from utility.retry import retry
 
@@ -219,6 +220,7 @@ def run(ceph_cluster, **kw):
         # Initialize the utility class for CephFS
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -234,8 +236,11 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
         fs_name = "cephfs" if not erasure else "cephfs-ec"
+        rc = cephfs_common_utils.cleanup_cephfs(clients)
+        if rc != 0:
+            log.error("Failed to cleanup cephfs")
+            return 1
         fs_details = fs_util.get_fs_info(client1, fs_name)
-
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
         log.info("Install cephfs-top by dnf install cephfs-top")
