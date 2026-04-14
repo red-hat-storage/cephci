@@ -4,8 +4,7 @@ id: rhel
 instance:
   create:
     image-name: rhel-101-server-amd64-kvm
-    vm-size: ci.standard.medium
-    profile: bx2-4x16
+    profile: cx2-2x8
 
   setup: |
     #cloud-config
@@ -39,9 +38,9 @@ instance:
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
       - echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/50-ceph-qe.conf
       - systemctl restart sshd
-      - touch /ceph-qa-ready
       - mkdir -p /root/rgw_rpms
       - curl -k -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm
       - curl -k -o /root/rgw_rpms/oathtool.rpm https://dl.fedoraproject.org/pub/epel/10/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el10_0.x86_64.rpm
+      - touch /ceph-qa-ready
 
     final_message: "Ready for ceph qa testing"
