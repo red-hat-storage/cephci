@@ -318,8 +318,11 @@ class SnapUtils(object):
         Required:
             client: ceph client to run cmd
             path : a snap-schedule path which needs to be removed, type - str
+        Optional:
+            check_ec: if False, non-zero exit from ceph is ignored (idempotent teardown).
         Returns: None
         """
+        check_ec = kw_args.pop("check_ec", True)
         cmd = f"ceph fs snap-schedule remove {path}"
         if kw_args.get("subvol_name"):
             sv_name = kw_args["subvol_name"]
@@ -328,7 +331,7 @@ class SnapUtils(object):
                 cmd += f" --group {kw_args['group_name']}"
         if kw_args.get("fs_name"):
             cmd += f" --fs {kw_args.get('fs_name')}"
-        client.exec_command(sudo=True, cmd=cmd)
+        client.exec_command(sudo=True, cmd=cmd, check_ec=check_ec)
 
     def validate_snap_schedule(self, client, path, sched_val):
         """
