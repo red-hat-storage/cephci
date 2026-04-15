@@ -49,7 +49,7 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
     ha.run()
 
     # Update the config
@@ -98,7 +98,7 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
                 f"Failed to delete subsystem {sub['nqn']}: {out} with error {err}"
             )
     # Configure gateway entities
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
     config["nvme_service"] = nvme_service
 
 

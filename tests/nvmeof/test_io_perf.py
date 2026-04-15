@@ -486,7 +486,7 @@ def nvmeof(ceph_cluster, **args):
 
             # Configure Subsystem, listeners, host, namespaces
             if args.get("subsystems"):
-                configure_gw_entities(nvme_service, rbd_obj=rbd)
+                configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
             try:
                 # Run with profiles and collect results

@@ -35,6 +35,7 @@ def run_gateway_group_operations(
                     configure_gw_entities,
                     nvme_service,
                     rbd_obj=rbd_obj,
+                    cluster=ceph_cluster,
                 )
 
         # HA failover and failback
