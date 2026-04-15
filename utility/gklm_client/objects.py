@@ -5,6 +5,20 @@ import requests
 from utility.gklm_client.auth import GklmAuth
 
 
+def _coerce_managed_object_list(data: Any) -> List[Dict[str, Any]]:
+    """Normalize list-objects JSON across SKLM / GKLM 5.x response shapes."""
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if isinstance(data, dict):
+        for key in ("managedObject", "managedObjects", "object", "objects"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return [x for x in v if isinstance(x, dict)]
+    return []
+
+
 class GklmObjects:
     def __init__(self, auth: GklmAuth):
         self.auth = auth
@@ -33,8 +47,7 @@ class GklmObjects:
             verify=self.verify,
         )
         if resp.status_code == 200:
-            data = resp.json()
-            return data.get("managedObject", [])
+            return _coerce_managed_object_list(resp.json())
 
         # Handle error response
         content_type = resp.headers.get("Content-Type", "")
