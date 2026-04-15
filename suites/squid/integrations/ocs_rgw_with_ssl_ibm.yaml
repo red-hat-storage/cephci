@@ -86,16 +86,18 @@ tests:
       abort-on-fail: true
       config:
         command: apply_spec
+        service: orch
         specs:
           - service_type: rgw
             service_id: rgw.ssl
             placement:
               nodes:
                 - node2
-            spec:
-              ssl: false
-              generate_cert: true
-      desc: "Deploying RGW endpoint which is SSL terminated."
+                - node4
+              spec:
+                ssl: true
+                generate_cert: true
+      desc: "Deploying RGW endpoint with ssl."
       destroy-cluster: false
       module: test_rgw.py
       name: "Test rgw ssl endpoint using spec"

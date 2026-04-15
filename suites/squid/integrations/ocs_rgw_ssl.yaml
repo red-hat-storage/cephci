@@ -59,7 +59,7 @@ tests:
                 - node7
             spec:
               ssl: true
-              rgw_frontend_ssl_certificate: create-cert
+              generate_cert: true
       desc: "Deploying RGW endpoint which is SSL terminated."
       destroy-cluster: false
       module: test_rgw.py
