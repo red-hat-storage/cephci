@@ -2130,6 +2130,14 @@ Steps:
                 for blob_detail in blobs_json["onode"]["extents"][:-1]:
                     blob = blob_detail["blob"]
                     compressed_length = blob["compressed_length"]
+                    # Bug https://bugzilla.redhat.com/show_bug.cgi?id=2427146
+                    # If offset of blob is 18446744073709551615 means INVALID_EXTENT
+                    # Which means it is empty
+                    if int(blob["extents"][0]["offset"]) >= 18446744073709551615:
+                        log.info(
+                            f"Blob {blob} has INVALID_EXTENT. Skipping validation."
+                        )
+                        continue
                     if compressed_length == 0:
                         log.info(
                             f"Compression did not occur on initial write operation: "
