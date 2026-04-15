@@ -363,9 +363,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         nvmegwcli = nvme_service.gateways[0]
 
         if config.get("subsystems"):
-            configure_subsystems(nvme_service)
+            configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
             configure_listeners(nvme_service.gateways, nvme_service.config)
-            configure_hosts(nvme_service.gateways[0], nvme_service.config)
+            configure_hosts(
+                nvme_service.gateways[0], nvme_service.config, ceph_cluster=ceph_cluster
+            )
 
         ns_masking = NamespaceMasking(
             ceph_cluster,

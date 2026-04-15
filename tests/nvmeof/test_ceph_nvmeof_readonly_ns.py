@@ -138,9 +138,9 @@ def test_ceph_83624617(ceph_cluster, config, nvme_service):
 
     # Configure subsystems
     LOG.info("Configure subsystems, listeners")
-    configure_subsystems(nvme_service)
+    configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
     configure_listeners(nvme_service.gateways, nvme_service.config)
-    configure_hosts(nvmegwcli, nvme_service.config)
+    configure_hosts(nvmegwcli, nvme_service.config, ceph_cluster=ceph_cluster)
 
     # Configure readonly namespaces
     ns_data = configure_ns(config, rbd_pool, rbd_obj, nvmegwcli, readonly=True)

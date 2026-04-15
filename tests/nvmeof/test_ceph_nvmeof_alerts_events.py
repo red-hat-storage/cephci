@@ -412,7 +412,7 @@ def test_ceph_83610948(ceph_cluster, config):
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
     # Validate the Health warning states
     @retry(ValueError, tries=6, delay=5)
@@ -677,7 +677,7 @@ def test_ceph_83611306(ceph_cluster, config):
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
     # Validate the Health warning states
     @retry(ValueError, tries=10, delay=60)
@@ -790,7 +790,7 @@ def test_CEPH_83616917(ceph_cluster, config):
     ha.gateways = nvme_service.gateways
 
     # Configure subsystems, --max-namespaces is 10 and we are creating 10 namesapces
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
     # Check for alert
     # NVMeoFSubsystemNamespaceLimit prometheus alert should be firing
@@ -934,7 +934,7 @@ def test_ceph_83616916(ceph_cluster, config):
     ha.gateways = nvme_service.gateways
     nvmegwcli = ha.gateways[0]
 
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
     # Check for alert
     # NVMeoFGatewayOpenSecurity prometheus alert should be firing
@@ -1184,7 +1184,7 @@ def test_ceph_83617545(ceph_cluster, config):
 
     # Configure subsystems
     LOG.info("Configure subsystems")
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
     # Check for alert
     # NVMeoFTooManyNamespaces prometheus alert should be firing
@@ -1258,7 +1258,7 @@ def test_ceph_83617640(ceph_cluster, config):
 
     # Configure subsystems
     LOG.info("Configure subsystems")
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
     # Check for alert
     # NVMeoFVersionMismatch prometheus alert should be in inactive state

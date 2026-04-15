@@ -87,8 +87,8 @@ def test_ceph_83608838(ceph_cluster, config):
 
     # Configure subsystems
     LOG.info("Configure subsystems")
-    configure_subsystems(nvme_service)
-    configure_hosts(nvme_service.gateways[0], config)
+    configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+    configure_hosts(nvme_service.gateways[0], config, ceph_cluster=ceph_cluster)
     listeners = [nvme_service.gateways[0].node.id]
     for cfg in config["subsystems"]:
         if cfg.get("listeners"):
@@ -166,8 +166,8 @@ def test_ceph_83609769(ceph_cluster, config):
 
     # Configure subsystems
     LOG.info("Configure subsystems")
-    configure_subsystems(nvme_service)
-    configure_hosts(nvme_service.gateways[0], config)
+    configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+    configure_hosts(nvme_service.gateways[0], config, ceph_cluster=ceph_cluster)
     listeners = [nvme_service.gateways[0].node.id]
     for cfg in config["subsystems"]:
         if cfg.get("listeners"):
@@ -399,8 +399,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
             # Configure Subsystem
             if config.get("subsystems"):
-                configure_subsystems(nvme_service)
-                configure_hosts(nvme_service.gateways[0], config)
+                configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+                configure_hosts(
+                    nvme_service.gateways[0], config, ceph_cluster=ceph_cluster
+                )
                 listeners = [nvme_service.gateways[0].node.id]
                 for cfg in config["subsystems"]:
                     if cfg.get("listeners"):

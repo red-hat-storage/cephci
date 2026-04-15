@@ -28,7 +28,7 @@ def configure_gw_entities_with_encryption(gwgroup_config, ceph_cluster, nvme_ser
     hosts = gwgroup_config.get("hosts", [])
     initiators = []
     if gwgroup_config.get("subsystems"):
-        initiators.extend(configure_subsystems(nvme_service))
+        initiators.extend(configure_subsystems(nvme_service, ceph_cluster=ceph_cluster))
         # configure_hosts will be called for all subsystems in the loop below
         # to ensure consistent handling
         listeners = [nvme_service.gateways[0].node.id]
