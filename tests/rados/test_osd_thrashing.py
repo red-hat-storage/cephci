@@ -92,6 +92,10 @@ CONFIGURATION OPTIONS:
 - enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
 - nfs_placement_label: Prefer orch hosts with this **ceph orch host label**. If no host
   has the label, fallback uses all orch hosts.
+- enable_esb_verification: Enable BlueStore ESB Bug #70390 verification (default: False).
+  Sets bluestore_elastic_shared_blobs=true, bluestore_write_v2=false, bluestore_onode_segment_size=0,
+  bluestore_debug_extent_map_encode_check=true, debug_bluestore=5/5.
+  Targets extent map resharding crash in EC pools with overwrites.
 
 """
 
@@ -167,6 +171,7 @@ def run(ceph_cluster, **kw):
         enable_cephfs_subvolume_thrashing (bool): Enable CephFS subvolume thrashing (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
         enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
+        enable_esb_verification (bool): Enable BlueStore ESB Bug #70390 configs (default: False)
         enable_nfs_rdma (bool): Use --enable-rdma on ceph nfs cluster create (default: False)
         nfs_rdma_port (int|None): Optional base --rdma_port; if unset, 20049 + index
         enable_nfsv3 (bool): Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
@@ -227,6 +232,7 @@ def run(ceph_cluster, **kw):
         "enable_election_strategy_thrash", True
     )
     enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
+    enable_esb_verification = config.get("enable_esb_verification", False)
     disabled_ec_optimizations = False
     major_version = int(rados_obj.rhbuild.split(".")[0])
 
@@ -316,6 +322,7 @@ def run(ceph_cluster, **kw):
         f"  CephFS subvolume thrashing: {enable_cephfs_subvolume_thrashing}\n"
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
         f"  Fast EC config params: {enable_fast_ec_config_params}\n"
+        f"  ESB verification (Bug #70390): {enable_esb_verification}\n"
         f"{'=' * 60}\n"
     )
     log.info(test_params)
@@ -674,6 +681,22 @@ def run(ceph_cluster, **kw):
             # mon_obj.set_config(section="mon", name="debug_mon", value="20/20")
             # mon_obj.set_config(section="mds", name="debug_mds", value="20/20")
             log.info("Debug logging enabled for daemons")
+
+        if enable_esb_verification:
+            log.info("Enabling BlueStore ESB verification configs (Bug #70390)...")
+            esb_configs = {
+                "bluestore_elastic_shared_blobs": "true",
+                "bluestore_write_v2": "false",
+                "bluestore_onode_segment_size": "0",
+                "bluestore_debug_extent_map_encode_check": "true",
+                "debug_bluestore": "5/5",
+            }
+            for name, value in esb_configs.items():
+                mon_obj.set_config(section="osd", name=name, value=value)
+            log.info(
+                "ESB verification configs applied -- "
+                "OSDs will validate extent maps on every encode"
+            )
 
         if inject_errors:
             mon_obj.set_config(
@@ -1231,6 +1254,18 @@ def run(ceph_cluster, **kw):
             # mon_obj.remove_config(section="mon", name="debug_mon")
             # mon_obj.remove_config(section="mds", name="debug_mds")
             log.info("Debug logging configs removed")
+
+        if enable_esb_verification:
+            log.info("Removing BlueStore ESB verification configs...")
+            for name in [
+                "bluestore_elastic_shared_blobs",
+                "bluestore_write_v2",
+                "bluestore_onode_segment_size",
+                "bluestore_debug_extent_map_encode_check",
+                "debug_bluestore",
+            ]:
+                mon_obj.remove_config(section="osd", name=name)
+            log.info("ESB verification configs removed")
 
         if inject_errors:
             log.info("Removing EC write error injection config...")

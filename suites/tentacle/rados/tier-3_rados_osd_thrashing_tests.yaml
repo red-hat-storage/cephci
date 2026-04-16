@@ -367,6 +367,45 @@ tests:
         enable_cephfs_subvolume_thrashing: false
 
   # ===========================================================================
+  # Bug #70390 ESB Extent Map Resharding Verification
+  # ===========================================================================
+  - test:
+      name: ESB Bug 70390 OSD thrashing verification
+      desc: Verify BlueStore ESB extent map resharding fix - Tracker IBMCEPH-10839.
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-12
+          - pool_type: erasure
+            sample_pool_id: sample-pool-5
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 3600
+        aggressive: true
+        enable_esb_verification: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: false
+        enable_rgw_thrashing: false
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: true
+        inject_errors: false
+        enable_fio_cephfs: false
+        enable_fio_rbd: false
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_nfs_thrashing: false
+        enable_cephfs_subvolume_thrashing: false
+
+  # ===========================================================================
   # Bug #2423971 EC Divergent Log Reproduction Tests
   # ===========================================================================
   - test:
