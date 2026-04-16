@@ -4,6 +4,7 @@ import string
 import time
 import traceback
 
+from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -201,6 +202,35 @@ def run(ceph_cluster, **kw):
                     cmd=f"mkdir {kernel_mounting_dir}{path.lstrip('/')}/.snap/{snap_name}",
                 )
 
+        # --- Pre-compute asok info for polling ---
+        mirror_nodes = [cephfs_mirror_node[0]]
+        cephfs_mirror_node[0].exec_command(
+            sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+        )
+        fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
+        daemon_names = fs_mirroring_utils.get_daemon_name(source_clients[0])
+        filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
+            source_clients[0], source_fs
+        )
+        asok_files = fs_mirroring_utils.get_asok_file_with_connectivity_check(
+            mirror_nodes, fsid, daemon_names
+        )
+        if not asok_files:
+            raise CommandFailed("No accessible cephfs-mirror admin socket found")
+        peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
+            source_clients[0], source_fs
+        )
+
+        def _get_peer_status():
+            for _node, asok in asok_files.items():
+                out, _ = asok[0].exec_command(
+                    sudo=True,
+                    cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} "
+                    f"fs mirror peer status {source_fs}@{filesystem_id} "
+                    f"{peer_uuid} -f json",
+                )
+                return json.loads(out)
+
         # --- Poll peer status to detect the hang ---
         log.info(f"Waiting up to {SYNC_TIMEOUT}s for directories to sync...")
         start_time = time.time()
@@ -211,11 +241,7 @@ def run(ceph_cluster, **kw):
             time.sleep(POLL_INTERVAL)
             elapsed = int(time.time() - start_time)
 
-            peer_status = fs_mirroring_utils.get_fs_mirror_peer_status_using_asok(
-                cephfs_mirror_node[0],
-                source_clients[0],
-                source_fs,
-            )
+            peer_status = _get_peer_status()
             log.info(f"Peer status at {elapsed}s: {json.dumps(peer_status, indent=2)}")
 
             data_states = []
@@ -259,11 +285,7 @@ def run(ceph_cluster, **kw):
                 )
                 extra_wait = 120
                 time.sleep(extra_wait)
-                peer_status = fs_mirroring_utils.get_fs_mirror_peer_status_using_asok(
-                    cephfs_mirror_node[0],
-                    source_clients[0],
-                    source_fs,
-                )
+                peer_status = _get_peer_status()
                 dirs_only_entry = peer_status.get(dirs_only_path, {})
                 dirs_only_state = dirs_only_entry.get("state", "unknown")
 

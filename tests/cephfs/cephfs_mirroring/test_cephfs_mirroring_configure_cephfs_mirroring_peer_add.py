@@ -74,6 +74,7 @@ def run(ceph_cluster, **kw):
             fs_util_ceph1.create_fs(target_clients[0], target_fs)
         target_user = "mirror_remote"
         target_site_name = "remote_site"
+        peer_uuid = None
 
         log.info("Deploy CephFS Mirroring Configuration")
         target_mon_host = fs_util_ceph2.get_mon_node_ips()[0]
@@ -186,25 +187,21 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}{subvol2_path}.snap/{snap2}"
         )
 
-        log.info("Validate the Snapshot Synchronisation on Target Cluster")
-        snap_count = 2
-        validate_syncronisation = fs_mirroring_utils.validate_synchronization(
-            cephfs_mirror_node[0], source_clients[0], source_fs, snap_count
-        )
-        if validate_syncronisation:
-            log.error("Snapshot Synchronisation failed..")
-            raise CommandFailed("Snapshot Synchronisation failed")
-
         log.info(
             "Fetch the daemon_name, fsid, asok_file, filesystem_id and peer_id to validate the synchronisation"
+        )
+        cephfs_mirror_node[0].exec_command(
+            sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
         )
         fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
         log.info(f"fsid on ceph cluster : {fsid}")
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
-        asok_file = fs_mirroring_utils.get_asok_file(
-            cephfs_mirror_node[0], fsid, daemon_name
+        asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
+            [cephfs_mirror_node[0]], fsid, daemon_name
         )
+        if not asok_file:
+            raise CommandFailed("No accessible cephfs-mirror admin socket found")
         log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
@@ -335,6 +332,10 @@ def run(ceph_cluster, **kw):
                 )
 
             log.info("Destroy CephFS Mirroring setup.")
+            if peer_uuid is None:
+                peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
+                    source_clients[0], source_fs
+                )
             fs_mirroring_utils.destroy_cephfs_mirroring(
                 source_fs,
                 source_clients[0],

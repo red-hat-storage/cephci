@@ -163,7 +163,6 @@ tests:
       desc: Verify qos Pershare enablement on cluster level
       polarion-id: CEPH-83611390
       abort-on-fail: false
-      comments: IBMCEPH-13575
       config:
         control: bandwidth_control
         cephfs_volume : cephfs
@@ -180,6 +179,7 @@ tests:
       module: test_nfs_grpc.py
       desc: Unmount from 1 client and verify client/session IDs are updated
       polarion-id: CEPH-83630616
+      comments: This test may fail on IBM-Cloud. This is not a bug or automation issue. We are currently investigating why This is failing on IBM-Cloud on RH builds only
       abort-on-fail: false
       config:
         operation: verify_id_after_unmount
