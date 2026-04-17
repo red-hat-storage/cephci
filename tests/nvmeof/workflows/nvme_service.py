@@ -2,6 +2,8 @@
 NVMe Service, Gateway Group, and Gateway classes for NVMeoF workflows.
 """
 
+import json
+
 from looseversion import LooseVersion
 
 from ceph.ceph_admin.orch import Orch
@@ -76,13 +78,7 @@ class NVMeService:
         """Delete the NVMe gateway service."""
         ceph_cluster = self.ceph_cluster
 
-        gw_group = self.group
-        pool = self.nvme_metadata_pool
-        if pool == DEFAULT_NVME_METADATA_POOL:
-            service_name = f"nvmeof{pool}"
-        else:
-            service_name = f"nvmeof.{pool}"
-        service_name = f"{service_name}.{gw_group}" if gw_group else service_name
+        service_name = self.service_name
         cfg = {
             "no_cluster_state": False,
             "config": {
@@ -218,6 +214,14 @@ class NVMeService:
         deploy_config = self._create_spec_deployment_config()
         if deploy_config:
             test_nvmeof.run(self.ceph_cluster, **deploy_config)
+
+        # Once the service is deployed, get the service name and service id and store it
+        ceph = Orch(self.ceph_cluster, **{})
+        cmd = "ceph orch ls nvmeof --format json"
+        out, _ = ceph.shell(args=[cmd])
+        services = json.loads(out)
+        self.service_name = services[0]["service_name"]
+        self.service_id = services[0]["service_id"]
 
     def init_gateways(self):
         """
