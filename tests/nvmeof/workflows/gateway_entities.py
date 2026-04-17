@@ -132,6 +132,10 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
         }
 
         if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+            if sub_cfg.get("listener_port"):
+                args["port"] = sub_cfg.get("listener_port")
+            if sub_cfg.get("secure_listener"):
+                args["secure_listeners"] = sub_cfg.get("secure_listener")
             args["network-mask"] = get_network_mask(nvme_service.gateways)
 
         gateway.subsystem.add(**{"args": args})
