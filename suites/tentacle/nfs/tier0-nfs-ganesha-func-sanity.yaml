@@ -179,7 +179,6 @@ tests:
       module: test_nfs_grpc.py
       desc: Unmount from 1 client and verify client/session IDs are updated
       polarion-id: CEPH-83630616
-      comments: This test may fail on IBM-Cloud. This is not a bug or automation issue. We are currently investigating why This is failing on IBM-Cloud on RH builds only
       abort-on-fail: false
       config:
         operation: verify_id_after_unmount
