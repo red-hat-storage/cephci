@@ -22,6 +22,18 @@ Every export is backed by a dedicated CephFS subvolume (in the
 ``ganeshagroup`` subvolume group by default).  Subvolumes are created
 at the start of each test run and cleaned up in the finally block.
 
+RDMA mount support
+------------------
+When ``rdma: true`` is set in the suite config, the test fetches
+per-cluster port and RDMA configuration from ``ceph orch ls nfs``
+(``spec.rdma_port``, ``spec.enable_rdma``).  All client mounts use
+``proto=rdma`` with each cluster's ``rdma_port`` from the service
+spec.  Before mounting, the test checks each export's info for RDMA
+in the ``transports`` field and warns if ``enable_rdma`` is not set
+in the cluster's service spec.  These checks are advisory -- the
+test proceeds with RDMA mounts regardless, and failures surface at
+mount time.
+
 IO workload
 -----------
 Uses ``fio`` to generate parallel, high-iodepth IO that
@@ -61,11 +73,15 @@ qos_post_upgrade
 Test workflow (cluster_bandwidth)
 ---------------------------------------
 Phase 0  – Parse config, install ``fio`` on all client nodes.
-Phase 1  – Resolve each NFS cluster's server IP via ``ceph nfs cluster info``.
+Phase 1  – Resolve each NFS cluster's server IP and service spec
+           (port, RDMA config) via ``ceph nfs cluster info`` and
+           ``ceph orch ls nfs``.
 Phase 2  – Create namespace-isolated CephFS subvolumes (one per export).
 Phase 3  – Build the assignment table (export→client round-robin mapping).
 Phase 4  – Create NFS exports backed by the subvolume paths.
+Phase 4b – (RDMA only) Check export info for RDMA transport.
 Phase 5  – Mount each export on its assigned client, verify mounts & daemons.
+Phase 5c – Baseline IO with no QoS enabled (uncapped reference throughput).
 Phase 6–8 (loop per BW limit) –
            Enable cluster-level QoS with the current bandwidth limit,
            log export QoS details, execute the configured operation (default:
@@ -141,6 +157,65 @@ def _get_nfs_server_ip(client, cluster_name):
     return ip
 
 
+def _get_nfs_service_specs(client, cluster_names):
+    """Fetch NFS service specs from ``ceph orch ls nfs`` and return
+    per-cluster port and RDMA configuration.
+
+    Returns a dict keyed by cluster name (service_id)::
+
+        {
+            "nfs-cluster1": {
+                "port": 2049,
+                "rdma_port": 20049,
+                "enable_rdma": True,
+            },
+            ...
+        }
+
+    Clusters not found in orch output are excluded from the
+    returned dict and logged as warnings.  Callers should remove
+    those clusters from their working set.
+    """
+    log.info("Fetching NFS service specs from ceph orch ls...")
+    try:
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph orch ls nfs --export -f json",
+            timeout=60,
+        )
+        services = json.loads(str(out).strip()) if out else []
+    except Exception as e:
+        log.warning(f"  Could not fetch NFS service specs: {e}")
+        services = []
+
+    specs_by_id = {}
+    for svc in services:
+        sid = svc.get("service_id", "")
+        spec = svc.get("spec", {})
+        try:
+            parsed = {
+                "port": int(spec.get("port", 2049)),
+                "rdma_port": int(spec.get("rdma_port", 20049)),
+                "enable_rdma": bool(spec.get("enable_rdma", False)),
+            }
+        except (ValueError, TypeError) as e:
+            log.warning(f"  {sid}: bad spec values ({e}), skipping")
+            continue
+        specs_by_id[sid] = parsed
+        log.info(f"  {sid}: {specs_by_id[sid]}")
+
+    result = {}
+    for cn in cluster_names:
+        if cn in specs_by_id:
+            result[cn] = specs_by_id[cn]
+        else:
+            log.warning(
+                f"  Cluster '{cn}' not found in orch ls output -- "
+                f"excluding from test"
+            )
+    return result
+
+
 def _create_export(client, cephfs_volume, cluster_name, export_path, cephfs_path="/"):
     """Create a CephFS-backed NFS export directly via CLI."""
     cmd = (
@@ -169,26 +244,60 @@ def _create_export(client, cephfs_volume, cluster_name, export_path, cephfs_path
 
 
 @retry(OperationFailedError, tries=5, delay=10, backoff=2)
-def _mount_export(client, nfs_server_ip, export_path, mount_point, port="2049"):
-    """Mount an NFS export on a client node."""
+def _mount_export(
+    client, nfs_server_ip, export_path, mount_point, port="2049", rdma=False
+):
+    """Mount an NFS export on a client node.
+
+    When *rdma* is True, the mount uses ``proto=rdma`` and bypasses
+    ``Mount.nfs()`` since that helper does not support extra mount options.
+    The default RDMA port is 20049 (override via *port*).
+    """
     client.exec_command(sudo=True, cmd=f"mkdir -p {mount_point}")
+    proto_label = "RDMA" if rdma else "TCP"
     log.info(
         f"Mounting {nfs_server_ip}:{export_path} -> {mount_point} "
-        f"on {client.hostname} (port={port})..."
+        f"on {client.hostname} (port={port}, proto={proto_label})..."
     )
 
-    if Mount(client).nfs(
-        mount=mount_point,
-        version="4.2",
-        port=port,
-        server=nfs_server_ip,
-        export=export_path,
-    ):
-        raise OperationFailedError(
-            f"mount command returned non-zero for {export_path} on "
-            f"{client.hostname}"
+    if rdma:
+        client.exec_command(
+            sudo=True,
+            cmd="rpm -q nfs-utils || dnf install -y nfs-utils",
+            timeout=300,
         )
-    log.info(f"  Mounted on {client.hostname}")
+        mount_opts = f"vers=4.2,proto=rdma,port={port}"
+        cmd = (
+            f"mount -t nfs -o {mount_opts} "
+            f"{nfs_server_ip}:{export_path} {mount_point}"
+        )
+        _, err = client.exec_command(sudo=True, cmd=cmd, timeout=120)
+        if err:
+            err_s = str(err).strip()
+            if err_s:
+                log.info(f"  mount stderr: {err_s}")
+        verify_out, _ = client.exec_command(sudo=True, cmd="mount")
+        if isinstance(verify_out, tuple):
+            verify_out = verify_out[0]
+        if mount_point.rstrip("/") not in str(verify_out):
+            raise OperationFailedError(
+                f"RDMA mount not found in mount table for {export_path} on "
+                f"{client.hostname}"
+            )
+    else:
+        if Mount(client).nfs(
+            mount=mount_point,
+            version="4.2",
+            port=port,
+            server=nfs_server_ip,
+            export=export_path,
+        ):
+            raise OperationFailedError(
+                f"mount command returned non-zero for {export_path} on "
+                f"{client.hostname}"
+            )
+
+    log.info(f"  Mounted on {client.hostname} ({proto_label})")
 
 
 def _create_subvolumes_for_cluster(
@@ -342,6 +451,49 @@ def _verify_mounts(assignments, driver_client, cluster_names):
                 log.warning(f"    nfs.{cn}: could not check daemons: {e}")
     else:
         log.info(f"  All {len(assignments)} mount(s) accessible")
+
+
+def _verify_export_rdma_transport(driver_client, assignments):
+    """Verify that export info includes RDMA in the transports field.
+
+    Runs ``ceph nfs export get`` for each export and checks that the
+    ``transports`` list contains ``"RDMA"`` (case-insensitive).  Logs
+    warnings for exports missing RDMA but does not abort the test.
+
+    Returns the number of exports missing RDMA transport.
+    """
+    log.info("  Verifying RDMA transport in export info...")
+    missing = 0
+    for a in assignments:
+        cn = a["cluster_name"]
+        ep = a["export_path"]
+        try:
+            out, _ = driver_client.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export get {cn} {ep} --format json",
+                timeout=30,
+            )
+            export_info = json.loads(str(out).strip())
+            transports = export_info.get("transports", [])
+            if isinstance(transports, str):
+                transports = [t.strip() for t in transports.split(",")]
+            has_rdma = any(t.upper() == "RDMA" for t in transports)
+            if has_rdma:
+                log.info(f"    {cn} {ep}: transports={transports} -- RDMA present")
+            else:
+                missing += 1
+                log.warning(
+                    f"    {cn} {ep}: transports={transports} -- "
+                    f"RDMA NOT found in export info"
+                )
+        except Exception as e:
+            missing += 1
+            log.warning(f"    {cn} {ep}: could not verify transports: {e}")
+    if missing:
+        log.warning(f"  {missing}/{len(assignments)} export(s) missing RDMA transport")
+    else:
+        log.info(f"  All {len(assignments)} export(s) have RDMA transport")
+    return missing
 
 
 def _unmount_and_cleanup(client, mount_point):
@@ -688,6 +840,7 @@ def _print_qos_report(all_iteration_results, assignments, cfg):
     per_iter_violations = []
     for iteration in all_iteration_results:
         bw_label = iteration["bw_limit"]
+        is_baseline = bw_label == "baseline"
         params = iteration.get("bw_params", {})
         export_limit = params.get("max_export_write_bw") or bw_label
         iter_v = 0
@@ -701,25 +854,29 @@ def _print_qos_report(all_iteration_results, assignments, cfg):
                 f"{res['write_iops']:>8.1f} {res['read_iops']:>8.1f}"
             )
             if per_export_enforced:
-                w_ok, r_ok = _check_single_result(
-                    qos_type,
-                    export_limit,
-                    res["write_mbps"],
-                    res["read_mbps"],
-                    slack_ratio=slack,
-                )
-                if not w_ok:
-                    iter_v += 1
-                if not r_ok:
-                    iter_v += 1
-                line += (
-                    f"  {'PASS' if w_ok else 'FAIL':>4} "
-                    f"{'PASS' if r_ok else 'FAIL':>4}"
-                )
+                if is_baseline:
+                    line += f"  {'--':>4} {'--':>4}"
+                else:
+                    w_ok, r_ok = _check_single_result(
+                        qos_type,
+                        export_limit,
+                        res["write_mbps"],
+                        res["read_mbps"],
+                        slack_ratio=slack,
+                    )
+                    if not w_ok:
+                        iter_v += 1
+                    if not r_ok:
+                        iter_v += 1
+                    line += (
+                        f"  {'PASS' if w_ok else 'FAIL':>4} "
+                        f"{'PASS' if r_ok else 'FAIL':>4}"
+                    )
             log.info(line)
         log.info(div)
         per_iter_violations.append(iter_v)
-        per_export_violations += iter_v
+        if not is_baseline:
+            per_export_violations += iter_v
     total_violations += per_export_violations
 
     # Per-limit summary
@@ -738,7 +895,10 @@ def _print_qos_report(all_iteration_results, assignments, cfg):
             f"{max(writes):>9.3f} {max(reads):>9.3f}"
         )
         if per_export_enforced:
-            line += f"  {per_iter_violations[idx]:>10}"
+            if iteration["bw_limit"] == "baseline":
+                line += f"  {'--':>10}"
+            else:
+                line += f"  {per_iter_violations[idx]:>10}"
         log.info(line)
 
     # -- Section 2: Per-client aggregate -------------------------------------
@@ -760,10 +920,11 @@ def _print_qos_report(all_iteration_results, assignments, cfg):
     key_fn = lambda a: a["client"].hostname  # noqa: E731
     for iteration in all_iteration_results:
         bw_label = iteration["bw_limit"]
+        is_baseline = bw_label == "baseline"
         params = iteration.get("bw_params", {})
         client_limit = params.get("max_client_write_bw") or bw_label
         groups = _group_results(assignments, iteration["results"], key_fn)
-        if per_client_enforced:
+        if per_client_enforced and not is_baseline:
             details, v = _check_aggregate(
                 groups, sorted(groups), client_limit, slack_ratio=slack
             )
@@ -809,10 +970,11 @@ def _print_qos_report(all_iteration_results, assignments, cfg):
     key_fn = lambda a: a["cluster_name"]  # noqa: E731
     for iteration in all_iteration_results:
         bw_label = iteration["bw_limit"]
+        is_baseline = bw_label == "baseline"
         params = iteration.get("bw_params", {})
         export_limit = params.get("max_export_write_bw") or bw_label
         groups = _group_results(assignments, iteration["results"], key_fn)
-        if per_cluster_enforced:
+        if per_cluster_enforced and not is_baseline:
             details, v = _check_aggregate(
                 groups, cluster_names, export_limit, slack_ratio=slack
             )
@@ -841,7 +1003,11 @@ def _print_qos_report(all_iteration_results, assignments, cfg):
 
     # -- Verdict -------------------------------------------------------------
     per_export_checks = (
-        sum(len(it["results"]) * 2 for it in all_iteration_results)
+        sum(
+            len(it["results"]) * 2
+            for it in all_iteration_results
+            if it["bw_limit"] != "baseline"
+        )
         if per_export_enforced
         else 0
     )
@@ -909,7 +1075,7 @@ def _parse_multi_cluster_config(config):
         "qos_type": qos_type,
         "control": config.get("control", "bandwidth_control"),
         "operation": config.get("operation", "none"),
-        "port": str(config.get("port", "2049")),
+        "rdma": bool(config.get("rdma", False)),
         "fault_tolerance": float(config.get("fault_tolerance", 0.10)),
         "fio": {
             "bs": str(config.get("fio_bs", "1M")),
@@ -937,16 +1103,26 @@ def _collect_qos_bw_params(config):
     }
 
 
-def _build_assignments(clients, cluster_specs, subvol_map, nfs_ips, cfg):
+def _build_assignments(
+    clients, cluster_specs, subvol_map, nfs_ips, cfg, service_specs=None
+):
     """Build a flat list of mount assignments with round-robin client mapping.
 
     Each entry contains all info needed for mount, IO, validation,
-    and cleanup.
+    and cleanup.  When *service_specs* is provided, each assignment
+    gets a ``port`` resolved from the cluster's orch service spec
+    (``rdma_port`` when ``cfg["rdma"]`` is True, else ``port``).
     """
+    rdma = cfg.get("rdma", False)
     assignments = []
     idx = 0
     for cluster in cluster_specs:
         cn = cluster["name"]
+        spec = (service_specs or {}).get(cn, {})
+        if rdma:
+            port = str(spec.get("rdma_port", 20049))
+        else:
+            port = str(spec.get("port", 2049))
         for i, sv in enumerate(subvol_map[cn]):
             assignments.append(
                 {
@@ -956,6 +1132,7 @@ def _build_assignments(clients, cluster_specs, subvol_map, nfs_ips, cfg):
                     "export_path": f"{cfg['export_prefix']}_{cn}_{i}",
                     "mount_point": f"{cfg['mount_prefix']}_{cn}_{i}",
                     "nfs_server_ip": nfs_ips[cn],
+                    "port": port,
                     "subvol_name": sv["name"],
                     "subvol_path": sv["path"],
                 }
@@ -969,13 +1146,14 @@ def _log_assignment_table(assignments):
     log.info(f"Assignment table ({len(assignments)} mount(s)):")
     log.info(
         f"  {'#':>3}  {'Client':<15} {'Cluster':<12} "
-        f"{'Export':<30} {'Mount':<30} {'NFS IP':<16}"
+        f"{'Export':<30} {'Mount':<30} {'NFS IP':<16} {'Port':>5}"
     )
     for i, a in enumerate(assignments):
         log.info(
             f"  {i:>3}  {a['client'].hostname:<15} "
             f"{a['cluster_name']:<12} {a['export_path']:<30} "
-            f"{a['mount_point']:<30} {a['nfs_server_ip']:<16}"
+            f"{a['mount_point']:<30} {a['nfs_server_ip']:<16} "
+            f"{a.get('port', '?'):>5}"
         )
 
 
@@ -1046,6 +1224,11 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
     through one or more bandwidth limits (``bw_limits`` config key).
     Each iteration enables QoS, runs concurrent fio IO, and collects
     results.  A consolidated scaling report is printed at the end.
+
+    When ``rdma: true`` is set in config, per-cluster RDMA ports and
+    enablement are fetched from ``ceph orch ls nfs``.  Mounts use
+    ``proto=rdma`` with each cluster's ``rdma_port`` from the service
+    spec, and export info is verified for RDMA transport support.
     """
     cfg = _parse_multi_cluster_config(config)
     cluster_specs = cfg["clusters"]
@@ -1068,6 +1251,7 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
         bw_labels.append(label)
 
     total_exports = len(cluster_specs) * cfg["num_exports_per_cluster"]
+    rdma = cfg["rdma"]
     fio = cfg["fio"]
     log.info(
         f"\n{'=' * 70}\n"
@@ -1081,6 +1265,7 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
         f"  QoS type:        {cfg['qos_type']}\n"
         f"  Control:         {cfg['control']}\n"
         f"  Operation:       {cfg['operation']}\n"
+        f"  RDMA (config):   {rdma}\n"
         f"  Fault tolerance: {cfg['fault_tolerance'] * 100:.0f}%\n"
         f"  Subvol group:    {cfg['subvol_group']}\n"
         f"  BW limits:       {bw_labels} ({len(bw_iterations)} iteration(s))\n"
@@ -1100,6 +1285,7 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
     nfs_obj = Ceph(driver_client).nfs
     subvol_map = {}
     nfs_ips = {}
+    service_specs = {}
     assignments = []
 
     try:
@@ -1107,10 +1293,42 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
         _log_phase(0, "Install fio on client nodes")
         _install_fio(clients)
 
-        # Phase 1: Resolve NFS server IPs
-        _log_phase(1, "Resolve NFS server IPs")
+        # Phase 1: Resolve NFS server IPs and service specs
+        _log_phase(1, "Resolve NFS server IPs and service specs")
         for cn in cluster_names:
             nfs_ips[cn] = _get_nfs_server_ip(driver_client, cn)
+
+        service_specs = _get_nfs_service_specs(driver_client, cluster_names)
+
+        missing = [cn for cn in cluster_names if cn not in service_specs]
+        if missing:
+            log.warning(
+                f"  Clusters not found in orch: {missing} -- " f"removing from test"
+            )
+            cluster_specs = [c for c in cluster_specs if c["name"] not in missing]
+            cluster_names = [c["name"] for c in cluster_specs]
+            cfg["clusters"] = cluster_specs
+            if not cluster_names:
+                raise ConfigError("No NFS clusters found in orch ls output")
+            log.info(
+                f"  Proceeding with {len(cluster_names)} cluster(s): "
+                f"{cluster_names}"
+            )
+
+        if rdma:
+            for cn in cluster_names:
+                spec = service_specs[cn]
+                if not spec["enable_rdma"]:
+                    log.warning(
+                        f"  Config requests RDMA but cluster '{cn}' "
+                        f"does not have enable_rdma=true in orch spec"
+                    )
+                else:
+                    log.info(
+                        f"  {cn}: RDMA enabled, "
+                        f"rdma_port={spec['rdma_port']}, "
+                        f"tcp_port={spec['port']}"
+                    )
 
         # Phase 2: Create subvolumes
         _log_phase(2, "Create CephFS subvolumes")
@@ -1126,7 +1344,12 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
         # Phase 3: Build assignments (round-robin client mapping)
         _log_phase(3, "Build round-robin client assignments")
         assignments = _build_assignments(
-            clients, cluster_specs, subvol_map, nfs_ips, cfg
+            clients,
+            cluster_specs,
+            subvol_map,
+            nfs_ips,
+            cfg,
+            service_specs=service_specs,
         )
         _log_assignment_table(assignments)
 
@@ -1157,21 +1380,86 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
                     if not suffix:
                         log.warning(f"    {cn}: could not list exports: {e}")
 
+        # Phase 4b: Verify RDMA transport in export info (when enabled)
+        if rdma:
+            _log_phase("4b", "Verify RDMA transport in export info")
+            rdma_missing = _verify_export_rdma_transport(driver_client, assignments)
+            if rdma_missing:
+                log.warning(
+                    f"  {rdma_missing} export(s) missing RDMA transport -- "
+                    f"mounts will still use proto=rdma"
+                )
+
         # Phase 5: Mount all assignments
-        _log_phase(5, f"Mount exports on clients ({len(assignments)} mounts)")
+        mount_label = "RDMA" if rdma else "TCP"
+        _log_phase(
+            5,
+            f"Mount exports on clients ({len(assignments)} " f"{mount_label} mounts)",
+        )
         for a in assignments:
             _mount_export(
                 a["client"],
                 a["nfs_server_ip"],
                 a["export_path"],
                 a["mount_point"],
-                cfg["port"],
+                a["port"],
+                rdma=rdma,
             )
             sleep(1)
-        log.info(f"  All {len(assignments)} mount(s) complete")
+        log.info(f"  All {len(assignments)} {mount_label} mount(s) complete")
 
         _log_phase("5b", "Verify mounts and NFS daemon health")
         _verify_mounts(assignments, driver_client, cluster_names)
+
+        # Phase 5c: Baseline IO (no QoS)
+        _log_phase(
+            "5c",
+            f"Baseline IO — no QoS "
+            f"({len(assignments)} threads, "
+            f"bs={fio['bs']} iodepth={fio['iodepth']} "
+            f"numjobs={fio['numjobs']} runtime={fio['runtime']}s)",
+        )
+        log.info("  Confirming QoS is disabled on all clusters...")
+        for cn in cluster_names:
+            try:
+                enable_disable_qos_for_cluster(
+                    enable_flag=False,
+                    ceph_cluster_nfs_obj=nfs_obj.cluster,
+                    cluster_name=cn,
+                    operation=cfg["control"],
+                )
+            except Exception:
+                pass
+
+        with ThreadPoolExecutor(max_workers=len(assignments)) as executor:
+            futures = [
+                executor.submit(
+                    _fio_client_io,
+                    a["client"],
+                    a["mount_point"],
+                    fio,
+                )
+                for a in assignments
+            ]
+            baseline_results = [f.result() for f in futures]
+
+        log.info("\n  Baseline IO Results (no QoS):")
+        log.info(
+            f"  {'#':>3}  {'Client':<15} {'Cluster':<12} "
+            f"{'Write MiB/s':>12} {'Read MiB/s':>12} "
+            f"{'W-IOPS':>10} {'R-IOPS':>10}"
+        )
+        for i, res in enumerate(baseline_results):
+            a = assignments[i]
+            log.info(
+                f"  {i:>3}  {a['client'].hostname:<15} "
+                f"{a['cluster_name']:<12} "
+                f"{res['write_mbps']:>12.3f} {res['read_mbps']:>12.3f} "
+                f"{res['write_iops']:>10.1f} {res['read_iops']:>10.1f}"
+            )
+
+        log.info("  Settling 5s before QoS iterations...")
+        sleep(5)
 
         # Validate operation handler once before iteration loop
         op_handler = _OPERATIONS.get(cfg["operation"])
@@ -1180,7 +1468,13 @@ def _scenario_cluster_bandwidth(config, ceph_cluster):
             raise ConfigError(f"Unknown operation '{cfg['operation']}'. Valid: {valid}")
 
         # Phase 6-8: Iterate through bandwidth limits
-        all_iteration_results = []
+        all_iteration_results = [
+            {
+                "bw_limit": "baseline",
+                "bw_params": {},
+                "results": baseline_results,
+            }
+        ]
         for iter_idx, bw_params in enumerate(bw_iterations):
             bw_label = bw_labels[iter_idx]
             iter_hdr = f"BW iteration {iter_idx + 1}/{len(bw_iterations)}: {bw_label}"
