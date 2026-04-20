@@ -33,11 +33,24 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
-        client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
-        fs_util.run_ios(client1, f"{mounting_dir}/run_ios_{iter}/", io_tools=["dd"])
-        client1.exec_command(
-            sudo=True, cmd=f"rm -rf {mounting_dir}/run_ios_{iter}", timeout=3600
-        )
+        try:
+            client1.exec_command(
+                sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}"
+            )
+            fs_util.run_ios(
+                client1, f"{mounting_dir}/run_ios_{iter}/", io_tools=["dd"]
+            )
+            client1.exec_command(
+                sudo=True,
+                cmd=f"rm -rf {mounting_dir}/run_ios_{iter}",
+                timeout=3600,
+            )
+        except CommandFailed as e:
+            log.warning(
+                f"IO command failed during disruption (expected): {e}"
+            )
+        except Exception as e:
+            log.warning(f"IO operation hit an error during disruption: {e}")
         iter = iter + 1
 
 

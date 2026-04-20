@@ -149,6 +149,9 @@ class CephFSSystemUtils(object):
                         crash_ready_nodes.append(node.node.hostname)
                     except BaseException as ex:
                         if "No such file" in str(ex):
+                            node.exec_command(
+                                sudo=True, cmd="mkdir -p /etc/ceph"
+                            )
                             for file_name in ["ceph.conf", "ceph.client.admin.keyring"]:
                                 src_path = f"{log_base_dir}/{file_name}"
                                 dst_path = f"/etc/ceph/{file_name}"

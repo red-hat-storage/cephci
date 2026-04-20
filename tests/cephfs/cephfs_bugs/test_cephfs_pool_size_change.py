@@ -219,34 +219,9 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Cleaning up the system")
-        out, rc = clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_points[1]}/*")
         for mount_point in mount_points:
-            clients[0].exec_command(sudo=True, cmd=f"umount {mount_point}")
-        if orig_data_pool_pg_num and orig_metadata_pool_pg_num:
-            log.info("Restoring original pg_num values")
-            clients[0].exec_command(
-                sudo=True,
-                cmd=f"ceph osd pool set {data_pool} pg_num {orig_data_pool_pg_num}",
-                timeout=3600,
+            fs_util.client_clean_up(
+                "umount", kernel_clients=[clients[0]], mounting_dir=mount_point
             )
-            clients[0].exec_command(
-                sudo=True,
-                cmd=f"ceph osd pool set {metadata_pool} pg_num {orig_metadata_pool_pg_num}",
-                timeout=3600,
-            )
-        if "4." in rhbuild:
-            commands = [
-                f"ceph osd pool set {data_pool} pg_autoscale_mode warn",
-                f"ceph osd pool set {metadata_pool} pg_autoscale_mode warn",
-            ]
-            for command in commands:
-                clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
-        else:
-            commands = [
-                f"ceph osd pool set {data_pool} pg_autoscale_mode on",
-                f"ceph osd pool set {metadata_pool} pg_autoscale_mode on",
-            ]
-            for command in commands:
-                clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
-        for mount_point in mount_points:
-            clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_point}")
+        log.info("Removing the test filesystem to avoid leftover health warnings")
+        fs_util.remove_fs(clients[0], fs_name, validate=True, check_ec=False)

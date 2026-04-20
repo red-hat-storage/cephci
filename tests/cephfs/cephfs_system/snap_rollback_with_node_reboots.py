@@ -155,12 +155,16 @@ def run(ceph_cluster, **kw):
         files_checksum_snap_4 = fs_util.get_files_and_checksum(
             client1, fuse_mounting_dir_1
         )
+        retry_revert = retry(CommandFailed, tries=3, delay=60)(
+            client1.exec_command
+        )
+
+        client1.exec_command(
+            sudo=True,
+            cmd=f"cd {kernel_mounting_dir_1};rm -rf *",
+        )
+
         with parallel() as p:
-            client1.exec_command(
-                sudo=True,
-                cmd=f"cd {kernel_mounting_dir_1};rm -rf *",
-            )
-            retry_revert = retry(CommandFailed, tries=3, delay=60)(client1.exec_command)
             p.spawn(
                 retry_revert,
                 sudo=True,
@@ -170,14 +174,14 @@ def run(ceph_cluster, **kw):
                 fs_util.reboot_node(ceph_node=mds)
             for mon in mon_nodes:
                 fs_util.reboot_node(ceph_node=mon)
+        files_checksum_snap_1_revert = fs_util.get_files_and_checksum(
+            client1, f"/mnt/cephfs_kernel{mounting_dir}_1"
+        )
+        if files_checksum_snap_1_revert != files_checksum_snap_1:
+            log.error("checksum is not matching after snapshot1 revert")
+            return 1
 
-            files_checksum_snap_1_revert = fs_util.get_files_and_checksum(
-                client1, f"/mnt/cephfs_kernel{mounting_dir}_1"
-            )
-            if files_checksum_snap_1_revert != files_checksum_snap_1:
-                log.error("checksum is not matching after snapshot1 revert")
-                return 1
-
+        with parallel() as p:
             p.spawn(
                 retry_revert,
                 sudo=True,
@@ -187,12 +191,14 @@ def run(ceph_cluster, **kw):
                 fs_util.reboot_node(ceph_node=mds)
             for mon in mon_nodes:
                 fs_util.reboot_node(ceph_node=mon)
-            files_checksum_snap_2_revert = fs_util.get_files_and_checksum(
-                client1, f"/mnt/cephfs_kernel{mounting_dir}_1"
-            )
-            if files_checksum_snap_2_revert != files_checksum_snap_2:
-                log.error("checksum is not matching after snapshot2 revert")
-                return 1
+        files_checksum_snap_2_revert = fs_util.get_files_and_checksum(
+            client1, f"/mnt/cephfs_kernel{mounting_dir}_1"
+        )
+        if files_checksum_snap_2_revert != files_checksum_snap_2:
+            log.error("checksum is not matching after snapshot2 revert")
+            return 1
+
+        with parallel() as p:
             p.spawn(
                 retry_revert,
                 sudo=True,
@@ -202,13 +208,14 @@ def run(ceph_cluster, **kw):
                 fs_util.reboot_node(ceph_node=mds)
             for mon in mon_nodes:
                 fs_util.reboot_node(ceph_node=mon)
-            files_checksum_snap_3_revert = fs_util.get_files_and_checksum(
-                client1, fuse_mounting_dir_1
-            )
-            if files_checksum_snap_3_revert != files_checksum_snap_3:
-                log.error("checksum is not matching after snapshot3 revert")
-                return 1
+        files_checksum_snap_3_revert = fs_util.get_files_and_checksum(
+            client1, fuse_mounting_dir_1
+        )
+        if files_checksum_snap_3_revert != files_checksum_snap_3:
+            log.error("checksum is not matching after snapshot3 revert")
+            return 1
 
+        with parallel() as p:
             p.spawn(
                 retry_revert,
                 sudo=True,
@@ -218,12 +225,12 @@ def run(ceph_cluster, **kw):
                 fs_util.reboot_node(ceph_node=mds)
             for mon in mon_nodes:
                 fs_util.reboot_node(ceph_node=mon)
-            files_checksum_snap_4_revert = fs_util.get_files_and_checksum(
-                client1, fuse_mounting_dir_1
-            )
-            if files_checksum_snap_4_revert != files_checksum_snap_4:
-                log.error("checksum is not matching after snapshot4 revert")
-                return 1
+        files_checksum_snap_4_revert = fs_util.get_files_and_checksum(
+            client1, fuse_mounting_dir_1
+        )
+        if files_checksum_snap_4_revert != files_checksum_snap_4:
+            log.error("checksum is not matching after snapshot4 revert")
+            return 1
 
         return 0
     except Exception as e:
