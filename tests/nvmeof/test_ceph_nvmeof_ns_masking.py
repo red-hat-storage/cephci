@@ -1,6 +1,8 @@
 import json
 from copy import deepcopy
 
+from looseversion import LooseVersion
+
 from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
 from ceph.nvmeof.initiators.linux import Initiator
@@ -16,7 +18,7 @@ from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.utils import generate_unique_id
+from utility.utils import generate_unique_id, get_ceph_version_from_cluster
 
 LOG = Log(__name__)
 
@@ -364,7 +366,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         if config.get("subsystems"):
             configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
-            configure_listeners(nvme_service.gateways, nvme_service.config)
+            ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+            if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                configure_listeners(nvme_service.gateways, nvme_service.config)
             configure_hosts(
                 nvme_service.gateways[0], nvme_service.config, ceph_cluster=ceph_cluster
             )

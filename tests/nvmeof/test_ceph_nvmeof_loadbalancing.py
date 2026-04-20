@@ -9,6 +9,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
+from looseversion import LooseVersion
+
 from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
@@ -37,7 +39,10 @@ from tests.nvmeof.workflows.nvme_utils import (
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.utils import generate_unique_id
+from utility.utils import (
+    generate_unique_id,
+    get_ceph_version_from_cluster,
+)
 
 LOG = Log(__name__)
 
@@ -94,7 +99,9 @@ def test_ceph_83608838(ceph_cluster, config):
         if cfg.get("listeners"):
             listeners.extend(cfg["listeners"])
     listeners = list(set(listeners))
-    configure_listeners(nvme_service.gateways, config, listeners=listeners)
+    ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+    if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+        configure_listeners(nvme_service.gateways, config, listeners=listeners)
     lb_groups = fetch_lb_groups(nvme_service, listeners)
     opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
     configure_namespaces(nvme_service.gateways[0], config, opt_args)
@@ -173,7 +180,9 @@ def test_ceph_83609769(ceph_cluster, config):
         if cfg.get("listeners"):
             listeners.extend(cfg["listeners"])
     listeners = list(set(listeners))
-    configure_listeners(nvme_service.gateways, config, listeners=listeners)
+    ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+    if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+        configure_listeners(nvme_service.gateways, config, listeners=listeners)
     opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": "sequential"}
     LOG.info("Configure namespaces")
     configure_namespaces(nvme_service.gateways[0], config, opt_args)
@@ -408,7 +417,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     if cfg.get("listeners"):
                         listeners.extend(cfg["listeners"])
                 listeners = list(set(listeners))
-                configure_listeners(nvme_service.gateways, config, listeners=listeners)
+                ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+                if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                    configure_listeners(
+                        nvme_service.gateways, config, listeners=listeners
+                    )
                 lb_groups = fetch_lb_groups(nvme_service, listeners)
                 opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
                 LOG.info("Configure namespaces")
@@ -547,11 +560,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
                             # Add listeners and namespaces to newly added GWs
                             LOG.info(f"Adding listeners for {scaleup_nodes}")
-                            configure_listeners(
-                                nvme_service.gateways,
-                                nvme_service.config,
-                                listeners=scaleup_nodes,
+                            ceph_version = get_ceph_version_from_cluster(
+                                nvme_service.clients[0]
                             )
+                            if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                                configure_listeners(
+                                    nvme_service.gateways,
+                                    nvme_service.config,
+                                    listeners=scaleup_nodes,
+                                )
 
                             lb_groups = fetch_lb_groups(nvme_service, scaleup_nodes)
 

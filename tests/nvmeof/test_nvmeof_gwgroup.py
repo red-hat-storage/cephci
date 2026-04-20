@@ -72,6 +72,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         nvme_service = NVMeService(gwgroup_config, ceph_cluster)
                         LOG.info("Deploy NVMe service")
                         nvme_service.deploy()
+                        cleanup_dict.update({nvme_service: rbd_obj})
                         LOG.info("Initialize gateways")
                         nvme_service.init_gateways()
                     p.spawn(
@@ -82,7 +83,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         rbd_obj,
                         nvme_service,
                     )
-                    cleanup_dict.update({nvme_service: rbd_obj})
         else:
             for gwgroup_config in config["gw_groups"]:
                 clean_up = ["subsystems", "initiators", "pool", "gateway"]
@@ -96,12 +96,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     nvme_service = NVMeService(gwgroup_config, ceph_cluster)
                     LOG.info("Deploy NVMe service")
                     nvme_service.deploy()
+                    cleanup_dict.update({nvme_service: rbd_obj})
                     LOG.info("Initialize gateways")
                     nvme_service.init_gateways()
                 run_gateway_group_operations(
                     ceph_cluster, gwgroup_config, config, rbd_obj, nvme_service
                 )
-                cleanup_dict.update({nvme_service: rbd_obj})
 
         return 0
 

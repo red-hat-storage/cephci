@@ -1,3 +1,5 @@
+from looseversion import LooseVersion
+
 from ceph.ceph import Ceph
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.gateway_entities import (
@@ -17,6 +19,7 @@ from tests.nvmeof.workflows.nvme_utils import (
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 LOG = Log(__name__)
 
@@ -39,7 +42,11 @@ def configure_gw_entities_with_encryption(gwgroup_config, ceph_cluster, nvme_ser
                 hosts.extend(cfg["hosts"])
         listeners = list(set(listeners))
         hosts = list({tuple(sorted(h.items())): h for h in hosts}.values())
-        configure_listeners(nvme_service.gateways, gwgroup_config, listeners=listeners)
+        ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+        if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+            configure_listeners(
+                nvme_service.gateways, gwgroup_config, listeners=listeners
+            )
         lb_groups = fetch_lb_groups(nvme_service.gateways, listeners)
         opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
         configure_namespaces(nvme_service.gateways[0], gwgroup_config, opt_args)

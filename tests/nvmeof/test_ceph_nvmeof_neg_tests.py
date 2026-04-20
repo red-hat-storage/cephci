@@ -1041,7 +1041,9 @@ def test_ceph_83608266(
             # Configure Subsystem, listeners, host, namespaces
             if config.get("subsystems"):
                 configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
-                configure_listeners(nvme_service.gateways, nvme_service.config)
+                ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+                if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                    configure_listeners(nvme_service.gateways, nvme_service.config)
                 configure_hosts(
                     nvme_service.gateways[0],
                     nvme_service.config,
