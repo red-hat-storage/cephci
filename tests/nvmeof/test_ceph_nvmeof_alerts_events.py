@@ -30,8 +30,6 @@ from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
 
-rbd_obj = None
-nvme_service = None
 cleanup = False
 
 
@@ -213,7 +211,7 @@ def test_ceph_83611097(ceph_cluster, config):
     nvme_service.init_gateways()
 
     # Initialize High Availability
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -307,88 +305,92 @@ def test_ceph_83610950(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-    rbd_pool = config["rbd_pool"]
-    rbd_obj = config["rbd_obj"]
-    time_to_fire = config.get("time_to_fire", 60)
-    interval = config.get("interval", 50)
-    alert = "NVMeoFMultipleNamespacesOfRBDImage"
-    msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
-    svcs = []
-    services = []
+    try:
+        rbd_pool = config["rbd_pool"]
+        rbd_obj = config["rbd_obj"]
+        time_to_fire = config.get("time_to_fire", 60)
+        interval = config.get("interval", 50)
+        alert = "NVMeoFMultipleNamespacesOfRBDImage"
+        msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
+        svcs = []
+        services = []
 
-    # Deploy Services
-    for svc in config["gw_groups"]:
-        svc.update({"rbd_pool": rbd_pool})
-        service = NVMeService(svc, ceph_cluster)
-        service.deploy()
-        service.init_gateways()
-        services.append(service)
-        svc.update({"nvme_service": service})
-        ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
-        ha.gateways = service.gateways
-        svcs.append(ha)
+        # Deploy Services
+        for svc in config["gw_groups"]:
+            svc.update({"rbd_pool": rbd_pool})
+            service = NVMeService(svc, ceph_cluster)
+            service.deploy()
+            service.init_gateways()
+            services.append(service)
+            svc.update({"nvme_service": service})
+            ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
+            ha.gateways = service.gateways
+            svcs.append(ha)
 
-    # Create RBD image and multiple NS with that image.
-    ha1, ha2 = svcs
-    nvmegwcl1 = ha1.gateways[0]
-    sub1_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
-    nvmegwcl1.subsystem.add(**{"args": {**sub1_args, **{"no-group-append": True}}})
+        # Create RBD image and multiple NS with that image.
+        ha1, ha2 = svcs
+        nvmegwcl1 = ha1.gateways[0]
+        sub1_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
+        nvmegwcl1.subsystem.add(**{"args": {**sub1_args, **{"no-group-append": True}}})
 
-    nvmegwcl2 = ha2.gateways[0]
-    sub2_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
-    nvmegwcl2.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
+        nvmegwcl2 = ha2.gateways[0]
+        sub2_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
+        nvmegwcl2.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
 
-    image = f"image-{generate_unique_id(4)}"
-    rbd_obj.create_image(rbd_pool, image, "10G")
+        image = f"image-{generate_unique_id(4)}"
+        rbd_obj.create_image(rbd_pool, image, "10G")
 
-    # Removing nsid because we have https://tracker.ceph.com/issues/72681
-    # img_args = {"rbd-pool": _rbd_pool, "rbd-image": image, "nsid": 1}
-    img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "force": ""}
-    nvmegwcl1.namespace.add(**{"args": {**sub1_args, **img_args}})
-    nvmegwcl2.namespace.add(**{"args": {**sub2_args, **img_args}})
-    events = PrometheusAlerts(ha1.orch)
+        # Removing nsid because we have https://tracker.ceph.com/issues/72681
+        # img_args = {"rbd-pool": _rbd_pool, "rbd-image": image, "nsid": 1}
+        img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "force": ""}
+        nvmegwcl1.namespace.add(**{"args": {**sub1_args, **img_args}})
+        nvmegwcl2.namespace.add(**{"args": {**sub2_args, **img_args}})
+        events = PrometheusAlerts(ha1.orch)
 
-    # Two namespaces created for single RBD image,
-    # NVMeoFMultipleNamespacesOfRBDImage prometheus alert should be firing
-    LOG.info(
-        f"{alert} should be FIRING Since multiple namespaces are created for Single RBD image."
-    )
-    events.monitor_alert(
-        alert, timeout=time_to_fire, interval=interval, msg=msg.format(image=image)
-    )
-    nvmegwcl2.namespace.delete(**{"args": {**sub2_args, **{"nsid": 1}}})
+        # Two namespaces created for single RBD image,
+        # NVMeoFMultipleNamespacesOfRBDImage prometheus alert should be firing
+        LOG.info(
+            f"{alert} should be FIRING Since multiple namespaces are created for Single RBD image."
+        )
+        events.monitor_alert(
+            alert, timeout=time_to_fire, interval=interval, msg=msg.format(image=image)
+        )
+        nvmegwcl2.namespace.delete(**{"args": {**sub2_args, **{"nsid": 1}}})
 
-    # Alert should be inactive
-    LOG.info(f"{alert} should be INACTIVE.")
-    events.monitor_alert(
-        alert, timeout=time_to_fire, interval=interval, state="inactive"
-    )
+        # Alert should be inactive
+        LOG.info(f"{alert} should be INACTIVE.")
+        events.monitor_alert(
+            alert, timeout=time_to_fire, interval=interval, state="inactive"
+        )
 
-    sub2_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
-    nvmegwcl2.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
-    nvmegwcl2.namespace.add(**{"args": {**sub2_args, **img_args}})
+        sub2_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
+        nvmegwcl2.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
+        nvmegwcl2.namespace.add(**{"args": {**sub2_args, **img_args}})
 
-    # Alert should be active again, since image is used in new subsystem
-    LOG.info(
-        f"{alert} should be FIRING Since multiple namespaces are created for Single RBD image."
-    )
-    events.monitor_alert(
-        alert, timeout=time_to_fire, interval=interval, msg=msg.format(image=image)
-    )
-    nvmegwcl1.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
+        # Alert should be active again, since image is used in new subsystem
+        LOG.info(
+            f"{alert} should be FIRING Since multiple namespaces are created for Single RBD image."
+        )
+        events.monitor_alert(
+            alert, timeout=time_to_fire, interval=interval, msg=msg.format(image=image)
+        )
+        nvmegwcl1.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
 
-    # Namespace removed , alert should be inactive
-    LOG.info(f"{alert} should be INACTIVE.")
-    events.monitor_alert(
-        alert, timeout=time_to_fire, interval=interval, state="inactive"
-    )
-    if config.get("cleanup"):
-        LOG.info("Cleaning up NVMeoF services and RBD pool for CEPH-83610950.")
-        for service in services:
-            service.delete_nvme_service()
-            rbd_obj.clean_up(pools=[rbd_pool])
-    global cleanup
-    cleanup = True
+        # Namespace removed , alert should be inactive
+        LOG.info(f"{alert} should be INACTIVE.")
+        events.monitor_alert(
+            alert, timeout=time_to_fire, interval=interval, state="inactive"
+        )
+    except Exception as err:
+        LOG.error(err)
+    finally:
+        if config.get("cleanup"):
+            LOG.info("Cleaning up NVMeoF services and RBD pool for CEPH-83610950.")
+            for service in services:
+                service.delete_nvme_service()
+                rbd_obj.clean_up(pools=[rbd_pool])
+            global cleanup
+            cleanup = False
 
     LOG.info(f"CEPH-83610950 - {alert} alert validated successfully.")
 
@@ -408,7 +410,7 @@ def test_ceph_83610948(ceph_cluster, config):
     nvme_service.deploy()
     nvme_service.init_gateways()
 
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -501,7 +503,7 @@ def test_ceph_83611098(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -595,7 +597,7 @@ def test_ceph_83611099(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -673,7 +675,7 @@ def test_ceph_83611306(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -785,7 +787,7 @@ def test_CEPH_83616917(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -857,7 +859,7 @@ def test_ceph_83617544(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
 
     # Check for alert
@@ -929,7 +931,7 @@ def test_ceph_83616916(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
     nvmegwcli = ha.gateways[0]
@@ -1100,7 +1102,7 @@ def test_ceph_83617622(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -1178,7 +1180,7 @@ def test_ceph_83617545(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     nvmegwcl1 = nvme_service.gateways[0]
 
@@ -1252,7 +1254,7 @@ def test_ceph_83617640(ceph_cluster, config):
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
-    config.update({"nvme_service": nvme_service})
+    config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
@@ -1342,7 +1344,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     Returns:
         int - 0 when the execution is successful else 1 (for failure).
     """
-    global rbd_obj, nvme_service, cleanup
+    global cleanup
+    nvme_service = None
+    rbd_obj = None
     config = kwargs["config"]
     kwargs["config"].update(
         {
@@ -1368,6 +1372,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(err)
     finally:
         if config.get("cleanup") and not cleanup:
-            teardown(nvme_service, rbd_obj)
+            service_to_clean = nvme_service or config.get("nvme_service")
+            if service_to_clean is not None:
+                try:
+                    teardown(service_to_clean, rbd_obj)
+                except Exception as teardown_err:
+                    LOG.error(f"Teardown in run() finally failed: {teardown_err}")
 
     return 1

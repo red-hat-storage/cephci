@@ -4,6 +4,8 @@ Test E2E nvmeof namespace resize
 
 import json
 
+from looseversion import LooseVersion
+
 from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
 from tests.nvmeof.workflows.gateway_entities import (
@@ -17,7 +19,7 @@ from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from tests.rbd.rbd_utils import initial_rbd_config, verify_image_size
 from utility.log import Log
-from utility.utils import generate_unique_id
+from utility.utils import generate_unique_id, get_ceph_version_from_cluster
 
 LOG = Log(__name__)
 
@@ -224,7 +226,9 @@ def test_ceph_83627178(ceph_cluster, config, nvme_service):
     # Configure subsystems and listeners
     LOG.info("Configure subsystems, listeners")
     configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
-    configure_listeners(nvme_service.gateways, nvme_service.config)
+    ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+    if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+        configure_listeners(nvme_service.gateways, nvme_service.config)
     configure_hosts(nvmegwcli, nvme_service.config, ceph_cluster=ceph_cluster)
 
     # Configure namespaces
