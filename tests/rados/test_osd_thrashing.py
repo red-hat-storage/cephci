@@ -109,6 +109,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from ceph import utils
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import NFS_RDMA_DEFAULT_BASE_PORT, RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
@@ -194,6 +195,7 @@ def run(ceph_cluster, **kw):
     mon_workflow_obj = MonitorWorkflows(node=cephadm)
     mon_election_obj = MonElectionStrategies(rados_obj=rados_obj)
     mgr_workflow_obj = MgrWorkflows(node=cephadm)
+    rbd_image = "thrash-test-image" + str(random.randint(100, 999))
 
     # Test parameters
     iterations = config.get("iterations", 60)
@@ -384,6 +386,7 @@ def run(ceph_cluster, **kw):
                 log.info("RBD workflows enabled - creating RBD pools")
                 rbd_future = pool_executor.submit(
                     rados_obj.create_ec_rbd_pools,
+                    image_name=rbd_image,
                     enable_fast_ec_config_params=enable_fast_ec_config_params,
                 )
 
@@ -1443,8 +1446,9 @@ def run(ceph_cluster, **kw):
                     logrotate_cmd = f"logrotate -f /etc/logrotate.d/ceph-{fsid}"
                     osd_hosts = rados_obj.get_osd_hosts()
                     for host in osd_hosts:
+                        host_obj = utils.get_node_by_id(ceph_cluster, host)
                         try:
-                            host.exec_command(
+                            host_obj.exec_command(
                                 cmd=logrotate_cmd,
                                 sudo=True,
                                 check_ec=False,
