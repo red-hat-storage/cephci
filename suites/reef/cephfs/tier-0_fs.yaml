@@ -19,10 +19,6 @@ tests:
                 registry-url: registry.redhat.io
                 allow-fqdn-hostname: true
                 skip-monitoring-stack: true
-                config:
-                  mon:
-                    debug_mon: 20
-                    debug_ms: 1
               base_cmd_args:
                 verbose: true
               command: bootstrap

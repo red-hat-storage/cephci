@@ -67,14 +67,11 @@ def run(ceph_cluster, **kw):
     2. Remove all the cephfs mounts
     3. Reset pg_autoscale_mode for cephfs pools to on
     """
-    orig_data_pool_pg_num = None
-    orig_metadata_pool_pg_num = None
     try:
         tc = "CEPH-83574596"
         log.info(f"Running cephfs {tc} test case")
 
         config = kw["config"]
-        rhbuild = config.get("rhbuild")
         build = config.get("build", config.get("rhbuild"))
         mdss = ceph_cluster.get_ceph_objects("mds")
 
@@ -139,8 +136,6 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph osd pool get {metadata_pool} pg_num | awk '{{print $2}}'",
         )
         log.debug("metadata_pool_pg_num : {}".format(metadata_pool_pg_num))
-        orig_data_pool_pg_num = data_pool_pg_num.strip()
-        orig_metadata_pool_pg_num = metadata_pool_pg_num.strip()
         for num in range(1, 7):
             log.info("Creating Directories")
             out, rc = clients[0].exec_command(

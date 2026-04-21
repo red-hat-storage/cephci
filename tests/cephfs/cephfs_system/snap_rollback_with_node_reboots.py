@@ -155,9 +155,7 @@ def run(ceph_cluster, **kw):
         files_checksum_snap_4 = fs_util.get_files_and_checksum(
             client1, fuse_mounting_dir_1
         )
-        retry_revert = retry(CommandFailed, tries=3, delay=60)(
-            client1.exec_command
-        )
+        retry_revert = retry(CommandFailed, tries=3, delay=60)(client1.exec_command)
 
         client1.exec_command(
             sudo=True,

@@ -2385,33 +2385,18 @@ class FsUtils(object):
                 container_exec=False,
                 check_ec=False,
             )
-        max_wait = max(wait, 30) if expect_exit else wait
-        poll_interval = 5
-        elapsed = 0
-        pids_after = list(pids_before)
-        while elapsed < max_wait:
-            sleep(poll_interval)
-            elapsed += poll_interval
-            out_after, rc_after = node.exec_command(
-                cmd=f"pgrep {daemon}",
-                container_exec=False,
-                check_ec=False,
-            )
-            pids_after = out_after.splitlines() if not rc_after else []
-            log.info(
-                f"PIDs after {sig.name} (waited {elapsed}s): {pids_after}"
-            )
-            if expect_exit and not (set(pids_before) & set(pids_after)):
-                log.info(
-                    f"Old PIDs gone after {elapsed}s (may have new PIDs from restart)"
-                )
-                break
-            if not expect_exit and pids_after:
-                break
+        sleep(wait)
+        out_after, rc_after = node.exec_command(
+            cmd=f"pgrep {daemon}",
+            container_exec=False,
+            check_ec=False,
+        )
+        pids_after = out_after.splitlines() if not rc_after else []
+        log.info(f"PIDs after {sig.name}: {pids_after}")
         if expect_exit:
             if set(pids_before) & set(pids_after):
                 raise CommandFailed(
-                    f"{sig.name} failed. PIDs still running after {elapsed}s: "
+                    f"{sig.name} failed. PIDs still running: "
                     f"{set(pids_before) & set(pids_after)}"
                 )
         else:

@@ -41,7 +41,6 @@ def run(ceph_cluster, **kw):
     target_site_name = "remote_site"
     fs_mirroring_utils = None
     snap_names = []
-    peer_uuid = None
 
     try:
         config = kw.get("config")
@@ -141,13 +140,9 @@ def run(ceph_cluster, **kw):
         # --- Retrieve mirror daemon identifiers for status queries ---
         fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
         daemon_names = fs_mirroring_utils.get_daemon_name(source_clients[0])
-        asok_files = fs_mirroring_utils.get_asok_file_with_connectivity_check(
+        asok_files = fs_mirroring_utils.get_asok_file(
             cephfs_mirror_node, fsid, daemon_names
         )
-        if not asok_files:
-            raise CommandFailed(
-                "No accessible cephfs-mirror admin socket found"
-            )
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
         )
@@ -392,10 +387,6 @@ def run(ceph_cluster, **kw):
             )
 
         log.info("Destroy CephFS Mirroring setup.")
-        if peer_uuid is None:
-            peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
-                source_clients[0], source_fs
-            )
         fs_mirroring_utils.destroy_cephfs_mirroring(
             source_fs,
             source_clients[0],
