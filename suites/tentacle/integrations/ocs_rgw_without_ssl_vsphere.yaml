@@ -92,13 +92,10 @@ tests:
             placement:
               nodes:
                 - node2
-            spec:
-              ssl: false
-              generate_cert: true
       desc: "Deploying RGW endpoint which is SSL terminated."
       destroy-cluster: false
       module: test_rgw.py
-      name: "Test rgw ssl endpoint using spec"
+      name: "Test rgw without ssl endpoint using spec"
 
   - test:
       abort-on-fail: true
