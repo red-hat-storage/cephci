@@ -22,7 +22,7 @@ class Mount(Cli):
         if not out.strip():
             self.execute(cmd="dnf install -y nfs-utils", sudo=True, timeout=600)
 
-    def nfs(self, mount, version, port, server, export):
+    def nfs(self, mount, version, port, server, export, **kwargs):
         """
         Perform nfs mount
         Args:
@@ -40,7 +40,12 @@ class Mount(Cli):
             self.execute(cmd=f"mkdir {mount}", sudo=True)
 
         # Create the mount point
-        cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port} {server}:{export} {mount}"
+        cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port}"
+        xprtsec = kwargs.get("xprtsec")
+        if xprtsec:
+            cmd += f",xprtsec={xprtsec}"
+        cmd += f" {server}:{export} {mount}"
+
         self.execute(sudo=True, long_running=True, cmd=cmd)
 
         out = self.execute(sudo=True, cmd="mount")
