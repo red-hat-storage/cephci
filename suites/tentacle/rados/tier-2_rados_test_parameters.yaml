@@ -89,6 +89,12 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
+      name: Verification of appending downstream version ID to Ceph version
+      desc: Verification of downstream version ID appended to Ceph version output
+      module: test_downstream_version_check.py
+      polarion-id: CEPH-83632347
+
+  - test:
       name: Ceph bluestore_min_alloc_size tests
       desc: Modification of Ceph bluestore_min_alloc_size before OSD deployment
       polarion-id: CEPH-83594019
