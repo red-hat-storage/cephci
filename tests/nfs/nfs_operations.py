@@ -75,29 +75,22 @@ def setup_nfs_cluster(
     # Step 2: Create an NFS cluster
     # Extract NFS version from version parameter (could be "3", "4", "4.2", etc.)
     nfs_version = None
-    if version:
-        # Check if version contains "3" (e.g., "3", "3.0", or list containing 3)
-        if isinstance(version, (list, tuple)):
-            nfs_version = 3 if 3 in version else None
-        elif isinstance(version, (int, str)):
-            # Convert to string and check if it starts with "3"
-            version_str = str(version)
-            if version_str.startswith("3") or version_str == "3":
-                nfs_version = 3
-                # for NFSv3, We need to run cephadm prepare-host on the nfs nodes
-                # prepare the host and check if rpcbin service is running
+    if version and _nfs_version_spec_includes_v3(version):
+        nfs_version = 3
+        # for NFSv3, We need to run cephadm prepare-host on the nfs nodes
+        # prepare the host and check if rpcbin service is running
 
-                # on older version we do not have the support for
-                # --install-service-dependencies. Instead of verion check
-                # we are getting it from command help.
-                prepare_host_help_output, _ = nfs_nodes[0].exec_command(
-                    sudo=True, cmd="cephadm prepare-host --help"
-                )
-                cmd = "cephadm prepare-host"
-                if "install-service-dependencies" in prepare_host_help_output:
-                    cmd += " --install-service-dependencies"
-                for nfs_node in nfs_nodes:
-                    nfs_node.exec_command(sudo=True, cmd=cmd)
+        # on older version we do not have the support for
+        # --install-service-dependencies. Instead of verion check
+        # we are getting it from command help.
+        prepare_host_help_output, _ = nfs_nodes[0].exec_command(
+            sudo=True, cmd="cephadm prepare-host --help"
+        )
+        cmd = "cephadm prepare-host"
+        if "install-service-dependencies" in prepare_host_help_output:
+            cmd += " --install-service-dependencies"
+        for nfs_node in nfs_nodes:
+            nfs_node.exec_command(sudo=True, cmd=cmd)
 
     create_kwargs = {"nfs_version": nfs_version}
 
@@ -332,15 +325,8 @@ def setup_custom_nfs_cluster_multi_export_client(
     # Step 2: Create an NFS cluster
     # Extract NFS version from version parameter (could be "3", "4", "4.2", etc.)
     nfs_version = None
-    if version:
-        # Check if version contains "3" (e.g., "3", "3.0", or list containing 3)
-        if isinstance(version, (list, tuple)):
-            nfs_version = 3 if 3 in version else None
-        elif isinstance(version, (int, str)):
-            # Convert to string and check if it starts with "3"
-            version_str = str(version)
-            if version_str.startswith("3") or version_str == "3":
-                nfs_version = 3
+    if version and _nfs_version_spec_includes_v3(version):
+        nfs_version = 3
 
     create_kwargs = {"nfs_version": nfs_version}
     if "in-file" in kwargs:
@@ -577,6 +563,31 @@ def cleanup_custom_nfs_cluster_multi_export_client(
     # Delete the subvolume group
     cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
     client.exec_command(sudo=True, cmd=cmd)
+
+
+def _nfs_mount_version_key_is_v3(key):
+    """True if a mount-version key from config denotes NFSv3 (e.g. 3, 3.0, \"3\")."""
+    if isinstance(key, bool):
+        return False
+    if isinstance(key, (int, float)):
+        return float(key) >= 3 and float(key) < 4
+    parts = str(key).strip().split(".", 1)
+    return parts[0] == "3"
+
+
+def _nfs_version_spec_includes_v3(version):
+    """True if any client uses NFSv3, so the cluster must be created with nfs_version=3."""
+    if version is None or isinstance(version, bool):
+        return False
+    if isinstance(version, (list, tuple)):
+        if not version:
+            return False
+        if all(isinstance(e, dict) for e in version):
+            return any(
+                _nfs_mount_version_key_is_v3(k) for entry in version for k in entry
+            )
+        return 3 in version or "3" in version
+    return _nfs_mount_version_key_is_v3(version)
 
 
 def _get_client_specific_mount_versions(versions, clients):
