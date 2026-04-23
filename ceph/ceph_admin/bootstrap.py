@@ -32,7 +32,11 @@ __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
 def construct_registry(
-    cls, registry: str, json_file: bool = False, ibm_build: bool = False
+    cls,
+    registry: str,
+    json_file: bool = False,
+    ibm_build: bool = False,
+    build_type: str = "released",
 ):
     """
     Construct registry credentials for bootstrapping cluster
@@ -42,6 +46,7 @@ def construct_registry(
         registry (Str): registry name
         json_file (Bool): registry credentials in JSON file (default:False)
         ibm_build: flag to fetch IBM registry creds
+        build_type: CLI build type (released|cdn|stage|nightly etc.)
 
     Example::
 
@@ -53,13 +58,27 @@ def construct_registry(
     Returns:
         constructed string of registry credentials ( Str )
     """
-    # Todo: Retrieve credentials based on registry name
-    build_type = "ibm" if ibm_build else "rh"
+    _vendor = "ibm" if ibm_build else "rh"
 
     _config = get_cephci_config()
-    cdn_cred = _config.get(
-        f"{build_type}_registry_credentials", _config["cdn_credentials"]
+
+    # Determine the registry tier: "cdn" for released/cdn builds, "stage" otherwise
+    _tier = "cdn" if build_type in ("released", "cdn") else "stage"
+
+    # Prefer the nested credentials.registry.<vendor>.<tier> path which
+    # carries separate entries for cdn (cp.icr.io) vs stage (cp.stg.icr.io).
+    cdn_cred = (
+        _config.get("credentials", {})
+        .get("registry", {})
+        .get(_vendor, {})
+        .get(_tier)
     )
+
+    if not cdn_cred:
+        # Fall back to the flat top-level key (legacy config layout)
+        cdn_cred = _config.get(
+            f"{_vendor}_registry_credentials", _config["cdn_credentials"]
+        )
     reg_args = {
         "registry-url": cdn_cred.get("registry", registry),
         "registry-username": cdn_cred.get("username"),
@@ -247,7 +266,7 @@ class BootstrapMixin:
         elif build_type == "released" and base_url == manifest_obj.repository:
             custom_image = False
             self.cluster.use_cdn = True
-            self.set_cdn_tool_repo()
+            self.set_cdn_tool_repo(manifest_obj)
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
@@ -320,6 +339,7 @@ class BootstrapMixin:
                 self,
                 registry_url,
                 ibm_build=True if manifest_obj.product == "ibm" else False,
+                build_type=build_type,
             )
 
         if registry_json:
@@ -328,6 +348,7 @@ class BootstrapMixin:
                 registry_json,
                 json_file=True,
                 ibm_build=True if manifest_obj.product == "ibm" else False,
+                build_type=build_type,
             )
 
         # Generate dashboard certificate and key if bootstrap cli
