@@ -61,12 +61,12 @@ def scale_down(nvme_service, orch, gateway_nodes_to_be_scaleddown):
     nvme_service.gw_nodes = get_nodes_by_ids(
         nvme_service.ceph_cluster, gwnodes_to_be_deployed
     )
+    start_counter, start_time = get_current_timestamp()
     nvme_service.deploy()
 
     nvme_service.gateways = []
     nvme_service.init_gateways()
 
-    start_counter, start_time = get_current_timestamp()
     for gateway in to_be_scaledown_gws:
         hostname = gateway.hostname
 
@@ -74,6 +74,8 @@ def scale_down(nvme_service, orch, gateway_nodes_to_be_scaleddown):
             # Wait until 600 seconds
             for w in WaitUntil(timeout=600, interval=5):
                 # Check for gateway unavailability
+                # Most of the time, the time we reach here, the gateway is already in deleted state
+                # So, we can't get the gateway in DELETING state
                 if check_gateway_availability(
                     nvme_service, gateway.ana_group_id, orch, state="DELETING"
                 ):
@@ -89,7 +91,16 @@ def scale_down(nvme_service, orch, gateway_nodes_to_be_scaleddown):
                         )
                         break
 
-                LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
+                    LOG.warning(f"[ {hostname} ] is still in DELETING state..")
+                else:
+                    # Check for gwnodes_to_be_deployed list is equal to nvme_service.gateways
+                    if set(gwnodes_to_be_deployed) == {
+                        gw.node.id for gw in nvme_service.gateways
+                    }:
+                        LOG.info(f"[ {hostname} ] is in DELETED(SCALED DOWN) state..")
+                        break
+                    else:
+                        LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
 
             if w.expired:
                 raise TimeoutError(

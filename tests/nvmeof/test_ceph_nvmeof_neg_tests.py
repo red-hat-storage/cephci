@@ -1210,7 +1210,8 @@ def test_ceph_83608266(
         )
         nvme_service.config["gw_node"] = gw_node.id
         nvme_service.group = "gw_group1"
-        if nvme_service.gateways:
+        name = getattr(nvme_service, "service_name", None)
+        if name is not None:
             teardown(nvme_service, rbd)
         return 0
 

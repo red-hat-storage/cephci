@@ -80,13 +80,12 @@ def parse_namespaces(config, namespaces):
     return all_namespaces
 
 
-def test_ceph_83608838(ceph_cluster, config):
+def test_ceph_83608838(ceph_cluster, config, nvme_service):
     rbd_pool = config["rbd_pool"]
     rbd_obj = config["rbd_obj"]
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
     orch = Orch(ceph_cluster, **{})
-    nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
 
@@ -160,7 +159,7 @@ def test_ceph_83608838(ceph_cluster, config):
     )
 
 
-def test_ceph_83609769(ceph_cluster, config):
+def test_ceph_83609769(ceph_cluster, config, nvme_service):
     gateway_group = config.get("gw_group", "")
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
@@ -168,7 +167,6 @@ def test_ceph_83609769(ceph_cluster, config):
     config["rebalance_period"] = True
     config["rebalance_period_sec"] = 0
     orch = Orch(ceph_cluster, **{})
-    nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
 
     # Configure subsystems
@@ -395,7 +393,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
             test_case_run = testcases[config["test_case"]]
             config.update({"rbd_obj": rbd_obj})
-            test_case_run(ceph_cluster, config)
+            config.update({"nvme_service": nvme_service})
+            test_case_run(ceph_cluster, config, nvme_service)
         else:
             # Deploy NVMe services
             if config.get("install"):
@@ -438,8 +437,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 for lb_config in config.get("load_balancing"):
                     # namespace addition
                     if lb_config.get("ns_add"):
-                        config = lb_config["ns_add"]
-                        subsystems = config["subsystems"]
+                        config_ns_add = lb_config["ns_add"]
+                        subsystems = config_ns_add["subsystems"]
                         opt_args = {
                             "ceph_cluster": ceph_cluster,
                             "lb_groups": lb_groups,

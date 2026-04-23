@@ -220,8 +220,31 @@ class NVMeService:
         cmd = "ceph orch ls nvmeof --format json"
         out, _ = ceph.shell(args=[cmd])
         services = json.loads(out)
-        self.service_name = services[0]["service_name"]
-        self.service_id = services[0]["service_id"]
+        self.service_name = None
+        self.service_id = None
+        for service in services:
+            # If we have multiple services in single cluster then we need to filter the service by group
+            # so that we will get the correct service name and service id for the group.
+            # when we take services[0]["service_name"] only first service name will be returned
+            # so we need to filter the service by group.
+            if "nvmeof" in service["service_name"]:
+                if self.group:
+                    if self.group in service["service_name"]:
+                        service_name = service["service_name"]
+                        service_id = service["service_id"]
+                        LOG.info(
+                            f"Service name: {service_name}, Service id: {service_id}"
+                        )
+                        self.service_name = service_name
+                        self.service_id = service_id
+                        break
+                else:
+                    service_name = service["service_name"]
+                    service_id = service["service_id"]
+                    LOG.info(f"Service name: {service_name}, Service id: {service_id}")
+                    self.service_name = service_name
+                    self.service_id = service_id
+                    break
 
     def init_gateways(self):
         """
