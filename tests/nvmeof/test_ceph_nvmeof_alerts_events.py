@@ -2,6 +2,8 @@
 Test suite that verifies NVMe alerts and NVMe Health checks.
 """
 
+import json
+import time
 from copy import deepcopy
 from json import dumps, loads
 from random import choice
@@ -11,6 +13,7 @@ import requests
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
+from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id
 from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
@@ -21,7 +24,6 @@ from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
     check_gateway,
     check_gateway_availability,
-    delete_nvme_service,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -991,91 +993,112 @@ def test_ceph_83617404(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-    time_to_fire = config.get("time_to_fire", 60)
-    interval = config.get("interval", 60)
-    rbd_pool = config["rbd_pool"]
-    rbd_obj = config["rbd_obj"]
-    alert = "NVMeoFMaxGatewayGroups"
-    original_gw_groups = deepcopy(config.get("gw_groups"))
+    # Cleanup is not happening here because we are deploying 5 services in test case,
+    # so we need to handle the cleanup in the test case itself
     svcs = list()
-    services = []
-    gw_groups = deepcopy(config.get("gw_groups"))
+    services = dict()
+    try:
+        time_to_fire = config.get("time_to_fire", 60)
+        interval = config.get("interval", 60)
+        rbd_pool = config["rbd_pool"]
+        rbd_obj = config["rbd_obj"]
+        alert = "NVMeoFMaxGatewayGroups"
+        original_gw_groups = deepcopy(config.get("gw_groups"))
 
-    # Deploy nvmeof service
-    LOG.info("deploy nvme service")
-    # Deploy Services
-    for svc in config["gw_groups"]:
-        svc.update({"rbd_pool": rbd_pool})
-        nvme_service = NVMeService(svc, ceph_cluster)
-        nvme_service.deploy()
-        nvme_service.init_gateways()
-        services.append(nvme_service)
-        svc.update({"nvme_service": nvme_service})
-        ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
-        ha.gateways = nvme_service.gateways
-        svcs.append(ha)
+        # Deploy nvmeof service
+        LOG.info("deploy nvme service")
+        # Deploy Services
+        for svc in config["gw_groups"]:
+            svc.update({"rbd_pool": rbd_pool})
+            nvme_service = NVMeService(svc, ceph_cluster)
+            nvme_service.deploy()
+            nvme_service.init_gateways()
+            services[svc["gw_group"]] = nvme_service
 
-    ha1 = svcs[0]
-    # Check for alert
-    # NVMeoFMaxGatewayGroups prometheus alert should be firing
-    events = PrometheusAlerts(ha1.orch)
+            svc.update({"nvme_service": nvme_service})
+            ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
+            ha.gateways = nvme_service.gateways
+            svcs.append(ha)
 
-    LOG.info("Check NVMeoFMaxGatewayGroups should be firing")
-    nvmegwcli = ha1.gateways[0]
-    # Execute ceph -s --format json and get fsid
-    cephs, _ = ha1.orch.shell(args=["ceph", "-s", "--format", "json"])
-    cephs = loads(cephs)
-    fsid = cephs["fsid"]
-    # Check version of cluster if it is less than 20.0 then msg should be "Max gateway groups exceeded on cluster "
-    if nvmegwcli.cli_version != "v2":
-        msg = "Max gateway groups exceeded on cluster"
-    else:
-        msg = f"Max gateway groups exceeded on cluster {fsid}".format(fsid=fsid)
+        ha1 = svcs[0]
+        # Check for alert
+        # NVMeoFMaxGatewayGroups prometheus alert should be firing
+        events = PrometheusAlerts(ha1.orch)
 
-    events.monitor_alert(
-        alert,
-        timeout=time_to_fire,
-        msg=msg,
-        interval=interval,
-    )
+        LOG.info("Check NVMeoFMaxGatewayGroups should be firing")
+        nvmegwcli = ha1.gateways[0]
+        # Execute ceph -s --format json and get fsid
+        cephs, _ = ha1.orch.shell(args=["ceph", "-s", "--format", "json"])
+        cephs = loads(cephs)
+        fsid = cephs["fsid"]
+        # Check version of cluster if it is less than 20.0 then msg should be "Max gateway groups exceeded on cluster "
+        if nvmegwcli.cli_version != "v2":
+            msg = "Max gateway groups exceeded on cluster"
+        else:
+            msg = f"Max gateway groups exceeded on cluster {fsid}".format(fsid=fsid)
 
-    # Remove one gateway and NVMeoFMaxGatewayGroups alert should be in inactive state
-    LOG.info(
-        "Remove one gateway group and NVMeoFMaxGatewayGroups alert should be in inactive state"
-    )
-    rm_add_gw_grp = gw_groups[0:1]
-    config.update({"gw_groups": rm_add_gw_grp})
-    delete_nvme_service(ceph_cluster, config)
-    events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=interval
-    )
+        events.monitor_alert(
+            alert,
+            timeout=time_to_fire,
+            msg=msg,
+            interval=interval,
+        )
 
-    # Add more than 4 gateway groups and NVMeoFMaxGatewayGroups alert should be in firing state
-    LOG.info(
-        "Add more than 4 gateway groups and NVMeoFMaxGatewayGroups alert should be in firing state"
-    )
-    # Deploy Services
-    config.update({"gw_groups": original_gw_groups})
-    for svc in config["gw_groups"]:
-        svc.update({"rbd_pool": rbd_pool})
-        nvme_service = NVMeService(svc, ceph_cluster)
-        nvme_service.deploy()
-        nvme_service.init_gateways()
+        # Remove one gateway and NVMeoFMaxGatewayGroups alert should be in inactive state
+        LOG.info(
+            "Remove one gateway group and NVMeoFMaxGatewayGroups alert should be in inactive state"
+        )
+        # Get the first service and delete the nvme service
+        rm_add_gw_grp = services.get("group1")
+        if not rm_add_gw_grp:
+            raise Exception("group1 service not found")
+        # Delete the nvme service
+        LOG.info(f"Deleting NVMe service for {rm_add_gw_grp.service_name}")
+        rm_add_gw_grp.delete_nvme_service()
+        # Check for alert and it should be in inactive state
+        events.monitor_alert(
+            alert, timeout=time_to_fire, state="inactive", interval=interval
+        )
 
-    events.monitor_alert(
-        alert,
-        timeout=time_to_fire,
-        msg=msg,
-        interval=interval,
-    )
+        # Add more than 4 gateway groups and NVMeoFMaxGatewayGroups alert should be in firing state
+        LOG.info(
+            "Add more than 4 gateway groups and NVMeoFMaxGatewayGroups alert should be in firing state"
+        )
+        # Deploy Services
+        config.update({"gw_groups": original_gw_groups})
+        for svc in config["gw_groups"]:
+            svc.update({"rbd_pool": rbd_pool})
+            nvme_service = NVMeService(svc, ceph_cluster)
+            nvme_service.deploy()
+            nvme_service.init_gateways()
 
-    if config.get("cleanup"):
-        LOG.info("Cleaning up NVMeoF services and RBD pool for CEPH-83617404.")
-        for service in services:
-            service.delete_nvme_service()
+        events.monitor_alert(
+            alert,
+            timeout=time_to_fire,
+            msg=msg,
+            interval=interval,
+        )
+
+    except Exception as err:
+        LOG.error(err)
+        return 1
+    finally:
+        if config.get("cleanup"):
+            LOG.info("Cleaning up NVMeoF services and RBD pool for CEPH-83617404.")
+            # Execute ceph orch ls nvmeof and get the service names
+            ceph = Orch(ceph_cluster, **{})
+            cmd = "ceph orch ls nvmeof --format json"
+            out, _ = ceph.shell(args=[cmd])
+            services = json.loads(out)
+            for service in services:
+                if "nvmeof" in service["service_name"]:
+                    service_name = service["service_name"]
+                    ceph.shell(args=["ceph", "orch", "rm", service_name, "--force"])
+            # Sleep for 40 seconds to ensure the services are deleted
+            time.sleep(40)
             rbd_obj.clean_up(pools=[rbd_pool])
-    global cleanup
-    cleanup = True
+        global cleanup
+        cleanup = True
     LOG.info("CEPH-83617404 - NVMeoFMaxGatewayGroups validated successfully.")
 
 

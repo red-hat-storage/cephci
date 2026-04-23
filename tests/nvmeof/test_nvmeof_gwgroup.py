@@ -1,5 +1,6 @@
 from ceph.ceph import Ceph
 from ceph.parallel import parallel
+from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
 from tests.nvmeof.workflows.ha import HighAvailability
 from tests.nvmeof.workflows.nvme_service import NVMeService
@@ -61,7 +62,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("parallel"):
             with parallel() as p:
                 for gwgroup_config in config["gw_groups"]:
-                    clean_up = ["subsystems", "initiators", "pool", "gateway"]
+                    clean_up = ["initiators", "gateway"]
                     gwgroup_config.update({"cleanup": clean_up})
                     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
                     # Deploy NVMeOf services
@@ -85,7 +86,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
         else:
             for gwgroup_config in config["gw_groups"]:
-                clean_up = ["subsystems", "initiators", "pool", "gateway"]
+                clean_up = ["initiators", "gateway"]
                 gwgroup_config.update({"cleanup": clean_up})
                 rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
                 # Deploy NVMeOf services
@@ -111,5 +112,25 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     finally:
         if config.get("cleanup"):
             for nvme_service, rbd_obj in cleanup_dict.items():
+                # Delete only service here, if we delete pools here then .nvmeof pool will be deleted
+                # and we end up stale entries in ceph orch ls nvmeof command.
                 teardown(nvme_service, rbd_obj)
+            # Delete the pools here
+            for nvme_service, rbd_obj in cleanup_dict.items():
+                subsystem_config = nvme_service.config.get("subsystems", [])
+                pools_to_delete = set()
+                for sub_cfg in subsystem_config:
+                    if sub_cfg.get("bdevs"):
+                        bdev_configs = sub_cfg["bdevs"]
+                        if isinstance(bdev_configs, dict):
+                            bdev_configs = [bdev_configs]
+                        for bdev_cfg in bdev_configs:
+                            if bdev_cfg.get("pool"):
+                                pools_to_delete.add(bdev_cfg["pool"])
+                            else:
+                                pools_to_delete.add(nvme_service.rbd_pool)
+                pools_to_delete.add(nvme_service.rbd_pool)
+                if DEFAULT_NVME_METADATA_POOL == nvme_service.nvme_metadata_pool:
+                    pools_to_delete.add(nvme_service.nvme_metadata_pool)
+                rbd_obj.clean_up(pools=list(pools_to_delete))
             LOG.info("Cleanup completed.")
