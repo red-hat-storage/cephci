@@ -212,6 +212,12 @@ def verify_read_write_io_progress(before_total_read, before_total_write):
 
 
 def run(ceph_cluster, **kw):
+    fuse_mounting_dir_1 = None
+    fuse_mounting_dir_2 = None
+    fuse_mounting_dir_3 = None
+    kernel_mounting_dir_1 = None
+    cephfs_name1 = None
+    cephfs_name2 = None
     try:
         global fs_util, client1, fs_name, client_id
 
@@ -243,6 +249,7 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(client1, fs_name)
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
+        fs_util.wait_for_mds_process(client1, fs_name)
         log.info("Install cephfs-top by dnf install cephfs-top")
         client1.exec_command(
             sudo=True,
@@ -462,13 +469,18 @@ def run(ceph_cluster, **kw):
             fuse_mounting_dir_2,
             fuse_mounting_dir_3,
         ]:
+            if mount_dir:
+                fs_util.client_clean_up(
+                    "umount", fuse_clients=[client1], mounting_dir=mount_dir
+                )
+
+        if kernel_mounting_dir_1:
             fs_util.client_clean_up(
-                "umount", fuse_clients=[client1], mounting_dir=mount_dir
+                "umount",
+                kernel_clients=[client1],
+                mounting_dir=kernel_mounting_dir_1,
             )
 
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[client1], mounting_dir=kernel_mounting_dir_1
-        )
-
         for fs_delete in [cephfs_name1, cephfs_name2]:
-            fs_util.remove_fs(client1, fs_delete)
+            if fs_delete:
+                fs_util.remove_fs(client1, fs_delete)

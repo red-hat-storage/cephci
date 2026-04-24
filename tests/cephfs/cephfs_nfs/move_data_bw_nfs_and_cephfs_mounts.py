@@ -34,6 +34,11 @@ def run(ceph_cluster, **kw):
     1. Remove cephfs nfs export
     2. Remove NFS Cluster
     """
+    nfs_mounting_dir = None
+    kernel_mounting_dir_1 = None
+    fuse_mounting_dir_1 = None
+    nfs_name = "cephfs-nfs"
+    nfs_export_name = None
     try:
         tc = "CEPH-11309"
         log.info(f"Running cephfs {tc} test case")
@@ -53,7 +58,6 @@ def run(ceph_cluster, **kw):
         rhbuild = config.get("rhbuild")
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
-        nfs_name = "cephfs-nfs"
         default_fs = "cephfs" if not erasure else "cephfs-ec"
         client1.exec_command(sudo=True, cmd="ceph mgr module enable nfs")
         fs_util.create_nfs(
@@ -134,12 +138,14 @@ def run(ceph_cluster, **kw):
                 [clients[0]],
                 kernel_mounting_dir_1,
                 ",".join(mon_node_ips),
+                extra_params=f",fs={default_fs}",
             )
 
             fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
             fs_util.fuse_mount(
                 [clients[0]],
                 fuse_mounting_dir_1,
+                extra_params=f" --client_fs {default_fs}",
             )
 
         run_ios(
@@ -195,31 +201,34 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Cleaning Up")
-        client1.exec_command(
-            sudo=True, cmd=f"umount -f {nfs_mounting_dir}", check_ec=False
-        )
-        client1.exec_command(
-            sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}", check_ec=False
-        )
-        client1.exec_command(
-            sudo=True, cmd=f"umount -l {fuse_mounting_dir_1}", check_ec=False
-        )
-        client1.exec_command(
-            sudo=True, cmd=f"rm -rf {nfs_mounting_dir}", check_ec=False
-        )
-        client1.exec_command(
-            sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}", check_ec=False
-        )
-        client1.exec_command(
-            sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}", check_ec=False
-        )
-        log.info("Removing the Export")
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph nfs export delete {nfs_name} {nfs_export_name}",
-            check_ec=False,
-        )
-
+        if nfs_mounting_dir:
+            client1.exec_command(
+                sudo=True, cmd=f"umount -f {nfs_mounting_dir}", check_ec=False
+            )
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {nfs_mounting_dir}", check_ec=False
+            )
+        if kernel_mounting_dir_1:
+            client1.exec_command(
+                sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}", check_ec=False
+            )
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}", check_ec=False
+            )
+        if fuse_mounting_dir_1:
+            client1.exec_command(
+                sudo=True, cmd=f"umount -l {fuse_mounting_dir_1}", check_ec=False
+            )
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}", check_ec=False
+            )
+        if nfs_export_name:
+            log.info("Removing the Export")
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export delete {nfs_name} {nfs_export_name}",
+                check_ec=False,
+            )
         log.info("Removing NFS Cluster")
         client1.exec_command(
             sudo=True,

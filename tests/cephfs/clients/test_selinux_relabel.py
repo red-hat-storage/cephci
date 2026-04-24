@@ -32,13 +32,19 @@ def run(ceph_cluster, **kw):
         int: 0 if the test case executes successfully, 1 if an error occurs.
     """
 
+    kernel_mounting_dir_1 = None
+    kernel_mounting_dir_2 = None
+    kernel_mounting_dir = None
+    subvolume_list = []
+    default_fs = "cephfs"
+    subvolume_group_name = "subvol_group1"
+    clients = ceph_cluster.get_ceph_objects("client")
+    fs_util_v1 = FsUtilsV1(ceph_cluster)
     try:
         tc = "CEPH-83595737"
         log.info(f"Running cephfs {tc} test case")
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
-        clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
         if len(clients) < 2:
             log.error(
@@ -139,7 +145,8 @@ def run(ceph_cluster, **kw):
             log.info(f"Creating {num_files} files in {test_dir}")
             client.exec_command(
                 sudo=True,
-                cmd=f"for i in $(seq 1 {num_files}); do touch {test_dir}/file_$i; done",
+                cmd=f"seq 1 {num_files} | xargs -n 500 -P 16 "
+                f"sh -c 'for f; do touch {test_dir}/file_$f; done' _",
                 timeout=14400,
             )
 
@@ -210,7 +217,8 @@ def run(ceph_cluster, **kw):
         num_files = 1000000
         clients[0].exec_command(
             sudo=True,
-            cmd=f"for i in $(seq 1 {num_files}); do touch {test_dir_s3}/file_$i; done",
+            cmd=f"seq 1 {num_files} | xargs -n 500 -P 16 "
+            f"sh -c 'for f; do touch {test_dir_s3}/file_$f; done' _",
             timeout=14400,
         )
 
@@ -317,13 +325,15 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.error("Clean up the system")
-        kernel_mounts = [
-            (clients[0], kernel_mounting_dir_1),
-            (clients[1], kernel_mounting_dir_2),
-            (clients[0], kernel_mounting_dir),
-            (clients[1], kernel_mounting_dir),
-        ]
+        log.info("Clean up the system")
+        kernel_mounts = []
+        if kernel_mounting_dir_1:
+            kernel_mounts.append((clients[0], kernel_mounting_dir_1))
+        if kernel_mounting_dir_2:
+            kernel_mounts.append((clients[1], kernel_mounting_dir_2))
+        if kernel_mounting_dir:
+            kernel_mounts.append((clients[0], kernel_mounting_dir))
+            kernel_mounts.append((clients[1], kernel_mounting_dir))
 
         for client, mounting_dir in kernel_mounts:
             fs_util_v1.client_clean_up(
@@ -333,9 +343,10 @@ def run(ceph_cluster, **kw):
         for subvolume in subvolume_list:
             fs_util_v1.remove_subvolume(clients[0], **subvolume)
 
-        fs_util_v1.remove_subvolumegroup(
-            clients[0], default_fs, subvolume_group_name, force=True
-        )
+        if subvolume_group_name:
+            fs_util_v1.remove_subvolumegroup(
+                clients[0], default_fs, subvolume_group_name, force=True
+            )
 
 
 def apply_selinux_label(client, label, path):
