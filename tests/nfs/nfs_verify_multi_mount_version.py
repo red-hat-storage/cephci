@@ -10,9 +10,10 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-    """Verify mount the NFS volume via V3 on both windows and linux client and run IO's in parallel
-    Args:
-        **kw: Key/value pairs of configuration information to be used in the test.
+    """Mount the export with mixed NFS versions across Linux clients and run IO in parallel.
+
+    ``nfs_version`` may be a scalar or a per-client list such as ``[{4.2: 2}, {3: 1}]``.
+    If any client uses v3, ``setup_nfs_cluster`` enables NFSv3 on the cluster (multi-protocol).
     """
     config = kw.get("config")
     # nfs cluster details
@@ -24,6 +25,7 @@ def run(ceph_cluster, **kw):
     no_clients = int(config.get("clients", "2"))
     port = config.get("port", "2049")
     version = config.get("nfs_version", "3")
+    log.info("nfs_version config (mount mix / scalar): %s", version)
     fs_name = "cephfs"
     nfs_name = "cephfs-nfs"
     nfs_export = "/export"
@@ -52,7 +54,7 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
         )
 
-        # Run parallel IO in linux and window mount point
+        # Run parallel IO on each client's mount
         threads = []
         for client in clients:
             io = Thread(
