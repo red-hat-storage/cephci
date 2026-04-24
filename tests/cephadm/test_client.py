@@ -116,6 +116,7 @@ def add(cls, config: Dict) -> None:
                     "8": ["rhceph-8-tools-for-rhel-9-x86_64-rpms"],
                     "9": ["rhceph-9-tools-for-rhel-9-x86_64-rpms"],
                 },
+                "10": {"9": ["rhceph-9-tools-for-rhel-10-x86_64-rpms"]},
             }
 
             rhel_repos = {
