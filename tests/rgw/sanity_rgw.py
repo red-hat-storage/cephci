@@ -56,6 +56,7 @@ import os
 
 import yaml
 
+from ceph.ceph_admin.helper import check_service_exists
 from utility import utils
 from utility.log import Log
 from utility.utils import (
@@ -64,6 +65,7 @@ from utility.utils import (
     get_cephci_config,
     install_start_kafka,
     setup_cluster_access,
+    setup_gklm_prereq,
 )
 
 log = Log(__name__)
@@ -104,6 +106,8 @@ def run(ceph_cluster, **kw):
     install_keystone_ldap = config.get("install_keystone_ldap")
     cloud_type = config.get("cloud-type")
     log.info(f"Cloud Type is {cloud_type}")
+    test_data = kw.get("test_data")
+    custom_config = test_data.get("custom-config", {})
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     client_node = client_ceph_object.node
@@ -178,6 +182,18 @@ def run(ceph_cluster, **kw):
         install_start_kafka(rgw_node, cloud_type)
     if configure_kafka_broker_security:
         configure_kafka_security(rgw_node, cloud_type)
+
+    setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
+    if setup_gklm_prerequisites:
+        setup_gklm_prereq(ceph_cluster, cloud_type, custom_config)
+        rgw_status = check_service_exists(
+            ceph_cluster.get_nodes(role="installer")[0],
+            service_type="rgw",
+            interval=10,
+            timeout=180,
+        )
+        if not rgw_status:
+            raise Exception("rgw service restart failed")
 
     if install_keystone_ldap:
         config_keystone_ldap(rgw_node, cloud_type)
