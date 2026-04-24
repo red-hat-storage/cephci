@@ -1,0 +1,49 @@
+---
+# RedHat Enterprise Linux 10.1
+# image_id: Get from OneCloud API (GET /vm/images) - 22 is placeholder
+version_id: 10.1
+id: rhel
+instance:
+  create:
+    image_id: 383  # RHEL 10.1 from OneCloud (get from API/portal)
+    projectID: 808  # IBM-Ceph-QE (get from API/portal)
+    site: POK
+    groupID: 1
+    VLAN: 2231
+    resources: small  # Profiles: small | medium | large
+    arch: x86_64
+    os: RHEL
+
+  setup: |
+    #cloud-config
+    ssh_pwauth: true
+    disable_root: false
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoKGCTzMmNvHFY4THKNpZYFLeEgB7Do8y2JAEy+ZvIZ ceph-qe-sa
+
+    chpasswd:
+      list: |
+        root:passwd
+        cephuser:pass123
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - timedatectl set-timezone Etc/UTC
+      - hostnamectl set-hostname $(hostname -s)
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - touch /ceph-qa-ready
+
+    final_message: "Ready for ceph qa testing"
