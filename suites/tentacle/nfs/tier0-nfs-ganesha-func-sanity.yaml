@@ -190,18 +190,17 @@ tests:
         nfs_version: 4.1
         port: 2049
 
-  # Commenting below byok test case as GKLM changes 4.x to 5.x, need to update the test case
-  # - test:
-  #     name: Test Encryption with the correct keys (single cluster)
-  #     module: byok.test_byok_single_multi_restart.py
-  #     desc: BYOK single-cluster with FUSE encryption validation
-  #     polarion-id: CEPH-83625072
-  #     config:
-  #        nfs_version: 4.2
-  #        total_export_num: 4
-  #        clients: 1
-  #        nfs_replication_number: 1
-  #        nfs_mount: /mnt/nfs_byok
-  #        nfs_export: /export_byok
-  #        nfs_instance_name: nfs_byok
+  - test:
+      name: Test Encryption with the correct keys (single cluster)
+      module: byok.test_byok_single_multi_restart.py
+      desc: BYOK single-cluster with FUSE encryption validation
+      polarion-id: CEPH-83625072
+      config:
+         nfs_version: 4.2
+         total_export_num: 4
+         clients: 1
+         nfs_replication_number: 1
+         nfs_mount: /mnt/nfs_byok
+         nfs_export: /export_byok
+         nfs_instance_name: nfs_byok
 

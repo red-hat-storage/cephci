@@ -23,7 +23,7 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
     rename_file,
     write_to_file_using_dd_command,
 )
-from utility.gklm_client.gklm_client import GklmClient
+from utility.gklm_client.gklm_client import build_gklm_client
 
 
 def get_enctag(
@@ -196,7 +196,10 @@ def create_nfs_instance_for_byok(
     log.debug(f"NFS service spec: {nfs_cluster_dict}")
 
     create_nfs_via_file_and_verify(
-        installer_node=installer, nfs_objects=[nfs_cluster_dict], timeout=300
+        installer_node=installer,
+        nfs_objects=[nfs_cluster_dict],
+        timeout=300,
+        nfs_nodes=[nfs_node],
     )
     log.info("NFS Ganesha BYOK service creation successful")
 
@@ -343,6 +346,9 @@ def load_gklm_config(custom_data, config, cephci_data):
       3. cephci_data['gklm_config'][cloud_type] (with baremetal → openstack fallback)
       4. Raises ConfigError if required keys are still missing
 
+    Optional key ``gklm_rest_prefix`` (e.g. ``/GKLM/rest/v1`` for GKLM 5.x) selects the
+    REST API root; when omitted, ``/SKLM/rest/v1`` is used for backward compatibility.
+
     Args:
         custom_data (dict): {'custom-config': [], 'custom-config-file': None}
         config (dict): CLI config, contains 'cloud-type'
@@ -394,6 +400,7 @@ def load_gklm_config(custom_data, config, cephci_data):
             "gklm_node_username",
             "gklm_node_password",
             "gklm_hostname",
+            "gklm_rest_prefix",
         }:
             merged[key] = val
             log.info("Overrode GKLM config '%s' via custom-config: %s", key, val)
@@ -416,7 +423,11 @@ def load_gklm_config(custom_data, config, cephci_data):
             "Provide via cephci_data, custom-config-file, or --custom-config."
         )
 
-    log.info("Final GKLM configuration: %s", [k for k in required if k in merged])
+    log.info(
+        "Final GKLM configuration keys: %s",
+        [k for k in required if k in merged]
+        + (["gklm_rest_prefix"] if merged.get("gklm_rest_prefix") else []),
+    )
     return merged
 
 
@@ -460,8 +471,18 @@ def nfs_byok_test_setup(byok_setup_params):
             gklm_ip=gklm_ip,
             gklm_hostname=gklm_hostname,
         )
-        gklm_rest_client = GklmClient(
-            gklm_ip, user=gklm_user, password=gklm_password, verify=False
+        gklm_rest_client = build_gklm_client(
+            {
+                "gklm_ip": gklm_ip,
+                "gklm_user": gklm_user,
+                "gklm_password": gklm_password,
+                **(
+                    {"gklm_rest_prefix": byok_setup_params["gklm_rest_prefix"]}
+                    if byok_setup_params.get("gklm_rest_prefix")
+                    else {}
+                ),
+            },
+            verify=False,
         )
         log.info(
             f"Initialized GKLM REST client for server {gklm_ip}, user {gklm_user}. "
@@ -518,6 +539,7 @@ def create_multiple_nfs_instance_for_byok(
     ca_cert: str,
     kmip_host_list: str,
     timeout: int = 300,
+    cluster_nodes=None,
 ) -> int:
     """
     Create multiple BYOK-enabled NFS Ganesha service instances using a given service spec.
@@ -535,6 +557,8 @@ def create_multiple_nfs_instance_for_byok(
         ca_cert (str): PEM-encoded KMIP server CA certificate.
         kmip_host_list (str): Hostname(s) or IP(s) of the KMIP server(s).
         timeout (int, optional): Timeout in seconds for creation & verification. Defaults to 300.
+        cluster_nodes (list, optional): Ceph cluster node list for resolving NFS hosts
+            when enabling coredump after spec apply.
 
     Returns:
         int: 0 on success, 1 on failure.
@@ -553,6 +577,7 @@ def create_multiple_nfs_instance_for_byok(
             replication_number=replication_number,
             installer=installer,
             timeout=timeout,
+            cluster_nodes=cluster_nodes,
         )
 
         if result == 0:
