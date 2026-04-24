@@ -103,7 +103,7 @@ def test_ceph_83608838(ceph_cluster, config, nvme_service):
         configure_listeners(nvme_service.gateways, config, listeners=listeners)
     lb_groups = fetch_lb_groups(nvme_service, listeners)
     opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
-    configure_namespaces(nvme_service.gateways[0], config, opt_args)
+    configure_namespaces(nvme_service.gateways[0], config, opt_args, rbd_obj=rbd_obj)
 
     # Configure namespaces
     LOG.info("Configure namespaces")
@@ -163,6 +163,7 @@ def test_ceph_83609769(ceph_cluster, config, nvme_service):
     gateway_group = config.get("gw_group", "")
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
+    rbd_obj = config["rbd_obj"]
     config["spec_deployment"] = True
     config["rebalance_period"] = True
     config["rebalance_period_sec"] = 0
@@ -183,7 +184,7 @@ def test_ceph_83609769(ceph_cluster, config, nvme_service):
         configure_listeners(nvme_service.gateways, config, listeners=listeners)
     opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": "sequential"}
     LOG.info("Configure namespaces")
-    configure_namespaces(nvme_service.gateways[0], config, opt_args)
+    configure_namespaces(nvme_service.gateways[0], config, opt_args, rbd_obj=rbd_obj)
 
     # Check for num-namespaces is 10 in all gateways
     LOG.info("Check for num-namespaces is 10 in all gateways")
@@ -424,7 +425,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 lb_groups = fetch_lb_groups(nvme_service, listeners)
                 opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
                 LOG.info("Configure namespaces")
-                configure_namespaces(nvme_service.gateways[0], config, opt_args)
+                configure_namespaces(
+                    nvme_service.gateways[0], config, opt_args, rbd_obj=rbd_obj
+                )
 
                 if ceph_cluster.rhcs_version > "8.0":
                     time.sleep(120)
@@ -444,7 +447,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             "lb_groups": lb_groups,
                         }
                         configure_namespaces(
-                            nvme_service.gateways[0], nvme_service.config, opt_args
+                            nvme_service.gateways[0],
+                            nvme_service.config,
+                            opt_args,
+                            rbd_obj=rbd_obj,
                         )
                         if ceph_cluster.rhcs_version > "8.0":
                             validate_auto_loadbalance(
@@ -578,7 +584,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 "lb_groups": lb_groups,
                             }
                             configure_namespaces(
-                                nvme_service.gateways[-1], nvme_service.config, opt_args
+                                nvme_service.gateways[-1],
+                                nvme_service.config,
+                                opt_args,
+                                rbd_obj=rbd_obj,
                             )
 
                             # Prepare FIO Execution for new namespaces
