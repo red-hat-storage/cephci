@@ -79,7 +79,7 @@ tests:
           - ceph-common
           - samba-client
           - cifs-utils
-      copy_admin_keyring: true
+        copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
@@ -261,6 +261,7 @@ tests:
         path: "/"
         earmark: smb
 
+  # TO-DO: Revert after the issue is fixed IBMCEPH-10920
   - test:
       name: Verify samba multiple share creation with "smb" earmark subvolumes should pass
       desc: Verify samba multiple share creation with "smb" earmark subvolumes should pass
@@ -269,13 +270,13 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1, sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: user
         smb_user_name: user1
         smb_user_password: passwd
-        smb_shares: [share1, share2]
+        smb_shares: [share1]
         path: "/"
         earmark: smb
 

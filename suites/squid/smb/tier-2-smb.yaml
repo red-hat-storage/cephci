@@ -73,7 +73,7 @@ tests:
           - ceph-common
           - samba-client
           - cifs-utils
-      copy_admin_keyring: true
+        copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
