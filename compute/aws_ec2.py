@@ -1,5 +1,6 @@
 """AWS EC2 provider implementation for CephVMNode."""
 
+import random
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,13 @@ from utility.log import Log
 from .exceptions import NodeDeleteFailure, NodeError
 
 LOG = Log(__name__)
+
+_THROTTLE_ERROR_CODES = frozenset({
+    "RequestLimitExceeded",
+    "Throttling",
+    "ThrottlingException",
+    "EC2ThrottledException",
+})
 
 
 def process_aws_custom_config(custom_config):
@@ -211,12 +219,51 @@ def get_ec2_client(
         secret_key: Optional secret key; if omitted, uses default credential chain.
     """
     import boto3
+    from botocore.config import Config
 
-    kwargs = {"region_name": region}
+    boto_config = Config(
+        retries={"mode": "adaptive", "max_attempts": 10},
+    )
+
+    kwargs = {"region_name": region, "config": boto_config}
     if access_key and secret_key:
         kwargs["aws_access_key_id"] = access_key
         kwargs["aws_secret_access_key"] = secret_key
     return boto3.client("ec2", **kwargs)
+
+
+def _run_instances_with_throttle_retry(client, max_retries=8, base_delay=5,
+                                       max_delay=120, **run_kwargs):
+    """Call run_instances with exponential backoff on throttle errors.
+
+    Botocore's adaptive retry handles mild throttling, but when many
+    Jenkins suites provision simultaneously the SDK retries can be
+    exhausted.  This adds a second retry layer that only triggers for
+    rate-limit errors, keeping the rest of the suite (test execution)
+    completely unaffected.
+    """
+    from botocore.exceptions import ClientError
+
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return client.run_instances(**run_kwargs)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code not in _THROTTLE_ERROR_CODES:
+                raise
+
+            last_exc = exc
+            ceiling = min(max_delay, base_delay * (2 ** attempt))
+            wait = random.uniform(ceiling * 0.5, ceiling)
+            LOG.warning(
+                "EC2 RunInstances throttled (%s), attempt %d/%d — "
+                "backing off %.1fs",
+                code, attempt, max_retries, wait,
+            )
+            sleep(wait)
+
+    raise last_exc
 
 
 class CephVMNodeAWS:
@@ -495,7 +542,7 @@ class CephVMNodeAWS:
                     type(run_kwargs["SecurityGroupIds"]).__name__,
                 )
 
-            resp = self.client.run_instances(**run_kwargs)
+            resp = _run_instances_with_throttle_retry(self.client, **run_kwargs)
             instances = resp.get("Instances", [])
             if not instances:
                 raise NodeError("run_instances returned no instances")

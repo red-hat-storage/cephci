@@ -612,7 +612,16 @@ def create_aws_ceph_nodes(
         else:
             params["root-login"] = True
 
-        with parallel() as p:
+        # Random initial delay to stagger EC2 API calls across concurrent
+        # Jenkins suite processes hitting the same AWS account.  With 20+
+        # suites a 60s window still clusters too many RunInstances calls;
+        # 180s spreads the first wave enough for adaptive retry to handle
+        # any remaining bursts.
+        stagger = random.uniform(10, 180)
+        log.info("Staggering AWS node creation by %.1f seconds", stagger)
+        sleep(stagger)
+
+        with parallel(max_workers=4) as p:
             for node in range(1, 100):
                 node_key = "node" + str(node)
                 if not ceph_cluster.get(node_key):
@@ -647,7 +656,7 @@ def create_aws_ceph_nodes(
                 if node_dict.get("cloud-data"):
                     node_params["cloud-data"] = node_dict.get("cloud-data")
 
-                sleep(node_count * 5)
+                sleep(node_count * 10)
                 node_count += 1
                 p.spawn(setup_vm_node_aws, node_key, ceph_nodes, **node_params)
 
@@ -663,7 +672,7 @@ def create_aws_ceph_nodes(
     return ceph_nodes
 
 
-@retry(RETRY_EXCEPTIONS, tries=3, delay=10)
+@retry(RETRY_EXCEPTIONS, tries=5, delay=15, jitter=True)
 def setup_vm_node_aws(node, ceph_nodes, **params):
     """
     Create the VM node using AWS EC2 API.
