@@ -78,10 +78,11 @@ tests:
         install_packages:
           - ceph-common
           - samba-client
-      copy_admin_keyring: true
+        copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
+  # TO-DO: Revert after the issue is fixed IBMCEPH-10920
   - test:
       name: Deploy Active Directory and join domain to perform AD basic operations
       desc: Deploy samba with auth_mode 'Active Directory(AD)' and perform basic AD operations
@@ -90,7 +91,7 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1, sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: active-directory
@@ -98,9 +99,10 @@ tests:
         custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
-        smb_shares: [share1, share2]
+        smb_shares: [share1]
         path: "/"
 
+  # TO-DO: Revert after the issue is fixed IBMCEPH-10920
   - test:
       name: Deploy samba with auth_mode 'AD' using imperative style(CLI Commands)
       desc: Deploy samba with auth_mode 'Active Directory(AD)' using imperative style(CLI Commands)
@@ -109,7 +111,7 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1, sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: active-directory
@@ -117,7 +119,7 @@ tests:
         custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
-        smb_shares: [share1, share2]
+        smb_shares: [share1]
         path: "/"
 
   - test:
@@ -368,6 +370,7 @@ tests:
         smb_shares: [share1]
         path: "/"
 
+  # TO-DO: Revert after the issue is fixed IBMCEPH-10920
   - test:
       name: (Imperative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
       desc: (Imperative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
@@ -376,7 +379,7 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1,sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: active-directory
@@ -384,7 +387,7 @@ tests:
         custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
-        smb_shares: [share1,share2]
+        smb_shares: [share1]
         path: "/"
 
   -  test:

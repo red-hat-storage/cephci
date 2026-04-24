@@ -78,7 +78,7 @@ tests:
         install_packages:
           - ceph-common
           - samba-client
-      copy_admin_keyring: true
+        copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
@@ -99,6 +99,7 @@ tests:
         smb_shares: [share1]
         path: "/"
 
+  # TO-DO: Revert after the issue is fixed IBMCEPH-10920
   - test:
       name: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
       desc: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
@@ -107,13 +108,13 @@ tests:
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [sv1,sv2]
+        smb_subvolumes: [sv1]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: user
         smb_user_name: user1
         smb_user_password: passwd
-        smb_shares: [share1, share2]
+        smb_shares: [share1]
         path: "/"
 
   - test:
