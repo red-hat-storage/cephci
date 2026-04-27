@@ -141,6 +141,46 @@ class CephfsMirroringUtils(object):
             return 1
         return 0
 
+    @staticmethod
+    @retry(Exception, tries=20, delay=15, backoff=1)
+    def wait_for_daemon_running(client, cephfs_mirror_nodes, ceph_cluster=None):
+        """Wait for cephfs-mirror daemon to be running via podman ps on mirror nodes.
+
+        Retries up to 20 times with fixed 15s delay (~5 min) until at least one
+        cephfs-mirror container is confirmed running by podman on a mirror node.
+
+        Args:
+            client: Client node (unused, kept for API compatibility)
+            cephfs_mirror_nodes: List of CephNode objects with the cephfs-mirror role
+            ceph_cluster: Ceph cluster object (unused, kept for API compatibility)
+
+        Raises:
+            Exception: If no running container found on any node (triggers retry)
+        """
+        if not cephfs_mirror_nodes:
+            raise Exception("No cephfs-mirror nodes provided")
+
+        failures = []
+        for ceph_obj in cephfs_mirror_nodes:
+            mirror_node = ceph_obj.node if hasattr(ceph_obj, "node") else ceph_obj
+            hostname = mirror_node.hostname
+            podman_out, _ = mirror_node.exec_command(
+                sudo=True,
+                cmd="podman ps --format '{{.Names}}' --filter name=cephfs-mirror",
+                check_ec=False,
+            )
+            if podman_out and "cephfs-mirror" in podman_out:
+                log.info(
+                    "cephfs-mirror container confirmed via podman on %s",
+                    hostname,
+                )
+                return 0
+            failures.append(hostname)
+
+        raise Exception(
+            "No cephfs-mirror container found via podman on: %s" % ", ".join(failures)
+        )
+
     def enable_mirroring_module(self, client):
         """
         Enable the mirroring mgr module on the specified Ceph client.
@@ -601,84 +641,42 @@ class CephfsMirroringUtils(object):
         self, cephfs_mirror_node, fsid, daemon_names
     ):
         """
-        Fetches the asok file of the cephfs-mirror daemon with connectivity testing.
-        Tests connectivity to each asok file and retries with remaining files if connection refused.
-        This function is useful when connection refused errors occur with the first asok file.
+        Fetch an accessible asok file by matching the daemon ID suffix
+        (e.g. 'zddvsp' from 'cephfs-mirror.mero006.zddvsp') to the asok
+        files on each node.
 
-        Args:
-            cephfs_mirror_node (CephNode or list): The CephFS mirror node(s) used to execute the command.
-            fsid (str): The FSID (File System ID) of the Ceph cluster.
-            daemon_name (str or list): The name(s) of the cephfs-mirror daemon.
         Returns:
-            dict: Dictionary mapping hostname to [node, asok_file_path] for accessible asok files.
+            dict: {hostname: [node, asok_file_path]}
         """
-        log.info(
-            "Fetch all asok files of the cephfs-mirror daemon with connectivity check."
-        )
         accessible_asok_files = {}
-        if not isinstance(daemon_names, list):
-            daemon_names = [daemon_names]
-        if not isinstance(cephfs_mirror_node, list):
-            cephfs_mirror_node = [cephfs_mirror_node]
+        daemon_ids = {n.rsplit(".", 1)[-1] for n in daemon_names if "." in n}
 
-        for daemon_name in daemon_names:
-            # Get all asok files, not just the first one
-            cmd = f"cd /var/run/ceph/{fsid}/ ; ls -1tr ceph-client.{daemon_name}* 2>/dev/null"
-            # cephfs_mirror_node is always a list from get_ceph_objects("cephfs-mirror")
-            for node in cephfs_mirror_node:
-                # Get all asok files for this node
-                file_output, _ = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
-                asok_file_list = [
-                    f.strip() for f in file_output.split("\n") if f.strip()
-                ]
-                node_hostname = (
-                    node.node.hostname if hasattr(node, "node") else node.hostname
-                )
-                log.info(
-                    f"Found {len(asok_file_list)} asok file(s) for {node_hostname}: {asok_file_list}"
-                )
+        for node in cephfs_mirror_node:
+            node.exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
+            file_output, _ = node.exec_command(
+                sudo=True,
+                cmd=f"ls -1tr /var/run/ceph/{fsid}/ceph-client.cephfs-mirror.* 2>/dev/null",
+                check_ec=False,
+            )
+            asok_dir = f"/var/run/ceph/{fsid}"
+            for asok_file_path in (
+                f.strip() for f in file_output.split("\n") if f.strip()
+            ):
+                if not any(did in asok_file_path for did in daemon_ids):
+                    continue
+                asok_basename = asok_file_path.rsplit("/", 1)[-1]
+                test_cmd = f"cd {asok_dir} && ceph --admin-daemon {asok_basename} help"
+                out, err = node.exec_command(sudo=True, cmd=test_cmd, check_ec=False)
+                if out and "fs mirror peer status" in out:
+                    accessible_asok_files[node.node.hostname] = [node, asok_file_path]
+                    log.info(f"Connected to asok: {asok_file_path}")
+                    break
+                else:
+                    log.warning(f"Cannot reach asok {asok_file_path}: {err}")
 
-                # Test each asok file until we find an accessible one for this hostname
-                for asok_file_path in asok_file_list:
-                    if not asok_file_path:
-                        continue
-                    if node_hostname in accessible_asok_files:
-                        break  # Already found accessible file for this hostname
-
-                    log.info(
-                        f"Testing connectivity to asok file on {node_hostname}: {asok_file_path}"
-                    )
-                    test_cmd = (
-                        f"cephadm shell -- bash -c "
-                        f'"cd /var/run/ceph && ceph --admin-daemon {asok_file_path} help"'
-                    )
-
-                    out, err = node.exec_command(
-                        sudo=True, cmd=test_cmd, check_ec=False
-                    )
-
-                    # Check if "fs mirror peer status" is in the output
-                    if out and "fs mirror peer status" in out:
-                        accessible_asok_files[node_hostname] = [
-                            node,
-                            asok_file_path,
-                        ]
-                        log.info(
-                            f"Successfully connected to asok file on {node_hostname}: {asok_file_path}"
-                        )
-                        break  # Found accessible file, move to next hostname
-                    else:
-                        log.warning(
-                            f"Connection refused or error accessing asok file on {node_hostname}: "
-                            f"'fs mirror peer status' not found. stderr: {err}, output: {out[:200] if out else 'empty'}"
-                        )
-
-        if accessible_asok_files:
-            log.info(f"Found {len(accessible_asok_files)} accessible asok file(s)")
-            return accessible_asok_files
-        else:
-            log.warning("No accessible asok files found, returning empty dict")
-            return {}
+        if not accessible_asok_files:
+            log.warning("No accessible asok files found")
+        return accessible_asok_files
 
     def _resolve_mirror_nodes(self, source_clients, fallback_nodes):
         """Find the node where cephfs-mirror daemon is actually running via ceph orch ps.
@@ -736,9 +734,11 @@ class CephfsMirroringUtils(object):
             raise CommandFailed("No accessible cephfs-mirror admin socket found")
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
+            asok_basename = asok_file[1].rsplit("/", 1)[-1]
+            asok_dir = f"/var/run/ceph/{fsid}"
             out, _ = asok_file[0].exec_command(
                 sudo=True,
-                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
+                cmd=f"cd {asok_dir} && ceph --admin-daemon {asok_basename} "
                 f"fs mirror status {fs_name}@{filesystem_id} -f json",
             )
             data = json.loads(out)
@@ -792,9 +792,11 @@ class CephfsMirroringUtils(object):
             node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
+            asok_basename = asok_file[1].rsplit("/", 1)[-1]
+            asok_dir = f"/var/run/ceph/{fsid}"
             out, _ = asok_file[0].exec_command(
                 sudo=True,
-                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
+                cmd=f"cd {asok_dir} && ceph --admin-daemon {asok_basename} "
                 f"fs mirror status {fs_name}@{filesystem_id} -f json",
             )
             data = json.loads(out)
@@ -844,8 +846,10 @@ class CephfsMirroringUtils(object):
         """
         log.info("Get peer mirror status")
         log.info("Validate the snapshot sync to target cluster.")
+        asok_basename = asok_file.rsplit("/", 1)[-1]
+        asok_dir = f"/var/run/ceph/{fsid}"
         cmd = (
-            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file} fs mirror peer status "
+            f"cd {asok_dir} && ceph --admin-daemon {asok_basename} fs mirror peer status "
             f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
         )
         out, _ = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
@@ -914,8 +918,10 @@ class CephfsMirroringUtils(object):
                 )
             except CommandFailed as e:
                 log.warning(f"dnf install ceph-common failed (non-fatal): {e}")
+            asok_basename = asok[1].rsplit("/", 1)[-1]
+            asok_dir = f"/var/run/ceph/{fsid}"
             cmd = (
-                f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+                f"cd {asok_dir} && ceph --admin-daemon {asok_basename} fs mirror peer status "
                 f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
             )
             out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
@@ -1686,9 +1692,11 @@ class CephfsMirroringUtils(object):
         asok_files = self.get_asok_file(resolved_nodes, fsid, daemon_names)
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
+            asok_basename = asok_file[1].rsplit("/", 1)[-1]
+            asok_dir = f"/var/run/ceph/{fsid}"
             out, _ = asok_file[0].exec_command(
                 sudo=True,
-                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
+                cmd=f"cd {asok_dir} && ceph --admin-daemon {asok_basename} "
                 f"fs mirror status {fs_name}@{filesystem_id} -f json",
             )
             fs_mirror_status = json.dump(out)
@@ -1726,9 +1734,11 @@ class CephfsMirroringUtils(object):
         peer_uuid = self.get_peer_uuid_by_name(source_clients, fs_name)
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
+            asok_basename = asok_file[1].rsplit("/", 1)[-1]
+            asok_dir = f"/var/run/ceph/{fsid}"
             out, _ = asok_file[0].exec_command(
                 sudo=True,
-                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
+                cmd=f"cd {asok_dir} && ceph --admin-daemon {asok_basename} "
                 f"fs mirror peer status {fs_name}@{filesystem_id} {peer_uuid} -f json",
             )
             fs_mirror_status = json.loads(out)
@@ -2224,8 +2234,10 @@ class CephfsMirroringUtils(object):
             asok[0].exec_command(
                 sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
             )
+        asok_basename = asok[1].rsplit("/", 1)[-1]
+        asok_dir = f"/var/run/ceph/{fsid}"
         cmd = (
-            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+            f"cd {asok_dir} && ceph --admin-daemon {asok_basename} fs mirror peer status "
             f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
         )
         out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
@@ -2266,8 +2278,10 @@ class CephfsMirroringUtils(object):
             asok[0].exec_command(
                 sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
             )
+        asok_basename = asok[1].rsplit("/", 1)[-1]
+        asok_dir = f"/var/run/ceph/{fsid}"
         cmd = (
-            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+            f"cd {asok_dir} && ceph --admin-daemon {asok_basename} fs mirror peer status "
             f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
         )
         out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
@@ -2400,8 +2414,10 @@ def wait_for_sync_idle(fs_name, fsid, asok_file, filesystem_id, peer_uuid, paths
             )
         except Exception as e:
             log.warning("dnf install ceph-common failed (non-fatal): %s", e)
+    asok_basename = asok[1].rsplit("/", 1)[-1]
+    asok_dir = f"/var/run/ceph/{fsid}"
     cmd = (
-        f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+        f"cd {asok_dir} && ceph --admin-daemon {asok_basename} fs mirror peer status "
         f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
     )
     out, _ = asok[0].exec_command(sudo=True, cmd=cmd)

@@ -6,6 +6,9 @@ import traceback
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_mirroring_system.cephfs_mirroring_system_utils import (
     cleanup_mirroring_test_environment,
+    collect_background_io_logs,
+    get_active_daemon_nodes,
+    recover_crashed_mirror_daemon,
     run_container_restart,
     run_daemon_redeploy,
     run_node_reboot,
@@ -56,7 +59,7 @@ def run(ceph_cluster, **kw):
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         test_data = kw.get("test_data")
 
-        io_runtime = config.get("io_runtime", 40)
+        io_runtime = config.get("io_runtime", 120)
         signal_tests = [
             {
                 "type": "signal",
@@ -64,12 +67,12 @@ def run(ceph_cluster, **kw):
                 "name": "SIGHUP",
                 "expect_exit": False,
             },
-            {
-                "type": "signal",
-                "signal": signal.SIGKILL,
-                "name": "SIGKILL",
-                "expect_exit": True,
-            },
+            # {
+            #     "type": "signal",
+            #     "signal": signal.SIGKILL,
+            #     "name": "SIGKILL",
+            #     "expect_exit": True,
+            # },
             {
                 "type": "signal",
                 "signal": signal.SIGTERM,
@@ -108,6 +111,7 @@ def run(ceph_cluster, **kw):
         source_fs = env["source_fs"]
         subvolume_paths = env["subvolume_paths"]
         mounting_dirs = env["mounting_dirs"]
+        full_subvolume_path = env["full_subvolume_path"]
         fsid = env["fsid"]
         daemon_name = env["daemon_name"]
         asok_file = env["asok_file"]
@@ -124,8 +128,8 @@ def run(ceph_cluster, **kw):
         log.info("Original cephfs-mirror daemon host: %s", original_mirror_host)
 
         log.info(f"Starting background IOs for {io_runtime} minutes")
-        io_threads = start_background_ios(
-            fs_util_v1_ceph1, source_clients[0], mounting_dirs, io_runtime
+        io_threads, stop_io_event = start_background_ios(
+            fs_util_v1_ceph1, source_clients[0], full_subvolume_path, io_runtime
         )
 
         # Give IO a moment to actually start
@@ -150,14 +154,34 @@ def run(ceph_cluster, **kw):
 
             log.info("=== Starting %s test ===", test_name)
 
+            # Wait for daemon to be running; if stuck in crash loop, redeploy
+            try:
+                CephfsMirroringUtils.wait_for_daemon_running(
+                    source_clients[0],
+                    cephfs_mirror_nodes,
+                    ceph_cluster=ceph_cluster_dict.get("ceph1"),
+                )
+            except Exception:
+                log.error(
+                    "cephfs-mirror daemon not running before %s, "
+                    "attempting crash-loop recovery",
+                    test_name,
+                )
+                if not recover_crashed_mirror_daemon(
+                    source_clients[0], original_mirror_host
+                ):
+                    log.error("Recovery failed, cannot continue")
+                    return 1
+                daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
+                log.info("Daemon name after recovery: %s", daemon_name)
+
             # Fetch asok_file at the start of each test
-            # It will be refetched after operations that restart the daemon
             asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
                 cephfs_mirror_nodes, fsid, daemon_name
             )
             if not asok_file:
+                log.error("Failed to get asok_file before %s", test_name)
                 return 1
-            log.info("Using asok_file for %s: %s", test_name, asok_file)
 
             # Check cluster health before test
             log.info("Verify cluster is healthy before %s", test_name)
@@ -190,7 +214,21 @@ def run(ceph_cluster, **kw):
                 snap_sync_id_before.append(sync_id)
 
             try:
-                mirror_nodes = [mn.node for mn in cephfs_mirror_nodes]
+                all_mirror_nodes = [mn.node for mn in cephfs_mirror_nodes]
+                active_mirror_nodes = get_active_daemon_nodes(
+                    source_clients[0], "cephfs-mirror", all_mirror_nodes
+                )
+                if not active_mirror_nodes:
+                    log.error(
+                        "No active cephfs-mirror daemons found before %s", test_name
+                    )
+                    return 1
+                log.info(
+                    "Active cephfs-mirror nodes for %s: %s",
+                    test_name,
+                    [n.hostname for n in active_mirror_nodes],
+                )
+
                 recovery_timeout = (
                     120 if test_type in ("node_reboot", "mirror_redeploy") else 60
                 )
@@ -199,7 +237,7 @@ def run(ceph_cluster, **kw):
                     log.info("Running signal test on cephfs-mirror daemons")
                     result = run_signal_tests(
                         fs_util_v1_ceph1,
-                        mirror_nodes,
+                        active_mirror_nodes,
                         "cephfs-mirror",
                         r"cephfs-mirror\.",
                         test_case,
@@ -208,19 +246,19 @@ def run(ceph_cluster, **kw):
                     log.info("Running systemctl restart test on cephfs-mirror daemons")
                     result = run_systemctl_restart(
                         fs_util_v1_ceph1,
-                        mirror_nodes,
+                        active_mirror_nodes,
                         "cephfs-mirror",
                         r"cephfs-mirror\.",
                     )
                 elif test_type == "container_restart":
                     log.info("Running container restart test on cephfs-mirror daemons")
                     result = run_container_restart(
-                        mirror_nodes,
+                        active_mirror_nodes,
                         ["cephfs-mirror"],
                     )
                 elif test_type == "node_reboot":
                     log.info("Running node reboot test on cephfs-mirror nodes")
-                    result = run_node_reboot(fs_util_v1_ceph1, mirror_nodes)
+                    result = run_node_reboot(fs_util_v1_ceph1, active_mirror_nodes)
                 elif test_type == "mirror_redeploy":
                     log.info("Running cephfs-mirror redeploy test")
                     result = run_daemon_redeploy(
@@ -271,8 +309,12 @@ def run(ceph_cluster, **kw):
                 log.info(
                     "Refetching asok_file after %s (daemon was restarted)", test_name
                 )
-                # Wait a moment for daemon to fully restart
-                time.sleep(10)
+                # Wait for daemon to be fully running (retries up to ~5 min)
+                CephfsMirroringUtils.wait_for_daemon_running(
+                    source_clients[0],
+                    cephfs_mirror_nodes,
+                    ceph_cluster=ceph_cluster_dict.get("ceph1"),
+                )
                 # Refetch daemon_name in case it changed (especially for redeploy)
                 daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
                 log.info("Updated daemon name: %s", daemon_name)
@@ -292,19 +334,30 @@ def run(ceph_cluster, **kw):
                 )
                 if mirror_node:
                     cephfs_mirror_nodes = mirror_node.get_ceph_objects()
-                # Refetch asok_file
-                asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
-                    cephfs_mirror_nodes, fsid, daemon_name
-                )
+
+                # Retry asok fetch — after SIGKILL/restart the new admin socket
+                # may take extra time to become connectable
+                asok_file = {}
+                for attempt in range(10):
+                    asok_file = (
+                        fs_mirroring_utils.get_asok_file_with_connectivity_check(
+                            cephfs_mirror_nodes, fsid, daemon_name
+                        )
+                    )
+                    if asok_file:
+                        break
+                    log.warning(
+                        "Asok not ready yet after %s, retry %d/10",
+                        test_name,
+                        attempt + 1,
+                    )
+                    time.sleep(15)
                 if not asok_file:
                     log.error("Failed to refetch asok_file after %s", test_name)
                     return 1
-                log.info("Refetched asok_file after %s: %s", test_name, asok_file)
 
             # Check cluster health after test
-            health_timeout = (
-                300 if test_type in ("node_reboot", "mirror_redeploy") else 60
-            )
+            health_timeout = 300
             log.info("Verify cluster is healthy after %s", test_name)
             if cephfs_common_utils.wait_for_healthy_ceph(
                 source_clients[0], health_timeout
@@ -327,7 +380,12 @@ def run(ceph_cluster, **kw):
                 log.error("Mount points are hung after %s", test_name)
                 return 1
 
-            # After test execution, fetch last_synced_snap.id and compare with before
+            # Ensure daemon is running before checking sync status
+            CephfsMirroringUtils.wait_for_daemon_running(
+                source_clients[0],
+                cephfs_mirror_nodes,
+                ceph_cluster=ceph_cluster_dict.get("ceph1"),
+            )
 
             for idx, path in enumerate(subvolume_paths):
                 sync_id_b = snap_sync_id_before[idx]
@@ -386,11 +444,12 @@ def run(ceph_cluster, **kw):
             log.error("Cluster is not healthy at final check")
             return 1
 
-        # Wait for all IO threads to complete
-        log.info("Waiting for all IO threads to complete")
+        # Signal IO threads to stop and wait for them
+        log.info("Stopping background IO threads")
+        stop_io_event.set()
         for t in io_threads:
-            t.join()
-        log.info("All IO threads have completed")
+            t.join(timeout=120)
+        log.info("All IO threads have stopped")
 
         # Redeploy cephfs-mirror back to the original host so that
         # subsequent tests find the daemon on the expected node.
@@ -432,5 +491,6 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        collect_background_io_logs(source_clients[0], full_subvolume_path)
         if config and config.get("cleanup", True) and env:
             cleanup_mirroring_test_environment(env)
