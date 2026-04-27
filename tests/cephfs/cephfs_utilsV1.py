@@ -2360,13 +2360,32 @@ class FsUtils(object):
             )
         return 0
 
+    @retry(CommandFailed, tries=30, delay=10, backoff=1)
+    def _wait_for_pid_signal(self, node, daemon, sig, pids_before, expect_exit):
+        out_after, rc_after = node.exec_command(
+            cmd=f"pgrep {daemon}",
+            container_exec=False,
+            check_ec=False,
+        )
+        pids_after = out_after.splitlines() if not rc_after else []
+        still_running = set(pids_before) & set(pids_after)
+        log.info(
+            f"PIDs after {sig.name}: {pids_after}, "
+            f"still running from before: {still_running}"
+        )
+        if expect_exit and still_running:
+            raise CommandFailed(
+                f"{sig.name} failed. PIDs still running: {still_running}"
+            )
+        if not expect_exit and not pids_after:
+            raise CommandFailed(f"{sig.name} failed. {daemon} exited unexpectedly")
+
     def pid_signal(
         self,
         node,
         daemon,
         sig=signal.SIGTERM,
         expect_exit=True,
-        wait=10,
     ):
         out, rc = node.exec_command(
             cmd=f"pgrep {daemon}",
@@ -2385,23 +2404,7 @@ class FsUtils(object):
                 container_exec=False,
                 check_ec=False,
             )
-        sleep(wait)
-        out_after, rc_after = node.exec_command(
-            cmd=f"pgrep {daemon}",
-            container_exec=False,
-            check_ec=False,
-        )
-        pids_after = out_after.splitlines() if not rc_after else []
-        log.info(f"PIDs after {sig.name}: {pids_after}")
-        if expect_exit:
-            if set(pids_before) & set(pids_after):
-                raise CommandFailed(
-                    f"{sig.name} failed. PIDs still running: "
-                    f"{set(pids_before) & set(pids_after)}"
-                )
-        else:
-            if not pids_after:
-                raise CommandFailed(f"{sig.name} failed. {daemon} exited unexpectedly")
+        self._wait_for_pid_signal(node, daemon, sig, pids_before, expect_exit)
         return 0
 
     def network_disconnect(self, ceph_object, sleep_time=20):

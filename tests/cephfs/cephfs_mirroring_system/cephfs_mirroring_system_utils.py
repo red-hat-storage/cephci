@@ -7,13 +7,15 @@ and mirror-daemon test suites.
 """
 
 import json
+import logging
+import os
 import random
 import secrets
 import signal
 import string
 import time
 import traceback
-from threading import Thread
+from threading import Event, Thread
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utils import FsUtils
@@ -26,32 +28,96 @@ from utility.retry import retry
 
 log = Log(__name__)
 
+REMOTE_IO_LOG_DIR = "/var/log/mirror_io_logs"
+_SMALLFILE_OPS = [
+    "create",
+    "read",
+    "append",
+    "read",
+    "delete",
+    "create",
+    "overwrite",
+    "rename",
+    "delete-renamed",
+    "mkdir",
+    "rmdir",
+    "create",
+    "symlink",
+    "stat",
+    "chmod",
+    "ls-l",
+    "delete",
+    "cleanup",
+]
+
+
+def _run_background_io(client, mounting_dir, runtime, io_log_file, stop_event):
+    """Run smallfile IO with output redirected to *io_log_file* on the remote node."""
+    suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    io_path = f"{mounting_dir}/smallfile_io_dir_{suffix}"
+    try:
+        client.exec_command(sudo=True, cmd=f"mkdir -p {io_path}")
+        end_time = time.time() + runtime * 60
+        while time.time() < end_time and not stop_event.is_set():
+            for op in _SMALLFILE_OPS:
+                if time.time() >= end_time or stop_event.is_set():
+                    break
+                try:
+                    client.exec_command(
+                        sudo=True,
+                        timeout=600,
+                        cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py "
+                        f"--operation {op} --threads 8 --file-size 10240 "
+                        f"--files 10 --top {io_path} >> {io_log_file} 2>&1",
+                    )
+                except Exception:
+                    pass
+                time.sleep(3)
+            time.sleep(30)
+    except Exception as e:
+        log.error("Background IO failed on %s: %s", mounting_dir, e)
+    log.info("Background IO stopped for %s", mounting_dir)
+
 
 def start_background_ios(fs_util, client, mounting_dirs, runtime):
-    """
-    Start background IO threads on all mount points.
-
-    Args:
-        fs_util: Filesystem utility object
-        client: Client node to run IOs on
-        mounting_dirs: List of mount directories
-        runtime: Runtime for IOs in minutes
+    """Start background IO threads; output goes to remote log files.
 
     Returns:
-        List of Thread objects
+        tuple: (threads, stop_event) - list of threads and an Event to signal them to stop.
     """
+    stop_event = Event()
+    client.exec_command(sudo=True, cmd=f"mkdir -p {REMOTE_IO_LOG_DIR}")
     threads = []
-    for mounting_dir in mounting_dirs:
+    for idx, mounting_dir in enumerate(mounting_dirs):
+        io_log = f"{REMOTE_IO_LOG_DIR}/io_thread_{idx}.log"
         t = Thread(
-            target=fs_util.run_ios_V1,
-            args=(client, mounting_dir),
-            kwargs={"io_tools": ["smallfile"], "run_time": runtime},
+            target=_run_background_io,
+            args=(client, mounting_dir, runtime, io_log, stop_event),
             daemon=True,
         )
         t.start()
         threads.append(t)
-        log.info("Started IO thread for %s", mounting_dir)
-    return threads
+        log.info("Started IO thread for %s (logs: %s)", mounting_dir, io_log)
+    return threads, stop_event
+
+
+def collect_background_io_logs(client, mounting_dirs):
+    """Download IO logs from the remote node to the local test log directory."""
+    for h in logging.getLogger("cephci").handlers:
+        if isinstance(h, logging.FileHandler):
+            local_dir = os.path.join(os.path.dirname(h.baseFilename), "mirror_io_logs")
+            break
+    else:
+        local_dir = "/tmp/mirror_io_logs"
+    os.makedirs(local_dir, exist_ok=True)
+    for idx in range(len(mounting_dirs)):
+        remote = f"{REMOTE_IO_LOG_DIR}/io_thread_{idx}.log"
+        local = os.path.join(local_dir, f"io_thread_{idx}.log")
+        try:
+            client.download_file(src=remote, dst=local, sudo=True)
+        except Exception as e:
+            log.warning("Could not collect IO log %s: %s", remote, e)
+    log.info("IO logs saved to: %s", local_dir)
 
 
 def run_signal_tests(
@@ -88,7 +154,7 @@ def run_signal_tests(
                 node.hostname,
             )
             fs_util_v1.pid_signal(
-                node, daemon_process_name, sig=sig, expect_exit=expect_exit, wait=10
+                node, daemon_process_name, sig=sig, expect_exit=expect_exit
             )
             if sig == signal.SIGTERM and expect_exit:
                 log.info(
@@ -154,6 +220,11 @@ def run_systemctl_restart(
             )
             service_name = fs_util_v1.deamon_name(node, daemon_service_pattern)
             log.info("Restarting %s service: %s", daemon_process_name, service_name)
+            node.exec_command(
+                sudo=True,
+                cmd=f"systemctl reset-failed {service_name}",
+                check_ec=False,
+            )
             node.exec_command(
                 sudo=True,
                 cmd=f"systemctl restart {service_name}",
@@ -341,7 +412,7 @@ def run_daemon_redeploy(
     return 0
 
 
-@retry(Exception, tries=5, delay=15)
+@retry(Exception, tries=5, delay=15, backoff=1)
 def wait_for_snaps_synced_increase(
     fs_mirroring_utils,
     source_fs,
@@ -395,7 +466,7 @@ def wait_for_snaps_synced_increase(
     )
 
 
-@retry(Exception, tries=5, delay=15)
+@retry(Exception, tries=5, delay=15, backoff=1)
 def wait_for_sync_id_increase(
     fs_mirroring_utils,
     source_fs,
@@ -738,6 +809,11 @@ def setup_mirroring_test_environment(
     log.info("fsid on ceph cluster : %s", fsid)
     daemon_name = fs_mirroring_utils.get_daemon_name(source_client)
     log.info("Name of the cephfs-mirror daemon : %s", daemon_name)
+    CephfsMirroringUtils.wait_for_daemon_running(
+        source_client,
+        cephfs_mirror_nodes,
+        ceph_cluster=ceph_cluster_dict.get("ceph1"),
+    )
     asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
         cephfs_mirror_nodes, fsid, daemon_name
     )
@@ -854,7 +930,7 @@ def cleanup_mirroring_test_environment(env):
                 check_ec=False,
             )
 
-    cleanup_io_dirs(source_client, mounting_dirs)
+    cleanup_io_dirs(source_client, full_subvolume_path)
     for mounting_dir in mounting_dirs:
         log.info("Unmount the paths")
         source_client.exec_command(

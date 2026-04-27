@@ -32,6 +32,7 @@ globals:
           - osd
           - mds
           - nfs
+          - cephfs-mirror
         no-of-volumes: 4
         disk-size: 60
       node6:
