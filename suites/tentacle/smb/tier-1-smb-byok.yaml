@@ -1,0 +1,129 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy samba with byok and verify share encryption.
+      desc: Deploy samba with byok and verify share encryption.
+      module: smb_byok_setup.py
+      polarion-id: CEPH-83627654
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - { source_type: resource, ref: ug1 }
+            placement:
+              label: smb
+            keybridge:
+              scopes:
+                - name: mem
+                - name: kmip
+                  kmip_hosts:
+                    - 10.0.64.87
+                  kmip_port: 5696
+                  kmip_cert:
+                    source_type: resource
+                    ref: cert1
+                  kmip_key:
+                    source_type: resource
+                    ref: key1
+                  kmip_ca_cert:
+                    source_type: resource
+                    ref: cacert1
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - { name: user1, password: passwd }
+              groups: [ ]
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: sharebyok1
+            intent: present
+            readonly: false
+            browseable: true
+            cephfs:
+              volume: cephfs
+              path: /
+              subvolumegroup: smb-byok-grp
+              subvolume: svol1
+              fscrypt_key:
+                scope: kmip
