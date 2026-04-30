@@ -3,7 +3,7 @@ version_id: 10.1
 id: rhel
 instance:
   create:
-    image-name: rhel-101-server-amd64-kvm
+    image-name: cephci-golden-rhel101-v1
     private_key: ceph-qe-sa-svc
 
   setup: |
