@@ -349,6 +349,41 @@ def _image_matches_version(img: Dict, version_preference: str) -> bool:
     return vp in name or f"rhel-{vp}" in name or f"rhel {vp}" in name
 
 
+def _image_version_number(img: Dict) -> Optional[float]:
+    """Extract numeric version (e.g. 9.7) from image for sorting."""
+    ver = img.get("version_id") or img.get("version") or img.get("os_version")
+    if ver is not None:
+        try:
+            return float(str(ver).strip())
+        except (ValueError, TypeError):
+            pass
+    name = _image_display_name(img)
+    m = re.search(r"(\d+\.\d+)", name)
+    if m:
+        try:
+            return float(m.group(1))
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _sort_images_by_version_proximity(
+    images: List[Dict], target_version: str
+) -> List[Dict]:
+    """Sort images by proximity to target version (closest first)."""
+    try:
+        target = float(target_version)
+    except (ValueError, TypeError):
+        return images
+    scored = []
+    for img in images:
+        ver = _image_version_number(img)
+        distance = abs(ver - target) if ver is not None else 999.0
+        scored.append((distance, img))
+    scored.sort(key=lambda x: x[0])
+    return [img for _, img in scored]
+
+
 def resolve_image_for_site(
     client,
     site: str,
@@ -517,6 +552,18 @@ def resolve_image_for_site(
     for_site_before_version = (
         for_site  # Keep for fallback if all version matches are excluded
     )
+    available_versions = [
+        (
+            _image_id(i),
+            _image_version_number(i),
+            _image_display_name(i)[:40],
+        )
+        for i in for_site
+    ]
+    LOG.debug(
+        "OneCloud: available images after filtering: %s",
+        [(vid, ver, n) for vid, ver, n in available_versions],
+    )
     if version_preference:
         matching = [
             i for i in for_site if _image_matches_version(i, version_preference)
@@ -542,21 +589,36 @@ def resolve_image_for_site(
         )
         return iid
 
-    # All version-preferred images excluded? Fall back to full platform list
+    # All version-preferred images excluded? Fall back to closest available version
     if (
         version_preference
         and for_site_before_version
         and for_site != for_site_before_version
     ):
-        picked = _pick_first_valid(for_site_before_version)
+        sorted_by_proximity = _sort_images_by_version_proximity(
+            for_site_before_version, version_preference
+        )
+        fallback_options = [
+            (_image_id(i), _image_version_number(i), _image_display_name(i)[:40])
+            for i in sorted_by_proximity
+        ]
+        LOG.debug(
+            "OneCloud: version %s unavailable, fallback options (closest first): %s",
+            version_preference,
+            fallback_options,
+        )
+        picked = _pick_first_valid(sorted_by_proximity)
         if picked is not None:
             iid, img = picked
             name = _image_display_name(img)
-            LOG.info(
-                "OneCloud: version %s image(s) excluded; using image_id %s (%s)",
+            ver = _image_version_number(img)
+            LOG.warning(
+                "OneCloud: version %s not available; using closest: image_id %s "
+                "(%s, version %s)",
                 version_preference,
                 iid,
                 name[:50] if name else "?",
+                ver or "?",
             )
             return iid
 
@@ -1108,6 +1170,148 @@ def _wait_until_vm_state(
     )
 
 
+def floating_ip_provision(
+    client,
+    cluster_id: int,
+    site: str,
+    vlan: int,
+) -> Optional[str]:
+    """
+    Provision a floating IP for a OneCloud cluster.
+
+    Args:
+        client: OneCloud API client.
+        cluster_id: Cluster ID from POST /clusters response.
+        site: Site code (e.g. POK).
+        vlan: VLAN ID the VMs belong to (from VM network.vlan).
+
+    Returns:
+        Floating IP address if returned by API, else None.
+    """
+    body = {"VLAN": int(vlan), "site": site}
+    resp = client.put(f"/clusters/{cluster_id}/floating-ip/provision", json=body)
+    if resp.status_code not in (200, 201):
+        raise NodeError(
+            f"OneCloud: failed to provision floating IP for cluster {cluster_id}: "
+            f"{resp.status_code} {resp.text[:200]}"
+        )
+    data = resp.json()
+    LOG.info(
+        "OneCloud: floating IP provision response for cluster %s: %s", cluster_id, data
+    )
+    ip = None
+    if isinstance(data, dict):
+        ip = data.get("floating_ip") or data.get("ip") or data.get("ipaddr")
+    return ip
+
+
+def floating_ip_release(client, cluster_id: int) -> None:
+    """
+    Release floating IP from a OneCloud cluster.
+
+    Args:
+        client: OneCloud API client.
+        cluster_id: Cluster ID.
+    """
+    resp = client.put(f"/clusters/{cluster_id}/floating-ip/release", json={})
+    if resp.status_code not in (200, 201, 204):
+        raise NodeError(
+            f"OneCloud: failed to release floating IP for cluster {cluster_id}: "
+            f"{resp.status_code} {resp.text[:200]}"
+        )
+    LOG.info("OneCloud: floating IP released for cluster %s", cluster_id)
+
+
+def floating_ip_get(client, cluster_id: int) -> Optional[str]:
+    """
+    Get the floating IP assigned to a OneCloud cluster.
+
+    Args:
+        client: OneCloud API client.
+        cluster_id: Cluster ID.
+
+    Returns:
+        Floating IP string, or None if not provisioned.
+    """
+    resp = client.get("/clusters")
+    if resp.status_code != 200:
+        LOG.warning("OneCloud: GET /clusters failed: %s", resp.status_code)
+        return None
+    data = resp.json()
+    clusters = data.get("data", []) if isinstance(data, dict) else data
+    for c in clusters:
+        if c.get("clusterid") == cluster_id or c.get("clusterID") == cluster_id:
+            return c.get("floating_ip")
+    return None
+
+
+def vm_resize(
+    client,
+    vmid: int,
+    cpu: int,
+    mem: int,
+    disk_total_gb: int,
+    justification: str = "CephCI resize",
+) -> None:
+    """
+    Resize a VM (CPU, memory, total disk).
+
+    Args:
+        client: OneCloud API client.
+        vmid: VM ID.
+        cpu: Number of vCPUs (max 8).
+        mem: Memory in GB (max 32).
+        disk_total_gb: Total disk size in GB (must be >= current, max 1024).
+        justification: Reason for resize.
+    """
+    if cpu > 8 or mem > 32 or disk_total_gb > 1024:
+        raise ValueError(
+            f"Resource limits exceeded (cpu<=8, mem<=32GB, disk<=1024GB): "
+            f"cpu={cpu}, mem={mem}, disk={disk_total_gb}GB"
+        )
+    body = {
+        "justification": justification,
+        "cpu": int(cpu),
+        "mem": int(mem),
+        "disk": [int(disk_total_gb)],
+    }
+    resp = client.put(f"/vm/{vmid}/resize", json=body)
+    if resp.status_code not in (200, 201):
+        raise NodeError(
+            f"OneCloud: failed to resize VM {vmid}: "
+            f"{resp.status_code} {resp.text[:300]}"
+        )
+    LOG.info(
+        "OneCloud: resize request created for VM %s (cpu=%s, mem=%s, disk=%sGB)",
+        vmid,
+        cpu,
+        mem,
+        disk_total_gb,
+    )
+
+
+def vm_get_details(client, vmid: int) -> Dict:
+    """
+    Get VM details from OneCloud API.
+
+    Args:
+        client: OneCloud API client.
+        vmid: VM ID.
+
+    Returns:
+        VM dict with resources, network, cluster info.
+    """
+    resp = client.get(f"/vm/{vmid}")
+    if resp.status_code != 200:
+        raise NodeError(f"OneCloud: GET /vm/{vmid} failed: {resp.status_code}")
+    data = resp.json()
+    if isinstance(data, dict):
+        vms = data.get("data", [data])
+        if isinstance(vms, list) and vms:
+            return vms[0]
+    return data
+
+
 class CephVMNodeOneCloud:
     """Represents a VM node from OneCloud API."""
 
@@ -1275,3 +1479,117 @@ class CephVMNodeOneCloud:
         vm_restart(client, vmid)
         if wait:
             _wait_until_vm_state(client, vmid, "on")
+
+    @property
+    def cluster_id(self) -> Optional[int]:
+        """Return the cluster ID this VM belongs to."""
+        cluster = self.node.get("cluster") or {}
+        cid = cluster.get("id") or cluster.get("clusterid") or cluster.get("clusterID")
+        if cid is not None:
+            try:
+                return int(cid)
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    @property
+    def vlan(self) -> Optional[int]:
+        """Return the VLAN this VM is on (from network.vlan)."""
+        net = self.node.get("network") or {}
+        v = net.get("vlan")
+        if v is not None:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    @property
+    def floating_ip(self) -> Optional[str]:
+        """Return the floating IP assigned to this VM's cluster, or None."""
+        cid = self.cluster_id
+        if cid is None:
+            return None
+        client = get_onecloud_client(
+            self._api_key, self._base_url, verify_ssl=self._verify_ssl
+        )
+        return floating_ip_get(client, cid)
+
+    def provision_floating_ip(self, site: str = "POK") -> Optional[str]:
+        """
+        Provision a floating IP for this VM's cluster.
+
+        Args:
+            site: Site code (default: POK).
+
+        Returns:
+            Floating IP address if returned, else None.
+        """
+        cid = self.cluster_id
+        v = self.vlan
+        if cid is None:
+            raise NodeError("Cannot provision floating IP: no cluster_id")
+        if v is None:
+            raise NodeError("Cannot provision floating IP: no VLAN on VM")
+        client = get_onecloud_client(
+            self._api_key, self._base_url, verify_ssl=self._verify_ssl
+        )
+        return floating_ip_provision(client, cid, site, v)
+
+    def release_floating_ip(self) -> None:
+        """Release floating IP from this VM's cluster."""
+        cid = self.cluster_id
+        if cid is None:
+            raise NodeError("Cannot release floating IP: no cluster_id")
+        client = get_onecloud_client(
+            self._api_key, self._base_url, verify_ssl=self._verify_ssl
+        )
+        floating_ip_release(client, cid)
+
+    def resize(
+        self,
+        cpu: Optional[int] = None,
+        mem: Optional[int] = None,
+        disk_total_gb: Optional[int] = None,
+        justification: str = "CephCI resize",
+    ) -> None:
+        """
+        Resize this VM (CPU, memory, disk).
+
+        Args:
+            cpu: vCPUs (default: keep current).
+            mem: Memory in GB (default: keep current).
+            disk_total_gb: Total disk in GB (default: keep current, must be >= current).
+            justification: Reason for resize.
+        """
+        vmid = self.vmid
+        if vmid is None:
+            raise NodeError("Cannot resize VM: no vmid")
+        client = get_onecloud_client(
+            self._api_key, self._base_url, verify_ssl=self._verify_ssl
+        )
+        details = vm_get_details(client, int(vmid))
+        resources = details.get("resources") or {}
+        _cpu = cpu if cpu is not None else resources.get("cpu", 4)
+        _mem = mem if mem is not None else resources.get("mem", 16)
+        current_disks = resources.get("disk") or []
+        current_total = sum(current_disks) if current_disks else 100
+        _disk = disk_total_gb if disk_total_gb is not None else current_total
+        if _disk < current_total:
+            raise ValueError(
+                f"Disk shrinking not allowed: requested {_disk}GB "
+                f"< current {current_total}GB"
+            )
+        vm_resize(client, int(vmid), _cpu, _mem, _disk, justification)
+
+    def get_details(self) -> Dict:
+        """Refresh and return full VM details from the API."""
+        vmid = self.vmid
+        if vmid is None:
+            raise NodeError("Cannot get details: no vmid")
+        client = get_onecloud_client(
+            self._api_key, self._base_url, verify_ssl=self._verify_ssl
+        )
+        details = vm_get_details(client, int(vmid))
+        self.node.update(details)
+        return details
