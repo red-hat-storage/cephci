@@ -34,7 +34,12 @@ from compute.onecloud import (
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import generate_node_name, parse_custom_config_list
+from utility.utils import (
+    extract_ceph_version,
+    extract_version,
+    generate_node_name,
+    parse_custom_config_list,
+)
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
@@ -2020,3 +2025,30 @@ def enable_coredump(node):
     for _cmd in sys_cmds:
         out, err = node.exec_command(cmd=_cmd, sudo=True)
         log.info("Out: %s \n Err: %s" % (out, err))
+
+
+def get_daemon_versions(node, daemon_type: str):
+    """
+    Method to get a ceph daemon's versions.
+    Note that in case multiple versions of input daemon type exist, \
+    this method returns version of the first entry.
+    Args:
+        node: ceph node object having cephadm package
+        daemon_type: The type of ceph daemon e.g. mgr, mon, osd, etc
+    Returns:
+        a tuple of (common_version, downstream_version)
+        e.g. 20.2.1,9.9.1.0
+    """
+    out, _ = node.exec_command(sudo=True, cmd="cephadm shell ceph versions -f json")
+    try:
+        ceph_versions = json.loads(out)
+    except json.JSONDecodeError as e:
+        log.exception(e)
+        raise
+
+    if ceph_versions.get(daemon_type):
+        daemon_ver_text = next(iter(ceph_versions[daemon_type]))
+        return extract_ceph_version(daemon_ver_text), extract_version(daemon_ver_text)
+
+    log.warning("No versions found for %s", daemon_type)
+    return "", ""

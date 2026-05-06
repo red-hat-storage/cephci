@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
+from packaging.version import InvalidVersion, Version
 
 from cli.exceptions import ConfigError
 from utility.log import Log
@@ -2925,3 +2926,41 @@ def setup_gklm_prereq(ceph_cluster, cloud_type, custom_config):
     client_node.exec_command(sudo=True, cmd="ceph orch apply -i /root/rgw_spec.yaml")
     log.info("sleeping for 20 seconds")
     time.sleep(20)
+
+
+def extract_version(text: str) -> str:
+    """
+    Extract the first valid version token from a text string.
+
+    Args:
+        text: Command output string containing a version value.
+
+    Returns:
+        First token that parses as a packaging.version ``Version``; empty string if none.
+        e.g. 9.9.1.0 or 9.9.2.0
+    """
+    log.debug("Extracting version token from text: %s", text)
+
+    for token in text.split():
+        try:
+            Version(token)
+            log.debug("Extracted version token: %s", token)
+            return token
+        except InvalidVersion:
+            continue
+    log.warning("No valid version token found in text: %s", text)
+    return ""
+
+
+def extract_ceph_version(text: str) -> str:
+    """
+    Extract 'ceph' version from a text string.
+    Args:
+        text: Command output string containing a version value.
+
+    Returns:
+        19.2.1 or 20.2.1
+    """
+    match = re.search(r"\d+\.\d+\.\d+", text)
+
+    return match.group() if match else ""
