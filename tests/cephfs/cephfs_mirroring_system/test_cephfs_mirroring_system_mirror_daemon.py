@@ -7,6 +7,7 @@ from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroring
 from tests.cephfs.cephfs_mirroring_system.cephfs_mirroring_system_utils import (
     cleanup_mirroring_test_environment,
     collect_background_io_logs,
+    get_active_daemon_nodes,
     run_container_restart,
     run_daemon_redeploy,
     run_node_reboot,
@@ -198,7 +199,19 @@ def run(ceph_cluster, **kw):
                 snap_sync_id_before.append(sync_id)
 
             try:
-                mirror_nodes = [mn.node for mn in cephfs_mirror_nodes]
+                all_mirror_nodes = [mn.node for mn in cephfs_mirror_nodes]
+                active_mirror_nodes = get_active_daemon_nodes(
+                    source_clients[0], "cephfs-mirror", all_mirror_nodes
+                )
+                if not active_mirror_nodes:
+                    log.error("No active cephfs-mirror daemons found before %s", test_name)
+                    return 1
+                log.info(
+                    "Active cephfs-mirror nodes for %s: %s",
+                    test_name,
+                    [n.hostname for n in active_mirror_nodes],
+                )
+
                 recovery_timeout = (
                     120 if test_type in ("node_reboot", "mirror_redeploy") else 60
                 )
@@ -207,7 +220,7 @@ def run(ceph_cluster, **kw):
                     log.info("Running signal test on cephfs-mirror daemons")
                     result = run_signal_tests(
                         fs_util_v1_ceph1,
-                        mirror_nodes,
+                        active_mirror_nodes,
                         "cephfs-mirror",
                         r"cephfs-mirror\.",
                         test_case,
@@ -216,19 +229,19 @@ def run(ceph_cluster, **kw):
                     log.info("Running systemctl restart test on cephfs-mirror daemons")
                     result = run_systemctl_restart(
                         fs_util_v1_ceph1,
-                        mirror_nodes,
+                        active_mirror_nodes,
                         "cephfs-mirror",
                         r"cephfs-mirror\.",
                     )
                 elif test_type == "container_restart":
                     log.info("Running container restart test on cephfs-mirror daemons")
                     result = run_container_restart(
-                        mirror_nodes,
+                        active_mirror_nodes,
                         ["cephfs-mirror"],
                     )
                 elif test_type == "node_reboot":
                     log.info("Running node reboot test on cephfs-mirror nodes")
-                    result = run_node_reboot(fs_util_v1_ceph1, mirror_nodes)
+                    result = run_node_reboot(fs_util_v1_ceph1, active_mirror_nodes)
                 elif test_type == "mirror_redeploy":
                     log.info("Running cephfs-mirror redeploy test")
                     result = run_daemon_redeploy(

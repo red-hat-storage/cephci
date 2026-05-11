@@ -79,6 +79,38 @@ def _run_background_io(client, mounting_dir, runtime, io_log_file, stop_event):
     log.info("Background IO stopped for %s", mounting_dir)
 
 
+def get_active_daemon_nodes(client, daemon_type, all_nodes):
+    """
+    Return only the nodes from all_nodes where the daemon is actually running,
+    by querying ``ceph orch ps``.
+
+    Args:
+        client: A CephNode with ceph CLI access (e.g. source_clients[0]).
+        daemon_type (str): Daemon type to look up (e.g. "cephfs-mirror", "mds").
+        all_nodes: Iterable of node objects (with a ``.hostname`` attribute)
+            that *could* host the daemon.
+
+    Returns:
+        list: Subset of all_nodes whose hostname appears in ``ceph orch ps``
+        output for the given daemon_type.
+    """
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ps --daemon_type={daemon_type} --format json",
+    )
+    daemon_hosts = {d["hostname"] for d in json.loads(out)}
+    log.info(
+        "Active %s daemon hosts: %s", daemon_type, daemon_hosts
+    )
+    active = [n for n in all_nodes if n.hostname in daemon_hosts]
+    skipped = [n.hostname for n in all_nodes if n.hostname not in daemon_hosts]
+    if skipped:
+        log.info(
+            "Skipping nodes without active %s daemon: %s", daemon_type, skipped
+        )
+    return active
+
+
 def start_background_ios(fs_util, client, mounting_dirs, runtime):
     """Start background IO threads; output goes to remote log files.
 
