@@ -792,6 +792,8 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
             round_robin=True if cluster_qos else False,
             single_export=True if cluster_qos else False,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Process QoS operations
