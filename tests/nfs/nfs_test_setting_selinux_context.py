@@ -46,6 +46,8 @@ def run(ceph_cluster, **kw):
             fs,
             ceph_cluster=ceph_cluster,
             single_export=True,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Create a file on Mount point from client 1
