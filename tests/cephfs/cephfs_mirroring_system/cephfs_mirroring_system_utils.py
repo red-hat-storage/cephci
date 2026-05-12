@@ -399,7 +399,7 @@ def run_daemon_redeploy(
     ceph_cluster_dict,
     cluster_key,
     deploy_service_name,
-    node_role="mds",
+    node_role="cephfs-mirror",
     process_name=None,
 ):
     """
@@ -415,7 +415,7 @@ def run_daemon_redeploy(
         cluster_key: Key for the cluster (e.g., "ceph1")
         deploy_service_name: Service name for 'ceph orch apply'
             (e.g., "mds cephfs" or "cephfs-mirror")
-        node_role: Cluster role to find available nodes (default: "mds")
+        node_role: Cluster role to find available nodes (default: "cephfs-mirror")
         process_name: If set, verify the process with wait_for_process after deploy
 
     Returns:

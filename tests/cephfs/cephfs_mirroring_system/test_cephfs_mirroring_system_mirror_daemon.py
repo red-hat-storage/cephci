@@ -59,7 +59,7 @@ def run(ceph_cluster, **kw):
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         test_data = kw.get("test_data")
 
-        io_runtime = config.get("io_runtime", 120)
+        io_runtime = config.get("io_runtime", 80)
         signal_tests = [
             {
                 "type": "signal",
@@ -67,12 +67,12 @@ def run(ceph_cluster, **kw):
                 "name": "SIGHUP",
                 "expect_exit": False,
             },
-            # {
-            #     "type": "signal",
-            #     "signal": signal.SIGKILL,
-            #     "name": "SIGKILL",
-            #     "expect_exit": True,
-            # },
+            {
+                "type": "signal",
+                "signal": signal.SIGKILL,
+                "name": "SIGKILL",
+                "expect_exit": True,
+            },
             {
                 "type": "signal",
                 "signal": signal.SIGTERM,
@@ -175,10 +175,23 @@ def run(ceph_cluster, **kw):
                 daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
                 log.info("Daemon name after recovery: %s", daemon_name)
 
-            # Fetch asok_file at the start of each test
-            asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
-                cephfs_mirror_nodes, fsid, daemon_name
-            )
+            # Fetch asok_file at the start of each test (with retries
+            # in case daemon just recovered from a crash loop)
+            asok_file = {}
+            for attempt in range(10):
+                asok_file = (
+                    fs_mirroring_utils.get_asok_file_with_connectivity_check(
+                        cephfs_mirror_nodes, fsid, daemon_name
+                    )
+                )
+                if asok_file:
+                    break
+                log.warning(
+                    "Asok not ready yet before %s, retry %d/10",
+                    test_name,
+                    attempt + 1,
+                )
+                time.sleep(15)
             if not asok_file:
                 log.error("Failed to get asok_file before %s", test_name)
                 return 1
@@ -401,6 +414,7 @@ def run(ceph_cluster, **kw):
                     )
                 except Exception as e:
                     log.error(str(e))
+                    return 1
 
             log.info("=== %s test completed successfully ===", test_name)
 

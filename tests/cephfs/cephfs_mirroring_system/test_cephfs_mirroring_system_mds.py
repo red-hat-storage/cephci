@@ -69,7 +69,7 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("Found %s target MDS node(s)", len(target_mds_nodes))
 
-        io_runtime = config.get("io_runtime", 120)
+        io_runtime = config.get("io_runtime", 80)
         signal_tests = [
             {
                 "type": "signal",
@@ -83,6 +83,8 @@ def run(ceph_cluster, **kw):
                 "name": "SIGKILL",
                 "expect_exit": True,
             },
+            # SIGTERM disabled: MDS can get stuck in encode_inodestat loop
+            # during active mirroring and not respond to SIGTERM for 30+ min.
             # {
             #     "type": "signal",
             #     "signal": signal.SIGTERM,
@@ -346,6 +348,33 @@ def run(ceph_cluster, **kw):
                 ceph_cluster=ceph_cluster_dict.get("ceph1"),
             )
 
+            if test_type == "node_reboot":
+                log.info(
+                    "Refetching daemon_name and asok_file after %s "
+                    "(cephfs-mirror may have restarted)",
+                    test_name,
+                )
+                daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
+                log.info("Updated daemon name: %s", daemon_name)
+                asok_file = {}
+                for attempt in range(10):
+                    asok_file = (
+                        fs_mirroring_utils.get_asok_file_with_connectivity_check(
+                            cephfs_mirror_nodes, fsid, daemon_name
+                        )
+                    )
+                    if asok_file:
+                        break
+                    log.warning(
+                        "Asok not ready yet after %s, retry %d/10",
+                        test_name,
+                        attempt + 1,
+                    )
+                    time.sleep(15)
+                if not asok_file:
+                    log.error("Failed to refetch asok_file after %s", test_name)
+                    return 1
+
             for path, snap_synced_before in zip(
                 subvolume_paths, snap_sync_counts_before
             ):
@@ -363,6 +392,7 @@ def run(ceph_cluster, **kw):
                     )
                 except Exception as e:
                     log.error(str(e))
+                    return 1
 
             log.info("=== %s test completed successfully ===", test_name)
 
