@@ -79,6 +79,58 @@ def _run_background_io(client, mounting_dir, runtime, io_log_file, stop_event):
     log.info("Background IO stopped for %s", mounting_dir)
 
 
+def recover_crashed_mirror_daemon(client, mirror_node_hostname, timeout=120):
+    """
+    Force-redeploy the cephfs-mirror daemon when it is stuck in a crash loop.
+
+    Removes the existing daemon via ``ceph orch rm`` and re-applies it on the
+    same node, then waits for it to appear in ``ceph orch ps``.
+
+    Args:
+        client: A CephNode with ceph CLI access.
+        mirror_node_hostname (str): Hostname to place the redeployed daemon on.
+        timeout (int): Seconds to wait for the daemon to come back.
+
+    Returns:
+        bool: True if recovery succeeded, False otherwise.
+    """
+    log.error(
+        "cephfs-mirror daemon appears to be in a crash loop. "
+        "Attempting recovery via orch rm + orch apply on %s",
+        mirror_node_hostname,
+    )
+    client.exec_command(
+        sudo=True, cmd="ceph orch rm cephfs-mirror", check_ec=False
+    )
+    time.sleep(10)
+    client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch apply cephfs-mirror --placement='1 {mirror_node_hostname}'",
+        check_ec=False,
+    )
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        time.sleep(15)
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph orch ps --daemon_type=cephfs-mirror --format json",
+            check_ec=False,
+        )
+        try:
+            daemons = json.loads(out)
+            running = [d for d in daemons if d.get("status_desc") == "running"]
+            if running:
+                log.info(
+                    "cephfs-mirror daemon recovered: %s",
+                    running[0].get("daemon_name"),
+                )
+                return True
+        except (json.JSONDecodeError, TypeError):
+            pass
+    log.error("cephfs-mirror daemon did not recover within %ds", timeout)
+    return False
+
+
 def get_active_daemon_nodes(client, daemon_type, all_nodes):
     """
     Return only the nodes from all_nodes where the daemon is actually running,

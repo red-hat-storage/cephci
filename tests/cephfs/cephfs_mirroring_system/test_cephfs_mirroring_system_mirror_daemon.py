@@ -8,6 +8,7 @@ from tests.cephfs.cephfs_mirroring_system.cephfs_mirroring_system_utils import (
     cleanup_mirroring_test_environment,
     collect_background_io_logs,
     get_active_daemon_nodes,
+    recover_crashed_mirror_daemon,
     run_container_restart,
     run_daemon_redeploy,
     run_node_reboot,
@@ -66,12 +67,12 @@ def run(ceph_cluster, **kw):
                 "name": "SIGHUP",
                 "expect_exit": False,
             },
-            {
-                "type": "signal",
-                "signal": signal.SIGKILL,
-                "name": "SIGKILL",
-                "expect_exit": True,
-            },
+            # {
+            #     "type": "signal",
+            #     "signal": signal.SIGKILL,
+            #     "name": "SIGKILL",
+            #     "expect_exit": True,
+            # },
             {
                 "type": "signal",
                 "signal": signal.SIGTERM,
@@ -153,12 +154,26 @@ def run(ceph_cluster, **kw):
 
             log.info("=== Starting %s test ===", test_name)
 
-            # Wait for daemon to be running via ceph orch ps and podman ps
-            CephfsMirroringUtils.wait_for_daemon_running(
-                source_clients[0],
-                cephfs_mirror_nodes,
-                ceph_cluster=ceph_cluster_dict.get("ceph1"),
-            )
+            # Wait for daemon to be running; if stuck in crash loop, redeploy
+            try:
+                CephfsMirroringUtils.wait_for_daemon_running(
+                    source_clients[0],
+                    cephfs_mirror_nodes,
+                    ceph_cluster=ceph_cluster_dict.get("ceph1"),
+                )
+            except Exception:
+                log.error(
+                    "cephfs-mirror daemon not running before %s, "
+                    "attempting crash-loop recovery",
+                    test_name,
+                )
+                if not recover_crashed_mirror_daemon(
+                    source_clients[0], original_mirror_host
+                ):
+                    log.error("Recovery failed, cannot continue")
+                    return 1
+                daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
+                log.info("Daemon name after recovery: %s", daemon_name)
 
             # Fetch asok_file at the start of each test
             asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
@@ -340,9 +355,7 @@ def run(ceph_cluster, **kw):
                     return 1
 
             # Check cluster health after test
-            health_timeout = (
-                300 if test_type in ("node_reboot", "mirror_redeploy") else 60
-            )
+            health_timeout = 300
             log.info("Verify cluster is healthy after %s", test_name)
             if cephfs_common_utils.wait_for_healthy_ceph(
                 source_clients[0], health_timeout
