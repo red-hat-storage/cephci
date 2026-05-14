@@ -4,7 +4,16 @@ from cli.utilities.packages import Package, PackageError, ReposError, Rpm
 from cli.utilities.utils import get_custom_repo_url
 
 YUM_REPO_DIR = "/etc/yum.repos.d"
-REG_IMAGE = "registry.redhat.io/openshift4/{}:latest"
+
+
+def openshift4_monitoring_image(short_name, tag):
+    """Build registry.redhat.io/openshift4/<name>:<tag> using the suite YAML tag.
+
+    Tags must match what is mirrored (e.g. v4.13.0). Using :latest breaks pulls when
+    the lab mirror only syncs versioned tags.
+    """
+    suffix = (tag or "").strip() or "latest"
+    return f"registry.redhat.io/openshift4/{short_name}:{suffix}"
 
 
 def compare_packages(node, pkgs):
@@ -60,8 +69,8 @@ def pull_images(node, images):
         node (ceph): ceph node objects
         images (dict): container images
     """
-    for image, _ in images.items():
-        Container(node).pull(REG_IMAGE.format(image))
+    for image, tag in images.items():
+        Container(node).pull(openshift4_monitoring_image(image, tag))
 
 
 def compare_images(node, images):
@@ -71,10 +80,9 @@ def compare_images(node, images):
         images (dict): container images
     """
     for image, ver in images.items():
-        if Container(node).compare(REG_IMAGE.format(image), ver) == -1:
-            raise PackageError(
-                f"Expected version for {REG_IMAGE.format(image)} is {ver}"
-            )
+        ref = openshift4_monitoring_image(image, ver)
+        if Container(node).compare(ref, ver) == -1:
+            raise PackageError(f"Expected version for {ref} is {ver}")
 
 
 def validate_packages(node, pkgs):
@@ -141,7 +149,9 @@ def run(ceph_cluster, **kwargs):
     server_pkgs = config.get("server_packages")
 
     # Enable ceph tools repo on installer and client
-    base_url = get_custom_repo_url(base_url, cloud_type)
+    base_url = get_custom_repo_url(
+        base_url, cloud_type, config.get("ibm_build", False)
+    )
     for node in {installer, client}:
         if not Package(node).add_repo(base_url):
             raise ReposError(f"Failed to enable {base_url} repo")
@@ -152,7 +162,7 @@ def run(ceph_cluster, **kwargs):
     if build_type == "rh":
         _files = [repo for repo in out if "Tools" in repo or "RHCEPH" in repo]
     elif build_type == "ibm":
-        _files = [repo for repo in out if "IBM" in repo]
+        _files = [repo for repo in out if "ibm" in repo.lower()]
     # Raise error if expected repository is not added
     if not _files:
         raise ResourceNotFoundError("Expected repository not added to node")
