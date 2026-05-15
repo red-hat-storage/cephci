@@ -50,6 +50,7 @@ rpm_packages = {
         "wget",
         "git-core",
         "python3-devel",
+        "python3-pip",
         "chrony",
         "yum-utils",
         "net-tools",
