@@ -9,6 +9,14 @@ aliases:
     - sunilkumarn417
     - AmarnatReddy
     - psathyan
+    - rakeshcn
+
+  ceph-qe-managers:
+    - vdas-redhat
+    - neha-gangadhar
+    - Manohar-Murthy
+    - mkasturi18
+    - prshanthakumar
 
   # Members of Ceph Infra team
   ceph-infra-team:
@@ -16,11 +24,9 @@ aliases:
 
   # members of RBD team
   ceph-block-team:
-    - Manohar-Murthy
     - sunilangadi2
     - manasagowri
     - rahullepakshi
-    - HaruChebrolu
     - jprakash-redhat
     - sunilkumarn417
     - krishnaramaswamy
@@ -29,8 +35,6 @@ aliases:
 
   # Members of CI team
   ceph-ci-team:
-    - pavankumarag
-    - vdas-redhat
     - vamahaja
     - obannak
     - tintumathew10
@@ -39,17 +43,13 @@ aliases:
 
   # Members of DMFG
   ceph-dmfg-team:
-    - vdas-redhat
     - sayaleeraut
     - adityaramteke
     - vinpapnoi
-    - msainiRedhat
     - MohitBis
-    - pranavprakash20
 
   # Members of FS
   ceph-fs-team:
-    - neha-gangadhar
     - sumabai
     - hkadam134
     - Manimaran-MM
@@ -57,7 +57,6 @@ aliases:
 
   # Members of rados
   ceph-rados-team:
-    - neha-gangadhar
     - pdhiran
     - SrinivasaBharath
     - harshkumarRH
@@ -66,7 +65,6 @@ aliases:
 
   # Members of RGW
   ceph-rgw-team:
-    - mkasturi18
     - viduship
     - TejasC88
     - ckulal
