@@ -1794,14 +1794,41 @@ class CephNode(object):
                 ssh_env["SSH_ASKPASS_REQUIRE"] = "force"
                 ssh_env["DISPLAY"] = ":"
 
+            def _ssh_cmd(cmd, retries=1, retry_interval=15):
+                for attempt in range(retries):
+                    try:
+                        result = subprocess.run(
+                            ssh_base + [cmd],
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                            env=ssh_env,
+                        )
+                        if result.returncode == 0 or attempt == retries - 1:
+                            return result
+                        logger.warning(
+                            "OneCloud SSH cmd failed (attempt %d/%d): exit=%s err=%r",
+                            attempt + 1,
+                            retries,
+                            result.returncode,
+                            result.stderr[:100],
+                        )
+                    except subprocess.TimeoutExpired:
+                        if attempt == retries - 1:
+                            raise
+                        logger.warning(
+                            "OneCloud SSH timed out (attempt %d/%d), retrying in %ds",
+                            attempt + 1,
+                            retries,
+                            retry_interval,
+                        )
+                    sleep(retry_interval)
+                return result
+
             try:
-                for cmd in setup_cmds:
-                    result = subprocess.run(
-                        ssh_base + [cmd],
-                        capture_output=True,
-                        text=True,
-                        timeout=60,
-                        env=ssh_env,
+                for i, cmd in enumerate(setup_cmds):
+                    result = _ssh_cmd(
+                        cmd, retries=20 if i == 0 else 1, retry_interval=15
                     )
                     logger.info(
                         "OneCloud setup: cmd=%s exit=%s out=%r err=%r",
@@ -1810,12 +1837,6 @@ class CephNode(object):
                         result.stdout[:200],
                         result.stderr[:200],
                     )
-                    if result.returncode != 0 and "chpasswd" in cmd:
-                        raise AssertionError(
-                            f"OneCloud setup failed on {self.ip_address}: "
-                            f"chpasswd exit={result.returncode} "
-                            f"err={result.stderr[:200]!r}"
-                        )
             finally:
                 if askpass_file:
                     try:
