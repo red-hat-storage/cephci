@@ -241,6 +241,16 @@ tests:
                 - mon_osd_down_out_subtree_limit
                 - host
 
+  # Test: Stripe unit and Fast EC default verification
+  - test:
+      name: Stripe unit and Fast EC default verification
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83632256
+      abort-on-fail: false
+      config:
+        test_stripe_unit_pool_creation: true
+      desc: Verify stripe_unit and Fast EC defaults for various EC configurations
+
   # ==========================================================================
   # ISA Plugin Tests (Default plugin from Tentacle onwards)
   # ==========================================================================

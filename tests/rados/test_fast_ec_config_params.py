@@ -1826,18 +1826,28 @@ def run(ceph_cluster, **kw):
         Test: Stripe Unit and Fast EC Default Verification
 
         Verifies that Fast EC is enabled by default only for supported configurations,
-        and that stripe_unit defaults are correct.
+        and that stripe_unit defaults are correct. Also verifies that enabling Fast EC
+        on ineligible pools (unsupported plugin/technique or non-4K-aligned stripe_unit)
+        is correctly rejected.
+
+        Stripe Unit Alignment Rules:
+        - Hard check: stripe_unit must be a multiple of 32 bytes (ISA SIMD alignment).
+          Cannot be overridden; Ceph rejects with EINVAL.
+        - Soft check: stripe_unit should be a multiple of 4096 bytes (page alignment).
+          Can be overridden with --force, but resulting pool cannot be fast EC.
 
         Expected Defaults:
         - Fast EC pools: stripe_unit = 16K, allow_ec_optimizations = True
         - Non-Fast EC pools: stripe_unit = 4K, allow_ec_optimizations = False
 
         Workflow:
-        1. Create EC pools with various plugin/technique/k/m combinations
-        2. Verify allow_ec_optimizations matches expected
-        3. Verify stripe_unit matches expected (16K for Fast EC, 4K otherwise)
-        4. Write data to verify pool functionality
-        5. Cleanup all test pools
+        0. Verify global config precondition (osd_pool_default_flag_ec_optimizations=true)
+        1. Create EC pools with various plugin/technique/k/m/stripe_unit combinations
+        2. Verify allow_ec_optimizations, stripe_unit, stripe_width for each pool
+        2.5. Negative test: attempt to enable Fast EC on ineligible pools and verify
+             the correct EINVAL error and that the property stays False
+        3. Write data to verify pool functionality
+        4. Cleanup all test pools
         """
         log.info("=" * 80)
         log.info("TEST: STRIPE UNIT AND FAST EC DEFAULT VERIFICATION")
@@ -1848,54 +1858,290 @@ def run(ceph_cluster, **kw):
         test_failed = False
         created_pools = []
         pool_fast_ec_expected = {}  # pool_name -> fast_ec_expected
+        pool_stripe_unit_config = {}  # pool_name -> stripe_unit value from config
 
-        # Pool configurations: (k, m, plugin, technique, fast_ec_expected, d, description)
+        # Pool configurations:
+        # (k, m, plugin, technique, fast_ec_expected, d, description, stripe_unit, force)
+        #   stripe_unit: None = use Ceph default, or explicit int value
+        #   force: True = pass --force to bypass soft 4K alignment check
         # Fast EC supported: Jerasure+reed_sol_van, ISA+reed_sol_van, ISA+cauchy
         pool_configs = [
-            # Jerasure with reed_sol_van - Fast EC SUPPORTED
-            (2, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k2m2"),
-            (4, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k4m2"),
-            (4, 3, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k4m3"),
-            (5, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k5m2"),
-            (6, 2, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k6m2"),
-            (8, 4, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k8m4"),
-            (8, 6, "jerasure", "reed_sol_van", True, None, "jerasure-rsv-k8m6"),
-            # ISA with reed_sol_van - Fast EC SUPPORTED
-            (2, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k2m2"),
-            (4, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k4m2"),
-            (4, 3, "isa", "reed_sol_van", True, None, "isa-rsv-k4m3"),
-            (5, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k5m2"),
-            (6, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k6m2"),
-            (8, 4, "isa", "reed_sol_van", True, None, "isa-rsv-k8m4"),
-            (8, 6, "isa", "reed_sol_van", True, None, "isa-rsv-k8m6"),
-            # ISA with cauchy - Fast EC SUPPORTED
-            (2, 2, "isa", "cauchy", True, None, "isa-cauchy-k2m2"),
-            (4, 2, "isa", "cauchy", True, None, "isa-cauchy-k4m2"),
-            (4, 3, "isa", "cauchy", True, None, "isa-cauchy-k4m3"),
-            (5, 2, "isa", "cauchy", True, None, "isa-cauchy-k5m2"),
-            (6, 2, "isa", "cauchy", True, None, "isa-cauchy-k6m2"),
-            (8, 4, "isa", "cauchy", True, None, "isa-cauchy-k8m4"),
-            (8, 6, "isa", "cauchy", True, None, "isa-cauchy-k8m6"),
+            # Jerasure with reed_sol_van - Fast EC SUPPORTED (default stripe_unit)
+            (
+                2,
+                2,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k2m2",
+                None,
+                False,
+            ),
+            (
+                4,
+                2,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k4m2",
+                None,
+                False,
+            ),
+            (
+                4,
+                3,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k4m3",
+                None,
+                False,
+            ),
+            (
+                5,
+                2,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k5m2",
+                None,
+                False,
+            ),
+            (
+                6,
+                2,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k6m2",
+                None,
+                False,
+            ),
+            (
+                8,
+                4,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k8m4",
+                None,
+                False,
+            ),
+            (
+                8,
+                6,
+                "jerasure",
+                "reed_sol_van",
+                True,
+                None,
+                "jerasure-rsv-k8m6",
+                None,
+                False,
+            ),
+            # ISA with reed_sol_van - Fast EC SUPPORTED (default stripe_unit)
+            (2, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k2m2", None, False),
+            (4, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k4m2", None, False),
+            (4, 3, "isa", "reed_sol_van", True, None, "isa-rsv-k4m3", None, False),
+            (5, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k5m2", None, False),
+            (6, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k6m2", None, False),
+            (8, 4, "isa", "reed_sol_van", True, None, "isa-rsv-k8m4", None, False),
+            (8, 6, "isa", "reed_sol_van", True, None, "isa-rsv-k8m6", None, False),
+            # ISA with cauchy - Fast EC SUPPORTED (default stripe_unit)
+            (2, 2, "isa", "cauchy", True, None, "isa-cauchy-k2m2", None, False),
+            (4, 2, "isa", "cauchy", True, None, "isa-cauchy-k4m2", None, False),
+            (4, 3, "isa", "cauchy", True, None, "isa-cauchy-k4m3", None, False),
+            (5, 2, "isa", "cauchy", True, None, "isa-cauchy-k5m2", None, False),
+            (6, 2, "isa", "cauchy", True, None, "isa-cauchy-k6m2", None, False),
+            (8, 4, "isa", "cauchy", True, None, "isa-cauchy-k8m4", None, False),
+            (8, 6, "isa", "cauchy", True, None, "isa-cauchy-k8m6", None, False),
             # ISA with reed_sol_van but m > 4 - falls back to cauchy - Fast EC supported
-            (4, 5, "isa", "reed_sol_van", True, None, "isa-rsv-m5-fallback-k4m5"),
-            (5, 5, "isa", "reed_sol_van", True, None, "isa-rsv-m5-fallback-k5m5"),
-            (6, 5, "isa", "reed_sol_van", True, None, "isa-rsv-m5-fallback-k6m5"),
-            (4, 6, "isa", "reed_sol_van", True, None, "isa-rsv-m6-fallback-k4m6"),
-            (6, 6, "isa", "reed_sol_van", True, None, "isa-rsv-m6-fallback-k6m6"),
+            (
+                4,
+                5,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-m5-fallback-k4m5",
+                None,
+                False,
+            ),
+            (
+                5,
+                5,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-m5-fallback-k5m5",
+                None,
+                False,
+            ),
+            (
+                6,
+                5,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-m5-fallback-k6m5",
+                None,
+                False,
+            ),
+            (
+                4,
+                6,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-m6-fallback-k4m6",
+                None,
+                False,
+            ),
+            (
+                6,
+                6,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-m6-fallback-k6m6",
+                None,
+                False,
+            ),
+            # Fast EC with various 4K-aligned stripe_unit values
+            (2, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k2m2-su4k", 4096, False),
+            (2, 2, "isa", "reed_sol_van", True, None, "isa-rsv-k2m2-su8k", 8192, False),
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-k2m2-su32k",
+                32768,
+                False,
+            ),
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-k2m2-su64k",
+                65536,
+                False,
+            ),
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                True,
+                None,
+                "isa-rsv-k2m2-su128k",
+                131072,
+                False,
+            ),
             # Clay plugin - Fast EC NOT supported
-            (2, 2, "clay", None, False, 3, "clay-k2m2d3"),
-            (3, 2, "clay", None, False, 4, "clay-k3m2d4"),
-            (4, 2, "clay", None, False, 5, "clay-k4m2d5"),
+            (2, 2, "clay", None, False, 3, "clay-k2m2d3", None, False),
+            (3, 2, "clay", None, False, 4, "clay-k3m2d4", None, False),
+            (4, 2, "clay", None, False, 5, "clay-k4m2d5", None, False),
+            # Non-4K-aligned stripe_unit (multiples of 32 but not 4096) - Fast EC NOT supported
+            # These require --force to bypass the soft page-alignment check
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                False,
+                None,
+                "isa-rsv-k2m2-su6112",
+                6112,
+                True,
+            ),
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                False,
+                None,
+                "isa-rsv-k2m2-su7168",
+                7168,
+                True,
+            ),
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                False,
+                None,
+                "isa-rsv-k2m2-su5120",
+                5120,
+                True,
+            ),
+            (
+                2,
+                2,
+                "isa",
+                "reed_sol_van",
+                False,
+                None,
+                "isa-rsv-k2m2-su2048",
+                2048,
+                True,
+            ),
         ]
 
         try:
+            # Step 0: Verify global config preconditions
+            log.info("\nStep 0: Verifying global config preconditions...")
+
+            ec_opt_flag = mon_obj.get_config(
+                section="osd", param="osd_pool_default_flag_ec_optimizations"
+            )
+
+            log.info("  osd_pool_default_flag_ec_optimizations: %s", ec_opt_flag)
+
+            if str(ec_opt_flag).strip().lower() != "true":
+                log.error(
+                    "osd_pool_default_flag_ec_optimizations is not true. Cannot proceed."
+                )
+                raise Exception(
+                    "Precondition failed: osd_pool_default_flag_ec_optimizations != true"
+                )
+
+            log.info("  Preconditions PASSED")
+
+            # Step 1: Create EC pools with various configurations
             log.info("\nStep 1: Creating EC pools with various configurations...")
 
             # Get number of OSD hosts to determine failure domain
             num_osd_hosts = len(rados_obj.get_osd_hosts())
             log.info("  Number of OSD hosts: %d", num_osd_hosts)
 
-            for k, m, plugin, technique, fast_ec_expected, d, desc in pool_configs:
+            for (
+                k,
+                m,
+                plugin,
+                technique,
+                fast_ec_expected,
+                d,
+                desc,
+                stripe_unit_val,
+                force_val,
+            ) in pool_configs:
                 pool_name = f"stripe-unit-test-{desc}"
                 profile_name = f"ec_profile_{pool_name}"
 
@@ -1905,7 +2151,7 @@ def run(ceph_cluster, **kw):
 
                 log.info(
                     "  Creating: %s (k=%d, m=%d, plugin=%s, technique=%s, d=%s, "
-                    "fast_ec=%s, failure_domain=%s)",
+                    "fast_ec=%s, stripe_unit=%s, force=%s, failure_domain=%s)",
                     pool_name,
                     k,
                     m,
@@ -1913,6 +2159,8 @@ def run(ceph_cluster, **kw):
                     technique or "default",
                     d,
                     fast_ec_expected,
+                    stripe_unit_val,
+                    force_val,
                     failure_domain,
                 )
 
@@ -1930,21 +2178,28 @@ def run(ceph_cluster, **kw):
                         pool_kwargs["technique"] = technique
                     if d is not None:
                         pool_kwargs["d"] = d
+                    if stripe_unit_val is not None:
+                        pool_kwargs["stripe_unit"] = stripe_unit_val
+                    if force_val:
+                        pool_kwargs["force"] = True
 
                     if not rados_obj.create_erasure_pool(**pool_kwargs):
                         raise Exception(f"Failed to create pool {pool_name}")
 
                     created_pools.append(pool_name)
                     pool_fast_ec_expected[pool_name] = fast_ec_expected
+                    pool_stripe_unit_config[pool_name] = stripe_unit_val
                     log.info("    Created successfully")
 
                 except Exception as e:
                     log.error("    Failed to create pool %s: %s", pool_name, e)
                     raise
 
+            # Step 2: Verify Fast EC, stripe_unit and stripe_width
             log.info("\nStep 2: Verifying Fast EC, stripe_unit and stripe_width...")
             verification_passed = True
             fast_ec_count, non_fast_ec_count = 0, 0
+            explicit_su_count, non_4k_su_count = 0, 0
 
             # Fetch all pool details and convert to dict for O(1) lookups
             pool_details_map = {
@@ -1957,6 +2212,7 @@ def run(ceph_cluster, **kw):
 
             for pool_name in created_pools:
                 fast_ec_expected = pool_fast_ec_expected[pool_name]
+                su_config = pool_stripe_unit_config[pool_name]
                 pool_detail = pool_details_map.get(pool_name, {})
                 ec_profile_name = pool_detail.get("erasure_code_profile", "")
 
@@ -1982,7 +2238,17 @@ def run(ceph_cluster, **kw):
                     stripe_unit_actual = int(stripe_width_actual / k_val)
 
                 # Expected values
-                expected_stripe_unit = 16384 if fast_ec_expected else 4096
+                if su_config is not None:
+                    expected_stripe_unit = su_config
+                    explicit_su_count += 1
+                    if su_config % 4096 != 0:
+                        non_4k_su_count += 1
+                elif fast_ec_expected:
+                    expected_stripe_unit = 16384
+                else:
+                    # Non-fast-EC pools without explicit stripe_unit: the default
+                    # varies by plugin/technique, so just accept whatever Ceph set
+                    expected_stripe_unit = stripe_unit_actual
                 expected_stripe_width = k_val * stripe_unit_actual
 
                 # Verify
@@ -2017,6 +2283,76 @@ def run(ceph_cluster, **kw):
             if not verification_passed:
                 raise Exception("Pool property verification failed")
 
+            # Step 2.5: Negative test - attempt to enable Fast EC on ineligible pools
+            log.info(
+                "\nStep 2.5: Negative test - attempting to enable Fast EC "
+                "on ineligible pools..."
+            )
+            neg_test_passed = True
+            neg_test_count = 0
+
+            for pool_name in created_pools:
+                if pool_fast_ec_expected[pool_name]:
+                    continue
+
+                neg_test_count += 1
+                su_val = pool_stripe_unit_config.get(pool_name)
+                is_non_4k_aligned = su_val is not None and su_val % 4096 != 0
+
+                log.info(
+                    "  Testing: %s (non_4k_aligned=%s)", pool_name, is_non_4k_aligned
+                )
+
+                cmd = f"ceph osd pool set {pool_name} allow_ec_optimizations true"
+                try:
+                    rados_obj.node.shell([cmd])
+                    log.error(
+                        "  FAIL: %s - command should have failed but succeeded",
+                        pool_name,
+                    )
+                    neg_test_passed = False
+                except Exception as e:
+                    err_msg = str(e)
+                    log.info("  Command failed as expected: %s", err_msg)
+                    if is_non_4k_aligned:
+                        if "stripe_unit must be divisible by 4096" not in err_msg:
+                            log.error(
+                                "  FAIL: %s - expected 'stripe_unit must be divisible "
+                                "by 4096' in error but got: %s",
+                                pool_name,
+                                err_msg,
+                            )
+                            neg_test_passed = False
+                        else:
+                            log.info(
+                                "  PASS: %s - correct EINVAL error for "
+                                "non-4K-aligned stripe_unit",
+                                pool_name,
+                            )
+                    else:
+                        log.info("  PASS: %s - command rejected as expected", pool_name)
+
+                ec_opt = rados_obj.get_pool_property(
+                    pool=pool_name, props="allow_ec_optimizations"
+                )
+                actual_val = ec_opt.get("allow_ec_optimizations")
+                if actual_val is True:
+                    log.error(
+                        "  FAIL: %s - allow_ec_optimizations is True after failed set",
+                        pool_name,
+                    )
+                    neg_test_passed = False
+                else:
+                    log.info(
+                        "  PASS: %s - allow_ec_optimizations correctly remained %s",
+                        pool_name,
+                        actual_val,
+                    )
+
+            if not neg_test_passed:
+                raise Exception("Negative validation failed")
+
+            # Step 3: Write data to verify pool functionality
             log.info("\nStep 3: Writing data to verify pool functionality...")
 
             for pool_name in created_pools:
@@ -2036,6 +2372,9 @@ def run(ceph_cluster, **kw):
             log.info("Total pools tested: %d", len(created_pools))
             log.info("Fast EC enabled pools: %d", fast_ec_count)
             log.info("Non-Fast EC pools: %d", non_fast_ec_count)
+            log.info("Pools with explicit stripe_unit: %d", explicit_su_count)
+            log.info("Pools with non-4K-aligned stripe_unit: %d", non_4k_su_count)
+            log.info("Negative tests (enable on ineligible): %d", neg_test_count)
             log.info("All verifications: PASSED")
             log.info("=" * 80)
 
