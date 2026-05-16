@@ -1,0 +1,53 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 9.11.121.0/24
+      nodes:
+        - hostname: at7n1.tuc.stglabs.ibm.com
+          id: node1
+          ip: 9.11.121.118
+          role:
+            - mon
+            - mgr
+            - osd
+            - installer
+            - _admin
+          root_password: ceph@IBM
+        - hostname: at7n2.tuc.stglabs.ibm.com
+          id: node2
+          ip: 9.11.121.119
+          role:
+            - mon
+            - osd
+            - mgr
+            - nvmeof-gw
+          root_password: ceph@IBM
+        - hostname: at8n1.tuc.stglabs.ibm.com
+          id: node3
+          ip: 9.11.121.120
+          role:
+            - mon
+            - osd
+            - nvmeof-gw
+          root_password: ceph@IBM
+        - hostname: at8n2.tuc.stglabs.ibm.com
+          id: node4
+          ip: 9.11.121.121
+          role:
+            - osd
+          root_password: ceph@IBM
+        - hostname: atollon-clients-0
+          id: node5
+          ip: 9.11.206.175
+          role:
+            - client1
+          root_password: ceph@IBM040404
+        - hostname: atollon-clients-1
+          id: node6
+          ip: 9.11.206.191
+          role:
+            - client2
+          root_password: ceph@IBM040404
