@@ -27,6 +27,8 @@ class Cluster(Cli):
         active_standby=False,
         nfs_nodes_obj=None,
         check_ec=True,
+        enable_rdma=False,
+        rdma_port=None,
         **kwargs,
     ):
         """
@@ -37,6 +39,8 @@ class Cluster(Cli):
             ha (bool): Flag to check if HA is required
             vip (str): Vip for the HA cluster
             active_standby (bool): Flag to check if active standby is required
+            enable_rdma (bool): Pass --enable-rdma to enable RDMA transport
+            rdma_port (int|str|None): RDMA listener port (--rdma_port)
             **kwargs: Additional keyword arguments.
             If nfs_version=3 is provided and ceph version > 19.2.1-300,
                     --enable-nfsv3 flag will be added
@@ -48,6 +52,11 @@ class Cluster(Cli):
         cmd = "{0} create {1} '{2}'".format(self.base_cmd, name, nfs_server)
         if ha:
             cmd += " --ingress --virtual-ip {0}".format(vip)
+
+        if enable_rdma:
+            cmd += " --enable-rdma"
+            if rdma_port is not None:
+                cmd += f" --rdma_port {rdma_port}"
 
         # Check if --enable-nfsv3 flag needs to be added
         # Condition: ceph version > 19.2.1-300 AND nfs_version == 3
