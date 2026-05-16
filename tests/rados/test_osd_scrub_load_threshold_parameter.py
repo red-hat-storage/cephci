@@ -179,6 +179,7 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     wait_time = 120
     osd_nodes = ceph_cluster.get_nodes(role="osd")
+    rhbuild = config.get("rhbuild")
 
     # Check if config contains "replicated_pool" or "EC_pool"
 
@@ -242,14 +243,19 @@ def run(ceph_cluster, **kw):
         default_threshold_value = mon_obj.get_config(
             section="osd", param="osd_scrub_load_threshold"
         )
-
-        if float(default_threshold_value) != 10.0:
-            log.error(
-                "The default value of the osd_scrub_load_threshold is not equal to 10.0"
-            )
+        log.info("The rh build value is- %s", rhbuild)
+        if rhbuild.split(".")[0] < "9":
+            expected_threshold_value = 0.500000
+        else:
+            expected_threshold_value = 10.0
+        if float(default_threshold_value) != expected_threshold_value:
+            msg_error = f"The default value of the osd_scrub_load_threshold is not equal to {expected_threshold_value}"
+            log.error(msg_error)
             return 1
-        log.info("The default value of the osd_scrub_load_threshold is 10.0")
-
+        log.info(
+            "The default value of the osd_scrub_load_threshold is - %s",
+            default_threshold_value,
+        )
         # Check that the scrubbing is progress or not
         if not scrub_object.wait_for_pg_scrub_state(pg_id, wait_time=wait_time):
             log.error("The scrub operations are running, not executing further tests")
