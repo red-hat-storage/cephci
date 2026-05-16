@@ -106,6 +106,12 @@ tests:
       polarion-id: CEPH-83632240
       desc: MDS observability - subvolume metrics, mds_rank_perf counters, CPU validation
       abort-on-fail: false
+  - test:
+      name: test MDS and subvolume metrics across disruptive ops
+      module: cephfs_mds_observability.test_mds_subvol_metrics_disruptive_ops.py
+      polarion-id: CEPH-83632428
+      desc: Verify subvolume and mds metrics remain available across MDS/MGR disruptive operations with ongoing smallfile IO
+      abort-on-fail: false
   ######################################################################################################################
   # Feature: CephFS Subvolume Metrics - Functional
   ######################################################################################################################
