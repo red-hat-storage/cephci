@@ -9,6 +9,7 @@ from cli.ops.cephadm_ansible import (
     exec_cephadm_preflight,
 )
 from cli.utilities.packages import Package, Repos
+from cli.utilities.utils import repo_uses_flat_tools_compose_layout
 from utility.log import Log
 
 from .configs import get_registry_details
@@ -377,23 +378,23 @@ def setup_client_node(installer, ansible_clients):
         exec_cephadm_clients(installer)
 
 
-def get_tools_repo(repo, ibm_build=False):
+def get_tools_repo(repo, ibm_build=False, cloud_type="openstack"):
     """Get tools repo based on repo and build type
 
     Args:
         repo (str): Ceph tools repo URL
         ibm_build (bool): IBM build tag
+        cloud_type (str): cloud type (ibmc uses flat Tools layout like IBM builds)
     """
     repo = repo.rstrip("/")
-    log.info(f"get_tools_repo(): repo={repo}, ibm_build={ibm_build}")
+    log.info(
+        f"get_tools_repo(): repo={repo}, ibm_build={ibm_build}, cloud_type={cloud_type}"
+    )
 
     if repo.endswith(".repo"):
         return repo
 
-    if "repo.qe.ceph.lab" in repo:
-        return f"{repo}/Tools"
-
-    if ibm_build:
+    if repo_uses_flat_tools_compose_layout(repo, ibm_build, cloud_type):
         return f"{repo}/Tools"
 
     return f"{repo}/compose/Tools/x86_64/os"

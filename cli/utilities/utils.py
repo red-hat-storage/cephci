@@ -204,28 +204,49 @@ def get_node_ip(nodes, node_name):
     return False
 
 
-def get_custom_repo_url(base_url, cloud_type="openstack"):
+def repo_uses_flat_tools_compose_layout(
+    repo_url, ibm_build=False, cloud_type="openstack"
+):
+    """True when RPM Tools live at {compose}/Tools/ (not compose/Tools/x86_64/os/).
+
+    QE lab composes, IP mirrors of the same layout, IBM composes, and IBM Cloud
+    metal (ibmc) use this layout; downstream RH compose trees use the deeper path.
+    """
+    if ibm_build or cloud_type == "ibmc":
+        return True
+    lowered = repo_url.lower()
+    if "repo.qe.ceph.lab" in lowered:
+        return True
+    # Jenkins / internal mirrors often expose compose roots without the QE hostname.
+    if "/repos/ceph/" in lowered:
+        return True
+    return False
+
+
+def get_custom_repo_url(base_url, cloud_type="openstack", ibm_build=False):
     """Add the given custom repo on every node part of the cluster.
 
     Args:
         cloud_type (str): cloudtype (openstack|ibmc|aws|onecloud)
         base_url (str): base URL of repository
+        ibm_build (bool): IBM compose; Tools dir is {compose}/Tools/
     """
     if base_url.endswith(".repo"):
         return base_url
 
-    if not base_url.endswith("/"):
-        base_url += "/"
+    trimmed = base_url.rstrip("/")
+    lowered = trimmed.lower()
+    if lowered.endswith("/tools") or "/tools/" in (lowered + "/"):
+        return trimmed + "/"
+
+    base_url = trimmed + "/"
 
     if base_url.endswith("x86_64/"):
         return base_url
 
-    if cloud_type == "ibmc":
-        base_url += "Tools"
-    else:
-        base_url += "compose/Tools/x86_64/os/"
-
-    return base_url
+    if repo_uses_flat_tools_compose_layout(base_url, ibm_build, cloud_type):
+        return base_url + "Tools/"
+    return base_url + "compose/Tools/x86_64/os/"
 
 
 def get_nodes_by_ids(nodes, ids):
