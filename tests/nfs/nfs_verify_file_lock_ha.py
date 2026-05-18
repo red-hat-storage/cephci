@@ -72,6 +72,8 @@ def run(ceph_cluster, **kw):
             ha,
             vip,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
     except Exception as e:
         log.error(f"Failed to setup nfs cluster {e}")

@@ -10,6 +10,7 @@ from time import sleep
 import yaml
 from looseversion import LooseVersion
 
+from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
@@ -58,7 +59,44 @@ def setup_nfs_cluster(
     active_standby=False,
     round_robin=False,
     single_export=False,
+    enable_rdma=False,
+    rdma_port=None,
 ):
+    """Set up an NFS-Ganesha cluster with exports and client mounts.
+
+    End-to-end helper used by most NFS test modules.  It enables the
+    NFS manager module, creates an NFS-Ganesha cluster, creates one
+    export per client (or a single shared export), and mounts the
+    export(s) on each client.
+
+    Args:
+        clients (list): Client CephNode objects to mount on.
+        nfs_server (str | list): NFS server hostname(s) for the
+            cluster placement.
+        port (str): TCP NFS port (e.g. ``"2049"``).
+        version: NFS version(s) to use for mounts.  May be a single
+            value (``"4.2"``) or a dict mapping versions to client
+            lists for multi-version mounts.
+        nfs_name (str): NFS cluster name.
+        nfs_mount (str): Local mount-point path on clients.
+        fs_name (str): CephFS filesystem name (e.g. ``"cephfs"``).
+        export (str): Base export pseudo-path prefix.
+        fs (str): Filesystem backend identifier.
+        ha (bool): Enable HA with ingress (requires *vip*).
+        vip (str | None): Virtual IP for HA ingress.
+        ceph_cluster: CephCluster object for node lookups.
+        active_standby (bool): Use active-standby HA placement.
+        round_robin (bool): Distribute mounts across all servers
+            in round-robin fashion.
+        single_export (bool): Create only one export shared by
+            all clients instead of one per client.
+        enable_rdma (bool): Create the cluster with ``--enable-rdma``
+            and mount clients using ``proto=rdma``.
+        rdma_port (str | int | None): RDMA listener port passed to
+            ``--rdma_port`` on cluster create and used as the mount
+            port when *enable_rdma* is True.  Falls back to *port*
+            if not specified.
+    """
     # Get ceph cluter object and setup start time
     global ceph_cluster_obj
     global setup_start_time
@@ -114,6 +152,8 @@ def setup_nfs_cluster(
         vip=vip,
         active_standby=active_standby,
         nfs_nodes_obj=nfs_nodes,
+        enable_rdma=enable_rdma,
+        rdma_port=rdma_port,
         **create_kwargs,
     )
     sleep(3)
@@ -168,6 +208,14 @@ def setup_nfs_cluster(
         else:
             mount_servers = [servers[0]]
 
+    mount_kwargs = {}
+    if enable_rdma:
+        mount_kwargs["proto"] = "rdma"
+        mount_port = rdma_port or port
+        log.info("RDMA enabled: mounts will use proto=rdma, port=%s", mount_port)
+    else:
+        mount_port = port
+
     i = 0
     server_idx = 0
     for version, clients in mount_versions.items():
@@ -182,9 +230,34 @@ def setup_nfs_cluster(
             else:
                 current_export = export_name  # Fallback
 
+            # Clear any stale mount left by a previous test before mkdir
+            try:
+                client.exec_command(sudo=True, cmd=f"stat {nfs_mount}")
+            except CommandFailed:
+                try:
+                    client.exec_command(
+                        sudo=True, cmd=f"umount -l {nfs_mount}", check_ec=False
+                    )
+                    client.exec_command(
+                        sudo=True, cmd=f"rm -rf {nfs_mount}", check_ec=False
+                    )
+                except Exception:
+                    pass
+                log.info(
+                    "Cleared stale/leftover mount at %s on %s",
+                    nfs_mount,
+                    client.hostname,
+                )
+
             client.create_dirs(dir_path=nfs_mount, sudo=True)
             if mount_retry(
-                client, nfs_mount, version, port, current_server, current_export
+                client,
+                nfs_mount,
+                version,
+                mount_port,
+                current_server,
+                current_export,
+                **mount_kwargs,
             ):
                 log.info(
                     "Mount succeeded on %s using server %s and export %s"
@@ -1156,9 +1229,19 @@ def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kw
 
 @retry(OperationFailedError, tries=5, delay=10, backoff=2)
 def mount_cleanup_retry(client, mount_name):
-    _, err = client.exec_command(sudo=True, cmd=f"rm -rf {mount_name}/*", timeout=120)
-    if err:
-        raise OperationFailedError("Failed to clenaup the mount directory")
+    try:
+        _, err = client.exec_command(
+            sudo=True, cmd=f"rm -rf {mount_name}/*", timeout=120
+        )
+        if err:
+            raise OperationFailedError("Failed to cleanup the mount directory")
+    except CommandFailed as e:
+        log.warning(
+            "rm -rf %s/* failed on %s: %s — skipping, will proceed to unmount",
+            mount_name,
+            client.hostname,
+            e,
+        )
     return True
 
 

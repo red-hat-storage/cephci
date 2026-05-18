@@ -94,6 +94,8 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs_name,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Create files from Client 1 and perform lookups and rename from client 2 and client 3
