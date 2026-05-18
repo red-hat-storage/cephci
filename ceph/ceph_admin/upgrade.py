@@ -5,10 +5,14 @@ from json import JSONDecodeError, loads
 from time import sleep
 from typing import Dict
 
+from looseversion import LooseVersion
+from packaging.version import Version
+
 from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
 from utility.log import Log
 
+from ..utils import get_daemon_versions
 from .common import config_dict_to_string
 from .typing_ import OrchProtocol
 
@@ -70,6 +74,29 @@ class UpgradeMixin:
         # Add optional services argument
         if args and "services" in args:
             cmd.append(f"--services {args['services']}")
+
+        skip_license = None
+        if (args and "skip_license" in args) or config.get("skip_license"):
+            skip_license = True
+
+        # IBM Storage Ceph 9.1 and greater would require license acceptance
+        # There is '--automatically-accept-license' option
+        if (
+            config.get("product") == "ibm"
+            and LooseVersion(str(config.get("release"))) >= LooseVersion("9.1")
+            and not skip_license
+        ):
+            LOG.debug("Ceph product: %s", config.get("product"))
+            LOG.debug("Target version: %s", config.get("release"))
+            mgr_version_common, mgr_version_downstream = get_daemon_versions(
+                node=self.installer, daemon_type="mgr"
+            )
+            LOG.debug("MGR common version: %s", mgr_version_common)
+            LOG.debug("MGR downstream version: %s", mgr_version_downstream)
+            if Version(mgr_version_common) >= Version("20.2.1") or Version(
+                mgr_version_downstream
+            ) >= Version("9.9.1.0"):
+                cmd.append("--automatically-accept-license")
 
         return self.shell(args=cmd)
 
