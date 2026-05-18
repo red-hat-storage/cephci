@@ -93,9 +93,13 @@ class UpgradeMixin:
             )
             LOG.debug("MGR common version: %s", mgr_version_common)
             LOG.debug("MGR downstream version: %s", mgr_version_downstream)
-            if Version(mgr_version_common) >= Version("20.2.1") or Version(
+            common_ver_check = mgr_version_common and Version(
+                mgr_version_common
+            ) >= Version("20.2.1")
+            downstream_ver_check = mgr_version_downstream and Version(
                 mgr_version_downstream
-            ) >= Version("9.9.1.0"):
+            ) >= Version("9.9.1.0")
+            if common_ver_check or downstream_ver_check:
                 cmd.append("--automatically-accept-license")
 
         return self.shell(args=cmd)
