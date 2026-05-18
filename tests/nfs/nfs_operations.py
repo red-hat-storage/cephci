@@ -133,6 +133,11 @@ def setup_nfs_cluster(
         )
         i += 1
         all_exports = Ceph(client).nfs.export.ls(nfs_name)
+        if isinstance(all_exports, str):
+            try:
+                all_exports = json.loads(all_exports)
+            except Exception:
+                pass
         if export_name not in all_exports:
             raise OperationFailedError(
                 f"Export {export_name} not found in the list of exports {all_exports}"
