@@ -141,7 +141,9 @@ def run(ceph_cluster, **kwargs):
     server_pkgs = config.get("server_packages")
 
     # Enable ceph tools repo on installer and client
-    base_url = get_custom_repo_url(base_url, cloud_type)
+    base_url = get_custom_repo_url(
+        base_url, cloud_type, config.get("ibm_build", False)
+    )
     for node in {installer, client}:
         if not Package(node).add_repo(base_url):
             raise ReposError(f"Failed to enable {base_url} repo")
@@ -152,7 +154,8 @@ def run(ceph_cluster, **kwargs):
     if build_type == "rh":
         _files = [repo for repo in out if "Tools" in repo or "RHCEPH" in repo]
     elif build_type == "ibm":
-        _files = [repo for repo in out if "IBM" in repo]
+        _files = [repo for repo in out if "ibm" in repo.lower()]
+
     # Raise error if expected repository is not added
     if not _files:
         raise ResourceNotFoundError("Expected repository not added to node")
