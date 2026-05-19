@@ -2027,7 +2027,7 @@ def enable_coredump(node):
         log.info("Out: %s \n Err: %s" % (out, err))
 
 
-def get_daemon_versions(node, daemon_type: str):
+def get_daemon_versions(node, daemon_type: str, daemon_id: str = None):
     """
     Method to get a ceph daemon's versions.
     Note that in case multiple versions of input daemon type exist, \
@@ -2035,11 +2035,15 @@ def get_daemon_versions(node, daemon_type: str):
     Args:
         node: ceph node object having cephadm package
         daemon_type: The type of ceph daemon e.g. mgr, mon, osd, etc
+        daemon_id: name or id of ceph daemon e.g. 0, ceph-name-dc0dxh-node2
     Returns:
         a tuple of (common_version, downstream_version)
         e.g. 20.2.1,9.9.1.0
     """
-    out, _ = node.exec_command(sudo=True, cmd="cephadm shell ceph versions -f json")
+    if daemon_id:
+        out = get_daemon_metadata(node, daemon_type, daemon_id)
+    else:
+        out, _ = node.exec_command(sudo=True, cmd="cephadm shell ceph versions -f json")
     try:
         ceph_versions = json.loads(out)
     except json.JSONDecodeError as e:
@@ -2052,3 +2056,44 @@ def get_daemon_versions(node, daemon_type: str):
 
     log.warning("No versions found for %s", daemon_type)
     return "", ""
+
+
+def get_daemon_metadata(node, daemon_type: str, daemon_id: str = None):
+    """
+    Method to fetch the metadata for any daemon
+    If daemon id is not provided, return complete output of
+    ceph <daemon_type> metadata
+    Args:
+        node: ceph node object having cephadm package
+        daemon_type: The type of ceph daemon e.g. mgr, mon, osd, etc
+        daemon_id: name or id of ceph daemon e.g. 0, ceph-name-dc0dxh-node2
+    Returns:
+        metadata (List) -> If daemon_id is not provided
+        metadata (Dict) -> If daemon_id is provided
+        None if metadata is not found
+    """
+    log.debug("Passed daemon type : %s, Daemon ID : %s", daemon_type, daemon_id)
+    base_cmd = f"cephadm shell ceph {daemon_type} metadata "
+    if daemon_id is not None:
+        base_cmd += daemon_id
+
+    for _ in range(3):
+        try:
+            out, _ = node.exec_command(args=[base_cmd], sudo=True)
+            break
+        except Exception as e:
+            debug_msg = f"Passed daemon type : {daemon_type}, Daemon ID : {daemon_id}, Error : {e}"
+            log.debug(debug_msg)
+            log.warning("ceph metadata command failed. retrying after 30 seconds.")
+            time.sleep(30)
+    else:
+        log.debug("Metadata command execution failed 3 consecutive tries")
+        return None
+
+    if out is None:
+        log.error(
+            "Metadata info for the input daemon: %s.%s not found",
+            daemon_type,
+            daemon_id,
+        )
+    return out
