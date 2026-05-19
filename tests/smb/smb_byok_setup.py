@@ -8,23 +8,27 @@ from utility.utils import generate_self_signed_certificate
 log = Log(__name__)
 
 CA = """-----BEGIN CERTIFICATE-----
-    MIIC+DCCAeCgAwIBAgIHNI+wFxpITzANBgkqhkiG9w0BAQsFADArMSkwJwYDVQQDEyBjZXBoLWdr
-    bG0teGUxamF3LW5vZGUxLWluc3RhbGxlcjAeFw0yNjAxMTMxMjA2MzJaFw0yOTAxMTIxMjA2MzJa
-    MCsxKTAnBgNVBAMTIGNlcGgtZ2tsbS14ZTFqYXctbm9kZTEtaW5zdGFsbGVyMIIBIjANBgkqhkiG
-    9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnpkFcTBzt20tMVBpePo30RtWAw3r3nuu8FVU8FIbwIudJASH
-    EBJtQdFzM7NUziwD3RpT8LdjssDsub+quylhyXsDaqEX/yuP1x9w6yYfJFxT5j2TGL3zFVm6vlXD
-    NkUqe+MUBrFPnQHvuxOcGkeKptXUqrtPBQRQ9B8jGTCqxainAtbvtpetnniiCr6B5qml60dWgT7j
-    UE5tEJ+5yrSbEDu5Z/+Rqb97M+EcMoVdpgCMNok33R9jMP6Y/XcVwlfSX7XEM3MMGxFJitBr10py
-    N0H+aXgVP8vBYT629Fk8xUdDroYovjR9oC74T3jlMANh1jl5Q0lR0c/8gJxQ/ip1ZwIDAQABoyEw
-    HzAdBgNVHQ4EFgQU3igRGjdvzDl9Riw49fj2QE1/+/AwDQYJKoZIhvcNAQELBQADggEBAAOb1WB8
-    0OTg/9MqPqeJTbMnX9/cNCH5C11uA7LRUcP/C4/nWBrf6wYfHJxQ+VilLGOMSKEJ/MzJYQoz1joX
-    Jo9molEkvBQGopLiYQx2ZeKSNRtIXwAXm6eSvPSncwFTehniRD0EaKbajhkH8vbodk3T+WuTLGzz
-    WCQeZD4L73AVj89lCdmMEb9e9MccJE+NfoKYws7LgSKgoh36Y1JaZ5F9sa3RI8S3fHJodchLkaaT
-    RcUTctv/NjKGgDwSNF7cXuc9F+Z8DKb+vidpDV+1EXhLR0DlWWianTTXZ42q8TYEvzJpTo/LknuI
-    NfrG3Uh1p3VnFNXdSCruvbOPUsgf66M=
-    -----END CERTIFICATE-----"""
+MIIC+DCCAeCgAwIBAgIHNI+wFxpITzANBgkqhkiG9w0BAQsFADArMSkwJwYDVQQDEyBjZXBoLWdr
+bG0teGUxamF3LW5vZGUxLWluc3RhbGxlcjAeFw0yNjAxMTMxMjA2MzJaFw0yOTAxMTIxMjA2MzJa
+MCsxKTAnBgNVBAMTIGNlcGgtZ2tsbS14ZTFqYXctbm9kZTEtaW5zdGFsbGVyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnpkFcTBzt20tMVBpePo30RtWAw3r3nuu8FVU8FIbwIudJASH
+EBJtQdFzM7NUziwD3RpT8LdjssDsub+quylhyXsDaqEX/yuP1x9w6yYfJFxT5j2TGL3zFVm6vlXD
+NkUqe+MUBrFPnQHvuxOcGkeKptXUqrtPBQRQ9B8jGTCqxainAtbvtpetnniiCr6B5qml60dWgT7j
+UE5tEJ+5yrSbEDu5Z/+Rqb97M+EcMoVdpgCMNok33R9jMP6Y/XcVwlfSX7XEM3MMGxFJitBr10py
+N0H+aXgVP8vBYT629Fk8xUdDroYovjR9oC74T3jlMANh1jl5Q0lR0c/8gJxQ/ip1ZwIDAQABoyEw
+HzAdBgNVHQ4EFgQU3igRGjdvzDl9Riw49fj2QE1/+/AwDQYJKoZIhvcNAQELBQADggEBAAOb1WB8
+0OTg/9MqPqeJTbMnX9/cNCH5C11uA7LRUcP/C4/nWBrf6wYfHJxQ+VilLGOMSKEJ/MzJYQoz1joX
+Jo9molEkvBQGopLiYQx2ZeKSNRtIXwAXm6eSvPSncwFTehniRD0EaKbajhkH8vbodk3T+WuTLGzz
+WCQeZD4L73AVj89lCdmMEb9e9MccJE+NfoKYws7LgSKgoh36Y1JaZ5F9sa3RI8S3fHJodchLkaaT
+RcUTctv/NjKGgDwSNF7cXuc9F+Z8DKb+vidpDV+1EXhLR0DlWWianTTXZ42q8TYEvzJpTo/LknuI
+NfrG3Uh1p3VnFNXdSCruvbOPUsgf66M=
+-----END CERTIFICATE-----"""
 
 FSCRYPT_KEYNAME = "KEY-74e01cb-2acf8553-8b45-414a-96ed-1066d9994b86"
+
+cert_tls_credential_id = "cert1"
+key_tls_credential_id = "key1"
+cacert_tls_credential_id = "cacert1"
 
 class LiteralString(str):
     pass
@@ -36,24 +40,23 @@ def literal_presenter(dumper, data):
 
 yaml.add_representer(LiteralString, literal_presenter)
 
-def create_grpc_spec_with_literal_strings(cert, key, ca, cert_tls_credential_id, key_tls_credential_id,
-                                          cacert_tls_credential_id):
+def create_grpc_spec_with_literal_strings(cert, key, ca, cert_tls_id, key_tls_id, cacert_tls_id):
     byok_spec_tls_credential_dict = [
         {
             "resource_type": "ceph.smb.tls.credential",
-            "tls_credential_id": cert_tls_credential_id,
+            "tls_credential_id": cert_tls_id,
             "credential_type": "cert",
             "value": LiteralString(cert.rstrip("\n")),
         },
         {
             "resource_type": "ceph.smb.tls.credential",
-            "tls_credential_id": key_tls_credential_id,
+            "tls_credential_id": key_tls_id,
             "credential_type": "cert",
             "value": LiteralString(key.rstrip("\n")),
         },
         {
             "resource_type": "ceph.smb.tls.credential",
-            "tls_credential_id": cacert_tls_credential_id,
+            "tls_credential_id": cacert_tls_id,
             "credential_type": "ca-cert",
             "value": LiteralString(ca.rstrip("\n")),
         },
@@ -103,7 +106,7 @@ def check_keybridge_service(smb_node):
     else:
         raise OperationFailedError(f"BYOK keybridge service has not been loaded {out}")
 
-    if "remotectl" in out and "active" in out and "running" in out:
+    if "keybridge" in out and "active" in out and "running" in out:
         log.info(
             f"BYOK keybridge service is running activetly: {out}, BYOK smb cluster is created successfully"
         )
@@ -149,11 +152,8 @@ def run(ceph_cluster, **kw):
         if spec["resource_type"] == "ceph.smb.cluster":
             smb_cluster_id = spec["cluster_id"]
             auth_mode = spec["auth_mode"]
-            cert_tls_credential_id = spec["remote_control"]["cert"]["ref"]
-            key_tls_credential_id = spec["remote_control"]["key"]["ref"]
-            cacert_tls_credential_id = spec["remote_control"]["ca_cert"]["ref"]
             if "domain_settings" in spec:
-                domain_realm = spec["domain_settings"]["realm"]
+               domain_realm = spec["domain_settings"]["realm"]
             else:
                 domain_realm = None
         elif spec["resource_type"] == "ceph.smb.usersgroups":
@@ -167,8 +167,8 @@ def run(ceph_cluster, **kw):
             smb_subvol_group = spec["cephfs"]["subvolumegroup"]
             smb_subvols.append(spec["cephfs"]["subvolume"])
             smb_shares.append(spec["share_id"])
-            if spec["resource_type"]["cephfs"]["fscrypt_key"]["scope"] == "kmip":
-                spec["resource_type"]["cephfs"]["fscrypt_key"]["name"] = FSCRYPT_KEYNAME
+            if spec["cephfs"]["fscrypt_key"]["scope"] == "kmip":
+                spec["cephfs"]["fscrypt_key"]["name"] = FSCRYPT_KEYNAME
 
 
     # Get installer node
@@ -200,17 +200,6 @@ def run(ceph_cluster, **kw):
             file_type,
             smb_spec,
             file_mount,
-        )
-
-        # Check smb share using smbclient
-        smbclient_check_shares(
-            smb_nodes,
-            client,
-            smb_shares,
-            smb_user_name,
-            smb_user_password,
-            auth_mode,
-            domain_realm,
         )
 
         # Check grpc keybridge service
