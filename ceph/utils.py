@@ -2079,7 +2079,7 @@ def get_daemon_metadata(node, daemon_type: str, daemon_id: str = None):
 
     for _ in range(3):
         try:
-            out, _ = node.exec_command(args=[base_cmd], sudo=True)
+            out, _ = node.exec_command(cmd=base_cmd, sudo=True)
             break
         except Exception as e:
             debug_msg = f"Passed daemon type : {daemon_type}, Daemon ID : {daemon_id}, Error : {e}"
