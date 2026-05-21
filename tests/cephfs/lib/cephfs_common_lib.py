@@ -513,7 +513,6 @@ class CephFSCommonUtils(FsUtils):
         op_type,
         subvol,
         enc_tag="cephfs_enctag",
-        add_suffix=True,
         validate=True,
         **kwargs,
     ):
@@ -529,18 +528,18 @@ class CephFSCommonUtils(FsUtils):
 
         Returns: Upon sucess - 0 for op_type set/rm, enc_tag string if op_type is get,1 upon failure
         """
-        rand_str = "".join(
-            random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(4))
-        )
 
+        enc_tag = kwargs.get(enc_tag, enc_tag)
+        if enc_tag == "cephfs_enctag":
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(4))
+            )
+            enc_tag = f"cephfs_enctag_{rand_str}"
         cmd = f"ceph fs subvolume enctag {op_type} {kwargs['fs_name']} {subvol}"
         if kwargs.get("group_name"):
             cmd += f" --group_name {kwargs['group_name']}"
         if op_type == "set":
-            enc_tag = kwargs.get(enc_tag, enc_tag)
-            if kwargs.get(add_suffix, add_suffix):
-                enc_tag = f"{enc_tag}_{rand_str}"
             cmd += f" --enctag {enc_tag}"
         out, _ = client.exec_command(
             sudo=True,
