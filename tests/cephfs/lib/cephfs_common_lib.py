@@ -51,6 +51,7 @@ class CephFSCommonUtils(FsUtils):
             "experiencing slow operations in BlueStore",
             "Slow OSD heartbeats",
             "stray daemon(s) not managed by cephadm",
+            "CALL_HOME_ENABLED_AUTOMATICALLY",
         ]
         non_accepted_list = ["OSD_DOWN", "OSD_HOST_DOWN"]
         while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
