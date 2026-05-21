@@ -16,7 +16,7 @@ tests:
       abort-on-fail: true
       config:
         args:
-          mon-ip: node1
+          mon-ip: node2
           allow-fqdn-hostname: true
           allow-overwrite: true
         command: bootstrap
