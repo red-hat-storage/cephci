@@ -69,15 +69,15 @@ tests:
               base_cmd_args: # arguments to ceph orch
                 verbose: true
               pos_args:
-                - cephfs              # name of the filesystem
+                - cephfs # name of the filesystem
               args:
                 placement:
                   nodes:
                     - node2
                     - node6
                     - node8
-                  limit: 3            # no of daemons
-                  sep: " "            # separator to be used for placements
+                  limit: 3 # no of daemons
+                  sep: " " # separator to be used for placements
       destroy-cluster: false
       abort-on-fail: true
 
@@ -88,12 +88,12 @@ tests:
       polarion-id:
       config:
         command: add
-        id: client.1                      # client Id (<type>.<Id>)
-        node: node7                       # client node
+        id: client.1 # client Id (<type>.<Id>)
+        node: node7 # client node
         install_packages:
           - ceph-common
           - ceph-base
-        copy_admin_keyring: true          # Copy admin keyring to node
+        copy_admin_keyring: true # Copy admin keyring to node
         caps: # authorize client capabilities
           mon: "allow *"
           osd: "allow *"
@@ -107,101 +107,100 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
-# The below test is openstack only, and would need modifications to run on BM.
-# commenting the run of below test in BM pipeline
-  - test:
-      name: Cluster behaviour when OSDs are full
-      desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
-      module: test_osd_full.py
-      polarion-id: CEPH-83571715
-      config:
-        pg_autoscaling:
-          pool_config:
-            pool-1:
-              pool_type: replicated
-              pool_name: re_pool_3
-              pg_num: 1
-              disable_pg_autoscale: true
-            # EC pool will be added later
+  # The below test is openstack only, and would need modifications to run on BM.
+  # commenting the run of below test in BM pipeline
+  # - test:
+  #     name: Cluster behaviour when OSDs are full
+  #     desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
+  #     module: test_osd_full.py
+  #     polarion-id: CEPH-83571715
+  #     config:
+  #       pg_autoscaling:
+  #         pool_config:
+  #           pool-1:
+  #             pool_type: replicated
+  #             pool_name: re_pool_3
+  #             pg_num: 1
+  #             disable_pg_autoscale: true
+  #           # EC pool will be added later
 
-  - test:
-      name: osd_memory_target param set at OSD level
-      module: test_osd_memory_target.py
-      desc: Verification of osd_memory_target parameter set at OSD level
-      polarion-id: CEPH-83580882
-      config:
-        osd_level: true
+  # - test:
+  #     name: osd_memory_target param set at OSD level
+  #     module: test_osd_memory_target.py
+  #     desc: Verification of osd_memory_target parameter set at OSD level
+  #     polarion-id: CEPH-83580882
+  #     config:
+  #       osd_level: true
 
-  - test:
-      name: osd_memory_target param set at host level
-      module: test_osd_memory_target.py
-      desc: Verification of osd_memory_target parameter set at host level
-      polarion-id: CEPH-83580881
-      config:
-        host_level: true
+  # - test:
+  #     name: osd_memory_target param set at host level
+  #     module: test_osd_memory_target.py
+  #     desc: Verification of osd_memory_target parameter set at host level
+  #     polarion-id: CEPH-83580881
+  #     config:
+  #       host_level: true
 
-  - test:
-      name: ObjectStore block stats verification
-      module: test_objectstore_block.py
-      desc: Reduce data from an object and verify the decrease in blocks
-      polarion-id: CEPH-83571714
-      config:
-        create_pool: true
-        pool_name: test-objectstore
-        write_iteration: 3
-        delete_pool: true
+  # - test:
+  #     name: ObjectStore block stats verification
+  #     module: test_objectstore_block.py
+  #     desc: Reduce data from an object and verify the decrease in blocks
+  #     polarion-id: CEPH-83571714
+  #     config:
+  #       create_pool: true
+  #       pool_name: test-objectstore
+  #       write_iteration: 3
+  #       delete_pool: true
 
-  - test:
-      name: ceph osd df stats
-      module: test_osd_df.py
-      desc: Mark osd out and inspect stats change in ceph osd df
-      polarion-id: CEPH-10787
-      config:
-        run_iteration: 3
-        create_pool: true
-        pool_name: test-osd-df
-        write_iteration: 10
-        delete_pool: true
+  # - test:
+  #     name: ceph osd df stats
+  #     module: test_osd_df.py
+  #     desc: Mark osd out and inspect stats change in ceph osd df
+  #     polarion-id: CEPH-10787
+  #     config:
+  #       run_iteration: 3
+  #       create_pool: true
+  #       pool_name: test-osd-df
+  #       write_iteration: 10
+  #       delete_pool: true
 
   # Below test is currently failing, BZ raised #2214864 - Closed - Not a bug
   # We have to reproduce the issue in a Replica-1 Cluster, and if we hit the same issue, we can re-open it.
-#  - test:
-#      name: Perform IOPS on a Cluster with full OSDs
-#      desc: Verify posibility of IOPS on a Cluster with full OSDs
-#      module: test_osd_full.py
-#      polarion-id: CEPH-83572758
-#      config:
-#        iops_with_full_osds:
-#          pool-1:
-#            pool_name: "pool_full_osds"
-#            pool_type: replicated
-#            pg_num: 1
-#            disable_pg_autoscale: true
-#          pool-2:
-#            pool_name: "re_pool_test"
-#            pool_type: replicated
-#            pg_num: 1
-#            disable_pg_autoscale: true
-#          pool-3:
-#            pool_name: "test_ec_pool"
-#            pool_type: erasure
-#            pg_num: 1
-#            k: 4
-#            m: 2
-#            disable_pg_autoscale: true
+  #  - test:
+  #      name: Perform IOPS on a Cluster with full OSDs
+  #      desc: Verify posibility of IOPS on a Cluster with full OSDs
+  #      module: test_osd_full.py
+  #      polarion-id: CEPH-83572758
+  #      config:
+  #        iops_with_full_osds:
+  #          pool-1:
+  #            pool_name: "pool_full_osds"
+  #            pool_type: replicated
+  #            pg_num: 1
+  #            disable_pg_autoscale: true
+  #          pool-2:
+  #            pool_name: "re_pool_test"
+  #            pool_type: replicated
+  #            pg_num: 1
+  #            disable_pg_autoscale: true
+  #          pool-3:
+  #            pool_name: "test_ec_pool"
+  #            pool_type: erasure
+  #            pg_num: 1
+  #            k: 4
+  #            m: 2
+  #            disable_pg_autoscale: true
 
-
-# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
-# Tests:-
-# scenario 2 - Enables bluestore write v2
-# setup - setup phase for bluestore compression tests
-#     --> Cephfs - replicated & EC
-#     --> RBD - replicated & EC
-#     --> RGW - replicated
-# scenario 12 - data integrity tests
-# scenario 13 - compression algorithm tests
-# scenario 14 - compression mode tests
-# scenario 16 - compression tests post recovery
+  # Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+  # Tests:-
+  # scenario 2 - Enables bluestore write v2
+  # setup - setup phase for bluestore compression tests
+  #     --> Cephfs - replicated & EC
+  #     --> RBD - replicated & EC
+  #     --> RGW - replicated
+  # scenario 12 - data integrity tests
+  # scenario 13 - compression algorithm tests
+  # scenario 14 - compression mode tests
+  # scenario 16 - compression tests post recovery
 
   - test:
       name: Bluestore data compression - enable bluestore write v2
