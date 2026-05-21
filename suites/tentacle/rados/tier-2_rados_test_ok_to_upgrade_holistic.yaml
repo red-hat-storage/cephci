@@ -274,8 +274,8 @@ tests:
           node16: rack=rack8,chassis=chassis16
 
   - test:
-      name: Upgrade mgr,crash,mon to latest 9.1 ceph version
-      desc: Upgrade mgr,crash,mon to latest 9.1 ceph version
+      name: Upgrade mgr,mon to latest 9.x ceph version
+      desc: Upgrade mgr,mon to latest 9.x ceph version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       config:
@@ -284,9 +284,7 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-          daemon_types: mgr,crash,mon
-          rhcs-version: 9.1
-          release: stable
+          daemon_types: mgr,mon
           platform: rhel-9
       abort-on-fail: true
 

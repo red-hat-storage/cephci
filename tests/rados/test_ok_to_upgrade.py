@@ -4,6 +4,8 @@ import string
 import time
 from typing import List
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CephNode, CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -67,6 +69,12 @@ def run(ceph_cluster, **kw):
     pg_num = config.get("pg_num", 2048)
     pg_num_min = config.get("pg_num_min", 2048)
     ceph_nodes = kw.get("ceph_nodes")
+    # ceph version check
+    if LooseVersion(str(config.get("release"))) < LooseVersion("9.1"):
+        log.error(
+            "This test module is a 9.1 feature. Skipping test in ceph versions less than 9.1."
+        )
+        return 0
 
     try:
         if len(scenarios) == 0:
