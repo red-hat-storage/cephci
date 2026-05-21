@@ -167,7 +167,7 @@ def run(ceph_cluster, **kw):
         log.debug(
             f"Chose host : {bucket_name} from {dc_2_name} to move to trigger weight imbalance"
         )
-        warning = "UNEVEN_WEIGHTS_STRETCH_MODE"
+        warning = "STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE"
         cmd1 = f"ceph osd crush move {bucket_name} {stretch_bucket}={dc_1_name}"
         rados_obj.run_ceph_command(cmd=cmd1)
         log.info(

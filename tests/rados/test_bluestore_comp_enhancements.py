@@ -165,83 +165,13 @@ def run(ceph_cluster, **kw):
         rgw_bucket_name = "test-bucket"
         rgw_nodes = ceph_cluster.get_nodes(role="rgw")
         rgw_endpoint = rgw_nodes[0].ip_address
-
-        if "setup" in scenarios_to_run:
-            # Created Erasure and Replicated Ceph file system
-            if config.get("include_erasure_pools", False):
-                fs_name, mount_path, created_pools = (
-                    rados_obj.create_cephfs_filesystem_mount(
-                        client_node=client_node,
-                        fs_name="cephfs0",
-                        pool_type="erasure",
-                    )
-                )
-
-            fs_name, mount_path, created_pools = (
-                rados_obj.create_cephfs_filesystem_mount(
-                    client_node=client_node,
-                    fs_name="cephfs1",
-                    pool_type="replicated",
-                )
-            )
-
-            # Create EC RBD
-            if config.get("include_erasure_pools", False):
-                rbd_pool_name = "rbd-ec-data"
-                rbd_ec_metadata = "rbd-ec-metadata"
-                rbd_image = "rbd_image"
-                mount_path, device_path, created_pools = rados_obj.create_ec_rbd_pools(
-                    rbd_ec_data_pool=rbd_pool_name,
-                    rbd_metadata_pool=rbd_ec_metadata,
-                    image_name=rbd_image,
-                    crush_failure_domain="osd",
-                )
-
-            # Create replicated RBD
-            rbd_pool_name = "rbd-replicated-data"
-            rbd_image = "rbd_image"
-            mount_path, device_path, created_pools = (
-                rados_obj.create_replicated_rbd_pools(
-                    rbd_pool=rbd_pool_name,
-                    image_name=rbd_image,
-                    mount_path="/mnt/rbd_replicated_mount",
-                )
-            )
-
-            # Replicated RGW setup
-            rgw_data_pool = "default.rgw.buckets.data"
-            rados_obj.create_pool(pool_name=rgw_data_pool, app_name="rgw")
-
-            # Install aws cli
-            cmd = "pip3 install awscli"
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
-
-            # fetch rgw key and secret
-            keys = get_or_create_user(client_node)
-            access_key = keys["access_key"]
-            secret_key = keys["secret_key"]
-
-            cmd = "mkdir .aws"
-            try:
-                rados_obj.client.exec_command(cmd=cmd, sudo=True)
-            except Exception:
-                log.error(".aws directory already exists.")
-
-            cmd = """cat <<EOF > ~/.aws/config
-[default]
-region = us-east-1
-EOF"""
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
-            cmd = f"""cat <<EOF > ~/.aws/credentials
-[default]
-aws_access_key_id = {access_key}
-aws_secret_access_key = {secret_key}
-EOF"""
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
-            cmd = (
-                f"aws s3 mb s3://{rgw_bucket_name} --endpoint-url http://{rgw_endpoint}"
-            )
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        prereq_kwargs = {
+            "client_node": client_node,
+            "rados_obj": rados_obj,
+            "config": config,
+            "rgw_bucket_name": rgw_bucket_name,
+            "rgw_endpoint": rgw_endpoint,
+        }
 
         log.info(f"Performing validations on {test_pools}")
         comp_io_obj = CompressionIO(
@@ -1262,6 +1192,7 @@ Steps:
 8) Start OSDs and cleanup
             """
             )
+            test_prerequisite_setup(**prereq_kwargs)
             compression_mode = COMPRESSION_MODES.FORCE
             objectstore_obj.nostop = True
             objectstore_obj.nostart = True
@@ -1485,23 +1416,13 @@ Steps:
                             f"Validation summary for algorithm {algorithm}, pool {pool_name}: "
                         )
 
-                        log.info(
-                            f"Starting cleanup for pool {pool_name}, algorithm {algorithm}"
-                        )
-                        comp_io_obj.clean(
-                            rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                            rgw_bucket_name=rgw_bucket_name,
-                            pool_name=pool_name,
-                            compression_obj=bluestore_compression,
-                        )
-
-                        log.info(
-                            f"Completed clean up for pool {pool_name}, algorithm {algorithm}"
-                        )
-
             objectstore_obj.nostop = None
             objectstore_obj.nostart = None
             log.info("Reset objectstore_obj.nostop and nostart flags")
+
+            test_prerequisite_teardown(
+                **prereq_kwargs, created_resources=created_resources
+            )
 
             log.info("******* Scenario 13 passed **********")
 
@@ -1531,6 +1452,7 @@ Steps:
                 return 1
 
             for mode in ["none", "passive", "aggressive", "force"]:
+                test_prerequisite_setup(**prereq_kwargs)
                 for pool_name, mount_point, workload_type, pool_type in test_pools:
                     log.info(
                         f"\n{'='*80}\n"
@@ -1689,15 +1611,9 @@ Steps:
                         raise
 
                     log.info(f"Validation PASSED for pool {pool_name} with mode {mode}")
-                    log.info(f"Starting cleanup for pool {pool_name}, mode {mode}")
-                    comp_io_obj.clean(
-                        rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                        rgw_bucket_name=rgw_bucket_name,
-                        pool_name=pool_name,
-                        compression_obj=bluestore_compression,
+                test_prerequisite_teardown(
+                        **prereq_kwargs, created_resources=created_resources
                     )
-
-                    log.info(f"Completed clean up for {pool_name} with mode {mode}")
 
             log.info("******* Test 14 passed **********")
 
@@ -1732,300 +1648,292 @@ Steps:
                 log.error("CephFS, RBD and RGW setup has failed")
                 return 1
 
-            for pool_name, mount_point, workload_type, pool_type in test_pools:
-                log.info(
-                    f"\n{'='*80}\n"
-                    f"Starting Scenario-15 tests for pool: {pool_name}\n"
-                    f"Mount point: {mount_point}\n"
-                    f"Workload type: {workload_type}\n"
-                    f"Pool type: {pool_type}\n"
-                    f"{'='*80}"
-                )
-                for blob_size in [32768, 65536]:
-                    for ratio in [0.5]:
-                        log.info(f"Testing with compression_required_ratio: {ratio}")
-                        log.info(
-                            f"\n******* testing compression required ratio **********\n"
-                            f"pool -> {pool_name}\n"
-                            f"mount point -> {mount_point}\n"
-                            f"workload type -> {workload_type}\n"
-                            f"pool type -> {pool_type}\n"
-                            f"blob size -> {blob_size}\n"
-                            f"ratio -> {ratio}\n"
-                            f"******* ***************************** **********"
-                        )
-                        rgw_bucket_name = "test-bucket"
+            for blob_size in [32768, 65536]:
+                for ratio in [0.5]:
+                    test_prerequisite_setup(**prereq_kwargs)
+                    for pool_name, mount_point, workload_type, pool_type in test_pools:
+                    log.info(
+                        f"\n{'='*80}\n"
+                        f"Starting Scenario-15 tests for pool: {pool_name}\n"
+                        f"Mount point: {mount_point}\n"
+                        f"Workload type: {workload_type}\n"
+                        f"Pool type: {pool_type}\n"
+                        f"{'='*80}"
+                    )
+                        
+                    log.info(f"Testing with compression_required_ratio: {ratio}")
+                    log.info(
+                        f"\n******* testing compression required ratio **********\n"
+                        f"pool -> {pool_name}\n"
+                        f"mount point -> {mount_point}\n"
+                        f"workload type -> {workload_type}\n"
+                        f"pool type -> {pool_type}\n"
+                        f"blob size -> {blob_size}\n"
+                        f"ratio -> {ratio}\n"
+                        f"******* ***************************** **********"
+                    )
+                    rgw_bucket_name = "test-bucket"
 
-                        log.info(
-                            f"Enabling compression on pool {pool_name} with:\n"
-                            f"  compression_mode: FORCE\n"
-                            f"  compression_algorithm: {algorithm}\n"
-                            f"  compression_required_ratio: {ratio}\n"
-                            f"  compression_min_blob_size: {blob_size}"
-                        )
-                        bluestore_compression.enable_compression(
-                            compression_mode=COMPRESSION_MODES.FORCE,
-                            compression_algorithm=algorithm,
-                            pool_level_compression=pool_level_compression,
-                            compression_required_ratio=ratio,
-                            pool_name=pool_name,
-                            compression_min_blob_size=blob_size,
-                        )
-                        log.info(
-                            f"Successfully enabled compression on pool {pool_name}"
-                        )
-                        time.sleep(30)
+                    log.info(
+                        f"Enabling compression on pool {pool_name} with:\n"
+                        f"  compression_mode: FORCE\n"
+                        f"  compression_algorithm: {algorithm}\n"
+                        f"  compression_required_ratio: {ratio}\n"
+                        f"  compression_min_blob_size: {blob_size}"
+                    )
+                    bluestore_compression.enable_compression(
+                        compression_mode=COMPRESSION_MODES.FORCE,
+                        compression_algorithm=algorithm,
+                        pool_level_compression=pool_level_compression,
+                        compression_required_ratio=ratio,
+                        pool_name=pool_name,
+                        compression_min_blob_size=blob_size,
+                    )
+                    log.info(
+                        f"Successfully enabled compression on pool {pool_name}"
+                    )
+                    time.sleep(30)
 
-                        comp_io_obj.workload_type = workload_type
-                        rbd_cephfs_folder_full_path = mount_point
-                        file_path = "/tmp/testfile_%s_%s_%s" % (
-                            pool_name,
-                            str(ratio),
-                            "".join(
-                                random.choices(
-                                    string.ascii_letters + string.digits, k=6
-                                )
-                            ),
-                        )
-                        log.info(f"Writing IO to file: {file_path}")
-                        log.info(
-                            f"File size: 10m, Compression percentage: {compression_percentage}%"
-                        )
-                        comp_io_obj.write(
-                            file_size="10m",
-                            compression_percentage=compression_percentage,
-                            file_full_path=file_path,
-                            offset="0",
-                            rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                            rgw_bucket_name=rgw_bucket_name,
-                        )
-                        log.info(f"Completed writing IO to pool {pool_name}")
-
-                        int_compression_percentage = (
-                            (100 - int(compression_percentage)) + 5
-                        ) / 100  # 0.35
-                        log.info(
-                            f"Calculated compression percentage (with 5% buffer): {int_compression_percentage}"
-                        )
-                        log.info(f"Listing objects in pool {pool_name}")
-                        cmd = f"rados ls -p {pool_name}"
-                        out = rados_obj.client.exec_command(cmd=cmd, sudo=True)
-                        log.info(
-                            f"Found objects in pool {pool_name}: {out[0] if out[0] else 'None'}"
-                        )
-
-                        osd_to_object_map = {}
-                        log.info("Mapping objects to their primary OSDs")
-                        # {23: [obj1, obj2] }
-                        for obj_name in out[0].split():
-                            log.debug(f"Processing object: {obj_name}")
-                            osd_map = rados_obj.get_osd_map(
-                                pool=pool_name, obj=obj_name
+                    comp_io_obj.workload_type = workload_type
+                    rbd_cephfs_folder_full_path = mount_point
+                    file_path = "/tmp/testfile_%s_%s_%s" % (
+                        pool_name,
+                        str(ratio),
+                        "".join(
+                            random.choices(
+                                string.ascii_letters + string.digits, k=6
                             )
-                            acting_pg_set = osd_map["acting"]
-                            primary_osd_id = acting_pg_set[0]
+                        ),
+                    )
+                    log.info(f"Writing IO to file: {file_path}")
+                    log.info(
+                        f"File size: 10m, Compression percentage: {compression_percentage}%"
+                    )
+                    comp_io_obj.write(
+                        file_size="10m",
+                        compression_percentage=compression_percentage,
+                        file_full_path=file_path,
+                        offset="0",
+                        rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
+                        rgw_bucket_name=rgw_bucket_name,
+                    )
+                    log.info(f"Completed writing IO to pool {pool_name}")
+
+                    int_compression_percentage = (
+                        (100 - int(compression_percentage)) + 5
+                    ) / 100  # 0.35
+                    log.info(
+                        f"Calculated compression percentage (with 5% buffer): {int_compression_percentage}"
+                    )
+                    log.info(f"Listing objects in pool {pool_name}")
+                    cmd = f"rados ls -p {pool_name}"
+                    out = rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                    log.info(
+                        f"Found objects in pool {pool_name}: {out[0] if out[0] else 'None'}"
+                    )
+
+                    osd_to_object_map = {}
+                    log.info("Mapping objects to their primary OSDs")
+                    # {23: [obj1, obj2] }
+                    for obj_name in out[0].split():
+                        log.debug(f"Processing object: {obj_name}")
+                        osd_map = rados_obj.get_osd_map(
+                            pool=pool_name, obj=obj_name
+                        )
+                        acting_pg_set = osd_map["acting"]
+                        primary_osd_id = acting_pg_set[0]
+                        log.debug(
+                            f"Object {obj_name} is on primary OSD {primary_osd_id}"
+                        )
+                        osd_to_object_map[primary_osd_id] = osd_to_object_map.get(
+                            primary_osd_id, []
+                        )
+                        osd_to_object_map[primary_osd_id].append(obj_name)
+                    log.info(
+                        f"OSD to object mapping completed. Total OSDs with objects: {len(osd_to_object_map)}"
+                    )
+
+                    obj_name_to_blobs_map = {}
+                    log.info("Fetching blob information from OSDs")
+                    for primary_osd_id, obj_names_list in osd_to_object_map.items():
+                        log.info(
+                            f"Processing OSD ID {primary_osd_id} with"
+                            f" {len(obj_names_list)} objects: {obj_names_list}"
+                        )
+                        log.info(
+                            f"Stopping OSD {primary_osd_id} to fetch blob information"
+                        )
+                        rados_obj.change_osd_state(
+                            action="stop", target=primary_osd_id
+                        )
+                        log.info(f"OSD {primary_osd_id} stopped successfully")
+
+                        for obj_name in obj_names_list:
+                            log.info(
+                                f"Processing object {obj_name} in OSD {primary_osd_id}"
+                            )
                             log.debug(
-                                f"Object {obj_name} is on primary OSD {primary_osd_id}"
+                                f"Listing object {obj_name} in OSD {primary_osd_id}"
                             )
-                            osd_to_object_map[primary_osd_id] = osd_to_object_map.get(
-                                primary_osd_id, []
+                            obj_json = objectstore_obj.list_objects(
+                                osd_id=int(primary_osd_id), obj_name=obj_name
+                            ).strip()
+                            if not obj_json:
+                                log.error(
+                                    f"Object {obj_name} could not be listed in OSD {primary_osd_id}"
+                                )
+                                raise
+
+                            log.debug(
+                                f"Fetching object dump for {obj_name} from OSD {primary_osd_id}"
                             )
-                            osd_to_object_map[primary_osd_id].append(obj_name)
+                            blobs_json = objectstore_obj.fetch_object_dump(
+                                osd_id=int(primary_osd_id), obj=obj_json
+                            )
+                            blobs_json = json.loads(blobs_json)
+                            obj_name_to_blobs_map[obj_name] = blobs_json
+                            log.info(
+                                f"Successfully fetched blob information for object {obj_name}"
+                            )
+
                         log.info(
-                            f"OSD to object mapping completed. Total OSDs with objects: {len(osd_to_object_map)}"
+                            f"Starting OSD {primary_osd_id} after blob inspection"
                         )
+                        rados_obj.change_osd_state(
+                            action="start", target=primary_osd_id
+                        )
+                        log.info(f"OSD {primary_osd_id} started successfully")
 
-                        obj_name_to_blobs_map = {}
-                        log.info("Fetching blob information from OSDs")
-                        for primary_osd_id, obj_names_list in osd_to_object_map.items():
-                            log.info(
-                                f"Processing OSD ID {primary_osd_id} with"
-                                f" {len(obj_names_list)} objects: {obj_names_list}"
-                            )
-                            log.info(
-                                f"Stopping OSD {primary_osd_id} to fetch blob information"
-                            )
-                            rados_obj.change_osd_state(
-                                action="stop", target=primary_osd_id
-                            )
-                            log.info(f"OSD {primary_osd_id} stopped successfully")
+                    log.info(
+                        f"Object name to blobs map: {json.dumps(obj_name_to_blobs_map, indent=4)}"
+                    )
+                    log.info(
+                        f"OSD ID to object map : {json.dumps(osd_to_object_map, indent=4)}"
+                    )
 
-                            for obj_name in obj_names_list:
+                    log.info(
+                        f"Starting validation of compression_required_ratio={ratio} with blob_size={blob_size}"
+                    )
+                    log.info(
+                        f"Validation rule: If compressed_AU/original_AU < {ratio}, compression should occur"
+                    )
+                    for obj_name, blobs_json in obj_name_to_blobs_map.items():
+                        log.info(f"Validating blobs for object: {obj_name}")
+                        extents = blobs_json["onode"]["extents"][:-1]
+                        log.info(f"Number of extents to validate: {len(extents)}")
+                        for idx, blob_detail in enumerate(extents):
+                            log.debug(f"Processing blob {idx} of object {obj_name}")
+                            log.debug(blob_detail)
+                            blob = blob_detail["blob"]
+                            logical_length = blob["logical_length"]
+                            compressed_length = blob["compressed_length"]
+                            actual_AU = math.ceil(logical_length / 4096)
+                            log.debug(
+                                f"Blob {idx}: logical_length={logical_length}, "
+                                f"compressed_length={compressed_length}, actual_AU={actual_AU}"
+                            )
+
+                            msg = (
+                                f"\nPool -> {pool_name}\n"
+                                f"Object -> {obj_name}\n"
+                                f"Blob index -> {idx}\n"
+                                f"compressed_length -> {compressed_length}\n"
+                                f"logical_length -> {logical_length}\n"
+                                f"Actual AU (logical_length/4096) -> {actual_AU}\n"
+                                f"Calculated compressed length -> {blob_size * int_compression_percentage}\n"
+                                f"int com per -> {int_compression_percentage}\n"
+                                f"blob size -> {blob_size}\n"
+                                f"compression_required_ratio -> {ratio}"
+                            )
+                            # no compression
+                            if compressed_length == 0:
                                 log.info(
-                                    f"Processing object {obj_name} in OSD {primary_osd_id}"
+                                    f"Blob {idx} is NOT compressed (compressed_length=0)"
                                 )
-                                log.debug(
-                                    f"Listing object {obj_name} in OSD {primary_osd_id}"
+                                # 8192 * 0.35 is used to obtain 35% of 8192
+                                # which is post compression size.
+                                compressed_AU = math.ceil(
+                                    (logical_length * int_compression_percentage)
+                                    / 4096
                                 )
-                                obj_json = objectstore_obj.list_objects(
-                                    osd_id=int(primary_osd_id), obj_name=obj_name
-                                ).strip()
-                                if not obj_json:
-                                    log.error(
-                                        f"Object {obj_name} could not be listed in OSD {primary_osd_id}"
-                                    )
-                                    raise
-
-                                log.debug(
-                                    f"Fetching object dump for {obj_name} from OSD {primary_osd_id}"
-                                )
-                                blobs_json = objectstore_obj.fetch_object_dump(
-                                    osd_id=int(primary_osd_id), obj=obj_json
-                                )
-                                blobs_json = json.loads(blobs_json)
-                                obj_name_to_blobs_map[obj_name] = blobs_json
+                                calculated_ratio = compressed_AU / actual_AU
                                 log.info(
-                                    f"Successfully fetched blob information for object {obj_name}"
+                                    f"Calculated compressed_AU: {compressed_AU}, "
+                                    f"calculated_ratio: {calculated_ratio}"
                                 )
-
-                            log.info(
-                                f"Starting OSD {primary_osd_id} after blob inspection"
-                            )
-                            rados_obj.change_osd_state(
-                                action="start", target=primary_osd_id
-                            )
-                            log.info(f"OSD {primary_osd_id} started successfully")
-
-                        log.info(
-                            f"Object name to blobs map: {json.dumps(obj_name_to_blobs_map, indent=4)}"
-                        )
-                        log.info(
-                            f"OSD ID to object map : {json.dumps(osd_to_object_map, indent=4)}"
-                        )
-
-                        log.info(
-                            f"Starting validation of compression_required_ratio={ratio} with blob_size={blob_size}"
-                        )
-                        log.info(
-                            f"Validation rule: If compressed_AU/original_AU < {ratio}, compression should occur"
-                        )
-                        for obj_name, blobs_json in obj_name_to_blobs_map.items():
-                            log.info(f"Validating blobs for object: {obj_name}")
-                            extents = blobs_json["onode"]["extents"][:-1]
-                            log.info(f"Number of extents to validate: {len(extents)}")
-                            for idx, blob_detail in enumerate(extents):
-                                log.debug(f"Processing blob {idx} of object {obj_name}")
-                                log.debug(blob_detail)
-                                blob = blob_detail["blob"]
-                                logical_length = blob["logical_length"]
-                                compressed_length = blob["compressed_length"]
-                                actual_AU = math.ceil(logical_length / 4096)
-                                log.debug(
-                                    f"Blob {idx}: logical_length={logical_length}, "
-                                    f"compressed_length={compressed_length}, actual_AU={actual_AU}"
-                                )
-
-                                msg = (
-                                    f"\nPool -> {pool_name}\n"
-                                    f"Object -> {obj_name}\n"
-                                    f"Blob index -> {idx}\n"
-                                    f"compressed_length -> {compressed_length}\n"
-                                    f"logical_length -> {logical_length}\n"
-                                    f"Actual AU (logical_length/4096) -> {actual_AU}\n"
-                                    f"Calculated compressed length -> {blob_size * int_compression_percentage}\n"
-                                    f"int com per -> {int_compression_percentage}\n"
-                                    f"blob size -> {blob_size}\n"
-                                    f"compression_required_ratio -> {ratio}"
-                                )
-                                # no compression
-                                if compressed_length == 0:
-                                    log.info(
-                                        f"Blob {idx} is NOT compressed (compressed_length=0)"
+                                # blobs with length <= minimum allocation size are not compressed
+                                # Bug https://bugzilla.redhat.com/show_bug.cgi?id=2427146
+                                # Blobs with more than one extents are not compressed despite compression
+                                # being enabled
+                                if (
+                                    len(blob["extents"]) > 1
+                                ) or logical_length == 4096:
+                                    msg += (
+                                        f"\ncompressed AU -> {compressed_AU}\n"
+                                        f"calculated_ratio -> {calculated_ratio}\n"
+                                        f"When extents are > 1\n"
+                                        f"Expected: No compression (ratio > required ratio) ✓"
                                     )
-                                    # 8192 * 0.35 is used to obtain 35% of 8192
-                                    # which is post compression size.
-                                    compressed_AU = math.ceil(
-                                        (logical_length * int_compression_percentage)
-                                        / 4096
+                                    log.info(msg)
+                                    log.info("***PASS***")
+                                elif float(calculated_ratio) > float(ratio):
+                                    msg += (
+                                        f"\ncompressed AU -> {compressed_AU}\n"
+                                        f"calculated_ratio -> {calculated_ratio}\n"
+                                        f"compressed length == 0 and {calculated_ratio} > {ratio}\n"
+                                        f"Expected: No compression (ratio > required ratio) ✓"
                                     )
-                                    calculated_ratio = compressed_AU / actual_AU
-                                    log.info(
-                                        f"Calculated compressed_AU: {compressed_AU}, "
-                                        f"calculated_ratio: {calculated_ratio}"
-                                    )
-                                    # blobs with length <= minimum allocation size are not compressed
-                                    # Bug https://bugzilla.redhat.com/show_bug.cgi?id=2427146
-                                    # Blobs with more than one extents are not compressed despite compression
-                                    # being enabled
-                                    if (
-                                        len(blob["extents"]) > 1
-                                    ) or logical_length == 4096:
-                                        msg += (
-                                            f"\ncompressed AU -> {compressed_AU}\n"
-                                            f"calculated_ratio -> {calculated_ratio}\n"
-                                            f"When extents are > 1\n"
-                                            f"Expected: No compression (ratio > required ratio) ✓"
-                                        )
-                                        log.info(msg)
-                                        log.info("***PASS***")
-                                    elif float(calculated_ratio) > float(ratio):
-                                        msg += (
-                                            f"\ncompressed AU -> {compressed_AU}\n"
-                                            f"calculated_ratio -> {calculated_ratio}\n"
-                                            f"compressed length == 0 and {calculated_ratio} > {ratio}\n"
-                                            f"Expected: No compression (ratio > required ratio) ✓"
-                                        )
-                                        log.info(msg)
-                                        log.info("***PASS***")
-                                    else:
-                                        msg += (
-                                            f"\ncompressed AU -> {compressed_AU}\n"
-                                            f"calculated_ratio -> {calculated_ratio}\n"
-                                            f"err -> When calculated ratio < required ratio, compression should occur"
-                                        )
-                                        log.error(msg)
-                                        log.error("***FAIL***")
-                                        raise
+                                    log.info(msg)
+                                    log.info("***PASS***")
                                 else:
-                                    log.info(
-                                        f"Blob {idx} is compressed (compressed_length={compressed_length})"
+                                    msg += (
+                                        f"\ncompressed AU -> {compressed_AU}\n"
+                                        f"calculated_ratio -> {calculated_ratio}\n"
+                                        f"err -> When calculated ratio < required ratio, compression should occur"
                                     )
-                                    compressed_AU = math.ceil(compressed_length / 4096)
-                                    calculated_ratio = compressed_AU / actual_AU
-                                    log.info(
-                                        f"Calculated compressed_AU: {compressed_AU}, "
-                                        f"calculated_ratio: {calculated_ratio}"
+                                    log.error(msg)
+                                    log.error("***FAIL***")
+                                    raise
+                            else:
+                                log.info(
+                                    f"Blob {idx} is compressed (compressed_length={compressed_length})"
+                                )
+                                compressed_AU = math.ceil(compressed_length / 4096)
+                                calculated_ratio = compressed_AU / actual_AU
+                                log.info(
+                                    f"Calculated compressed_AU: {compressed_AU}, "
+                                    f"calculated_ratio: {calculated_ratio}"
+                                )
+                                # For 8192 the compression required ratio is not honoured in bluestore v1
+                                # In bluestore v2 for all blob sizes , compression required ratio is not honoured
+                                if logical_length == 8192 or float(
+                                    calculated_ratio
+                                ) <= float(ratio):
+                                    msg += (
+                                        f"\ncompressed AU -> {compressed_AU}\n"
+                                        f"calculated_ratio -> {calculated_ratio}\n"
+                                        f"compressed length > 0 and {calculated_ratio} < {ratio}\n"
+                                        f"Expected: Compression occurred (ratio < required ratio) ✓"
                                     )
-                                    # For 8192 the compression required ratio is not honoured in bluestore v1
-                                    # In bluestore v2 for all blob sizes , compression required ratio is not honoured
-                                    if logical_length == 8192 or float(
-                                        calculated_ratio
-                                    ) <= float(ratio):
-                                        msg += (
-                                            f"\ncompressed AU -> {compressed_AU}\n"
-                                            f"calculated_ratio -> {calculated_ratio}\n"
-                                            f"compressed length > 0 and {calculated_ratio} < {ratio}\n"
-                                            f"Expected: Compression occurred (ratio < required ratio) ✓"
-                                        )
-                                        log.info(msg)
-                                        log.info("***PASS***")
-                                    else:
-                                        msg += (
-                                            f"\ncompressed AU -> {compressed_AU}\n"
-                                            f"calculated_ratio -> {calculated_ratio}\n"
-                                            f"When calculated ratio > required ratio, compression should not occur"
-                                        )
-                                        log.error(msg)
-                                        log.error("***FAIL***")
-                                        raise
-                            log.info(f"Completed validation for object {obj_name}")
-                        log.info(
-                            f"Validation summary for ratio={ratio}, blob_size={blob_size}, pool={pool_name}: "
-                        )
+                                    log.info(msg)
+                                    log.info("***PASS***")
+                                else:
+                                    msg += (
+                                        f"\ncompressed AU -> {compressed_AU}\n"
+                                        f"calculated_ratio -> {calculated_ratio}\n"
+                                        f"When calculated ratio > required ratio, compression should not occur"
+                                    )
+                                    log.error(msg)
+                                    log.error("***FAIL***")
+                                    raise
+                        log.info(f"Completed validation for object {obj_name}")
+                    log.info(
+                        f"Validation summary for ratio={ratio}, blob_size={blob_size}, pool={pool_name}: "
+                    )
 
-                        log.info(
-                            f"Starting cleanup for pool {pool_name}, ratio={ratio}, blob_size={blob_size}"
-                        )
-                        comp_io_obj.clean(
-                            rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                            rgw_bucket_name=rgw_bucket_name,
-                            pool_name=pool_name,
-                            compression_obj=bluestore_compression,
-                        )
-
-                        log.info(
-                            f"Completed clean up for {pool_name} with ratio={ratio}, blob_size={blob_size}"
-                        )
+                    test_prerequisite_teardown(
+                        **prereq_kwargs, created_resources=created_resources
+                    )
 
             objectstore_obj.nostop = None
             objectstore_obj.nostart = None
@@ -2051,6 +1959,7 @@ Steps:
 11) Cleanup pool
             """
             )
+            test_prerequisite_setup(**prereq_kwargs)
             # initializations
             compression_percentage = 70
             log.info("Starting scenario-16")
@@ -2213,14 +2122,9 @@ Steps:
                     f"***PASS***"
                 )
 
-                comp_io_obj.clean(
-                    rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                    rgw_bucket_name=rgw_bucket_name,
-                    pool_name=pool_name,
-                    compression_obj=bluestore_compression,
-                )
-
-                log.info(f"Completed clean up for {pool_name}")
+            test_prerequisite_teardown(
+                **prereq_kwargs, created_resources=created_resources
+            )
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
@@ -2247,72 +2151,191 @@ Steps:
                     pool_name=pool_name,
                     compression_obj=bluestore_compression,
                 )
-
-        # Clean up pools (if configured)
-        if config.get("cleanup_pools", False) and created_resources:
-            log.debug("Cleaning up test resources...")
-
-            # Parallel cleanup of CephFS and RBD
-            cleanup_tasks = []
-            with cf.ThreadPoolExecutor(max_workers=2) as cleanup_executor:
-                for name, mount_path, _, workload_type in created_resources:
-                    # Submit cleanup tasks
-                    if workload_type == "cephfs":
-                        task = (
-                            cleanup_executor.submit(
-                                _cleanup_cephfs, client_node, mount_path, name
-                            )
-                            if (mount_path or name)
-                            else None
-                        )
-                    elif workload_type == "rbd":
-                        task = (
-                            cleanup_executor.submit(
-                                _cleanup_rbd, client_node, mount_path, name
-                            )
-                            if mount_path
-                            else None
-                        )
-                cleanup_tasks.append(task)
-
-            for task in cleanup_tasks:
-                # Wait for cleanup tasks to complete
-                try:
-                    task.result()
-                except Exception as e:
-                    log.warning(f"cleanup failed: {e}")
-
-            # Clean up rados pools sequentially (depends on CephFS/RBD cleanup)
-            log.info(f"Deleting {len(created_resources)} pool(s)...")
-            failed_pools = []
-
-            for name, mount_path, created_pools, workload_type in created_resources:
-                for pool in created_pools:
-                    pool_name = pool["pool_name"]
-                    try:
-                        rados_obj.delete_pool(pool=pool_name)
-                    except Exception as e:
-                        log.error(f"Failed to delete pool {pool_name}: {e}")
-                        failed_pools.append(pool_name)
-            if failed_pools:
-                log.warning(
-                    f"Failed to delete {len(failed_pools)} pool(s): {failed_pools}"
-                )
-            else:
-                log.info("All pools deleted successfully")
-        else:
-            log.info("Skipping cleanup (cleanup_pools=False or no pools created)")
-
-        # log cluster health
-        rados_obj.log_cluster_health()
-        # check for crashes after test execution
-        test_end_time = get_cluster_timestamp(rados_obj.node)
-        log.debug(
-            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
-        )
-        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
-            log.error("Test failed due to crash at the end of test")
-            return 1
+        try:
+            test_prerequisite_teardown(
+                **prereq_kwargs, created_resources=created_resources
+            )
+        except Exception as e:
+            log.error(f"Failed to clean up prerequisite setup: {e}")
 
     log.info("Completed validation of bluestore v2 data compression.")
     return 0
+
+
+def test_prerequisite_setup(
+    client_node,
+    rados_obj,
+    config,
+    rgw_bucket_name,
+    rgw_endpoint,
+):
+    # Created Erasure and Replicated Ceph file system
+    if config.get("include_erasure_pools", False):
+        fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
+            client_node=client_node,
+            fs_name="cephfs0",
+            pool_type="erasure",
+        )
+
+    fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
+        client_node=client_node,
+        fs_name="cephfs1",
+        pool_type="replicated",
+    )
+
+    # Create EC RBD
+    if config.get("include_erasure_pools", False):
+        rbd_pool_name = "rbd-ec-data"
+        rbd_ec_metadata = "rbd-ec-metadata"
+        rbd_image = "rbd_image"
+        mount_path, device_path, created_pools = rados_obj.create_ec_rbd_pools(
+            rbd_ec_data_pool=rbd_pool_name,
+            rbd_metadata_pool=rbd_ec_metadata,
+            image_name=rbd_image,
+            crush_failure_domain="osd",
+        )
+
+    # Create replicated RBD
+    rbd_pool_name = "rbd-replicated-data"
+    rbd_image = "rbd_image"
+    mount_path, device_path, created_pools = rados_obj.create_replicated_rbd_pools(
+        rbd_pool=rbd_pool_name,
+        image_name=rbd_image,
+        mount_path="/mnt/rbd_replicated_mount",
+    )
+
+    # Replicated RGW setup
+    rgw_data_pool = "default.rgw.buckets.data"
+    rados_obj.create_pool(pool_name=rgw_data_pool, app_name="rgw")
+
+    # Install aws cli
+    cmd = "pip3 install awscli"
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+    # fetch rgw key and secret
+    keys = get_or_create_user(client_node)
+    access_key = keys["access_key"]
+    secret_key = keys["secret_key"]
+
+    cmd = "mkdir .aws"
+    try:
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    except Exception:
+        log.error(".aws directory already exists.")
+
+    cmd = """cat <<EOF > ~/.aws/config
+[default]
+region = us-east-1
+EOF"""
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    cmd = f"""cat <<EOF > ~/.aws/credentials
+[default]
+aws_access_key_id = {access_key}
+aws_secret_access_key = {secret_key}
+EOF"""
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    cmd = f"aws s3 mb s3://{rgw_bucket_name} --endpoint-url http://{rgw_endpoint}"
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+
+def test_prerequisite_teardown(
+    client_node,
+    rados_obj,
+    config,
+    rgw_bucket_name,
+    rgw_endpoint,
+    created_resources,
+):
+    """
+    Tear down resources created by test_prerequisite_setup.
+
+    Unmounts CephFS/RBD workloads, removes RGW S3 bucket and RBD images,
+    deletes tracked pools, and removes EC erasure-code profiles when applicable.
+    """
+    log.debug("Tearing down prerequisite test resources...")
+
+    rbd_image = "rbd_image"
+    rbd_images = [
+        ("rbd-replicated-data", rbd_image),
+    ]
+    if config.get("include_erasure_pools", False):
+        rbd_images.append(("rbd-ec-metadata", rbd_image))
+
+    for pool_name, image_name in rbd_images:
+        log.info(f"Removing RBD image {pool_name}/{image_name}")
+        try:
+            client_node.exec_command(
+                cmd=f"rbd rm {pool_name}/{image_name}",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception as e:
+            log.warning(f"Failed to remove RBD image {pool_name}/{image_name}: {e}")
+
+    # Cleanup RGW S3 bucket
+    if rgw_bucket_name and rgw_endpoint:
+        log.info(f"Removing RGW bucket: {rgw_bucket_name}")
+        try:
+            client_node.exec_command(
+                cmd=(
+                    f"aws s3 rb s3://{rgw_bucket_name} --force "
+                    f"--endpoint-url http://{rgw_endpoint}"
+                ),
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception as e:
+            log.warning(f"Failed to remove RGW bucket {rgw_bucket_name}: {e}")
+
+    # Parallel cleanup of CephFS and RBD mounts
+    cleanup_tasks = []
+    with cf.ThreadPoolExecutor(max_workers=4) as cleanup_executor:
+        for name, mount_path, _, workload_type in created_resources:
+            if workload_type == "cephfs" and (mount_path or name):
+                cleanup_tasks.append(
+                    cleanup_executor.submit(
+                        _cleanup_cephfs, client_node, mount_path, name
+                    )
+                )
+            elif workload_type == "rbd" and mount_path:
+                cleanup_tasks.append(
+                    cleanup_executor.submit(_cleanup_rbd, client_node, mount_path, name)
+                )
+
+    for task in cleanup_tasks:
+        try:
+            task.result()
+        except Exception as e:
+            log.warning(f"Prerequisite cleanup failed: {e}")
+
+    # Delete tracked pools (depends on CephFS/RBD cleanup above)
+    log.info(f"Deleting pools from {len(created_resources)} resource(s)...")
+    failed_pools = []
+    for _, _, created_pools, _ in created_resources:
+        for pool in created_pools:
+            pool_name = pool["pool_name"]
+            try:
+                rados_obj.delete_pool(pool=pool_name)
+            except Exception as e:
+                log.error(f"Failed to delete pool {pool_name}: {e}")
+                failed_pools.append(pool_name)
+
+    if failed_pools:
+        log.warning(f"Failed to delete {len(failed_pools)} pool(s): {failed_pools}")
+    else:
+        log.info("All prerequisite pools deleted successfully")
+
+    # Remove EC erasure-code profiles created during setup
+    if config.get("include_erasure_pools", False):
+        for profile_name in ("ec_profile_cephfs0", "rbd-ec-profile"):
+            log.info(f"Removing EC profile: {profile_name}")
+            try:
+                client_node.exec_command(
+                    cmd=f"ceph osd erasure-code-profile rm {profile_name}",
+                    sudo=True,
+                    check_ec=False,
+                )
+            except Exception as e:
+                log.warning(f"Failed to remove EC profile {profile_name}: {e}")
+
+    log.info("Prerequisite teardown completed")

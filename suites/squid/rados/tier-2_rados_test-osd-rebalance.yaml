@@ -200,19 +200,6 @@ tests:
 # scenario 16 - compression tests post recovery
 
   - test:
-      name: Bluestore compression v1 - setup rbd , rgw and cephfs
-      module: test_bluestore_comp_enhancements.py
-      desc: Positive workflows for bluestore data compression enhancements
-      polarion-id: CEPH-83620071
-      abort-on-fail: true
-      config:
-        include_erasure_coded_pools: true
-        cleanup_objects: true
-        cleanup_pools: false
-        scenarios_to_run:
-          - setup
-
-  - test:
       name: Bluestore compression v1 - compression required ratio tests
       module: test_bluestore_comp_enhancements.py
       desc: Bluestore compression v1 - compression required ratio tests
