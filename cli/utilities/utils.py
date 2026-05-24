@@ -204,28 +204,57 @@ def get_node_ip(nodes, node_name):
     return False
 
 
+def repo_uses_flat_tools_compose_layout(repo_url, ibm_build=False):
+    """True when RPM Tools live at {compose}/Tools/ (not compose/Tools/x86_64/os/).
+
+    QE lab composes, IP mirrors of the same layout, and IBM composes use this
+    layout; downstream RH compose trees use the deeper path.
+
+    Examples:
+        http://repo.qe.ceph.lab/.../18.2.1-393/ -> flat Tools/
+        IBM build or cloud_type ibmc -> flat Tools/
+        downstream RH compose -> compose/Tools/x86_64/os/
+    """
+    if ibm_build:
+        return True
+    lowered = repo_url.lower()
+    if "repo.qe.ceph.lab" in lowered:
+        return True
+    # Jenkins / internal mirrors often expose compose roots without the QE hostname.
+    if "/repos/ceph/" in lowered:
+        return True
+    return False
+
+
 def get_custom_repo_url(base_url, cloud_type="openstack"):
     """Add the given custom repo on every node part of the cluster.
 
     Args:
         cloud_type (str): cloudtype (openstack|ibmc|aws|onecloud)
         base_url (str): base URL of repository
+
+    Returns:
+        str: Repo URL or path ending with Tools/ or compose/Tools/x86_64/os/.
+        URLs that already end with /tools or /tools/ are returned with a trailing
+        slash only (Tools path is already present).
     """
     if base_url.endswith(".repo"):
         return base_url
 
-    if not base_url.endswith("/"):
-        base_url += "/"
+    trimmed = base_url.rstrip("/")
+    lowered = trimmed.lower()
+    if lowered.endswith("/tools") or lowered.endswith("/tools/"):
+        return trimmed + "/"
+
+    base_url = trimmed + "/"
 
     if base_url.endswith("x86_64/"):
         return base_url
 
-    if cloud_type == "ibmc":
-        base_url += "Tools"
-    else:
-        base_url += "compose/Tools/x86_64/os/"
-
-    return base_url
+    ibm_build = cloud_type == "ibmc"
+    if repo_uses_flat_tools_compose_layout(base_url, ibm_build):
+        return base_url + "Tools/"
+    return base_url + "compose/Tools/x86_64/os/"
 
 
 def get_nodes_by_ids(nodes, ids):

@@ -9,6 +9,7 @@ from cli.ops.cephadm_ansible import (
     exec_cephadm_preflight,
 )
 from cli.utilities.packages import Package, Repos
+from cli.utilities.utils import repo_uses_flat_tools_compose_layout
 from utility.log import Log
 
 from .configs import get_registry_details
@@ -390,10 +391,7 @@ def get_tools_repo(repo, ibm_build=False):
     if repo.endswith(".repo"):
         return repo
 
-    if "repo.qe.ceph.lab" in repo:
-        return f"{repo}/Tools"
-
-    if ibm_build:
+    if repo_uses_flat_tools_compose_layout(repo, ibm_build):
         return f"{repo}/Tools"
 
     return f"{repo}/compose/Tools/x86_64/os"
