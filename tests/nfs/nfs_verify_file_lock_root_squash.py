@@ -1,5 +1,6 @@
+import shlex
 from threading import Thread
-from time import sleep
+from time import sleep, time
 
 from nfs_operations import cleanup_cluster, enable_v3_locking, setup_nfs_cluster
 
@@ -9,6 +10,21 @@ from cli.utilities.filesys import Mount, Unmount
 from utility.log import Log
 
 log = Log(__name__)
+
+LOCK_READY_FILENAME = ".cephci_nfs_lock_ready"
+
+
+def wait_for_lock_holder_ready(client, marker_path, timeout=90):
+    """Wait until client 1 creates the marker after taking LOCK_EX (sync for contender)."""
+    deadline = time() + timeout
+    while time() < deadline:
+        try:
+            client.exec_command(sudo=True, cmd=f"test -f {marker_path}")
+            log.info(f"Lock holder ready ({marker_path})")
+            return
+        except Exception:
+            sleep(1)
+    raise OperationFailedError(f"Timeout waiting for lock holder marker {marker_path}")
 
 
 def rootsquash_using_conf(
@@ -34,15 +50,51 @@ def rootsquash_using_conf(
         raise OperationFailedError("failed to enable rootsquash using conf file")
 
 
-def get_file_lock(client):
-    """
-    Gets the file lock on the file with root_squash enabled
+def _flock_hold_script(squash_mount, publish_ready_marker):
+    """Build python3 -c command for exclusive flock on sample_file over NFS.
+
+    Opens sample_file, takes LOCK_EX | LOCK_NB, holds 30s, then unlocks.
+    If publish_ready_marker is True, creates LOCK_READY_FILENAME after flock
+    so the second client can synchronize before contending.
+
     Args:
-        client (ceph): Ceph client node
+        squash_mount: NFS mount path (e.g. /mnt/nfs_squash).
+        publish_ready_marker: Touch ready marker after lock (client 1 only).
+
+    Returns:
+        Command string for client.exec_command.
     """
-    cmd = """python3 -c 'from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN;from time import sleep;f = open(
-"/mnt/nfs_squash/sample_file", "w");flock(f.fileno(), LOCK_EX | LOCK_NB);sleep(30);flock(f.fileno(), LOCK_UN)'"""
-    client.exec_command(cmd=cmd, sudo=True)
+    sample = f"{squash_mount}/sample_file"
+    ready = f"{squash_mount}/{LOCK_READY_FILENAME}"
+    parts = [
+        "from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN",
+        "from time import sleep",
+        f"f = open({repr(sample)}, 'w')",
+        "flock(f.fileno(), LOCK_EX | LOCK_NB)",
+    ]
+    if publish_ready_marker:
+        parts.append(f"open({repr(ready)}, 'w').close()")
+    parts.extend(["sleep(30)", "flock(f.fileno(), LOCK_UN)"])
+    py = "; ".join(parts)
+    return f"python3 -c {shlex.quote(py)}"
+
+
+def get_file_lock(client, squash_mount):
+    """
+    Acquire exclusive non-blocking lock on sample_file, hold ~30s, release.
+    """
+    client.exec_command(
+        sudo=True,
+        cmd=_flock_hold_script(squash_mount, publish_ready_marker=False),
+    )
+
+
+def get_file_lock_holder(client, squash_mount):
+    """Same as get_file_lock but drops a marker after flock so client 2 can synchronize."""
+    client.exec_command(
+        sudo=True,
+        cmd=_flock_hold_script(squash_mount, publish_ready_marker=True),
+    )
 
 
 def run(ceph_cluster, **kw):
@@ -78,6 +130,8 @@ def run(ceph_cluster, **kw):
     new_squash_value = '"squash": "rootsquash"'
 
     try:
+        # single_export: one CephFS export for all clients so flock is on the same inode;
+        # without it each client gets a separate export and locks do not block each other.
         setup_nfs_cluster(
             clients,
             nfs_server_name,
@@ -91,6 +145,7 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
             enable_rdma=config.get("enable_rdma", False),
             rdma_port=config.get("rdma_port"),
+            single_export=True,
         )
 
         # Create export
@@ -137,49 +192,71 @@ def run(ceph_cluster, **kw):
         if version == 3:
             enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
 
-        # Create file on squashed dir
+        # Create file on squashed dir; chmod the file so squashed UIDs can open it for "w"
+        # (chmod on the mount dir alone leaves sample_file 644 and the second lock fails).
         clients[0].exec_command(
             sudo=True,
-            cmd=f"touch {nfs_squash_mount}/sample_file",
+            cmd=(
+                f"touch {nfs_squash_mount}/sample_file && "
+                f"chmod 666 {nfs_squash_mount}/sample_file"
+            ),
         )
+        ready = f"{nfs_squash_mount}/{LOCK_READY_FILENAME}"
+        clients[0].exec_command(sudo=True, cmd=f"rm -f {ready}")
     except Exception as e:
         log.error(f"Failed to create rootsquash dir. Error: {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
 
-    # Perform File Lock from client 1
-    c1 = Thread(target=get_file_lock, args=(clients[0],))
-    c1.start()
-
-    # Adding a constant sleep as it is required for the thread call to start the lock process
-    sleep(2)
     try:
-        get_file_lock(clients[1])
-        log.error(
-            "Unexpected: Client 2 was able to access file lock while client 1 lock was active"
+        # Client 1 holds lock in a thread; marker file syncs before client 2 contends
+        c1 = Thread(
+            target=get_file_lock_holder,
+            args=(
+                clients[0],
+                nfs_squash_mount,
+            ),
         )
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-        return 1
-    except Exception as e:
-        log.info(
-            f"Expected: Failed to acquire lock from client 2 while client 1 lock is in on {e}"
+        c1.start()
+        try:
+            wait_for_lock_holder_ready(
+                clients[1], f"{nfs_squash_mount}/{LOCK_READY_FILENAME}"
+            )
+        except Exception as e:
+            log.error(f"Lock setup sync failed: {e}")
+            c1.join(timeout=120)
+            return 1
+
+        try:
+            get_file_lock(clients[1], nfs_squash_mount)
+            log.error(
+                "Unexpected: Client 2 was able to access file lock while client 1 lock was active"
+            )
+            c1.join(timeout=120)
+            return 1
+        except Exception as e:
+            log.info(
+                f"Expected: Failed to acquire lock from client 2 while client 1 lock is in on {e}"
+            )
+
+        c1.join()
+
+        clients[0].exec_command(
+            sudo=True, cmd=f"rm -f {nfs_squash_mount}/{LOCK_READY_FILENAME}",
         )
 
-    c1.join()
+        try:
+            get_file_lock(clients[1], nfs_squash_mount)
+            log.info(
+                "Expected: Successfully acquired lock from client 2 while client 1 lock is released"
+            )
+            return 0
 
-    try:
-        get_file_lock(clients[1])
-        log.info(
-            "Expected: Successfully acquired lock from client 2 while client 1 lock is released"
-        )
-        return 0
-
-    except Exception as e:
-        log.error(
-            f"Unexpected: Failed to acquire lock from client 2 while client 1 lock is in removed {e}"
-        )
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-        return 1
+        except Exception as e:
+            log.error(
+                f"Unexpected: Failed to acquire lock from client 2 while client 1 lock is in removed {e}"
+            )
+            return 1
 
     finally:
         log.info("Cleaning up")
@@ -195,5 +272,7 @@ def run(ceph_cluster, **kw):
         Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_export_squash)
 
         # Cleaning up the remaining export and deleting the nfs cluster
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
+        cleanup_cluster(
+            clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
+        )
         log.info("Cleaning up successfull")
