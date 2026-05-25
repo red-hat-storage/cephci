@@ -42,6 +42,8 @@ class CephfsMirroringUtils(object):
         self.source_clients = source_ceph_cluster.get_ceph_objects("client")
         self.target_clients = target_ceph_cluster.get_ceph_objects("client")
         self.source_mirrors = source_ceph_cluster.get_ceph_objects("cephfs-mirror")
+        self.source_ceph_cluster = source_ceph_cluster
+        self.target_ceph_cluster = target_ceph_cluster
         self.fs_util_ceph1 = FsUtils(source_ceph_cluster)
         self.fs_util_ceph2 = FsUtils(target_ceph_cluster)
 
@@ -572,15 +574,26 @@ class CephfsMirroringUtils(object):
                     file = node.exec_command(sudo=True, cmd=cmd)
                     asok_file = file[0].replace("\\n", "")
                     if asok_file:
-                        asok_files[node.node.hostname] = [node, asok_file]
+                        hostname = (
+                            node.node.hostname
+                            if hasattr(node, "node")
+                            else node.hostname
+                        )
+                        asok_files[hostname] = [node, asok_file]
                     log.info(asok_file)
             else:
                 file = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
                 asok_file = file[0].replace("\\n", "")
-                asok_files[cephfs_mirror_node.node.hostname] = [
-                    cephfs_mirror_node,
-                    asok_file,
-                ]
+                if asok_file:
+                    hostname = (
+                        cephfs_mirror_node.node.hostname
+                        if hasattr(cephfs_mirror_node, "node")
+                        else cephfs_mirror_node.hostname
+                    )
+                    asok_files[hostname] = [
+                        cephfs_mirror_node,
+                        asok_file,
+                    ]
                 log.info(asok_file)
         return asok_files
 
@@ -603,6 +616,10 @@ class CephfsMirroringUtils(object):
             "Fetch all asok files of the cephfs-mirror daemon with connectivity check."
         )
         accessible_asok_files = {}
+        if not isinstance(daemon_names, list):
+            daemon_names = [daemon_names]
+        if not isinstance(cephfs_mirror_node, list):
+            cephfs_mirror_node = [cephfs_mirror_node]
 
         for daemon_name in daemon_names:
             # Get all asok files, not just the first one
@@ -614,21 +631,23 @@ class CephfsMirroringUtils(object):
                 asok_file_list = [
                     f.strip() for f in file_output.split("\n") if f.strip()
                 ]
+                node_hostname = (
+                    node.node.hostname if hasattr(node, "node") else node.hostname
+                )
                 log.info(
-                    f"Found {len(asok_file_list)} asok file(s) for {node.node.hostname}: {asok_file_list}"
+                    f"Found {len(asok_file_list)} asok file(s) for {node_hostname}: {asok_file_list}"
                 )
 
                 # Test each asok file until we find an accessible one for this hostname
                 for asok_file_path in asok_file_list:
                     if not asok_file_path:
                         continue
-                    if node.node.hostname in accessible_asok_files:
+                    if node_hostname in accessible_asok_files:
                         break  # Already found accessible file for this hostname
 
                     log.info(
-                        f"Testing connectivity to asok file on {node.node.hostname}: {asok_file_path}"
+                        f"Testing connectivity to asok file on {node_hostname}: {asok_file_path}"
                     )
-                    # test_cmd = f"cd /var/run/ceph ; ceph --admin-daemon {asok_file_path} help"
                     test_cmd = (
                         f"cephadm shell -- bash -c "
                         f'"cd /var/run/ceph && ceph --admin-daemon {asok_file_path} help"'
@@ -640,17 +659,17 @@ class CephfsMirroringUtils(object):
 
                     # Check if "fs mirror peer status" is in the output
                     if out and "fs mirror peer status" in out:
-                        accessible_asok_files[node.node.hostname] = [
+                        accessible_asok_files[node_hostname] = [
                             node,
                             asok_file_path,
                         ]
                         log.info(
-                            f"Successfully connected to asok file on {node.node.hostname}: {asok_file_path}"
+                            f"Successfully connected to asok file on {node_hostname}: {asok_file_path}"
                         )
                         break  # Found accessible file, move to next hostname
                     else:
                         log.warning(
-                            f"Connection refused or error accessing asok file on {node.node.hostname}: "
+                            f"Connection refused or error accessing asok file on {node_hostname}: "
                             f"'fs mirror peer status' not found. stderr: {err}, output: {out[:200] if out else 'empty'}"
                         )
 
@@ -660,6 +679,32 @@ class CephfsMirroringUtils(object):
         else:
             log.warning("No accessible asok files found, returning empty dict")
             return {}
+
+    def _resolve_mirror_nodes(self, source_clients, fallback_nodes):
+        """Find the node where cephfs-mirror daemon is actually running via ceph orch ps.
+        Falls back to fallback_nodes if lookup fails.
+        """
+        if not hasattr(self, "source_ceph_cluster") or not self.source_ceph_cluster:
+            return fallback_nodes
+        try:
+            out, _ = source_clients.exec_command(
+                sudo=True,
+                cmd="ceph orch ps --daemon_type cephfs-mirror -f json",
+            )
+            data = json.loads(out)
+            resolved = []
+            for daemon_info in data:
+                hostname = daemon_info.get("hostname")
+                if hostname:
+                    node = self.source_ceph_cluster.get_node_by_hostname(hostname)
+                    if node and node not in resolved:
+                        resolved.append(node)
+            if resolved:
+                log.info("Resolved mirror nodes: %s", [n.hostname for n in resolved])
+                return resolved
+        except Exception as e:
+            log.warning("Failed to resolve mirror nodes via orch ps: %s", e)
+        return fallback_nodes
 
     @retry(CommandFailed, tries=5, delay=30)
     def validate_synchronization(
@@ -684,7 +729,11 @@ class CephfsMirroringUtils(object):
         fsid = self.get_fsid(cephfs_mirror_node[0])
         daemon_names = self.get_daemon_name(source_clients)
         filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
-        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        asok_files = self.get_asok_file_with_connectivity_check(
+            cephfs_mirror_node, fsid, daemon_names
+        )
+        if not asok_files:
+            raise CommandFailed("No accessible cephfs-mirror admin socket found")
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
             out, _ = asok_file[0].exec_command(
@@ -809,7 +858,7 @@ class CephfsMirroringUtils(object):
         log.error("last synced Snapshot not found or not synced")
         raise CommandFailed("last synced Snapshot not found or not synced")
 
-    @retry(CommandFailed, tries=20, delay=30, backoff=1)
+    @retry(CommandFailed, tries=10, delay=30, backoff=1)
     def validate_snapshot_sync_status(
         self,
         cephfs_mirror_node,
@@ -840,15 +889,25 @@ class CephfsMirroringUtils(object):
             json.JSONDecodeError: If there's an error decoding JSON from the Ceph mirror status response.
         """
         log.info("Get peer mirror status")
+        if not isinstance(cephfs_mirror_node, list):
+            cephfs_mirror_node = [cephfs_mirror_node]
         daemon_names = self.get_daemon_name(self.source_clients[0])
 
-        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        asok_files = self.get_asok_file_with_connectivity_check(
+            cephfs_mirror_node, fsid, daemon_names
+        )
+        if not asok_files:
+            raise CommandFailed("No accessible cephfs-mirror admin socket found")
         log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_files}")
+        if not asok_files:
+            raise CommandFailed(
+                "No valid admin socket files found for cephfs-mirror daemon"
+            )
         filesystem_id = self.get_filesystem_id_by_name(self.source_clients[0], fs_name)
         log.info(f"filesystem id of {fs_name} is : {filesystem_id}")
         peer_uuid = self.get_peer_uuid_by_name(self.source_clients[0], fs_name)
         log.info(f"peer uuid of {fs_name} is : {peer_uuid}")
-        for node, asok in asok_file.items():
+        for node, asok in asok_files.items():
             try:
                 asok[0].exec_command(
                     sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
@@ -1119,10 +1178,21 @@ class CephfsMirroringUtils(object):
             if self.enable_mirroring_module(target_client) != 0:
                 raise Exception("Failed to enable mirroring module on Target.")
 
-            log.info("Create and authorize user for the target filesystem")
-            if self.create_authorize_user(target_fs, target_user, target_client) != 0:
-                raise Exception(
-                    "Failed to create/authorize user for the target filesystem."
+            ceph_version = get_ceph_version_from_cluster(source_client)
+            if LooseVersion(ceph_version) <= LooseVersion("20.1.0"):
+                log.info("Create and authorize user for the target filesystem")
+                if (
+                    self.create_authorize_user(target_fs, target_user, target_client)
+                    != 0
+                ):
+                    raise Exception(
+                        "Failed to create/authorize user for the target filesystem."
+                    )
+            else:
+                log.info(
+                    "Skipping manual user creation as ceph version '%s' > 20.1.0; "
+                    "peer_bootstrap will handle it automatically",
+                    ceph_version,
                 )
 
             log.info("Enable snapshot mirroring on the source filesystem")
@@ -1432,18 +1502,24 @@ class CephfsMirroringUtils(object):
         Parameters:
             cephfs_mirror_node (list): List of cephfs mirror nodes.
             fsid (str): Filesystem ID.
-            asok_file (str): Admin socket file.
+            asok_file (dict): Admin socket file dict mapping hostname to [node, asok_path].
 
         Returns:
             dict: Dictionary containing the cephfs mirror counters.
         """
-        command = f"ceph --admin-daemon {asok_file[cephfs_mirror_node[0].node.hostname][1]} counter dump -f json"
-        out, _ = cephfs_mirror_node[0].exec_command(
-            sudo=True, cmd=f"cd /var/run/ceph/{fsid}/ ; {command}"
+        for node_hostname, asok in asok_file.items():
+            if not asok[1]:
+                continue
+            command = f"ceph --admin-daemon {asok[1]} counter dump -f json"
+            out, _ = asok[0].exec_command(
+                sudo=True, cmd=f"cd /var/run/ceph/{fsid}/ ; {command}"
+            )
+            data = json.loads(out)
+            log.info(f"Output of Metrics Report : {data}")
+            return data
+        raise CommandFailed(
+            "No valid admin socket files found for cephfs-mirror counter dump"
         )
-        data = json.loads(out)
-        log.info(f"Output of Metrics Report : {data}")
-        return data
 
     def get_labels_and_counters(self, resource_name, filesystem_name, json_data):
         """
@@ -1606,7 +1682,8 @@ class CephfsMirroringUtils(object):
         fsid = self.get_fsid(cephfs_mirror_node[0])
         daemon_names = self.get_daemon_name(source_clients)
         filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
-        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        resolved_nodes = self._resolve_mirror_nodes(source_clients, cephfs_mirror_node)
+        asok_files = self.get_asok_file(resolved_nodes, fsid, daemon_names)
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
             out, _ = asok_file[0].exec_command(
@@ -1641,7 +1718,11 @@ class CephfsMirroringUtils(object):
         fsid = self.get_fsid(cephfs_mirror_node[0])
         daemon_names = self.get_daemon_name(source_clients)
         filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
-        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        asok_files = self.get_asok_file_with_connectivity_check(
+            cephfs_mirror_node, fsid, daemon_names
+        )
+        if not asok_files:
+            raise CommandFailed("No accessible cephfs-mirror admin socket found")
         peer_uuid = self.get_peer_uuid_by_name(source_clients, fs_name)
         log.info("Get filesystem mirror status")
         for node, asok_file in asok_files.items():
@@ -1855,8 +1936,6 @@ class CephfsMirroringUtils(object):
                 sudo=True, cmd=f"mkdir {mounting_dir}{subvol_path}/.snap/{snap_name}"
             )
 
-    # Function to validate snapshot sync with retry
-    @retry(CommandFailed, tries=10, delay=30)
     def validate_snapshot_sync(
         self,
         fs_mirroring_utils,
@@ -2087,7 +2166,7 @@ class CephfsMirroringUtils(object):
         for mount_type in ["kernel", "fuse", "nfs"]:
             snap_info = self.validate_snapshot_sync(
                 fs_mirroring_utils,
-                cephfs_mirror_node[0],
+                cephfs_mirror_node,
                 source_fs,
                 snapshots[mount_type],
                 fsid,
@@ -2213,6 +2292,88 @@ class CephfsMirroringUtils(object):
         else:
             log.error(f"Path '{absolute_path}' not found in the mirror status.")
             return None
+
+    def validate_daemon_status_for_fs(
+        self, source_client, fs_name, expected_fsid, expected_mon_ips
+    ):
+        """Validate that daemon status for a filesystem contains the correct
+        remote cluster fsid and mon_host addresses.
+
+        Raises CommandFailed if any validation check fails.
+        """
+        out, _ = source_client.exec_command(
+            sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
+        )
+        daemon_status = json.loads(out)
+        log.info("Daemon status JSON: %s", json.dumps(daemon_status, indent=2))
+
+        fs_entry = None
+        for daemon in daemon_status:
+            for fs in daemon.get("filesystems", []):
+                if fs.get("name") == fs_name:
+                    fs_entry = fs
+                    break
+            if fs_entry:
+                break
+
+        if not fs_entry:
+            raise CommandFailed(
+                "Filesystem '%s' not found in daemon status output" % fs_name
+            )
+
+        peers = fs_entry.get("peers", [])
+        if not peers:
+            raise CommandFailed(
+                "No peers found for filesystem '%s' in daemon status" % fs_name
+            )
+
+        peer = peers[0]
+        remote_info = peer.get("remote", {})
+        log.info(
+            "Peer remote info for %s: %s",
+            fs_name,
+            json.dumps(remote_info, indent=2),
+        )
+
+        mon_host_str = remote_info.get("mon_host", "")
+        if not mon_host_str:
+            raise CommandFailed(
+                "mon_host is empty in daemon status for filesystem '%s'" % fs_name
+            )
+
+        log.info("Validating mon_host IPs are valid cluster monitors")
+        import re
+
+        actual_ips = re.findall(r"[\d]+\.[\d]+\.[\d]+\.[\d]+", mon_host_str)
+        if not actual_ips:
+            raise CommandFailed(
+                "No IPs found in mon_host '%s' for filesystem '%s'"
+                % (mon_host_str, fs_name)
+            )
+        unexpected_ips = set(actual_ips) - set(expected_mon_ips)
+        if unexpected_ips:
+            raise CommandFailed(
+                "mon_host contains IPs not in expected monitors: %s "
+                "(mon_host='%s', expected=%s) for filesystem '%s'"
+                % (unexpected_ips, mon_host_str, expected_mon_ips, fs_name)
+            )
+        log.info(
+            "mon_host IPs %s are valid cluster monitors for %s",
+            actual_ips,
+            fs_name,
+        )
+
+        remote_fsid = remote_info.get("fsid", "")
+        if not remote_fsid:
+            raise CommandFailed(
+                "fsid field missing in daemon status for filesystem '%s'" % fs_name
+            )
+        if remote_fsid != expected_fsid:
+            raise CommandFailed(
+                "FSID mismatch: expected '%s', got '%s' for filesystem '%s'"
+                % (expected_fsid, remote_fsid, fs_name)
+            )
+        log.info("FSID '%s' validated for %s", remote_fsid, fs_name)
 
 
 @retry(CommandFailed, tries=10, delay=30, backoff=1)

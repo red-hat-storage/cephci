@@ -3,11 +3,14 @@ import random
 import string
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -74,6 +77,36 @@ def run(ceph_cluster, **kw):
                 "This test requires a minimum of 1 client node on both ceph1 and ceph2."
             )
             return 1
+
+        ceph_version = get_ceph_version_from_cluster(source_clients[0])
+        if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+            log.info(
+                "Ceph version '%s' >= 20.2.1, validating daemon status shows "
+                "fsid and mon_host for pre-upgrade peer",
+                ceph_version,
+            )
+            expected_fsid = fs_util_ceph2.get_fsid(target_clients[0])
+            expected_mon_ips = sorted(fs_util_ceph2.get_mon_node_ips())
+            log.info("Expected target cluster fsid: %s", expected_fsid)
+            log.info("Expected target cluster mon IPs: %s", expected_mon_ips)
+            fs_mirroring_utils.validate_daemon_status_for_fs(
+                source_clients[0],
+                source_fs,
+                expected_fsid,
+                expected_mon_ips,
+            )
+            log.info(
+                "Daemon status validation passed for '%s' - "
+                "fsid and mon_host present and correct for pre-upgrade peer",
+                source_fs,
+            )
+        else:
+            log.info(
+                "Ceph version '%s' < 20.2.1, skipping daemon status "
+                "fsid/mon_host validation",
+                ceph_version,
+            )
+
         peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
             source_clients[0], source_fs
         )
@@ -186,7 +219,7 @@ def run(ceph_cluster, **kw):
             subvol2_path_upgrade = subvol_path2[: index + len("subvol_2/")]
         else:
             subvol2_path_upgrade = subvol_path2
-        log.info(subvol2_path)
+        log.info(subvol2_path_upgrade)
         fs_util_ceph1.fuse_mount(
             [source_clients[0]],
             fuse_mounting_dir_2,
