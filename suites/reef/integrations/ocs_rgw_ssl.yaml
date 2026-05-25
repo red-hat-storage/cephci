@@ -14,7 +14,7 @@ tests:
       abort-on-fail: true
       config:
         args:
-          mon-ip: node1
+          mon-ip: node2
         command: bootstrap
         service: cephadm
       desc: "Bootstrap the cluster with minimal configuration."
