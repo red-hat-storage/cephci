@@ -144,6 +144,13 @@ def add(cls, config: Dict) -> None:
                     _node.exec_command(
                         sudo=True, cmd=f"{enable_cmd}{manifest_obj.repo_id}"
                     )
+                elif use_cdn:
+                    _manifest = cls.config.get("manifest")
+                    if _manifest and _manifest.repo_id:
+                        _node.exec_command(
+                            sudo=True,
+                            cmd=f"{enable_cmd}{_manifest.repo_id}",
+                        )
 
                 # Clearing the release preference set and cleaning all yum repos
                 # Observing selinux package dependency issues for ceph-base
