@@ -64,11 +64,13 @@ def run(ceph_cluster, **kw):
             extra_params=f" --client_fs {fs_name}",
         )
 
-        # Start monitoring MDS state in a separate thread
+        # Start monitoring MDS state in a daemon thread so it is
+        # automatically killed if the main thread exits unexpectedly.
         monitor_thread = threading.Thread(
             target=monitor_mds_state, args=(client1, fs_name)
         )
-        monitor_thread.start()  # This starts monitoring in the background
+        monitor_thread.daemon = True
+        monitor_thread.start()
 
         # Execute smallfile workload
         client1.exec_command(
@@ -104,6 +106,8 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        monitor_thread.do_run = False
+        monitor_thread.join(timeout=30)
         client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False)
         client1.exec_command(
             sudo=True,
@@ -115,29 +119,32 @@ def run(ceph_cluster, **kw):
         fs_util.remove_fs(client1, fs_name)
 
 
-def monitor_mds_state(client1, fs_name, interval=5):
+def monitor_mds_state(client1, fs_name, interval=5, max_consecutive_failures=5):
     """
     Monitors the MDS states and logs changes with a datetime stamp.
     Runs in a separate thread and stops when signaled.
 
     Parameters:
     client1: Object to execute commands on the Ceph cluster.
+    fs_name (str): Name of the filesystem to monitor.
     interval (int): Time interval in seconds between health checks.
+    max_consecutive_failures (int): Stop monitoring after this many
+        consecutive failures (e.g. SSH unreachable) to avoid running forever.
     """
     thread = threading.currentThread()
     previous_mds_states = {}
+    consecutive_failures = 0
 
     while getattr(thread, "do_run", True):
         try:
-            # Run command to get the current Ceph MDS state in JSON format
             out, rc = client1.exec_command(
                 sudo=True, cmd=f"ceph fs status {fs_name} -f json"
             )
             current_data = json.loads(out)
+            consecutive_failures = 0
 
             current_mds_states = {}
 
-            # Extract current MDS states (name and state)
             for mds in current_data["mdsmap"]:
                 name = mds["name"]
                 state = mds["state"]
@@ -145,7 +152,6 @@ def monitor_mds_state(client1, fs_name, interval=5):
 
             log.info(f"Current MDS states: {current_mds_states}")
 
-            # Check for changes in the MDS states
             for mds_name, current_state in current_mds_states.items():
                 previous_state = previous_mds_states.get(mds_name)
 
@@ -161,6 +167,14 @@ def monitor_mds_state(client1, fs_name, interval=5):
                     log.info(f"MDS {mds_name} changed state at {datetime.now()}")
 
         except Exception as e:
-            log.error(f"Exception occurred: {e}")
+            consecutive_failures += 1
+            log.error(
+                f"Exception occurred ({consecutive_failures}/{max_consecutive_failures}): {e}"
+            )
+            if consecutive_failures >= max_consecutive_failures:
+                log.error(
+                    "Max consecutive failures reached, stopping MDS state monitor"
+                )
+                break
 
         time.sleep(interval)
