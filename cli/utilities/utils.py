@@ -683,13 +683,15 @@ def check_coredump_generated(node, coredump_path, created_after):
 
 
 @retry((TimeoutError, OperationFailedError), tries=3, delay=1)
-def create_files(client, mount_point, file_count, windows_client=False):
+def create_files(client, mount_point, file_count, windows_client=False, sudo=True):
     """
     Create files
     Args:
         clients (ceph): Client nodes
         mount_point (str): mount path
         file_count (int): total file count
+        windows_client (bool): Whether client is Windows
+        sudo (bool): Whether to use sudo for Linux client commands
     """
 
     for i in range(0, file_count + 1):
@@ -704,11 +706,11 @@ def create_files(client, mount_point, file_count, windows_client=False):
                 cmd = f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1"
                 # create a file with touch command instead of dd command to avoid the error "No space left on device"
                 client.exec_command(
-                    sudo=True,
+                    sudo=sudo,
                     cmd=f"touch {mount_point}/file{i}",
                 )
                 client.exec_command(
-                    sudo=True,
+                    sudo=sudo,
                     cmd=cmd,
                 )
             log.info(f"Created file{i}")
@@ -716,29 +718,27 @@ def create_files(client, mount_point, file_count, windows_client=False):
             raise OperationFailedError(f"failed to create file file{i}")
 
 
-def perform_lookups(client, mount_point, num_files, windows_client=False):
+def perform_lookups(client, mount_point, num_files, windows_client=False, sudo=True):
     """
     Perform lookups
     Args:
-        clients (ceph): Client nodes
+        client (ceph): Client node
         mount_point (str): mount path
         num_files (int): total file count
+        windows_client (bool): Whether client is Windows
+        sudo (bool): Whether to use sudo for Linux client commands
     """
     for _ in range(num_files):
         try:
             if windows_client:
-                log.info(
-                    client.exec_command(
-                        cmd=f"dir {mount_point}",
-                    )
-                )
+                out, _ = client.exec_command(cmd=f"dir {mount_point}")
+                log.info(out)
             else:
-                log.info(
-                    client.exec_command(
-                        sudo=True,
-                        cmd=f"ls -laRt {mount_point}/",
-                    )
+                out, _ = client.exec_command(
+                    sudo=sudo,
+                    cmd=f"ls -laRt {mount_point}/",
                 )
+                log.info(out)
         except FileNotFoundError as e:
             error_message = str(e)
             if "No such file or directory" not in error_message:
