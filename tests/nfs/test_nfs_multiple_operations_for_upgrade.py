@@ -7,17 +7,18 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def lookup_in_directory(client, mount):
+def lookup_in_directory(client, mount, sudo=True):
     """
     Check if the mount point is accessible and contains expected files.
     Args:
         client: Client node where the mount is performed.
         mount: Mount point path.
+        sudo: Run commands with sudo when True.
     Returns:
         bool: True if the mount point is accessible and contains expected files, False otherwise.
     """
     try:
-        out, _ = client.exec_command(sudo=True, cmd=f"ls {mount}")
+        out, _ = client.exec_command(sudo=sudo, cmd=f"ls {mount}")
         log.info(f"Contents of {mount}: {out.strip()}")
         return out
     except Exception as e:
@@ -25,35 +26,35 @@ def lookup_in_directory(client, mount):
         return False
 
 
-def create_file(client, nfs_mount, file_name):
+def create_file(client, nfs_mount, file_name, sudo=True):
     """Create a file in the NFS mount point"""
     try:
         if file_name not in client.get_dir_list(nfs_mount):
             cmd = f"touch {nfs_mount}/{file_name}"
-            client.exec_command(cmd=cmd, sudo=True)
+            client.exec_command(cmd=cmd, sudo=sudo)
             log.info("File - {0} created successfully".format(file_name))
     except Exception as e:
         log.error(f"Failed to create file {file_name}: {e}")
         raise OperationFailedError(f"Failed to create file {file_name}: {e}")
 
 
-def delete_file(client, nfs_mount, file_name):
+def delete_file(client, nfs_mount, file_name, sudo=True):
     """Delete a file in the NFS mount point"""
     try:
         cmd = f"rm -rf {nfs_mount}/{file_name}"
-        client.exec_command(cmd=cmd, sudo=True)
+        client.exec_command(cmd=cmd, sudo=sudo)
         log.info("File - {0} deleted successfully".format(file_name))
     except Exception as e:
         log.error(f"Failed to delete file {file_name}: {e}")
         raise OperationFailedError(f"Failed to delete file {file_name}: {e}")
 
 
-def rename_file(client, nfs_mount, old_name, new_name):
+def rename_file(client, nfs_mount, old_name, new_name, sudo=True):
     """Rename a file in the NFS mount point"""
     try:
         if new_name not in client.get_dir_list(nfs_mount):
             cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
-            client.exec_command(cmd=cmd, sudo=True)
+            client.exec_command(cmd=cmd, sudo=sudo)
             log.info("File renamed successfully")
     except Exception as e:
         log.error(f"Failed to rename file {old_name} to {new_name}: {e}")
@@ -62,22 +63,22 @@ def rename_file(client, nfs_mount, old_name, new_name):
         )
 
 
-def write_to_file_using_dd_command(client, nfs_mount, file_name, size):
+def write_to_file_using_dd_command(client, nfs_mount, file_name, size, sudo=True):
     """Write to a file in the NFS mount point using dd command"""
     try:
         cmd = f"dd if=/dev/zero of={nfs_mount}/{file_name} bs={size}M count=5"
-        client.exec_command(cmd=cmd, sudo=True)
+        client.exec_command(cmd=cmd, sudo=sudo)
         log.info("File written successfully")
     except Exception as e:
         log.error(f"Failed to write to file {file_name}: {e}")
         raise OperationFailedError(f"Failed to write to file {file_name}: {e}")
 
 
-def read_from_file_using_dd_command(client, nfs_mount, file_name, size):
+def read_from_file_using_dd_command(client, nfs_mount, file_name, size, sudo=True):
     """Read from a file in the NFS mount point using dd command"""
     try:
         cmd = f"dd if={nfs_mount}/{file_name} of=/dev/null bs={size}M count=5"
-        client.exec_command(cmd=cmd, sudo=True)
+        client.exec_command(cmd=cmd, sudo=sudo)
         log.info("File read successfully")
     except Exception as e:
         log.error(f"Failed to read from file {file_name}: {e}")
@@ -85,7 +86,7 @@ def read_from_file_using_dd_command(client, nfs_mount, file_name, size):
 
 
 def permission_to_directory(client, nfs_mount):
-    """Provide permission to directory"""
+    """Provide permission to directory (root-only workaround; skip for non-root)."""
     try:
         cmd = f"chmod 777 {nfs_mount}"
         client.exec_command(cmd=cmd, sudo=True)
@@ -156,6 +157,7 @@ def run(ceph_cluster, **kw):
     ha = bool(config.get("ha", False))
     vip = config.get("vip", None)
     active_standby = bool(config.get("active_standby", False))
+    sudo = config.get("sudo", False)
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -204,6 +206,7 @@ def run(ceph_cluster, **kw):
                             client,
                             nfs_mount,
                             old_file_name + "_{0}".format(i),
+                            sudo,
                         )
                         for i in range(file_count)
                     ]
@@ -225,6 +228,7 @@ def run(ceph_cluster, **kw):
                             client,
                             nfs_mount,
                             old_file_name + "_{0}".format(i),
+                            sudo,
                         )
                         for i in range(file_count // 2)
                     ]
@@ -234,10 +238,10 @@ def run(ceph_cluster, **kw):
                 "All delete files during before upgrade are created successfully after upgrade"
             )
 
-        # provide permission to directory
-        for client in clients:
-            permission_to_directory(client, nfs_mount)
-        log.info("Permission provided to directory successfully")
+        if sudo:
+            for client in clients:
+                permission_to_directory(client, nfs_mount)
+            log.info("Permission provided to directory successfully")
 
         # write to file using dd command parellel using ThreadPoolExecutor
         log.info("Writing to files in parallel using ThreadPoolExecutor")
@@ -250,6 +254,7 @@ def run(ceph_cluster, **kw):
                         nfs_mount,
                         old_file_name + "_{0}".format(i),
                         dd_command_size_in_M,
+                        sudo,
                     )
                     for i in range(file_count)
                 ]
@@ -268,6 +273,7 @@ def run(ceph_cluster, **kw):
                         nfs_mount,
                         old_file_name + "_{0}".format(i),
                         dd_command_size_in_M,
+                        sudo,
                     )
                     for i in range(file_count)
                 ]
@@ -286,6 +292,7 @@ def run(ceph_cluster, **kw):
                         nfs_mount,
                         old_file_name + "_{0}".format(i),
                         new_file_name + "_{0}".format(i),
+                        sudo,
                     )
                     for i in range(file_count)
                 ]
@@ -304,6 +311,7 @@ def run(ceph_cluster, **kw):
                             client,
                             nfs_mount,
                             new_file_name + "_{0}".format(i),
+                            sudo,
                         )
                         for i in range(file_count // 2)
                     ]
@@ -322,6 +330,7 @@ def run(ceph_cluster, **kw):
                             client,
                             nfs_mount,
                             new_file_name + "_{0}".format(i),
+                            sudo,
                         )
                         for i in range(file_count)
                     ]

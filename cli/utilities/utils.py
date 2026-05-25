@@ -4,6 +4,7 @@ import re
 import shlex
 import string
 import tempfile
+import time
 from datetime import datetime
 from json import loads
 from subprocess import PIPE, Popen
@@ -654,69 +655,164 @@ def check_coredump_generated(node, coredump_path, created_after):
 
 
 @retry((TimeoutError, OperationFailedError), tries=3, delay=1)
-def create_files(client, mount_point, file_count, windows_client=False):
+def create_files(
+    client,
+    mount_point,
+    file_count,
+    windows_client=False,
+    sudo=True,
+    timeout=60,
+):
     """
     Create files
     Args:
         clients (ceph): Client nodes
         mount_point (str): mount path
         file_count (int): total file count
-    """
+        windows_client (bool): Whether client is Windows
+        sudo (bool): Whether to use sudo
+        timeout (int): Command timeout in seconds (default: 60)
 
-    for i in range(0, file_count + 1):
+    Returns:
+        int: Number of files successfully created
+
+    Raises:
+        ValueError: If file_count or timeout is invalid
+        OperationFailedError: If file creation fails
+        TimeoutError: If operation times out
+    """
+    # Input validation
+    if file_count <= 0:
+        raise ValueError(f"file_count must be positive, got {file_count}")
+    if file_count > 10000:
+        log.warning(f"Large file_count={file_count} may cause resource issues")
+    if timeout <= 0:
+        raise ValueError(f"timeout must be positive, got {timeout}")
+
+    log.info(f"Attempting to create {file_count} files (timeout={timeout}s)")
+    created_count = 0
+    start_time = time.time()
+    max_total_time = min(timeout * file_count, 3600)
+
+    for i in range(1, file_count + 1):
+        if time.time() - start_time > max_total_time:
+            log.error(f"Overall timeout exceeded after creating {created_count} files")
+            raise TimeoutError(f"create_files exceeded {max_total_time}s total time")
+
         log.info(f"Creating file{i}")
         try:
             if windows_client:
                 cmd = f"type nul > {mount_point}\\win_file{i}"
                 client.exec_command(
                     cmd=cmd,
+                    timeout=timeout,
                 )
             else:
                 cmd = f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1"
-                # create a file with touch command instead of dd command to avoid the error "No space left on device"
+                # touch first to avoid "No space left on device" from dd alone
                 client.exec_command(
-                    sudo=True,
+                    sudo=sudo,
                     cmd=f"touch {mount_point}/file{i}",
+                    timeout=timeout,
                 )
                 client.exec_command(
-                    sudo=True,
+                    sudo=sudo,
                     cmd=cmd,
+                    timeout=timeout,
                 )
             log.info(f"Created file{i}")
-        except Exception:
-            raise OperationFailedError(f"failed to create file file{i}")
+            created_count += 1
+        except TimeoutError:
+            log.error(f"Timeout creating file{i} after {timeout}s")
+            raise
+        except (OSError, IOError) as e:
+            log.error(f"Failed to create file{i}: {e}")
+            raise OperationFailedError(f"failed to create file{i}: {e}")
+        except Exception as e:
+            log.critical(f"Unexpected error creating file{i}: {e}", exc_info=True)
+            raise
+
+    log.info(f"Successfully created {created_count}/{file_count} files")
+    return created_count
 
 
-def perform_lookups(client, mount_point, num_files, windows_client=False):
+@retry((TimeoutError, OperationFailedError), tries=3, delay=1)
+def perform_lookups(
+    client,
+    mount_point,
+    num_files,
+    windows_client=False,
+    sudo=True,
+    timeout=60,
+):
     """
     Perform lookups
     Args:
-        clients (ceph): Client nodes
+        client (ceph): Client node
         mount_point (str): mount path
         num_files (int): total file count
+        windows_client (bool): Whether client is Windows
+        sudo (bool): Whether to use sudo
+        timeout (int): Command timeout in seconds (default: 60)
+
+    Returns:
+        int: Number of successful lookups performed
+
+    Raises:
+        ValueError: If num_files or timeout is invalid
+        TimeoutError: If lookup operation times out
+        OperationFailedError: If lookup fails
     """
-    for _ in range(num_files):
+    # Input validation
+    if num_files <= 0:
+        raise ValueError(f"num_files must be positive, got {num_files}")
+    if timeout <= 0:
+        raise ValueError(f"timeout must be positive, got {timeout}")
+
+    log.info(f"Performing {num_files} lookups (timeout={timeout}s)")
+    successful_lookups = 0
+
+    for i in range(1, num_files + 1):
         try:
             if windows_client:
-                log.info(
-                    client.exec_command(
-                        cmd=f"dir {mount_point}",
-                    )
+                log.info(f"Performing lookup {i}/{num_files}")
+                result = client.exec_command(
+                    cmd=f"dir {mount_point}",
+                    timeout=timeout,
                 )
+                # Count entries instead of logging full output
+                entry_count = len(
+                    [
+                        line
+                        for line in result.split("\n")
+                        if line.strip() and not line.startswith("Directory of")
+                    ]
+                )
+                log.info(f"Lookup {i}/{num_files} found {entry_count} entries")
             else:
-                log.info(
-                    client.exec_command(
-                        sudo=True,
-                        cmd=f"ls -laRt {mount_point}/",
-                    )
+                log.info(f"Performing lookup {i}/{num_files}")
+                # Use efficient file count instead of full recursive listing
+                cmd = f"find {mount_point}/ -type f 2>/dev/null | wc -l"
+                result = client.exec_command(
+                    sudo=sudo,
+                    cmd=cmd,
+                    timeout=timeout,
                 )
-        except FileNotFoundError as e:
+                file_count = result.strip()
+                log.info(f"Lookup {i}/{num_files} - found {file_count} files")
+            successful_lookups += 1
+        except TimeoutError:
+            log.error(f"Lookup {i}/{num_files} timed out after {timeout}s")
+            raise
+        except Exception as e:
             error_message = str(e)
             if "No such file or directory" not in error_message:
-                raise OperationFailedError("failed to perform lookups")
-            log.warning(f"Ignoring error: {error_message}")
-        except Exception:
-            raise OperationFailedError("failed to perform lookups")
+                log.error(f"Lookup {i}/{num_files} failed: {e}")
+                raise OperationFailedError(f"failed to perform lookups: {e}")
+            log.warning(f"Ignoring expected error: {error_message}")
+
+    log.info(f"Successfully completed {successful_lookups}/{num_files} lookups")
+    return successful_lookups
 
 
 def change_ownership(client, mount_point, file_count, user):
