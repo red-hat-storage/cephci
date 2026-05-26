@@ -17,6 +17,7 @@ from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import FuseMount, Mount, MountFailedError, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
+from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
 
@@ -24,6 +25,44 @@ log = Log(__name__)
 
 ceph_cluster_obj = None
 setup_start_time = None
+GANESHA_SUBVOL_GROUP = "ganeshagroup"
+
+
+def ensure_ganeshagroup(
+    client, fs_name="cephfs", group=GANESHA_SUBVOL_GROUP, ceph_cluster=None
+):
+    """
+    Create the NFS Ganesha subvolume group before any subvolume create/export.
+
+    Idempotent: no-op when the group already exists.
+
+    Returns:
+        bool: True if group exists or was created successfully
+    """
+    cluster = ceph_cluster or ceph_cluster_obj
+    if not cluster:
+        raise OperationFailedError(
+            "ceph_cluster is required; pass ceph_cluster or call after "
+            "setup_nfs_cluster / setup_custom_nfs_cluster_multi_export_client"
+        )
+    fs_util = FsUtils(cluster)
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph fs subvolumegroup ls {fs_name} --format json",
+    )
+    raw = out if isinstance(out, str) else (out[0] if out else "[]")
+    groups = json.loads(raw)
+    names = [g["name"] for g in groups if isinstance(g, dict)]
+
+    if group in names:
+        log.info("Subvolume group %s already exists on %s", group, fs_name)
+        return True
+
+    fs_util.create_subvolumegroup(
+        client, vol_name=fs_name, group_name=group, validate=True
+    )
+    log.info("Subvolume group %s created on filesystem %s", group, fs_name)
+    return True
 
 
 class _LiteralPemDumper(yaml.SafeDumper):
@@ -61,6 +100,8 @@ def setup_nfs_cluster(
     single_export=False,
     enable_rdma=False,
     rdma_port=None,
+    enable_virtual_server=False,
+    skip_mount=False,
 ):
     """Set up an NFS-Ganesha cluster with exports and client mounts.
 
@@ -96,6 +137,9 @@ def setup_nfs_cluster(
             ``--rdma_port`` on cluster create and used as the mount
             port when *enable_rdma* is True.  Falls back to *port*
             if not specified.
+        enable_virtual_server (bool): Pass ``--enable-virtual-server`` on
+            ``ceph nfs cluster create``.
+        skip_mount (bool): Create exports only; skip client mounts.
     """
     # Get ceph cluter object and setup start time
     global ceph_cluster_obj
@@ -154,9 +198,12 @@ def setup_nfs_cluster(
         nfs_nodes_obj=nfs_nodes,
         enable_rdma=enable_rdma,
         rdma_port=rdma_port,
+        enable_virtual_server=enable_virtual_server,
         **create_kwargs,
     )
     sleep(3)
+
+    ensure_ganeshagroup(clients[0], fs_name=fs_name, ceph_cluster=ceph_cluster)
 
     # Step 3: Perform Export on clients
     export_list = []
@@ -184,6 +231,10 @@ def setup_nfs_cluster(
             )
         export_list.append(export_name)
         sleep(1)
+
+    if skip_mount:
+        Enable_nfs_coredump(nfs_nodes)
+        return export_list
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
@@ -308,6 +359,8 @@ def setup_nfs_cluster(
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
 
+    return export_list
+
 
 def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
     """
@@ -394,6 +447,8 @@ def setup_custom_nfs_cluster_multi_export_client(
     export_num=None,
     ceph_cluster=None,
     active_standby=None,
+    enable_virtual_server=False,
+    skip_mount=False,
     **kwargs,
 ):
     # Get ceph cluter object and setup start time
@@ -430,9 +485,12 @@ def setup_custom_nfs_cluster_multi_export_client(
         vip=vip,
         active_standby=active_standby,
         nfs_nodes_obj=nfs_nodes,
+        enable_virtual_server=enable_virtual_server,
         **create_kwargs,
     )
     sleep(3)
+
+    ensure_ganeshagroup(clients[0], fs_name=fs_name, ceph_cluster=ceph_cluster)
 
     # Step 3: Perform Export on clients
     client_export_mount_dict = exports_mounts_perclient(
@@ -463,6 +521,8 @@ def setup_custom_nfs_cluster_multi_export_client(
                     f"Export {export_name} not found in the list of exports {all_exports}"
                 )
             sleep(1)
+            if skip_mount:
+                continue
             # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)
             # Step 4: Perform nfs mount
@@ -490,7 +550,12 @@ def setup_custom_nfs_cluster_multi_export_client(
                 )
                 log.info("Transferred ownership of %s to cephuser" % mount_name)
                 sleep(1)
-        log.info("Mount succeeded on all clients")
+        if not skip_mount:
+            log.info("Mount succeeded on all clients")
+
+    if skip_mount:
+        Enable_nfs_coredump(nfs_nodes)
+        return client_export_mount_dict
 
     try:
         cmd_used = None
@@ -522,6 +587,8 @@ def setup_custom_nfs_cluster_multi_export_client(
 
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
+
+    return client_export_mount_dict
 
 
 def exports_mounts_perclient(clients, nfs_export, nfs_mount, export_num) -> dict:
