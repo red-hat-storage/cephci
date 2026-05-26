@@ -213,17 +213,19 @@ def test_non_default_to_default_namespace_mirroring(
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        snap_schedule_config = {
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        schedule = {
                             "pool": pool,
                             "image": image,
-                            "level": level,
+                            "level": effective_level,
                             "interval": interval,
-                            "namespace": namespace,
                         }
+                        if namespace:
+                            schedule["namespace"] = namespace
                         # Adding snapshot schedules to the images in namespace
-                        out, err = add_snapshot_scheduling(
-                            rbd_primary, **snap_schedule_config
-                        )
+                        out, err = add_snapshot_scheduling(rbd_primary, **schedule)
                         if err:
                             raise Exception(
                                 "Adding snapshot schedule failed with error " + err
@@ -308,6 +310,29 @@ def test_non_default_to_default_namespace_mirroring(
                 log.info(
                     "Data is consistent with the mirrored image for " + pri_image_spec
                 )
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        remove_args = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            remove_args["namespace"] = namespace
+                        out, err = remove_snapshot_scheduling(
+                            rbd_primary, **remove_args
+                        )
+                        if err:
+                            raise Exception("Failed to remove mirror snapshot schedule")
             # create image in the default namespace on secondary
             log.info(
                 "Creating image in the default namespace of secondary and "
@@ -341,14 +366,17 @@ def test_non_default_to_default_namespace_mirroring(
                 "Enabled image mirroring on " + pool + "/" + image + " in Cluster2"
             )
 
+            # Add snapshot schedules on the images on secondary side
+            effective_level = "image" if level == "namespace" else level
             snap_schedule_config = {
                 "pool": pool,
                 "image": image,
-                "level": level,
+                "level": effective_level,
                 "interval": interval,
             }
-            # Add snapshot schedules on the images on secondary side
             out, err = add_snapshot_scheduling(rbd_secondary, **snap_schedule_config)
+            if err:
+                raise Exception("Adding snapshot schedule failed with error " + err)
             if verify_snapshot_schedule(rbd_secondary, pool, image, interval=interval):
                 raise Exception(
                     "Snapshot schedule verification " + pool + "/" + image + " failed"
@@ -388,6 +416,15 @@ def test_non_default_to_default_namespace_mirroring(
             }
             if check_data_integrity(**data_integrity_spec):
                 raise Exception("Data integrity check failed for " + pri_image_spec)
+            remove_args = {
+                "pool": pool,
+                "image": image,
+                "level": effective_level,
+                "interval": interval,
+            }
+            out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
+            if err:
+                raise Exception("Failed to remove mirror snapshot schedule")
     return 0
 
 
@@ -433,15 +470,22 @@ def test_default_to_non_default_namespace_mirroring(
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        snap_schedule_config = {
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        schedule = {
                             "pool": pool,
                             "image": image,
+                            "level": effective_level,
                             "interval": interval,
                         }
-
-                        out, err = add_snapshot_scheduling(
-                            rbd_primary, **snap_schedule_config
-                        )
+                        if namespace:
+                            schedule["namespace"] = namespace
+                        out, err = add_snapshot_scheduling(rbd_primary, **schedule)
+                        if err:
+                            raise Exception(
+                                "Adding snapshot schedule failed with error " + err
+                            )
 
                         if verify_snapshot_schedule(
                             rbd_primary, pool, image, interval=interval
@@ -532,17 +576,29 @@ def test_default_to_non_default_namespace_mirroring(
                     )
 
                 # Remove schedule from primary
-                out, err = remove_snapshot_scheduling(
-                    rbd_primary,
-                    pool=pool,
-                    image=image,
-                    level=level,
-                    interval=interval,
-                    namespace=namespace,
-                )
-
-                if err:
-                    raise Exception("Failed to remove mirror snapshot schedule")
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        remove_args = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            remove_args["namespace"] = namespace
+                        out, err = remove_snapshot_scheduling(
+                            rbd_primary, **remove_args
+                        )
+                        if err:
+                            raise Exception("Failed to remove mirror snapshot schedule")
 
                 disable_args = {"pool": pool, "image": image}
                 if namespace:
@@ -592,14 +648,18 @@ def test_default_to_non_default_namespace_mirroring(
                 "Enabled image mirroring on " + pool + "/" + image + " in Cluster2"
             )
 
+            # Adding snapshot schedules to the images in namespace
+            effective_level = (
+                "image" if level == "namespace" and not remote_namespace else level
+            )
             snap_schedule_config = {
                 "pool": pool,
                 "image": image,
-                "level": level,
+                "level": effective_level,
                 "interval": interval,
-                "namespace": remote_namespace,
             }
-            # Adding snapshot schedules to the images in namespace
+            if remote_namespace:
+                snap_schedule_config["namespace"] = remote_namespace
             out, err = add_snapshot_scheduling(rbd_secondary, **snap_schedule_config)
             if err:
                 raise Exception("Adding snapshot schedule failed with error " + err)
@@ -642,15 +702,15 @@ def test_default_to_non_default_namespace_mirroring(
                 raise Exception("Data integrity check failed for " + pri_image_spec)
 
             # Remove schedule from secondary
-            out, err = remove_snapshot_scheduling(
-                rbd_secondary,
-                pool=pool,
-                image=image,
-                level=level,
-                interval=interval,
-                namespace=remote_namespace,
-            )
-
+            remove_args = {
+                "pool": pool,
+                "image": image,
+                "level": effective_level,
+                "interval": interval,
+            }
+            if remote_namespace:
+                remove_args["namespace"] = remote_namespace
+            out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
             if err:
                 raise Exception("Failed to remove mirror snapshot schedule")
 
@@ -811,57 +871,21 @@ def test_multi_snap_scheduling_namespace_mirroring(
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        snap_schedule_config = {
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        schedule = {
                             "pool": pool,
-                            "level": level,
+                            "image": first_image,
+                            "level": effective_level,
                             "interval": interval,
                         }
-                        # Add namespace if required
-                        if level == "namespace":
-                            snap_schedule_config["namespace"] = namespace
-                        # Add image if required
-                        if level == "image":
-                            snap_schedule_config["namespace"] = namespace
-                            snap_schedule_config["image"] = first_image
-
-                        out, err = add_snapshot_scheduling(
-                            rbd_primary, **snap_schedule_config
-                        )
+                        if namespace:
+                            schedule["namespace"] = namespace
+                        out, err = add_snapshot_scheduling(rbd_primary, **schedule)
                         if err:
                             raise Exception(
-                                "Adding snapshot schedule failed for {}: {}".format(
-                                    pri_image_spec, err
-                                )
-                            )
-
-            # Snapshot schedule verification - run only once per pool
-            if image_status_map:
-                # Use the first image's config as reference
-                first_image = next(iter(image_status_map))
-                image_config_val = image_status_map[first_image]["image_config_val"]
-
-                if image_config_val.get(
-                    "snap_schedule_levels"
-                ) and image_config_val.get("snap_schedule_intervals"):
-                    for level, interval in zip(
-                        image_config_val["snap_schedule_levels"],
-                        image_config_val["snap_schedule_intervals"],
-                    ):
-                        verify_args = {
-                            "rbd": rbd_primary,
-                            "pool": pool,
-                            "interval": interval,
-                        }
-                        if level == "namespace":
-                            verify_args["namespace"] = namespace
-                        elif level == "image":
-                            verify_args["namespace"] = namespace
-                            verify_args["image"] = first_image
-
-                        if verify_snapshot_schedule(**verify_args):
-                            raise Exception(
-                                "Snapshot schedule verification failed at {} level for {} "
-                                "with interval: {}".format(level, first_image, interval)
+                                "Adding snapshot schedule failed with error %s" % err
                             )
 
             # Run I/O on all primary images in parallel
@@ -901,14 +925,53 @@ def test_multi_snap_scheduling_namespace_mirroring(
                 with parallel() as p:
                     for io_config in io_configs:
                         p.spawn(krbd_io_handler, **io_config)
+                io_results = p.results
             except Exception as e:
                 raise Exception(f"I/O spawning or execution failed: {e}")
 
+            failed_io = [result for result in io_results if result and result[0]]
+            if failed_io:
+                raise Exception(f"I/O failed for one or more images: {failed_io}")
             log.info("All I/O completed successfully")
 
-            # Wait for snapshot interval to elapse
-            interval = image_config_val["snap_schedule_intervals"][-1]
-            time.sleep(int(interval[:-1]) * 120)
+            # Snapshot schedule verification - run only once per pool after new I/O.
+            # Scheduled snapshots need changed data to produce a new mirror snapshot.
+            if (
+                image_status_map
+                and image_config_val.get("snap_schedule_levels")
+                and image_config_val.get("snap_schedule_intervals")
+            ):
+                for level, interval in zip(
+                    image_config_val["snap_schedule_levels"],
+                    image_config_val["snap_schedule_intervals"],
+                ):
+                    effective_level = (
+                        "image" if level == "namespace" and not namespace else level
+                    )
+                    verify_args = {
+                        "rbd": rbd_primary,
+                        "pool": pool,
+                        "interval": interval,
+                    }
+                    if effective_level == "pool" and namespace:
+                        verify_args["namespace"] = namespace
+                    elif effective_level == "namespace":
+                        verify_args["namespace"] = namespace
+                    elif effective_level == "image":
+                        if namespace:
+                            verify_args["namespace"] = namespace
+                        verify_args["image"] = first_image
+
+                    if verify_snapshot_schedule(**verify_args):
+                        raise Exception(
+                            "Snapshot schedule verification failed at {} level for {} "
+                            "with interval: {}".format(
+                                effective_level, first_image, interval
+                            )
+                        )
+            else:
+                interval = image_config_val["snap_schedule_intervals"][-1]
+                time.sleep(int(interval[:-1]) * 120)
 
             # Validate data consistency in parallel for all images
             data_integrity_specs = []
@@ -934,10 +997,38 @@ def test_multi_snap_scheduling_namespace_mirroring(
                 with parallel() as p:
                     for spec in data_integrity_specs:
                         p.spawn(check_data_integrity, **spec)
+                integrity_results = p.results
             except Exception as e:
                 raise Exception(f"Data integrity check spawn failed: {e}")
 
+            if any(integrity_results):
+                raise Exception(
+                    f"Data integrity check failed for one or more images: {integrity_results}"
+                )
             log.info("Data is consistent from primary and secondary")
+            if (
+                image_status_map
+                and image_config_val.get("snap_schedule_levels")
+                and image_config_val.get("snap_schedule_intervals")
+            ):
+                for level, interval in zip(
+                    image_config_val["snap_schedule_levels"],
+                    image_config_val["snap_schedule_intervals"],
+                ):
+                    effective_level = (
+                        "image" if level == "namespace" and not namespace else level
+                    )
+                    remove_args = {
+                        "pool": pool,
+                        "image": first_image,
+                        "level": effective_level,
+                        "interval": interval,
+                    }
+                    if namespace:
+                        remove_args["namespace"] = namespace
+                    out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
+                    if err:
+                        raise Exception("Failed to remove mirror snapshot schedule")
 
         # Log test case success for this pool
         namespace_mirror_type = rbd_config.get("namespace_mirror_type")
@@ -1015,14 +1106,18 @@ def test_failover_and_image_operations(pri_config, sec_config, pool_types, **kw)
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        out, err = add_snapshot_scheduling(
-                            rbd_primary,
-                            pool=pool,
-                            image=image,
-                            level=level,
-                            interval=interval,
-                            namespace=namespace,
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
                         )
+                        schedule = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            schedule["namespace"] = namespace
+                        out, err = add_snapshot_scheduling(rbd_primary, **schedule)
                         if err:
                             raise Exception(
                                 f"Adding snapshot schedule failed with error {err}"
@@ -1060,6 +1155,29 @@ def test_failover_and_image_operations(pri_config, sec_config, pool_types, **kw)
                         f"Map, mount and run IOs failed for {pri_image_spec}"
                     )
                 log.info(f"Map, mount and IOs successful for {pri_image_spec}")
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        remove_args = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            remove_args["namespace"] = namespace
+                        out, err = remove_snapshot_scheduling(
+                            rbd_primary, **remove_args
+                        )
+                        if err:
+                            raise Exception("Failed to remove mirror snapshot schedule")
 
                 log.info(f"Demoting primary image {pri_image_spec} on Cluster-1")
                 out, err = rbd_primary.mirror.image.demote(
@@ -1102,14 +1220,20 @@ def test_failover_and_image_operations(pri_config, sec_config, pool_types, **kw)
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        out, err = add_snapshot_scheduling(
-                            rbd_secondary,
-                            pool=pool,
-                            image=image,
-                            level=level,
-                            interval=interval,
-                            namespace=remote_namespace,
+                        effective_level = (
+                            "image"
+                            if level == "namespace" and not remote_namespace
+                            else level
                         )
+                        schedule = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if remote_namespace:
+                            schedule["namespace"] = remote_namespace
+                        out, err = add_snapshot_scheduling(rbd_secondary, **schedule)
                         if err:
                             raise Exception(
                                 f"Adding snapshot schedule failed with error {err}"
@@ -1136,7 +1260,6 @@ def test_failover_and_image_operations(pri_config, sec_config, pool_types, **kw)
                         f"Rename image {sec_image_spec} failed with error {err}"
                     )
                 log.info(f"Renamed image {sec_image_spec} to {new_sec_image_spec}")
-
                 time.sleep(
                     int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
                 )
@@ -1193,6 +1316,33 @@ def test_failover_and_image_operations(pri_config, sec_config, pool_types, **kw)
                     )
 
                 log.info(f"Resize verified for image {new_sec_image_spec} on Cluster-1")
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        effective_level = (
+                            "image"
+                            if level == "namespace" and not remote_namespace
+                            else level
+                        )
+                        remove_args = {
+                            "pool": pool,
+                            "image": (
+                                new_image_name if effective_level == "image" else image
+                            ),
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if remote_namespace:
+                            remove_args["namespace"] = remote_namespace
+                        out, err = remove_snapshot_scheduling(
+                            rbd_secondary, **remove_args
+                        )
+                        if err:
+                            raise Exception("Failed to remove mirror snapshot schedule")
 
                 log.info(f"Removing image {new_sec_image_spec} on Cluster-2")
                 out, err = rbd_secondary.rm(**{"image-spec": new_sec_image_spec})
@@ -1277,14 +1427,18 @@ def test_disable_enable_namespace_mirroring(pri_config, sec_config, pool_types, 
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        out, err = add_snapshot_scheduling(
-                            rbd_primary,
-                            pool=pool,
-                            image=image,
-                            level=level,
-                            interval=interval,
-                            namespace=namespace,
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
                         )
+                        schedule = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            schedule["namespace"] = namespace
+                        out, err = add_snapshot_scheduling(rbd_primary, **schedule)
                         if err:
                             raise Exception(
                                 f"Adding snapshot schedule failed with error {err}"
@@ -1346,6 +1500,29 @@ def test_disable_enable_namespace_mirroring(pri_config, sec_config, pool_types, 
                 log.info(
                     "Data is consistent with the mirrored image for " + pri_image_spec
                 )
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        remove_args = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            remove_args["namespace"] = namespace
+                        out, err = remove_snapshot_scheduling(
+                            rbd_primary, **remove_args
+                        )
+                        if err:
+                            raise Exception("Failed to remove mirror snapshot schedule")
 
                 # Remove pool peer on both clusters
                 out, err = rbd_primary.mirror.pool.info(
@@ -1445,14 +1622,18 @@ def test_disable_enable_namespace_mirroring(pri_config, sec_config, pool_types, 
                         image_config_val["snap_schedule_levels"],
                         image_config_val["snap_schedule_intervals"],
                     ):
-                        out, err = add_snapshot_scheduling(
-                            rbd_primary,
-                            pool=pool,
-                            image=image,
-                            level=level,
-                            interval=interval,
-                            namespace=namespace,
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
                         )
+                        schedule = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            schedule["namespace"] = namespace
+                        out, err = add_snapshot_scheduling(rbd_primary, **schedule)
                         if err:
                             raise Exception(
                                 f"Adding snapshot schedule failed with error {err}"
@@ -1496,6 +1677,29 @@ def test_disable_enable_namespace_mirroring(pri_config, sec_config, pool_types, 
                 log.info(
                     "Data is consistent with the mirrored image for " + pri_image_spec
                 )
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        effective_level = (
+                            "image" if level == "namespace" and not namespace else level
+                        )
+                        remove_args = {
+                            "pool": pool,
+                            "image": image,
+                            "level": effective_level,
+                            "interval": interval,
+                        }
+                        if namespace:
+                            remove_args["namespace"] = namespace
+                        out, err = remove_snapshot_scheduling(
+                            rbd_primary, **remove_args
+                        )
+                        if err:
+                            raise Exception("Failed to remove mirror snapshot schedule")
 
                 log.info(
                     "Test passed successfully for disabling and enabling namespace mirroring"
