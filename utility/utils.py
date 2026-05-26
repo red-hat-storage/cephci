@@ -1,3 +1,4 @@
+import base64
 import datetime
 import getpass
 import json
@@ -5,6 +6,7 @@ import os
 import random
 import re
 import smtplib
+import subprocess
 import time
 import traceback
 from copy import deepcopy
@@ -13,7 +15,6 @@ from email.mime.text import MIMEText
 from ipaddress import ip_address
 from string import ascii_uppercase, digits
 from typing import Any, Dict, Optional, Tuple
-from urllib import request
 
 import requests
 import yaml
@@ -1404,26 +1405,57 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
     return node_name
 
 
-def get_cephqe_ca() -> Optional[Tuple]:
-    """Retrieve CephCI QE CA certificate and key."""
-    base_uri = (
-        get_cephci_config()
-        .get("root-ca-location", "http://magna002.ceph.redhat.com/cephci-jenkins")
-        .rstrip("/")
-    )
-    ca_cert = None
-    ca_key = None
+def get_cephqe_ca() -> Tuple[Optional[Any], Optional[Any]]:
+    """Retrieve CephCI QE CA certificate and key from the cloned configs repo."""
+    try:
+        repo_dict = get_cephci_config()["repos"]["rgw_configs"]
+    except KeyError:
+        log.debug("Repo details are missing for rgw_configs in ~/.cephci.yaml")
+        return None, None
+
+    path_to_clone = os.path.expanduser(repo_dict["dest"])
+    repo_url = repo_dict["git_url"]
+    repo_dir_name = repo_url.rstrip("/").split("/")[-1]
+    if repo_dir_name.endswith(".git"):
+        repo_dir_name = repo_dir_name[:-4]
+    final_repo_path = os.path.join(path_to_clone, repo_dir_name)
 
     try:
-        with request.urlopen(url=f"{base_uri}/.cephqe-ca.pem") as fd:
-            ca_cert = x509.load_pem_x509_certificate(fd.read())
+        os.makedirs(path_to_clone, exist_ok=True)
+        if not os.path.exists(final_repo_path):
+            clone_url = repo_url
+            oauth_token = repo_dict.get("oauth_token")
+            if oauth_token:
+                clone_url = clone_url.replace(
+                    "https://", f"https://oauth2:{oauth_token}@"
+                )
+            subprocess.run(
+                ["git", "clone", "--depth", "1", clone_url, final_repo_path],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+    except BaseException as be:
+        log.debug(be)
+        return None, None
 
-        with request.urlopen(url=f"{base_uri}/.cephqe-ca.key") as fd:
-            ca_key = serialization.load_pem_private_key(fd.read(), None)
+    repo_ca_cert_path = os.path.join(final_repo_path, "rgw", "certs", ".ca.crt")
+    repo_ca_key_path = os.path.join(final_repo_path, "rgw", "certs", ".ca.key")
+
+    try:
+        with open(repo_ca_cert_path, "rb") as fd:
+            cert_pem = base64.b64decode(fd.read().strip())
+            ca_cert = x509.load_pem_x509_certificate(cert_pem)
+
+        with open(repo_ca_key_path, "rb") as fd:
+            key_pem = base64.b64decode(fd.read().strip())
+            ca_key = serialization.load_pem_private_key(key_pem, None)
+
+        return ca_key, ca_cert
     except BaseException as be:
         log.debug(be)
 
-    return ca_key, ca_cert
+    return None, None
 
 
 def generate_self_signed_certificate(subject: Dict) -> Tuple:
@@ -1485,7 +1517,7 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
         (
             ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
             if ca_cert
-            else None
+            else ""
         ),
     )
 
