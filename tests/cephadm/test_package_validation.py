@@ -4,7 +4,16 @@ from cli.utilities.packages import Package, PackageError, ReposError, Rpm
 from cli.utilities.utils import get_custom_repo_url
 
 YUM_REPO_DIR = "/etc/yum.repos.d"
-REG_IMAGE = "registry.redhat.io/openshift4/{}:latest"
+
+
+def openshift_monitoring_image(image_name, tag):
+    """registry.redhat.io/openshift4 image ref using the suite tag (not :latest).
+
+    Internal mirrors often omit :latest; tags match monitoring_images values
+    (e.g. v4.13.0).
+    """
+    t = (tag or "latest").strip() or "latest"
+    return f"registry.redhat.io/openshift4/{image_name}:{t}"
 
 
 def compare_packages(node, pkgs):
@@ -60,8 +69,8 @@ def pull_images(node, images):
         node (ceph): ceph node objects
         images (dict): container images
     """
-    for image, _ in images.items():
-        Container(node).pull(REG_IMAGE.format(image))
+    for image, ver in images.items():
+        Container(node).pull(openshift_monitoring_image(image, ver))
 
 
 def compare_images(node, images):
@@ -71,10 +80,9 @@ def compare_images(node, images):
         images (dict): container images
     """
     for image, ver in images.items():
-        if Container(node).compare(REG_IMAGE.format(image), ver) == -1:
-            raise PackageError(
-                f"Expected version for {REG_IMAGE.format(image)} is {ver}"
-            )
+        ref = openshift_monitoring_image(image, ver)
+        if Container(node).compare(ref, ver) == -1:
+            raise PackageError(f"Expected version for {ref} is {ver}")
 
 
 def validate_packages(node, pkgs):
@@ -131,7 +139,8 @@ def run(ceph_cluster, **kwargs):
     # Get config details
     config = kwargs.get("config")
     base_url = config.get("base_url")
-    cloud_type = config.get("cloud_type")
+    # run.py sets "cloud-type" (hyphen); accept both spellings
+    cloud_type = config.get("cloud_type") or config.get("cloud-type")
 
     # Get expected package versions from config
     client_pkgs = config.get("client_packages")
@@ -152,7 +161,7 @@ def run(ceph_cluster, **kwargs):
     if build_type == "rh":
         _files = [repo for repo in out if "Tools" in repo or "RHCEPH" in repo]
     elif build_type == "ibm":
-        _files = [repo for repo in out if "IBM" in repo]
+        _files = [repo for repo in out if "ibm" in repo.lower()]
     # Raise error if expected repository is not added
     if not _files:
         raise ResourceNotFoundError("Expected repository not added to node")
