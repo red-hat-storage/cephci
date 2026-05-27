@@ -132,9 +132,7 @@ def run(ceph_cluster, **kw):
                 server=nfs_server_name,
                 export=nfs_export_squash,
             ):
-                raise OperationFailedError(
-                    f"Failed to mount nfs on {cl.hostname}"
-                )
+                raise OperationFailedError(f"Failed to mount nfs on {cl.hostname}")
         log.info("Mount succeeded on all clients for squash export")
 
         # Create oprtaions on each client
