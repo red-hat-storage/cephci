@@ -251,6 +251,100 @@ def group_mirror_status_verify(
             raise Exception("Global ids of both the clusters are not same")
 
 
+def get_peer_image_global_ids(rbd, image_names, **group_kw):
+    """
+    Return peer-site image name to global_id mapping from group mirror status.
+    Args:
+        rbd: RBD object
+        image_names: Image names to include (e.g. image_1, image_2)
+        **group_kw: Group spec or pool/group/namespace status spec
+    Returns:
+        dict: image name -> global_id for matching peer images
+    """
+    out, err = rbd.mirror.group.status(**group_kw, format="json")
+    if err:
+        raise Exception("Getting group mirror status failed : " + str(err))
+    ids = {}
+    for peer in json.loads(out).get("peer_sites", []):
+        for img in peer.get("images", []):
+            if img.get("name") in image_names and img.get("global_id"):
+                ids[img["name"]] = img["global_id"]
+    return ids
+
+
+def mirror_group_snapshot_add_and_wait_sync(
+    rbd_primary,
+    rbd_secondary,
+    max_wait_sec=300,
+    poll_interval=5,
+    **group_kw,
+):
+    """
+    Create a mirror group snapshot on the primary and wait until it is copied
+    on the secondary. Required after block I/O when group mirroring uses snapshot mode.
+    Args:
+        rbd_primary: RBD object for the primary cluster
+        rbd_secondary: RBD object for the secondary cluster
+        max_wait_sec: Maximum time to wait for snapshot copy
+        poll_interval: Seconds between copy-status polls
+        **group_kw: Group spec, e.g. group-spec or pool/group/namespace
+    """
+    out, err = rbd_primary.mirror.group.snapshot.add(**group_kw)
+    if err:
+        raise Exception("Failed to add mirror group snapshot: " + str(err))
+    snapshot_id = out.strip().split(":")[1].strip()
+    log.info("Created mirror group snapshot id=%s", snapshot_id)
+
+    time.sleep(10)
+    start = time.time()
+    while True:
+        snap_kw = dict(group_kw)
+        snap_kw.setdefault("format", "json")
+        copied = get_mirror_group_snap_copied_status(
+            rbd_secondary, snapshot_id, **snap_kw
+        )
+        log.info(
+            "Mirror group snapshot %s copied status on secondary: %s",
+            snapshot_id,
+            copied,
+        )
+        if copied:
+            break
+        if time.time() - start > max_wait_sec:
+            raise Exception(
+                "Mirror group snapshot "
+                + snapshot_id
+                + " not copied to secondary within "
+                + str(max_wait_sec)
+                + "s"
+            )
+        time.sleep(poll_interval)
+
+    wait_for_idle(rbd_primary, **group_kw)
+
+
+def verify_peer_image_global_ids_unchanged(
+    rbd, baseline_ids, after_event="", **group_kw
+):
+    """
+    Verify peer image global_ids are unchanged after adding images to a group.
+    Args:
+        rbd: RBD object
+        baseline_ids: name -> global_id captured before the change
+        after_event: Description of the change (for logging and errors)
+        **group_kw: Group spec or pool/group/namespace status spec
+    """
+    current_ids = get_peer_image_global_ids(rbd, list(baseline_ids.keys()), **group_kw)
+    for name, old_id in baseline_ids.items():
+        if current_ids.get(name) != old_id:
+            raise Exception("Image " + name + " global_id changed after " + after_event)
+    if after_event:
+        log.info(
+            "Verified existing images global_ids unchanged after %s",
+            after_event,
+        )
+
+
 def wait_for_idle(rbd, **group_kw):
     """
     Wait for 300 seconds for group mirroring replay state to be idle for all images in the group
@@ -366,12 +460,21 @@ def verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec):
         0 if snapshot schedule is verified successfully
         1 if fails
     """
-    out, err = rbd.mirror.group.snapshot.schedule.ls(**status_spec)
+    ls_spec = dict(status_spec)
+    ls_spec.setdefault("format", "json")
+    out, err = rbd.mirror.group.snapshot.schedule.ls(**ls_spec)
     if err:
         log.error(
             "Error while fetching snapshot schedule list for group  %s, %s",
             group_spec,
             err,
+        )
+        return 1
+    if not out or not str(out).strip():
+        log.error(
+            "Empty snapshot schedule list for group %s at interval %s",
+            group_spec,
+            interval,
         )
         return 1
     out = str(out).strip("'<>() ").replace("'", '"')
