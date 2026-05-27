@@ -242,29 +242,37 @@ def run_signal_tests(
                 )
                 service_name = fs_util_v1.deamon_name(node, daemon_service_pattern)
                 log.info("Starting %s service: %s", daemon_process_name, service_name)
-                node.exec_command(
-                    sudo=True,
-                    cmd=f"systemctl start {service_name}",
-                    check_ec=False,
-                )
-                out, rc = node.exec_command(
-                    sudo=True,
-                    cmd=f"systemctl is-active {service_name}",
-                    check_ec=False,
-                )
-                if "active" in out:
+                try:
+                    node.exec_command(
+                        sudo=True,
+                        cmd=f"systemctl start {service_name}",
+                    )
+                    # Verify service started
+                    out, rc = node.exec_command(
+                        sudo=True,
+                        cmd=f"systemctl is-active {service_name}",
+                    )
+                    if "active" not in out:
+                        log.error(
+                            "%s service %s failed to start: %s",
+                            daemon_process_name,
+                            service_name,
+                            out,
+                        )
+                        return 1
                     log.info(
                         "%s service %s started successfully",
                         daemon_process_name,
                         service_name,
                     )
-                else:
-                    log.warning(
-                        "%s service %s might not be active: %s",
+                except Exception as e:
+                    log.error(
+                        "Failed to start %s service %s: %s",
                         daemon_process_name,
                         service_name,
-                        out,
+                        e,
                     )
+                    return 1
         return 0
     except Exception as e:
         log.error("Error during %s test: %s", test_name, e)
@@ -357,14 +365,16 @@ def run_container_restart(nodes, container_filter_keywords):
             "Restarting containers matching '%s' using podman restart", grep_pattern
         )
 
+        failed_nodes = []
         for node in nodes:
             log.info("Restarting container on host: %s", node.hostname)
             try:
                 out, _ = node.exec_command(
                     sudo=True,
-                    cmd=f"podman ps | grep {grep_pattern}",
+                    cmd=f"podman ps | grep '{grep_pattern}'",
                 )
                 lines = out.strip().split("\n")
+                container_restarted = False
                 for line in lines:
                     if all(kw in line for kw in container_filter_keywords):
                         container_id = line.split()[0]
@@ -377,9 +387,18 @@ def run_container_restart(nodes, container_filter_keywords):
                             sudo=True,
                             cmd=f"podman restart {container_id}",
                         )
+                        container_restarted = True
                         break
+                if not container_restarted:
+                    log.error("No matching container found on %s", node.hostname)
+                    failed_nodes.append(node.hostname)
             except Exception as e:
-                log.warning("Failed to restart container on %s: %s", node.hostname, e)
+                log.error("Failed to restart container on %s: %s", node.hostname, e)
+                failed_nodes.append(node.hostname)
+
+        if failed_nodes:
+            log.error("Container restart failed on nodes: %s", failed_nodes)
+            return 1
         return 0
     except Exception as e:
         log.error("Error during container restart test: %s", e)

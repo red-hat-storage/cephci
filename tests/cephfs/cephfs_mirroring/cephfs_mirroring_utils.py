@@ -131,15 +131,17 @@ class CephfsMirroringUtils(object):
             int: 0 if daemon recovered, 1 if timed out
         """
         log.info("Waiting for %s to recover after %s", daemon_name, context)
-        if not wait_for_process(
+        if wait_for_process(
             client=client,
             process_name=daemon_name,
             timeout=timeout,
             interval=interval,
+            ispresent=True,
         ):
-            log.error("%s daemon did not recover after %s", daemon_name, context)
-            return 1
-        return 0
+            log.info("%s daemon recovered after %s", daemon_name, context)
+            return 0
+        log.error("%s daemon did not recover after %s", daemon_name, context)
+        return 1
 
     @staticmethod
     @retry(Exception, tries=20, delay=15, backoff=1)

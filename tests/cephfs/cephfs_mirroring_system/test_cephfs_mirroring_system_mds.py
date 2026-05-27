@@ -119,7 +119,7 @@ def run(ceph_cluster, **kw):
         filesystem_id = env["filesystem_id"]
         peer_uuid = env["peer_uuid"]
 
-        log.info(f"Starting background IOs for {io_runtime} minutes")
+        log.info("Starting background IOs for %s minutes", io_runtime)
         io_threads, stop_io_event = start_background_ios(
             fs_util_v1_ceph1, source_clients[0], full_subvolume_path, io_runtime
         )

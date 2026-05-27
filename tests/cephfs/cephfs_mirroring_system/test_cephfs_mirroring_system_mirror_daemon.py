@@ -127,7 +127,7 @@ def run(ceph_cluster, **kw):
         original_mirror_host = json.loads(out)[0].get("hostname")
         log.info("Original cephfs-mirror daemon host: %s", original_mirror_host)
 
-        log.info(f"Starting background IOs for {io_runtime} minutes")
+        log.info("Starting background IOs for %s minutes", io_runtime)
         io_threads, stop_io_event = start_background_ios(
             fs_util_v1_ceph1, source_clients[0], full_subvolume_path, io_runtime
         )
@@ -318,15 +318,20 @@ def run(ceph_cluster, **kw):
                 # Refetch daemon_name in case it changed (especially for redeploy)
                 daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
                 log.info("Updated daemon name: %s", daemon_name)
-                if not daemon_name:
+                if (
+                    not daemon_name
+                    or not isinstance(daemon_name, list)
+                    or len(daemon_name) == 0
+                ):
                     log.error("No cephfs-mirror daemons found after %s", test_name)
                     return 1
                 try:
                     hostname = daemon_name[0].split(".")[1]
-                except (IndexError, AttributeError):
+                except (IndexError, AttributeError) as e:
                     log.error(
-                        "Failed to extract hostname from daemon name: %s",
+                        "Failed to extract hostname from daemon name %s: %s",
                         daemon_name,
+                        e,
                     )
                     return 1
                 mirror_node = ceph_cluster_dict.get("ceph1").get_node_by_hostname(
@@ -465,14 +470,32 @@ def run(ceph_cluster, **kw):
                 original_mirror_host,
                 current_mirror_host,
             )
-            source_clients[0].exec_command(
-                sudo=True,
-                cmd=f"ceph orch apply cephfs-mirror "
-                f"--placement='1 {original_mirror_host}'",
-                check_ec=False,
-            )
-            time.sleep(30)
-            log.info("cephfs-mirror redeployed back to %s", original_mirror_host)
+            try:
+                source_clients[0].exec_command(
+                    sudo=True,
+                    cmd=f"ceph orch apply cephfs-mirror --placement='1 {original_mirror_host}'",
+                )
+                # Wait and verify daemon moved back
+                time.sleep(30)
+                out_verify, _ = source_clients[0].exec_command(
+                    sudo=True,
+                    cmd="ceph orch ps --daemon_type=cephfs-mirror --format json",
+                    check_ec=False,
+                )
+                verify_host = json.loads(out_verify)[0].get("hostname")
+                if verify_host == original_mirror_host:
+                    log.info(
+                        "cephfs-mirror successfully redeployed to %s",
+                        original_mirror_host,
+                    )
+                else:
+                    log.warning(
+                        "cephfs-mirror on %s, expected %s",
+                        verify_host,
+                        original_mirror_host,
+                    )
+            except Exception as e:
+                log.error("Failed to redeploy cephfs-mirror: %s", e)
         else:
             log.info(
                 "cephfs-mirror still on original host %s, no redeploy needed",
