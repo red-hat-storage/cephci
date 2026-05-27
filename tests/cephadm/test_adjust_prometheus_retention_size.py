@@ -13,11 +13,42 @@ def get_retention_size(node, promethus_api_host):
     """
     Get the retention_size set for prometheus daemon
     """
-    cmd = f"curl -s {promethus_api_host}/api/v1/status/flags | grep -A2 retention"
-    out = loads(node.exec_command(sudo=True, cmd=cmd)[0])["data"][
-        "storage.tsdb.retention.size"
-    ]
-    return out
+    # Ensure the URL has the proper protocol
+    if not promethus_api_host.startswith(("http://", "https://")):
+        promethus_api_host = f"http://{promethus_api_host}"
+
+    # Use curl to get the flags and parse JSON directly
+    cmd = f"curl -s {promethus_api_host}/api/v1/status/flags"
+    try:
+        output, err = node.exec_command(sudo=True, cmd=cmd)
+        if not output or output.strip() == "":
+            raise OperationFailedError(
+                f"Empty response from Prometheus API at {promethus_api_host}. "
+                "Ensure Prometheus is running and accessible."
+            )
+
+        # Parse JSON response
+        response = loads(output)
+
+        # Check if response is successful
+        if response.get("status") != "success":
+            raise OperationFailedError(
+                f"Prometheus API returned non-success status: {response}"
+            )
+
+        # Extract retention size from the data
+        retention_size = response.get("data", {}).get("storage.tsdb.retention.size")
+
+        if retention_size is None:
+            raise OperationFailedError(
+                "storage.tsdb.retention.size not found in Prometheus flags"
+            )
+
+        return retention_size
+    except Exception as e:
+        log.error(f"Failed to get retention size: {str(e)}")
+        log.error(f"Prometheus API host: {promethus_api_host}")
+        raise
 
 
 def run(ceph_cluster, **kw):
