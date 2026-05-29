@@ -67,6 +67,10 @@ tests:
               args:
                 placement:
                   label: node-exporter
+          - config:
+              args:
+                - "ceph config set mgr mgr/cephadm/use_agent true"
+              command: shell
       destroy-cluster: false
       abort-on-fail: true
 
