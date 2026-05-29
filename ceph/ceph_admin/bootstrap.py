@@ -2,9 +2,7 @@
 
 import json
 import tempfile
-import time
 from copy import deepcopy
-from time import sleep
 from typing import Dict
 
 from looseversion import LooseVersion
@@ -171,61 +169,6 @@ def generate_ssl_certificate(cls, dashboard_key, dashboard_crt):
 
 class BootstrapMixin:
     """Add bootstrap support to the child class."""
-
-    def _verify_public_network(self, public_nws, mon_node, timeout=300):
-        """Verify public_network DB and runtime values match for MON and MGR.
-
-        Retries every 30s for up to ``timeout`` seconds.
-        Raises Exception if values do not converge.
-        """
-        expected = sorted(public_nws.split(","))
-        end_time = time.time() + timeout
-
-        while True:
-            db_val, _ = self.shell(
-                args=["ceph", "config", "get", "mon", "public_network"]
-            )
-            mon_rt, _ = self.shell(
-                args=[
-                    "ceph",
-                    "config",
-                    "show",
-                    f"mon.{mon_node.shortname}",
-                    "public_network",
-                ]
-            )
-            mgr_dump, _ = self.shell(args=["ceph", "mgr", "dump", "-f", "json"])
-            mgr_id = json.loads(mgr_dump)["active_name"]
-            mgr_rt, _ = self.shell(
-                args=[
-                    "ceph",
-                    "config",
-                    "show",
-                    f"mgr.{mgr_id}",
-                    "public_network",
-                ]
-            )
-
-            db_val = sorted(db_val.strip().split(","))
-            mon_rt = sorted(mon_rt.strip().split(","))
-            mgr_rt = sorted(mgr_rt.strip().split(","))
-
-            if db_val == expected and mon_rt == expected and mgr_rt == expected:
-                logger.info(
-                    "public_network verified: DB, MON, MGR all match %s",
-                    expected,
-                )
-                return
-
-            if time.time() >= end_time:
-                raise Exception(
-                    f"public_network mismatch after {timeout}s. "
-                    f"Expected={expected}, DB={db_val}, "
-                    f"MON={mon_rt}, MGR={mgr_rt}"
-                )
-
-            logger.info("public_network not yet converged, retrying in 30s...")
-            sleep(30)
 
     def bootstrap(self: CephAdmProtocol, config: Dict):
         """
@@ -526,16 +469,11 @@ class BootstrapMixin:
         # Todo: remove this code commit once we have network config from node_obj.
         if config.get("update_public_nw", True):
             public_nws = ",".join(
-                [
-                    public_nws,
-                    get_public_network(self.cluster.get_nodes(ignore="client")),
-                ]
+                [public_nws, get_public_network(self.cluster.get_nodes())]
             )
             # Append IPv6 public networks only when requested and available
             if getattr(self.cluster, "use_ipv6", False):
-                ipv6_nws = get_public_network_ipv6(
-                    self.cluster.get_nodes(ignore="client")
-                )
+                ipv6_nws = get_public_network_ipv6(self.cluster.get_nodes())
                 if ipv6_nws:
                     public_nws = ",".join([public_nws, ipv6_nws])
             public_nws = ",".join(filter(lambda x: x, list(set(public_nws.split(",")))))
@@ -548,40 +486,16 @@ class BootstrapMixin:
             # - 7.1z3: https://bugzilla.redhat.com/show_bug.cgi?id=2314606
             # - 8.0: https://bugzilla.redhat.com/show_bug.cgi?id=2314438
             # - https://access.redhat.com/solutions/7088483
-            try:
-                major_version = int(rhbuild.split(".")[0])
-                config_level = "global" if major_version >= 6 else "mon"
-            except (ValueError, IndexError, AttributeError):
-                logger.warning(
-                    "Unable to parse rhbuild version: %s, defaulting to global",
-                    rhbuild,
-                )
-                config_level = "global"
+            config_level = "global" if rhbuild.split(".")[0] >= "6" else "mon"
             self.shell(
                 args=[
                     "ceph",
                     "config",
                     "set",
-                    config_level,
-                    "public_network",
+                    f"{config_level} public_network",
                     public_nws,
                 ]
             )
-            # Redeploy MONs to pick up the updated public_network config.
-            # Affects all versions. Refer:
-            # - https://ibm-ceph.atlassian.net/browse/IBMCEPH-12242 (9.1 target)
-            # - https://ibm-ceph.atlassian.net/browse/IBMCEPH-15003 (8.0z backport)
-            # - https://ibm-ceph.atlassian.net/browse/IBMCEPH-15002 (9.0z backport)
-            try:
-                self.shell(args=["ceph", "orch", "redeploy", "mon"])
-                sleep(5)
-            except Exception:
-                logger.warning("Failed to redeploy mon after public_network update")
-            try:
-                self.shell(args=["ceph", "orch", "restart", "mgr"])
-            except Exception:
-                logger.warning("Failed to restart mgr after public_network update")
-            self._verify_public_network(public_nws, mon_node)
         if cluster_nws:
             self.shell(
                 args=["ceph", "config", "set", "global cluster_network", cluster_nws]
