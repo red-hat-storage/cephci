@@ -107,12 +107,21 @@ instance:
         - name: root
           password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
 
+    packages:
+      - lvm2
+      - chrony
+      - yum-utils
+      - podman
+      - net-snmp-utils
+      - net-snmp
+      - python3-devel
+      - wget
+
+    package_upgrade: true
+
     runcmd:
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
-      - dnf clean all
-      - dnf install -yq lvm2 chrony yum-utils podman net-snmp-utils net-snmp python3-devel wget
-      - dnf update -y
       - mkdir -p /root/rgw_rpms
       - curl --fail -L -k -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm
       - curl --fail -L -k -o /root/rgw_rpms/oathtool.rpm https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
