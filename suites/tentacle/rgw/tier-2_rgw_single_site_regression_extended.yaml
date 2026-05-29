@@ -214,6 +214,51 @@ tests:
         config-file-name: ../../curl/configs/test_cors_presigned_put_url_using_curl.yaml
 
   - test:
+      name: Greater test coverage for bucket CORS
+      desc: Enhanced test coverage for bucket CORS
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: test_cors.py
+        config-file-name: test_cors.yaml
+
+  - test:
+      name: Greater test coverage for bucket CORS with wildcards
+      desc: Enhanced test coverage for bucket CORS with wildcards
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: test_cors.py
+        config-file-name: test_cors_wildcard.yaml
+
+  - test:
+      name: Greater test coverage for bucket CORS with multiple rules
+      desc: Enhanced test coverage for bucket CORS with multiple rules
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: test_cors.py
+        config-file-name: test_cors_multiple_rules.yaml
+
+  - test:
+      name: Test Global CORS
+      desc: Test all the config options with global CORS
+      polarion-id: CEPH-83632421
+      module: sanity_rgw.py
+      config:
+        script-name: test_gcors_config.py
+        config-file-name: test_gcors_config.yaml
+
+  - test:
+      name: Test Global CORS
+      desc: Test global CORS with strict config
+      polarion-id: CEPH-83632421
+      module: sanity_rgw.py
+      config:
+        script-name: test_gcors_config.py
+        config-file-name: test_gcors_config_strict.yaml
+
+  - test:
       name: Test Tags added during multipart upload are retrievable
       desc: Test Tags added during multipart upload are retrievable
       polarion-id: CEPH-83604857
