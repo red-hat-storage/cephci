@@ -11,6 +11,7 @@ instance:
 
     ssh_pwauth: true
     disable_root: false
+    timezone: Etc/UTC
 
     groups:
       - cephuser
@@ -31,10 +32,13 @@ instance:
         cephuser:pass123
       expire: false
 
+    write_files:
+      - path: /etc/sysctl.d/1000-qdisc.conf
+        content: |
+          net.core.default_qdisc=netem
+
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
-      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
-      - timedatectl set-timezone Etc/UTC
       - hostnamectl set-hostname $(hostname -s)
       - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
       - systemctl restart sshd

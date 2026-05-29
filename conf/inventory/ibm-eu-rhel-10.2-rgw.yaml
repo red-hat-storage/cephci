@@ -11,6 +11,7 @@ instance:
     no_ssh_fingerprints: true
     disable_root: false
     ssh_pwauth: true
+    timezone: Etc/UTC
 
     # We are forcing an update of the packages
     package_update: true
@@ -107,7 +108,6 @@ instance:
           password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
 
     runcmd:
-      - timedatectl set-timezone Etc/UTC
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
       - dnf clean all
