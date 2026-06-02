@@ -234,7 +234,7 @@ def setup_tls_client(client_node, ca_cert):
     Package(client_node).install("ktls-utils")
 
     log.info("Configuring tlshd on client node %s", client_node.hostname)
-    cert_dir = "/cert/tls"
+    cert_dir = "/etc/pki/ca-trust/source/anchors"
     cert_path = f"{cert_dir}/tls_ca_cert.pem"
     client_node.exec_command(sudo=True, cmd=f"mkdir -p {cert_dir}")
 
@@ -259,9 +259,13 @@ def setup_tls_client(client_node, ca_cert):
     client_node.exec_command(
         sudo=True, cmd="sed -i '/x509.truststore/d' /etc/tlshd.conf", check_ec=False
     )
-    tlshd_conf_adds = f"\n[authenticate.client]\nx509.truststore= {cert_path}\n"
+    # keep strict formatting for tlshd parser: no leading spaces around '='
+    tlshd_conf_adds = f"\n[authenticate.client]\nx509.truststore={cert_path}\n"
     client_node.exec_command(
         sudo=True, cmd=f"echo '{tlshd_conf_adds}' >> /etc/tlshd.conf"
+    )
+    client_node.exec_command(
+        sudo=True, cmd=f"restorecon -Rv {cert_dir}", check_ec=False
     )
 
     log.info("Restarting tlshd on %s", client_node.hostname)
