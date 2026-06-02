@@ -4,8 +4,6 @@ import re
 import string
 import time
 
-from looseversion import LooseVersion
-
 from ceph.ceph import CommandFailed
 from utility.log import Log
 
@@ -66,39 +64,19 @@ class FsUtils(object):
         # Setup Crefi pre-requisites : pyxattr
         node.exec_command(sudo=True, cmd="pip3 install pyxattr", long_running=True)
 
+    def get_mon_node_ips(self):
+        """
+        Returns monitor node IPs from the cluster config, avoiding
+        fragile parsing of 'ceph mon dump' output which varies across
+        Ceph versions (e.g. new auth_* fields in Ceph 20.x).
+        """
+        return [node.ip_address for node in self.ceph_cluster.get_nodes(role="mon")]
+
     def get_clients(self, build):
         log.info("Getting Clients")
 
         self.clients = self.ceph_cluster.get_ceph_objects("client")
-
-        for node in self.clients:
-            out, rc = node.exec_command(
-                sudo=True, cmd="ceph mon dump  | awk {'print $2'} "
-            )
-            self.mon_node_ip = out.rstrip("\n")
-            self.mon_node_ip = self.mon_node_ip.split("\n")
-            self.mon_node_ip = (
-                self.mon_node_ip[-3].strip("/0")
-                + " "
-                + self.mon_node_ip[-2].strip("/0")
-                + " "
-                + self.mon_node_ip[-1].strip("/0")
-            )
-            self.mon_node_ip = self.mon_node_ip.split(" ")
-            if LooseVersion(build) > LooseVersion("3"):
-                self.mon_node_ip[0] = re.search(
-                    r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
-                    self.mon_node_ip[0],
-                ).group(2)
-                self.mon_node_ip[1] = re.search(
-                    r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
-                    self.mon_node_ip[1],
-                ).group(2)
-                self.mon_node_ip[2] = re.search(
-                    r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
-                    self.mon_node_ip[2],
-                ).group(2)
-            break
+        self.mon_node_ip = self.get_mon_node_ips()
         for client in self.clients:
             node = client.node
             if node.pkg_type == "rpm":
