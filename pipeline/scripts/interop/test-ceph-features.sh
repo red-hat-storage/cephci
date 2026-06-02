@@ -13,7 +13,7 @@ PY_CMD=${PY_CMD:-"${HOME}/cephci-venv/bin/python"}
 OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
-BUILD_TYPE=${BUILD_TYPE:-"rc"}
+BUILD_TYPE=${BUILD_TYPE:-"released"}
 RHCS_VERSION=${RHCS_VERSION:-}
 
 echo "Red Hat Ceph Storage sanity test suite execution."
