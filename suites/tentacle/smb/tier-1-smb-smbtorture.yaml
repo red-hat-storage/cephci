@@ -56,14 +56,6 @@ tests:
               pos_args:
                 - cephfs
               service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
       destroy-cluster: false
       abort-on-fail: true
 
