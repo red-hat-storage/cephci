@@ -126,7 +126,7 @@ def add(cls, config: Dict) -> None:
                     enabled_repos.append(repo)
             log.debug(f"Enabled repos on the system are : {enabled_repos}")
 
-            if rhcs_version != "default":
+            if rhcs_version != "default" and not _manifest_section:
                 try:
                     # Disabling all the repos and enabling the ones we need to install the ceph client
                     for cmd in disable_all:
