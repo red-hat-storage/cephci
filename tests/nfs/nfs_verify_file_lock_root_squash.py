@@ -180,7 +180,7 @@ def run(ceph_cluster, **kw):
             original_squash_value,
             new_squash_value,
         )
-        sleep(5)
+        sleep(90)  # allow Ganesha to finish grace after export apply
 
     except Exception as e:
         log.error(f"Failed to setup nfs cluster with rootsquash enabled : Error - {e}")
@@ -220,7 +220,7 @@ def run(ceph_cluster, **kw):
         c1.start()
         try:
             wait_for_lock_holder_ready(
-                clients[1], f"{nfs_squash_mount}/{LOCK_READY_FILENAME}"
+                clients[0], f"{nfs_squash_mount}/{LOCK_READY_FILENAME}"
             )
         except Exception as e:
             log.error(f"Lock setup sync failed: {e}")
