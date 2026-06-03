@@ -202,7 +202,7 @@ def run(ceph_cluster, **kw):
         log.info(f"fsid on ceph cluster : {fsid}")
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
-        asok_file = fs_mirroring_utils.get_asok_file(
+        asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
             cephfs_mirror_node[0], fsid, daemon_name
         )
         log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
@@ -335,13 +335,19 @@ def run(ceph_cluster, **kw):
                 )
 
             log.info("Destroy CephFS Mirroring setup.")
+            try:
+                cleanup_peer_uuid = peer_uuid
+            except NameError:
+                cleanup_peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
+                    source_clients[0], source_fs
+                )
             fs_mirroring_utils.destroy_cephfs_mirroring(
                 source_fs,
                 source_clients[0],
                 target_fs,
                 target_clients[0],
                 target_user,
-                peer_uuid,
+                cleanup_peer_uuid,
             )
 
             log.info("Remove Subvolumes")
@@ -364,9 +370,14 @@ def run(ceph_cluster, **kw):
             )
 
             log.info("Cleanup Target Client")
-            fs_mirroring_utils.cleanup_target_client(
-                target_clients[0], target_mount_path1
-            )
-            fs_mirroring_utils.cleanup_target_client(
-                target_clients[0], target_mount_path2
-            )
+            try:
+                fs_mirroring_utils.cleanup_target_client(
+                    target_clients[0], target_mount_path1
+                )
+                fs_mirroring_utils.cleanup_target_client(
+                    target_clients[0], target_mount_path2
+                )
+            except NameError:
+                log.warning(
+                    "target_mount_path not defined, skipping target client cleanup"
+                )
