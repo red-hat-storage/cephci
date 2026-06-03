@@ -37,7 +37,7 @@ def _detect_registry_tier(registry: str, build_type: str) -> str:
         return "cdn" if build_type in ("released", "cdn") else "stage"
     if "registry.redhat.io" in registry or "cp.icr.io" in registry:
         return "cdn"
-    if "registry.stage.redhat.io" in registry or "cp.stg.icr.io" in registry:
+    if "stage" in registry or "stg" in registry or "quay" in registry:
         return "stage"
     return "cdn" if build_type in ("released", "cdn") else "stage"
 
@@ -46,7 +46,7 @@ def construct_registry(
     cls,
     registry: str,
     json_file: bool = False,
-    ibm_build: bool = False,
+    product: str = "redhat",
     build_type: str = "released",
 ):
     """
@@ -56,7 +56,7 @@ def construct_registry(
         cls (CephAdmin): class object
         registry (Str): registry name
         json_file (Bool): registry credentials in JSON file (default:False)
-        ibm_build: flag to fetch IBM registry creds
+        product: ceph product - ibm/redhat
         build_type: CLI build type (released|cdn|stage|nightly etc.)
 
     Registry tier is chosen from the registry hostname when it matches a known
@@ -72,7 +72,7 @@ def construct_registry(
     Returns:
         constructed string of registry credentials ( Str )
     """
-    _vendor = "ibm" if ibm_build else "rh"
+    _vendor = "ibm" if "ibm" in product else "rh"
 
     _config = get_cephci_config()
     _reg = registry if registry else ""
@@ -97,7 +97,7 @@ def construct_registry(
             f"{_vendor}_registry_credentials", _config["cdn_credentials"]
         )
     reg_args = {
-        "registry-url": registry or cdn_cred.get("registry"),
+        "registry-url": cdn_cred.get("registry", registry),
         "registry-username": cdn_cred.get("username"),
         "registry-password": cdn_cred.get("password"),
     }
@@ -334,27 +334,22 @@ class BootstrapMixin:
         registry_url = args.pop("registry-url", None)
         registry_json = args.pop("registry-json", None)
 
-        # Auto-detect registry from custom_image and add credentials if needed
-        if custom_image and not registry_url and not registry_json:
-            if isinstance(custom_image, str):
-                image_registry = custom_image.split("/")[0]
-            else:
-                image_registry = self.config["container_image"].split("/")[0]
+        # Auto-detect registry from custom_image or container image and add credentials if needed
+        if custom_image and isinstance(custom_image, str):
+            image_registry = custom_image.split("/")[0]
+        else:
+            image_registry = self.config["container_image"].split("/")[0]
 
-            if (
-                "registry.stage.redhat.io" in image_registry
-                or "registry.redhat.io" in image_registry
-            ):
-                registry_url = image_registry
-                logger.info(
-                    f"Auto-detected registry {registry_url} from custom image, adding credentials"
-                )
+        registry_url = image_registry
+        logger.info(
+            f"Auto-detected registry {registry_url} from container image, adding credentials"
+        )
 
         if registry_url or manifest_obj.product == "ibm":
             cmd += construct_registry(
                 self,
                 registry_url,
-                ibm_build=True if manifest_obj.product == "ibm" else False,
+                product=manifest_obj.product,
                 build_type=build_type,
             )
 
@@ -363,7 +358,7 @@ class BootstrapMixin:
                 self,
                 registry_json,
                 json_file=True,
-                ibm_build=True if manifest_obj.product == "ibm" else False,
+                product=manifest_obj.product,
                 build_type=build_type,
             )
 
