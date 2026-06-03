@@ -89,8 +89,10 @@ tests:
                   service: cephfs-mirror
                   args:
                     placement:
-                      nodes:
-                        - node6
+                      label: cephfs-mirror
+                      limit: 1
+                      # nodes:
+                      #   - node6
         ceph2:
           config:
             verify_cluster_health: true
