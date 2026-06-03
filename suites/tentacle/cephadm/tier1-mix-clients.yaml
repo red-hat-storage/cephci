@@ -76,6 +76,10 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
+          - config:
+              args:
+                - "ceph config set mgr mgr/cephadm/use_agent true"
+              command: shell
       abort-on-fail: true
       destroy-cluster: false
 

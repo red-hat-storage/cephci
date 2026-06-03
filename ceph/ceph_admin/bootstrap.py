@@ -31,6 +31,17 @@ __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
+def _detect_registry_tier(registry: str, build_type: str) -> str:
+    """Return credential tier (cdn/stage) from registry host, else from build_type."""
+    if not registry:
+        return "cdn" if build_type in ("released", "cdn") else "stage"
+    if "registry.redhat.io" in registry or "cp.icr.io" in registry:
+        return "cdn"
+    if "registry.stage.redhat.io" in registry or "cp.stg.icr.io" in registry:
+        return "stage"
+    return "cdn" if build_type in ("released", "cdn") else "stage"
+
+
 def construct_registry(
     cls,
     registry: str,
@@ -48,6 +59,9 @@ def construct_registry(
         ibm_build: flag to fetch IBM registry creds
         build_type: CLI build type (released|cdn|stage|nightly etc.)
 
+    Registry tier is chosen from the registry hostname when it matches a known
+    RH/IBM host; otherwise build_type is used (released/cdn -> cdn, else stage).
+
     Example::
 
         json_file:
@@ -61,9 +75,15 @@ def construct_registry(
     _vendor = "ibm" if ibm_build else "rh"
 
     _config = get_cephci_config()
-
-    # Determine the registry tier: "cdn" for released/cdn builds, "stage" otherwise
-    _tier = "cdn" if build_type in ("released", "cdn") else "stage"
+    _reg = registry if registry else ""
+    _tier = _detect_registry_tier(_reg, build_type)
+    logger.debug(
+        "Registry tier selection: registry=%r tier=%r build_type=%r vendor=%r",
+        _reg,
+        _tier,
+        build_type,
+        _vendor,
+    )
 
     # Prefer the nested credentials.registry.<vendor>.<tier> path which
     # carries separate entries for cdn (cp.icr.io) vs stage (cp.stg.icr.io).
@@ -77,7 +97,7 @@ def construct_registry(
             f"{_vendor}_registry_credentials", _config["cdn_credentials"]
         )
     reg_args = {
-        "registry-url": cdn_cred.get("registry", registry),
+        "registry-url": registry or cdn_cred.get("registry"),
         "registry-username": cdn_cred.get("username"),
         "registry-password": cdn_cred.get("password"),
     }
@@ -321,7 +341,6 @@ class BootstrapMixin:
             else:
                 image_registry = self.config["container_image"].split("/")[0]
 
-            # If using stage or production registry, auto-add credentials
             if (
                 "registry.stage.redhat.io" in image_registry
                 or "registry.redhat.io" in image_registry

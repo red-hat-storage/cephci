@@ -50,14 +50,6 @@ tests:
               pos_args:
                 - cephfs
               service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
       destroy-cluster: false
       abort-on-fail: true
 
@@ -72,25 +64,38 @@ tests:
         install_packages:
           - ceph-common
           - samba-client
+          - cifs-utils
         copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
   - test:
-      name: Test set and retrieve quota and capacity on subvolume
-      desc: Test set and retrieve quota and capacity on subvolume
+      name: Test retrieve quota and capacity on volume when no quota is added.
+      desc: Test retrieve quota and capacity on volume when no quota is added.
       module: smb_per_share_quota_capacity_setup.py
       polarion-id: CEPH-83632299
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
+        smb_subvolumes: [ sv1, sv1 ]
         smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
         auth_mode: user
         smb_user_name: user1
         smb_user_password: passwd
-        smb_shares: [ share1 ]
+        smb_shares: [ share1, share2 ]
+        mount_point: /mnt/mount
+        cifs_mount_point: /mnt/smb
+        sub_dir: /volumes
+        path: "/"
+
+  - test:
+      name: Test set and retrieve quota and capacity on subvolume
+      desc: Test set and retrieve quota and capacity on subvolume
+      module: smb_per_share_quota_capacity_operations.py
+      polarion-id: CEPH-83632300
+      config:
+        smb_cluster_id: smb1
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes/smb/sv1
@@ -101,18 +106,10 @@ tests:
   - test:
       name: Test write operation on share within quota limit on subvolume.
       desc: Test write operation on share within quota limit on subvolume.
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632303
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes/smb/sv1
@@ -123,18 +120,10 @@ tests:
   - test:
       name: Test write operation on share above quota limit on subvolume.
       desc: Test write operation on share above quota limit on subvolume.
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632303
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes/smb/sv1
@@ -145,18 +134,10 @@ tests:
   - test:
       name: Test set and retrieve quota and capacity on volume
       desc: Test set and retrieve quota and capacity on volume
-      module: smb_per_share_quota_capacity_setup.py
-      polarion-id: CEPH-83632300
+      module: smb_per_share_quota_capacity_operations.py
+      polarion-id: CEPH-8363230
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes/smb/sv1
@@ -167,18 +148,10 @@ tests:
   - test:
       name: Test write operation on share within quota limit on volume.
       desc: Test write operation on share within quota limit on volume.
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632302
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes
@@ -189,18 +162,10 @@ tests:
   - test:
       name: Test write operation on share above quota limit on volume.
       desc: Test write operation on share above quota limit on volume.
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632302
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes
@@ -211,18 +176,10 @@ tests:
   - test:
       name: Test write operation on multiple shares within quota limit on volume.
       desc: Test write operation on multiple shares within quota limit on volume.
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632303
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1, sv2 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1, share2 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes
@@ -233,18 +190,10 @@ tests:
   - test:
       name: Test write operation on multiple shares within quota limit on subvolume.
       desc: Test write operation on multiple shares within quota limit on subvolume.
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632303
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1, sv2 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1, share2 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes/smb/sv1
@@ -255,18 +204,10 @@ tests:
   - test:
       name: Test delete quota and capacity on subvolume
       desc: Test delete quota and capacity on subvolume
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632301
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes/smb/sv1
@@ -277,18 +218,10 @@ tests:
   - test:
       name: Test delete quota and capacity on volume
       desc: Test delete quota and capacity on volume
-      module: smb_per_share_quota_capacity_setup.py
+      module: smb_per_share_quota_capacity_operations.py
       polarion-id: CEPH-83632301
       config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [ sv1 ]
-        smb_subvolume_mode: '0777'
         smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: [ share1 ]
         mount_point: /mnt/mount
         cifs_mount_point: /mnt/smb
         sub_dir: /volumes

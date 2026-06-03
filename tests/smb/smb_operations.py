@@ -998,3 +998,41 @@ def config_smb_images(installer, samba_image, samba_metrics_image):
         installer.exec_command(sudo=True, cmd=cmd)
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to configure smb images, Error {e}")
+
+
+def samba_kernel_mount(samba_client, mount_point, mon_node_ip, sub_dir):
+    """
+    Mounts the sub volume or volume using kernel mount
+    Args:
+        samba_client:
+        mount_point:
+        mon_node_ip:
+        sub_dir: specific directory subvolume or volume
+    Returns:
+
+    Exceptions:
+        assertion error will occur if the device is not mounted
+    """
+    log.info("Creating mounting dir:")
+    samba_client.exec_command(
+        sudo=True, cmd=f"mkdir -p {mount_point}", long_running=True
+    )
+    samba_client.exec_command(
+        sudo=True,
+        cmd=f"ceph auth get-key client.admin -o "
+        f"/etc/ceph/{samba_client.hostname}.secret",
+        long_running=True,
+    )
+    cmd = (
+        f"mount -t ceph {mon_node_ip}:{sub_dir} {mount_point} "
+        f"-o name=admin,"
+        f"secretfile=/etc/ceph/{samba_client.hostname}.secret,"
+        f"noshare"
+    )
+    cmd_rc = samba_client.exec_command(sudo=True, cmd=cmd, long_running=True)
+
+    if cmd_rc:
+        raise CephadmOpsExecutionError(
+            f"Ceph Kernel Command failed with error: {cmd_rc}"
+        )
+    return cmd_rc

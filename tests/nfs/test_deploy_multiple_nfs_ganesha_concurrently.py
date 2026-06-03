@@ -52,8 +52,8 @@ def run(ceph_cluster, **kw):
     try:
         # Find 12 free ports (6 services * 2 ports each)
         all_nfs_nodes = ceph_cluster.get_nodes("nfs")
-        needed_ports = nfs_instance_number * 2
-        free_ports = get_free_ports(all_nfs_nodes, needed_ports, 50200)
+        needed_ports = nfs_instance_number * 3
+        free_ports = get_free_ports(all_nfs_nodes, needed_ports, 52000)
 
         if len(free_ports) < needed_ports:
             raise ConfigError(f"Could not find {needed_ports} free ports on NFS nodes")
@@ -62,6 +62,7 @@ def run(ceph_cluster, **kw):
         for i in range(nfs_instance_number):
             nfs_port = free_ports[i * 2]
             mon_port = free_ports[i * 2 + 1]
+            cQoS_port = free_ports[i * 2 + 2]
 
             new_object = {
                 "service_type": original_config["service_type"],
@@ -70,6 +71,7 @@ def run(ceph_cluster, **kw):
                 "spec": {
                     "port": nfs_port,
                     "monitoring_port": mon_port,
+                    "cluster_qos_port": cQoS_port,
                 },
             }
             new_objects.append(new_object)

@@ -1,51 +1,30 @@
-from ceph.ceph import CommandFailed
-from cli.exceptions import OperationFailedError
 from smb_operations import (
     check_smb_cluster,
     get_smb_shares,
-    smb_cifs_mount,
+    samba_kernel_mount,
     smb_cleanup,
     verify_smb_service,
 )
 
+from ceph.ceph import CommandFailed
+from cli.exceptions import OperationFailedError
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def samba_kernel_mount(samba_client, mount_point, mon_node_ip, sub_dir):
+def get_current_storage_capacity_of_mount(samba_client, mount_point):
     """
-    Mounts the sub volume or volume using kernel mount
+    Get current capacity of subvolume/volume/share
     Args:
         samba_client:
         mount_point:
-        mon_node_ip:
-        sub_dir: specific directory subvolume or volume
-    Returns:
-
-    Exceptions:
-        assertion error will occur if the device is not mounted
     """
-    log.info("Creating mounting dir:")
-    samba_client.exec_command(sudo=True, cmd=f"mkdir -p %{mount_point}")
-    samba_client.exec_command(
+    out = samba_client.exec_command(
         sudo=True,
-        cmd=f"ceph auth get-key client.admin -o "
-            f"/etc/ceph/{samba_client.hostname}.secret",
+        cmd=f"df -h | grep '{mount_point}$' | awk '{{print \"Used: \" $3 \", Available: \" $4}}'",
     )
-    cmd = (
-        f"mount -t ceph {mon_node_ip}:{sub_dir} {mount_point} "
-        f"-o name=admin,"
-        f"secretfile=/etc/ceph/{samba_client.hostname}.secret,"
-        f"noshare"
-    )
-    cmd_rc = samba_client.exec_command(sudo=True, cmd=cmd, long_running=True)
-
-    if cmd_rc:
-        raise CommandFailed(
-            f"Ceph Kernel Command failed with error: {cmd_rc}"
-        )
-    return cmd_rc
+    return out
 
 
 def set_quota_and_capacity(samba_client, mount_point, quota):
@@ -58,31 +37,49 @@ def set_quota_and_capacity(samba_client, mount_point, quota):
 
     """
     log.info("Setting quota and capacity of {} bytes".format(quota))
-    out = samba_client.exec_command(sudo=True, cmd=f"setfattr -n ceph.quota.max_bytes -v {quota} {mount_point}")
+    out = samba_client.exec_command(
+        sudo=True, cmd=f"setfattr -n ceph.quota.max_bytes -v {quota} {mount_point}"
+    )
     if out:
-        raise CommandFailed(
-            f"Set quota and capacity failed with error: {out}"
-        )
+        raise CommandFailed(f"Set quota and capacity failed with error: {out}")
 
 
-def get_quota_and_capacity(samba_client, mount_point, quota):
+def get_quota_and_capacity(samba_client, mount_point):
     """
     get quota and capacity on subvolume or volume
     Args:
         samba_client:
         mount_point:
-        quota:
-
     """
     out, _ = out = samba_client.exec_command(
         sudo=True,
-        cmd=f"getfattr -n ceph.quota.max_bytes {mount_point} | awk -F'\"' '/ceph.quota.max_bytes/{{print $2}}'"
+        cmd=f"getfattr -n ceph.quota.max_bytes {mount_point} | awk -F'\"' '/ceph.quota.max_bytes/{{print $2}}'",
     )
     if not out:
-        raise CommandFailed(
-            f"Get quota and capacity failed with error: {out}"
-        )
+        raise CommandFailed(f"Get quota and capacity failed with error: {out}")
     log.info("quota and capacity is set to {} bytes".format(out))
+    out = get_current_storage_capacity_of_mount(samba_client, mount_point)
+    log.info(f"Storage capacity available after setting quota: {out}")
+
+
+def delete_quota_and_capacity(samba_client, mount_point):
+    """
+    delete quota and capacity on subvolume or volume
+    Args:
+        samba_client:
+        mount_point:
+    """
+    out, _ = samba_client.exec_command(
+        sudo=True, cmd=f"setfattr -x ceph.quota.max_bytes {mount_point}"
+    )
+    out, err = samba_client.exec_command(
+        sudo=True, cmd=f"getfattr -n ceph.quota.max_bytes {mount_point}"
+    )
+    if not err:
+        raise CommandFailed("Get quota should throw error, but passed")
+    log.info("quota and capacity is deleted {}".format(out))
+    out = get_current_storage_capacity_of_mount(samba_client, mount_point)
+    log.info(f"Storage capacity available after deleting quota: {out}")
 
 
 def run(ceph_cluster, **kw):
@@ -95,9 +92,6 @@ def run(ceph_cluster, **kw):
 
     # Get installer node
     installer_node = ceph_cluster.get_nodes(role="installer")[0]
-
-    # Get smb nodes
-    smb_nodes = ceph_cluster.get_nodes("smb")
 
     # Get client node
     client = ceph_cluster.get_nodes(role="client")[0]
@@ -116,18 +110,6 @@ def run(ceph_cluster, **kw):
     log.info("smb_shares: {}".format(smb_shares))
     print(type(smb_shares))
 
-    # Get auth_mode
-    auth_mode = config.get("auth_mode", "user")
-
-    # Get domain_realm
-    domain_realm = config.get("domain_realm", None)
-
-    # Get smb user name
-    smb_user_name = config.get("smb_user_name", "user1")
-
-    # Get smb user password
-    smb_user_password = config.get("smb_user_password", "passwd")
-
     # Get quota operations to perform
     quota_operation = config.get("quota_operation")
 
@@ -135,7 +117,10 @@ def run(ceph_cluster, **kw):
     mount_point = config.get("mount_point", "/mnt/mount")
 
     # Get CIFS mount point
-    cifs_mount_point = config.get("mount_point", "/mnt/smb")
+    cifs_mount_point = config.get("cifs_mount_point", "/mnt/smb")
+
+    # Share 2 CIFS mount point
+    share2_mount_point = cifs_mount_point + "share2"
 
     # Get sub directory path
     sub_dir = config.get("sub_dir", "/volumes/smb/sv1")
@@ -148,18 +133,6 @@ def run(ceph_cluster, **kw):
 
     try:
 
-        # Mount smb share with cifs
-        smb_cifs_mount(
-            smb_nodes[0],
-            client,
-            smb_shares[0],
-            smb_user_name,
-            smb_user_password,
-            auth_mode,
-            domain_realm,
-            cifs_mount_point,
-        )
-
         log.info("mount subvolume using kernel mount")
         rc = samba_kernel_mount(client, mount_point, installer_node.ip_address, sub_dir)
 
@@ -167,55 +140,70 @@ def run(ceph_cluster, **kw):
             log.info("Set quota and capacity on {}".format(mount_point))
             set_quota_and_capacity(client, mount_point, quota)
             log.info("Get quota and capacity on {}".format(mount_point))
-            get_quota_and_capacity(client, mount_point, quota)
+            get_quota_and_capacity(client, mount_point)
 
         elif quota_operation == "write_within_quota":
             rc, err = client.exec_command(
                 sudo=True,
-                cmd=f"dd if=/dev/zero of={cifs_mount_point}/file1 bs=100M count=5",
+                cmd=f"dd if=/dev/zero of={cifs_mount_point}/file1 bs=600M count=1",
+                long_running=True,
             )
             if err:
-                raise OperationFailedError(
-                    f"Ceph Kernel Command failed with error: {err}"
-                )
+                raise OperationFailedError(f"Write operation failed with quota: {err}")
 
-            log.info("Print Samba and container Info Samba Control")
+            out = get_current_storage_capacity_of_mount(client, cifs_mount_point)
+            log.info(f"Storage capacity used & available after writing data: {out}")
         elif quota_operation == "write_above_quota":
             rc, err = client.exec_command(
                 sudo=True,
-                cmd=f"dd if=/dev/zero of={cifs_mount_point}/file1 bs=100M count=10",
+                cmd=f"dd if=/dev/zero of={cifs_mount_point}/file2 bs=600M count=1",
+                check_ec=False,
             )
             if not err:
                 raise OperationFailedError(
-                    f"Ceph Kernel Command failed with error"
+                    "Write operation should fail above the quota, but did not fail."
                 )
 
-            log.info("Print Samba and container Info Samba Control ")
+            out = get_current_storage_capacity_of_mount(client, cifs_mount_point)
+            log.info(f"Storage capacity used & available to write data: {out}")
         elif quota_operation == "multiple_shares_quota":
+            rc, err = client.exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/zero of={cifs_mount_point}/file3 bs=100M count=1",
+                long_running=True,
+            )
+            if err:
+                raise OperationFailedError(f"Write operation failed with quota: {err}")
+            rc, err = client.exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/zero of={share2_mount_point}/file4 bs=100M count=1",
+                long_running=True,
+            )
+            if err:
+                raise OperationFailedError(f"Write operation failed with quota: {err}")
 
-            log.info("Print Samba and container Info Samba Control ")
+            out = get_current_storage_capacity_of_mount(client, mount_point)
+            log.info(f"Storage capacity used & available after writing data: {out}")
+
         elif quota_operation == "delete_quota":
-
-            log.info("Print Samba and container Info Samba Control ")
+            delete_quota_and_capacity(client, mount_point)
 
     except Exception as e:
         log.error(f"Failed to perform quota operations {quota_operation} : {e}")
         return 1
     finally:
         if smb_cluster_cleanup:
-            smb_cleanup(installer_node, smb_shares, smb_cluster_id)
             client.exec_command(
-                sudo=True,
-                cmd=f"umount {cifs_mount_point}",
+                sudo=True, cmd=f"umount {cifs_mount_point}", long_running=True
             )
             client.exec_command(sudo=True, cmd=f"rm -rf {cifs_mount_point}")
+            client.exec_command(
+                sudo=True, cmd=f"umount {share2_mount_point}", long_running=True
+            )
+            client.exec_command(sudo=True, cmd=f"rm -rf {share2_mount_point}")
+            smb_cleanup(installer_node, smb_shares, smb_cluster_id)
 
-        client.exec_command(
-            sudo=True,
-            cmd=f"umount {mount_point}",
-        )
-        client.exec_command(sudo=True, cmd=f"rm -rf {mount_point}")
+        client.exec_command(sudo=True, cmd=f"umount {mount_point}", long_running=True)
+        client.exec_command(sudo=True, cmd=f"rm -rf {mount_point}", long_running=True)
 
         return 0
-
-

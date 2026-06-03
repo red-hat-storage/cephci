@@ -1,17 +1,36 @@
 import time
 
-from ceph.ceph import CommandFailed
-from cli.exceptions import OperationFailedError
 from smb_operations import (
     deploy_smb_service_imperative,
-    smb_cleanup,
-    smb_cifs_mount, smbclient_check_shares,
+    samba_kernel_mount,
+    smb_cifs_mount,
 )
 
-from ceph.ceph_admin import CephAdmin
+from ceph.ceph import CommandFailed
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def get_quota_and_capacity(samba_client, mount_point):
+    """
+    get quota and capacity on subvolume or volume
+    Args:
+        samba_client:
+        mount_point:
+    """
+    out, err = samba_client.exec_command(
+        sudo=True, cmd=f"getfattr -n ceph.quota.max_bytes {mount_point}", check_ec=False
+    )
+    log.info(f"out, err:{out},{err}")
+    if not err:
+        raise CommandFailed(f"Get quota should throw error, but passed {out}")
+    out = samba_client.exec_command(
+        sudo=True,
+        cmd=f"df -h | grep '{mount_point}$' | awk '{{print \"Used: \" $3 \", Available: \" $4}}'",
+    )
+    log.info(f"Storage capacity available without setting quota: {out}")
+
 
 def run(ceph_cluster, **kw):
     """Deploy samba with auth_mode 'user' using imperative style(CLI Commands)
@@ -20,9 +39,6 @@ def run(ceph_cluster, **kw):
     """
     # Get config
     config = kw.get("config")
-
-    # Get cephadm obj
-    cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
     # Get cephfs volume
     cephfs_vol = config.get("cephfs_volume", "cephfs")
@@ -72,6 +88,18 @@ def run(ceph_cluster, **kw):
     # Check ctdb clustering
     clustering = config.get("clustering", "default")
 
+    # Get kernel mount point
+    mount_point = config.get("mount_point", "/mnt/mount")
+
+    # Get sub directory path
+    sub_dir = config.get("sub_dir", "/volumes/smb/sv1")
+
+    # Get CIFS mount point
+    cifs_mount_point = config.get("cifs_mount_point", "/mnt/smb")
+
+    # Share 2 CIFS mount point
+    share2_mount_point = cifs_mount_point + "share2"
+
     try:
         # deploy smb services
         deploy_smb_service_imperative(
@@ -90,19 +118,48 @@ def run(ceph_cluster, **kw):
             custom_dns,
             clustering,
         )
-        # Check smb share using smbclient
-        smbclient_check_shares(
-            smb_nodes,
+
+        # Mount smb share1 with cifs
+        smb_cifs_mount(
+            smb_nodes[0],
             client,
-            smb_shares,
+            smb_shares[0],
             smb_user_name,
             smb_user_password,
             auth_mode,
             domain_realm,
+            cifs_mount_point,
         )
-        log.info("Samba service is ready to test quota operations.")
+        # Mount smb share2 with cifs
+        smb_cifs_mount(
+            smb_nodes[0],
+            client,
+            smb_shares[1],
+            smb_user_name,
+            smb_user_password,
+            auth_mode,
+            domain_realm,
+            share2_mount_point,
+        )
+
+        log.info("mount subvolume using kernel mount")
+        samba_kernel_mount(client, mount_point, installer.ip_address, sub_dir)
+
+        log.info("Get quota and capacity on {}".format(mount_point))
+        get_quota_and_capacity(client, mount_point)
+
+        log.info(
+            "There is no quota set by default. Samba service is ready to test quota operations."
+        )
 
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode {auth_mode} : {e}")
         return 1
+    finally:
+        client.exec_command(
+            sudo=True,
+            cmd=f"umount {mount_point}",
+        )
+        time.sleep(5)
+        client.exec_command(sudo=True, cmd=f"rm -rf {mount_point}")
     return 0

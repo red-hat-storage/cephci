@@ -61,6 +61,10 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
+          - config:
+              args:
+                - "ceph config set mgr mgr/cephadm/use_agent true"
+              command: shell
       desc: bootstrap and deploy services.
       destroy-cluster: false
       polarion-id: CEPH-83573713

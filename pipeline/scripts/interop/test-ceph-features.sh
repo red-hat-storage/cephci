@@ -13,7 +13,7 @@ PY_CMD=${PY_CMD:-"${HOME}/cephci-venv/bin/python"}
 OSP_CRED_FILE=${OSP_CRED_FILE:-}
 REPO_FILE=${REPO_FILE:-}
 VM_SPEC=${VM_SPEC:-}
-BUILD_TYPE=${BUILD_TYPE:-"rc"}
+BUILD_TYPE=${BUILD_TYPE:-"released"}
 RHCS_VERSION=${RHCS_VERSION:-}
 
 echo "Red Hat Ceph Storage sanity test suite execution."
@@ -71,7 +71,9 @@ fi
 
 declare -A TEST_SUITES
 
-if [[ $RHCS_VERSION =~ "8." ]]; then
+if [[ $RHCS_VERSION =~ "9." ]]; then
+    TEST_SUITES["suites/tentacle/interop/test-ceph-sanity.yaml"]="conf/tentacle/integrations/6node-all-roles.yaml"
+elif [[ $RHCS_VERSION =~ "8." ]]; then
     TEST_SUITES["suites/squid/interop/test-ceph-sanity.yaml"]="conf/squid/integrations/6node-all-roles.yaml"
 elif [[ $RHCS_VERSION =~ "7." ]]; then
     TEST_SUITES["suites/reef/interop/test-ceph-sanity.yaml"]="conf/reef/integrations/6node-all-roles.yaml"
