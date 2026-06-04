@@ -599,11 +599,8 @@ def smb_cifs_mount(
     """
     try:
         # Create cifs mount dir
-        cmd = f"mkdir {cifs_mount_point}"
-        client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
+        cmd = f"mkdir -p {cifs_mount_point}"
+        client.exec_command(sudo=True, cmd=cmd)
         if public_addrs:
             # Mount smb share using cifs
             if auth_mode == "user":
@@ -611,10 +608,7 @@ def smb_cifs_mount(
                     f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
                     f" -o username={smb_user_name},password={smb_user_password}"
                 )
-                client.exec_command(
-                    sudo=True,
-                    cmd=cmd,
-                )
+                client.exec_command(sudo=True, cmd=cmd)
             elif auth_mode == "active-directory":
                 cmd = (
                     f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"

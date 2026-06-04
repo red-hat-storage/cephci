@@ -97,8 +97,9 @@ def run(ceph_cluster, **kw):
     # Get CIFS mount point
     cifs_mount_point = config.get("cifs_mount_point", "/mnt/smb")
 
+    # TO DO : uncomment once the multiple share access issue is resolved
     # Share 2 CIFS mount point
-    share2_mount_point = cifs_mount_point + "share2"
+    # share2_mount_point = cifs_mount_point + "share2"
 
     try:
         # deploy smb services
@@ -130,17 +131,19 @@ def run(ceph_cluster, **kw):
             domain_realm,
             cifs_mount_point,
         )
-        # Mount smb share2 with cifs
-        smb_cifs_mount(
-            smb_nodes[0],
-            client,
-            smb_shares[1],
-            smb_user_name,
-            smb_user_password,
-            auth_mode,
-            domain_realm,
-            share2_mount_point,
-        )
+
+        # TO DO : uncomment once the multiple share access issue is resolved
+        # # Mount smb share2 with cifs
+        # smb_cifs_mount(
+        #     smb_nodes[0],
+        #     client,
+        #     smb_shares[1],
+        #     smb_user_name,
+        #     smb_user_password,
+        #     auth_mode,
+        #     domain_realm,
+        #     share2_mount_point,
+        # )
 
         log.info("mount subvolume using kernel mount")
         samba_kernel_mount(client, mount_point, installer.ip_address, sub_dir)

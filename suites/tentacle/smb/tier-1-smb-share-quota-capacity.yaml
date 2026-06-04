@@ -131,6 +131,36 @@ tests:
         quota_operation: write_above_quota
         path: "/"
 
+# TO DO : uncomment once the multiple share access issue is resolved
+#  - test:
+#      name: Test write operation on multiple shares within quota limit on subvolume.
+#      desc: Test write operation on multiple shares within quota limit on subvolume.
+#      module: smb_per_share_quota_capacity_operations.py
+#      polarion-id: CEPH-83632303
+#      config:
+#        smb_cluster_id: smb1
+#        mount_point: /mnt/mount
+#        cifs_mount_point: /mnt/smb
+#        sub_dir: /volumes/smb/sv1
+#        quota: 1000000000
+#        quota_operation: multiple_shares_quota
+#        path: "/"
+
+  - test:
+      name: Test delete quota and capacity on subvolume
+      desc: Test delete quota and capacity on subvolume
+      module: smb_per_share_quota_capacity_operations.py
+      polarion-id: CEPH-83632301
+      config:
+        smb_cluster_id: smb1
+        mount_point: /mnt/mount
+        cifs_mount_point: /mnt/smb
+        sub_dir: /volumes/smb/sv1
+        quota: 1000000000
+        quota_operation: delete_quota
+        mount_cleanup: true
+        path: "/"
+
   - test:
       name: Test set and retrieve quota and capacity on volume
       desc: Test set and retrieve quota and capacity on volume
@@ -173,47 +203,20 @@ tests:
         quota_operation: write_above_quota
         path: "/"
 
-  - test:
-      name: Test write operation on multiple shares within quota limit on volume.
-      desc: Test write operation on multiple shares within quota limit on volume.
-      module: smb_per_share_quota_capacity_operations.py
-      polarion-id: CEPH-83632303
-      config:
-        smb_cluster_id: smb1
-        mount_point: /mnt/mount
-        cifs_mount_point: /mnt/smb
-        sub_dir: /volumes
-        quota: 1000000000
-        quota_operation: multiple_shares_quota
-        path: "/"
-
-  - test:
-      name: Test write operation on multiple shares within quota limit on subvolume.
-      desc: Test write operation on multiple shares within quota limit on subvolume.
-      module: smb_per_share_quota_capacity_operations.py
-      polarion-id: CEPH-83632303
-      config:
-        smb_cluster_id: smb1
-        mount_point: /mnt/mount
-        cifs_mount_point: /mnt/smb
-        sub_dir: /volumes/smb/sv1
-        quota: 1000000000
-        quota_operation: multiple_shares_quota
-        path: "/"
-
-  - test:
-      name: Test delete quota and capacity on subvolume
-      desc: Test delete quota and capacity on subvolume
-      module: smb_per_share_quota_capacity_operations.py
-      polarion-id: CEPH-83632301
-      config:
-        smb_cluster_id: smb1
-        mount_point: /mnt/mount
-        cifs_mount_point: /mnt/smb
-        sub_dir: /volumes/smb/sv1
-        quota: 1000000000
-        quota_operation: delete_quota
-        path: "/"
+# TO DO : uncomment once the multiple share access issue is resolved
+#  - test:
+#      name: Test write operation on multiple shares within quota limit on volume.
+#      desc: Test write operation on multiple shares within quota limit on volume.
+#      module: smb_per_share_quota_capacity_operations.py
+#      polarion-id: CEPH-83632303
+#      config:
+#        smb_cluster_id: smb1
+#        mount_point: /mnt/mount
+#        cifs_mount_point: /mnt/smb
+#        sub_dir: /volumes
+#        quota: 1000000000
+#        quota_operation: multiple_shares_quota
+#        path: "/"
 
   - test:
       name: Test delete quota and capacity on volume

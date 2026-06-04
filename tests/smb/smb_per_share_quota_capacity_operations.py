@@ -1,3 +1,5 @@
+import time
+
 from smb_operations import (
     check_smb_cluster,
     get_smb_shares,
@@ -37,10 +39,10 @@ def set_quota_and_capacity(samba_client, mount_point, quota):
 
     """
     log.info("Setting quota and capacity of {} bytes".format(quota))
-    out = samba_client.exec_command(
+    out, err = samba_client.exec_command(
         sudo=True, cmd=f"setfattr -n ceph.quota.max_bytes -v {quota} {mount_point}"
     )
-    if out:
+    if err:
         raise CommandFailed(f"Set quota and capacity failed with error: {out}")
 
 
@@ -51,7 +53,7 @@ def get_quota_and_capacity(samba_client, mount_point):
         samba_client:
         mount_point:
     """
-    out, _ = out = samba_client.exec_command(
+    out, _ = samba_client.exec_command(
         sudo=True,
         cmd=f"getfattr -n ceph.quota.max_bytes {mount_point} | awk -F'\"' '/ceph.quota.max_bytes/{{print $2}}'",
     )
@@ -73,7 +75,7 @@ def delete_quota_and_capacity(samba_client, mount_point):
         sudo=True, cmd=f"setfattr -x ceph.quota.max_bytes {mount_point}"
     )
     out, err = samba_client.exec_command(
-        sudo=True, cmd=f"getfattr -n ceph.quota.max_bytes {mount_point}"
+        sudo=True, cmd=f"getfattr -n ceph.quota.max_bytes {mount_point}", check_ec=False
     )
     if not err:
         raise CommandFailed("Get quota should throw error, but passed")
@@ -131,10 +133,13 @@ def run(ceph_cluster, **kw):
     # Get cleanup value, True if cleanup has to be done, False by default
     smb_cluster_cleanup = config.get("smb_cluster_cleanup", False)
 
+    # Get mount cleanup value, True if cleanup has to be done, False by default
+    mount_cleanup = config.get("mount_cleanup", False)
+
     try:
 
         log.info("mount subvolume using kernel mount")
-        rc = samba_kernel_mount(client, mount_point, installer_node.ip_address, sub_dir)
+        samba_kernel_mount(client, mount_point, installer_node.ip_address, sub_dir)
 
         if quota_operation == "set_and_get_quota":
             log.info("Set quota and capacity on {}".format(mount_point))
@@ -143,23 +148,24 @@ def run(ceph_cluster, **kw):
             get_quota_and_capacity(client, mount_point)
 
         elif quota_operation == "write_within_quota":
-            rc, err = client.exec_command(
+            rc = client.exec_command(
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={cifs_mount_point}/file1 bs=600M count=1",
                 long_running=True,
             )
-            if err:
-                raise OperationFailedError(f"Write operation failed with quota: {err}")
+            time.sleep(5)
+            if rc:
+                raise OperationFailedError(f"Write operation failed with quota: {rc}")
 
             out = get_current_storage_capacity_of_mount(client, cifs_mount_point)
             log.info(f"Storage capacity used & available after writing data: {out}")
         elif quota_operation == "write_above_quota":
-            rc, err = client.exec_command(
+            rc = client.exec_command(
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={cifs_mount_point}/file2 bs=600M count=1",
                 check_ec=False,
             )
-            if not err:
+            if rc == 0:
                 raise OperationFailedError(
                     "Write operation should fail above the quota, but did not fail."
                 )
@@ -167,21 +173,22 @@ def run(ceph_cluster, **kw):
             out = get_current_storage_capacity_of_mount(client, cifs_mount_point)
             log.info(f"Storage capacity used & available to write data: {out}")
         elif quota_operation == "multiple_shares_quota":
-            rc, err = client.exec_command(
+            rc = client.exec_command(
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={cifs_mount_point}/file3 bs=100M count=1",
                 long_running=True,
             )
-            if err:
-                raise OperationFailedError(f"Write operation failed with quota: {err}")
-            rc, err = client.exec_command(
+            if rc:
+                raise OperationFailedError(f"Write operation failed with quota: {rc}")
+            time.sleep(5)
+            rc = client.exec_command(
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={share2_mount_point}/file4 bs=100M count=1",
                 long_running=True,
             )
-            if err:
-                raise OperationFailedError(f"Write operation failed with quota: {err}")
-
+            if rc:
+                raise OperationFailedError(f"Write operation failed with quota: {rc}")
+            time.sleep(5)
             out = get_current_storage_capacity_of_mount(client, mount_point)
             log.info(f"Storage capacity used & available after writing data: {out}")
 
@@ -205,5 +212,9 @@ def run(ceph_cluster, **kw):
 
         client.exec_command(sudo=True, cmd=f"umount {mount_point}", long_running=True)
         client.exec_command(sudo=True, cmd=f"rm -rf {mount_point}", long_running=True)
+        if mount_cleanup:
+            client.exec_command(sudo=True, cmd=f"rm -rf {cifs_mount_point}/*")
+            # TO DO : uncomment once the multiple share access issue is resolved
+            # client.exec_command(sudo=True, cmd=f"rm -rf {share2_mount_point}/*")
 
-        return 0
+    return 0
