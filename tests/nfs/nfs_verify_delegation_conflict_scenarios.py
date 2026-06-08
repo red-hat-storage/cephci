@@ -8,11 +8,8 @@ conflicting NFS operations (SETATTR, REMOVE, RENAME, WRITE).
 import time
 
 from nfs_delegation_operations import (
-    DELEGATION_EXIT_WAIT_SECONDS_DEFAULT,
-    DELEGATION_HOLD_READY_SECONDS_DEFAULT,
-    DELEGATION_HOLD_SECONDS_DEFAULT,
-    DELEGATION_LOG_SETTLE_SECONDS_DEFAULT,
     create_delegation_exports,
+    delegation_timing_from_config,
     enable_cluster_delegation_and_debug_logging,
     ensure_ceph_conf_and_admin_keyring_on_hosts,
     ensure_nfs_cluster_for_delegation_test,
@@ -27,6 +24,8 @@ from nfs_delegation_operations import (
     truncate_ganesha_container_log,
     unmount_delegation_export,
     validate_delegation_recall_ganesha_capture,
+    wait_for_delegation_path,
+    write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
 
@@ -49,28 +48,6 @@ CONFLICT_SCENARIOS = (
 CONFLICT_TEST_FILES = [row[2] for row in CONFLICT_SCENARIOS]
 
 
-def _q(s):
-    return s.replace("'", "'\"'\"'")
-
-
-def _path_exists(client, path):
-    client.exec_command(sudo=True, cmd="test -e %s" % path, check_ec=False)
-    return int(getattr(client, "exit_status", 1)) == 0
-
-
-def _wait_path(client, path, label, retries=20):
-    parent = path.rsplit("/", 1)[0] or "/"
-    for n in range(1, retries + 1):
-        client.exec_command(sudo=True, cmd="ls -la %s" % parent, check_ec=False)
-        if _path_exists(client, path):
-            log.info("%s: %s visible (attempt %d)", label, path, n)
-            return
-        time.sleep(1)
-    raise OperationFailedError(
-        "%s: %s not visible on %s" % (label, path, client.hostname)
-    )
-
-
 def _cleanup_paths(client_a, client_b, path_a, path_b, extra_paths=()):
     for c in (client_a, client_b):
         kill_delegation_holds(c)
@@ -80,27 +57,23 @@ def _cleanup_paths(client_a, client_b, path_a, path_b, extra_paths=()):
             c.exec_command(sudo=True, cmd="rm -f %s" % p, check_ec=False)
 
 
-def _seed_clients(client_a, client_b, path_a, path_b, scenario):
-    payload = "seed-%s" % scenario
+def _seed_clients(client_a, client_b, path_a, path_b, scenario, path_wait_retries):
+    payload = "seed-%s\n" % scenario
     for client, path, tag in ((client_a, path_a, "A"), (client_b, path_b, "B")):
-        client.exec_command(
-            sudo=True,
-            cmd="bash -c 'echo %s > %s && sync'" % (_q(payload), path),
+        write_delegation_file(client, path, payload)
+        wait_for_delegation_path(
+            client, path, "client %s after seed" % tag, retries=path_wait_retries
         )
-        _wait_path(client, path, "client %s after seed" % tag)
 
 
 def _establish_delegation_hold(client_a, path_a, hold_mode, hold_s, ready_s):
     if hold_mode == "read":
         client_a.exec_command(sudo=True, cmd="cat %s" % path_a)
-        _wait_path(client_a, path_a, "client A pre read-hold")
+        wait_for_delegation_path(client_a, path_a, "client A pre read-hold")
         hold_delegation_open(client_a, path_a, "rb", hold_s)
     elif hold_mode == "write":
-        _wait_path(client_a, path_a, "client A pre write-hold")
-        client_a.exec_command(
-            sudo=True,
-            cmd="bash -c 'echo hold-write > %s && sync'" % path_a,
-        )
+        wait_for_delegation_path(client_a, path_a, "client A pre write-hold")
+        write_delegation_file(client_a, path_a, "hold-write\n")
         hold_delegation_open(client_a, path_a, "r+b", hold_s)
     else:
         raise ConfigError("Unknown hold_mode %r" % hold_mode)
@@ -108,7 +81,7 @@ def _establish_delegation_hold(client_a, path_a, hold_mode, hold_s, ready_s):
 
 
 def _run_conflict_io(name, client_b, path_b):
-    _wait_path(client_b, path_b, "client B pre-conflict")
+    wait_for_delegation_path(client_b, path_b, "client B pre-conflict")
 
     if name == "read_setattr_recall":
         client_b.exec_command(sudo=True, cmd="chmod 600 %s" % path_b)
@@ -121,10 +94,7 @@ def _run_conflict_io(name, client_b, path_b):
         client_b.exec_command(sudo=True, cmd="mv %s %s" % (path_b, renamed))
         return (renamed,)
     if name == "read_write_recall":
-        client_b.exec_command(
-            sudo=True,
-            cmd="bash -c 'echo client-b-write >> %s && sync'" % path_b,
-        )
+        write_delegation_file(client_b, path_b, "client-b-write\n", append=True)
         return ()
     if name == "write_setattr_recall":
         client_b.exec_command(sudo=True, cmd="chmod 644 %s" % path_b)
@@ -156,20 +126,12 @@ def run(ceph_cluster, **kw):
     export_rw = config.get("conflict_export", "/deleg_conflict_rw")
     mount_a = config.get("client_a_mount", "/mnt/deleg_conflict_c0")
     mount_b = config.get("client_b_mount", "/mnt/deleg_conflict_c1")
-    hold_s = int(config.get("delegation_hold_seconds", DELEGATION_HOLD_SECONDS_DEFAULT))
-    ready_s = int(
-        config.get(
-            "delegation_hold_ready_seconds", DELEGATION_HOLD_READY_SECONDS_DEFAULT
-        )
-    )
-    exit_wait = int(
-        config.get("delegation_exit_wait_seconds", DELEGATION_EXIT_WAIT_SECONDS_DEFAULT)
-    )
-    settle_s = int(
-        config.get(
-            "delegation_log_settle_seconds", DELEGATION_LOG_SETTLE_SECONDS_DEFAULT
-        )
-    )
+    timing = delegation_timing_from_config(config)
+    hold_s = timing.hold_seconds
+    ready_s = timing.hold_ready_seconds
+    exit_wait = timing.exit_wait_seconds
+    settle_s = timing.log_settle_seconds
+    path_wait_retries = timing.path_wait_retries
     redeploy_wait = int(config.get("redeploy_wait", 30))
     service_wait = int(config.get("service_wait_timeout", 300))
     subvol_group = config.get("subvolume_group", "delegconflictgrp")
@@ -234,7 +196,9 @@ def run(ceph_cluster, **kw):
             )
 
             truncate_ganesha_container_log(nfs_node, container_id)
-            _seed_clients(client_a, client_b, path_a, path_b, scenario)
+            _seed_clients(
+                client_a, client_b, path_a, path_b, scenario, path_wait_retries
+            )
             log.info("Waiting %s s after seed for delegations to exit", exit_wait)
             time.sleep(exit_wait)
 
