@@ -280,9 +280,15 @@ def check_mount_fails(client_node, mount_cmd):
     Returns True if the command failed as expected, False if it succeeded.
     """
     log.info("Attempting intentionally failing mount: %s", mount_cmd)
+    mount_path = mount_cmd.strip().split()[-1]
     try:
         client_node.exec_command(sudo=True, cmd=mount_cmd)
         log.error("Mount succeeded but was expected to fail!")
+        client_node.exec_command(
+            sudo=True,
+            cmd="umount -l {}".format(mount_path),
+            check_ec=False,
+        )
         return False
     except CommandFailed:
         log.info("Mount failed as expected.")
