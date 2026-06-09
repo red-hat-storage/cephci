@@ -701,6 +701,8 @@ def run(args):
     skip_sos_report = args.get("--skip-sos-report")
     if "collect-coredump" in custom_config_dict.keys():
         collect_coredump = bool(custom_config_dict["collect-coredump"])
+    if "collect-ceph-logs" in custom_config_dict.keys():
+        collect_ceph_logs = bool(custom_config_dict["collect-ceph-logs"])
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
@@ -1288,10 +1290,18 @@ def run(args):
                 installer.password or "cephuser",
                 run_dir,
             )
-            # This can be Removed as sos report will have this details as well
-            get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
 
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
+
+    if jenkins_rc or collect_ceph_logs:
+        log.info(
+            "\n\nCopying Ceph cluster logs due to failures in testcase or user instructed"
+        )
+        for cluster in ceph_cluster_dict.keys():
+            # method to collect logs from ceph nodes
+            get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
+
+        log.info(f"Generated cluster log location : {url_base}/ceph_logs\n")
 
     return jenkins_rc
 
