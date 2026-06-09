@@ -123,6 +123,60 @@ from utility.log import Log
 
 log = Log(__name__)
 
+
+def _has_inconsistent_obj_fix(rados_obj) -> bool:
+    """Check if the running ceph build contains the IBMCEPH-12717 fix.
+
+    The fix is present in builds with version > 20.1.0-149 but NOT in the
+    20.2.1.X line. Returns True if the fix is present and inconsistent
+    object detection should cause test failure.
+    """
+    import re
+
+    try:
+        out, _ = rados_obj.client.exec_command(cmd="ceph version", sudo=True)
+        # Expected: "ceph version 20.2.1-280.el9cp (...) tentacle"
+        version_str = out.strip().split()[2]  # e.g. "20.2.1-280.el9cp"
+        log.info(f"IBMCEPH-12717 fix check: ceph version = {version_str}")
+
+        # Parse "MAJOR.MINOR.PATCH-BUILD.suffix"
+        match = re.match(r"(\d+)\.(\d+)\.(\d+)(?:-(\d+))?", version_str)
+        if not match:
+            log.warning(
+                f"Could not parse ceph version '{version_str}', "
+                f"assuming fix is present"
+            )
+            return True
+
+        major = int(match.group(1))
+        minor = int(match.group(2))
+        patch = int(match.group(3))
+        build_num = int(match.group(4)) if match.group(4) else 0
+
+        # 20.2.1.X line does NOT have the fix
+        if (major, minor, patch) == (20, 2, 1):
+            log.info(
+                f"Ceph version {version_str}: 20.2.1.X does not have "
+                f"IBMCEPH-12717 fix, disabling inconsistent_object_fail"
+            )
+            return False
+
+        # Fix is present in builds > 20.1.0-149
+        if (major, minor, patch) > (20, 1, 0):
+            return True
+        if (major, minor, patch) == (20, 1, 0) and build_num > 149:
+            return True
+
+        log.info(
+            f"Ceph version {version_str}: build does not have "
+            f"IBMCEPH-12717 fix, disabling inconsistent_object_fail"
+        )
+        return False
+    except Exception as e:
+        log.warning(f"Failed to determine ceph version for fix check: {e}")
+        return True
+
+
 # Path to pool configurations file
 POOL_CONFIGS_FILE = "conf/tentacle/rados/test-confs/pool-configurations.yaml"
 
@@ -153,6 +207,8 @@ def run(ceph_cluster, **kw):
         cleanup_pools (bool): Delete pools after test (default: True)
         enable_debug_logs (bool): Enable debug logging for OSD/BlueStore (default: False)
         inject_errors (bool): Inject EC write errors on random OSDs (default: False)
+        inconsistent_object_fail (bool): Fail test on inconsistent PGs instead
+            of repairing - IBMCEPH-12717 (default: True)
         num_osds_to_inject (int): Number of OSDs to inject errors on (default: 3)
         num_writes_to_inject (int): Number of writes to inject errors per OSD (default: 1000)
         enable_rgw_thrashing (bool): Enable RGW S3 thrashing (default: False, requires RGW)
@@ -206,6 +262,9 @@ def run(ceph_cluster, **kw):
     compression = config.get("compression", False)
     enable_debug_logs = config.get("enable_debug_logs", True)
     inject_errors = config.get("inject_errors", False)
+    inconsistent_object_fail = config.get("inconsistent_object_fail", True)
+    if inconsistent_object_fail and not _has_inconsistent_obj_fix(rados_obj):
+        inconsistent_object_fail = False
     num_osds_to_inject = config.get("num_osds_to_inject", 3)
     num_writes_to_inject = config.get("num_writes_to_inject", 1000)
     enable_rgw_thrashing = config.get("enable_rgw_thrashing", True)
@@ -325,6 +384,7 @@ def run(ceph_cluster, **kw):
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
         f"  Fast EC config params: {enable_fast_ec_config_params}\n"
         f"  ESB verification (Bug #70390): {enable_esb_verification}\n"
+        f"  Inconsistent object fail (no repair): {inconsistent_object_fail}\n"
         f"{'=' * 60}\n"
     )
     log.info(test_params)
@@ -1201,28 +1261,60 @@ def run(ceph_cluster, **kw):
                 log.debug(f"Error checking pool {check_pool}: {e}")
 
         if inconsistent_pgs_found:
-            log.debug(
-                f"Total inconsistent PGs found: {len(inconsistent_pgs_found)}. "
-                f"Inconsistent PGs: {inconsistent_pgs_found}. "
-                f"Initiating PG repair..."
-            )
-            for pg_id in inconsistent_pgs_found:
-                try:
-                    client_node.exec_command(
-                        cmd=f"ceph pg {pg_id} query -f json-pretty > /tmp/{pg_id}_query.txt",
-                        sudo=True,
-                    )
-                    client_node.exec_command(
-                        cmd=f"rados list-inconsistent-obj {pg_id} -f json-pretty "
-                        f"> /tmp/{pg_id}_inconsistent_obj.txt",
-                        sudo=True,
-                    )
-                    time.sleep(5)
-                    log.info(f"Running pg repair on PG: {pg_id}")
-                    rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
-                except Exception as e:
-                    log.error(f"Failed to repair PG {pg_id}: {e}")
-            time.sleep(30)
+            # IBMCEPH-12717: Fail immediately on inconsistent objects to catch
+            # the bug rather than silently repairing and masking the issue.
+            if inconsistent_object_fail:
+                log.error(
+                    f"Total inconsistent PGs found: {len(inconsistent_pgs_found)}. "
+                    f"Inconsistent PGs: {inconsistent_pgs_found}. "
+                    f"Failing test due to inconsistent_object_fail=True (IBMCEPH-12717)"
+                )
+                for pg_id in inconsistent_pgs_found:
+                    try:
+                        log.info(f"Capturing diagnostic info for PG: {pg_id}")
+                        client_node.exec_command(
+                            cmd=f"ceph pg {pg_id} query -f json-pretty"
+                            f" > /tmp/{pg_id}_query.txt",
+                            sudo=True,
+                        )
+                        client_node.exec_command(
+                            cmd=f"rados list-inconsistent-obj {pg_id}"
+                            f" -f json-pretty"
+                            f" > /tmp/{pg_id}_inconsistent_obj.txt",
+                            sudo=True,
+                        )
+                    except Exception as e:
+                        log.warning(
+                            f"Failed to capture diagnostics for " f"PG {pg_id}: {e}"
+                        )
+                raise Exception(
+                    f"IBMCEPH-12717: Inconsistent objects detected in "
+                    f"{len(inconsistent_pgs_found)} PG(s): "
+                    f"{inconsistent_pgs_found}"
+                )
+            else:
+                log.debug(
+                    f"Total inconsistent PGs found: {len(inconsistent_pgs_found)}. "
+                    f"Inconsistent PGs: {inconsistent_pgs_found}. "
+                    f"Initiating PG repair..."
+                )
+                for pg_id in inconsistent_pgs_found:
+                    try:
+                        client_node.exec_command(
+                            cmd=f"ceph pg {pg_id} query -f json-pretty > /tmp/{pg_id}_query.txt",
+                            sudo=True,
+                        )
+                        client_node.exec_command(
+                            cmd=f"rados list-inconsistent-obj {pg_id} -f json-pretty "
+                            f"> /tmp/{pg_id}_inconsistent_obj.txt",
+                            sudo=True,
+                        )
+                        time.sleep(5)
+                        log.info(f"Running pg repair on PG: {pg_id}")
+                        rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
+                    except Exception as e:
+                        log.error(f"Failed to repair PG {pg_id}: {e}")
+                time.sleep(30)
         else:
             log.info("No inconsistent PGs found across all pools")
 
