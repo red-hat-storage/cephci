@@ -12,17 +12,18 @@ log = Log(__name__)
 
 
 def _verify_service_status(host, service_type):
-    """Verify service status is running"""
-    has_status = False
+    """Verify service status is running
+    Wait for service to reach 'running' state. Service may transition from
+    'starting' to 'running', or may already be 'running' after redeploy.
+    """
     for w in WaitUntil():
         CephAdm(host).ceph.orch.ps(refresh=True)
         conf = {"daemon_type": service_type, "format": "json-pretty"}
         service_info = loads(CephAdm(host).ceph.orch.ps(**conf))
         status_desc = [c.get("status_desc") for c in service_info][0]
         if status_desc == "starting":
-            has_status = True
-            log.info(f"{service_type} service is in starting")
-        if has_status and status_desc == "running":
+            log.info(f"{service_type} service is in starting state")
+        elif status_desc == "running":
             log.info(f"All {service_type} services are up and running")
             return True
     if w.expired:
