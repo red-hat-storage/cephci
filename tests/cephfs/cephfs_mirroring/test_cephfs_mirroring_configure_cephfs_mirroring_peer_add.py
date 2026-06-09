@@ -203,7 +203,7 @@ def run(ceph_cluster, **kw):
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
         asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
-            cephfs_mirror_node[0], fsid, daemon_name
+            cephfs_mirror_node, fsid, daemon_name
         )
         log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(

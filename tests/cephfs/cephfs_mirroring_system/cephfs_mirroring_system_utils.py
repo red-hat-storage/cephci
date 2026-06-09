@@ -902,7 +902,8 @@ def setup_mirroring_test_environment(
         "Fetching mirroring metadata (fsid, daemon_name, asok_file, "
         "filesystem_id, peer_uuid)"
     )
-    fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_nodes[0])
+    out, _ = source_client.exec_command(sudo=True, cmd="ceph fsid")
+    fsid = out.strip()
     log.info("fsid on ceph cluster : %s", fsid)
     daemon_name = fs_mirroring_utils.get_daemon_name(source_client)
     log.info("Name of the cephfs-mirror daemon : %s", daemon_name)
