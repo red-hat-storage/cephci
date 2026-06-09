@@ -1,25 +1,26 @@
 #===============================================================================================
-# Tier-level: 1
-# Test-Suite: tier-1_cephfs_mirror.yaml
-# Test-Case: Configure CephFS Mirror setup and run IOs
-# Conf file : conf/tentacle/cephfs/tier-1_cephfs_mirror.yaml
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_mirroring_system.yaml
+# Test-Case: CephFS Mirror system tests - daemon and MDS failure operations
+# Conf file : conf/tentacle/cephfs/tier-2_cephfs_mirror_ha.yaml
 # Cluster Configuration:
 #    No of Clusters : 2
 #    Cluster 1 :
-#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 CEPHFS MIRROR, 1 Client service daemon(s)
-#     Node1 - Mon, Mgr, Installer
-#     Node2 - Mon, Mgr
-#     Node3 - Mon, OSD
-#     Node4 - OSD,MDS
+#    3 MONS, 2 MGR, 5 MDS, 3 OSD, 2 CEPHFS MIRROR, 1 Client service daemon(s)
+#     Node1 - Mon, Mgr, Installer, MDS
+#     Node2 - Mon, Mgr, MDS
+#     Node3 - Mon, OSD, MDS
+#     Node4 - OSD, MDS
 #     Node5 - OSD, MDS
-#     Node6 - CephFS Mirror
-#     Node7 - Client
+#     Node6 - CephFS Mirror, MDS
+#     Node7 - CephFS Mirror, MDS
+#     Node8 - Client
 #    Cluster 2 :
 #    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 Client service daemon(s)
 #     Node1 - Mon, Mgr, Installer
-#     Node2 - Mon, Mgr
-#     Node3 - Mon, OSD
-#     Node4 - OSD,MDS
+#     Node2 - Mon, Mgr, MDS
+#     Node3 - Mon, OSD, MDS
+#     Node4 - OSD, MDS
 #     Node5 - OSD, MDS
 #     Node6 - Client
 
@@ -82,6 +83,7 @@ tests:
                   args:
                     placement:
                       nodes:
+                        - node3
                         - node4
                         - node5
               - config:
@@ -91,8 +93,6 @@ tests:
                     placement:
                       label: cephfs-mirror
                       limit: 1
-                      # nodes:
-                      #   - node6
         ceph2:
           config:
             verify_cluster_health: true
@@ -142,6 +142,7 @@ tests:
                   args:
                     placement:
                       nodes:
+                        - node3
                         - node4
                         - node5
       desc:  CephFS Mirror cluster deployment using cephadm
@@ -160,7 +161,7 @@ tests:
               install_packages:
                 - ceph-common
                 - ceph-fuse
-              node: node7
+              node: node8
           ceph2:
             config:
               command: add
