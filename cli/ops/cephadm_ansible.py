@@ -144,6 +144,8 @@ def exec_cephadm_preflight(node, build_type, ibm_build=False, repo=None):
                 repo = repo.replace(repo.split("/")[-1], "rhel9/x86_64/")
             elif "rhel8" in repo:
                 repo = repo.replace(repo.split("/")[-1], "rhel8/x86_64/")
+            elif "rhel10" in repo:
+                repo = repo.replace(repo.split("/")[-1], "rhel10/x86_64/")
         extra_vars = {
             "ceph_origin": "custom",
             "gpgcheck": "no",
