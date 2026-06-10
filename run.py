@@ -699,8 +699,15 @@ def run(args):
     enable_eus = args.get("--enable-eus")
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms")
     skip_sos_report = args.get("--skip-sos-report")
+
+    # Pre define the variables for coredump and logs collection.
+    # By default we don't collect any logs.
+    collect_coredump = False
+    collect_ceph_logs = False
+
     if "collect-coredump" in custom_config_dict.keys():
         collect_coredump = bool(custom_config_dict["collect-coredump"])
+
     if "collect-ceph-logs" in custom_config_dict.keys():
         collect_ceph_logs = bool(custom_config_dict["collect-ceph-logs"])
 
