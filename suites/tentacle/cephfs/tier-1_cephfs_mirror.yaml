@@ -323,3 +323,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_peer_remove_and_readd.py
       name: Validate peer remove and re-add via bootstrap_import
       polarion-id: "CEPH-83632394"
+  - test:
+      abort-on-fail: false
+      desc: "Validate snapdiff vs blockdiff behavior in cephfs-mirror daemon"
+      clusters:
+        ceph1:
+          config:
+            name: Validate snapdiff for small files and blockdiff for large files
+      module: cephfs_mirroring.test_cephfs_mirror_snapdiff_vs_blockdiff.py
+      name: Validate snapdiff vs blockdiff behavior
+      polarion-id: "CEPH-83632395"
