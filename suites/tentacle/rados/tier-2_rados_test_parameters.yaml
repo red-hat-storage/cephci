@@ -221,6 +221,12 @@ tests:
         scenario: rocksdb_compression
 
   - test:
+      name: RocksDB Perf Cache counters
+      desc: Validate RocksDB Perf Cache Counters
+      polarion-id: CEPH-83632416
+      module: test_rocksdb_perf_cache.py
+
+  - test:
       name: replica-1 non-resilient pools
       module: test_replica1.py
       polarion-id: CEPH-83575297
