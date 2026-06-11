@@ -86,6 +86,38 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - samba-client
+          - cifs-utils
+        node: node10
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - samba-client
+          - cifs-utils
+        node: node11
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
   ######################################################################################################################
   # Feature: MDS Traceability
   # Verify jaeger tracing config, sliding window, trace dump for IO operations
