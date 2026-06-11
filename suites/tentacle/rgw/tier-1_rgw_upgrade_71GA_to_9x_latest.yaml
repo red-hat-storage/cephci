@@ -19,10 +19,12 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 7.1
-                release: released
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
           - config:
               command: add_hosts
               service: host

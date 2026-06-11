@@ -26,12 +26,15 @@ tests:
                   service: cephadm
                   args:
                     rhcs-version: 8.1
-                    release: released
+                    release: rc
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+                  base_cmd_args:
+                    verbose: true
               - config:
                   command: add_hosts
                   service: host
@@ -76,12 +79,15 @@ tests:
                   service: cephadm
                   args:
                     rhcs-version: 8.1
-                    release: released
+                    release: rc
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+                  base_cmd_args:
+                    verbose: true
               - config:
                   command: add_hosts
                   service: host
