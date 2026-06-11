@@ -591,17 +591,13 @@ class GenerateServiceSpec:
                     # Format certificate with proper indentation if create-cert is specified
                     if ssl_cert_value == "create-cert":
                         cert_value = "|\n" + cert
-                        spec["spec"]["ssl_cert"] = "\n    ".join(
-                            cert_value.split("\n")
-                        )
+                        spec["spec"]["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
                         LOG.debug(f"Generated SSL Certificate:\n{cert}")
 
                     # Format key with proper indentation if create-key is specified
                     if ssl_key_value == "create-key":
                         key_value = "|\n" + key
-                        spec["spec"]["ssl_key"] = "\n    ".join(
-                            key_value.split("\n")
-                        )
+                        spec["spec"]["ssl_key"] = "\n    ".join(key_value.split("\n"))
                         LOG.debug(f"Generated SSL Key:\n{key}")
 
             # Handle legacy rgw_frontend_ssl_certificate (deprecated but still supported)
