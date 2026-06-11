@@ -572,13 +572,12 @@ class GenerateServiceSpec:
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
-
         if spec.get("spec", False):
             # Handle new inline certificate_source method (Tentacle/20.1.0+)
             if spec["spec"].get("certificate_source") == "inline":
                 ssl_cert_value = spec["spec"].get("ssl_cert")
                 ssl_key_value = spec["spec"].get("ssl_key")
-                
+
                 # Check if we need to generate certificate and/or key
                 if ssl_cert_value == "create-cert" or ssl_key_value == "create-key":
                     subject = {
@@ -588,7 +587,7 @@ class GenerateServiceSpec:
                         ).ip_address,
                     }
                     key, cert, ca = generate_self_signed_certificate(subject=subject)
-                    
+
                     # Format certificate with proper indentation if create-cert is specified
                     if ssl_cert_value == "create-cert":
                         cert_value = "|\n" + cert
@@ -596,7 +595,7 @@ class GenerateServiceSpec:
                             cert_value.split("\n")
                         )
                         LOG.debug(f"Generated SSL Certificate:\n{cert}")
-                    
+
                     # Format key with proper indentation if create-key is specified
                     if ssl_key_value == "create-key":
                         key_value = "|\n" + key
@@ -604,7 +603,7 @@ class GenerateServiceSpec:
                             key_value.split("\n")
                         )
                         LOG.debug(f"Generated SSL Key:\n{key}")
-            
+
             # Handle legacy rgw_frontend_ssl_certificate (deprecated but still supported)
             elif spec["spec"].get("rgw_frontend_ssl_certificate", False):
                 if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
