@@ -539,7 +539,20 @@ class GenerateServiceSpec:
                   rgw_zone: india
                   rgw_frontend_ssl_certificate: create-cert | <contents of crt>
 
-            contents of rgw_spec.yaml file
+            contents of rgw_spec.yaml file (Tentacle/20.1.0+ with inline certificate_source)
+
+                service_type: rgw
+                service_id: rgw.india
+                placement:
+                  hosts:
+                    - node5
+                spec:
+                  ssl: true
+                  certificate_source: inline
+                  ssl_cert: create-cert | <contents of cert>
+                  ssl_key: create-cert | <contents of key>
+
+            contents of rgw_spec.yaml file (Legacy with rgw_frontend_ssl_certificate)
 
                 service_type: rgw
                 service_id: rgw.india
@@ -559,9 +572,36 @@ class GenerateServiceSpec:
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
-
         if spec.get("spec", False):
-            if spec["spec"].get("rgw_frontend_ssl_certificate", False):
+            # Handle new inline certificate_source method (Tentacle/20.1.0+)
+            if spec["spec"].get("certificate_source") == "inline":
+                ssl_cert_value = spec["spec"].get("ssl_cert")
+                ssl_key_value = spec["spec"].get("ssl_key")
+
+                # Check if we need to generate certificate and/or key
+                if ssl_cert_value == "create-cert" or ssl_key_value == "create-key":
+                    subject = {
+                        "common_name": spec["placement"]["hosts"][0],
+                        "ip_address": self.cluster.get_node_by_hostname(
+                            spec["placement"]["hosts"][0]
+                        ).ip_address,
+                    }
+                    key, cert, ca = generate_self_signed_certificate(subject=subject)
+
+                    # Format certificate with proper indentation if create-cert is specified
+                    if ssl_cert_value == "create-cert":
+                        cert_value = "|\n" + cert
+                        spec["spec"]["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
+                        LOG.debug(f"Generated SSL Certificate:\n{cert}")
+
+                    # Format key with proper indentation if create-key is specified
+                    if ssl_key_value == "create-key":
+                        key_value = "|\n" + key
+                        spec["spec"]["ssl_key"] = "\n    ".join(key_value.split("\n"))
+                        LOG.debug(f"Generated SSL Key:\n{key}")
+
+            # Handle legacy rgw_frontend_ssl_certificate (deprecated but still supported)
+            elif spec["spec"].get("rgw_frontend_ssl_certificate", False):
                 if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
                     subject = {
                         "common_name": spec["placement"]["hosts"][0],

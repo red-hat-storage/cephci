@@ -64,7 +64,9 @@ tests:
                       - node5
                   spec:
                     ssl: true
-                    generate_cert: true
+                    certificate_source: inline
+                    ssl_cert: create-cert
+                    ssl_key: create-key
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
