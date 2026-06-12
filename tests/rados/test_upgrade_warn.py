@@ -14,13 +14,14 @@ import json
 import time
 
 from looseversion import LooseVersion
+from packaging.version import Version
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.utils import get_cluster_timestamp
-from ceph.utils import get_node_by_id, remove_repos
+from ceph.utils import get_daemon_versions, get_node_by_id, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
@@ -82,6 +83,26 @@ def run(ceph_cluster, **kw):
     verify_cluster_health = config.get("verify_cluster_health", False)
     enable_debug_level = config.get("enable_debug_level", False)
     installer = ceph_cluster.get_nodes(role="installer")[0]
+
+    def mgr_accept_license():
+        log.debug("Ceph product: %s", product)
+        mgr_version_common, mgr_version_downstream = get_daemon_versions(
+            node=installer, daemon_type="mgr"
+        )
+        log.debug("MGR common version: %s", mgr_version_common)
+        log.debug("MGR downstream version: %s", mgr_version_downstream)
+        common_ver_check = mgr_version_common and Version(
+            mgr_version_common
+        ) >= Version("20.2.1")
+        downstream_ver_check = mgr_version_downstream and Version(
+            mgr_version_downstream
+        ) >= Version("9.9.1.0")
+        if common_ver_check or downstream_ver_check:
+            license_cmd = (
+                f"ceph orch accept-license --image {config['container_image']}"
+            )
+            out, _ = cephadm_obj.shell(args=[license_cmd], check_status=False)
+            log.debug(out)
 
     init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
     msg = f"time when upgrade test was started : {init_time}"
@@ -160,14 +181,6 @@ def run(ceph_cluster, **kw):
             os_ver = rhbuild.split("-")[-1]
             _rpm_version = f"2:{_ver}.el{os_ver}cp"
 
-            # IBM Storage Ceph 9.1 and greater would require license acceptance
-            # There is '--automatically-accept-license' option
-            if product == "ibm" and LooseVersion(_rhcs_version) >= LooseVersion("9.1"):
-                license_cmd = (
-                    f"ceph orch accept-license --image {config['container_image']}"
-                )
-                out, _ = cephadm_obj.shell(args=[license_cmd], check_status=False)
-                log.debug(out)
         elif _custom_image and _custom_repo:
             _registry, _image_name = _custom_image.split(":")[0].split("/", 1)
             _image_tag = _custom_image.split(":")[-1]
@@ -236,11 +249,7 @@ def run(ceph_cluster, **kw):
         if product == "ibm" and LooseVersion(
             str(config.get("release"))
         ) >= LooseVersion("9.1"):
-            license_cmd = (
-                f"ceph orch accept-license --image {config['container_image']}"
-            )
-            out, _ = cephadm_obj.shell(args=[license_cmd], check_status=False)
-            log.debug(out)
+            mgr_accept_license()
 
         # Start Upgrade
         cluster_obj.start_upgrade(config)
