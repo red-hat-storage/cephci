@@ -1007,7 +1007,12 @@ def _first_kmip_pem(val):
 
 
 def create_nfs_via_file_and_verify(
-    installer_node, nfs_objects, timeout, nfs_nodes=None, cluster_nodes=None
+    installer_node,
+    nfs_objects,
+    timeout,
+    nfs_nodes=None,
+    cluster_nodes=None,
+    service_id=None,
 ):
     """
     Create a temporary YAML file with NFS Ganesha configuration.
@@ -1019,6 +1024,8 @@ def create_nfs_via_file_and_verify(
         cluster_nodes: Optional full cluster node list; when ``nfs_nodes`` does not
             resolve to any host, used with ``ceph orch ps`` via
             ``_resolve_nfs_nodes_for_service_ids`` to find Ganesha daemon nodes.
+        service_id (str, optional): Passed to ``verify_nfs_ganesha_service`` so
+            only the newly applied NFS cluster must be healthy.
     Returns:
         bool: True if apply and verification succeeded, else False.
     """
@@ -1054,7 +1061,9 @@ def create_nfs_via_file_and_verify(
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
             input=remote_spec, check_ec=True, pos_args=pos_args
         )
-        verify_nfs_ganesha_service(node=installer_node, timeout=timeout)
+        verify_nfs_ganesha_service(
+            node=installer_node, timeout=timeout, service_id=service_id
+        )
         log.info("NFS Ganesha spec file applied successfully.")
         nodes_for_coredump = None
         if nfs_nodes:
@@ -1266,11 +1275,28 @@ def fuse_mount_retry(client, mount, **kwargs):
     return True
 
 
-def verify_nfs_ganesha_service(node, timeout):
+def _filter_nfs_orch_services(services, service_id=None):
+    """When ``service_id`` is set, only check that NFS cluster (e.g. cephfs-nfs-krb)."""
+    if not service_id:
+        return services
+    filtered = []
+    for svc in services:
+        name = svc.get("service_name") or ""
+        if name == "nfs.{}".format(service_id) or name.endswith(
+            ".{}".format(service_id)
+        ):
+            filtered.append(svc)
+    return filtered
+
+
+def verify_nfs_ganesha_service(node, timeout, service_id=None):
     """
     Verify the status of NFS Ganesha service.
     Args:
         node: Installer Node.
+        service_id (str, optional): If set, only wait for this NFS cluster
+            (``service_id`` / ``nfs.<service_id>``), not every NFS service in
+            the cluster. Use when other NFS clusters may be stopped or unrelated.
     Returns:
         bool: True if the service is in the expected state, False otherwise.
     """
@@ -1280,7 +1306,10 @@ def verify_nfs_ganesha_service(node, timeout):
         result = json.loads(
             CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
         )
-        if all(x["status"]["running"] == x["status"]["size"] for x in result):
+        result = _filter_nfs_orch_services(result, service_id=service_id)
+        if result and all(
+            x["status"]["running"] == x["status"]["size"] for x in result
+        ):
             log.info(
                 "\n"
                 + "=" * 30
@@ -1620,6 +1649,137 @@ def get_ganesha_info_from_container(installer, nfs_service_name, nfs_host_node):
         return (None, None)
 
 
+def _nfs_service_daemon_names(client, nfs_name):
+    """Return ``ceph orch ps`` daemon names for an NFS cluster/service id."""
+    service = nfs_name if nfs_name.startswith("nfs.") else "nfs.{}".format(nfs_name)
+    raw, _ = client.exec_command(
+        sudo=True,
+        cmd="ceph orch ps --service_name {} --format json".format(service),
+        check_ec=False,
+    )
+    text = (raw or "").strip()
+    if text:
+        try:
+            entries = json.loads(text)
+            if isinstance(entries, dict):
+                entries = [entries]
+            names = [
+                entry.get("daemon_name")
+                for entry in entries
+                if entry.get("daemon_name")
+            ]
+            if names:
+                return names
+        except json.JSONDecodeError:
+            log.debug("Could not parse orch ps JSON for %s: %s", service, text[:200])
+
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd="ceph orch ps | grep {}".format(nfs_name),
+        check_ec=False,
+    )
+    names = []
+    for line in (out or "").splitlines():
+        parts = line.split()
+        if parts and parts[0].startswith("nfs."):
+            names.append(parts[0])
+    return names
+
+
+def _cluster_fsid(node):
+    """Return cluster FSID using ``ceph fsid`` with filesystem fallback."""
+    fsid = Ceph(node).fsid()
+    if fsid and len(fsid.strip()) >= 32 and "-" in fsid:
+        return fsid.strip().split()[0]
+    out, _ = node.exec_command(
+        sudo=True,
+        cmd="ls /var/lib/ceph 2>/dev/null",
+        check_ec=False,
+    )
+    text = out if isinstance(out, str) else (out[0] if out else "")
+    for name in (text or "").split():
+        if len(name) == 36 and name.count("-") == 4:
+            return name
+    return None
+
+
+def _daemon_hostname(daemon_name):
+    """Extract host shortname from ``nfs.<cluster>.<id>.<host>.<suffix>``."""
+    parts = daemon_name.split(".")
+    return parts[-2] if len(parts) >= 6 else None
+
+
+def _resolve_nfs_log_node(client, nfs_node, daemon_name):
+    """Prefer the node hosting the daemon for local ``cephadm logs``."""
+    host = _daemon_hostname(daemon_name)
+    candidates = []
+    if nfs_node:
+        nodes = nfs_node if isinstance(nfs_node, (list, tuple)) else [nfs_node]
+        for node in nodes:
+            if getattr(node, "hostname", None) == host:
+                return node
+        candidates.extend(nodes)
+    if client not in candidates:
+        candidates.append(client)
+    return candidates[0]
+
+
+def _fetch_cephadm_daemon_log(client, daemon_name, log_path="nfs_log", nfs_node=None):
+    """Fetch daemon logs; try ``--fsid`` from client, then local fetch on daemon host."""
+    fsid = _cluster_fsid(client)
+    log_node = _resolve_nfs_log_node(client, nfs_node, daemon_name)
+    attempts = []
+    if fsid:
+        attempts.append(
+            (
+                log_node,
+                "cephadm logs --fsid {} --name {} > {}".format(
+                    fsid, daemon_name, log_path
+                ),
+            )
+        )
+    attempts.append(
+        (
+            log_node,
+            "cephadm logs --name {} > {}".format(daemon_name, log_path),
+        )
+    )
+    if log_node is not client:
+        attempts.append(
+            (
+                client,
+                "cephadm logs --name {} > {}".format(daemon_name, log_path),
+            )
+        )
+        if fsid:
+            attempts.insert(
+                1,
+                (
+                    client,
+                    "cephadm logs --fsid {} --name {} > {}".format(
+                        fsid, daemon_name, log_path
+                    ),
+                ),
+            )
+
+    last_err = None
+    for node, cmd in attempts:
+        try:
+            node.exec_command(sudo=True, cmd=cmd)
+            return node
+        except BaseException as ex:
+            last_err = ex
+            log.debug(
+                "cephadm log fetch failed on %s (%s): %s",
+                node.hostname,
+                cmd.split(">")[0].strip(),
+                ex,
+            )
+    raise OperationFailedError(
+        "Failed to fetch cephadm logs for {}: {}".format(daemon_name, last_err)
+    )
+
+
 def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None, expect_quiet=False):
     """
     This method parses the nfs debug log for given list of strings and returns 0 on Success
@@ -1632,22 +1792,37 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None, expect_quiet=Fa
     """
     results = {"expect": {}}
     if expect_list:
-        cmd = f"ceph orch ps | grep {nfs_name}"
-        out = list(client.exec_command(sudo=True, cmd=cmd))[0]
-        nfs_daemon_name = out.split()[0]
+        daemon_names = _nfs_service_daemon_names(client, nfs_name)
+        if not daemon_names:
+            msg = "No NFS daemons found for {}".format(nfs_name)
+            if expect_quiet:
+                log.debug(msg)
+            else:
+                log.error(msg)
+            return 1
+
         for search_str in expect_list:
-            cmd = f"cephadm logs --name {nfs_daemon_name} > nfs_log"
-            nfs_node.exec_command(sudo=True, cmd=cmd)
-            try:
-                cmd = f'grep "{search_str}" nfs_log'
-                out = nfs_node.exec_command(sudo=True, cmd=cmd)
-                if len(out) > 0:
-                    log.info(
-                        f"Found {search_str} in {nfs_daemon_name} log on {nfs_node.hostname}:\n {out}"
+            for daemon_name in daemon_names:
+                log_node = _fetch_cephadm_daemon_log(
+                    client, daemon_name, nfs_node=nfs_node
+                )
+                try:
+                    out = log_node.exec_command(
+                        sudo=True,
+                        cmd='grep -F "{}" nfs_log'.format(search_str),
                     )
-                    results["expect"].update({search_str: nfs_node})
-            except BaseException as ex:
-                log.info(ex)
+                    if out and (out[0] or "").strip():
+                        log.info(
+                            "Found %s in %s log via %s:\n %s",
+                            search_str,
+                            daemon_name,
+                            log_node.hostname,
+                            out,
+                        )
+                        results["expect"].update({search_str: log_node})
+                        break
+                except BaseException as ex:
+                    log.info(ex)
 
         expect_not_found = []
         for exp_str in expect_list:
@@ -1655,8 +1830,8 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None, expect_quiet=Fa
                 expect_not_found.append(exp_str)
         if len(expect_not_found):
             msg = (
-                f"Some of expected strings not found in debug logs for "
-                f"{nfs_daemon_name}:{expect_not_found}"
+                "Some of expected strings not found in debug logs for "
+                "{} daemons {}: {}".format(nfs_name, daemon_names, expect_not_found)
             )
             if expect_quiet:
                 log.debug(msg)
