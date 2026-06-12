@@ -29,6 +29,7 @@ class CephTestManifest:
         build_type: str,
         platform: str,
         datacenter: Optional[str] = None,
+        crimson_osd: Optional[bool] = None,
     ) -> None:
         """Instance initialization.
 
@@ -38,6 +39,7 @@ class CephTestManifest:
             build_type  Refers to section in the manifest file to be read.
             platform    The base operating system.
             datacenter  The location where the tests are being executed.
+            crimson_osd Whether to use crimson osd.
         """
         if product not in self.SUPPORTED_PRODUCTS:
             raise RuntimeError("Unsupported product")
@@ -46,7 +48,7 @@ class CephTestManifest:
         self._release: str = release
         self._build_type: str = build_type
         self._platform: str = platform
-
+        self._crimson_osd: bool = crimson_osd
         if datacenter is None:
             # Retrieve from config
             try:
@@ -125,16 +127,22 @@ class CephTestManifest:
         return self.build_info["images"]["ceph-base"]
 
     @property
+    def crimson_osd_image(self) -> str:
+        return self.images.get("crimson_image", "")
+
+    @property
     def ceph_image_dtr(self) -> str:
         return self.ceph_image.split("/")[0]
 
     @property
     def ceph_image_tag(self) -> str:
+        if self._crimson_osd:
+            return self.crimson_osd_image.split(":")[-1]
         return self.ceph_image.split(":")[-1]
 
     @property
     def ceph_image_path(self) -> str:
-        _image_fqdn = self.ceph_image
+        _image_fqdn = self.crimson_osd_image if self._crimson_osd else self.ceph_image
         _image_without_dtr = _image_fqdn.split("/", 1)[1]
         return _image_without_dtr.split(":")[0]
 

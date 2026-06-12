@@ -7544,3 +7544,38 @@ EOF"""
         ]
 
         return mount_path, device_path, created_pools
+
+    def setup_crimson_pre_req(self, **kwargs) -> None:
+        """
+        Setup Crimson pre-requisites for the cluster.
+        Args:
+            crimson_seastar_num_threads: Number of threads for Crimson Seastar.
+            crimson_alien_op_num_threads: Number of threads for Crimson alienized objectstore.
+            set-allow-crimson: Allow Crimson to be used in the cluster.
+            osd_pool_default_crimson: disables autoscaler for crimson pools.
+        """
+        crimson_seastar_num_threads = kwargs.get("crimson_seastar_num_threads", 1)
+        crimson_alien_op_num_threads = kwargs.get("crimson_alien_op_num_threads", 6)
+
+        log.info(
+            "Setting up Crimson pre-requisites for the cluster with the following parameters:"
+        )
+        log.info("Crimson Seastar number of threads: %s", crimson_seastar_num_threads)
+        log.info(
+            "Crimson Alien operation number of threads: %s",
+            crimson_alien_op_num_threads,
+        )
+
+        exp_cmds = [
+            "ceph config set global 'enable_experimental_unrecoverable_data_corrupting_features' crimson",
+            "ceph osd set-allow-crimson --yes-i-really-mean-it",
+            "ceph config set mon osd_pool_default_crimson true",
+        ]
+        cfg_cmds = [
+            f"ceph config set osd crimson_seastar_num_threads {crimson_seastar_num_threads}",
+            f"ceph config set osd crimson_alien_op_num_threads {crimson_alien_op_num_threads}",
+        ]
+        for cmd in exp_cmds + cfg_cmds:
+            self.node.shell([cmd])
+
+        log.info("Crimson pre-requisites setup completed.")
