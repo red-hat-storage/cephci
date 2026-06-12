@@ -122,6 +122,19 @@ tests:
           config:
             verify_cluster_health: true
             steps:
+              # QE rh-prod mirror exposes versioned OpenShift tags (e.g. v4.13.0), not cephadm defaults (v4.15).
+              - config:
+                  command: shell
+                  args:
+                    - ceph config set mgr mgr/cephadm/container_image_prometheus registry.redhat.io/openshift4/ose-prometheus:v4.13.0
+              - config:
+                  command: shell
+                  args:
+                    - ceph config set mgr mgr/cephadm/container_image_alertmanager registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.13.0
+              - config:
+                  command: shell
+                  args:
+                    - ceph config set mgr mgr/cephadm/container_image_node_exporter registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.13.0
               - config:
                   command: apply_spec
                   service: orch
@@ -149,6 +162,18 @@ tests:
           config:
             verify_cluster_health: true
             steps:
+              - config:
+                  command: shell
+                  args:
+                    - ceph config set mgr mgr/cephadm/container_image_prometheus registry.redhat.io/openshift4/ose-prometheus:v4.13.0
+              - config:
+                  command: shell
+                  args:
+                    - ceph config set mgr mgr/cephadm/container_image_alertmanager registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.13.0
+              - config:
+                  command: shell
+                  args:
+                    - ceph config set mgr mgr/cephadm/container_image_node_exporter registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.13.0
               - config:
                   command: apply_spec
                   service: orch
