@@ -120,7 +120,7 @@ def snap_visibility_test():
     )
     for kwargs in [sv_old, sv_new]:
         actual_snap_visibility = snap_util.snapshot_visibility(client, "get", **kwargs)
-        if actual_snap_visibility != 1:
+        if actual_snap_visibility != "1":
             str1 = f"Expected : 1,Actual:{actual_snap_visibility}"
             log.error(
                 "Snapshot Visibility on existing subvolume post upgrade is not as Expected.%s",
