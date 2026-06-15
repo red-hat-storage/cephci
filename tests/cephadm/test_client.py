@@ -7,6 +7,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from cephci.utils.build_info import CephTestManifest
+from cli.utilities.configure import setup_ibm_licence
 from utility import utils
 from utility.log import Log
 
@@ -126,6 +127,21 @@ def add(cls, config: Dict) -> None:
                     enabled_repos.append(repo)
             log.debug(f"Enabled repos on the system are : {enabled_repos}")
 
+            def enable_cdn_ceph_repo(manifest):
+                if manifest.product == "ibm":
+                    repo_url = manifest.build_info["repositories"]["default"][
+                        manifest.platform
+                    ]
+                    _node.exec_command(
+                        sudo=True,
+                        cmd=f"dnf config-manager --add-repo {repo_url}",
+                    )
+                elif manifest.repo_id:
+                    _node.exec_command(
+                        sudo=True,
+                        cmd=f"{enable_cmd}{manifest.repo_id}",
+                    )
+
             if rhcs_version != "default" and not _manifest_section:
                 try:
                     # Disabling all the repos and enabling the ones we need to install the ceph client
@@ -140,17 +156,12 @@ def add(cls, config: Dict) -> None:
                 for repos in rhel_repos[rhel_version]:
                     _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
-                if manifest_obj and manifest_obj.repo_id:
-                    _node.exec_command(
-                        sudo=True, cmd=f"{enable_cmd}{manifest_obj.repo_id}"
-                    )
+                if manifest_obj:
+                    enable_cdn_ceph_repo(manifest_obj)
                 elif use_cdn:
                     _manifest = cls.config.get("manifest")
-                    if _manifest and _manifest.repo_id:
-                        _node.exec_command(
-                            sudo=True,
-                            cmd=f"{enable_cmd}{_manifest.repo_id}",
-                        )
+                    if _manifest:
+                        enable_cdn_ceph_repo(_manifest)
 
                 # Clearing the release preference set and cleaning all yum repos
                 # Observing selinux package dependency issues for ceph-base
@@ -181,6 +192,10 @@ def add(cls, config: Dict) -> None:
 
             # Install ceph-common
             if config.get("install_packages"):
+                _manifest = manifest_obj or cls.config.get("manifest")
+                if _manifest and _manifest.product == "ibm":
+                    setup_ibm_licence(_node, build_type=_manifest.build_type)
+
                 for pkg in config.get("install_packages"):
                     if _rpm_version:
                         pkg = f"{pkg}-{_rpm_version}"
