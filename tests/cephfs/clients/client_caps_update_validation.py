@@ -102,13 +102,14 @@ def test_setup(fs_util, ceph_cluster, client):
     return setup_params
 
 
-def run_io_local(fs_util, mnt_info, sv_list):
+def run_io_local(fs_util, mnt_info, sv_list, wait=True):
     """
-    This methods runs IOs in parallel on given mountpoints
+    This methods runs IOs in parallel on given mountpoints.
     mnt_info : dict type input, with below format,
     {
     sv_name:{'path' : path,'client':client}
     }
+    If wait=False, returns the list of running threads without joining.
     """
     write_procs = []
     rand_str = "".join(random.choice(string.digits) for i in range(3))
@@ -122,8 +123,10 @@ def run_io_local(fs_util, mnt_info, sv_list):
         p = Thread(target=fs_util.run_ios, args=(mnt_client, io_path, io_tools))
         p.start()
         write_procs.append(p)
-    for p in write_procs:
-        p.join()
+    if wait:
+        for p in write_procs:
+            p.join()
+    return write_procs
 
 
 def client_caps_quiesce_test(
@@ -426,11 +429,11 @@ def run(ceph_cluster, **kw):
 
         test_fail = 0
 
-        run_io_local(fs_util_v1, mnt_info, sv_list)
-
         log.info(
             "Test1:Validate Client Caps recalled when CG quiesce is run on subvolumes"
         )
+        io_threads = run_io_local(fs_util_v1, mnt_info, sv_list, wait=False)
+        time.sleep(5)
 
         sv_name = random.choice(sv_name_list)
         subvol_path = sv_path_dict[sv_name]
@@ -441,6 +444,9 @@ def run(ceph_cluster, **kw):
             == 1
         ):
             test_fail += 1
+
+        for t in io_threads:
+            t.join(timeout=300)
 
         run_io_local(fs_util_v1, mnt_info, sv_list)
 
