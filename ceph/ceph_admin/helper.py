@@ -567,7 +567,21 @@ class GenerateServiceSpec:
                   rgw_zone: india
                   rgw_frontend_ssl_certificate: create-cert | <contents of crt>
 
-            contents of rgw_spec.yaml file
+            contents of rgw_spec.yaml file (Tentacle/20.1.0+ with inline certificate_source)
+
+                service_type: rgw
+                service_id: rgw.india
+                placement:
+                  hosts:
+                    - node5
+                spec:
+                  ssl: true
+                  certificate_source: inline
+
+            When certificate_source is inline, ssl_cert and ssl_key are generated
+            and embedded if they are omitted. Explicit PEM values are left unchanged.
+
+            contents of rgw_spec.yaml file (Legacy with rgw_frontend_ssl_certificate)
 
                 service_type: rgw
                 service_id: rgw.india
@@ -587,8 +601,37 @@ class GenerateServiceSpec:
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
-
         if spec.get("spec", False):
+            # Tentacle/20.1.0+: cephadm inline requires ssl_cert and ssl_key.
+            # Generate them when the suite only sets certificate_source: inline.
+            if spec["spec"].get("certificate_source") == "inline":
+                ssl_cert_value = spec["spec"].get("ssl_cert")
+                ssl_key_value = spec["spec"].get("ssl_key")
+                needs_cert = ssl_cert_value in (None, "create-cert")
+                needs_key = ssl_key_value in (None, "create-key")
+
+                if needs_cert or needs_key:
+                    subject = {
+                        "common_name": spec["placement"]["hosts"][0],
+                        "ip_address": self.cluster.get_node_by_hostname(
+                            spec["placement"]["hosts"][0]
+                        ).ip_address,
+                    }
+                    key, cert, ca = generate_self_signed_certificate(subject=subject)
+
+                    if needs_cert:
+                        cert_pem = cert + ca
+                        cert_value = "|\n" + cert_pem
+                        spec["spec"]["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
+                        LOG.debug(f"Generated SSL Certificate:\n{cert_pem}")
+
+                    if needs_key:
+                        key_value = "|\n" + key
+                        spec["spec"]["ssl_key"] = "\n    ".join(key_value.split("\n"))
+                        LOG.debug("Generated inline SSL private key")
+
+            # Squid and reef still use rgw_frontend_ssl_certificate, so keep this
+            # path independent of the inline certificate_source handling above.
             if spec["spec"].get("rgw_frontend_ssl_certificate", False):
                 if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
                     subject = {

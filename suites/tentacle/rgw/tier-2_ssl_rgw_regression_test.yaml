@@ -64,7 +64,7 @@ tests:
                       - node5
                   spec:
                     ssl: true
-                    generate_cert: true
+                    certificate_source: inline
                     zonegroup_hostnames:
                       - s3.example.com
                     wildcard_enabled: true
