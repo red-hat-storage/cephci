@@ -64,7 +64,9 @@ tests:
                       - node5
                   spec:
                     ssl: true
-                    generate_cert: true
+                    certificate_source: inline
+                    ssl_cert: create-cert
+                    ssl_key: create-key
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
@@ -115,22 +117,6 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        commands:
-          - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
-          - "sudo yum install -y sshpass"
-          - "sleep 20"
-          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node3}:/etc/pki/ca-trust/source/anchors/"
-          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node4}:/etc/pki/ca-trust/source/anchors/"
-          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node5}:/etc/pki/ca-trust/source/anchors/"
-          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node6}:/etc/pki/ca-trust/source/anchors/"
-      desc: copying cephadm_root_ca_cert to rgw and client nodes ca_trust_path
-      module: exec.py
-      name: copying cephadm_root_ca_cert
-      polarion-id: CEPH-10362
 
   - test:
       abort-on-fail: true
