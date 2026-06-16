@@ -184,8 +184,10 @@ def add(cls, config: Dict) -> None:
                 for pkg in config.get("install_packages"):
                     if _rpm_version:
                         pkg = f"{pkg}-{_rpm_version}"
+                    # Add --no-best flag for samba-client package
+                    extra_flags = "--nobest" if "samba-client" in pkg else ""
                     _node.exec_command(
-                        cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
+                        cmd=f"yum install -y --nogpgcheck {extra_flags} {pkg}", sudo=True
                     )
             if config.get("git_clone", False):
                 log.info("perform cloning operation")
