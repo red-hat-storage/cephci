@@ -168,6 +168,13 @@ tests:
                   label: rgw
 
   - test:
+      name: Verify Ceph config defaults
+      desc: Validate all config parameter defaults match expected values for this release
+      module: test_ceph_config_defaults.py
+      config:
+        scenario: verify_all_defaults
+
+  - test:
       name: Ceph bluestore_min_alloc_size tests
       desc: Modification of Ceph bluestore_min_alloc_size After OSD deployment
       polarion-id: CEPH-83594019
