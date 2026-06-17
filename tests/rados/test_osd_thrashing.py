@@ -120,6 +120,7 @@ from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStra
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
 from utility.log import Log
+from utility.utils import extract_ceph_version
 
 log = Log(__name__)
 
@@ -127,51 +128,31 @@ log = Log(__name__)
 def _has_inconsistent_obj_fix(rados_obj) -> bool:
     """Check if the running ceph build contains the IBMCEPH-12717 fix.
 
-    The fix is present in builds with version > 20.1.0-149 but NOT in the
-    20.2.1.X line. Returns True if the fix is present and inconsistent
-    object detection should cause test failure.
+    The fix is NOT present in the 20.2.1.X line (Ceph 9.1). All other versions
+    are assumed to have the fix.
+    Returns True if the fix is present and inconsistent object
+    detection should cause test failure.
     """
-    import re
-
     try:
         out, _ = rados_obj.client.exec_command(cmd="ceph version", sudo=True)
-        # Expected: "ceph version 20.2.1-280.el9cp (...) tentacle"
-        version_str = out.strip().split()[2]  # e.g. "20.2.1-280.el9cp"
-        log.info(f"IBMCEPH-12717 fix check: ceph version = {version_str}")
+        version = extract_ceph_version(out)
+        log.info(f"IBMCEPH-12717 fix check: ceph version = {version}")
 
-        # Parse "MAJOR.MINOR.PATCH-BUILD.suffix"
-        match = re.match(r"(\d+)\.(\d+)\.(\d+)(?:-(\d+))?", version_str)
-        if not match:
-            log.warning(
-                f"Could not parse ceph version '{version_str}', "
-                f"assuming fix is present"
-            )
+        if not version:
+            log.warning("Could not parse ceph version, assuming fix is present")
             return True
 
-        major = int(match.group(1))
-        minor = int(match.group(2))
-        patch = int(match.group(3))
-        build_num = int(match.group(4)) if match.group(4) else 0
+        parts = version.split(".")
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
 
-        # 20.2.1.X line does NOT have the fix
-        if (major, minor, patch) == (20, 2, 1):
+        if (major, minor, patch) <= (20, 2, 1):
             log.info(
-                f"Ceph version {version_str}: 20.2.1.X does not have "
-                f"IBMCEPH-12717 fix, disabling inconsistent_object_fail"
+                f"Ceph version {version} does not have IBMCEPH-12717 fix,"
+                f" disabling inconsistent_object_fail"
             )
             return False
 
-        # Fix is present in builds > 20.1.0-149
-        if (major, minor, patch) > (20, 1, 0):
-            return True
-        if (major, minor, patch) == (20, 1, 0) and build_num > 149:
-            return True
-
-        log.info(
-            f"Ceph version {version_str}: build does not have "
-            f"IBMCEPH-12717 fix, disabling inconsistent_object_fail"
-        )
-        return False
+        return True
     except Exception as e:
         log.warning(f"Failed to determine ceph version for fix check: {e}")
         return True
@@ -1409,6 +1390,23 @@ def run(ceph_cluster, **kw):
             except Exception as e:
                 log.warning(f"Failed to restore election strategy: {e}")
 
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
+
+        try:
+            if rados_obj.check_crash_status(
+                start_time=start_time,
+                end_time=test_end_time,
+                check_mds=enable_mds_thrashing,
+                check_nfs=enable_nfs_thrashing,
+                check_rgw=enable_rgw_thrashing,
+            ):
+                log.error("Test failed due to crash detected")
+                test_failed = True
+        except Exception as e:
+            log.error(f"Crash check failed: {e}")
+            test_failed = True
+
         if config.get("cleanup_pools", True):
             log.debug("Cleaning up test resources...")
 
@@ -1511,19 +1509,6 @@ def run(ceph_cluster, **kw):
             log.info("Pool cleanup completed")
         else:
             log.info("Skipping cleanup (cleanup_pools=False)")
-
-        test_end_time = get_cluster_timestamp(rados_obj.node)
-        log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
-
-        try:
-            if rados_obj.check_crash_status(
-                start_time=start_time, end_time=test_end_time
-            ):
-                log.error("Test failed due to crash detected")
-                test_failed = True
-        except Exception as e:
-            log.error(f"Crash check failed: {e}")
-            test_failed = True
 
         if enable_debug_logs:
             log.info("Forcing log rotation on OSD nodes...")
