@@ -20,7 +20,7 @@ tests:
         args:
           rhcs-version: 8.1
           platform: rhel-9
-          release: rc
+          release: released
           mon-ip: node1
           orphan-initial-daemons: true
           skip-dashboard: true
@@ -229,7 +229,7 @@ tests:
         nodes:                            # client node
           - node17:
               release: 8.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base

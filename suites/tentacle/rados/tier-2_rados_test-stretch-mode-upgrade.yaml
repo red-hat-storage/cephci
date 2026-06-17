@@ -24,7 +24,7 @@ tests:
           verbose: true
         args:
           rhcs-version: 7.1
-          release: rc
+          release: released
           platform: rhel-9
           mon-ip: node1
           orphan-initial-daemons: true
@@ -156,7 +156,7 @@ tests:
         nodes:                            # client node
           - node8:
               release: 7.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base
@@ -223,7 +223,7 @@ tests:
           verbose: true
         args:
           rhcs-version: 8.1
-          release: rc
+          release: released
           platform: rhel-9
       abort-on-fail: false
 

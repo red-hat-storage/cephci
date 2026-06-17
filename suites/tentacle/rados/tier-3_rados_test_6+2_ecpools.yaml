@@ -23,7 +23,7 @@ tests:
               args:
                 mon-ip: node1
                 rhcs-version: 8.1
-                release: rc
+                release: released
                 platform: rhel-9
                 skip-monitoring-stack: true
 
@@ -149,7 +149,7 @@ tests:
         nodes:                            # client node
           - node7:
               release: 8.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node
