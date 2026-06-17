@@ -133,26 +133,6 @@ def run(**kw):
     return 0
 
 
-def setup_ibmc_root_ssh_access(ceph):
-    """Enable root password SSH login after yum upgrade/reboot on IBM Cloud VMs."""
-    sshd_config_file = "/etc/ssh/sshd_config.d/50-ceph-qe.conf"
-    root_password = ceph.root_passwd or "passwd"
-    log.info("Enabling root password authentication on %s", ceph.hostname)
-
-    ceph.exec_command(cmd=f"echo 'root:{root_password}' | chpasswd", sudo=True)
-    ceph.exec_command(
-        cmd=(
-            f"tee {sshd_config_file} <<'EOF'\n"
-            "PermitRootLogin yes\n"
-            "PasswordAuthentication yes\n"
-            "EOF"
-        ),
-        sudo=True,
-    )
-    ceph.exec_command(cmd="systemctl restart sshd", sudo=True)
-    log.info("Root password authentication enabled on %s", ceph.hostname)
-
-
 def install_prereq(
     ceph,
     test_data=None,  # Default value for test_data
@@ -263,9 +243,6 @@ def install_prereq(
             time.sleep(60)
             ceph.reconnect()
             time.sleep(10)
-
-            if cloud_type.lower() == "ibmc":
-                setup_ibmc_root_ssh_access(ceph)
 
         if skip_enabling_rhel_rpms and skip_subscription:
             # Ansible is required for RHCS 4.x
