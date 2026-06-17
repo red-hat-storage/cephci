@@ -40,7 +40,6 @@ tests:
                 release: "released"
                 mon-ip: node1
                 orphan-initial-daemons: true
-                skip-monitoring-stack: true
           - config:
               command: add_hosts
               service: host
