@@ -1714,7 +1714,64 @@ def start_kafka_broker(rgw_node):
     )
 
 
-def configure_kafka_security(rgw_node, cloud_type):
+CEPHADM_ROOT_CA_ANCHOR = "/etc/pki/ca-trust/source/anchors/cephadm-root-ca.crt"
+
+
+def get_cephadm_root_ca_cert(source_node):
+    """Fetch cephadm root CA certificate from the cluster."""
+    version_out, _ = source_node.exec_command(sudo=True, cmd="ceph version")
+    ceph_version = version_out.strip().split()[2].split("-")[0]
+    if ceph_version == "19.2.0":
+        cmd = "ceph orch cert-store get cert cephadm_root_ca_cert"
+    else:
+        cmd = "ceph orch certmgr cert get cephadm_root_ca_cert"
+    cert, _ = source_node.exec_command(sudo=True, cmd=cmd)
+    return cert
+
+
+def copy_remote_file(
+    src_node, dest_node, file_path, dest_path=None, sudo=True, binary=False
+):
+    """Copy a file between cluster nodes using key-based SSH."""
+    dest_path = dest_path or file_path
+    parent_dir = os.path.dirname(dest_path)
+    if parent_dir:
+        dest_node.exec_command(sudo=sudo, cmd=f"mkdir -p {parent_dir}")
+    if binary:
+        encoded, _ = src_node.exec_command(sudo=sudo, cmd=f"base64 -w0 {file_path}")
+        dest_node.exec_command(
+            sudo=sudo,
+            cmd=f"echo {encoded.strip()} | base64 -d > {dest_path}",
+        )
+    else:
+        contents, _ = src_node.exec_command(sudo=sudo, cmd=f"cat {file_path}")
+        dest_file = dest_node.remote_file(sudo=sudo, file_name=dest_path, file_mode="w")
+        dest_file.write(contents)
+        dest_file.flush()
+
+
+def _get_cluster_node_by_ip(cluster, ip_address):
+    for node in cluster.get_nodes():
+        if node.ip_address == ip_address:
+            return node
+    return None
+
+
+def distribute_cephadm_root_ca_cert(source_node, target_nodes, update_ca_trust=True):
+    """Distribute cephadm root CA certificate to target nodes."""
+    cert = get_cephadm_root_ca_cert(source_node)
+    for node in target_nodes:
+        node.exec_command(sudo=True, cmd="mkdir -p /etc/pki/ca-trust/source/anchors")
+        ca_file = node.remote_file(
+            sudo=True, file_name=CEPHADM_ROOT_CA_ANCHOR, file_mode="w"
+        )
+        ca_file.write(cert)
+        ca_file.flush()
+        if update_ca_trust:
+            node.exec_command(sudo=True, cmd="update-ca-trust")
+
+
+def configure_kafka_security(rgw_node, cloud_type, ceph_cluster=None):
     """Configure kafka security and restart zookeeper and kafka services."""
     setup_server_properties_security_configs(rgw_node, cloud_type)
     setup_keystore_certs(rgw_node, cloud_type)
@@ -1723,23 +1780,21 @@ def configure_kafka_security(rgw_node, cloud_type):
     add_kafka_config_for_user(rgw_node)
 
     # copy kafka ssl certificate to all rgw nodes to be used for authentication while pushing notification
-    rgw_node.exec_command(sudo=True, cmd="sudo yum install -y sshpass")
-    rgw_hosts_out, _ = rgw_node.exec_command(
-        sudo=True, cmd="ceph orch host ls --label rgw --format json"
-    )
-    log.info(rgw_hosts_out)
-    rgw_hosts_out_json = json.loads(rgw_hosts_out)
-    for rgw_host in rgw_hosts_out_json:
-        ip = rgw_host["addr"]
-        rgw_node.exec_command(
-            sudo=True,
-            cmd=f"sshpass -p 'passwd' ssh -o StrictHostKeyChecking=no root@{ip} 'mkdir -p /usr/local/kafka/'",
+    if ceph_cluster:
+        rgw_hosts_out, _ = rgw_node.exec_command(
+            sudo=True, cmd="ceph orch host ls --label rgw --format json"
         )
-        rgw_node.exec_command(
-            sudo=True,
-            cmd="sshpass -p 'passwd'"
-            + f" scp -o StrictHostKeyChecking=no /usr/local/kafka/y-ca.crt root@{ip}:/usr/local/kafka",
-        )
+        log.info(rgw_hosts_out)
+        for rgw_host in json.loads(rgw_hosts_out):
+            dest_node = _get_cluster_node_by_ip(ceph_cluster, rgw_host["addr"])
+            if not dest_node or dest_node.ip_address == rgw_node.ip_address:
+                continue
+            copy_remote_file(
+                rgw_node,
+                dest_node,
+                f"{KAFKA_HOME}/y-ca.crt",
+                f"{KAFKA_HOME}/y-ca.crt",
+            )
 
     # redeploy rgw service so that kafka certs are mounted to rgw container to be used for authentication
     redeploy_rgw_service_for_kafka_security(rgw_node)
@@ -1937,37 +1992,44 @@ def configure_kafka_cluster_with_security(ceph_cluster, cloud_type):
     broker_id = (
         1  # broker_id is by default 0, so from node2 onwards broker_id starts from 1
     )
-    rgw_node1.exec_command(sudo=True, cmd="sudo yum install -y sshpass")
     for rgw_node_obj in rgw_nodes:
         rgw_node = rgw_node_obj.node
         rgw_node_ip = rgw_node.ip_address
-        # copy configured server.properties and zookeeper.properties from rgw node1 to current rgw mode
-        rgw_node1.exec_command(
-            sudo=True,
-            cmd="sshpass -p 'passwd'"
-            + f" scp -o StrictHostKeyChecking=no {KAFKA_HOME}/config/zookeeper.properties"
-            + f" root@{rgw_node_ip}:{KAFKA_HOME}/config/zookeeper.properties",
+        if rgw_node_ip == rgw_node1_ip:
+            continue
+        # copy configured server.properties and zookeeper.properties from rgw node1 to current rgw node
+        copy_remote_file(
+            rgw_node1,
+            rgw_node,
+            f"{KAFKA_HOME}/config/zookeeper.properties",
         )
-        rgw_node1.exec_command(
-            sudo=True,
-            cmd="sshpass -p 'passwd'"
-            + f" scp -o StrictHostKeyChecking=no {KAFKA_HOME}/config/server.properties"
-            + f" root@{rgw_node_ip}:{KAFKA_HOME}/config/server.properties",
+        copy_remote_file(
+            rgw_node1,
+            rgw_node,
+            f"{KAFKA_HOME}/config/server.properties",
         )
 
         # copy keystore, truststore and certs used for kafka security to other rgw node
-        rgw_node1.exec_command(
-            sudo=True,
-            cmd="sshpass -p 'passwd'"
-            + f" scp -o StrictHostKeyChecking=no server.truststore.jks server.keystore.jks  root@{rgw_node_ip}:~/",
-        )
-        rgw_node1.exec_command(
-            sudo=True,
-            cmd="sshpass -p 'passwd'"
-            + f" scp -o StrictHostKeyChecking=no {KAFKA_HOME}/localhost.crt {KAFKA_HOME}/localhost.req"
-            + f" {KAFKA_HOME}/y-ca.crt  {KAFKA_HOME}/y-ca.key {KAFKA_HOME}/y-ca.srl"
-            + f" root@{rgw_node_ip}:/usr/local/kafka/",
-        )
+        for keystore_file in ("server.truststore.jks", "server.keystore.jks"):
+            copy_remote_file(
+                rgw_node1,
+                rgw_node,
+                keystore_file,
+                f"/root/{keystore_file}",
+                binary=True,
+            )
+        for cert_file in (
+            "localhost.crt",
+            "localhost.req",
+            "y-ca.crt",
+            "y-ca.key",
+            "y-ca.srl",
+        ):
+            copy_remote_file(
+                rgw_node1,
+                rgw_node,
+                f"{KAFKA_HOME}/{cert_file}",
+            )
         # overwrite broker_id from 0 to current broker_id
         rgw_node.exec_command(
             sudo=True,

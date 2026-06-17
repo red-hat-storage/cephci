@@ -250,8 +250,12 @@ def run(**kw):
     if install_start_kafka_broker_archive:
         install_start_kafka(archive_rgw_node, cloud_type)
     if configure_kafka_broker_security:
-        configure_kafka_security(primary_rgw_node, cloud_type)
-        configure_kafka_security(secondary_rgw_node, cloud_type)
+        configure_kafka_security(
+            primary_rgw_node, cloud_type, ceph_cluster=primary_cluster
+        )
+        configure_kafka_security(
+            secondary_rgw_node, cloud_type, ceph_cluster=secondary_cluster
+        )
 
     configure_kafka_cluster = config.get("configure_kafka_cluster_with_security")
     if configure_kafka_cluster:
