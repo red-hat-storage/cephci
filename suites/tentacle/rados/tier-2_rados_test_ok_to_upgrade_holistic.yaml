@@ -20,10 +20,9 @@ tests:
         args:
           rhcs-version: 8.1
           platform: rhel-9
-          release: rc
+          release: released
           mon-ip: node1
           orphan-initial-daemons: true
-          skip-dashboard: true
           ssh-user: cephuser
           # 6 racks × 2 chassis; each chassis has exactly one host (node1–node12)
           # NOTE: node13,14,15 and 16 are not used in test modules.
@@ -229,7 +228,7 @@ tests:
         nodes:                            # client node
           - node17:
               release: 8.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base

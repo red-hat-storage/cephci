@@ -20,10 +20,9 @@ tests:
         args:
           mon-ip: node1
           rhcs-version: 8.1
-          release: rc
+          release: released
           platform: rhel-9
           ssh-user: cephuser
-          skip-monitoring-stack: true
           apply-spec:
             - service_type: host
               address: true
@@ -160,7 +159,7 @@ tests:
         nodes:                                  # client node
           - node10:
               release: 8.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base

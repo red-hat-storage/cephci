@@ -20,9 +20,8 @@ tests:
         args:
           mon-ip: node1
           rhcs-version: 8.0
-          release: rc
+          release: released
           ssh-user: cephuser
-          skip-monitoring-stack: true
           apply-spec:
             - service_type: host
               address: true
@@ -159,7 +158,7 @@ tests:
         nodes:                                  # client node
           - node10:
               release: 8.0
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base
