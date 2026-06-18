@@ -19,6 +19,8 @@ includes:
     - Pool sanity checks should be successful
     - No inactive PGs on the pool
     - Write IO should succeed
+NOTE:- UNEVEN_WEIGHTS_STRETCH_MODE warning is updated to
+STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE in 9.1 https://github.com/ceph/ceph/pull/66580
 """
 
 import datetime
@@ -26,6 +28,8 @@ import json
 import random
 import time
 from collections import namedtuple
+
+from looseversion import LooseVersion
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
@@ -112,6 +116,11 @@ def run(ceph_cluster, **kw):
         ceph_health_status = list(status_report["health"]["checks"].keys())
         log.debug(f"Ceph report: \n\n {status_report} \n\n")
         expected_warn = "UNEVEN_WEIGHTS_STRETCH_MODE"
+        if LooseVersion(str(config.get("release"))) >= LooseVersion("9.1"):
+            # UNEVEN_WEIGHTS_STRETCH_MODE warning is updated to
+            # STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE in 9.1
+            # - https://github.com/ceph/ceph/pull/66580
+            expected_warn = "STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE"
         if expected_warn in ceph_health_status:
             log.info("warning  present on the cluster")
             log.info(f"Warnings generated on the cluster : {ceph_health_status}")

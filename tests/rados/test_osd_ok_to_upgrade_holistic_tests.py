@@ -4,6 +4,8 @@ import time
 from collections import defaultdict
 from typing import List, Optional, Tuple
 
+from looseversion import LooseVersion
+
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
@@ -67,9 +69,7 @@ def run(ceph_cluster, **kw):
     host_without_osd = config.get("host_without_osd", "node15")
     re_pool_name = "re_pool"
     # ceph version check
-    rhbuild = config.get("rhbuild")
-    version = rhbuild.split("-")[0]
-    if float(version) < 9.1:
+    if LooseVersion(str(config.get("release"))) < LooseVersion("9.1"):
         log.error(
             "This test module is a 9.1 feature. Skipping test in ceph versions less than 9.1."
         )
