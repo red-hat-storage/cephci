@@ -118,6 +118,17 @@ tests:
 
   # STS tests
 
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert
+      polarion-id: CEPH-10362
   - test:
       name: STS Tests to perform assume role on principle user and perform IOs
       desc: Perform assume role on principle user and perform IOs
