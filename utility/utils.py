@@ -2976,7 +2976,8 @@ def extract_version(text: str) -> str:
     for token in text.split():
         try:
             Version(token)
-            log.debug("Extracted version token: %s", token)
+            _msg = f"Extracted version token: {token}"
+            log.debug(_msg)
             return token
         except InvalidVersion:
             continue
