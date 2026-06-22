@@ -208,6 +208,7 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: true
         compression: true
         cleanup_pools: true
@@ -246,6 +247,7 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: true
         compression: false
         cleanup_pools: true
@@ -284,6 +286,7 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: true
         compression: false
         cleanup_pools: true
@@ -321,6 +324,7 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         compression: false
         cleanup_pools: true
         enable_debug_logs: true
@@ -359,6 +363,7 @@ tests:
         aggressive: false
         enable_crush_thrashing: false
         enable_pg_thrashing: false
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: false
         compression: false
         cleanup_pools: true
@@ -401,6 +406,7 @@ tests:
         enable_esb_verification: true
         enable_crush_thrashing: true
         enable_pg_thrashing: false
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: false
         compression: false
         cleanup_pools: true
