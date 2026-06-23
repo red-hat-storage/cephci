@@ -1,6 +1,5 @@
 # Suite is to be used to verify osd ok-to-upgrade feature
 # to be run in regression conf: conf/tentacle/rados/16-node-cluster-1-client.yaml
-
 tests:
   - test:
       name: setup install pre-requisistes
@@ -258,3 +257,111 @@ tests:
       config:
         scenarios:
           - scenario6
+
+  - test:
+      name: scenario 7 - ok-to-upgrade-rack-failure-domain-max100
+      desc: Rack failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario7
+
+  - test:
+      name: scenario 8 - ok-to-upgrade-chassis-failure-domain-max100
+      desc: Chassis failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario8
+
+  - test:
+      name: scenario 9 - ok-to-upgrade-host-failure-domain-max100
+      desc: Host failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario9
+
+  - test:
+      name: scenario 10 - ok-to-upgrade-osd-failure-domain-max100
+      desc: OSD failure domain with max=100 - ok-to-upgrade for osd, host, rack, chassis
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario10
+
+  - test:
+      name: ec pool - scenario 1 - ok-to-upgrade-rack-failure-domain
+      desc: ec pool - Rack failure domain - ok-to-upgrade for osd, host, rack, chassis buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario1
+        erasure_coded_pool: true
+        ec_k: 2
+        ec_m: 2
+
+  - test:
+      name: ec pool - scenario 2 - ok-to-upgrade-chassis-failure-domain
+      desc: ec pool - Chassis failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario2
+        erasure_coded_pool: true
+        ec_k: 2
+        ec_m: 2
+
+  - test:
+      name: ec pool - scenario 3 - ok-to-upgrade-host-failure-domain
+      desc: ec pool - Host failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario3
+        erasure_coded_pool: true
+        ec_k: 2
+        ec_m: 2
+
+  - test:
+      name: ec pool - scenario 4 - ok-to-upgrade-osd-failure-domain
+      desc: ec pool - OSD failure domain - ok-to-upgrade for rack, host, chassis, osd buckets
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632277
+      config:
+        scenarios:
+          - scenario4
+        erasure_coded_pool: true
+        ec_k: 2
+        ec_m: 2
+
+  - test:
+      name: ec pool - scenario 5 - ok-to-upgrade-all-osds-upgraded
+      desc: ec pool - All OSDs already upgraded - verify ok_to_upgrade=False, all_osds_upgraded=True
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario5
+        erasure_coded_pool: true
+        ec_k: 2
+        ec_m: 2
+
+  - test:
+      name: ec pool - scenario 6 - ok-to-upgrade-convergence-factor
+      desc: ec pool - Convergence factor - verify mgr log convergence for host bucket
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632278
+      config:
+        scenarios:
+          - scenario6
+        erasure_coded_pool: true
+        ec_k: 2
+        ec_m: 2

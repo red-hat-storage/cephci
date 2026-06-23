@@ -10,6 +10,7 @@ Parameters:
     max: (Optional) Maximum number of OSDs to select for upgrade.
 """
 
+import time
 from dataclasses import dataclass
 
 from ceph.ceph import CommandFailed
@@ -17,6 +18,10 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
+
+# Constants for retry logic
+MAX_RETRY_ATTEMPTS = 3
+RETRY_SLEEP_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -140,10 +145,41 @@ class OsdOkToUpgradeCommand:
             CommandFailed: If the command fails or returns stderr.
         """
         log.info("Executing: %s", self.command)
-        out, err = self.rados_obj.run_ceph_command(
-            cmd=self.command, print_output=True, client_exec=True, return_err=True
-        )
-        if ignore_errors is False and len(err) > 0:
+        out, err = None, None
+        last_exception = None
+
+        for i in range(MAX_RETRY_ATTEMPTS):
+            try:
+                out, err = self.rados_obj.run_ceph_command(
+                    cmd=self.command,
+                    print_output=True,
+                    client_exec=True,
+                    return_err=True,
+                )
+                log.info("Command executed successfully. out: %s", out)
+                break
+            except Exception as e:
+                last_exception = e
+                if ignore_errors is True:
+                    log.info("Ignoring the command execution errors: %s", str(e))
+                    break
+                log.error(
+                    f"Command execution failed (attempt {i+1}/{MAX_RETRY_ATTEMPTS}): {str(e)}"
+                )
+                if i <= MAX_RETRY_ATTEMPTS - 1:
+                    log.info(
+                        f"Sleeping for {RETRY_SLEEP_SECONDS} seconds before retry..."
+                    )
+                    time.sleep(RETRY_SLEEP_SECONDS)
+
+        # If all retries failed, raise the last exception
+        if out is None:
+            log.error("All retry attempts exhausted. Last error: %s", last_exception)
+            raise CommandFailed(
+                f"Command execution failed after {MAX_RETRY_ATTEMPTS} attempts. Last error: {last_exception}"
+            )
+
+        if ignore_errors is False and err and len(err) > 0:
             log.error("ok-to-upgrade command failed. err: %s", err)
             raise CommandFailed(f"Command execution failed. err: {err}")
 
