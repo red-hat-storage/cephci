@@ -517,6 +517,23 @@ tests:
         redeploy_cluster_min_tls12: false
 
   - test:
+      name: TLS negative invalid certificate scenarios
+      module: security.test_tls_feature.py
+      desc: >
+        Valid TLS mount and IO, then negative tests: corrupted Ganesha server certs
+        (mount must fail; capture mount error and systemctl status tlshd) and
+        corrupted client trust anchor (mount must fail; capture tlshd status).
+      abort-on-fail: false
+      polarion-id: CEPH-83629233
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        operation: tls_negative_invalid_certs
+        negative_cert_scenario: both
+        timeout: 1800
+
+  - test:
       name: TLS mount fio IO with tcpdump encryption verification
       module: security.test_tls_feature.py
       desc: >
