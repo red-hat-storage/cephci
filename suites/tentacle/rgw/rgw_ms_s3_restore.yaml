@@ -250,7 +250,7 @@ tests:
       desc: IBM cloud transition and permanent restore with retain_head=true, verify at remote site
       module: sanity_rgw_multisite.py
       name: IBM cloud transition restore retain_head true
-      polarion-id: CEPH-83581972 # CEPH-83575498 CEPH-83591622 CEPH-83591621
+      polarion-id: CEPH-83581972 # CEPH-83575498
 
   # Test 3: AWS cloud transition + permanent restore, versioned objects eu-north-1
   - test:
@@ -263,6 +263,33 @@ tests:
       desc: AWS cloud transition and permanent restore for versioned objects in eu-north-1
       module: sanity_rgw_multisite.py
       name: AWS cloud transition restore versioned objects
+
+  # Test 4: IBM cloud transition + restore with bug verification
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_cloud_transition_restore_object.yaml
+
+      desc: IBM cloud transition and restore with bug verification for multipart and ETag issues
+      module: sanity_rgw_multisite.py
+      name: IBM cloud transition restore with bug verification
+      polarion-id: CEPH-83591622 # CEPH-83591672 CEPH-83591621
+
+  # Test 5: AWS cloud transition + restore for multipart >50MB with bug verification
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_aws_cloud_transition_restore_multipart.yaml
+
+      desc: AWS cloud transition and restore for multipart objects >50MB with bug verification
+      module: sanity_rgw_multisite.py
+      name: AWS cloud transition restore multipart with bug verification
+
+  # Test 6: IBM cloud transition + restore with retain_head=false primary-only
   - test:
       clusters:
         ceph-pri:
@@ -274,3 +301,4 @@ tests:
       module: sanity_rgw_multisite.py
       name: IBM cloud transition restore retain_head false
       polarion-id: CEPH-83581973 # CEPH-83581975 CEPH-83581977
+
