@@ -18,7 +18,11 @@ def verify_group_mirroring_state(rbd, mirror_state, **group_kw):
     """
     if mirror_state == "Disabled":
         group_mirror_status, err = rbd.mirror.group.status(**group_kw)
-        if err and "mirroring not enabled on the group" in err:
+        known_messages = [
+            "mirroring disabled",
+            "mirroring not enabled on the group",
+        ]
+        if err and any(msg in err for msg in known_messages):
             return True
         return False
     if mirror_state == "Enabled":

@@ -14,7 +14,7 @@ tests:
       abort-on-fail: true
       config:
         args:
-          mon-ip: node1
+          mon-ip: node2
         command: bootstrap
         service: cephadm
       desc: "Bootstrap the cluster with minimal configuration."
@@ -59,7 +59,7 @@ tests:
                 - node7
             spec:
               ssl: true
-              rgw_frontend_ssl_certificate: create-cert
+              generate_cert: true
       desc: "Deploying RGW endpoint which is SSL terminated."
       destroy-cluster: false
       module: test_rgw.py
@@ -75,7 +75,7 @@ tests:
       desc: "Create and configure a volume with 2 MDS limit"
       destroy-cluster: false
       module: exec.py
-      name: "Create volume with"
+      name: Create volume with 2 MDS limit
 
   - test:
       abort-on-fail: true
@@ -90,7 +90,7 @@ tests:
       desc: Test deploying MDS daemons on hosts with label mds.
       destroy-cluster: false
       module: test_mds.py
-      name: Test OSD daemon deployment with all-available-devices enabled.
+      name: Deploy MDS
 
   - test:
       abort-on-fail: true

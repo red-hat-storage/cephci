@@ -47,6 +47,8 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
         # Remount the share on Client with selinux label
         cmd = f"umount -l {nfs_mount}"
@@ -58,19 +60,19 @@ def run(ceph_cluster, **kw):
         # Create the files on mount point
         for i in range(1, num_files + 1):
             cmd = f"touch {nfs_mount}/{filename}_{i}"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd)
 
         # Create the directories and file inside directories on mount point
         for i in range(1, num_dirs + 1):
             cmd = f"mkdir {nfs_mount}/{dirname}_{i}"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd)
             cmd = f"touch {nfs_mount}/{dirname}_{i}/dir{i}_{filename}"
-            clients[0].exec_command(cmd=cmd, sudo=True)
+            clients[0].exec_command(cmd=cmd)
 
         # Check the labels of the files on mount point. It should be same as mount point
         for i in range(1, num_files + 1):
             cmd = f"ls -Z {nfs_mount}/{filename}_{i}"
-            out = clients[0].exec_command(cmd=cmd, sudo=True)
+            out = clients[0].exec_command(cmd=cmd)
             if "nfs_t" in out[0]:
                 log.info(
                     f"selinux lable is set correctly for file {filename}_{i} :  {out[0]}"
@@ -83,7 +85,7 @@ def run(ceph_cluster, **kw):
         # Check the labels of the files created inside directories. It should be same as mount point
         for i in range(1, num_dirs + 1):
             cmd = f"ls -Z {nfs_mount}/{dirname}_{i}/dir{i}_{filename}"
-            out = clients[0].exec_command(cmd=cmd, sudo=True)
+            out = clients[0].exec_command(cmd=cmd)
             if "nfs_t" in out[0]:
                 log.info(
                     f"selinux lable is set correctly for the file dir{i}_{filename} :  {out[0]}"

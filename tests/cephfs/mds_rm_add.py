@@ -39,6 +39,14 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
             else:
                 log.error("Unexpected error during smallfile IO")
                 raise CommandFailed
+        except Exception as ex1:
+            if "threads reached starting gate within" in str(ex1):
+                log.warning(
+                    "Smallfile IO failed with error may be due to daemon restarts - %s",
+                    ex1,
+                )
+            else:
+                log.error("Unexpected error during smallfile IO - %s", ex1)
         iter = iter + 1
 
 

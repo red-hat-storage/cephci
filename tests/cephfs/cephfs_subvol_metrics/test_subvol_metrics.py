@@ -105,7 +105,8 @@ def run(ceph_cluster, **kw):
             rw=rw,
             rwmixread=rwmixread,
         )
-
+        # wait for quota changes and io to start
+        time.sleep(10)
         # Collect expected values (quota_bytes and used_bytes) in parallel with metrics collection
         expected_values_snapshots: List[Dict[str, Any]] = []
         expected_values_lock = threading.Lock()

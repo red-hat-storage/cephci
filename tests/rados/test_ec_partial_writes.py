@@ -256,8 +256,22 @@ def run(ceph_cluster, **kw):
             expected_stripe_width,
             expected_stripe_width // 1024,
         )
+        pool_has_ec_optimizations = "ec_optimizations" in pool_ec_overwrites
         log.info("  Flags           : %s", pool_ec_overwrites)
+        log.info(
+            "  ec_optimizations: %s",
+            "PRESENT" if pool_has_ec_optimizations else "MISSING",
+        )
         log.info("-" * 70)
+
+        if not pool_has_ec_optimizations:
+            log.error(
+                "ec_optimizations flag is MISSING from pool flags for %s. "
+                "Flags: %s. Fast EC is not enabled on this pool.",
+                ec_pool_name,
+                pool_ec_overwrites,
+            )
+            return 1
 
         # Verify stripe_width matches expected
         if pool_stripe_width != expected_stripe_width:
@@ -272,6 +286,25 @@ def run(ceph_cluster, **kw):
         log.info(
             "EC pool verification passed - stripe_width correctly set to %sKB",
             pool_stripe_width // 1024,
+        )
+
+        # Verify allow_ec_optimizations pool property
+        ec_opt_dict = rados_obj.get_pool_property(
+            pool=ec_pool_name, props="allow_ec_optimizations"
+        )
+        ec_opt_value = ec_opt_dict.get("allow_ec_optimizations")
+        log.info("Pool %s - allow_ec_optimizations: %s", ec_pool_name, ec_opt_value)
+        if ec_opt_value is not True:
+            log.error(
+                "allow_ec_optimizations is not True for pool %s. "
+                "Fast EC was not enabled by default on pool creation.",
+                ec_pool_name,
+            )
+            return 1
+        log.info(
+            "EC pool Fast EC verification passed - "
+            "allow_ec_optimizations is True for %s",
+            ec_pool_name,
         )
 
         log.debug("Create replicated metadata pool for Metadata purposes")

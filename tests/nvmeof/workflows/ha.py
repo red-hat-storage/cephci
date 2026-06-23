@@ -534,7 +534,7 @@ class HighAvailability:
         except Exception as e:
             LOG.error(f"Failed to parse FIO output: {e}")
 
-    def run(self, FEWR_NAMESPACES=False):
+    def run(self, FEWR_NAMESPACES=False, iodepth=16):
         """Execute the HA failover and failback with IO validation."""
         fail_methods = self.config["fault-injection-methods"]
         initiators = self.config["initiators"]
@@ -630,7 +630,9 @@ class HighAvailability:
                         LOG.info("Starting IO Execution")
                         for initiator in self.clients:
                             io_tasks.append(
-                                executor.submit(initiator.start_fio, "100%", iodepth=16)
+                                executor.submit(
+                                    initiator.start_fio, "100%", iodepth=iodepth
+                                )
                             )
                         time.sleep(20)  # time sleep for IO to Kick-in
 
@@ -721,7 +723,7 @@ class HighAvailability:
                             for initiator in self.clients:
                                 io_tasks.append(
                                     executor.submit(
-                                        initiator.start_fio, "100%", iodepth=16
+                                        initiator.start_fio, "100%", iodepth=iodepth
                                     )
                                 )
                             time.sleep(20)  # time sleep for IO to Kick-in

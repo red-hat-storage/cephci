@@ -124,6 +124,24 @@ def get_cloud_credentials(cloud):
 
             msg += _authurl
 
+        # Get onecloud configs
+        elif cloud == "onecloud":
+            _dict["api_key"] = _server["api_key"]
+            _dict["base_url"] = _server["base_url"]
+            _dict["site"] = _server.get("site", "POK")
+            _dict["project_id"] = _server.get("project_id")
+            _dict["group_id"] = _server.get("group_id", 1)
+            _dict["default_vlan"] = _server.get("default_vlan", 2231)
+            _dict["default_image_id"] = _server.get("default_image_id")
+            _dict["default_resources"] = _server.get("default_resources", "small")
+            _dict["default_arch"] = _server.get("default_arch", "x86_64")
+            _dict["private_key_path"] = _server.get("private_key_path")
+            _dict["bootstrap_key_path"] = _server.get("bootstrap_key_path")
+            _dict["bootstrap_key_password"] = _server.get("bootstrap_key_password", "")
+            _dict["ssh_user"] = _server.get("ssh_user", "onecloud-user")
+
+            msg += _dict.get("base_url", "onecloud")
+
         # Set common configs
         _dict["username"] = _server.get("username")
         _dict["password"] = _server.get("password")

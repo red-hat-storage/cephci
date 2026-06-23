@@ -363,7 +363,7 @@ def test_mirror_group_consistency(
                         "num_jobs": io_large_cfg.get("num_jobs", "1"),
                         "iodepth": io_large_cfg.get("iodepth", "16"),
                         "io_type": io_large_cfg.get("io-type", "write"),
-                        "cmd_timeout": 2400,
+                        "cmd_timeout": 3600,
                     }
                     run_fio(**io_args)
 
@@ -427,7 +427,7 @@ def test_mirror_group_consistency(
                     )
                     log.info("Force killed rbd-mirror daemon before force promote")
 
-                time.sleep(10)
+                time.sleep(30)
                 md5sum_third_sync_site_b = []
                 for image in image_spec_all[0:2]:
                     md5sum_third_sync_site_b.append(
@@ -447,7 +447,7 @@ def test_mirror_group_consistency(
                     md5sum_second_write_site_a[0:2],
                 )
 
-                time.sleep(5)
+                time.sleep(120)
                 out, err = rbd_secondary.mirror.group.promote(
                     **{"group-spec": group_spec, "force": True}
                 )

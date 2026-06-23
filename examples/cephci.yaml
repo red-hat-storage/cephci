@@ -60,6 +60,16 @@ credentials:
       auth-url: <fake-authurl>
       ssh_key: <fake-ssh-key-path>
 
+    onecloud:
+      api_key: <JWT_TOKEN>
+      base_url: https://portal.onecloud.wdc.app.cirrus.ibm.com/api/v3
+      site: POK
+      ssh_user: onecloud-user
+      bootstrap_key_path: ~/.ssh/id_ecdsa_ciso
+      bootstrap_key_password: <passphrase>
+      private_key_path: ~/.ssh/id_ed25519_onecloud
+      # verify_ssl: false
+
   vault:
     url: <fake-url>
     agent:

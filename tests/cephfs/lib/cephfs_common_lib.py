@@ -51,6 +51,7 @@ class CephFSCommonUtils(FsUtils):
             "experiencing slow operations in BlueStore",
             "Slow OSD heartbeats",
             "stray daemon(s) not managed by cephadm",
+            "CALL_HOME_ENABLED_AUTOMATICALLY",
         ]
         non_accepted_list = ["OSD_DOWN", "OSD_HOST_DOWN"]
         while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
@@ -512,7 +513,6 @@ class CephFSCommonUtils(FsUtils):
         op_type,
         subvol,
         enc_tag="cephfs_enctag",
-        add_suffix=True,
         validate=True,
         **kwargs,
     ):
@@ -528,18 +528,18 @@ class CephFSCommonUtils(FsUtils):
 
         Returns: Upon sucess - 0 for op_type set/rm, enc_tag string if op_type is get,1 upon failure
         """
-        rand_str = "".join(
-            random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(4))
-        )
 
+        enc_tag = kwargs.get(enc_tag, enc_tag)
+        if enc_tag == "cephfs_enctag":
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(4))
+            )
+            enc_tag = f"cephfs_enctag_{rand_str}"
         cmd = f"ceph fs subvolume enctag {op_type} {kwargs['fs_name']} {subvol}"
         if kwargs.get("group_name"):
             cmd += f" --group_name {kwargs['group_name']}"
         if op_type == "set":
-            enc_tag = kwargs.get(enc_tag, enc_tag)
-            if kwargs.get(add_suffix, add_suffix):
-                enc_tag = f"{enc_tag}_{rand_str}"
             cmd += f" --enctag {enc_tag}"
         out, _ = client.exec_command(
             sudo=True,
@@ -690,3 +690,58 @@ class CephFSCommonUtils(FsUtils):
             raise CommandFailed(
                 "Failed to identify subscription status \n error: {0}".format(e)
             )
+
+    def cleanup_cephfs(self, clients):
+        """
+        This method will cleanup the cephfs resources
+        Args:
+            clients: List of client nodes
+        Returns:
+            0 on success, 1 on failure
+        """
+        log.info("Unmount Ceph-related mounts on all client nodes")
+        for client in clients:
+            log.info(
+                "Checking and unmounting Ceph-related mounts on %s",
+                client.node.hostname,
+            )
+            mount_types = {
+                "ceph-fuse": "grep -E 'fuse\\.ceph-fuse|fuse\\.ceph' || true",
+                "kernel-ceph": "grep ' type ceph ' || true",
+                "nfs": "grep -E ' type nfs| type nfs4' || true",
+            }
+            for label, grep_cmd in mount_types.items():
+                try:
+                    out, _ = client.exec_command(
+                        sudo=True, cmd=f"mount | {grep_cmd}", check_ec=False
+                    )
+                    mount_points = [
+                        line.split()[2] for line in out.splitlines() if line.strip()
+                    ]
+                    for mp in mount_points:
+                        log.info("Unmounting %s mount: %s", label, mp)
+                        client.exec_command(
+                            sudo=True, cmd=f"umount -f {mp}", check_ec=False
+                        )
+                except Exception as ex:
+                    log.warning(
+                        "Error while processing %s mounts on %s: %s",
+                        label,
+                        client.node.hostname,
+                        ex,
+                    )
+
+        log.info("Remove existing CephFS volumes")
+        try:
+            out, _ = clients[0].exec_command(
+                sudo=True, cmd="ceph fs ls --format json", check_ec=False
+            )
+            for fs_entry in json.loads(out or "[]"):
+                vol = fs_entry["name"]
+                log.info("Removing filesystem volume: %s", vol)
+                self.remove_fs(clients[0], vol, validate=False, check_ec=False)
+            time.sleep(5)
+        except Exception as ex:
+            log.warning("Filesystem volume cleanup skipped or partial: %s", ex)
+            return 1
+        return 0

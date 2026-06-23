@@ -2,6 +2,8 @@
 NVMe Service, Gateway Group, and Gateway classes for NVMeoF workflows.
 """
 
+import json
+
 from looseversion import LooseVersion
 
 from ceph.ceph_admin.orch import Orch
@@ -76,13 +78,7 @@ class NVMeService:
         """Delete the NVMe gateway service."""
         ceph_cluster = self.ceph_cluster
 
-        gw_group = self.group
-        pool = self.nvme_metadata_pool
-        if pool == DEFAULT_NVME_METADATA_POOL:
-            service_name = f"nvmeof{pool}"
-        else:
-            service_name = f"nvmeof.{pool}"
-        service_name = f"{service_name}.{gw_group}" if gw_group else service_name
+        service_name = self.service_name
         cfg = {
             "no_cluster_state": False,
             "config": {
@@ -218,6 +214,37 @@ class NVMeService:
         deploy_config = self._create_spec_deployment_config()
         if deploy_config:
             test_nvmeof.run(self.ceph_cluster, **deploy_config)
+
+        # Once the service is deployed, get the service name and service id and store it
+        ceph = Orch(self.ceph_cluster, **{})
+        cmd = "ceph orch ls nvmeof --format json"
+        out, _ = ceph.shell(args=[cmd])
+        services = json.loads(out)
+        self.service_name = None
+        self.service_id = None
+        for service in services:
+            # If we have multiple services in single cluster then we need to filter the service by group
+            # so that we will get the correct service name and service id for the group.
+            # when we take services[0]["service_name"] only first service name will be returned
+            # so we need to filter the service by group.
+            if "nvmeof" in service["service_name"]:
+                if self.group:
+                    if self.group in service["service_name"]:
+                        service_name = service["service_name"]
+                        service_id = service["service_id"]
+                        LOG.info(
+                            f"Service name: {service_name}, Service id: {service_id}"
+                        )
+                        self.service_name = service_name
+                        self.service_id = service_id
+                        break
+                else:
+                    service_name = service["service_name"]
+                    service_id = service["service_id"]
+                    LOG.info(f"Service name: {service_name}, Service id: {service_id}")
+                    self.service_name = service_name
+                    self.service_id = service_id
+                    break
 
     def init_gateways(self):
         """

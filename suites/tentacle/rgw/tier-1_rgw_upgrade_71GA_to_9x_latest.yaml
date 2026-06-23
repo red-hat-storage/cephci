@@ -23,6 +23,8 @@ tests:
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
           - config:
               command: add_hosts
               service: host
@@ -154,7 +156,9 @@ tests:
         run-on-rgw: true
         extra-pkgs:
           - jdk
+        git_clone_configs_repo: true
         install_start_kafka: true
+        configure_kafka_security: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent_multipart.yaml
 
@@ -229,7 +233,6 @@ tests:
       polarion-id: CEPH-83575407
       config:
         run-on-rgw: true
-        configure_kafka_security: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent.yaml
 

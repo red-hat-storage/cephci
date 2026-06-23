@@ -433,7 +433,7 @@ tests:
             cephadm: true
             commands:
               - radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --master
-              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin period update --rgw-realm india --commit --yes-i-really-mean-it"
               - "ceph orch restart {service_name:shared.sec.io}"
               - "ceph orch restart {service_name:shared.sec.sync}"
         ceph-pri:

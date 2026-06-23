@@ -134,7 +134,7 @@ tests:
   - test:
       name: Repeated MDS restarts
       module: cephfs_multi_mds.test_cephfs_multimds_repeated_restart_mds.py
-      polarion-id:
+      polarion-id: CEPH-83604080
       desc: Repeated MDS restarts
       abort-on-fail: false
       config:

@@ -295,7 +295,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         nvmegwcli = nvme_service.gateways[0]
 
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+            configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
         if config.get("initiators"):
             for i in config["initiators"]:

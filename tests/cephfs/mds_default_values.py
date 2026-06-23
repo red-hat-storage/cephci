@@ -1,3 +1,6 @@
+import json
+import re
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -41,7 +44,54 @@ def run(ceph_cluster, **kw):
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
-            return 1
+            out, _ = client1.exec_command(sudo=True, cmd="ceph health detail")
+            mon_match = re.search(r"(mon\.\S+)\s+has slow ops", out)
+            if not mon_match:
+                return 1
+
+            mon_daemon = mon_match.group(1)
+            log.warning("Mon slow ops detected on %s", mon_daemon)
+
+            orch_out, _ = client1.exec_command(
+                sudo=True,
+                cmd="ceph orch ps --daemon_type mon --format json",
+            )
+            mon_daemons = json.loads(orch_out)
+            mon_host = None
+            for daemon_info in mon_daemons:
+                if daemon_info.get("daemon_name") == mon_daemon:
+                    mon_host = daemon_info["hostname"]
+                    break
+
+            if mon_host:
+                mon_node = ceph_cluster.get_node_by_hostname(mon_host)
+                if mon_node:
+                    log.info(
+                        "Collecting debug ops from %s on host %s",
+                        mon_daemon,
+                        mon_host,
+                    )
+                    debug_out, _ = mon_node.exec_command(
+                        sudo=True,
+                        cmd=f"cephadm shell -- ceph daemon {mon_daemon} ops",
+                    )
+                    log.info("Debug ops output for %s:\n%s", mon_daemon, debug_out)
+
+            # Workaround for BZ IBMCEPH-13663: restart affected mon on 7.1 builds
+            if not build.startswith("7.1"):
+                return 1
+            log.info("Applying workaround for IBMCEPH-13663: restarting %s", mon_daemon)
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph orch daemon restart {mon_daemon}",
+            )
+            time.sleep(30)
+            if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+                log.error(
+                    "Cluster health is not OK even after restarting %s", mon_daemon
+                )
+                return 1
+            log.info("Cluster is healthy after mon restart workaround")
 
         for host in host_list:
             if not fs_util.wait_for_mds_deamon(

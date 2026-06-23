@@ -202,13 +202,21 @@ tests:
         install_packages:
           - ceph-common
           - rbd-nbd
-          - fio
         copy_admin_keyring: true          # Copy admin keyring to node
         caps:                             # authorize client capabilities
           mon: "allow *"
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+
+  - test:
+      desc: Install fio
+      module: exec.py
+      name: Install FIO
+      config:
+        sudo: true
+        commands:
+          - "dnf install fio -y"
 
   - test:
       name: Enable logging to file
@@ -232,6 +240,16 @@ tests:
                 - mon
                 - mon_osd_down_out_subtree_limit
                 - host
+
+  # Test: Stripe unit and Fast EC default verification
+  - test:
+      name: Stripe unit and Fast EC default verification
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83632256
+      abort-on-fail: false
+      config:
+        test_stripe_unit_pool_creation: true
+      desc: Verify stripe_unit and Fast EC defaults for various EC configurations
 
   # ==========================================================================
   # ISA Plugin Tests (Default plugin from Tentacle onwards)

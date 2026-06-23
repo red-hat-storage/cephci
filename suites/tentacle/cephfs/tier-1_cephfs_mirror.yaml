@@ -292,7 +292,6 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_multithreaded_empty_dataq_hang.py
       name: empty data queue on source cluster.
       polarion-id: "CEPH-83632392"
-      comments:  Yet to file issue
 
   - test:
       abort-on-fail: false
@@ -304,4 +303,23 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_incremental_sync.py
       name: Test incremental snapshot synchronization
       polarion-id: "CEPH-83632393"
-      comments:  Upstream tracker 74984
+  - test:
+      abort-on-fail: false
+      desc: "Validate cephfs-mirror daemon status shows correct fsid and mon list"
+      clusters:
+        ceph1:
+          config:
+            name: Validate daemon status fsid and mon list for cross-cluster and intra-cluster peers
+      module: cephfs_mirroring.test_cephfs_mirroring_daemon_status_validate_fsid_monlist.py
+      name: Validate daemon status fsid and mon list for cross-cluster and intra-cluster peers
+      polarion-id: "CEPH-83632391"
+  - test:
+      abort-on-fail: false
+      desc: "Validate peer removal and re-addition via bootstrap_import resumes sync"
+      clusters:
+        ceph1:
+          config:
+            name: Validate peer remove and re-add via bootstrap_import
+      module: cephfs_mirroring.test_cephfs_mirroring_peer_remove_and_readd.py
+      name: Validate peer remove and re-add via bootstrap_import
+      polarion-id: "CEPH-83632394"

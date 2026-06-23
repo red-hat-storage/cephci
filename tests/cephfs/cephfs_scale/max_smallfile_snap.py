@@ -135,12 +135,8 @@ def run(ceph_cluster, **kw):
             try:
                 clients[0].exec_command(
                     sudo=True,
-                    cmd=f"mkdir -p {kernel_mounting_dir_1}/{snapshot['snap_name']}",
-                )
-
-                clients[0].exec_command(
-                    sudo=True,
-                    cmd=f"dd if=/dev/zero of={kernel_mounting_dir_1}/{snapshot['snap_name']}/file.txt "
+                    cmd=f"mkdir -p {kernel_mounting_dir_1}/{snapshot['snap_name']} && "
+                    f"dd if=/dev/zero of={kernel_mounting_dir_1}/{snapshot['snap_name']}/file.txt "
                     f"bs=1M count={count_size}",
                     long_running=True,
                 )

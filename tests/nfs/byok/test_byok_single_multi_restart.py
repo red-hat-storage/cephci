@@ -7,6 +7,7 @@ from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
     create_multiple_nfs_instance_for_byok,
     create_nfs_instance_for_byok,
+    ensure_fresh_gklm_kmip_client,
     get_enctag,
     load_gklm_config,
     perform_io_operations_and_validate_fuse,
@@ -21,7 +22,7 @@ from tests.nfs.nfs_operations import (
 from tests.nfs.test_nfs_io_operations_during_upgrade import (
     create_export_and_mount_for_existing_nfs_cluster,
 )
-from utility.gklm_client.gklm_client import GklmClient
+from utility.gklm_client.gklm_client import build_gklm_client
 from utility.log import Log
 from utility.utils import get_cephci_config
 
@@ -205,7 +206,6 @@ def run(ceph_cluster, **kw):
     gklm_params = load_gklm_config(custom_data, config, cephci_data)
     gklm_ip = gklm_params["gklm_ip"]
     gklm_user = gklm_params["gklm_user"]
-    gklm_password = gklm_params["gklm_password"]
     gklm_hostname = gklm_params["gklm_hostname"]
 
     gkml_client_name = "automation"
@@ -222,24 +222,88 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Step 2: Initializing GKLM REST client")
-        gklm_rest_client = GklmClient(
-            ip=gklm_ip, user=gklm_user, password=gklm_password, verify=False
+        gklm_rest_client = build_gklm_client(gklm_params, verify=False)
+
+        log.info(
+            "Step 2b: Remove any existing GKLM KMIP client %r (and legacy cert2), "
+            "then create a new empty client",
+            gkml_client_name,
+        )
+        ensure_fresh_gklm_kmip_client(
+            gklm_rest_client,
+            gkml_client_name,
+            legacy_cert_aliases=("cert2",),
         )
 
         log.info("Step 3: generating certificates and keys, and CA_cert from GKLM")
-        if gklm_hostname not in [
-            x.get("alias") for x in gklm_rest_client.certificates.list_certificates()
-        ]:
-            log.info(f"Not Found CA cert alias {gklm_cert_alias}, creating ")
+        # GKLM 5.x lists TLS system certs under GET /system/certificates, not GET /certificates.
+        sys_cert_details = None
+        for entry in gklm_rest_client.certificates.list_system_certificates():
+            a = (
+                entry.get("alias")
+                or entry.get("Alias")
+                or entry.get("certAlias")
+                or entry.get("name")
+            )
+            if a and str(a) == gklm_hostname:
+                sys_cert_details = entry
+                break
+
+        legacy_cert_details = None
+        if not sys_cert_details:
+            for entry in gklm_rest_client.certificates.list_certificates():
+                a = (
+                    entry.get("alias")
+                    or entry.get("Alias")
+                    or entry.get("certAlias")
+                    or entry.get("name")
+                )
+                if a and str(a) == gklm_hostname:
+                    legacy_cert_details = entry
+                    break
+
+        needs_restart = False
+
+        if not sys_cert_details and not legacy_cert_details:
+            log.info(
+                "No system certificate with alias %s; creating self-signed system cert",
+                gklm_hostname,
+            )
             gklm_rest_client.certificates.create_system_certificate(
                 {
                     "type": "Self-signed",
                     "alias": gklm_hostname,
+                    "cn": gklm_hostname,
                     "validity": "3650",
                     "algorithm": "RSA",
                     "usageSubtype": "KEYSERVING_TLS",
                 }
             )
+            needs_restart = True
+        else:
+            cert_to_check = sys_cert_details or legacy_cert_details
+            usage = str(cert_to_check.get("usage", "")) + str(
+                cert_to_check.get("usageSubtype", "")
+            )
+
+            if "KEYSERVING" not in usage.upper():
+                log.info(
+                    "System certificate %s exists but is not KEYSERVING. Updating to add KEYSERVING_TLS.",
+                    gklm_hostname,
+                )
+                gklm_rest_client.certificates.update_system_certificate(
+                    alias=gklm_hostname,
+                    add_usage_subtype="KEYSERVING_TLS",
+                )
+                needs_restart = True
+            else:
+                log.info(
+                    "System certificate %s exists and is already KEYSERVING. No restart needed.",
+                    gklm_hostname,
+                )
+
+        if needs_restart:
+            log.info("Restarting GKLM server to apply system certificate changes.")
             gklm_rest_client.server.restart_server()
             wait_for_gklm_server_restart(
                 gklm_rest_client=gklm_rest_client,
@@ -351,7 +415,13 @@ def run(ceph_cluster, **kw):
                 rsa_key=rsa_key,
                 ca_cert=ca_cert,
                 kmip_host_list=gklm_hostname,
+                cluster_nodes=ceph_cluster.get_nodes(),
             )
+            if not isinstance(multiclusters_dict, list):
+                raise OperationFailedError(
+                    "BYOK multi-cluster NFS creation failed; expected a spec list from "
+                    "create_multiple_nfs_instance_for_byok."
+                )
 
             nfs_exports = [
                 f"{nfs_export}_{x['service_id']}" for x in multiclusters_dict
@@ -404,10 +474,15 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
         if config.get("check_sighup", False):
-            all_certs = [
-                x.get("alias", None)
-                for x in gklm_rest_client.certificates.list_certificates()
-            ]
+            all_certs = []
+            for x in gklm_rest_client.certificates.list_system_certificates():
+                a = x.get("alias") or x.get("Alias")
+                if a:
+                    all_certs.append(a)
+            for x in gklm_rest_client.certificates.list_certificates():
+                a = x.get("alias") or x.get("Alias")
+                if a:
+                    all_certs.append(a)
             if "certsighup" in all_certs:
                 gklm_cert_alias = "certsighup"
 

@@ -4,11 +4,13 @@
 
 approvers:
   - Manimaran-MM
+  - neha-gangadhar
 
 reviewers:
-  - neha-gangadhar
-  - sumabai
+  - aravindrrh
   - hkadam134
+  - kdhaduk81
+  - sumabai
 
 labels:
   - Ceph-FS

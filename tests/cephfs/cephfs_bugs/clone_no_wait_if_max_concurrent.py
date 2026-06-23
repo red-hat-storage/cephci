@@ -353,6 +353,13 @@ def run(ceph_cluster, **kw):
     2. ceph fs subvolume rm <vol_name> <subvol_name> [--group_name <subvol_group_name>]
     3. ceph fs subvolumegroup rm <vol_name> <group_name>
     """
+    setup_params = None
+    mnt_list = None
+    snap_list = []
+    sv_list = []
+    rmclone_list = []
+    default_fs = None
+    test_status = 0
     try:
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
@@ -474,21 +481,24 @@ def run(ceph_cluster, **kw):
 
         log.info("Clean Up in progess")
 
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph nfs cluster delete {setup_params['nfs_name']}",
-            check_ec=False,
-        )
+        if setup_params:
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs cluster delete {setup_params['nfs_name']}",
+                check_ec=False,
+            )
         for sv_snap in snap_list:
             fs_util.remove_snapshot(client1, **sv_snap, validate=False, check_ec=False)
         for sv in sv_list:
             fs_util.remove_subvolume(client1, **sv, validate=False, check_ec=False)
-        fs_util.remove_subvolumegroup(
-            client1, default_fs, "subvolgroup_1", validate=True
-        )
+        if default_fs:
+            fs_util.remove_subvolumegroup(
+                client1, default_fs, "subvolgroup_1", validate=True
+            )
         if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
             test_fail = 1
-        fs_util.remove_fs(client1, default_fs)
+        if default_fs:
+            fs_util.remove_fs(client1, default_fs)
         if test_fail == 1:
             log.error(
                 "Cluster health is not OK even after waiting for %s secs ",

@@ -19,9 +19,9 @@ tests:
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 7.1
-                    release: rc
+                    release: released
                     orphan-initial-daemons: true
-                    skip-monitoring-stack: true
+                    skip-monitoring-stack: false
               - config:
                   command: add_hosts
                   service: host
@@ -247,7 +247,7 @@ tests:
             polarion-id: CEPH-83575315
         - test:
             name: Upgrade ceph
-            desc: Upgrade cluster to latest version 9.0
+            desc: Upgrade cluster to latest version
             module: cephadm.test_cephadm_upgrade.py
             polarion-id: CEPH-83574638
             clusters:
@@ -257,9 +257,6 @@ tests:
                   service: upgrade
                   base_cmd_args:
                     verbose: true
-                  args:
-                    rhcs-version: 9.0
-                    release: latest
                   benchmark:
                     type: rados
                     pool_per_client: true

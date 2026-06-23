@@ -14,23 +14,60 @@ class Mount(Cli):
         super(Mount, self).__init__(nodes)
         self.base_cmd = "mount"
 
-    def nfs(self, mount, version, port, server, export):
-        """
-        Perform nfs mount
+    def _ensure_nfs_utils(self):
+        """Check if nfs-utils is installed on the client and install it if missing."""
+        out = self.execute(cmd="rpm -qa nfs-utils", sudo=True)
+        if isinstance(out, tuple):
+            out = out[0]
+        if not out.strip():
+            self.execute(cmd="dnf install -y nfs-utils", sudo=True, timeout=600)
+
+    def nfs(self, mount, version, port, server, export, **kwargs):
+        """Perform an NFS mount on the client node.
+
+        Installs nfs-utils if missing, creates the mount directory,
+        and runs ``mount -t nfs`` with the assembled option string.
+
+        The resulting command looks like::
+
+            mount -t nfs -o vers=<version>,port=<port>[,proto=<proto>]
+                [,xprtsec=<xprtsec>] <server>:<export> <mount>
+
         Args:
-            mount (str): nfs mount path
-            version (str): Nfs version (4.0, 4.1, 4.2 etc)
-            port (str): nfs port to bind
-            server (str): Nfs server hostname
-            export (str): nfs export path)
+            mount (str): Local mount-point path.
+            version (str): NFS version string (e.g. "3", "4.0",
+                "4.1", "4.2").
+            port (str): NFS port to connect to.  When using RDMA
+                this should be the RDMA listener port.
+            server (str): NFS server hostname or IP address.
+            export (str): NFS export pseudo-path.
+
+        Keyword Args:
+            proto (str): Transport protocol option appended to
+                ``-o``.  Pass ``"rdma"`` for NFS-over-RDMA mounts.
+            xprtsec (str): Transport-security option (e.g. ``"tls"``
+                for RPC-with-TLS).
+
+        Raises:
+            MountFailedError: If the mount point does not appear in
+                the ``mount`` table after the command completes.
         """
+        self._ensure_nfs_utils()
+
         # Check if mount dir is present, else create
         out = self.execute(cmd=f"ls {mount}", sudo=True)
         if not out[0]:
             self.execute(cmd=f"mkdir {mount}", sudo=True)
 
-        # Create the mount point
-        cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port} {server}:{export} {mount}"
+        cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port}"
+        proto = kwargs.get("proto")
+        if proto:
+            cmd += f",proto={proto}"
+        xprtsec = kwargs.get("xprtsec")
+        if xprtsec:
+            cmd += f",xprtsec={xprtsec}"
+        cmd += f" {server}:{export} {mount}"
+
         self.execute(sudo=True, long_running=True, cmd=cmd)
 
         out = self.execute(sudo=True, cmd="mount")

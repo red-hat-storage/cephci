@@ -209,12 +209,18 @@ def test_group_mirroring(
             # Get Group Mirroring Status
             group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
-                if "mirroring not enabled on the group" in err:
+                # 8.x and 9.x has different mirror status output
+                known_messages = [
+                    "mirroring disabled",
+                    "mirroring not enabled on the group",
+                ]
+                if any(msg in err for msg in known_messages):
                     mirror_state = "Disabled"
                 else:
                     raise Exception("Getting group mirror status failed : " + str(err))
             else:
                 mirror_state = "Enabled"
+
             log.info(
                 "Group "
                 + group_config["group-spec"]
@@ -430,7 +436,12 @@ def test_group_renaming_with_mirroring(
             # Get Group Mirroring Status
             group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
             if err:
-                if "mirroring not enabled on the group" in err:
+                # 8.x and 9.x has different mirror status output
+                known_messages = [
+                    "mirroring disabled",
+                    "mirroring not enabled on the group",
+                ]
+                if any(msg in err for msg in known_messages):
                     mirror_state = "Disabled"
                 else:
                     raise Exception("Getting group mirror status failed : " + str(err))

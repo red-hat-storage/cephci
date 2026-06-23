@@ -38,7 +38,7 @@ Utility to provision cluster on cloud
 
     Options:
         -h --help               Help
-        --cloud-type <CLOUD>    Cloud type [openstack|ibmc|baremetal]
+        --cloud-type <CLOUD>    Cloud type [openstack|ibmc|baremetal|onecloud]
         --global-conf <YAML>    Global config file with node details
         --platform <STR>        Node OS Type & Version
         --prefix <STR>          Resource name prefix
@@ -169,6 +169,14 @@ if __name__ == "__main__":
 
     # Read configuration for cloud
     get_configs(config)
+
+    # OneCloud uses run.py with --cloud onecloud, not this provision CLI
+    if cloud == "onecloud":
+        raise ConfigError(
+            "OneCloud is not supported by provision.py. "
+            "Use run.py with --cloud onecloud for cluster creation. "
+            "Credentials must be in ~/osp-cred-ci-2.yaml (globals.onecloud-credentials)."
+        )
 
     # Check for mandatory OSP paramters
     if cloud == "openstack":

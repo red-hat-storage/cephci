@@ -99,6 +99,19 @@ tests:
               command: shell
               args:
                 - ceph orch rm nvmeof.rbd.gw_group1
+          - config:
+              command: shell
+              args:
+                - sleep
+                - "60" # Sleep to get nvmeof gateway service deleted
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: NVMeoF Gateway deployment using cephadm
       destroy-cluster: false
       do-not-skip-tc: true

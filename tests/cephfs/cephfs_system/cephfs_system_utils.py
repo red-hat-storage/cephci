@@ -149,6 +149,7 @@ class CephFSSystemUtils(object):
                         crash_ready_nodes.append(node.node.hostname)
                     except BaseException as ex:
                         if "No such file" in str(ex):
+                            node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
                             for file_name in ["ceph.conf", "ceph.client.admin.keyring"]:
                                 src_path = f"{log_base_dir}/{file_name}"
                                 dst_path = f"/etc/ceph/{file_name}"
@@ -321,7 +322,7 @@ class CephFSSystemUtils(object):
                     # on each node
                     cmd = f"cp {log_rotate_file} {log_rotate_file_bkp}"
                     out, _ = log_node.exec_command(sudo=True, cmd=cmd)
-                    cmd = rf"sed '/compress/i \    \size {size_str}' {log_rotate_file} > {log_rotate_tmp}"
+                    cmd = rf"sed '/compress/i \    \maxsize {size_str}' {log_rotate_file} > {log_rotate_tmp}"
                     out, _ = log_node.exec_command(sudo=True, cmd=cmd)
                     cmd = f"yes | cp {log_rotate_tmp} {log_rotate_file}"
                     out, _ = log_node.exec_command(sudo=True, cmd=cmd)

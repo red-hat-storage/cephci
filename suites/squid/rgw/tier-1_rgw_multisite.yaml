@@ -112,6 +112,7 @@ tests:
                         - node5
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
+      comments: Automation issue - https://ibm-ceph.atlassian.net/browse/IBMCEPHQE-22443
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
@@ -302,6 +303,7 @@ tests:
             copy-user-info-to-site: ceph-sec
       desc: create non-tenanted user
       polarion-id: CEPH-83575199
+      comments: Intemittent failure - IBMCEPH-11930 or IBMCEPH-9871
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
 

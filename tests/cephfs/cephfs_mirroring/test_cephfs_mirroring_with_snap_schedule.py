@@ -4,7 +4,10 @@ import string
 import time
 import traceback
 
-from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
+from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
+    CephfsMirroringUtils,
+    wait_for_sync_idle,
+)
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
@@ -44,7 +47,8 @@ def run(ceph_cluster, **kw):
             - 1 on failure if there is any mismatch in snapshot counts or any part of the process fails.
 
     Cleanup:
-        - Removes all created snapshot schedules.
+        - Snapshot schedules are removed in the main flow before sync checks; finally repeats
+          removal with check_ec disabled for early-failure cleanup without aborting teardown.
         - Unmounts and removes the mounted directories and paths.
         - Deletes CephFS mirroring configuration and removes the associated subvolumes and subvolume groups.
         - Removes the CephFS filesystem from both the source and target clusters.
@@ -283,7 +287,15 @@ def run(ceph_cluster, **kw):
             f"list of scheduled snapshots from client mount path : {snap_schedule_list2}"
         )
 
-        log.info("Capture the snapshot created count")
+        log.info("Remove snap schedules so no new snapshots are created")
+        snap_util.remove_snap_schedule(
+            source_clients[0], subvol1_path, fs_name=source_fs
+        )
+        snap_util.remove_snap_schedule(
+            source_clients[0], subvol2_path, fs_name=source_fs
+        )
+
+        log.info("Capture the final snapshot count after schedule removal")
         snap_count1, rc = source_clients[0].exec_command(
             sudo=True, cmd=f'ls -lrt {snap_path1}/.snap/| grep "scheduled" | wc -l'
         )
@@ -317,35 +329,48 @@ def run(ceph_cluster, **kw):
         )
         log.info(f"peer uuid of {source_fs} is : {peer_uuid}")
 
+        wait_for_sync_idle(
+            source_fs,
+            fsid,
+            asok_file,
+            filesystem_id,
+            peer_uuid,
+            [subvol1_path, subvol2_path],
+        )
+
         snaps_synced1 = get_snaps_synced(
             source_fs, fsid, asok_file, filesystem_id, peer_uuid, subvol1_path
         )
         snaps_synced2 = get_snaps_synced(
-            source_fs, fsid, asok_file, filesystem_id, peer_uuid, subvol1_path
+            source_fs, fsid, asok_file, filesystem_id, peer_uuid, subvol2_path
         )
-        if snaps_synced1 is not None and snaps_synced2 is not None:
-            log.info(
-                f"Snaps synced for path '{subvol1_path}' is {snaps_synced1} & '{subvol2_path}' is {snaps_synced2}"
+        log.info(
+            "Snaps synced for '%s' is %s & '%s' is %s",
+            subvol1_path,
+            snaps_synced1,
+            subvol2_path,
+            snaps_synced2,
+        )
+
+        if snap_count1 != snaps_synced1:
+            log.error(
+                "Mismatch for %s: snap_count (%s) != snaps_synced (%s)",
+                subvol1_path,
+                snap_count1,
+                snaps_synced1,
             )
-
-            if snap_count1 != snaps_synced1:
-                log.error(
-                    f"Mismatch for {subvol1_path}: snap_count1 ({snap_count1}) != snaps_synced1 ({snaps_synced1})"
-                )
-                return 1
-
-            if snap_count2 != snaps_synced2:
-                log.error(
-                    f"Mismatch for {subvol2_path}: snap_count2 ({snap_count2}) != snaps_synced2 ({snaps_synced2})"
-                )
-                return 1
-
-            log.info("Snap counts and snaps synced match for both subvolumes.")
-            return 0
-        else:
-            log.error("Failed to capture snaps_synced for one or both subvolumes.")
             return 1
 
+        if snap_count2 != snaps_synced2:
+            log.error(
+                "Mismatch for %s: snap_count (%s) != snaps_synced (%s)",
+                subvol2_path,
+                snap_count2,
+                snaps_synced2,
+            )
+            return 1
+
+        log.info("Snap counts and snaps synced match for both subvolumes.")
         return 0
     except Exception as e:
         log.error(e)
@@ -363,12 +388,11 @@ def run(ceph_cluster, **kw):
                 sudo=True, cmd=f"rmdir {snapshot_path}", check_ec=False
             )
 
-        snap_util.remove_snap_schedule(
-            source_clients[0], subvol1_path, fs_name=source_fs
-        ),
-        snap_util.remove_snap_schedule(
-            source_clients[0], subvol2_path, fs_name=source_fs
-        ),
+        # Best-effort remove (check_ec=False) if the main path did not run; harmless if already removed.
+        for _path in (subvol1_path, subvol2_path):
+            snap_util.remove_snap_schedule(
+                source_clients[0], _path, fs_name=source_fs, check_ec=False
+            )
 
         log.info("Unmount the paths")
         paths_to_unmount = [kernel_mounting_dir_1, fuse_mounting_dir_1]

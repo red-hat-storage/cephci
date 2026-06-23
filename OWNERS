@@ -5,6 +5,7 @@
 approvers:
   - veera-raghava-reddy
   - cephci-admins
+  - ceph-qe-managers
 
 reviewers:
   - ceph-ci-team

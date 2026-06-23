@@ -101,6 +101,7 @@ tests:
       name: "configure client"
   - test:
       abort-on-fail: false
+      comments: Known issue IBMCEPH-13663
       desc: "Deploy MDS with default values using cephadm"
       module: mds_default_values.py
       name: cephfs default values for mds

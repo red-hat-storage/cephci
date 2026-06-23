@@ -42,9 +42,6 @@ def run(ceph_cluster, **kw):
     fs = "cephfs"
     nfs_lock_export = "/nfs_lock_export"
 
-    if version == 3:
-        enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
-
     nfstest_repo = "git://git.linux-nfs.org/projects/mora/nfstest.git"
     nfstest_dir = "/root/nfstest"
     nfstest_lock = "%s/test/nfstest_lock" % nfstest_dir
@@ -63,7 +60,12 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
+
+        if version == 3:
+            enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
 
         log.info("=== Create lock export ===")
         Ceph(clients[0]).nfs.export.create(

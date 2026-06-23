@@ -23,11 +23,10 @@ tests:
         steps:
           - config:
               args:
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:latest"
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo"
+                rhcs-version: 8.1
+                release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
-                registry-url: registry.redhat.io
                 skip-monitoring-stack: true
               base_cmd_args:
                 verbose: true

@@ -1,6 +1,8 @@
 import json
 from copy import deepcopy
 
+from looseversion import LooseVersion
+
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
@@ -10,8 +12,13 @@ from tests.nvmeof.workflows.constants import (
 )
 from tests.nvmeof.workflows.inband_auth import create_dhchap_key
 from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.nvme_utils import get_network_mask
 from utility.log import Log
-from utility.utils import generate_unique_id, log_json_dump
+from utility.utils import (
+    generate_unique_id,
+    get_ceph_version_from_cluster,
+    log_json_dump,
+)
 
 LOG = Log(__name__)
 
@@ -36,22 +43,31 @@ def validate_subsystems(nvme_service, subsystem_config):
     if not subsystem_list:
         raise ValueError("No subsystems found after configuration")
 
-    if len(subsystem_list) != len(subsystem_config):
-        raise ValueError(
-            f"Mismatch in number of configured subsystems: "
-            f"expected {len(subsystem_config)}, found {len(subsystem_list)}"
-        )
-
-    for i, sub_cfg in enumerate(subsystem_config):
+    actual_nqns = {
+        s.get("nqn") or s.get("subnqn")
+        for s in subsystem_list
+        if s.get("nqn") or s.get("subnqn")
+    }
+    for sub_cfg in subsystem_config:
         nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
-        if nqn in subsystem_list[i].get("nqn", subsystem_list[i].get("subnqn")):
-            continue
-        raise ValueError(
-            f"Subsystem {sub_cfg.get('nqn') or sub_cfg.get('subnqn')} not found in configured subsystems"
+        if not nqn:
+            raise ValueError("Subsystem NQN not provided in subsystem_config")
+        if nqn not in actual_nqns:
+            raise ValueError(
+                f"Subsystem {nqn} not found in configured subsystems "
+                f"(have {sorted(actual_nqns)})"
+            )
+
+    if len(subsystem_list) > len(subsystem_config):
+        LOG.info(
+            "More subsystems present on gateway than in this test config "
+            "(%s from config, %s total); treating extras as pre-existing",
+            len(subsystem_config),
+            len(subsystem_list),
         )
 
 
-def configure_subsystems(nvme_service):
+def configure_subsystems(nvme_service, ceph_cluster=None):
     """
     Configure subsystems, hosts, and namespaces for this gateway group.
     This is done once per group, not per gateway.
@@ -104,18 +120,25 @@ def configure_subsystems(nvme_service):
             no_group_append = sub_cfg.get("no-group-append", True)
         else:
             no_group_append = sub_cfg.get("no-group-append", False)
-        gateway.subsystem.add(
-            **{
-                "args": {
-                    **sub_args,
-                    **{
-                        "max-namespaces": sub_cfg.get("max_ns", 32),
-                        "enable-ha": sub_cfg.get("enable_ha", False),
-                        "no-group-append": no_group_append,
-                    },
-                }
-            }
+
+        ceph_version = get_ceph_version_from_cluster(
+            ceph_cluster.get_nodes(role="client")[0]
         )
+        args = {
+            **sub_args,
+            "max-namespaces": sub_cfg.get("max_ns", 32),
+            "enable-ha": sub_cfg.get("enable_ha", False),
+            "no-group-append": no_group_append,
+        }
+
+        if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+            if sub_cfg.get("listener_port"):
+                args["port"] = sub_cfg.get("listener_port")
+            if sub_cfg.get("secure_listener"):
+                args["secure_listeners"] = sub_cfg.get("secure_listener")
+            args["network-mask"] = get_network_mask(nvme_service.gateways)
+
+        gateway.subsystem.add(**{"args": args})
 
     subsystem_config = nvme_service.config.get("subsystems", [])
     for sub_cfg in subsystem_config:
@@ -227,7 +250,7 @@ def configure_hosts(gateway, config: dict, ceph_cluster=None, initiators=None):
 
                 # Generate key for host NQN if inband_auth is enabled and key doesn't exist
                 sub_cfg.pop("dhchap-key", None)
-                if host.get("inband_auth"):
+                if sub_cfg.get("inband_auth"):
                     if not initiator or not initiator.host_key:
                         # Key doesn't exist, generate it
                         # create_dhchap_key returns initiators with auth_mode set
@@ -484,9 +507,11 @@ def configure_gw_entities(nvme_service, rbd_obj=None, cluster=None):
                        (default: False, sequential execution)
     """
     subsystem_config = nvme_service.config.get("subsystems", [])
+    ceph_version = get_ceph_version_from_cluster(cluster.get_nodes(role="client")[0])
     if subsystem_config:
-        configure_subsystems(nvme_service)
-        configure_listeners(nvme_service.gateways, nvme_service.config)
+        configure_subsystems(nvme_service, ceph_cluster=cluster)
+        if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+            configure_listeners(nvme_service.gateways, nvme_service.config)
         configure_hosts(
             nvme_service.gateways[0], nvme_service.config, ceph_cluster=cluster
         )

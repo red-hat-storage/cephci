@@ -19,9 +19,13 @@ TEST WORKFLOW:
     │   ├── Enable compression (if configured)
     │   ├── Configure aggressive recovery settings
     │   ├── Enable debug logging: debug_osd=20/20 (if configured)
-    │   └── Inject EC write errors on random OSDs (if configured)
-    │       ├── bluestore_debug_inject_read_err=true
-    │       └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
+    │   ├── Inject EC write errors on random OSDs (if configured)
+    │   │   ├── bluestore_debug_inject_read_err=true
+    │   │   └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
+    │   └── Apply suite-driven error injection config (if provided)
+    │       ├── Apply chaos profile (e.g., network_chaos, storage_corruption)
+    │       ├── Apply individual config overrides
+    │       └── Detect destructive MDS injection configs
     │
     ├── THRASHING PHASE (dynamically configured parallel threads)
     │   ├── io_workload_burst: rados bench 30s write bursts (64K blocks) [always]
@@ -34,7 +38,8 @@ TEST WORKFLOW:
     │   ├── thrash_ec_pool_snapshots: RADOS-level snapshots + partial writes [if enabled]
     │   ├── thrash_osds: Mark out → orch daemon stop → wait → mark in → start [if enabled]
     │   ├── thrash_crush_weights: Reduce to 50% → restore [if enabled]
-    │   ├── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub [if enabled]
+    │   ├── thrash_pg_count: Bulk flag toggle for PG split/merge [if enabled]
+    │   ├── thrash_scrubs: Periodic scrub/deep-scrub on pools/OSDs/cluster [if enabled]
     │   ├── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW [if enabled]
     │   ├── thrash_mon: Leader failover, rolling restart, election strategy [if enabled]
     │   ├── thrash_mgr: Failover, rolling restart, random fail [if enabled]
@@ -45,14 +50,20 @@ TEST WORKFLOW:
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
     │   ├── Check cluster health
-    │   ├── Check for crashes (ceph crash ls-new)
-    │   └── Report findings and fail if crashes detected
+    │   ├── If destructive MDS injection:
+    │   │   ├── Validate MDS crashes match CDentry::check_corruption signature
+    │   │   ├── Attempt repair workflow (mds repaired -> damage ls -> scrub repair -> damage rm)
+    │   │   └── Log repair outcome (diagnostic only, does not affect pass/fail)
+    │   ├── Else: Check for crashes (ceph crash ls-new) and fail if detected
+    │   └── Report findings
     │
     └── CLEANUP PHASE
         ├── Reset recovery settings
         ├── Remove debug logging configs (if enabled)
-        ├── Remove error injection configs (if enabled)
-        ├── Force log rotation on all OSD hosts
+        ├── Remove error injection configs (cleanup_all)
+        ├── Restore down OSDs (mark in + restart OSD service)
+        ├── If destructive MDS injection: destroy damaged filesystem + pools
+        ├── Force log rotation on all OSD hosts (parallel)
         ├── Unmount and cleanup CephFS and RBD
         ├── Cleanup NFS clusters and exports (if enabled)
         └── Delete test pools and EC profiles
@@ -64,6 +75,7 @@ CONFIGURATION OPTIONS:
 - aggressive: Enable aggressive mode with longer waits (default: True)
 - enable_crush_thrashing: Enable CRUSH weight modifications (default: True)
 - enable_pg_thrashing: Enable PG count thrashing via bulk flag (default: True)
+- enable_scrub_thrashing: Enable independent scrub/deep-scrub cycles (default: True)
 - compression: Enable pool compression with mode=force (default: False)
 - cleanup_pools: Delete pools after test (default: True)
 - enable_debug_logs: Enable debug logging for OSD peering and BlueStore (default: False)
@@ -80,8 +92,25 @@ CONFIGURATION OPTIONS:
 - enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
 - enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
 - enable_nfs_thrashing: Enable NFS cluster/export setup for thrashing (default: False)
+- nfs_num_clusters: Number of ``ceph nfs cluster create`` instances (default: 3)
+- nfs_exports_per_cluster: Exports per cluster (default: 4)
+- nfs_placement: Placement daemon count argument to cluster create (default: 1)
 - enable_cephfs_subvolume_thrashing: Enable CephFS subvolume thrashing (default: False)
 - enable_election_strategy_thrash: Enable election strategy changes during MON thrash (default: False)
+- enable_nfs_rdma: Create NFS clusters with ceph nfs cluster create --enable-rdma
+  (default: False). Optional nfs_rdma_port overrides default RDMA base 20049.
+- nfs_rdma_port: Base RDMA port for ``--rdma_port`` (per-cluster: base + index).
+  If unset, ``NFS_RDMA_DEFAULT_BASE_PORT`` (20049) in core_workflows is used.
+- enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
+- nfs_placement_label: Prefer orch hosts with this **ceph orch host label**. If no host
+  has the label, fallback uses all orch hosts.
+- enable_esb_verification: Enable BlueStore ESB Bug #70390 verification (default: False).
+  Sets bluestore_elastic_shared_blobs=true, bluestore_write_v2=false, bluestore_onode_segment_size=0,
+  bluestore_debug_extent_map_encode_check=true, debug_bluestore=5/5.
+  Targets extent map resharding crash in EC pools with overwrites.
+- error_injection: Suite-driven error injection config (default: None).
+  Supports profiles, individual configs, EC errors, and admin socket commands.
+  See ceph/rados/ceph_error_injector.py for full schema and 22 available profiles.
 
 """
 
@@ -95,8 +124,14 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from ceph import utils
 from ceph.ceph_admin import CephAdmin
-from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.ceph_error_injector import (
+    PROFILES,
+    CephErrorInjector,
+    CephInjectionRecovery,
+)
+from ceph.rados.core_workflows import NFS_RDMA_DEFAULT_BASE_PORT, RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
@@ -105,14 +140,75 @@ from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStra
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
 from utility.log import Log
+from utility.utils import extract_ceph_version
 
 log = Log(__name__)
 
-# Path to pool configurations file
-POOL_CONFIGS_FILE = "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+
+def _has_inconsistent_obj_fix(rados_obj) -> bool:
+    """Check if the running ceph build contains the IBMCEPH-12717 fix.
+
+    The fix is NOT present in the 20.2.1.X line (Ceph 9.1). All other versions
+    are assumed to have the fix.
+    Returns True if the fix is present and inconsistent object
+    detection should cause test failure.
+    """
+    try:
+        out, _ = rados_obj.client.exec_command(cmd="ceph version", sudo=True)
+        version = extract_ceph_version(out)
+        log.info(f"IBMCEPH-12717 fix check: ceph version = {version}")
+
+        if not version:
+            log.warning("Could not parse ceph version, assuming fix is present")
+            return True
+
+        parts = version.split(".")
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+
+        if major == 20 and minor == 2 and patch <= 1:
+            log.info(
+                f"Ceph version {version} is in 20.2.1.X line (no IBMCEPH-12717 fix),"
+                f" disabling inconsistent_object_fail"
+            )
+            return False
+
+        return True
+    except Exception as e:
+        log.warning(f"Failed to determine ceph version for fix check: {e}")
+        return True
+
+
+# Version-to-release mapping for pool configuration file paths
+_VERSION_RELEASE_MAP = {
+    9: "tentacle",
+    8: "squid",
+    7: "reef",
+    6: "quincy",
+    5: "pacific",
+}
 
 # Cache for pool configurations (loaded once per module)
 _POOL_CONFIGS_CACHE = None
+
+
+def _get_pool_configs_path(rhbuild: str) -> str:
+    """Resolve the pool configurations file path based on Ceph version.
+
+    Args:
+        rhbuild: Ceph build version string (e.g., "9.2.0-123")
+
+    Returns:
+        Path to the pool-configurations.yaml for that release
+    """
+    major = int(rhbuild.split(".")[0])
+    release = _VERSION_RELEASE_MAP.get(major)
+    if not release:
+        log.warning(
+            f"Unknown major version {major} from rhbuild '{rhbuild}', "
+            f"falling back to tentacle pool configs"
+        )
+        release = "tentacle"
+    return f"conf/{release}/rados/test-confs/pool-configurations.yaml"
 
 
 def run(ceph_cluster, **kw):
@@ -138,6 +234,8 @@ def run(ceph_cluster, **kw):
         cleanup_pools (bool): Delete pools after test (default: True)
         enable_debug_logs (bool): Enable debug logging for OSD/BlueStore (default: False)
         inject_errors (bool): Inject EC write errors on random OSDs (default: False)
+        inconsistent_object_fail (bool): Fail test on inconsistent PGs instead
+            of repairing - IBMCEPH-12717 (default: True)
         num_osds_to_inject (int): Number of OSDs to inject errors on (default: 3)
         num_writes_to_inject (int): Number of writes to inject errors per OSD (default: 1000)
         enable_rgw_thrashing (bool): Enable RGW S3 thrashing (default: False, requires RGW)
@@ -147,13 +245,26 @@ def run(ceph_cluster, **kw):
         enable_rbd_snapshots (bool): Enable RBD snapshot thrashing (default: True)
         enable_ec_snapshots (bool): Enable EC pool snapshot thrashing (default: True)
         enable_osd_thrashing (bool): Enable OSD thrashing - main thrash operation (default: True)
+        enable_scrub_thrashing (bool): Enable independent scrub/deep-scrub cycles (default: True)
         enable_mon_thrashing (bool): Enable MON thrashing - leader failover/restart (default: False)
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
         enable_mds_thrashing (bool): Enable MDS thrashing - failover/restart/random fail (default: False)
         enable_nfs_thrashing (bool): Enable NFS cluster/export setup for thrashing (default: False)
+        nfs_num_clusters (int): How many NFS clusters to create (default: 3)
+        nfs_exports_per_cluster (int): Exports per cluster (default: 4)
+        nfs_placement (int): ``ceph nfs cluster create`` placement count (default: 1)
         enable_cephfs_subvolume_thrashing (bool): Enable CephFS subvolume thrashing (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
         enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
+        enable_esb_verification (bool): Enable BlueStore ESB Bug #70390 configs (default: False)
+        enable_nfs_rdma (bool): Use --enable-rdma on ceph nfs cluster create (default: False)
+        nfs_rdma_port (int|None): Optional base --rdma_port; if unset, 20049 + index
+        enable_nfsv3 (bool): Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
+        nfs_placement_label (str|None): Prefer orch hosts with this label; if no
+            matches, use all orch hosts (default: None).
+        error_injection (dict): Suite-driven error injection config (default: None).
+            Supports profile, profile_overrides, configs, ec_write_errors,
+            ec_read_errors, admin_socket. See CephErrorInjector for schema.
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -167,10 +278,12 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    injector = CephErrorInjector(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     mon_workflow_obj = MonitorWorkflows(node=cephadm)
     mon_election_obj = MonElectionStrategies(rados_obj=rados_obj)
     mgr_workflow_obj = MgrWorkflows(node=cephadm)
+    rbd_image = "thrash-test-image" + str(random.randint(100, 999))
 
     # Test parameters
     iterations = config.get("iterations", 60)
@@ -181,6 +294,9 @@ def run(ceph_cluster, **kw):
     compression = config.get("compression", False)
     enable_debug_logs = config.get("enable_debug_logs", True)
     inject_errors = config.get("inject_errors", False)
+    inconsistent_object_fail = config.get("inconsistent_object_fail", True)
+    if inconsistent_object_fail and not _has_inconsistent_obj_fix(rados_obj):
+        inconsistent_object_fail = False
     num_osds_to_inject = config.get("num_osds_to_inject", 3)
     num_writes_to_inject = config.get("num_writes_to_inject", 1000)
     enable_rgw_thrashing = config.get("enable_rgw_thrashing", True)
@@ -194,6 +310,15 @@ def run(ceph_cluster, **kw):
     enable_mgr_thrashing = config.get("enable_mgr_thrashing", False)
     enable_mds_thrashing = config.get("enable_mds_thrashing", False)
     enable_nfs_thrashing = config.get("enable_nfs_thrashing", False)
+    enable_nfs_rdma = config.get("enable_nfs_rdma", False)
+    nfs_rdma_port_raw = config.get("nfs_rdma_port")
+    nfs_rdma_port = int(nfs_rdma_port_raw) if nfs_rdma_port_raw is not None else None
+    enable_nfsv3 = config.get("enable_nfsv3", False)
+    nfs_placement_label = config.get("nfs_placement_label") or None
+    nfs_num_clusters = config.get("nfs_num_clusters", 3)
+    nfs_exports_per_cluster = config.get("nfs_exports_per_cluster", 4)
+    nfs_placement = config.get("nfs_placement", 1)
+    enable_scrub_thrashing = config.get("enable_scrub_thrashing", True)
     enable_cephfs_subvolume_thrashing = config.get(
         "enable_cephfs_subvolume_thrashing", False
     )
@@ -201,6 +326,7 @@ def run(ceph_cluster, **kw):
         "enable_election_strategy_thrash", True
     )
     enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
+    enable_esb_verification = config.get("enable_esb_verification", False)
     disabled_ec_optimizations = False
     major_version = int(rados_obj.rhbuild.split(".")[0])
 
@@ -243,6 +369,13 @@ def run(ceph_cluster, **kw):
         additional_pools.append("RBD (2 pools)")
     additional_pools_str = " + ".join(additional_pools) if additional_pools else "None"
 
+    rdma_suffix = ""
+    if enable_nfs_rdma:
+        if nfs_rdma_port is not None:
+            rdma_suffix = f" (rdma_port base={nfs_rdma_port})"
+        else:
+            rdma_suffix = f" (rdma default base {NFS_RDMA_DEFAULT_BASE_PORT})"
+
     test_params = (
         f"\n{'=' * 60}\n"
         f"OSD THRASHING TEST WITH CONCURRENT I/O\n"
@@ -252,7 +385,8 @@ def run(ceph_cluster, **kw):
         f"  Duration: {duration}s\n"
         f"  Aggressive mode: {aggressive}\n"
         f"  CRUSH thrashing: {enable_crush_thrashing}\n"
-        f"  PG thrashing via bulk flag and scrubbing: {enable_pg_thrashing}\n"
+        f"  PG thrashing via bulk flag (split/merge): {enable_pg_thrashing}\n"
+        f"  Scrub thrashing (independent scrub/deep-scrub): {enable_scrub_thrashing}\n"
         f"  Compression (mode=force): {compression}\n"
         f"  Debug logs: {enable_debug_logs}\n"
         f"  RADOS pools from config: {len(config.get('pool_configs', []))}\n"
@@ -271,11 +405,50 @@ def run(ceph_cluster, **kw):
         f"  MGR thrashing: {enable_mgr_thrashing}\n"
         f"  MDS thrashing: {enable_mds_thrashing}\n"
         f"  NFS thrashing: {enable_nfs_thrashing}\n"
+        + (
+            f"  NFS clusters / exports per cluster / placement count: "
+            f"{nfs_num_clusters} / {nfs_exports_per_cluster} / {nfs_placement}\n"
+            if enable_nfs_thrashing
+            else ""
+        )
+        + f"  NFS RDMA (cluster + mounts): {enable_nfs_rdma}{rdma_suffix}\n"
+        f"  NFS cluster NFSv3 enabled: {enable_nfsv3}\n"
+        f"  NFS placement orch label: {nfs_placement_label or '(none)'}\n"
         f"  CephFS subvolume thrashing: {enable_cephfs_subvolume_thrashing}\n"
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
         f"  Fast EC config params: {enable_fast_ec_config_params}\n"
-        f"{'=' * 60}\n"
+        f"  ESB verification (Bug #70390): {enable_esb_verification}\n"
+        f"  Inconsistent object fail (no repair): {inconsistent_object_fail}\n"
     )
+    _ei_config = config.get("error_injection", {})
+    if _ei_config:
+        _ei_profile = _ei_config.get("profile", "none")
+        test_params += f"  Error injection profile: {_ei_profile}\n"
+        _ei_merged = {}
+        if _ei_profile and _ei_profile in PROFILES:
+            _ei_merged.update(PROFILES[_ei_profile]["configs"])
+        _ei_merged.update(_ei_config.get("profile_overrides", {}))
+        _ei_merged.update(_ei_config.get("configs", {}))
+        if _ei_merged:
+            test_params += "  Error injection configs:\n"
+            for k, v in sorted(_ei_merged.items()):
+                test_params += f"    {k}: {v}\n"
+        if _ei_config.get("ec_write_errors"):
+            test_params += (
+                f"  EC write errors: {len(_ei_config['ec_write_errors'])} spec(s)\n"
+            )
+        if _ei_config.get("ec_read_errors"):
+            test_params += (
+                f"  EC read errors: {len(_ei_config['ec_read_errors'])} spec(s)\n"
+            )
+        if _ei_config.get("admin_socket"):
+            test_params += (
+                f"  Admin socket commands: "
+                f"{len(_ei_config['admin_socket'])} command(s)\n"
+            )
+    else:
+        test_params += "  Error injection: None\n"
+    test_params += f"{'=' * 60}\n"
     log.info(test_params)
 
     log.info("Archiving existing crashes...")
@@ -286,6 +459,8 @@ def run(ceph_cluster, **kw):
 
     created_pools = []
     test_failed = False
+    _destructive_mds_injection = False
+    _bluestore_corruption_active = False
     fs_name = None
     fs_names = []  # List of all filesystems created (for MDS thrashing)
     cephfs_mount_path = None
@@ -335,6 +510,7 @@ def run(ceph_cluster, **kw):
                 log.info("RBD workflows enabled - creating RBD pools")
                 rbd_future = pool_executor.submit(
                     rados_obj.create_ec_rbd_pools,
+                    image_name=rbd_image,
                     enable_fast_ec_config_params=enable_fast_ec_config_params,
                 )
 
@@ -356,11 +532,15 @@ def run(ceph_cluster, **kw):
                 nfs_future = pool_executor.submit(
                     rados_obj.create_nfs_clusters_and_exports,
                     client_node,
-                    num_clusters=config.get("nfs_num_clusters", 3),
-                    exports_per_cluster=config.get("nfs_exports_per_cluster", 4),
-                    placement=config.get("nfs_placement", 1),
+                    num_clusters=nfs_num_clusters,
+                    exports_per_cluster=nfs_exports_per_cluster,
+                    placement=nfs_placement,
                     pool_type="erasure",
                     enable_fast_ec_config_params=enable_fast_ec_config_params,
+                    enable_rdma=enable_nfs_rdma,
+                    rdma_port=nfs_rdma_port,
+                    enable_nfsv3=enable_nfsv3,
+                    nfs_placement_label=nfs_placement_label,
                 )
 
             # Collect results
@@ -425,43 +605,49 @@ def run(ceph_cluster, **kw):
                             f"{len(nfs_config.get('exports', []))} exports"
                         )
 
-                        # NFSv3 prerequisites: ensure rpcbind and rpc.statd are running
-                        # Without these services, NFS-Ganesha cannot register NFSv3 and
-                        # emits "Cannot register NFS V3 on TCP" error.
+                        # Per NFS host: always drop host firewall (TCP + RDMA). When the
+                        # cluster has v3 enabled, also install/start rpcbind and statd.
                         all_nodes = ceph_cluster.get_nodes()
                         configured_hosts = set()
+                        v3_extra = (
+                            "yum install -y rpcbind nfs-utils 2>/dev/null || true; "
+                            "systemctl enable rpcbind rpc-statd 2>/dev/null || true; "
+                            "systemctl start rpcbind rpc-statd 2>/dev/null || true; "
+                            "systemctl list-units --type=service --no-legend | "
+                            "grep '@nfs\\.' | awk '{print $1}' | "
+                            "xargs -r systemctl restart 2>/dev/null || true"
+                        )
                         for cluster_info in nfs_config.get("clusters", []):
                             hostname = cluster_info.get("host")
                             if not hostname or hostname in configured_hosts:
                                 continue
                             configured_hosts.add(hostname)
-                            # Find node object for this NFS server
                             host_node = next(
-                                (n for n in all_nodes if n.hostname == hostname), None
+                                (n for n in all_nodes if n.hostname == hostname),
+                                None,
                             )
                             if not host_node:
                                 log.warning(f"  {hostname}: Node not found, skipping")
                                 continue
                             try:
-                                # Batch: disable firewall, install/start services
-                                # Note: cephadm NFS service is ceph-*@nfs.*.service
+                                fw = (
+                                    "systemctl stop firewalld 2>/dev/null || true; "
+                                    "systemctl disable firewalld 2>/dev/null || true"
+                                )
+                                if nfs_config.get("enable_nfsv3"):
+                                    cmd = fw + "; " + v3_extra
+                                    log_note = "firewall disabled + NFSv3 prerequisites"
+                                else:
+                                    cmd = fw
+                                    log_note = "firewall disabled for NFS/RDMA"
                                 host_node.exec_command(
-                                    cmd="systemctl stop firewalld 2>/dev/null || true; "
-                                    "systemctl disable firewalld 2>/dev/null || true; "
-                                    "yum install -y rpcbind nfs-utils 2>/dev/null || true; "
-                                    "systemctl enable rpcbind rpc-statd 2>/dev/null || true; "
-                                    "systemctl start rpcbind rpc-statd 2>/dev/null || true; "
-                                    "systemctl list-units --type=service --no-legend | "
-                                    "grep '@nfs\\.' | awk '{print $1}' | "
-                                    "xargs -r systemctl restart 2>/dev/null || true",
+                                    cmd=cmd,
                                     sudo=True,
                                     timeout=180,
                                     check_ec=False,
                                 )
                                 nfs_firewall_disabled_nodes.append(host_node)
-                                log.info(
-                                    f"  {hostname}: NFSv3 prerequisites configured"
-                                )
+                                log.info(f"  {hostname}: {log_note}")
                             except Exception as e:
                                 log.warning(f"  {hostname}: Failed - {e}")
 
@@ -560,14 +746,35 @@ def run(ceph_cluster, **kw):
         if nfs_config:
             log.info("NFS Setup:")
             log.info("  Filesystem      : %s", nfs_config.get("fs_name", "N/A"))
-            log.info("  Clusters        : %d", len(nfs_config.get("clusters", [])))
-            for cluster in nfs_config.get("clusters", []):
+            log.info(
+                "  RDMA mounts     : %s",
+                (
+                    "yes (client uses rdma,port= per cluster)"
+                    if nfs_config.get("enable_rdma")
+                    else "no (TCP port= only)"
+                ),
+            )
+            if nfs_config.get("enable_rdma"):
                 log.info(
-                    "    - %s (port: %d, host: %s)",
-                    cluster["cluster_id"],
-                    cluster["port"],
-                    cluster.get("host", "N/A"),
+                    "  NFSv3 on cluster: %s", nfs_config.get("enable_nfsv3", False)
                 )
+            for cluster in nfs_config.get("clusters", []):
+                rp = cluster.get("rdma_port")
+                if nfs_config.get("enable_rdma") and rp is not None:
+                    log.info(
+                        "    - %s (NFS TCP port: %d, RDMA port: %d, host: %s)",
+                        cluster["cluster_id"],
+                        cluster["port"],
+                        rp,
+                        cluster.get("host", "N/A"),
+                    )
+                else:
+                    log.info(
+                        "    - %s (port: %d, host: %s)",
+                        cluster["cluster_id"],
+                        cluster["port"],
+                        cluster.get("host", "N/A"),
+                    )
             exports = nfs_config.get("exports", [])
             log.info("  Exports         : %d", len(exports))
             for export in exports:
@@ -602,46 +809,83 @@ def run(ceph_cluster, **kw):
             # mon_obj.set_config(section="mds", name="debug_mds", value="20/20")
             log.info("Debug logging enabled for daemons")
 
-        if inject_errors:
-            mon_obj.set_config(
-                section="global", name="bluestore_debug_inject_read_err", value="true"
+        if enable_esb_verification:
+            log.info("Enabling BlueStore ESB verification configs (Bug #70390)...")
+            esb_configs = {
+                "bluestore_elastic_shared_blobs": "true",
+                "bluestore_write_v2": "false",
+                "bluestore_onode_segment_size": "0",
+                "bluestore_debug_extent_map_encode_check": "true",
+                "debug_bluestore": "5/5",
+            }
+            for name, value in esb_configs.items():
+                mon_obj.set_config(section="osd", name=name, value=value)
+            log.info(
+                "ESB verification configs applied -- "
+                "OSDs will validate extent maps on every encode"
             )
-            # Get EC pools for injection
+
+        if inject_errors:
+            injector.inject_config("bluestore_debug_inject_read_err", True)
             ec_pool_names = [
                 p["pool_name"] for p in created_pools if p.get("pool_type") == "erasure"
             ]
             if ec_pool_names:
                 for ec_pool in ec_pool_names:
                     for osd_id in inject_osds:
-                        # injectecwriteerr <pool> <obj> <shard> <type> <skip> <inject>
-                        # shard=2, type=1 (drop sub write), skip=0
-                        inject_cmd = (
-                            f"cephadm shell -- ceph daemon osd.{osd_id} injectecwriteerr "
-                            f"{ec_pool} '*' 2 1 0 {num_writes_to_inject}"
+                        injector.inject_ec_write_error(
+                            osd_id=osd_id,
+                            pool=ec_pool,
+                            shard=2,
+                            err_type=1,
+                            skip=0,
+                            duration=num_writes_to_inject,
                         )
-                        try:
-                            osd_host = rados_obj.fetch_host_node(
-                                daemon_type="osd", daemon_id=str(osd_id)
-                            )
-                            out, _ = osd_host.exec_command(
-                                cmd=inject_cmd, sudo=True, check_ec=False
-                            )
-                            if "ok" in out.lower():
-                                log.info(
-                                    f"Injected on OSD.{osd_id} for {ec_pool}: {out.strip()}"
-                                )
-                            else:
-                                log.warning(
-                                    f"Injection failed on OSD.{osd_id} for {ec_pool}: {out.strip()}"
-                                )
-                        except Exception as e:
-                            log.warning(
-                                f"Failed to inject on OSD.{osd_id} for {ec_pool}: {e}"
-                            )
                 log.info(
                     f"Injected EC write errors on {len(inject_osds)} OSDs "
                     f"for {len(ec_pool_names)} pools: "
                     f"{', '.join(str(osd) for osd in inject_osds)}"
+                )
+
+        # Apply suite-driven error injection config (if provided)
+        error_injection_config = config.get("error_injection", {})
+        if error_injection_config:
+            injector.apply_from_config(error_injection_config)
+            _destructive_mds_keys = {
+                "mds_inject_rename_corrupt_dentry_first",
+                "mds_inject_journal_corrupt_dentry_first",
+            }
+            all_injected = set(error_injection_config.get("configs", {}).keys())
+            all_injected.update(
+                error_injection_config.get("profile_overrides", {}).keys()
+            )
+            prof = error_injection_config.get("profile")
+            if prof and prof in PROFILES:
+                all_injected.update(PROFILES[prof]["configs"].keys())
+            active_destructive = _destructive_mds_keys & all_injected
+            if active_destructive:
+                merged = {}
+                if prof and prof in PROFILES:
+                    merged.update(PROFILES[prof]["configs"])
+                merged.update(error_injection_config.get("profile_overrides", {}))
+                merged.update(error_injection_config.get("configs", {}))
+                if any(float(merged.get(k, 0)) > 0 for k in active_destructive):
+                    _destructive_mds_injection = True
+                    log.warning(
+                        "DESTRUCTIVE MDS INJECTION ACTIVE: "
+                        "CephFS metadata corruption expected. "
+                        "Filesystem will be destroyed during cleanup."
+                    )
+            _bs_corruption_keys = {
+                "bluestore_debug_inject_read_err",
+                "bluestore_debug_inject_csum_err_probability",
+                "bluestore_debug_inject_allocation_from_file_failure",
+            }
+            if _bs_corruption_keys & all_injected:
+                _bluestore_corruption_active = True
+                log.info(
+                    "BlueStore corruption injection active: "
+                    "PG inconsistency expected during test."
                 )
 
         mon_obj.set_config(
@@ -670,6 +914,7 @@ def run(ceph_cluster, **kw):
         max_workers += 1 if enable_osd_thrashing else 0
         max_workers += 1 if enable_crush_thrashing else 0
         max_workers += 1 if enable_pg_thrashing else 0
+        max_workers += 1 if enable_scrub_thrashing else 0
         max_workers += 1 if enable_rgw_thrashing else 0
         max_workers += 1 if enable_mon_thrashing else 0
         max_workers += 1 if enable_mgr_thrashing else 0
@@ -835,6 +1080,20 @@ def run(ceph_cluster, **kw):
                         pool_obj=pool_obj,
                         pools=created_pools,
                         iterations=iterations // 3,
+                        stop_flag=stop_flag,
+                    )
+                )
+
+            # Scrub thrashing (default: enabled)
+            if enable_scrub_thrashing:
+                log.info("Scrub thrashing enabled (independent scrub/deep-scrub)")
+                futures.append(
+                    executor.submit(
+                        thrash_scrubs,
+                        rados_obj=rados_obj,
+                        pools=created_pools,
+                        duration=duration,
+                        aggressive=aggressive,
                         stop_flag=stop_flag,
                     )
                 )
@@ -1010,6 +1269,12 @@ def run(ceph_cluster, **kw):
                 "rgw_s3_thrashing": None,
                 "mon_thrashing": None,
                 "mgr_thrashing": None,
+                "mds_thrashing": None,
+                "nfs_fio_thrashing": None,
+                "nfs_locking": None,
+                "nfs_rootsquash": None,
+                "nfs_fsops_extended": None,
+                "cephfs_subvolume_thrashing": None,
             }
             # Map futures to workflow names based on their index
             workflow_order = []
@@ -1037,6 +1302,8 @@ def run(ceph_cluster, **kw):
                 workflow_order.append("crush_weight_thrashing")
             if enable_pg_thrashing:
                 workflow_order.append("pg_count_thrashing")
+            if enable_scrub_thrashing:
+                workflow_order.append("scrub_thrashing")
             if enable_rgw_thrashing and rgw_config:
                 workflow_order.append("rgw_s3_thrashing")
             if enable_mon_thrashing:
@@ -1080,51 +1347,85 @@ def run(ceph_cluster, **kw):
         rados_obj.log_cluster_health()
 
         # Check for inconsistent PGs across all pools and repair if found
-        log.info("Checking for inconsistent PGs across all pools...")
-        all_pools = rados_obj.list_pools()
-        inconsistent_pgs_found = []
-        for check_pool in all_pools:
-            try:
-                inconsistent_pgs = rados_obj.get_inconsistent_pg_list(check_pool)
-                if inconsistent_pgs:
-                    log.warning(
-                        f"Found {len(inconsistent_pgs)} inconsistent PG(s) in pool "
-                        f"{check_pool}: {inconsistent_pgs}"
-                    )
-                    inconsistent_pgs_found.extend(inconsistent_pgs)
-            except Exception as e:
-                log.debug(f"Error checking pool {check_pool}: {e}")
-
-        if inconsistent_pgs_found:
-            log.debug(
-                f"Total inconsistent PGs found: {len(inconsistent_pgs_found)}. "
-                f"Inconsistent PGs: {inconsistent_pgs_found}. "
-                f"Initiating PG repair..."
+        if _bluestore_corruption_active:
+            log.info(
+                "Skipping inconsistent PG check -- BlueStore corruption "
+                "injection causes expected PG inconsistency. "
+                "Recovery will handle in cleanup phase."
             )
-            for pg_id in inconsistent_pgs_found:
-                try:
-                    client_node.exec_command(
-                        cmd=f"ceph pg {pg_id} query -f json-pretty > /tmp/{pg_id}_query.txt",
-                        sudo=True,
-                    )
-                    client_node.exec_command(
-                        cmd=f"rados list-inconsistent-obj {pg_id} -f json-pretty "
-                        f"> /tmp/{pg_id}_inconsistent_obj.txt",
-                        sudo=True,
-                    )
-                    time.sleep(5)
-                    log.info(f"Running pg repair on PG: {pg_id}")
-                    rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
-                except Exception as e:
-                    log.error(f"Failed to repair PG {pg_id}: {e}")
-            time.sleep(30)
+            inconsistent_pgs_found = []
         else:
-            log.info("No inconsistent PGs found across all pools")
+            log.info("Checking for inconsistent PGs across all pools...")
+            all_pools = rados_obj.list_pools()
+            inconsistent_pgs_found = []
+            for check_pool in all_pools:
+                try:
+                    inconsistent_pgs = rados_obj.get_inconsistent_pg_list(check_pool)
+                    if inconsistent_pgs:
+                        log.warning(
+                            f"Found {len(inconsistent_pgs)} inconsistent "
+                            f"PG(s) in pool {check_pool}: {inconsistent_pgs}"
+                        )
+                        inconsistent_pgs_found.extend(inconsistent_pgs)
+                except Exception as e:
+                    log.debug(f"Error checking pool {check_pool}: {e}")
 
-        log.info("Waiting for PGs to reach active+clean state...")
-        if not wait_for_clean_pg_sets(rados_obj, timeout=1200, recovery_thread=False):
-            log.error("Not all PGs are active+clean")
-            raise Exception("Not all PGs are active+clean")
+            if inconsistent_pgs_found:
+                if inconsistent_object_fail:
+                    log.error(
+                        f"Total inconsistent PGs found: "
+                        f"{len(inconsistent_pgs_found)}. "
+                        f"Failing test (IBMCEPH-12717)"
+                    )
+                    for pg_id in inconsistent_pgs_found:
+                        try:
+                            log.info(f"Capturing diagnostics for PG: {pg_id}")
+                            client_node.exec_command(
+                                cmd=f"ceph pg {pg_id} query -f json-pretty"
+                                f" > /tmp/{pg_id}_query.txt",
+                                sudo=True,
+                            )
+                            client_node.exec_command(
+                                cmd=f"rados list-inconsistent-obj {pg_id}"
+                                f" -f json-pretty"
+                                f" > /tmp/{pg_id}_inconsistent_obj.txt",
+                                sudo=True,
+                            )
+                        except Exception as e:
+                            log.warning(f"Failed diagnostics for PG {pg_id}: {e}")
+                    raise Exception(
+                        f"IBMCEPH-12717: Inconsistent objects in "
+                        f"{len(inconsistent_pgs_found)} PG(s)"
+                    )
+                else:
+                    log.debug(
+                        f"Found {len(inconsistent_pgs_found)} inconsistent "
+                        f"PG(s), initiating repair..."
+                    )
+                    for pg_id in inconsistent_pgs_found:
+                        try:
+                            time.sleep(5)
+                            log.info(f"Running pg repair on PG: {pg_id}")
+                            rados_obj.run_ceph_command(cmd=f"ceph pg repair {pg_id}")
+                        except Exception as e:
+                            log.error(f"Failed to repair PG {pg_id}: {e}")
+                    time.sleep(30)
+            else:
+                log.info("No inconsistent PGs found across all pools")
+
+        if _bluestore_corruption_active:
+            log.info(
+                "Skipping wait_for_clean_pg_sets -- BlueStore corruption "
+                "injection may have caused PG inconsistency. "
+                "Recovery will run in cleanup phase."
+            )
+        else:
+            log.info("Waiting for PGs to reach active+clean state...")
+            if not wait_for_clean_pg_sets(
+                rados_obj, timeout=1200, recovery_thread=False
+            ):
+                log.error("Not all PGs are active+clean")
+                raise Exception("Not all PGs are active+clean")
 
         rados_obj.log_cluster_health()
 
@@ -1153,11 +1454,20 @@ def run(ceph_cluster, **kw):
             # mon_obj.remove_config(section="mds", name="debug_mds")
             log.info("Debug logging configs removed")
 
-        if inject_errors:
-            log.info("Removing EC write error injection config...")
-            mon_obj.remove_config(
-                section="global", name="bluestore_debug_inject_read_err"
-            )
+        if enable_esb_verification:
+            log.info("Removing BlueStore ESB verification configs...")
+            for name in [
+                "bluestore_elastic_shared_blobs",
+                "bluestore_write_v2",
+                "bluestore_onode_segment_size",
+                "bluestore_debug_extent_map_encode_check",
+                "debug_bluestore",
+            ]:
+                mon_obj.remove_config(section="osd", name=name)
+            log.info("ESB verification configs removed")
+
+        log.info("Cleaning up all error injections...")
+        injector.cleanup_all()
 
         if disabled_ec_optimizations:
             log.info("Reverting osd_pool_default_flag_ec_optimizations config...")
@@ -1182,6 +1492,12 @@ def run(ceph_cluster, **kw):
             )
             if osds_to_restore:
                 _restore_osds_to_in(rados_obj, osds_to_restore)
+                log.info("Restarting OSD service to recover down daemons...")
+                try:
+                    rados_obj.restart_daemon_services(daemon="osd")
+                    log.info("OSD service restart completed")
+                except Exception as restart_err:
+                    log.warning(f"OSD service restart failed: {restart_err}")
             else:
                 log.info("All OSDs are healthy, no restoration needed")
         except Exception as e:
@@ -1200,13 +1516,95 @@ def run(ceph_cluster, **kw):
             except Exception as e:
                 log.warning(f"Failed to restore election strategy: {e}")
 
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
+
+        try:
+            if _destructive_mds_injection:
+                log.info("Validating expected MDS corruption crashes...")
+                crash_list = rados_obj.do_crash_ls() or []
+                mds_crashes = [
+                    c for c in crash_list if c.get("entity_name", "").startswith("mds.")
+                ]
+                if mds_crashes:
+                    validated = False
+                    log.info(
+                        f"Found {len(mds_crashes)} MDS crash(es), inspecting details..."
+                    )
+                    for crash in mds_crashes[:5]:
+                        try:
+                            info = rados_obj.run_ceph_command(
+                                f"ceph crash info {crash['crash_id']}",
+                                client_exec=True,
+                            )
+                            log.info(
+                                f"  Crash: {info.get('entity_name')} "
+                                f"at {info.get('timestamp')} "
+                                f"sig={str(info.get('stack_sig') or 'N/A')[:16]} "
+                                f"assert={info.get('assert_condition', 'N/A')} "
+                                f"file={info.get('assert_file', 'N/A')}"
+                            )
+                            bt = info.get("backtrace", [])
+                            if (
+                                any(
+                                    "check_corruption" in f or "CDentry" in f
+                                    for f in bt
+                                )
+                                and info.get("process_name") == "ceph-mds"
+                            ):
+                                validated = True
+                                log.info("  -> Matches CDentry corruption signature")
+                        except Exception:
+                            continue
+                    if validated:
+                        log.info(
+                            f"EXPECTED: {len(mds_crashes)} MDS crashes with "
+                            f"CDentry corruption signature. Injection validated."
+                        )
+                        mds_recovery = CephInjectionRecovery(rados_obj, client_node)
+                        repair = mds_recovery.recover_mds_corruption(
+                            fs_name=fs_name or "cephfs-thrash",
+                            cephfs_mount_path=cephfs_mount_path,
+                        )
+                        log.info(f"Repair outcome: {repair['outcome']}")
+                    else:
+                        log.error(
+                            "MDS crashes found but none match expected "
+                            "corruption signature"
+                        )
+                        test_failed = True
+                else:
+                    log.error(
+                        "No MDS crashes despite destructive injection -- "
+                        "injection may not have triggered"
+                    )
+                    test_failed = True
+            else:
+                if rados_obj.check_crash_status(
+                    start_time=start_time,
+                    end_time=test_end_time,
+                    check_mds=enable_mds_thrashing,
+                    check_nfs=enable_nfs_thrashing,
+                    check_rgw=enable_rgw_thrashing,
+                ):
+                    log.error("Test failed due to crash detected")
+                    test_failed = True
+        except Exception as e:
+            log.error(f"Crash check failed: {e}")
+            test_failed = True
+
+        if _destructive_mds_injection:
+            _fs = fs_name or "cephfs-thrash"
+            recovery = CephInjectionRecovery(rados_obj, client_node)
+            recovery.destroy_damaged_filesystem(_fs, cephfs_mount_path)
+
         if config.get("cleanup_pools", True):
             log.debug("Cleaning up test resources...")
 
             # Phase 1: Unmount filesystems, cleanup RGW and NFS (parallel)
             cleanup_tasks = []
             with cf.ThreadPoolExecutor(max_workers=4) as cleanup_executor:
-                if enable_cephfs_pools:
+                if enable_cephfs_pools and not _destructive_mds_injection:
                     cleanup_tasks.append(
                         (
                             "CephFS",
@@ -1303,19 +1701,6 @@ def run(ceph_cluster, **kw):
         else:
             log.info("Skipping cleanup (cleanup_pools=False)")
 
-        test_end_time = get_cluster_timestamp(rados_obj.node)
-        log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
-
-        try:
-            if rados_obj.check_crash_status(
-                start_time=start_time, end_time=test_end_time
-            ):
-                log.error("Test failed due to crash detected")
-                test_failed = True
-        except Exception as e:
-            log.error(f"Crash check failed: {e}")
-            test_failed = True
-
         if enable_debug_logs:
             log.info("Forcing log rotation on OSD nodes...")
             try:
@@ -1328,21 +1713,48 @@ def run(ceph_cluster, **kw):
                 if fsid:
                     logrotate_cmd = f"logrotate -f /etc/logrotate.d/ceph-{fsid}"
                     osd_hosts = rados_obj.get_osd_hosts()
+                    host_objs = []
                     for host in osd_hosts:
+                        host_obj = utils.get_node_by_id(ceph_cluster, host)
+                        if host_obj:
+                            host_objs.append(host_obj)
+
+                    def _rotate_log(node):
                         try:
-                            host.exec_command(
+                            node.exec_command(
                                 cmd=logrotate_cmd,
                                 sudo=True,
                                 check_ec=False,
                                 long_running=True,
                             )
-                            time.sleep(10)
-                            log.debug(f"Log rotation completed on {host.hostname}")
+                            log.debug(f"Log rotation completed on {node.hostname}")
                         except Exception:
                             pass
-                    log.info(f"Log rotation triggered on {len(osd_hosts)} OSD host(s)")
+
+                    with cf.ThreadPoolExecutor(max_workers=len(host_objs)) as pool:
+                        pool.map(_rotate_log, host_objs)
+                    log.info(
+                        f"Log rotation triggered on {len(host_objs)} OSD host(s) in parallel"
+                    )
             except Exception as e:
                 log.warning(f"Failed to rotate logs: {e}")
+
+        # Post-cleanup: recover any persistent injection damage
+        try:
+            post_recovery = CephInjectionRecovery(rados_obj, client_node)
+            recovery_result = post_recovery.recover_all(
+                fs_name=(
+                    None if _destructive_mds_injection else (fs_name or "cephfs-thrash")
+                ),
+                cephfs_mount_path=cephfs_mount_path,
+            )
+            if recovery_result.get("bluestore_recovery"):
+                log.info(
+                    f"BlueStore recovery: "
+                    f"{recovery_result['bluestore_recovery']['summary']}"
+                )
+        except Exception as e:
+            log.warning(f"Post-cleanup recovery failed: {e}")
 
         log.info("Cleanup phase completed")
 
@@ -1376,8 +1788,9 @@ def create_rados_pools(
 
     # Load pool configs from file (with caching)
     if _POOL_CONFIGS_CACHE is None:
-        log.debug(f"Loading pool configs from: {POOL_CONFIGS_FILE}")
-        with open(POOL_CONFIGS_FILE, "r") as f:
+        pool_configs_path = _get_pool_configs_path(rados_obj.rhbuild)
+        log.debug(f"Loading pool configs from: {pool_configs_path}")
+        with open(pool_configs_path, "r") as f:
             _POOL_CONFIGS_CACHE = yaml.safe_load(f)
         log.debug("Pool configs cached for future use")
 
@@ -1982,20 +2395,16 @@ def thrash_pg_count(
     stop_flag: Dict,
 ) -> int:
     """
-    Thrash PG count via bulk flag and trigger scrubbing to detect inconsistencies.
+    Thrash PG count via bulk flag toggle to exercise PG split and merge paths.
 
     Per iteration:
     1. Enable bulk flag on all pools (triggers PG split)
-    2. Run cluster-wide deep-scrub
-    3. Wait 90-120 seconds for splits and deep-scrub
-    4. Remove bulk flag from all pools (triggers PG merge)
-    5. Run cluster-wide scrub
-    6. Wait 90-120 seconds for merges and scrub
+    2. Wait 90-120 seconds for splits to complete
+    3. Remove bulk flag from all pools (triggers PG merge)
+    4. Wait 90-120 seconds for merges to complete
 
-    Deep-scrub and scrub operations are critical for detecting:
-    - Missing EC shard objects (from bug #74221)
-    - Data inconsistencies from incorrect clones
-    - Object mismatches between shards
+    Scrub and deep-scrub operations are handled separately by
+    thrash_scrubs() when enable_scrub_thrashing is enabled.
 
     Args:
         rados_obj: RadosOrchestrator object
@@ -2007,13 +2416,13 @@ def thrash_pg_count(
     Returns:
         Number of iterations completed
     """
-    log.info(f"Starting PG count thrashing and scrubbing (iterations: {iterations})")
+    log.info(f"Starting PG count thrashing (iterations: {iterations})")
 
     # Filter RADOS pools only (exclude CephFS and RBD pools)
     rados_pools = tuple(p for p in pools if p.get("client") not in ("cephfs", "rbd"))
 
     if not rados_pools:
-        log.info("No RADOS pools found, skipping PG count thrashing and scrubbing")
+        log.info("No RADOS pools found, skipping PG count thrashing")
         return 0
 
     log.info(f"Will thrash PG count and scrub PGs on {len(rados_pools)} RADOS pool(s)")
@@ -2038,47 +2447,39 @@ def thrash_pg_count(
                 break
 
             log.info(
-                f"Iteration {iteration + 1}/{iterations}: PG thrashing and deep scrubbing on all pools"
+                f"Iteration {iteration + 1}/{iterations}: PG thrashing on all pools"
             )
 
-            # Phase 1: Enable bulk flag on ALL pools
+            # Phase 1: Enable bulk flag on ALL pools (triggers PG split)
             for pool in rados_pools:
                 pool_name = pool["pool_name"]
                 pool_obj.set_bulk_flag(pool_name=pool_name)
                 bulk_enabled_pools.append(pool_name)
 
-            # Trigger cluster-wide deep scrub once (not per-pool)
             if bulk_enabled_pools:
-                rados_obj.run_deep_scrub()
                 pool_count = len(bulk_enabled_pools)
                 log.info(
-                    f"  Enabled bulk on {pool_count} pool(s), sleeping for PG splits and deep scrubbing..."
+                    f"  Enabled bulk on {pool_count} pool(s), "
+                    f"sleeping for PG splits..."
                 )
 
-                # Phase 2: Sleep while ALL pools split PGs simultaneously and deep scrubbing
+                # Phase 2: Sleep while ALL pools split PGs simultaneously
                 time.sleep(random.uniform(90, 120))
 
-                # Phase 3: Remove bulk flag from ALL pools
-                log.info(
-                    f"  Removing bulk from {pool_count} pool(s) and triggering scrub..."
-                )
+                # Phase 3: Remove bulk flag from ALL pools (triggers PG merge)
+                log.info(f"  Removing bulk from {pool_count} pool(s)...")
                 for pool_name in bulk_enabled_pools:
                     pool_obj.rm_bulk_flag(pool_name=pool_name)
                 bulk_enabled_pools.clear()
 
-                # Trigger cluster-wide scrub once (not per-pool)
-                rados_obj.run_scrub()
-
-                # Phase 4: Sleep for PG merges and scrubbing
-                log.info(
-                    f"  Sleeping while {pool_count} pool(s) merge PGs and scrubbing PGs..."
-                )
+                # Phase 4: Sleep for PG merges
+                log.info(f"  Sleeping while {pool_count} pool(s) merge PGs...")
                 time.sleep(random.uniform(90, 120))
 
                 completed += 1
             else:
                 log.warning(
-                    f"Iteration {iteration + 1}: No pools had bulk enabled, skipping PG thrashing and scrubbing"
+                    f"Iteration {iteration + 1}: No pools had bulk enabled, skipping PG thrashing"
                 )
     except Exception as e:
         log.error(f"Exception in thrash_pg_count: {e}")
@@ -2090,7 +2491,114 @@ def thrash_pg_count(
             for pool_name in bulk_enabled_pools:
                 pool_obj.rm_bulk_flag(pool_name=pool_name)
 
-    log.info(f"PG count thrashing and scrubbing completed: {completed} iterations")
+    log.info(f"PG count thrashing completed: {completed} iterations")
+    return completed
+
+
+def thrash_scrubs(
+    rados_obj: RadosOrchestrator,
+    pools: List[Dict],
+    duration: int,
+    aggressive: bool,
+    stop_flag: Dict,
+) -> int:
+    """
+    Run periodic scrub and deep-scrub cycles on the cluster.
+
+    Each iteration randomly picks a scrub strategy and target:
+
+    Strategy (random per iteration):
+        - scrub: Standard scrub to verify replica/shard consistency
+        - deep-scrub: Full data + metadata verification with checksum
+
+    Target (random per iteration):
+        - cluster-wide: ceph osd scrub all / deep-scrub all
+        - per-pool: ceph osd pool scrub <pool> / deep-scrub <pool>
+        - per-osd: ceph osd scrub <osd_id> / deep-scrub <osd_id>
+
+    Timing:
+        - Normal mode: 30-60s between iterations
+        - Aggressive mode: 15-30s between iterations (more frequent scrubs)
+
+    This function is independent of thrash_pg_count and does NOT perform
+    PG split/merge operations. It purely exercises the scrub subsystem.
+
+    Args:
+        rados_obj: RadosOrchestrator instance
+        pools: List of pool config dicts (for per-pool targeting)
+        duration: Total duration in seconds
+        aggressive: If True, scrub more frequently with shorter intervals
+        stop_flag: Shared dict with "stop" key for coordinated shutdown
+
+    Returns:
+        Number of scrub operations completed
+    """
+    log.info(
+        f"Starting scrub thrashing (duration: {duration}s, aggressive: {aggressive})"
+    )
+
+    pool_names = [p["pool_name"] for p in pools if p.get("pool_name")]
+
+    osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+    osd_ids = [
+        node["id"]
+        for node in osd_tree.get("nodes", [])
+        if node.get("type") == "osd" and node.get("status") == "up"
+    ]
+    if not osd_ids:
+        log.warning("No up OSDs found for scrub thrashing, running cluster-wide only")
+
+    completed = 0
+    end_time = time.time() + duration
+
+    try:
+        while time.time() < end_time and not stop_flag.get("stop"):
+            scrub_type = random.choice(["scrub", "deep-scrub"])
+            target_type = random.choice(["cluster", "pool", "osd"])
+
+            try:
+                if target_type == "pool" and pool_names:
+                    target_pool = random.choice(pool_names)
+                    if scrub_type == "deep-scrub":
+                        rados_obj.run_deep_scrub(pool=target_pool)
+                    else:
+                        rados_obj.run_scrub(pool=target_pool)
+                    log.info(
+                        f"Scrub [{completed + 1}]: {scrub_type} on pool {target_pool}"
+                    )
+
+                elif target_type == "osd" and osd_ids:
+                    target_osd = random.choice(osd_ids)
+                    if scrub_type == "deep-scrub":
+                        rados_obj.run_deep_scrub(osd=target_osd)
+                    else:
+                        rados_obj.run_scrub(osd=target_osd)
+                    log.info(
+                        f"Scrub [{completed + 1}]: {scrub_type} on osd.{target_osd}"
+                    )
+
+                else:
+                    if scrub_type == "deep-scrub":
+                        rados_obj.run_deep_scrub()
+                    else:
+                        rados_obj.run_scrub()
+                    log.info(f"Scrub [{completed + 1}]: {scrub_type} cluster-wide")
+
+                completed += 1
+
+            except Exception as e:
+                log.warning(f"Scrub operation failed (non-fatal): {e}")
+
+            sleep_time = (
+                random.uniform(15, 30) if aggressive else random.uniform(30, 60)
+            )
+            time.sleep(sleep_time)
+
+    except Exception as e:
+        log.error(f"Exception in thrash_scrubs: {e}")
+        return completed
+
+    log.info(f"Scrub thrashing completed: {completed} operations")
     return completed
 
 
@@ -3924,7 +4432,8 @@ def thrash_nfs_fio(
     Thrash NFS exports with mount -> FIO -> unmount cycles.
 
     Continuously cycles through:
-    1. Mount all NFS exports (cycling through NFSv3, NFSv4.1, NFSv4.2)
+    1. Mount all NFS exports (cycling NFSv4.0/4.1/4.2, and NFSv3 only if the
+       cluster was created with enable_nfsv3)
     2. Run NFS export info/ls commands on 2 random exports
     3. Run FIO workloads on all mounted exports (cycling through I/O patterns)
     4. Unmount all exports
@@ -3939,11 +4448,21 @@ def thrash_nfs_fio(
     Returns:
         Total number of completed mount-FIO-unmount cycles across all workers
     """
-    nfs_versions = (
-        ("3", "nfsvers=3,nolock"),
+    nfs_versions_v4 = (
+        ("4.0", "nfsvers=4.0"),
         ("4.1", "nfsvers=4.1"),
         ("4.2", "nfsvers=4.2"),
     )
+    if nfs_config.get("enable_nfsv3"):
+        nfs_versions = (("3", "nfsvers=3,nolock"),) + nfs_versions_v4
+        log.info(
+            "NFS FIO thrashing includes NFSv3 (cluster was created with --enable-nfsv3)"
+        )
+    else:
+        nfs_versions = nfs_versions_v4
+        log.info(
+            "NFS FIO thrashing skips NFSv3 (cluster was created without --enable-nfsv3)"
+        )
 
     log.info("Starting NFS FIO thrashing (5 parallel workers)")
 
@@ -3992,6 +4511,7 @@ def thrash_nfs_fio(
                         nfs_version=assigned_nfs_version,
                         duration=duration,
                         stop_flag=stop_flag,
+                        nfs_config=nfs_config,
                     )
                 )
 
@@ -4024,7 +4544,8 @@ def _nfs_worker_thread(
     nfs_version: tuple,
     duration: int,
     stop_flag: Dict,
-) -> int:
+    nfs_config: Dict[str, Any],
+) -> Dict[str, int]:
     """
     Worker thread for NFS FIO thrashing.
 
@@ -4036,10 +4557,11 @@ def _nfs_worker_thread(
         worker_id: Unique worker identifier
         export_group: List of (idx, export_dict) tuples assigned to this worker
         cluster_host_map: Cluster ID to host mapping
-        cluster_port_map: Cluster ID to port mapping
+        cluster_port_map: Cluster ID to TCP NFS port mapping (informational)
         nfs_version: Tuple of (version_str, mount_options) e.g. ("4.1", "nfsvers=4.1")
         duration: Total duration in seconds
         stop_flag: Stop signal dict
+        nfs_config: Full NFS setup dict (enable_rdma, clusters with rdma_port, etc.)
 
     Returns:
         Dict with cycles completed and failures encountered by this worker
@@ -4099,8 +4621,11 @@ def _nfs_worker_thread(
                 mount_point = exp["mount_point"]
                 try:
                     client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
+                    mount_opts = _nfs_client_mount_option_string(
+                        nfs_config, exp["cluster_id"], nfs_options
+                    )
                     mount_cmd = (
-                        f"mount -t nfs -o {nfs_options},port={exp['port']} "
+                        f"mount -t nfs -o {mount_opts} "
                         f"{exp['host']}:{exp['pseudo_path']} {mount_point}"
                     )
                     client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
@@ -4212,9 +4737,12 @@ FSOPS_WORKER
 
                     # Unmount and remount to verify persistence
                     mount_point = exp["mount_point"]
+                    remount_opts = _nfs_client_mount_option_string(
+                        nfs_config, exp["cluster_id"], nfs_options
+                    )
                     client_node.exec_command(
                         cmd=f"umount -lf {mount_point} && sleep 1 && "
-                        f"mount -t nfs -o {nfs_options},port={exp['port']} "
+                        f"mount -t nfs -o {remount_opts} "
                         f"{exp['host']}:{exp['pseudo_path']} {mount_point}",
                         sudo=True,
                         timeout=60,
@@ -4271,6 +4799,34 @@ FSOPS_WORKER
     return {"cycles": cycle_count, "failures": failures}
 
 
+def _nfs_client_mount_option_string(
+    nfs_config: Dict[str, Any],
+    cluster_id: str,
+    nfs_options_base: str,
+) -> str:
+    """
+    Build mount -o string for NFS client: nfsvers/... plus port= and optional rdma.
+
+    When nfs_config['enable_rdma'] is True, uses per-cluster rdma_port from
+    create_nfs_clusters_and_exports and appends the rdma mount option.
+    """
+    clusters = nfs_config.get("clusters", [])
+    port = None
+    for c in clusters:
+        if c["cluster_id"] == cluster_id:
+            if nfs_config.get("enable_rdma") and c.get("rdma_port") is not None:
+                port = c["rdma_port"]
+                return f"{nfs_options_base},rdma,port={port}"
+            port = c.get("port")
+            break
+    if port is None:
+        log.warning(
+            "_nfs_client_mount_option_string: no port for cluster_id=%s", cluster_id
+        )
+        return nfs_options_base
+    return f"{nfs_options_base},port={port}"
+
+
 def _pick_nfs_endpoint(nfs_config: Dict[str, Any], index: int = 0):
     """Helper to pick NFS export endpoint by index with cached lookups."""
     exports = nfs_config.get("exports", [])
@@ -4285,7 +4841,15 @@ def _pick_nfs_endpoint(nfs_config: Dict[str, Any], index: int = 0):
 
     exp = exports[index % len(exports)]
     host = nfs_config["_cluster_host_map"].get(exp["cluster_id"])
-    port = nfs_config["_cluster_port_map"].get(exp["cluster_id"])
+    cid = exp["cluster_id"]
+    if nfs_config.get("enable_rdma"):
+        if "_cluster_rdma_port_map" not in nfs_config:
+            nfs_config["_cluster_rdma_port_map"] = {
+                c["cluster_id"]: c.get("rdma_port") for c in clusters
+            }
+        port = nfs_config["_cluster_rdma_port_map"].get(cid)
+    else:
+        port = nfs_config["_cluster_port_map"].get(cid)
     return exp, host, port
 
 
@@ -4319,9 +4883,11 @@ def _nfs_mount_context(
     unique_suffix = uuid.uuid4().hex[:8]
     mount_point = f"{mount_base}-{unique_suffix}"
 
+    mount_opts = _nfs_client_mount_option_string(
+        nfs_config, exp["cluster_id"], f"nfsvers={nfs_ver}"
+    )
     mount_cmd = (
-        f"mount -t nfs -o nfsvers={nfs_ver},port={port} "
-        f"{host}:{exp['pseudo_path']} {mount_point}"
+        f"mount -t nfs -o {mount_opts} " f"{host}:{exp['pseudo_path']} {mount_point}"
     )
     try:
         client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
@@ -4919,10 +5485,13 @@ def _cleanup_cephfs(client_node, mount_path: str, fs_name: str) -> None:
         try:
             mount_path = mount_path.rstrip("/")
             client_node.exec_command(
-                cmd=f"umount {mount_path}", sudo=True, check_ec=False
+                cmd=f"umount -l {mount_path}", sudo=True, check_ec=False
             )
+            time.sleep(3)
             client_node.exec_command(
-                cmd=f"rm -rf {mount_path}", sudo=True, check_ec=False
+                cmd=f"timeout 30 rm -rf {mount_path}",
+                sudo=True,
+                check_ec=False,
             )
             log.debug(f"CephFS unmounted from {mount_path}")
         except Exception as e:
@@ -4959,7 +5528,7 @@ def _cleanup_rbd(client_node, mount_path: str, device_path: str) -> None:
         try:
             mount_path = mount_path.rstrip("/")
             client_node.exec_command(
-                cmd=f"umount {mount_path}", sudo=True, check_ec=False
+                cmd=f"umount -l {mount_path}", sudo=True, check_ec=False
             )
             if device_path:
                 client_node.exec_command(
@@ -4968,7 +5537,9 @@ def _cleanup_rbd(client_node, mount_path: str, device_path: str) -> None:
                     check_ec=False,
                 )
             client_node.exec_command(
-                cmd=f"rm -rf {mount_path}", sudo=True, check_ec=False
+                cmd=f"timeout 30 rm -rf {mount_path}",
+                sudo=True,
+                check_ec=False,
             )
             log.debug(f"RBD unmounted from {mount_path}")
         except Exception as e:

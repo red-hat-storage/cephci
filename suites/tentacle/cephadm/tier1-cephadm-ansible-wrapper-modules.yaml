@@ -14,6 +14,7 @@ tests:
   - test:
       name: Bootstrap cluster using cephadm-ansible wrapper modules
       desc: Execute 'playbooks/bootstrap-cluster.yaml' playbook
+      comments: Test fails due to Product Bug IBMCEPH-15709
       polarion-id: CEPH-83575201
       module: test_cephadm_ansible_bootstrap.py
       config:

@@ -222,6 +222,10 @@ tests:
               args: # sleep to get all services deployed
                 - sleep
                 - "120"
+          - config:
+              args:
+                - "ceph config set mgr mgr/cephadm/use_agent true"
+              command: shell
 
   - test:
       name: Setup destination node for SNMP traps

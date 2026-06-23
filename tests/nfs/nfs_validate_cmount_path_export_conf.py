@@ -27,6 +27,7 @@ def run(ceph_cluster, **kw):
     nfs_server_name = nfs_nodes[0].hostname
     fs_name = "cephfs"
     export_name = "/export_1"
+    Ceph(clients[0]).fs.sub_volume_group.create(group="ganeshagroup", volume=fs_name)
 
     if no_clients > len(clients):
         raise ConfigError("The test requires more clients than available")
@@ -43,6 +44,8 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs_name,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Fetch the export info

@@ -23,7 +23,7 @@ tests:
                 verbose: true
               args:
                 rhcs-version: 8.0
-                release: rc
+                release: released
                 platform: rhel-9
                 mon-ip: mero001
                 allow-fqdn-hostname: true

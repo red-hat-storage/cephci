@@ -174,6 +174,10 @@ tests:
                     virtual_ip: 10.0.208.0/22
                     frontend_port: 8000
                     monitor_port: 1967
+          - config:
+              args:
+                - "ceph config set mgr mgr/cephadm/use_agent true"
+              command: shell
   - test:
       name: Restarting ha proxy service using cephadm
       desc: Apply Ceph orch restart for all the daemons

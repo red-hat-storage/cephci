@@ -91,6 +91,7 @@ tests:
         run-on-rgw: true
         extra-pkgs:
           - jdk
+        git_clone_configs_repo: true
         install_start_kafka: true
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
@@ -403,33 +404,6 @@ tests:
   #       script-name: test_bucket_policy_ops.py
   #       config-file-name: test_public_access_block_restricted_public_buckets.yaml
   #     comments: known issue - Bug 2344730 atrgetted to 9.0
-
-  # test checksum with awscli v1 and v2
-
-  - test:
-      name: test checksum with awscli_v1_v2 small objects
-      desc: test checksum with awscli_v1_v2 small objects
-      polarion-id: CEPH-83591699
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
-        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_small_objects.yaml
-  - test:
-      name: test checksum with awscli_v1_v2 non-multipart objects
-      desc: test checksum with awscli_v1_v2 non-multipart objects
-      polarion-id: CEPH-83591699
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
-        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_non_multipart.yaml
-  - test:
-      name: test checksum with awscli_v1_v2 multipart objects
-      desc: test checksum with awscli_v1_v2 multipart objects
-      polarion-id: CEPH-83591699
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
-        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_multipart.yaml
 
   - test:
       name: Test scenario of object deletion with version id

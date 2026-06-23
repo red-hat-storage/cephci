@@ -25,13 +25,13 @@ instance:
       baseos:
         name: BaseOS
         baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/BaseOS/
-        gpcheck: false
+        gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
         baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/CRB/
-        gpcheck: false
+        gpgcheck: false
         enabled: true
 
     # write the mirror registry details
@@ -82,6 +82,36 @@ instance:
       - content: |
           PermitRootLogin yes
         path: /etc/ssh/sshd_config.d/50-cephci.conf
+        owner: root:root
+        permissions: '0644'
+      - content: |
+          {
+              "default": [
+                  {
+                      "type": "insecureAcceptAnything"
+                  }
+              ],
+              "transports": {
+                  "docker": {
+                      "registry.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "registry.stage.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "quay.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ]
+                  }
+              }
+          }
+        path: /etc/containers/policy.json
         owner: root:root
         permissions: '0644'
 

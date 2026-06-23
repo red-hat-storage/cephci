@@ -14,6 +14,7 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
+    fuse_mount_dir = None
     try:
         """
          CEPH-83586730 - validate standby replay node not removed after setting mds_inject_health_dummy
@@ -152,8 +153,13 @@ def run(ceph_cluster, **kw):
         test_fail = 0
         if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
             test_fail = 1
-        client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False)
-        client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}", check_ec=False)
+        if fuse_mount_dir:
+            client1.exec_command(
+                sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False
+            )
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {fuse_mount_dir}", check_ec=False
+            )
         client1.exec_command(
             sudo=True, cmd=f"ceph fs set {fs_name} allow_standby_replay 0"
         )

@@ -64,11 +64,15 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Create a file on Mount point
         cmd = f"touch {nfs_mount}/{filename}"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(
+            cmd=cmd,
+        )
 
         # Set the extended attribute of the file
         setfattr(
@@ -84,7 +88,9 @@ def run(ceph_cluster, **kw):
         # Perform mv operation and validate the extended attribute
         move_filename = "Testfile_mv"
         cmd = f"mv {nfs_mount}/{filename} {nfs_mount}/{move_filename}"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(
+            cmd=cmd,
+        )
 
         # Fetch the extended attribute of the file
         fetch_xattr(client=clients[0], file_path=f"{nfs_mount}/{move_filename}")
@@ -94,7 +100,9 @@ def run(ceph_cluster, **kw):
         cmd = (
             f"cp --preserve=all {nfs_mount}/{move_filename} {nfs_mount}/{copy_filename}"
         )
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(
+            cmd=cmd,
+        )
 
         # Fetch the extended attribute of the file
         fetch_xattr(client=clients[0], file_path=f"{nfs_mount}/{copy_filename}")

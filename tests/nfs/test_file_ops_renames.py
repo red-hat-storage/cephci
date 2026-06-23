@@ -8,41 +8,41 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def create_rename_files(mount_point, num_files, client1, client2):
+def create_rename_files(mount_point, num_files, client1, client2, sudo=False):
     for i in range(1, num_files + 1):
         try:
             client1.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1",
             )
             client2.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"mv {mount_point}/file{i} {mount_point}/renamefile{i}",
             )
         except Exception:
             raise OperationFailedError(f"failed to create file file{i}")
 
 
-def create_rename_dirs(mount_point, num_dirs, client1, client2):
+def create_rename_dirs(mount_point, num_dirs, client1, client2, sudo=False):
     for i in range(1, num_dirs + 1):
         try:
             client1.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"mkdir {mount_point}/dir{i}",
             )
             client2.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"mv {mount_point}/dir{i} {mount_point}/renamedir{i}",
             )
         except Exception:
             raise OperationFailedError(f"failed to create directory dir{i}")
 
 
-def perform_lookups(client, mount_point, num_files, num_dirs):
+def perform_lookups(client, mount_point, num_files, num_dirs, sudo=False):
     for _ in range(1, num_files + num_dirs):
         try:
             client.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"ls -laRt {mount_point}/",
             )
         except FileNotFoundError as e:
@@ -62,6 +62,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     clients = ceph_cluster.get_nodes("client")
+    sudo = config.get("sudo", True)
 
     port = config.get("port", "2049")
     version = config.get("nfs_version")
@@ -93,6 +94,8 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs_name,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Create files from Client 1 and perform lookups and rename from client 2 and client 3
@@ -105,6 +108,7 @@ def run(ceph_cluster, **kw):
                 num_files,
                 client1=clients[0],
                 client2=clients[1],
+                sudo=sudo,
             )
             create_dirs_future = executor.submit(
                 create_rename_dirs,
@@ -112,9 +116,10 @@ def run(ceph_cluster, **kw):
                 num_dirs,
                 client1=clients[0],
                 client2=clients[1],
+                sudo=sudo,
             )
             perform_lookups_future = executor.submit(
-                perform_lookups, clients[2], nfs_mount, num_files, num_dirs
+                perform_lookups, clients[2], nfs_mount, num_files, num_dirs, sudo=sudo
             )
 
             futures.extend(

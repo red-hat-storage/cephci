@@ -47,29 +47,27 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Create file in local file system
         cmd = f"touch {nfs_mount}/test_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Create hard links
         cmd = f"ln {nfs_mount}/test_file {nfs_mount}/link_file"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[0].exec_command(cmd=cmd)
 
         # Check inode for original and hard link file
         original_file_inode = (
             clients[0]
-            .exec_command(cmd="ls -i /mnt/nfs/test_file | awk '{print $1}'", sudo=True)[
-                0
-            ]
+            .exec_command(cmd="ls -i /mnt/nfs/test_file | awk '{print $1}'")[0]
             .strip()
         )
         hard_link_file_inode = (
             clients[0]
-            .exec_command(cmd="ls -i /mnt/nfs/link_file | awk '{print $1}'", sudo=True)[
-                0
-            ]
+            .exec_command(cmd="ls -i /mnt/nfs/link_file | awk '{print $1}'")[0]
             .strip()
         )
         if original_file_inode != hard_link_file_inode:

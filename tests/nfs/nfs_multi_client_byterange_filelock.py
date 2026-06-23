@@ -36,6 +36,7 @@ def run(ceph_cluster, **kw):
     rc = 1
 
     try:
+
         log.info("=== Setting up NFS Cluster ===")
         setup_nfs_cluster(
             clients,
@@ -48,6 +49,9 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs_name,
             ceph_cluster=ceph_cluster,
+            single_export=True,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         if version == 3:

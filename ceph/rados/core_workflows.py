@@ -18,6 +18,7 @@ import random
 import re
 import time
 from collections import namedtuple
+from typing import Optional
 
 from ceph.ceph import CommandFailed, SocketTimeoutException, TimeoutException
 from ceph.ceph_admin import CephAdmin
@@ -28,6 +29,8 @@ from utility import utils
 from utility.log import Log
 
 log = Log(__name__)
+
+NFS_RDMA_DEFAULT_BASE_PORT = 20049
 
 
 class RadosOrchestrator:
@@ -5288,7 +5291,15 @@ EOF"""
         )["summary"]["total_kb"]
         return total_size_osd
 
-    def check_crash_status(self, check_logs=True, start_time=None, end_time=None):
+    def check_crash_status(
+        self,
+        check_logs=True,
+        start_time=None,
+        end_time=None,
+        check_mds=False,
+        check_nfs=False,
+        check_rgw=False,
+    ):
         """
         Module to check crashes on the cluster using multiple methods:
         1. Standard crash detection via 'ceph crash ls' command
@@ -5301,6 +5312,10 @@ EOF"""
                        (requires both start_time and end_time to be provided)
             start_time: Start time for log analysis
             end_time: End time for log analysis
+            check_mds: If True, also scan MDS daemon logs for crash patterns
+            check_nfs: If True, also scan NFS-Ganesha daemon logs for crash
+                       patterns (via cephadm logs / journalctl)
+            check_rgw: If True, also scan RGW daemon logs for crash patterns
 
         Returns:
             True -> crash detected (in either crash ls or log scan)
@@ -5331,8 +5346,18 @@ EOF"""
         # Method 2: Scan daemon logs for crash patterns (if requested and timestamps provided)
         if check_logs and start_time and end_time:
             try:
+                daemon_types = ["mon", "mgr", "osd"]
+                if check_mds:
+                    daemon_types.append("mds")
+                if check_nfs:
+                    daemon_types.append("nfs")
+                if check_rgw:
+                    daemon_types.append("rgw")
+
                 crash_report = self.scan_daemon_logs_for_crashes(
-                    start_time=start_time, end_time=end_time
+                    start_time=start_time,
+                    end_time=end_time,
+                    daemon_types=daemon_types,
                 )
                 if crash_report.get("crashes_found", False):
                     crash_detected = True
@@ -5551,16 +5576,23 @@ EOF"""
 
     def get_host_label(self, host_name):
         """
-        Method is used to get the labels list of the host
+        Return the ceph orch labels for ``host_name`` (inventory hostname).
+
         Args:
-            host_name: Host name
+            host_name: Host name as in ``ceph orch host ls``
 
-        Returns: List of labels of the host
+        Returns:
+            List of label strings (may be empty).
         """
-
         cmd_get_labels = f"ceph orch host ls --host_pattern {host_name}"
         host_output = self.run_ceph_command(cmd=cmd_get_labels)
-        return host_output[0]["labels"]
+        if not host_output or not isinstance(host_output, list) or len(host_output) < 1:
+            log.warning("get_host_label: no orch host data for %s", host_name)
+            return []
+        labels = host_output[0].get("labels")
+        if not labels:
+            return []
+        return list(labels)
 
     def remove_host_label(self, host_name, label):
         """
@@ -6119,6 +6151,20 @@ EOF"""
         # Compile all patterns into a single regex for efficiency
         combined_pattern = "|".join(crash_patterns)
 
+        # NFS-Ganesha specific crash/fatal patterns (separate from generic)
+        # Used only inside _scan_nfs_daemon() to avoid false positives in
+        # OSD/MON/MGR/MDS/RGW logs
+        nfs_crash_patterns = [
+            r"Fatal signal",
+            r"ganesha_exit",
+            r"FSAL.*FATAL",
+            r"NFS STARTUP.*FATAL",
+            r":MAIN :FATAL",
+            r"Server is about to die",
+            r"Shutting down on signal",
+        ]
+        nfs_combined_pattern = "|".join(crash_patterns + nfs_crash_patterns)
+
         # Initialize result with daemon_crashes keys for all requested daemon types
         result = {
             "crashes_found": False,
@@ -6202,9 +6248,16 @@ EOF"""
 
                     if daemon_id and daemon_host:
                         # Build log path based on daemon type
-                        log_path = (
-                            f"/var/log/ceph/{fsid}/ceph-{daemon_type}.{daemon_id}.log"
-                        )
+                        if daemon_type == "rgw":
+                            log_path = (
+                                f"/var/log/ceph/{fsid}/ceph-client"
+                                f".rgw.{daemon_id}.log"
+                            )
+                        else:
+                            log_path = (
+                                f"/var/log/ceph/{fsid}/ceph-"
+                                f"{daemon_type}.{daemon_id}.log"
+                            )
                         daemons_to_scan.append(
                             {
                                 "type": daemon_type,
@@ -6372,6 +6425,10 @@ EOF"""
                         if not journal_timestamp_pattern.match(line):
                             continue
 
+                        # Skip MGR crash-store KV writes (false positives)
+                        if d_type == "mgr" and "set mgr/crash/crash/" in line:
+                            continue
+
                         # Check if this line matches a crash pattern
                         matched_keyword = None
                         for pattern in crash_patterns:
@@ -6425,6 +6482,126 @@ EOF"""
 
             return scan_result
 
+        # Helper function to scan NFS daemon logs via cephadm logs
+        def _scan_nfs_daemon(daemon_info: dict) -> dict:
+            """
+            Scan NFS daemon logs via 'cephadm logs' (primary) or journalctl
+            (fallback). NFS-Ganesha does not write to /var/log/ceph/{fsid}/.
+
+            Uses 'cephadm logs --name nfs.{id} -- --since --until --no-pager'
+            which passes journalctl args through for native time filtering.
+
+            Args:
+                daemon_info: Dict with type, id, host, log_path
+
+            Returns:
+                Dict with daemon_type, daemon_id, host, crash_events
+            """
+            d_type = daemon_info["type"]
+            d_id = daemon_info["id"]
+            d_host = daemon_info["host"]
+
+            scan_result = {
+                "daemon_type": d_type,
+                "daemon_id": d_id,
+                "host": d_host,
+                "crash_events": [],
+            }
+
+            host_obj = host_cache.get(d_host)
+            if not host_obj:
+                return scan_result
+
+            service_name = f"nfs.{d_id}"
+            grep_pattern_escaped = nfs_combined_pattern.replace("'", "'\\''")
+            stack_context = context_lines * 3
+            max_events = 50
+
+            cephadm_cmd = f"""
+            cephadm logs --name {service_name} -- \
+              --since "{journal_start}" \
+              --until "{journal_end}" \
+              --no-pager 2>/dev/null | \
+            grep -E '{grep_pattern_escaped}' \
+              -B {stack_context} -A {stack_context} 2>/dev/null | \
+            head -n 1000 || true
+            """
+
+            try:
+                crash_output, _ = host_obj.exec_command(
+                    cmd=cephadm_cmd, sudo=True, check_ec=False
+                )
+
+                if crash_output and crash_output.strip():
+                    raw_lines = crash_output.strip().split("\n")
+                    crash_events = []
+                    seen_timestamps = set()
+
+                    blocks = []
+                    current_block = []
+                    for line in raw_lines:
+                        if line.strip() == "--":
+                            if current_block:
+                                blocks.append(current_block)
+                            current_block = []
+                        else:
+                            current_block.append(line)
+                    if current_block:
+                        blocks.append(current_block)
+
+                    all_patterns = crash_patterns + nfs_crash_patterns
+                    for block in blocks:
+                        for line in block:
+                            if not journal_timestamp_pattern.match(line):
+                                continue
+                            matched_keyword = None
+                            for pattern in all_patterns:
+                                if re.search(pattern, line, re.IGNORECASE):
+                                    matched_keyword = (
+                                        pattern.replace("\\", "")
+                                        .replace("[", "")
+                                        .replace("]", "")
+                                        .replace("(", "")
+                                        .replace(")", "")
+                                    )
+                                    break
+
+                            if matched_keyword:
+                                ts_match = journal_timestamp_pattern.match(line)
+                                timestamp_key = (
+                                    ts_match.group(0) if ts_match else line[:20]
+                                )
+                                if timestamp_key in seen_timestamps:
+                                    continue
+                                seen_timestamps.add(timestamp_key)
+                                crash_events.append(
+                                    {
+                                        "keyword": matched_keyword,
+                                        "line_number": 0,
+                                        "line": line,
+                                        "context": list(block),
+                                        "source": "cephadm_logs",
+                                    }
+                                )
+                                if len(crash_events) >= max_events:
+                                    break
+                        if len(crash_events) >= max_events:
+                            break
+
+                    scan_result["crash_events"] = crash_events
+                    if crash_events:
+                        log.info(
+                            f"Found {len(crash_events)} crash event(s) via "
+                            f"cephadm logs for {d_type}.{d_id}"
+                        )
+                    return scan_result
+
+            except Exception as e:
+                log.warning(f"cephadm logs failed for {service_name}: {e}")
+
+            log.info(f"Falling back to journalctl for {d_type}.{d_id}")
+            return _scan_daemon_via_journalctl(daemon_info)
+
         # Helper function to scan a single daemon's logs (for parallel execution)
         def _scan_single_daemon(daemon_info: dict) -> dict:
             """
@@ -6440,6 +6617,10 @@ EOF"""
             # If journalctl-only mode is enabled, skip file scanning entirely
             if use_journalctl_only:
                 return _scan_daemon_via_journalctl(daemon_info)
+
+            # NFS daemons have no log files; use dedicated scanner
+            if daemon_info["type"] == "nfs":
+                return _scan_nfs_daemon(daemon_info)
 
             d_type = daemon_info["type"]
             d_id = daemon_info["id"]
@@ -6577,6 +6758,12 @@ EOF"""
 
                     # Validate line number is numeric (grep -n output format)
                     if not line_num_str.isdigit():
+                        continue
+
+                    # Skip MGR lines that are storing crash data from other
+                    # daemons via the crash module KV store — not actual MGR
+                    # crashes (avoids false positives from OSD crash payloads)
+                    if d_type == "mgr" and "set mgr/crash/crash/" in line_content:
                         continue
 
                     # Deduplicate: skip if we've seen similar content
@@ -7077,6 +7264,8 @@ EOF"""
 
         log.info(f"Creating CephFS with {pool_type} data pool: {fs_name}")
 
+        self.run_ceph_command(cmd="ceph fs flag set enable_multiple true")
+
         self.create_cephfs_pools(
             client_node,
             fs_name,
@@ -7118,6 +7307,10 @@ EOF"""
         nfs_fs_name: str = "nfs-cephfs",
         pool_type: str = "erasure",
         enable_fast_ec_config_params: bool = False,
+        enable_rdma: bool = False,
+        rdma_port: Optional[int] = None,
+        enable_nfsv3: bool = False,
+        nfs_placement_label: Optional[str] = None,
     ) -> dict:
         """
         Create NFS clusters with a dedicated CephFS filesystem and exports.
@@ -7130,17 +7323,35 @@ EOF"""
             nfs_fs_name: CephFS filesystem name for NFS (default: "nfs-cephfs")
             pool_type: Pool type for CephFS - "erasure" or "replicated"
             enable_fast_ec_config_params: Whether to enable fast EC config params
+            enable_rdma: Pass --enable-rdma to ceph nfs cluster create
+            rdma_port: Optional base RDMA port; per-cluster port is
+                rdma_port + cluster_index (same pattern as NFS TCP 2049+i).
+                If omitted when enable_rdma is True, uses ``NFS_RDMA_DEFAULT_BASE_PORT``
+                (20049), i.e. 20049, 20050, … for multi-cluster.
+            enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create
+            nfs_placement_label: If set, prefer orch hosts whose ``labels`` include
+                this string. If no orch host has the label, fall back to all orch hosts.
+                If unset, use all orch hosts.
 
         Returns:
             Dict with nfs_config containing clusters, exports, fs_name, and pool info
         """
+        rdma_base = (
+            (rdma_port if rdma_port is not None else NFS_RDMA_DEFAULT_BASE_PORT)
+            if enable_rdma
+            else None
+        )
+
         log.info(
             f"Creating NFS setup: {num_clusters} clusters, "
             f"{exports_per_cluster} exports each"
+            f"{', RDMA enabled' if enable_rdma else ''}"
+            f"{', NFSv3 enabled on cluster' if enable_nfsv3 else ''}"
         )
 
         # Step 1: Create CephFS filesystem for NFS
         log.info(f"Creating CephFS filesystem for NFS: {nfs_fs_name}")
+        self.run_ceph_command(cmd="ceph fs flag set enable_multiple true")
         self.create_cephfs_pools(
             client_node=client_node,
             fs_name=nfs_fs_name,
@@ -7148,9 +7359,48 @@ EOF"""
             enable_fast_ec_config_params=enable_fast_ec_config_params,
         )
 
-        # Get OSD hosts for NFS placement
-        available_hosts = self.get_osd_hosts()
-        log.info(f"Available OSD hosts for NFS placement: {available_hosts}")
+        lbl = nfs_placement_label
+        raw = self.run_ceph_command(cmd="ceph orch host ls")
+        if isinstance(raw, dict):
+            rows = raw.get("hosts", [])
+        elif isinstance(raw, list):
+            rows = raw
+        else:
+            rows = []
+            if raw:
+                log.warning(
+                    "create_nfs_clusters_and_exports: unexpected orch host ls output type %s",
+                    type(raw).__name__,
+                )
+
+        orch_hosts = list(
+            dict.fromkeys(
+                e["hostname"] for e in rows if isinstance(e, dict) and e.get("hostname")
+            )
+        )
+        if lbl:
+            labeled_hosts = list(
+                dict.fromkeys(
+                    e["hostname"]
+                    for e in rows
+                    if e.get("hostname") and lbl in (e.get("labels") or [])
+                )
+            )
+            available_hosts = labeled_hosts or orch_hosts
+            if not labeled_hosts:
+                log.warning(
+                    "create_nfs_clusters_and_exports: no orch host with label %r; "
+                    "using all orch hosts",
+                    lbl,
+                )
+        else:
+            available_hosts = orch_hosts
+
+        if not available_hosts:
+            raise ValueError(
+                "create_nfs_clusters_and_exports: no hosts available for NFS placement"
+            )
+        log.info("NFS cluster placement hosts: %s", available_hosts)
 
         # Step 2: Create NFS clusters with unique ports starting from 2049
         clusters = []
@@ -7164,15 +7414,29 @@ EOF"""
             selected_host = available_hosts[host_idx]
             placement_str = f'"{placement} {selected_host}"'
 
+            cluster_rdma_port = (rdma_base + i) if enable_rdma else None
             log.info(
                 f"Creating NFS cluster: {cluster_id} on port {port}, host {selected_host}"
+                + (
+                    f", rdma_port {cluster_rdma_port}"
+                    if cluster_rdma_port is not None
+                    else ""
+                )
             )
 
             cmd = f"ceph nfs cluster create {cluster_id} {placement_str} --port={port}"
+            if enable_nfsv3:
+                cmd += " --enable-nfsv3"
+            if enable_rdma:
+                cmd += f" --enable-rdma --rdma_port {cluster_rdma_port}"
             self.client.exec_command(cmd=cmd, sudo=True)
-            clusters.append(
-                {"cluster_id": cluster_id, "port": port, "host": selected_host}
-            )
+            cluster_entry = {
+                "cluster_id": cluster_id,
+                "port": port,
+                "host": selected_host,
+                "rdma_port": cluster_rdma_port,
+            }
+            clusters.append(cluster_entry)
             time.sleep(5)  # Allow cluster to initialize
 
         log.info(f"Created {len(clusters)} NFS clusters")
@@ -7225,6 +7489,8 @@ EOF"""
             "clusters": clusters,
             "exports": exports,
             "pools": created_pools,
+            "enable_rdma": enable_rdma,
+            "enable_nfsv3": enable_nfsv3,
         }
 
     def cleanup_nfs_clusters(self, nfs_config: dict) -> None:
