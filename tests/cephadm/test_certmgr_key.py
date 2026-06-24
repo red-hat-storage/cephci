@@ -44,6 +44,8 @@ def run(ceph_cluster, **kw):
         hostname = get_node_by_id(ceph_cluster, _node).hostname
         # get the key name from entity list
         out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
+        print("value of out")
+        print(out)
         _key_name = out[_scope][_entity]["keys"][0]
         # check if user has provided value for cert/key or needs to generate ssl certificate key
         generate_ssl_key = config.get("generate_ssl_cert")

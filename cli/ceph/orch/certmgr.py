@@ -236,4 +236,63 @@ class CertMgr(Cli):
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
+
+    def set_cert_key(
+        self,
+        entity,
+        cert=None,
+        key=None,
+        cert_name=None,
+        service_name=None,
+        hostname=None,
+        force=False,
+    ):
+        """
+        Set both certificate and key for an entity in a single operation
+        
+        Args:
+            entity (str): entity name (e.g., rgw, nfs, ingress, nvmeof, iscsi, grafana, oauth2-proxy)
+            cert (str): certificate value or file path
+            key (str): key value or file path
+            cert_name (str): custom certificate name (optional)
+            service_name (str): service name if it's a service level certificate
+            hostname (str): hostname if it's a host level certificate
+            force (bool): force set even if certificate/key already exists
+            
+        Returns:
+            str: command output
+            
+        Example:
+            # Set cert and key with values
+            set_cert_key(entity="rgw", cert="cert_value", key="key_value", service_name="rgw.1")
+            
+            # Set cert and key with files
+            set_cert_key(entity="grafana", cert="/path/to/cert.pem", key="/path/to/key.pem", hostname="node1")
+            
+            # Set with custom cert name
+            set_cert_key(entity="rgw", cert="cert_value", key="key_value", cert_name="custom_rgw_cert", service_name="rgw.1")
+        """
+        cmd = f"{self.base_cmd} cert-key set {entity}"
+        
+        if cert:
+            cmd += f" --cert {cert}"
+        
+        if key:
+            cmd += f" --key {key}"
+        
+        if cert_name:
+            cmd += f" --cert_name {cert_name}"
+        
+        if service_name:
+            cmd += f" --service_name {service_name}"
+        
+        if hostname:
+            cmd += f" --hostname {hostname}"
+        
+        if force:
+            cmd += " --force"
+        
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
         return out

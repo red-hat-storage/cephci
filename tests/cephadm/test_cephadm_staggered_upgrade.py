@@ -27,13 +27,16 @@ def run(ceph_cluster, **kw):
                 - noout
                 - noscrub
                 - nodeep-scrub
+                flags:
+                - automatically-accept-license
                 daemon_types: mgr,mon
     """
     config = kw.get("config")
-    osd_flags = config.get("osd_flags")
+    osd_flags = config.get("osd_flags", [])
+    flags = config.get("flags", [])
     target_image = config.get("container_image")
     action = config.get("action")
-    node = ceph_cluster.get_nodes(role="mon")[0]
+    installer = ceph_cluster.get_ceph_object("installer")
     orch = Orch(cluster=ceph_cluster, **config)
     client = ceph_cluster.get_nodes(role="client")
     # Check cluster health before upgrade
@@ -42,38 +45,44 @@ def run(ceph_cluster, **kw):
         raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
     # Set osd flags
     for flag in osd_flags:
-        if CephAdm(node).ceph.osd.set(flag):
+        if CephAdm(installer).ceph.osd.set(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
     # Check target image
-    if CephAdm(node).ceph.orch.upgrade.check(image=target_image):
+    if CephAdm(installer).ceph.orch.upgrade.check(image=target_image):
         raise StaggeredUpgradeError("Upgrade image check failed")
     # Staggered upgrade with daemon_types
     if action == "daemon_types":
         daemon_types = config.get("daemon_types")
+        upgrade_kwargs = {"image": target_image, "daemon_types": daemon_types}
+
+        # Add flags if provided
+        for flag in flags:
+            upgrade_kwargs[flag] = True
+
         if daemon_types == "osd":
             limit = config.get("limit")
-            if CephAdm(node).ceph.orch.upgrade.start(
-                image=target_image, daemon_types=daemon_types, limit=limit
-            ):
+            upgrade_kwargs["limit"] = limit
+            if CephAdm(installer).ceph.orch.upgrade.start(**upgrade_kwargs):
                 raise StaggeredUpgradeError("Unable to start upgrade with daemon_types")
         else:
-            if CephAdm(node).ceph.orch.upgrade.start(
-                image=target_image, daemon_types=daemon_types
-            ):
+            if CephAdm(installer).ceph.orch.upgrade.start(**upgrade_kwargs):
                 raise StaggeredUpgradeError("Unable to start upgrade with daemon_types")
     # Staggered upgrade with services
     if action == "services":
         services = config.get("services")
+        upgrade_kwargs = {"image": target_image, "services": services}
+
+        # Add flags if provided
+        for flag in flags:
+            upgrade_kwargs[flag] = True
+
         if services == "osd.all_available_devices":
             limit = config.get("limit")
-            if CephAdm(node).ceph.orch.upgrade.start(
-                image=target_image, services=services, limit=limit
-            ):
+            upgrade_kwargs["limit"] = limit
+            if CephAdm(installer).ceph.orch.upgrade.start(**upgrade_kwargs):
                 raise StaggeredUpgradeError("Unable to start upgrade with services")
         else:
-            if CephAdm(node).ceph.orch.upgrade.start(
-                image=target_image, services=services
-            ):
+            if CephAdm(installer).ceph.orch.upgrade.start(**upgrade_kwargs):
                 raise StaggeredUpgradeError("Unable to start upgrade with services")
     # Staggered upgrade with hosts
     if action == "hosts":
@@ -81,7 +90,13 @@ def run(ceph_cluster, **kw):
         hosts = ",".join(
             [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
         )
-        if CephAdm(node).ceph.orch.upgrade.start(image=target_image, hosts=hosts):
+        upgrade_kwargs = {"image": target_image, "hosts": hosts}
+
+        # Add flags if provided
+        for flag in flags:
+            upgrade_kwargs[flag] = True
+
+        if CephAdm(installer).ceph.orch.upgrade.start(**upgrade_kwargs):
             raise StaggeredUpgradeError("Unable to start upgrade with hosts")
     # Staggered upgrade with all combinations
     if action == "all_combination":
@@ -92,15 +107,24 @@ def run(ceph_cluster, **kw):
         hosts = ",".join(
             [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
         )
-        if CephAdm(node).ceph.orch.upgrade.start(
-            image=target_image, daemon_types=daemon_types, limit=limit, hosts=hosts
-        ):
+        upgrade_kwargs = {
+            "image": target_image,
+            "daemon_types": daemon_types,
+            "limit": limit,
+            "hosts": hosts,
+        }
+
+        # Add flags if provided
+        for flag in flags:
+            upgrade_kwargs[flag] = True
+
+        if CephAdm(installer).ceph.orch.upgrade.start(**upgrade_kwargs):
             raise StaggeredUpgradeError("Unable to start upgrade with all combinations")
     # Check upgrade status
     orch.monitor_upgrade_status()
     # Unset osd flags
     for flag in osd_flags:
-        if CephAdm(node).ceph.osd.unset(flag):
+        if CephAdm(installer).ceph.osd.unset(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
     # Check cluster health after upgrade
     health = wait_for_cluster_health(client, "HEALTH_OK", 300, 10)
