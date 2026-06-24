@@ -1,5 +1,3 @@
-import json
-
 from nfs_delegation_operations import (
     CONF_KEY,
     LOG_TEMPLATE_BACKUP_PATH,
@@ -11,8 +9,8 @@ from nfs_delegation_operations import (
     run_cephadm_shell,
     run_export_level_delegation_checks,
     set_cluster_delegation,
-    verify_container_delegation,
-    verify_host_conf_delegation,
+    skip_delegation_tests_unless_supported,
+    verify_cluster_delegation_on_nfs_nodes,
 )
 from nfs_operations import (
     cleanup_cluster,
@@ -35,6 +33,8 @@ def run(ceph_cluster, **kw):
     and host conf, optionally runs export create/update/negative checks when Delegations=true.
     """
     config = kw.get("config", {})
+    if skip_delegation_tests_unless_supported(config):
+        return 0
     clients = ceph_cluster.get_nodes("client")
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     installers = ceph_cluster.get_nodes("installer")
@@ -55,6 +55,10 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdm(installer).ceph
     redeploy_wait = int(config.get("redeploy_wait", 10))
     service_wait_timeout = int(config.get("service_wait_timeout", 300))
+    delegation_verify_timeout = int(
+        config.get("delegation_verify_timeout", service_wait_timeout)
+    )
+    delegation_verify_poll = int(config.get("delegation_verify_poll_seconds", 5))
     delegation_sequence = [
         str(item).strip().lower()
         for item in config.get("delegation_sequence", ["true", "false"])
@@ -131,17 +135,14 @@ def run(ceph_cluster, **kw):
                 cephadm, nfs_clusters, installer, redeploy_wait, service_wait_timeout
             )
 
-            for cluster_name in nfs_clusters:
-                raw = cephadm.orch.ps(service_name=f"nfs.{cluster_name}", format="json")
-                daemons = json.loads(raw) if raw else []
-                if not daemons:
-                    raise OperationFailedError(
-                        f"No nfs daemons found in orch ps for nfs.{cluster_name}"
-                    )
-                verify_container_delegation(
-                    nfs_nodes, daemons, cluster_name, delegation
-                )
-                verify_host_conf_delegation(nfs_nodes, cluster_name, delegation)
+            verify_cluster_delegation_on_nfs_nodes(
+                cephadm,
+                nfs_nodes,
+                nfs_clusters,
+                delegation,
+                timeout_seconds=delegation_verify_timeout,
+                poll_interval=delegation_verify_poll,
+            )
 
             if run_export_level and delegation == "true" and not export_checks_done:
                 log.info(
