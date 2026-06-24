@@ -312,15 +312,9 @@ def run(ceph_cluster, **kw):
             log.info("Restarted active MDS daemon on host %s", active_host)
 
         def _restart_active_mgr_daemon():
-            out, _ = client.exec_command(sudo=True, cmd="ceph mgr dump -f json")
-            mgr_dump = json.loads(out)
-            active_name = mgr_dump.get("active_name")
-            if not active_name:
-                raise RuntimeError("Active MGR daemon not found")
-            client.exec_command(
-                sudo=True, cmd=f"ceph orch daemon restart mgr.{active_name}"
-            )
-            log.info("Restarted active MGR daemon: mgr.%s", active_name)
+            client.exec_command(sudo=True, cmd="ceph orch restart mgr")
+            log.info("Restarted active MGR daemon: mgr")
+            time.sleep(10)
 
         def _reboot_active_mds_node():
             active_mds = FsUtils.get_active_mdss(client, fs_name=fs_name)
@@ -393,8 +387,11 @@ def run(ceph_cluster, **kw):
         ]
         for stage, op in disruptive_ops:
             _check_io_health(f"{stage} pre-check")
-            op()
+            log.info("Checking cluster health before disruptive op: %s", stage)
             if common_utils.wait_for_healthy_ceph(client, wait_time=300):
+                raise RuntimeError(f"{stage}: cluster did not become healthy in time")
+            op()
+            if common_utils.wait_for_healthy_ceph(client, wait_time=1200):
                 raise RuntimeError(f"{stage}: cluster did not become healthy in time")
             _validate_metrics(
                 stage=stage,
