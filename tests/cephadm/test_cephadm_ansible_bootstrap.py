@@ -47,6 +47,13 @@ def run(ceph_cluster, **kwargs):
         installer, nodes, rhbuild, tools_repo, build_type, ibm_build, ansible_preflight
     )
 
+    # For .repo based custom repos in cephadm-ansible bootstrap flow, download the
+    # repo file explicitly on all nodes instead of relying on yum-config-manager.
+    if tools_repo.endswith(".repo"):
+        cmd = f"curl -L -o /etc/yum.repos.d/ceph_custom.repo {tools_repo}"
+        for node in nodes:
+            node.exec_command(sudo=True, cmd=cmd)
+
     # Get bootstrap config
     bootstrap_config = config.get("bootstrap")
 
@@ -63,6 +70,12 @@ def run(ceph_cluster, **kwargs):
     # Get registry details
     if bootstrap_config.get("autoload_registry_details") or ibm_build:
         module_args.update(autoload_registry_details(ibm_build))
+
+    # IBM Storage Ceph 9.1+ bootstrap requires explicit license acceptance.
+    # Add IBM 9.1+ specific IBM license flags
+    if ibm_build and rhbuild == "9.1":
+        module_args.setdefault("automatically_accept_license", True)
+        module_args.setdefault("disable_ibm_call_home", True)
 
     # Execute cephadm bootstrap playbook
     exec_cephadm_bootstrap(installer, nodes, playbook, **module_args)

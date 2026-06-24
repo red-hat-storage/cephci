@@ -891,12 +891,6 @@ def run(ceph_cluster, **kw):
 
             # execute COT commands that are now feasible in read-only mode
             for operation in readonly_ops:
-                if operation == "list_get_attributes" and rhbuild.split(".")[0] < "9":
-                    log.info(
-                        "Skipping execution for 'get attribute' cmd during ENOSPC. "
-                        "Bug - https://bugzilla.redhat.com/show_bug.cgi?id=2404644"
-                    )
-                    continue
                 log.info("Next operation will be performed for ENOSPC OSD %s" % _osd_id)
                 execute_ops(op=operation, cot_obj=objectstore_obj, _osd_id=_osd_id)
 

@@ -277,7 +277,6 @@ def nfs_byok_cephfs_test_run():
     for sv in sv_list:
         enc_args = {
             "enc_tag": byok_test_params["byok_params"]["enctag"],
-            "add_suffix": False,
             "group_name": sv.get("group_name", None),
             "fs_name": sv["vol_name"],
         }

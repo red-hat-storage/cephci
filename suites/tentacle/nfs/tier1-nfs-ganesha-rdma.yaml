@@ -1,0 +1,257 @@
+#===============================================================================================
+#---    Test Suite for NFS Ganesha over RDMA Transport   ---
+#===============================================================================================
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+#
+# Pre-requisites (run before this suite or chain after a deploy suite):
+#   1. install_prereq.py          — install software pre-requisites
+#   2. test_cephadm.py            — bootstrap cluster, deploy OSD/RGW/MDS,
+#                                   create cephfs volume and rbd pool
+#   3. test_client.py (x4)        — configure client.1..client.4 on node4..node7
+#                                   with ceph-common, ceph-fuse, admin keyring
+#
+# All tests use enable_rdma: true with proto=rdma for client mounts.
+# Direct daemon mounts only (no VIP/ingress RDMA tests yet).
+# Tests are sorted by number of clients required: 1-client, 2-client, 3+ client.
+#
+#===============================================================================================
+
+# --- 1-client tests ---
+
+tests:
+  - test:
+      name: NFS RDMA - Export Readonly
+      module: test_export_readonly.py
+      desc: Test NFS export with readonly over RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  # --- 2-client tests ---
+
+  - test:
+      name: NFS RDMA - File Operations
+      module: nfs_verify_file_operations.py
+      desc: Verify file create, softlink and lookups over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+        operations:
+          client01: create_files
+          client02: perform_lookups
+
+  - test:
+      name: NFS RDMA - File Lock
+      module: nfs_verify_file_lock.py
+      desc: Perform file locking from 2 clients over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Read Write Operations
+      module: nfs_verify_read_write_operations.py
+      desc: Verify read and write operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Soft Links
+      module: nfs_verify_file_ops_soft_links.py
+      desc: Verify soft link operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - File Truncate
+      module: nfs_file_truncate.py
+      desc: Verify file truncate operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Stress Test
+      module: nfs_verify_stress.py
+      desc: Verify NFS stress operations over RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Directory Depth and Permissions
+      module: nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify deep directory creation and permission handling over RDMA
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Export Rootsquash
+      module: test_export_rootsquash.py
+      desc: Verify rootsquash enforcement over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Get Set Attributes
+      module: test_nfs_get_set_attr_operation.py
+      desc: Verify get/set attribute operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Pynfs Test Suite
+      module: nfs_verify_pynfs.py
+      desc: Run pynfs compliance tests over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Xattr Operations
+      module: nfs_test_xattr_across_file_operations.py
+      desc: Verify extended attribute operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  # --- 3-client tests ---
+
+  - test:
+      name: NFS RDMA - Hard Links
+      module: nfs_verify_file_ops_hard_links.py
+      desc: Verify hard link operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - File Modification
+      module: nfs_verify_file_modification.py
+      desc: Verify file modification and timestamps over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Parallel IO and Lookups
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      desc: Verify parallel IO and lookups over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - File Append
+      module: nfs_file_append.py
+      desc: Verify file append operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - File Copy Operations
+      module: test_file_ops_copy.py
+      desc: Verify file and directory copy operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - File Rename Operations
+      module: test_file_ops_renames.py
+      desc: Verify file and directory rename operations over NFS RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"
+
+  # --- 4-client tests ---
+
+  - test:
+      name: NFS RDMA - Readdir Operations
+      module: nfs_verify_readdir_ops.py
+      desc: Verify directory listing operations over RDMA transport
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+        port: "2049"
+        enable_rdma: true
+        rdma_port: "20049"

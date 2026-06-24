@@ -51,9 +51,7 @@ class Export(Cli):
         # NFS-export-only options must not be passed to ``fs subvolume create``; doing so
         # can break ``subvolume getpath`` (empty path) and yields ``ceph nfs export create
         # ... --path=`` which makes Ganesha reject mounts (e.g. ENOENT / No such file).
-        subvol_kwargs = {
-            k: v for k, v in kwargs.items() if k not in ("enctag", "xprtsec")
-        }
+        subvol_kwargs = {k: v for k, v in kwargs.items() if k in ("enctag")}
 
         # Step 2: Create subvolume
         cmd = f"ceph fs subvolume create cephfs {subvol_name} --group_name ganeshagroup --namespace-isolated "

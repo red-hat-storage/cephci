@@ -477,6 +477,8 @@ def run(ceph_cluster, **kw):
             export=nfs_export,
             fs=fs,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
         log.info("NFS cluster setup complete.")
 

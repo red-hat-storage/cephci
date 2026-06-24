@@ -387,14 +387,14 @@ def run(ceph_cluster, **kw):
             snap_params["client"] = clients[0]
             ceph_version_1 = get_ceph_version_from_cluster(clients[0])
             sched_list = (
-                ["2m", "10h", "7d", "4w"]
+                ["2m", "7d", "4w"]
                 if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
-                else ["2M", "10h", "7d", "4w"]
+                else ["2M", "7d", "4w"]
             )
             snap_params["retention"] = (
-                "3m5h5d4w"
+                "3m5d4w"
                 if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
-                else "3M5h5d4w"
+                else "3M5d4w"
             )
             cmd = f"ceph fs subvolume getpath {sv['vol_name']} {sv['subvol_name']} "
             cmd += f"{sv['group_name']}"

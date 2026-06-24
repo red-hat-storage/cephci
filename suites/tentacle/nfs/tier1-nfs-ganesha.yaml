@@ -515,3 +515,23 @@ tests:
         nfs_cluster_name: cephfs-nfs-tls
         operation: tls_logs_openssl_probe
         redeploy_cluster_min_tls12: false
+
+  - test:
+      name: TLS mount fio IO with tcpdump encryption verification
+      module: security.test_tls_feature.py
+      desc: >
+        Phase 1: plain NFS cluster/export, fio write/read, tcpdump- fio buffer
+        pattern must appear in cleartext on the wire. Phase 2: TLS cluster/export,
+        same fio pattern must not appear; TLS wire traffic verified encrypted.
+      abort-on-fail: false
+      polarion-id: CEPH-83629170
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        plain_nfs_cluster_name: cephfs-nfs-plain
+        operation: tls_io_tcpdump_encryption
+        fio_size: 100M
+        fio_bs: 4k
+        fio_runtime: 300
+        timeout: 7200

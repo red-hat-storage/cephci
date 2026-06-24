@@ -1,3 +1,4 @@
+import base64
 import datetime
 import getpass
 import json
@@ -5,6 +6,7 @@ import os
 import random
 import re
 import smtplib
+import subprocess
 import time
 import traceback
 from copy import deepcopy
@@ -13,7 +15,6 @@ from email.mime.text import MIMEText
 from ipaddress import ip_address
 from string import ascii_uppercase, digits
 from typing import Any, Dict, Optional, Tuple
-from urllib import request
 
 import requests
 import yaml
@@ -24,7 +25,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
+from packaging.version import InvalidVersion, Version
 
+from cli.exceptions import ConfigError
 from utility.log import Log
 
 log = Log(__name__)
@@ -1402,26 +1405,57 @@ def generate_node_name(cluster_name, instance_name, run_id, node, role):
     return node_name
 
 
-def get_cephqe_ca() -> Optional[Tuple]:
-    """Retrieve CephCI QE CA certificate and key."""
-    base_uri = (
-        get_cephci_config()
-        .get("root-ca-location", "http://magna002.ceph.redhat.com/cephci-jenkins")
-        .rstrip("/")
-    )
-    ca_cert = None
-    ca_key = None
+def get_cephqe_ca() -> Tuple[Optional[Any], Optional[Any]]:
+    """Retrieve CephCI QE CA certificate and key from the cloned configs repo."""
+    try:
+        repo_dict = get_cephci_config()["repos"]["rgw_configs"]
+    except KeyError:
+        log.debug("Repo details are missing for rgw_configs in ~/.cephci.yaml")
+        return None, None
+
+    path_to_clone = os.path.expanduser(repo_dict["dest"])
+    repo_url = repo_dict["git_url"]
+    repo_dir_name = repo_url.rstrip("/").split("/")[-1]
+    if repo_dir_name.endswith(".git"):
+        repo_dir_name = repo_dir_name[:-4]
+    final_repo_path = os.path.join(path_to_clone, repo_dir_name)
 
     try:
-        with request.urlopen(url=f"{base_uri}/.cephqe-ca.pem") as fd:
-            ca_cert = x509.load_pem_x509_certificate(fd.read())
+        os.makedirs(path_to_clone, exist_ok=True)
+        if not os.path.exists(final_repo_path):
+            clone_url = repo_url
+            oauth_token = repo_dict.get("oauth_token")
+            if oauth_token:
+                clone_url = clone_url.replace(
+                    "https://", f"https://oauth2:{oauth_token}@"
+                )
+            subprocess.run(
+                ["git", "clone", "--depth", "1", clone_url, final_repo_path],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+    except BaseException as be:
+        log.debug(be)
+        return None, None
 
-        with request.urlopen(url=f"{base_uri}/.cephqe-ca.key") as fd:
-            ca_key = serialization.load_pem_private_key(fd.read(), None)
+    repo_ca_cert_path = os.path.join(final_repo_path, "rgw", "certs", ".ca.crt")
+    repo_ca_key_path = os.path.join(final_repo_path, "rgw", "certs", ".ca.key")
+
+    try:
+        with open(repo_ca_cert_path, "rb") as fd:
+            cert_pem = base64.b64decode(fd.read().strip())
+            ca_cert = x509.load_pem_x509_certificate(cert_pem)
+
+        with open(repo_ca_key_path, "rb") as fd:
+            key_pem = base64.b64decode(fd.read().strip())
+            ca_key = serialization.load_pem_private_key(key_pem, None)
+
+        return ca_key, ca_cert
     except BaseException as be:
         log.debug(be)
 
-    return ca_key, ca_cert
+    return None, None
 
 
 def generate_self_signed_certificate(subject: Dict) -> Tuple:
@@ -1483,7 +1517,7 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
         (
             ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
             if ca_cert
-            else None
+            else ""
         ),
     )
 
@@ -2006,8 +2040,20 @@ def configure_kafka_cluster_with_security(ceph_cluster, cloud_type):
 
 def config_keystone_ldap(rgw_node, cloud_type):
     """Set the keystone config option on the cluster at startup"""
-    keystone_server = get_cephci_config()["keystone"][cloud_type].get("url")
-    ldap_url = get_cephci_config()["ldap"][cloud_type].get("url")
+    cephci_config = get_cephci_config()
+    keystone_cfg = cephci_config.get("keystone", {})
+    ldap_cfg = cephci_config.get("ldap", {})
+    # OneCloud may share keystone/ldap with openstack; fallback if onecloud not configured
+    lookup = cloud_type if cloud_type in keystone_cfg else "openstack"
+    keystone_server = keystone_cfg.get(lookup, keystone_cfg.get("openstack", {})).get(
+        "url"
+    )
+    ldap_url = ldap_cfg.get(lookup, ldap_cfg.get("openstack", {})).get("url")
+    if not keystone_server or not ldap_url:
+        raise ConfigError(
+            f"keystone/ldap config missing for cloud_type '{cloud_type}'. "
+            "Add keystone.{cloud} and ldap.{cloud} to cephci config."
+        )
 
     out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
     rgw_name = out[0].split()[0]
@@ -2912,3 +2958,42 @@ def setup_gklm_prereq(ceph_cluster, cloud_type, custom_config):
     client_node.exec_command(sudo=True, cmd="ceph orch apply -i /root/rgw_spec.yaml")
     log.info("sleeping for 20 seconds")
     time.sleep(20)
+
+
+def extract_version(text: str) -> str:
+    """
+    Extract the first valid version token from a text string.
+
+    Args:
+        text: Command output string containing a version value.
+
+    Returns:
+        First token that parses as a packaging.version ``Version``; empty string if none.
+        e.g. 9.9.1.0 or 9.9.2.0
+    """
+    log.debug("Extracting version token from text: %s", text)
+
+    for token in text.split():
+        try:
+            Version(token)
+            _msg = f"Extracted version token: {token}"
+            log.debug(_msg)
+            return token
+        except InvalidVersion:
+            continue
+    log.warning("No valid version token found in text: %s", text)
+    return ""
+
+
+def extract_ceph_version(text: str) -> str:
+    """
+    Extract 'ceph' version from a text string.
+    Args:
+        text: Command output string containing a version value.
+
+    Returns:
+        19.2.1 or 20.2.1
+    """
+    match = re.search(r"\d+\.\d+\.\d+", text)
+
+    return match.group() if match else ""

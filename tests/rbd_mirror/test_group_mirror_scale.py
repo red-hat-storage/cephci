@@ -70,26 +70,29 @@ def test_scale_options(
     **kw,
 ):
     """
-    Test group mirroring with scale for 1 group having 50 images
+    Test group mirroring with scale.
+
     Args:
         rbd_primary: RBD object of primary cluster
-        rbd_secondary: RBD objevct of secondary cluster
-        client_primary: client node object of primary cluster
-        client_secondary: client node object of secondary cluster
+        rbd_secondary: RBD object of secondary cluster
+        client_primary: Client node object of primary cluster
+        client_secondary: Client node object of secondary cluster
         primary_cluster: Primary cluster object
         secondary_cluster: Secondary cluster object
-        pool_types: Replication pool or EC pool
+        pool_types: Replicated pool or EC pool
+        scale_option: Scale option selected for the run
         **kw: any other arguments
     """
 
     for pool_type in pool_types:
         rbd_config = kw.get("config", {}).get(pool_type, {})
         multi_pool_config = deepcopy(getdict(rbd_config))
+
         log.info("Running test CEPH-83611376 for %s", pool_type)
 
-        # FIO Params Required for ODF workload exclusively in group mirroring
         fio = kw.get("config", {}).get("fio", {})
-        io_config = {
+
+        base_io_config = {
             "size": fio["size"],
             "do_not_create_image": True,
             "num_jobs": fio["ODF_CONFIG"]["num_jobs"],
@@ -112,19 +115,22 @@ def test_scale_options(
         }
 
         for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
+            if "data_pool" in pool_config:
+                pool_config.pop("data_pool")
 
             pool_spec = None
+
             if "namespace" in pool_config:
                 enable_namespace_mirroring(
-                    rbd_primary, rbd_secondary, pool, **pool_config
+                    rbd_primary,
+                    rbd_secondary,
+                    pool,
+                    **pool_config,
                 )
                 pool_spec = pool + "/" + pool_config.get("namespace")
             else:
                 pool_spec = pool
 
-            # Create group
             scale_map = {
                 "test_1_group_50_images": (1, 50),
                 "test_100_groups_100_images": (100, 1),
@@ -133,7 +139,8 @@ def test_scale_options(
             }
 
             no_of_group, no_of_images_in_each_group = scale_map.get(
-                scale_option, (1, 1)
+                scale_option,
+                (1, 1),
             )
 
             group_image_kw = {
@@ -142,129 +149,198 @@ def test_scale_options(
                 "size_of_image": "30M",
                 "pool_spec": pool_spec,
             }
+
             out = create_group_add_images(rbd_primary, **group_image_kw)
-            log.info("Successfully created groups, images and added images to group")
 
-            # Run IO on images
-            group_config = {}
-            image_spec_copy = []
-            file_path_list = []
+            log.info(
+                "Successfully created %s groups with %s images each for pool spec %s",
+                no_of_group,
+                no_of_images_in_each_group,
+                pool_spec,
+            )
+
             for group_spec, images_spec in out.items():
-                group_config.update({"group-spec": group_spec})
-                for image_spec in images_spec:
-                    io_config["rbd_obj"] = rbd_primary
-                    io_config["client"] = client_primary
-                    image_spec_copy.append(image_spec)
-                    file_path_list.append("/mnt/mnt_" + random_string(len=5) + "/file")
-                io_config["config"]["image_spec"] = image_spec_copy
-                io_config["config"]["file_path"] = file_path_list
-                io, err = krbd_io_handler(**io_config)
-                if err:
-                    raise Exception("Map, mount and run IOs failed for " + image_spec)
-                else:
-                    log.info("Map, mount and IOs successful for " + image_spec)
+                group_config = {"group-spec": group_spec}
 
-            # Get Group Mirroring Status
-            group_mirror_status, err = rbd_primary.mirror.group.status(**group_config)
-            if err:
-                # 8.x and 9.x has different mirror status output
-                known_messages = [
-                    "mirroring disabled",
-                    "mirroring not enabled on the group",
+                image_spec_list = list(images_spec)
+
+                file_path_list = [
+                    "/mnt/mnt_" + random_string(len=5) + "/file"
+                    for _ in image_spec_list
                 ]
-                if any(msg in err for msg in known_messages):
-                    mirror_state = "Disabled"
+
+                group_io_config = deepcopy(base_io_config)
+                group_io_config["rbd_obj"] = rbd_primary
+                group_io_config["client"] = client_primary
+                group_io_config["config"]["image_spec"] = image_spec_list
+                group_io_config["config"]["file_path"] = file_path_list
+
+                log.info(
+                    "Running KRBD IO for group %s with %s images",
+                    group_spec,
+                    len(image_spec_list),
+                )
+
+                io, err = krbd_io_handler(**group_io_config)
+                if err:
+                    raise Exception(
+                        "Map, mount and run IOs failed for group "
+                        + group_spec
+                        + " with error: "
+                        + str(err)
+                    )
+
+                log.info(
+                    "Map, mount and IOs successful for group %s",
+                    group_spec,
+                )
+
+                group_mirror_status, err = rbd_primary.mirror.group.status(
+                    **group_config
+                )
+                if err:
+                    known_messages = [
+                        "mirroring disabled",
+                        "mirroring not enabled on the group",
+                    ]
+
+                    if any(msg in err for msg in known_messages):
+                        mirror_state = "Disabled"
+                    else:
+                        raise Exception(
+                            "Getting group mirror status failed for group "
+                            + group_spec
+                            + " : "
+                            + str(err)
+                        )
                 else:
-                    raise Exception("Getting group mirror status failed : " + str(err))
-            else:
-                mirror_state = "Enabled"
-            log.info(
-                "Group "
-                + group_config["group-spec"]
-                + " mirroring state is "
-                + mirror_state
-            )
+                    mirror_state = "Enabled"
 
-            # Enable Group Mirroring and Verify
-            if mirror_state == "Disabled":
-                enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
-            log.info("Successfully Enabled group mirroring")
+                log.info(
+                    "Group %s mirroring state is %s",
+                    group_spec,
+                    mirror_state,
+                )
 
-            # Wait for group mirroring to complete
-            wait_for_idle(rbd_primary, **group_config)
-            log.info(
-                "Successfully completed sync for group mirroring to secondary site"
-            )
+                if mirror_state == "Disabled":
+                    enable_group_mirroring_and_verify_state(
+                        rbd_primary,
+                        **group_config,
+                    )
 
-            # Validate size of each image should be same on site-a and site-b
-            group_image_list, err = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
-            if err:
-                raise Exception("Getting group image list failed : " + str(err))
+                log.info(
+                    "Successfully enabled group mirroring for group %s",
+                    group_spec,
+                )
 
-            compare_image_size_primary_secondary(
-                rbd_primary, rbd_secondary, group_image_list
-            )
-            log.info(
-                "Successfully verified size of rbd images matches across both clusters"
-            )
+                wait_for_idle(rbd_primary, **group_config)
 
-            # Check group is replicated on site-b using group info
-            group_info_status, err = rbd_secondary.group.info(
-                **group_config, format="json"
-            )
-            if err:
-                raise Exception("Getting group info failed : " + str(err))
+                log.info(
+                    "Successfully completed sync for group mirroring to secondary site "
+                    "for group %s",
+                    group_spec,
+                )
 
-            group_info = json.loads(group_info_status)
-            group_name_expected = group_config["group-spec"].split("/")[-1]
+                group_image_list, err = rbd_primary.group.image.list(
+                    **group_config,
+                    format="json",
+                )
+                if err:
+                    raise Exception(
+                        "Getting group image list failed for group "
+                        + group_spec
+                        + " : "
+                        + str(err)
+                    )
 
-            if (
-                group_info["group_name"] != group_name_expected
-                or group_info["mirroring"]["state"] != "enabled"
-                or group_info["mirroring"]["mode"] != "snapshot"
-                or group_info["mirroring"]["primary"]
-            ):
-                raise Exception("Group info is not as expected on secondary cluster")
+                compare_image_size_primary_secondary(
+                    rbd_primary,
+                    rbd_secondary,
+                    group_image_list,
+                )
 
-            log.info("Successfully verified group is present on secondary cluster")
+                log.info(
+                    "Successfully verified image sizes match across both clusters "
+                    "for group %s",
+                    group_spec,
+                )
 
-            # Verify group mirroring status on both clusters & Match global id of both cluster
-            group_mirror_status_verify(
-                primary_cluster,
-                secondary_cluster,
-                rbd_primary,
-                rbd_secondary,
-                primary_state="up+stopped",
-                secondary_state="up+replaying",
-                **group_config,
-                global_id=False,
-            )
-            log.info("Successfully verified group status")
+                group_info_status, err = rbd_secondary.group.info(
+                    **group_config,
+                    format="json",
+                )
+                if err:
+                    raise Exception(
+                        "Getting group info failed for group "
+                        + group_spec
+                        + " : "
+                        + str(err)
+                    )
 
-            # Validate the integrity of the data on secondary site-b
-            check_mirror_consistency(
-                rbd_primary,
-                rbd_secondary,
-                client_primary,
-                client_secondary,
-                group_image_list,
-            )
-            log.info(
-                "Successfully verified md5sum of all images matches across both clusters"
-            )
+                group_info = json.loads(group_info_status)
+                group_name_expected = group_config["group-spec"].split("/")[-1]
+
+                if (
+                    group_info["group_name"] != group_name_expected
+                    or group_info["mirroring"]["state"] != "enabled"
+                    or group_info["mirroring"]["mode"] != "snapshot"
+                    or group_info["mirroring"]["primary"]
+                ):
+                    raise Exception(
+                        "Group info is not as expected on secondary cluster "
+                        "for group " + group_spec
+                    )
+
+                log.info(
+                    "Successfully verified group is present on secondary cluster: %s",
+                    group_spec,
+                )
+
+                group_mirror_status_verify(
+                    primary_cluster,
+                    secondary_cluster,
+                    rbd_primary,
+                    rbd_secondary,
+                    primary_state="up+stopped",
+                    secondary_state="up+replaying",
+                    **group_config,
+                    global_id=False,
+                )
+
+                log.info(
+                    "Successfully verified group mirror status for group %s",
+                    group_spec,
+                )
+
+                check_mirror_consistency(
+                    rbd_primary,
+                    rbd_secondary,
+                    client_primary,
+                    client_secondary,
+                    group_image_list,
+                )
+
+                log.info(
+                    "Successfully verified md5sum of all images matches across both "
+                    "clusters for group %s",
+                    group_spec,
+                )
 
 
 def run(**kw):
     """
-    This test verifies 8.1 group mirroring rbd scale test case
+    This test verifies 8.1 group mirroring RBD scale test case.
+
     Args:
         kw: test data
-    Returns:
-        int: The return value. 0 for success, 1 otherwise
 
+    Returns:
+        int: 0 for success, 1 otherwise
     """
+
+    pool_types = []
+    mirror_obj = {}
+
     try:
         scale_options = [
             "test_1_group_50_images",
@@ -272,19 +348,40 @@ def run(**kw):
             "test_20_groups_5_images",
             "test_5_groups_20_images",
         ]
+
         scale_option = scale_options[random.randrange(len(scale_options))]
+
         log.info(
             "Running consistency group mirroring scale with scale option selected as: "
             + scale_option
         )
+
         pool_types = ["rep_pool_config", "ec_pool_config"]
-        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+        grouptypes = [
+            "single_pool_without_namespace",
+            "single_pool_with_namespace",
+        ]
+
         for pooltype in pool_types:
             group_type = grouptypes.pop(random.randrange(len(grouptypes)))
             kw.get("config").get(pooltype).update({"grouptype": group_type})
-            log.info("Choosing Group type on %s - %s", pooltype, group_type)
+
+            log.info(
+                "Choosing Group type on %s - %s",
+                pooltype,
+                group_type,
+            )
+
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
+
+        rbd_primary = None
+        rbd_secondary = None
+        client_primary = None
+        client_secondary = None
+        primary_cluster = None
+        secondary_cluster = None
+
         for val in mirror_obj.values():
             if not val.get("is_secondary", False):
                 rbd_primary = val.get("rbd")
@@ -294,6 +391,20 @@ def run(**kw):
                 rbd_secondary = val.get("rbd")
                 client_secondary = val.get("client")
                 secondary_cluster = val.get("cluster")
+
+        if not all(
+            [
+                rbd_primary,
+                rbd_secondary,
+                client_primary,
+                client_secondary,
+                primary_cluster,
+                secondary_cluster,
+            ]
+        ):
+            raise Exception(
+                "Failed to identify primary/secondary RBD, client, or cluster objects"
+            )
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
 
@@ -308,6 +419,7 @@ def run(**kw):
             scale_option,
             **kw,
         )
+
         log.info(
             "Test group mirroring with scale passed with scale option as "
             + scale_option
@@ -315,12 +427,17 @@ def run(**kw):
 
     except Exception as e:
         log.error(
-            "Test: RBD group mirroring (snapshot mode) across two clusters failed: "
+            "Test: RBD group mirroring snapshot mode across two clusters failed: "
             + str(e)
         )
         return 1
 
     finally:
-        cleanup(pool_types=pool_types, multi_cluster_obj=mirror_obj, **kw)
+        if mirror_obj and pool_types:
+            cleanup(
+                pool_types=pool_types,
+                multi_cluster_obj=mirror_obj,
+                **kw,
+            )
 
     return 0

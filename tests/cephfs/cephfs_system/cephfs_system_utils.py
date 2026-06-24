@@ -322,7 +322,7 @@ class CephFSSystemUtils(object):
                     # on each node
                     cmd = f"cp {log_rotate_file} {log_rotate_file_bkp}"
                     out, _ = log_node.exec_command(sudo=True, cmd=cmd)
-                    cmd = rf"sed '/compress/i \    \size {size_str}' {log_rotate_file} > {log_rotate_tmp}"
+                    cmd = rf"sed '/compress/i \    \maxsize {size_str}' {log_rotate_file} > {log_rotate_tmp}"
                     out, _ = log_node.exec_command(sudo=True, cmd=cmd)
                     cmd = f"yes | cp {log_rotate_tmp} {log_rotate_file}"
                     out, _ = log_node.exec_command(sudo=True, cmd=cmd)

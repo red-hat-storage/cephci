@@ -31,11 +31,22 @@ __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
+def _detect_registry_tier(registry: str, build_type: str) -> str:
+    """Return credential tier (cdn/stage) from registry host, else from build_type."""
+    if not registry:
+        return "cdn" if build_type in ("released", "cdn") else "stage"
+    if "registry.redhat.io" in registry or "cp.icr.io" in registry:
+        return "cdn"
+    if "stage" in registry or "stg" in registry or "quay" in registry:
+        return "stage"
+    return "cdn" if build_type in ("released", "cdn") else "stage"
+
+
 def construct_registry(
     cls,
     registry: str,
     json_file: bool = False,
-    ibm_build: bool = False,
+    product: str = "redhat",
     build_type: str = "released",
 ):
     """
@@ -45,8 +56,11 @@ def construct_registry(
         cls (CephAdmin): class object
         registry (Str): registry name
         json_file (Bool): registry credentials in JSON file (default:False)
-        ibm_build: flag to fetch IBM registry creds
+        product: ceph product - ibm/redhat
         build_type: CLI build type (released|cdn|stage|nightly etc.)
+
+    Registry tier is chosen from the registry hostname when it matches a known
+    RH/IBM host; otherwise build_type is used (released/cdn -> cdn, else stage).
 
     Example::
 
@@ -58,12 +72,18 @@ def construct_registry(
     Returns:
         constructed string of registry credentials ( Str )
     """
-    _vendor = "ibm" if ibm_build else "rh"
+    _vendor = "ibm" if "ibm" in product else "rh"
 
     _config = get_cephci_config()
-
-    # Determine the registry tier: "cdn" for released/cdn builds, "stage" otherwise
-    _tier = "cdn" if build_type in ("released", "cdn") else "stage"
+    _reg = registry if registry else ""
+    _tier = _detect_registry_tier(_reg, build_type)
+    logger.debug(
+        "Registry tier selection: registry=%r tier=%r build_type=%r vendor=%r",
+        _reg,
+        _tier,
+        build_type,
+        _vendor,
+    )
 
     # Prefer the nested credentials.registry.<vendor>.<tier> path which
     # carries separate entries for cdn (cp.icr.io) vs stage (cp.stg.icr.io).
@@ -314,28 +334,22 @@ class BootstrapMixin:
         registry_url = args.pop("registry-url", None)
         registry_json = args.pop("registry-json", None)
 
-        # Auto-detect registry from custom_image and add credentials if needed
-        if custom_image and not registry_url and not registry_json:
-            if isinstance(custom_image, str):
-                image_registry = custom_image.split("/")[0]
-            else:
-                image_registry = self.config["container_image"].split("/")[0]
+        # Auto-detect registry from custom_image or container image and add credentials if needed
+        if custom_image and isinstance(custom_image, str):
+            image_registry = custom_image.split("/")[0]
+        else:
+            image_registry = self.config["container_image"].split("/")[0]
 
-            # If using stage or production registry, auto-add credentials
-            if (
-                "registry.stage.redhat.io" in image_registry
-                or "registry.redhat.io" in image_registry
-            ):
-                registry_url = image_registry
-                logger.info(
-                    f"Auto-detected registry {registry_url} from custom image, adding credentials"
-                )
+        registry_url = image_registry
+        logger.info(
+            f"Auto-detected registry {registry_url} from container image, adding credentials"
+        )
 
         if registry_url or manifest_obj.product == "ibm":
             cmd += construct_registry(
                 self,
                 registry_url,
-                ibm_build=True if manifest_obj.product == "ibm" else False,
+                product=manifest_obj.product,
                 build_type=build_type,
             )
 
@@ -344,7 +358,7 @@ class BootstrapMixin:
                 self,
                 registry_json,
                 json_file=True,
-                ibm_build=True if manifest_obj.product == "ibm" else False,
+                product=manifest_obj.product,
                 build_type=build_type,
             )
 
@@ -403,17 +417,21 @@ class BootstrapMixin:
             if "automatically-accept-license" not in cmd:
                 cmd += " --automatically-accept-license"
 
-            # By default, call home is disabled when no call home options are
-            # are found
-            if "call-home" not in cmd:
-                cmd += " --disable-ibm-call-home"
-
         out, err = self.installer.exec_command(
             sudo=True,
             cmd=cmd,
             timeout=600,
             check_ec=True,
         )
+
+        # Silence the alerts to prevent downstream tests erroring when
+        # callhome
+        if (
+            manifest_obj.product == "ibm"
+            and LooseVersion(str(manifest_obj.release)) >= LooseVersion("9.1")
+            and "call-home" not in cmd
+        ):
+            self.shell(args=["ceph", "orch", "accept", "call-home-enabled"], timeout=60)
 
         logger.info("Bootstrap output : %s", out)
         logger.error("Bootstrap error: %s", err)
@@ -496,19 +514,6 @@ class BootstrapMixin:
             self.shell(
                 args=["ceph", "config", "set", "global cluster_network", cluster_nws]
             )
-        if self.cluster.rhcs_version >= LooseVersion("8.0"):
-            wa_txt = """
-            Disabling the balancer module as a WA for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2314146
-            Issue : If any mgr module based operation is performed right after mgr failover, The command execution fails
-            as the module isn't loaded by mgr daemon. Issue was identified to be with Balancer module.
-            Disabling automatic balancing on the cluster as a WA until we get the fix for the same.
-            Disabling balancer should unblock Upgrade tests.
-            Error snippet :
-    Error ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
-    Module 'crash' is not enabled/loaded (required by command 'crash ls'): use `ceph mgr module enable crash` to enable
-            """
-            logger.info(wa_txt)
-            self.shell(args=["ceph balancer off"])
 
         # validate spec file
         if specs:

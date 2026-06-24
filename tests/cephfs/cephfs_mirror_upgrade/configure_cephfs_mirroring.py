@@ -234,7 +234,7 @@ def run(ceph_cluster, **kw):
         log.info("Validate the Snapshot Synchronisation on Target Cluster")
         snap_count = 2
         validate_syncronisation = fs_mirroring_utils.validate_synchronization(
-            cephfs_mirror_node[0], source_clients[0], source_fs, snap_count
+            cephfs_mirror_node, source_clients[0], source_fs, snap_count
         )
         if validate_syncronisation:
             log.error("Snapshot Synchronisation failed..")
@@ -248,7 +248,7 @@ def run(ceph_cluster, **kw):
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
         asok_file = fs_mirroring_utils.get_asok_file(
-            cephfs_mirror_node[0], fsid, daemon_name
+            cephfs_mirror_node, fsid, daemon_name
         )
         log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_file}")
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
@@ -262,7 +262,7 @@ def run(ceph_cluster, **kw):
 
         log.info("Validate if the Snapshots are synced to Target Cluster")
         result_snap_k1 = fs_mirroring_utils.validate_snapshot_sync_status(
-            cephfs_mirror_node[0],
+            cephfs_mirror_node,
             source_fs,
             snap1,
             fsid,
@@ -271,7 +271,7 @@ def run(ceph_cluster, **kw):
             peer_uuid,
         )
         result_snap_f1 = fs_mirroring_utils.validate_snapshot_sync_status(
-            cephfs_mirror_node[0],
+            cephfs_mirror_node,
             source_fs,
             snap2,
             fsid,

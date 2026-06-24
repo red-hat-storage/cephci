@@ -57,6 +57,10 @@ tests:
               service: osd
               args:
                 all-available-devices: true
+          - config:
+              args:
+                - "ceph config set mgr mgr/cephadm/use_agent true"
+              command: shell
       abort-on-fail: true
       destroy-cluster: false
 

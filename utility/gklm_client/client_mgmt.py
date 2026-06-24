@@ -6,6 +6,20 @@ import requests
 from utility.gklm_client.auth import GklmAuth
 
 
+def _coerce_client_list(data: Any) -> List[Dict[str, Any]]:
+    """Normalize list-clients JSON across SKLM / GKLM 5.x response shapes."""
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if isinstance(data, dict):
+        for key in ("client", "clients", "Client", "genericKmipClient"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return [x for x in v if isinstance(x, dict)]
+    return []
+
+
 class GklmClientManagement:
     def __init__(self, auth: GklmAuth):
         self.auth = auth
@@ -67,8 +81,7 @@ class GklmClientManagement:
             f"{self.base_url}/clients", headers=self.auth._headers(), verify=self.verify
         )
         if resp.status_code == 200:
-            data = resp.json()
-            return data.get("client", [])
+            return _coerce_client_list(resp.json())
 
         # Error path
         content_type = resp.headers.get("Content-Type", "")
@@ -86,8 +99,8 @@ class GklmClientManagement:
             headers=self.auth._headers(),
             verify=self.verify,
         )
-        if resp.status_code == 200:
-            if resp.text:
+        if resp.status_code in (200, 201, 204):
+            if resp.text and resp.text.strip():
                 try:
                     return resp.json()
                 except ValueError:
@@ -96,8 +109,11 @@ class GklmClientManagement:
 
         # Error path
         content_type = resp.headers.get("Content-Type", "")
-        if "application/json" in content_type:
-            err_msg = resp.json().get("message", resp.text)
+        if "application/json" in content_type and resp.text.strip():
+            try:
+                err_msg = resp.json().get("message", resp.text)
+            except ValueError:
+                err_msg = resp.text or f"HTTP {resp.status_code}"
         else:
             err_msg = resp.text or f"HTTP {resp.status_code}"
 

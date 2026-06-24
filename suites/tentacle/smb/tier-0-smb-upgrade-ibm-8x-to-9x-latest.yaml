@@ -17,7 +17,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: "8.1"
-                release: rc
+                release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -84,7 +84,7 @@ tests:
       polarion-id: CEPH-83622441
       config:
         deployment_version: 8.1
-        deployment_release: rc
+        deployment_release: released
         operations:
           - deploy_smb
           - upgrade

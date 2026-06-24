@@ -283,6 +283,39 @@ class NVMeInitiator(Initiator):
 
         # Use max_workers to ensure all FIO processes can start simultaneously
         with parallel(max_workers=len(paths) + 4) as p:
+            # Configure SSH MaxSessions to accommodate max_workers
+            max_workers = len(paths) + 4
+            required_sessions = max_workers + 10  # Add buffer for safety
+            try:
+                # Backup original sshd_config
+                self.node.exec_command(
+                    cmd="cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup", sudo=True
+                )
+
+                # Update MaxSessions in sshd_config
+                self.node.exec_command(
+                    cmd=f"sed -i 's/^#*MaxSessions.*/MaxSessions {required_sessions}/' /etc/ssh/sshd_config",
+                    sudo=True,
+                )
+
+                # Add MaxSessions if it doesn't exist
+                self.node.exec_command(
+                    cmd=(
+                        f"grep -q '^MaxSessions' /etc/ssh/sshd_config || "
+                        f"echo 'MaxSessions {required_sessions}' >> /etc/ssh/sshd_config"
+                    ),
+                    sudo=True,
+                )
+
+                # Restart sshd service to apply changes
+                self.node.exec_command(cmd="systemctl restart sshd", sudo=True)
+
+                LOG.info(
+                    f"Configured SSH MaxSessions to {required_sessions} for max_workers={max_workers}"
+                )
+            except Exception as e:
+                LOG.warning(f"Failed to configure SSH MaxSessions: {e}")
+
             for path in paths:
                 _io_args = {}
                 # TODO: blkdiscard is temporary workaround for same image usage

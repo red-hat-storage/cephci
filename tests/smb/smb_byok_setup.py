@@ -1,67 +1,22 @@
-import yaml
-from smb_operations import deploy_smb_service_declarative, smbclient_check_shares
+from smb_operations import create_vol_smb_subvol
 
 from cli.exceptions import ConfigError, OperationFailedError
+from tests.smb.smb_byok_tools import (
+    deploy_samba_service_with_byok,
+    ensure_fresh_gklm_kmip_client,
+    get_enctag,
+    load_gklm_config,
+    setup_gklm_infrastructure,
+    wait_for_gklm_server_restart,
+)
+from utility.gklm_client.gklm_client import build_gklm_client
 from utility.log import Log
-from utility.utils import generate_self_signed_certificate
+from utility.utils import generate_self_signed_certificate, get_cephci_config
 
 log = Log(__name__)
 
-CA = """-----BEGIN CERTIFICATE-----
-MIIC+DCCAeCgAwIBAgIHNI+wFxpITzANBgkqhkiG9w0BAQsFADArMSkwJwYDVQQDEyBjZXBoLWdr
-bG0teGUxamF3LW5vZGUxLWluc3RhbGxlcjAeFw0yNjAxMTMxMjA2MzJaFw0yOTAxMTIxMjA2MzJa
-MCsxKTAnBgNVBAMTIGNlcGgtZ2tsbS14ZTFqYXctbm9kZTEtaW5zdGFsbGVyMIIBIjANBgkqhkiG
-9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnpkFcTBzt20tMVBpePo30RtWAw3r3nuu8FVU8FIbwIudJASH
-EBJtQdFzM7NUziwD3RpT8LdjssDsub+quylhyXsDaqEX/yuP1x9w6yYfJFxT5j2TGL3zFVm6vlXD
-NkUqe+MUBrFPnQHvuxOcGkeKptXUqrtPBQRQ9B8jGTCqxainAtbvtpetnniiCr6B5qml60dWgT7j
-UE5tEJ+5yrSbEDu5Z/+Rqb97M+EcMoVdpgCMNok33R9jMP6Y/XcVwlfSX7XEM3MMGxFJitBr10py
-N0H+aXgVP8vBYT629Fk8xUdDroYovjR9oC74T3jlMANh1jl5Q0lR0c/8gJxQ/ip1ZwIDAQABoyEw
-HzAdBgNVHQ4EFgQU3igRGjdvzDl9Riw49fj2QE1/+/AwDQYJKoZIhvcNAQELBQADggEBAAOb1WB8
-0OTg/9MqPqeJTbMnX9/cNCH5C11uA7LRUcP/C4/nWBrf6wYfHJxQ+VilLGOMSKEJ/MzJYQoz1joX
-Jo9molEkvBQGopLiYQx2ZeKSNRtIXwAXm6eSvPSncwFTehniRD0EaKbajhkH8vbodk3T+WuTLGzz
-WCQeZD4L73AVj89lCdmMEb9e9MccJE+NfoKYws7LgSKgoh36Y1JaZ5F9sa3RI8S3fHJodchLkaaT
-RcUTctv/NjKGgDwSNF7cXuc9F+Z8DKb+vidpDV+1EXhLR0DlWWianTTXZ42q8TYEvzJpTo/LknuI
-NfrG3Uh1p3VnFNXdSCruvbOPUsgf66M=
------END CERTIFICATE-----"""
+KMIP_PORT = 5696
 
-FSCRYPT_KEYNAME = "KEY-74e01cb-2acf8553-8b45-414a-96ed-1066d9994b86"
-
-cert_tls_credential_id = "cert1"
-key_tls_credential_id = "key1"
-cacert_tls_credential_id = "cacert1"
-
-class LiteralString(str):
-    pass
-
-def literal_presenter(dumper, data):
-    if '\n' in data:
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
-
-yaml.add_representer(LiteralString, literal_presenter)
-
-def create_grpc_spec_with_literal_strings(cert, key, ca, cert_tls_id, key_tls_id, cacert_tls_id):
-    byok_spec_tls_credential_dict = [
-        {
-            "resource_type": "ceph.smb.tls.credential",
-            "tls_credential_id": cert_tls_id,
-            "credential_type": "cert",
-            "value": LiteralString(cert.rstrip("\n")),
-        },
-        {
-            "resource_type": "ceph.smb.tls.credential",
-            "tls_credential_id": key_tls_id,
-            "credential_type": "cert",
-            "value": LiteralString(key.rstrip("\n")),
-        },
-        {
-            "resource_type": "ceph.smb.tls.credential",
-            "tls_credential_id": cacert_tls_id,
-            "credential_type": "ca-cert",
-            "value": LiteralString(ca.rstrip("\n")),
-        },
-    ]
-    return byok_spec_tls_credential_dict
 
 def generate_self_signed_certificate_for_smb_node(installer_node):
     """Generate self signed certificates for samba node
@@ -91,12 +46,13 @@ def generate_self_signed_certificate_for_smb_node(installer_node):
     ca_file.flush()
     return key, cert, ca
 
+
 def check_keybridge_service(smb_node):
     """Check if grpc keybridge service is running
     Args:
         smb_node (obj): samba installer server node obj
     """
-    # Get grpc remotectl service
+    # Get keybridge service
     cmd = "systemctl list-units --type=service | grep keybridge"
     out = smb_node.exec_command(sudo=True, cmd=cmd)[0].strip()
     log.info(out)
@@ -123,6 +79,17 @@ def run(ceph_cluster, **kw):
     """
     # Get config
     config = kw.get("config")
+    custom_data = kw.get("test_data", {})
+    cephci_data = get_cephci_config()
+
+    # Load GKLM configuration
+    gklm_params = load_gklm_config(custom_data, config, cephci_data)
+    gklm_ip = gklm_params["gklm_ip"]
+    gklm_user = gklm_params["gklm_user"]
+    gklm_hostname = gklm_params["gklm_hostname"]
+
+    gkml_client_name = "SMBBYOK1"
+    gklm_cert_alias = "smb"
 
     # Check mandatory parameter file_type
     if not config.get("file_type"):
@@ -146,30 +113,14 @@ def run(ceph_cluster, **kw):
     log.info("smb_spec_log: {} ".format(smb_spec))
 
     # Get smb service value from spec file
-    smb_shares = []
     smb_subvols = []
     for spec in smb_spec:
         if spec["resource_type"] == "ceph.smb.cluster":
             smb_cluster_id = spec["cluster_id"]
-            auth_mode = spec["auth_mode"]
-            if "domain_settings" in spec:
-               domain_realm = spec["domain_settings"]["realm"]
-            else:
-                domain_realm = None
-        elif spec["resource_type"] == "ceph.smb.usersgroups":
-            smb_user_name = spec["values"]["users"][0]["name"]
-            smb_user_password = spec["values"]["users"][0]["password"]
-        elif spec["resource_type"] == "ceph.smb.join.auth":
-            smb_user_name = spec["auth"]["username"]
-            smb_user_password = spec["auth"]["password"]
         elif spec["resource_type"] == "ceph.smb.share":
             cephfs_vol = spec["cephfs"]["volume"]
             smb_subvol_group = spec["cephfs"]["subvolumegroup"]
             smb_subvols.append(spec["cephfs"]["subvolume"])
-            smb_shares.append(spec["share_id"])
-            if spec["cephfs"]["fscrypt_key"]["scope"] == "kmip":
-                spec["cephfs"]["fscrypt_key"]["name"] = FSCRYPT_KEYNAME
-
 
     # Get installer node
     installer_node = ceph_cluster.get_nodes(role="installer")[0]
@@ -177,29 +128,145 @@ def run(ceph_cluster, **kw):
     # Get smb nodes
     smb_nodes = ceph_cluster.get_nodes("smb")
 
-    # Get client node
-    client = ceph_cluster.get_nodes(role="client")[0]
-
     # Generate self signed certificates crt, cacrt, key
     key, cert, _ = generate_self_signed_certificate_for_smb_node(installer_node)
 
-    byok_spec_tls_credential_dict = create_grpc_spec_with_literal_strings(cert, key, CA, cert_tls_credential_id, key_tls_credential_id,
-                                          cacert_tls_credential_id)
-    smb_spec.extend(byok_spec_tls_credential_dict)
-    log.info("smb_spec: {}".format(smb_spec))
-
     try:
-        # deploy smb services
-        deploy_smb_service_declarative(
+        log.info("Step 1: Setting up GKLM infrastructure")
+        setup_gklm_infrastructure(
+            smb_nodes=smb_nodes,
+            gklm_ip=gklm_ip,
+            gklm_hostname=gklm_hostname,
+        )
+
+        log.info("Step 2: Initializing GKLM REST client")
+        gklm_rest_client = build_gklm_client(gklm_params, verify=False)
+
+        log.info(
+            "Step 2b: Remove any existing GKLM KMIP client %r (and legacy cert2), "
+            "then create a new empty client",
+            gkml_client_name,
+        )
+        ensure_fresh_gklm_kmip_client(
+            gklm_rest_client,
+            gkml_client_name,
+            legacy_cert_aliases=("smb",),
+        )
+
+        log.info("Step 3: generating certificates and keys, and CA_cert from GKLM")
+        # GKLM 5.x lists TLS system certs under GET /system/certificates, not GET /certificates.
+        sys_cert_details = None
+        for entry in gklm_rest_client.certificates.list_system_certificates():
+            a = (
+                entry.get("alias")
+                or entry.get("Alias")
+                or entry.get("certAlias")
+                or entry.get("name")
+            )
+            if a and str(a) == gklm_hostname:
+                sys_cert_details = entry
+                break
+
+        legacy_cert_details = None
+        if not sys_cert_details:
+            for entry in gklm_rest_client.certificates.list_certificates():
+                a = (
+                    entry.get("alias")
+                    or entry.get("Alias")
+                    or entry.get("certAlias")
+                    or entry.get("name")
+                )
+                if a and str(a) == gklm_hostname:
+                    legacy_cert_details = entry
+                    break
+
+        needs_restart = False
+
+        if not sys_cert_details and not legacy_cert_details:
+            log.info(
+                "No system certificate with alias %s; creating self-signed system cert",
+                gklm_hostname,
+            )
+            gklm_rest_client.certificates.create_system_certificate(
+                {
+                    "type": "Self-signed",
+                    "alias": gklm_hostname,
+                    "cn": gklm_hostname,
+                    "validity": "3650",
+                    "algorithm": "RSA",
+                    "usageSubtype": "KEYSERVING_TLS",
+                }
+            )
+            needs_restart = True
+        else:
+            cert_to_check = sys_cert_details or legacy_cert_details
+            usage = str(cert_to_check.get("usage", "")) + str(
+                cert_to_check.get("usageSubtype", "")
+            )
+
+            if "KEYSERVING" not in usage.upper():
+                log.info(
+                    "System certificate %s exists but is not KEYSERVING. Updating to add KEYSERVING_TLS.",
+                    gklm_hostname,
+                )
+                gklm_rest_client.certificates.update_system_certificate(
+                    alias=gklm_hostname,
+                    add_usage_subtype="KEYSERVING_TLS",
+                )
+                needs_restart = True
+            else:
+                log.info(
+                    "System certificate %s exists and is already KEYSERVING. No restart needed.",
+                    gklm_hostname,
+                )
+
+        if needs_restart:
+            log.info("Restarting GKLM server to apply system certificate changes.")
+            gklm_rest_client.server.restart_server()
+            wait_for_gklm_server_restart(
+                gklm_rest_client=gklm_rest_client,
+                timeout=500,
+                check_interval=10,
+                initial_wait=10,
+            )
+        ca_cert = gklm_rest_client.certificates.get_system_certificate(
+            cert_name=gklm_hostname
+        )
+        all_clients = gklm_rest_client.clients.list_clients()
+        if gkml_client_name.upper() not in [x.get("clientName") for x in all_clients]:
+            log.info(f"Not Found client name {gkml_client_name}, creating ")
+            gklm_rest_client.clients.create_client(gkml_client_name)
+
+        enctag = get_enctag(
+            gklm_rest_client,
+            gkml_client_name,
+            gklm_cert_alias,
+            gklm_user,
+            cert,
+        )
+
+        # Create volume and smb subvolume
+        create_vol_smb_subvol(
             installer_node,
             cephfs_vol,
             smb_subvol_group,
             smb_subvols,
-            smb_cluster_id,
             smb_subvolume_mode,
-            file_type,
-            smb_spec,
-            file_mount,
+        )
+
+        log.info("Step 5: Deploying SMB cluster with BYOK")
+        deploy_samba_service_with_byok(
+            installer=installer_node,
+            smb_cluster_id=smb_cluster_id,
+            kmip_hosts=gklm_ip,
+            kmip_port=KMIP_PORT,
+            key=key,
+            cert=cert,
+            ca_cert=ca_cert,
+            smb_spec=smb_spec,
+            fscrypt_key_name=enctag,
+            file_type=file_type,
+            file_mount=file_mount,
         )
 
         # Check grpc keybridge service

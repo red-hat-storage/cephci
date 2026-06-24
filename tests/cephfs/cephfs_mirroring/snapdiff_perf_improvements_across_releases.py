@@ -1,10 +1,20 @@
 import concurrent.futures
 import os
+import signal
 import time
 import traceback
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from utility.log import Log
+
+
+class TestTimeout(Exception):
+    pass
+
+
+def _timeout_handler(signum, frame):
+    raise TestTimeout("Test exceeded maximum allowed runtime of 3 hours")
+
 
 log = Log(__name__)
 
@@ -18,6 +28,9 @@ def run(ceph_cluster, **kw):
     """
     CEPH-83595260 - Performance evaluation of snapdiff feature using CephFS Mirroring after upgrading to RHCS 8.0
     """
+    max_runtime = 3 * 3600
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(max_runtime)
     try:
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
@@ -128,7 +141,7 @@ def run(ceph_cluster, **kw):
         fsid = fs_util_ceph1.get_fsid(source_clients[0])
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         asok_file = fs_mirroring_utils.get_asok_file(
-            cephfs_mirror_node[0], fsid, daemon_name
+            cephfs_mirror_node, fsid, daemon_name
         )
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
@@ -207,7 +220,7 @@ def run(ceph_cluster, **kw):
             # Validate snapshot sync
             sync_info = fs_mirroring_utils.validate_snapshot_sync(
                 fs_mirroring_utils,
-                cephfs_mirror_node[0],
+                cephfs_mirror_node,
                 source_fs,
                 snapshot_name,
                 fsid,
@@ -357,11 +370,15 @@ def run(ceph_cluster, **kw):
         )
 
         return 0
+    except TestTimeout as e:
+        log.error(f"Test timed out after {max_runtime}s: {e}")
+        return 1
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
         return 1
     finally:
+        signal.alarm(0)
         if config.get("cleanup", True):
             log.info("Delete the snapshots")
             snap_suffixes = [

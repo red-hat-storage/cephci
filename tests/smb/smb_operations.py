@@ -249,7 +249,7 @@ def smb_cleanup(
         remove_smb_share(installer, smb_shares, smb_cluster_id)
         # Remove smb cluster
         remove_smb_cluster(installer, smb_cluster_id)
-        sleep(9)
+        sleep(3)
         # Remove subvolume and subvolume group
         # List subvolumes
         cmd = (
@@ -268,7 +268,7 @@ def smb_cleanup(
             f"cephadm shell -- ceph fs subvolumegroup rm {volume} {group_name} --force"
         )
         installer.exec_command(sudo=True, cmd=cmd)
-        sleep(9)
+        sleep(3)
 
     except Exception as e:
         raise CephadmOpsExecutionError(
@@ -599,11 +599,8 @@ def smb_cifs_mount(
     """
     try:
         # Create cifs mount dir
-        cmd = f"mkdir {cifs_mount_point}"
-        client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
+        cmd = f"mkdir -p {cifs_mount_point}"
+        client.exec_command(sudo=True, cmd=cmd)
         if public_addrs:
             # Mount smb share using cifs
             if auth_mode == "user":
@@ -611,10 +608,7 @@ def smb_cifs_mount(
                     f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
                     f" -o username={smb_user_name},password={smb_user_password}"
                 )
-                client.exec_command(
-                    sudo=True,
-                    cmd=cmd,
-                )
+                client.exec_command(sudo=True, cmd=cmd)
             elif auth_mode == "active-directory":
                 cmd = (
                     f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
@@ -998,3 +992,54 @@ def config_smb_images(installer, samba_image, samba_metrics_image):
         installer.exec_command(sudo=True, cmd=cmd)
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to configure smb images, Error {e}")
+
+
+def samba_kernel_mount(samba_client, mount_point, mon_node_ip, sub_dir):
+    """
+    Mounts the sub volume or volume using kernel mount
+    Args:
+        samba_client:
+        mount_point:
+        mon_node_ip:
+        sub_dir: specific directory subvolume or volume
+    Returns:
+
+    Exceptions:
+        assertion error will occur if the device is not mounted
+    """
+    log.info("Creating mounting dir:")
+    samba_client.exec_command(
+        sudo=True, cmd=f"mkdir -p {mount_point}", long_running=True
+    )
+    samba_client.exec_command(
+        sudo=True,
+        cmd=f"ceph auth get-key client.admin -o "
+        f"/etc/ceph/{samba_client.hostname}.secret",
+        long_running=True,
+    )
+    cmd = (
+        f"mount -t ceph {mon_node_ip}:{sub_dir} {mount_point} "
+        f"-o name=admin,"
+        f"secretfile=/etc/ceph/{samba_client.hostname}.secret,"
+        f"noshare"
+    )
+    cmd_rc = samba_client.exec_command(sudo=True, cmd=cmd, long_running=True)
+
+    if cmd_rc:
+        raise CephadmOpsExecutionError(
+            f"Ceph Kernel Command failed with error: {cmd_rc}"
+        )
+    return cmd_rc
+
+
+def ceph_smb_show(installer, smb_resource):
+    """Get SMB shares
+    Args:
+        installer (obj): Installer node obj
+        smb_resource (str): Smb resource type
+    Return:
+        List of shares
+    """
+    smb_show = CephAdm(installer).ceph.smb.show(smb_resource)
+    smb_resouce_dict = json.loads(smb_show)
+    return smb_resouce_dict

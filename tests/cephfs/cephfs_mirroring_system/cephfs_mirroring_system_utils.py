@@ -7,13 +7,15 @@ and mirror-daemon test suites.
 """
 
 import json
+import logging
+import os
 import random
 import secrets
 import signal
 import string
 import time
 import traceback
-from threading import Thread
+from threading import Event, Thread
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utils import FsUtils
@@ -26,32 +28,174 @@ from utility.retry import retry
 
 log = Log(__name__)
 
+REMOTE_IO_LOG_DIR = "/var/log/mirror_io_logs"
+_SMALLFILE_OPS = [
+    "create",
+    "read",
+    "append",
+    "read",
+    "delete",
+    "create",
+    "overwrite",
+    "rename",
+    "delete-renamed",
+    "mkdir",
+    "rmdir",
+    "create",
+    "symlink",
+    "stat",
+    "chmod",
+    "ls-l",
+    "delete",
+    "cleanup",
+]
 
-def start_background_ios(fs_util, client, mounting_dirs, runtime):
+
+def _run_background_io(client, mounting_dir, runtime, io_log_file, stop_event):
+    """Run smallfile IO with output redirected to *io_log_file* on the remote node."""
+    suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+    io_path = f"{mounting_dir}/smallfile_io_dir_{suffix}"
+    try:
+        client.exec_command(sudo=True, cmd=f"mkdir -p {io_path}")
+        end_time = time.time() + runtime * 60
+        while time.time() < end_time and not stop_event.is_set():
+            for op in _SMALLFILE_OPS:
+                if time.time() >= end_time or stop_event.is_set():
+                    break
+                try:
+                    client.exec_command(
+                        sudo=True,
+                        timeout=600,
+                        cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py "
+                        f"--operation {op} --threads 8 --file-size 10240 "
+                        f"--files 10 --top {io_path} >> {io_log_file} 2>&1",
+                    )
+                except Exception:
+                    pass
+                time.sleep(3)
+            time.sleep(30)
+    except Exception as e:
+        log.error("Background IO failed on %s: %s", mounting_dir, e)
+    log.info("Background IO stopped for %s", mounting_dir)
+
+
+def recover_crashed_mirror_daemon(client, mirror_node_hostname, timeout=120):
     """
-    Start background IO threads on all mount points.
+    Force-redeploy the cephfs-mirror daemon when it is stuck in a crash loop.
+
+    Removes the existing daemon via ``ceph orch rm`` and re-applies it on the
+    same node, then waits for it to appear in ``ceph orch ps``.
 
     Args:
-        fs_util: Filesystem utility object
-        client: Client node to run IOs on
-        mounting_dirs: List of mount directories
-        runtime: Runtime for IOs in minutes
+        client: A CephNode with ceph CLI access.
+        mirror_node_hostname (str): Hostname to place the redeployed daemon on.
+        timeout (int): Seconds to wait for the daemon to come back.
 
     Returns:
-        List of Thread objects
+        bool: True if recovery succeeded, False otherwise.
     """
+    log.error(
+        "cephfs-mirror daemon appears to be in a crash loop. "
+        "Attempting recovery via orch rm + orch apply on %s",
+        mirror_node_hostname,
+    )
+    client.exec_command(sudo=True, cmd="ceph orch rm cephfs-mirror", check_ec=False)
+    time.sleep(10)
+    client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch apply cephfs-mirror --placement='1 {mirror_node_hostname}'",
+        check_ec=False,
+    )
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        time.sleep(15)
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph orch ps --daemon_type=cephfs-mirror --format json",
+            check_ec=False,
+        )
+        try:
+            daemons = json.loads(out)
+            running = [d for d in daemons if d.get("status_desc") == "running"]
+            if running:
+                log.info(
+                    "cephfs-mirror daemon recovered: %s",
+                    running[0].get("daemon_name"),
+                )
+                return True
+        except (json.JSONDecodeError, TypeError):
+            pass
+    log.error("cephfs-mirror daemon did not recover within %ds", timeout)
+    return False
+
+
+def get_active_daemon_nodes(client, daemon_type, all_nodes):
+    """
+    Return only the nodes from all_nodes where the daemon is actually running,
+    by querying ``ceph orch ps``.
+
+    Args:
+        client: A CephNode with ceph CLI access (e.g. source_clients[0]).
+        daemon_type (str): Daemon type to look up (e.g. "cephfs-mirror", "mds").
+        all_nodes: Iterable of node objects (with a ``.hostname`` attribute)
+            that *could* host the daemon.
+
+    Returns:
+        list: Subset of all_nodes whose hostname appears in ``ceph orch ps``
+        output for the given daemon_type.
+    """
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ps --daemon_type={daemon_type} --format json",
+    )
+    daemon_hosts = {d["hostname"] for d in json.loads(out)}
+    log.info("Active %s daemon hosts: %s", daemon_type, daemon_hosts)
+    active = [n for n in all_nodes if n.hostname in daemon_hosts]
+    skipped = [n.hostname for n in all_nodes if n.hostname not in daemon_hosts]
+    if skipped:
+        log.info("Skipping nodes without active %s daemon: %s", daemon_type, skipped)
+    return active
+
+
+def start_background_ios(fs_util, client, mounting_dirs, runtime):
+    """Start background IO threads; output goes to remote log files.
+
+    Returns:
+        tuple: (threads, stop_event) - list of threads and an Event to signal them to stop.
+    """
+    stop_event = Event()
+    client.exec_command(sudo=True, cmd=f"mkdir -p {REMOTE_IO_LOG_DIR}")
     threads = []
-    for mounting_dir in mounting_dirs:
+    for idx, mounting_dir in enumerate(mounting_dirs):
+        io_log = f"{REMOTE_IO_LOG_DIR}/io_thread_{idx}.log"
         t = Thread(
-            target=fs_util.run_ios_V1,
-            args=(client, mounting_dir),
-            kwargs={"io_tools": ["smallfile"], "run_time": runtime},
+            target=_run_background_io,
+            args=(client, mounting_dir, runtime, io_log, stop_event),
             daemon=True,
         )
         t.start()
         threads.append(t)
-        log.info("Started IO thread for %s", mounting_dir)
-    return threads
+        log.info("Started IO thread for %s (logs: %s)", mounting_dir, io_log)
+    return threads, stop_event
+
+
+def collect_background_io_logs(client, mounting_dirs):
+    """Download IO logs from the remote node to the local test log directory."""
+    for h in logging.getLogger("cephci").handlers:
+        if isinstance(h, logging.FileHandler):
+            local_dir = os.path.join(os.path.dirname(h.baseFilename), "mirror_io_logs")
+            break
+    else:
+        local_dir = "/tmp/mirror_io_logs"
+    os.makedirs(local_dir, exist_ok=True)
+    for idx in range(len(mounting_dirs)):
+        remote = f"{REMOTE_IO_LOG_DIR}/io_thread_{idx}.log"
+        local = os.path.join(local_dir, f"io_thread_{idx}.log")
+        try:
+            client.download_file(src=remote, dst=local, sudo=True)
+        except Exception as e:
+            log.warning("Could not collect IO log %s: %s", remote, e)
+    log.info("IO logs saved to: %s", local_dir)
 
 
 def run_signal_tests(
@@ -88,7 +232,7 @@ def run_signal_tests(
                 node.hostname,
             )
             fs_util_v1.pid_signal(
-                node, daemon_process_name, sig=sig, expect_exit=expect_exit, wait=10
+                node, daemon_process_name, sig=sig, expect_exit=expect_exit
             )
             if sig == signal.SIGTERM and expect_exit:
                 log.info(
@@ -98,29 +242,37 @@ def run_signal_tests(
                 )
                 service_name = fs_util_v1.deamon_name(node, daemon_service_pattern)
                 log.info("Starting %s service: %s", daemon_process_name, service_name)
-                node.exec_command(
-                    sudo=True,
-                    cmd=f"systemctl start {service_name}",
-                    check_ec=False,
-                )
-                out, rc = node.exec_command(
-                    sudo=True,
-                    cmd=f"systemctl is-active {service_name}",
-                    check_ec=False,
-                )
-                if "active" in out:
+                try:
+                    node.exec_command(
+                        sudo=True,
+                        cmd=f"systemctl start {service_name}",
+                    )
+                    # Verify service started
+                    out, rc = node.exec_command(
+                        sudo=True,
+                        cmd=f"systemctl is-active {service_name}",
+                    )
+                    if "active" not in out:
+                        log.error(
+                            "%s service %s failed to start: %s",
+                            daemon_process_name,
+                            service_name,
+                            out,
+                        )
+                        return 1
                     log.info(
                         "%s service %s started successfully",
                         daemon_process_name,
                         service_name,
                     )
-                else:
-                    log.warning(
-                        "%s service %s might not be active: %s",
+                except Exception as e:
+                    log.error(
+                        "Failed to start %s service %s: %s",
                         daemon_process_name,
                         service_name,
-                        out,
+                        e,
                     )
+                    return 1
         return 0
     except Exception as e:
         log.error("Error during %s test: %s", test_name, e)
@@ -154,6 +306,11 @@ def run_systemctl_restart(
             )
             service_name = fs_util_v1.deamon_name(node, daemon_service_pattern)
             log.info("Restarting %s service: %s", daemon_process_name, service_name)
+            node.exec_command(
+                sudo=True,
+                cmd=f"systemctl reset-failed {service_name}",
+                check_ec=False,
+            )
             node.exec_command(
                 sudo=True,
                 cmd=f"systemctl restart {service_name}",
@@ -208,14 +365,16 @@ def run_container_restart(nodes, container_filter_keywords):
             "Restarting containers matching '%s' using podman restart", grep_pattern
         )
 
+        failed_nodes = []
         for node in nodes:
             log.info("Restarting container on host: %s", node.hostname)
             try:
                 out, _ = node.exec_command(
                     sudo=True,
-                    cmd=f"podman ps | grep {grep_pattern}",
+                    cmd=f"podman ps | grep '{grep_pattern}'",
                 )
                 lines = out.strip().split("\n")
+                container_restarted = False
                 for line in lines:
                     if all(kw in line for kw in container_filter_keywords):
                         container_id = line.split()[0]
@@ -228,9 +387,18 @@ def run_container_restart(nodes, container_filter_keywords):
                             sudo=True,
                             cmd=f"podman restart {container_id}",
                         )
+                        container_restarted = True
                         break
+                if not container_restarted:
+                    log.error("No matching container found on %s", node.hostname)
+                    failed_nodes.append(node.hostname)
             except Exception as e:
-                log.warning("Failed to restart container on %s: %s", node.hostname, e)
+                log.error("Failed to restart container on %s: %s", node.hostname, e)
+                failed_nodes.append(node.hostname)
+
+        if failed_nodes:
+            log.error("Container restart failed on nodes: %s", failed_nodes)
+            return 1
         return 0
     except Exception as e:
         log.error("Error during container restart test: %s", e)
@@ -341,7 +509,7 @@ def run_daemon_redeploy(
     return 0
 
 
-@retry(Exception, tries=5, delay=15)
+@retry(Exception, tries=5, delay=15, backoff=1)
 def wait_for_snaps_synced_increase(
     fs_mirroring_utils,
     source_fs,
@@ -395,7 +563,7 @@ def wait_for_snaps_synced_increase(
     )
 
 
-@retry(Exception, tries=5, delay=15)
+@retry(Exception, tries=5, delay=15, backoff=1)
 def wait_for_sync_id_increase(
     fs_mirroring_utils,
     source_fs,
@@ -734,10 +902,16 @@ def setup_mirroring_test_environment(
         "Fetching mirroring metadata (fsid, daemon_name, asok_file, "
         "filesystem_id, peer_uuid)"
     )
-    fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_nodes[0])
+    out, _ = source_client.exec_command(sudo=True, cmd="ceph fsid")
+    fsid = out.strip()
     log.info("fsid on ceph cluster : %s", fsid)
     daemon_name = fs_mirroring_utils.get_daemon_name(source_client)
     log.info("Name of the cephfs-mirror daemon : %s", daemon_name)
+    CephfsMirroringUtils.wait_for_daemon_running(
+        source_client,
+        cephfs_mirror_nodes,
+        ceph_cluster=ceph_cluster_dict.get("ceph1"),
+    )
     asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
         cephfs_mirror_nodes, fsid, daemon_name
     )
@@ -854,7 +1028,7 @@ def cleanup_mirroring_test_environment(env):
                 check_ec=False,
             )
 
-    cleanup_io_dirs(source_client, mounting_dirs)
+    cleanup_io_dirs(source_client, full_subvolume_path)
     for mounting_dir in mounting_dirs:
         log.info("Unmount the paths")
         source_client.exec_command(

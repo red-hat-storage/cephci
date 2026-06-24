@@ -23,7 +23,7 @@ tests:
                 verbose: true
               args:
                 rhcs-version: 6.1
-                release: rc
+                release: released
                 mon-ip: node1
                 registry-url: registry.redhat.io
                 allow-fqdn-hostname: true
@@ -94,7 +94,7 @@ tests:
         nodes:                            # client node
           - node7:
               release: 6.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base
