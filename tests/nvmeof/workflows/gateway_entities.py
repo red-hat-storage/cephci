@@ -67,14 +67,14 @@ def validate_subsystems(nvme_service, subsystem_config):
         )
 
 
-def configure_subsystems(nvme_service, ceph_cluster=None):
+def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None):
     """
     Configure subsystems, hosts, and namespaces for this gateway group.
     This is done once per group, not per gateway.
     Args:
         nvme_service: NvmeService instance
-        exec_parallel: Whether to execute subsystem configuration in parallel
-        (default: False, sequential execution)
+        ceph_cluster: Ceph cluster object
+        subsystem_config: Optional subsystem list; defaults to nvme_service.config
     """
 
     # Configure subsystem
@@ -113,6 +113,8 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
                 {"initiators": create_dhchap_key(sub_cfg, nvme_service.ceph_cluster)}
             )
             sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
+        elif sub_cfg.get("dhchap-key"):
+            sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
 
         # Add Subsystem
         release = nvme_service.ceph_cluster.rhcs_version
@@ -140,7 +142,8 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
 
         gateway.subsystem.add(**{"args": args})
 
-    subsystem_config = nvme_service.config.get("subsystems", [])
+    if subsystem_config is None:
+        subsystem_config = nvme_service.config.get("subsystems", [])
     for sub_cfg in subsystem_config:
         with parallel() as p:
             p.spawn(configure_subsystem, nvme_service, sub_cfg)
