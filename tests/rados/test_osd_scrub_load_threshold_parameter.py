@@ -179,6 +179,7 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     wait_time = 120
     osd_nodes = ceph_cluster.get_nodes(role="osd")
+    rhbuild = config.get("rhbuild")
 
     # Check if config contains "replicated_pool" or "EC_pool"
 
@@ -193,12 +194,13 @@ def run(ceph_cluster, **kw):
         is_ec_pool = True
         log.info("Using ec_pool configuration")
     else:
-        log.error("Config must contain either 'replicated_pool' or ec_pool'")
+        log.error("Config must contain either 'replicated_pool' or 'ec_pool'")
         return 1
 
     acting_pg_set = ""
     start_time = get_cluster_timestamp(rados_object.node)
-    log.debug("Test workflow started. Start time: {}".format(start_time))
+    msg_start_time = f"Test workflow started. Start time: {start_time}"
+    log.debug(msg_start_time)
     try:
 
         log_line_no_scrub = "'scrub_load_below_threshold:.* = no'"
@@ -242,14 +244,19 @@ def run(ceph_cluster, **kw):
         default_threshold_value = mon_obj.get_config(
             section="osd", param="osd_scrub_load_threshold"
         )
-
-        if float(default_threshold_value) != 10.0:
-            log.error(
-                "The default value of the osd_scrub_load_threshold is not equal to 10.0"
-            )
+        log.info("The rh build value is- %s", rhbuild)
+        if rhbuild.split(".")[0] < "9":
+            expected_threshold_value = 0.500000
+        else:
+            expected_threshold_value = 10.0
+        if float(default_threshold_value) != expected_threshold_value:
+            msg_error = f"The default value of the osd_scrub_load_threshold is not equal to {expected_threshold_value}"
+            log.error(msg_error)
             return 1
-        log.info("The default value of the osd_scrub_load_threshold is 10.0")
-
+        log.info(
+            "The default value of the osd_scrub_load_threshold is - %s",
+            default_threshold_value,
+        )
         # Check that the scrubbing is progress or not
         if not scrub_object.wait_for_pg_scrub_state(pg_id, wait_time=wait_time):
             log.error("The scrub operations are running, not executing further tests")
@@ -410,7 +417,7 @@ def run(ceph_cluster, **kw):
                     "Before starting the test waiting for the PG into active+clean state"
                 )
                 if not wait_for_clean_pg_sets(rados_object, timeout=300):
-                    log.error("Cluster cloud not reach active+clean state within 300")
+                    log.error("Cluster could not reach active+clean state within 300")
 
                 # Perform the tests by modifying the osd_scrub_load_threshold to 0
                 mon_obj.set_config(
@@ -444,7 +451,7 @@ def run(ceph_cluster, **kw):
                 )
                 if not chk_auto_repair_param:
                     log.error(
-                        "The repair parameters are not set. No executing the further tests"
+                        "The repair parameters are not set. Not executing the further tests"
                     )
                     return 1
 
@@ -522,6 +529,21 @@ def run(ceph_cluster, **kw):
                     "===Scenario 3: Verification of the osd_scrub_load_threshold parameter with the default ==="
                     "value which is 10.0"
                 )
+                default_threshold_value = mon_obj.get_config(
+                    section="osd", param="osd_scrub_load_threshold"
+                )
+                log.info(
+                    "The default osd_scrub_load_threshold value is - %s",
+                    default_threshold_value,
+                )
+
+                if rhbuild.split(".")[0] < "9":
+                    assert mon_obj.set_config(
+                        section="osd",
+                        name="osd_scrub_load_threshold",
+                        value="10.000000",
+                    ), "Could not set osd_scrub_load_threshold value "
+
                 no_of_objects = 6
 
                 if is_ec_pool:
@@ -563,6 +585,7 @@ def run(ceph_cluster, **kw):
                         "Scenario 3: Failed to generate load and reach target threshold"
                     )
                     return 1
+
                 chk_auto_repair_param = set_auto_repair_parameters(
                     mon_obj, before_tst_scrub_inconsistent_count
                 )
@@ -571,7 +594,10 @@ def run(ceph_cluster, **kw):
                         "The repair parameters are not set. No executing the further tests"
                     )
                     return 1
-
+                if not rados_object.enable_file_logging():
+                    log.error("Error while setting config to enable logging into file")
+                    return 1
+                log.info("Logging to file configured")
                 init_time, _ = installer.exec_command(
                     cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
                 )
@@ -606,6 +632,7 @@ def run(ceph_cluster, **kw):
                 )
                 end_time = end_time.strip()
                 configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
+
                 remove_parameter_configuration(mon_obj)
 
                 if (
@@ -628,8 +655,8 @@ def run(ceph_cluster, **kw):
                     rados_object, pg_id
                 )
                 msg_after_tst_inconsistent_count = (
-                    "The inconsistent  error count after "
-                    "testing is - {} ".format(after_tst_scrub_err_count)
+                    f"The inconsistent error count after testing is "
+                    f"- {after_tst_scrub_err_count}"
                 )
                 log.info(msg_after_tst_inconsistent_count)
                 if after_tst_scrub_err_count != 0:
@@ -662,7 +689,7 @@ def run(ceph_cluster, **kw):
                     "Before starting the test waiting for the PG into active+clean state"
                 )
                 if not wait_for_clean_pg_sets(rados_object, timeout=900):
-                    log.error("Cluster cloud not reach active+clean state within 900")
+                    log.error("Cluster could not reach active+clean state within 900")
                 if not start_stress_ng_and_generate_load(
                     node=primary_osd_host,
                     target_load_threshold=2,
@@ -716,7 +743,7 @@ def run(ceph_cluster, **kw):
                 except Exception:
                     log.info(
                         "Scenario 4.1: Scrub operation not started after setting the osd_scrub_load_threshold value"
-                        "to lesser than the average load of node"
+                        " to lesser than the average load of node"
                     )
 
                 end_time, _ = installer.exec_command(
@@ -771,7 +798,7 @@ def run(ceph_cluster, **kw):
                     "Before starting the test waiting for the PG into active+clean state"
                 )
                 if not wait_for_clean_pg_sets(rados_object, timeout=900):
-                    log.error("Cluster cloud not reach active+clean state within 900")
+                    log.error("Cluster could not reach active+clean state within 900")
 
                 # Rotate the osd logs
                 rados_object.rotate_logs(acting_osd_hosts)
@@ -873,7 +900,7 @@ def run(ceph_cluster, **kw):
                     )
 
                 if not wait_for_clean_pg_sets(rados_object, timeout=300):
-                    log.error("Cluster cloud not reach active+clean state within 300")
+                    log.error("Cluster could not reach active+clean state within 300")
 
                 # Rotate the osd logs
                 rados_object.rotate_logs(acting_osd_hosts)
@@ -1078,15 +1105,15 @@ def run(ceph_cluster, **kw):
         # Clean up any running stress-ng processes
         for osd_node in osd_nodes:
             if kill_stress_ng(osd_node):
-                log.info(
-                    "Cleaned up stress-ng processes on {}".format(osd_node.hostname)
+                msg_stress_ng_clean = (
+                    f"Cleaned up stress-ng processes on {osd_node.hostname}"
                 )
+                log.info(msg_stress_ng_clean)
             else:
-                log.warning(
-                    "Failed to clean up stress-ng processes on {}".format(
-                        osd_node.hostname
-                    )
+                msg_stress_ng_warning = (
+                    f"Failed to clean up stress-ng processes on {osd_node.hostname}"
                 )
+                log.warning(msg_stress_ng_warning)
         remove_parameter_configuration(mon_obj)
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
 
@@ -1191,7 +1218,7 @@ def set_auto_repair_parameters(mon_obj, inconsistent_obj_count):
     return True
 
 
-def configure_log_level(mon_obj, acting_set, set_to_default: True):
+def configure_log_level(mon_obj, acting_set, set_to_default: bool = True):
     """
     Method is used to set the acting osd log to 20 or to default value
     Args:
@@ -1267,7 +1294,7 @@ def get_node_avg_load(cluster_node):
     cmd_count_cpu = "grep -c ^processor /proc/cpuinfo"
     cpu_count_output = cluster_node.exec_command(cmd=cmd_count_cpu)
     cpu_count = int(cpu_count_output[0].strip())
-    msg_count_cpu = f"The CPU count of the {cluster_node.hostname} is {cmd_count_cpu}"
+    msg_count_cpu = f"The CPU count of the {cluster_node.hostname} is {cpu_count}"
     log.info(msg_count_cpu)
     load_threshold = round(load_avg / cpu_count, 3)
     msg_threshold = (
@@ -1387,7 +1414,6 @@ def start_stress_ng_and_generate_load(
         log.info(f"Online CPU count on {node.hostname}: {online_cpu_count}")
 
         initial_load = 0
-        # load_avg = 0
         load_threshold = 0.0
         continuous_count = 0
         elapsed_time = 0
@@ -1419,7 +1445,7 @@ def start_stress_ng_and_generate_load(
                     f"Load did not increase significantly on {node.hostname}. "
                     f"This may indicate stress-ng is not working properly."
                 )
-                continuous_count = continuous_count + 1
+                continuous_count += 1
                 continue
             else:
                 continuous_count = 0
