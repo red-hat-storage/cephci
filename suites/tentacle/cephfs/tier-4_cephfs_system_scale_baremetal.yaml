@@ -1546,6 +1546,13 @@ tests:
             name: "CephFS System Test MDS ops"
         -
           test:
+            abort-on-fail: false
+            desc: Run FS recovery with large mds log
+            module: cephfs_bugs.test_fs_recovery_with_large_mds_log.py
+            name: "CephFS System Test FS recovery with large mds log"
+            polarion-id: CEPH-83632603
+        -
+          test:
             abort-on-fail: true
             desc: System monitor
             module: cephfs_system.cephfs_systest_monitor.py
