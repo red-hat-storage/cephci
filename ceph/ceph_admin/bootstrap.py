@@ -280,10 +280,17 @@ class BootstrapMixin:
             custom_image = False
             self.cluster.use_cdn = True
             self.set_cdn_tool_repo(_ceph_version, manifest_obj)
-        elif build_type == "released" and base_url == manifest_obj.repository:
+        elif (
+            build_type == "released"
+            and base_url == manifest_obj.repository
+            and manifest_obj.build_info.get("repo_ids", {}).get(manifest_obj.platform)
+            and cloud_type != "ibmc"
+            and not self.config.get("skip_subscription", False)
+            and not _ceph_version
+        ):
             custom_image = False
             self.cluster.use_cdn = True
-            self.set_cdn_tool_repo(manifest_obj)
+            self.set_cdn_tool_repo(ctm=manifest_obj)
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
