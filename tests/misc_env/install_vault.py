@@ -173,25 +173,28 @@ def _initialize_vault(vault: Vault, config: Dict) -> Dict:
     """Initialize Vault and configure Transit engine via REST API."""
     LOG.info("Initializing Vault server")
 
-    status = vault.operator.init_status()
     try:
+        status = vault.operator.init_status()
         if status.get("initialized"):
             LOG.info("Vault already initialized, retrieving existing credentials")
-            if isinstance(vault.ctx, list):
-                node = vault.ctx[0]
-            else:
-                node = vault.ctx
+            node = vault.ctx[0] if isinstance(vault.ctx, list) else vault.ctx
             creds_out, _ = node.exec_command(
                 sudo=True, cmd="cat /vault/credentials.json", check_ec=False
             )
             if creds_out:
                 return json.loads(creds_out)
     except Exception:
-        pass
+        LOG.info("Vault not yet initialized, proceeding with init")
 
     init_data = vault.operator.init(**{"secret-shares": 5, "secret-threshold": 3})
 
-    unseal_keys = init_data["unseal_keys_b64"]
+    if "keys_base64" not in init_data:
+        LOG.error(f"Unexpected init response: {init_data}")
+        raise RuntimeError(
+            f"Vault init failed: {init_data.get('errors', 'unknown error')}"
+        )
+
+    unseal_keys = init_data["keys_base64"]
     root_token = init_data["root_token"]
     LOG.info("Vault initialized")
 
