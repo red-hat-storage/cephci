@@ -108,6 +108,8 @@ def run(ceph_cluster, **kw):
             nfs_export,
             fs_name,
             ceph_cluster=ceph_cluster,
+            enable_rdma=config.get("enable_rdma", False),
+            rdma_port=config.get("rdma_port"),
         )
 
         # Create export with squash permission
@@ -120,17 +122,18 @@ def run(ceph_cluster, **kw):
         )
         sleep(9)
 
-        # Mount the volume with rootsquash enable on clients
-        clients[0].create_dirs(dir_path=nfs_squash_mount, sudo=True)
-        if Mount(clients[0]).nfs(
-            mount=nfs_squash_mount,
-            version=version,
-            port=port,
-            server=nfs_server_name,
-            export=nfs_export_squash,
-        ):
-            raise OperationFailedError(f"Failed to mount nfs on {clients[0].hostname}")
-        log.info("Mount succeeded on client")
+        # Mount the same export on every client that runs threaded work on mount_path
+        for cl in clients:
+            cl.create_dirs(dir_path=nfs_squash_mount, sudo=True)
+            if Mount(cl).nfs(
+                mount=nfs_squash_mount,
+                version=version,
+                port=port,
+                server=nfs_server_name,
+                export=nfs_export_squash,
+            ):
+                raise OperationFailedError(f"Failed to mount nfs on {cl.hostname}")
+        log.info("Mount succeeded on all clients for squash export")
 
         # Create oprtaions on each client
         for client, operation in operations.items():
@@ -180,17 +183,17 @@ def run(ceph_cluster, **kw):
 
     except Exception as e:
         log.error(
-            f"Failed to perform faiolver while delete in progress from client2. Error: {e}"
+            f"nfs_verify_setuid_bit failed during NFS setuid operations. Error: {e}"
         )
         return 1
     finally:
         sleep(10)
-        # Cleaning up the squash export and mount dir
-        for client in clients[:2]:
+        # Cleaning up the squash export and mount dir on every client that mounted it
+        for client in clients:
             log.info("Unmounting nfs-ganesha squash mount on client:")
             if Unmount(client).unmount(nfs_squash_mount):
                 raise OperationFailedError(
-                    f"Failed to unmount nfs on {clients[0].hostname}"
+                    f"Failed to unmount nfs on {client.hostname}"
                 )
             log.info("Removing nfs-ganesha squash mount dir on client:")
             client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_squash_mount}")

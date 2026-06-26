@@ -9,6 +9,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
+from looseversion import LooseVersion
+
 from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
@@ -37,7 +39,10 @@ from tests.nvmeof.workflows.nvme_utils import (
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.utils import generate_unique_id
+from utility.utils import (
+    generate_unique_id,
+    get_ceph_version_from_cluster,
+)
 
 LOG = Log(__name__)
 
@@ -75,29 +80,30 @@ def parse_namespaces(config, namespaces):
     return all_namespaces
 
 
-def test_ceph_83608838(ceph_cluster, config):
+def test_ceph_83608838(ceph_cluster, config, nvme_service):
     rbd_pool = config["rbd_pool"]
     rbd_obj = config["rbd_obj"]
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
     orch = Orch(ceph_cluster, **{})
-    nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
     nvme_service.init_gateways()
 
     # Configure subsystems
     LOG.info("Configure subsystems")
-    configure_subsystems(nvme_service)
-    configure_hosts(nvme_service.gateways[0], config)
+    configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+    configure_hosts(nvme_service.gateways[0], config, ceph_cluster=ceph_cluster)
     listeners = [nvme_service.gateways[0].node.id]
     for cfg in config["subsystems"]:
         if cfg.get("listeners"):
             listeners.extend(cfg["listeners"])
     listeners = list(set(listeners))
-    configure_listeners(nvme_service.gateways, config, listeners=listeners)
+    ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+    if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+        configure_listeners(nvme_service.gateways, config, listeners=listeners)
     lb_groups = fetch_lb_groups(nvme_service, listeners)
     opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
-    configure_namespaces(nvme_service.gateways[0], config, opt_args)
+    configure_namespaces(nvme_service.gateways[0], config, opt_args, rbd_obj=rbd_obj)
 
     # Configure namespaces
     LOG.info("Configure namespaces")
@@ -153,30 +159,32 @@ def test_ceph_83608838(ceph_cluster, config):
     )
 
 
-def test_ceph_83609769(ceph_cluster, config):
+def test_ceph_83609769(ceph_cluster, config, nvme_service):
     gateway_group = config.get("gw_group", "")
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
+    rbd_obj = config["rbd_obj"]
     config["spec_deployment"] = True
     config["rebalance_period"] = True
     config["rebalance_period_sec"] = 0
     orch = Orch(ceph_cluster, **{})
-    nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
 
     # Configure subsystems
     LOG.info("Configure subsystems")
-    configure_subsystems(nvme_service)
-    configure_hosts(nvme_service.gateways[0], config)
+    configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+    configure_hosts(nvme_service.gateways[0], config, ceph_cluster=ceph_cluster)
     listeners = [nvme_service.gateways[0].node.id]
     for cfg in config["subsystems"]:
         if cfg.get("listeners"):
             listeners.extend(cfg["listeners"])
     listeners = list(set(listeners))
-    configure_listeners(nvme_service.gateways, config, listeners=listeners)
+    ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+    if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+        configure_listeners(nvme_service.gateways, config, listeners=listeners)
     opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": "sequential"}
     LOG.info("Configure namespaces")
-    configure_namespaces(nvme_service.gateways[0], config, opt_args)
+    configure_namespaces(nvme_service.gateways[0], config, opt_args, rbd_obj=rbd_obj)
 
     # Check for num-namespaces is 10 in all gateways
     LOG.info("Check for num-namespaces is 10 in all gateways")
@@ -386,7 +394,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
             test_case_run = testcases[config["test_case"]]
             config.update({"rbd_obj": rbd_obj})
-            test_case_run(ceph_cluster, config)
+            config.update({"nvme_service": nvme_service})
+            test_case_run(ceph_cluster, config, nvme_service)
         else:
             # Deploy NVMe services
             if config.get("install"):
@@ -399,18 +408,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
             # Configure Subsystem
             if config.get("subsystems"):
-                configure_subsystems(nvme_service)
-                configure_hosts(nvme_service.gateways[0], config)
+                configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+                configure_hosts(
+                    nvme_service.gateways[0], config, ceph_cluster=ceph_cluster
+                )
                 listeners = [nvme_service.gateways[0].node.id]
                 for cfg in config["subsystems"]:
                     if cfg.get("listeners"):
                         listeners.extend(cfg["listeners"])
                 listeners = list(set(listeners))
-                configure_listeners(nvme_service.gateways, config, listeners=listeners)
+                ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+                if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                    configure_listeners(
+                        nvme_service.gateways, config, listeners=listeners
+                    )
                 lb_groups = fetch_lb_groups(nvme_service, listeners)
                 opt_args = {"ceph_cluster": ceph_cluster, "lb_groups": lb_groups}
                 LOG.info("Configure namespaces")
-                configure_namespaces(nvme_service.gateways[0], config, opt_args)
+                configure_namespaces(
+                    nvme_service.gateways[0], config, opt_args, rbd_obj=rbd_obj
+                )
 
                 if ceph_cluster.rhcs_version > "8.0":
                     time.sleep(120)
@@ -423,14 +440,17 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 for lb_config in config.get("load_balancing"):
                     # namespace addition
                     if lb_config.get("ns_add"):
-                        config = lb_config["ns_add"]
-                        subsystems = config["subsystems"]
+                        config_ns_add = lb_config["ns_add"]
+                        subsystems = config_ns_add["subsystems"]
                         opt_args = {
                             "ceph_cluster": ceph_cluster,
                             "lb_groups": lb_groups,
                         }
                         configure_namespaces(
-                            nvme_service.gateways[0], nvme_service.config, opt_args
+                            nvme_service.gateways[0],
+                            nvme_service.config,
+                            opt_args,
+                            rbd_obj=rbd_obj,
                         )
                         if ceph_cluster.rhcs_version > "8.0":
                             validate_auto_loadbalance(
@@ -545,11 +565,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
                             # Add listeners and namespaces to newly added GWs
                             LOG.info(f"Adding listeners for {scaleup_nodes}")
-                            configure_listeners(
-                                nvme_service.gateways,
-                                nvme_service.config,
-                                listeners=scaleup_nodes,
+                            ceph_version = get_ceph_version_from_cluster(
+                                nvme_service.clients[0]
                             )
+                            if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                                configure_listeners(
+                                    nvme_service.gateways,
+                                    nvme_service.config,
+                                    listeners=scaleup_nodes,
+                                )
 
                             lb_groups = fetch_lb_groups(nvme_service, scaleup_nodes)
 
@@ -560,7 +584,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 "lb_groups": lb_groups,
                             }
                             configure_namespaces(
-                                nvme_service.gateways[-1], nvme_service.config, opt_args
+                                nvme_service.gateways[-1],
+                                nvme_service.config,
+                                opt_args,
+                                rbd_obj=rbd_obj,
                             )
 
                             # Prepare FIO Execution for new namespaces

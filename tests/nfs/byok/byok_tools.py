@@ -10,6 +10,7 @@ from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError
 from tests.nfs.nfs_operations import (
+    _LiteralPemDumper,
     create_multiple_nfs_instance_via_spec_file,
     create_nfs_via_file_and_verify,
     fuse_mount_retry,
@@ -23,7 +24,83 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
     rename_file,
     write_to_file_using_dd_command,
 )
-from utility.gklm_client.gklm_client import GklmClient
+from utility.gklm_client.gklm_client import build_gklm_client
+
+
+def remove_gklm_kmip_client_and_legacy_certs(
+    gklm_rest_client,
+    client_name: str,
+    legacy_cert_aliases=("cert2",),
+):
+    """
+    Best-effort removal of a generic KMIP client and stale client cert aliases.
+
+    Deletes managed objects for ``client_name``, deletes the client, then tries to
+    delete each legacy certificate alias (e.g. ``cert2`` from older test runs).
+    """
+    try:
+        for obj in gklm_rest_client.objects.list_client_objects(client_name):
+            oid = obj.get("uuid") or obj.get("id")
+            if not oid:
+                continue
+            try:
+                gklm_rest_client.objects.delete_object(oid)
+            except Exception as e:
+                log.warning("Could not delete GKLM object %s: %s", oid, e)
+    except Exception as e:
+        log.debug("list_client_objects for %r: %s", client_name, e)
+
+    try:
+        gklm_rest_client.clients.delete_client(client_name)
+        log.info("Removed GKLM generic KMIP client %r (if it existed).", client_name)
+    except Exception as e:
+        log.debug("delete_client %r: %s", client_name, e)
+
+    for alias in legacy_cert_aliases:
+        if not alias:
+            continue
+        try:
+            gklm_rest_client.certificates.delete_certificate(alias)
+            log.info("Removed legacy GKLM client certificate alias %r.", alias)
+        except Exception as e:
+            log.debug("delete_certificate %r: %s", alias, e)
+
+
+def ensure_fresh_gklm_kmip_client(
+    gklm_rest_client,
+    client_name: str,
+    legacy_cert_aliases=("cert2",),
+):
+    """
+    Drop any existing GKLM state for ``client_name`` (client + keys + legacy certs),
+    then register a new empty generic KMIP client with the same name.
+
+    Call this right after ``build_gklm_client(...)`` when tests must not reuse a
+    client or symmetric keys left from a failed prior run.
+    """
+    remove_gklm_kmip_client_and_legacy_certs(
+        gklm_rest_client, client_name, legacy_cert_aliases
+    )
+    try:
+        names = {
+            str(x.get("clientName") or "").upper()
+            for x in gklm_rest_client.clients.list_clients()
+        }
+    except Exception as e:
+        log.warning("Could not list GKLM clients after cleanup: %s", e)
+        names = set()
+    if client_name.upper() not in names:
+        log.info("Creating new GKLM generic KMIP client %r", client_name)
+        gklm_rest_client.clients.create_client(client_name)
+    else:
+        log.warning(
+            "GKLM client %r still exists after removal; skipping create_client",
+            client_name,
+        )
+    try:
+        gklm_rest_client.login()
+    except Exception as e:
+        log.debug("GKLM re-login after ensure_fresh_gklm_kmip_client: %s", e)
 
 
 def get_enctag(
@@ -187,16 +264,19 @@ def create_nfs_instance_for_byok(
         "service_id": nfs_name,
         "placement": {"host_pattern": nfs_node.hostname},
         "spec": {
-            "kmip_cert": cert.rstrip("\\n"),
-            "kmip_key": rsa_key.rstrip("\\n"),
-            "kmip_ca_cert": ca_cert.rstrip("\\n"),
+            "kmip_cert": cert.strip(),
+            "kmip_key": rsa_key.strip(),
+            "kmip_ca_cert": ca_cert.strip(),
             "kmip_host_list": [kmip_host_list],
         },
     }
     log.debug(f"NFS service spec: {nfs_cluster_dict}")
 
     create_nfs_via_file_and_verify(
-        installer_node=installer, nfs_objects=[nfs_cluster_dict], timeout=300
+        installer_node=installer,
+        nfs_objects=[nfs_cluster_dict],
+        timeout=300,
+        nfs_nodes=[nfs_node],
     )
     log.info("NFS Ganesha BYOK service creation successful")
 
@@ -295,13 +375,17 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
 
     # Step 1: Delete symmetric keys associated with the client
     log.info("Retrieving symmetric key objects for client '%s'.", gkml_client_name)
+    ids = []
     try:
         objects = gklm_rest_client.objects.list_client_objects(gkml_client_name)
-        ids = [obj["uuid"] for obj in objects]
+        ids = [obj["uuid"] for obj in objects if obj.get("uuid")]
         log.info("Found %d symmetric key object(s) to delete.", len(ids))
     except Exception as e:
-        log.error("Failed to retrieve symmetric key objects: %s", str(e))
-        return
+        log.warning(
+            "Could not list symmetric keys for client '%s' (client may be absent): %s",
+            gkml_client_name,
+            e,
+        )
 
     for key_id in ids:
         try:
@@ -309,8 +393,8 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
             gklm_rest_client.objects.delete_object(key_id)
         except Exception as e:
             log.warning("Failed to delete symmetric key '%s': %s", key_id, str(e))
-    if not ids:
-        log.info("Symmetric key objects deleted successfully.")
+    if ids:
+        log.info("Symmetric key objects deleted (or attempted).")
     else:
         log.info("No symmetric keys found to delete.")
 
@@ -338,10 +422,18 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
 def load_gklm_config(custom_data, config, cephci_data):
     """
     Load GKLM parameters in this order of precedence:
-      1. explicit --custom-config list items
-      2. --custom-config-file YAML
-      3. cephci_data['gklm_config'][cloud_type] (with baremetal → openstack fallback)
+      1. ``~/.cephci.yaml`` (or cephci equivalent) ``gklm_config`` for the runtime cloud
+      2. Overrides from ``--custom-config-file`` YAML
+      3. Overrides from explicit ``--custom-config`` entries
       4. Raises ConfigError if required keys are still missing
+
+    ``gklm_config`` lookup: uses ``cloud-type`` from the test/config (normally set by
+    ``run.py`` from ``--cloud``). ``baremetal`` maps to ``openstack``. When
+    ``cloud-type`` is missing or empty, ``openstack`` is assumed. If that section is
+    empty, falls back to the first populated entry among ``openstack``, ``ibmc``.
+
+    Optional key ``gklm_rest_prefix`` (e.g. ``/GKLM/rest/v1`` for GKLM 5.x) selects the
+    REST API root; when omitted, ``/SKLM/rest/v1`` is used for backward compatibility.
 
     Args:
         custom_data (dict): {'custom-config': [], 'custom-config-file': None}
@@ -354,32 +446,89 @@ def load_gklm_config(custom_data, config, cephci_data):
     Raises:
         ConfigError: If GKLM data is missing after all lookup methods
     """
-    # 1. Defaults placeholder (no valid defaults; will validate later)
     merged = {}
 
-    # 2. Attempt load from cephci_data using cloud type
     cloud_type = config.get("cloud-type")
-    lookup_type = "openstack" if cloud_type == "baremetal" else cloud_type
-    cloud_gklm = cephci_data.get("gklm_config", {}).get(lookup_type, {})
+    if cloud_type == "baremetal":
+        lookup_type = "openstack"
+    elif not cloud_type:
+        lookup_type = "openstack"
+    else:
+        lookup_type = cloud_type
+
+    gklm_master_raw = cephci_data.get("gklm_config")
+    if not isinstance(gklm_master_raw, dict):
+        gklm_master_raw = {}
+
+    cloud_gklm = gklm_master_raw.get(lookup_type) if lookup_type else {}
+    if isinstance(cloud_gklm, dict):
+        cloud_gklm = {k: v for k, v in cloud_gklm.items() if v not in ("", None)}
+    else:
+        cloud_gklm = {}
+
+    if not cloud_gklm:
+        for fk in ("openstack", "ibmc"):
+            block = gklm_master_raw.get(fk)
+            if isinstance(block, dict) and any(
+                v not in ("", None) for v in block.values()
+            ):
+                cloud_gklm = dict(block)
+                log.info(
+                    "Loaded GKLM config from cephci_data gklm_config[%r] "
+                    "(no usable entry for cloud-type %r)",
+                    fk,
+                    cloud_type if cloud_type else lookup_type,
+                )
+                break
+    elif cloud_gklm:
+        log.info("Loaded GKLM config from cephci_data for cloud '%s'", lookup_type)
+
     if cloud_gklm:
         merged.update(cloud_gklm)
-        log.info("Loaded GKLM config from cephci_data for cloud ")
-    else:
-        log.debug("No GKLM config in cephci_data for cloud '%s'", lookup_type)
+    elif gklm_master_raw:
+        log.debug(
+            "cephci_data defines gklm_config but no usable block for '%s' "
+            "(tried fallback openstack/ibmc); supply --custom-config-file or fill ~/.cephci.yaml",
+            lookup_type,
+        )
 
-    # 3. Override from YAML file if provided
+    # Override from YAML file if provided (``gklm:`` stanza or top-level GKLM keys)
     yaml_file = custom_data.get("custom-config-file")
     if yaml_file:
         try:
             with open(yaml_file) as f:
-                data = yaml.safe_load(f).get("gklm", {})
-            merged.update({k: data[k] for k in data if k in data})
-            log.info("Loaded GKLM config from file '%s': %s", yaml_file, data)
+                raw = yaml.safe_load(f)
+            data = {}
+            if isinstance(raw, dict):
+                inner = raw.get("gklm")
+                if isinstance(inner, dict):
+                    data = inner
+                else:
+                    gklm_yaml_keys = {
+                        "gklm_ip",
+                        "gklm_user",
+                        "gklm_password",
+                        "gklm_node_username",
+                        "gklm_node_password",
+                        "gklm_hostname",
+                        "gklm_rest_prefix",
+                    }
+                    for k in gklm_yaml_keys:
+                        if k in raw and raw[k] not in ("", None):
+                            data[k] = raw[k]
+            if data:
+                merged.update(data)
+                log.info("Loaded GKLM config from file '%s': %s", yaml_file, data)
+            else:
+                log.warning(
+                    "GKLM section empty or missing under 'gklm:' in '%s'",
+                    yaml_file,
+                )
         except Exception as e:
             log.error("Failed to load GKLM config file '%s': %s", yaml_file, e)
             raise ConfigError(f"Unable to parse custom-config-file: {e}")
 
-    # 4. Override from --custom-config list
+    # Override from --custom-config list
     for item in custom_data.get("custom-config", []):
         try:
             key, val = item.split("=", 1)
@@ -394,6 +543,7 @@ def load_gklm_config(custom_data, config, cephci_data):
             "gklm_node_username",
             "gklm_node_password",
             "gklm_hostname",
+            "gklm_rest_prefix",
         }:
             merged[key] = val
             log.info("Overrode GKLM config '%s' via custom-config: %s", key, val)
@@ -416,7 +566,11 @@ def load_gklm_config(custom_data, config, cephci_data):
             "Provide via cephci_data, custom-config-file, or --custom-config."
         )
 
-    log.info("Final GKLM configuration: %s", [k for k in required if k in merged])
+    log.info(
+        "Final GKLM configuration keys: %s",
+        [k for k in required if k in merged]
+        + (["gklm_rest_prefix"] if merged.get("gklm_rest_prefix") else []),
+    )
     return merged
 
 
@@ -460,8 +614,18 @@ def nfs_byok_test_setup(byok_setup_params):
             gklm_ip=gklm_ip,
             gklm_hostname=gklm_hostname,
         )
-        gklm_rest_client = GklmClient(
-            gklm_ip, user=gklm_user, password=gklm_password, verify=False
+        gklm_rest_client = build_gklm_client(
+            {
+                "gklm_ip": gklm_ip,
+                "gklm_user": gklm_user,
+                "gklm_password": gklm_password,
+                **(
+                    {"gklm_rest_prefix": byok_setup_params["gklm_rest_prefix"]}
+                    if byok_setup_params.get("gklm_rest_prefix")
+                    else {}
+                ),
+            },
+            verify=False,
         )
         log.info(
             f"Initialized GKLM REST client for server {gklm_ip}, user {gklm_user}. "
@@ -518,7 +682,8 @@ def create_multiple_nfs_instance_for_byok(
     ca_cert: str,
     kmip_host_list: str,
     timeout: int = 300,
-) -> int:
+    cluster_nodes=None,
+):
     """
     Create multiple BYOK-enabled NFS Ganesha service instances using a given service spec.
 
@@ -535,9 +700,12 @@ def create_multiple_nfs_instance_for_byok(
         ca_cert (str): PEM-encoded KMIP server CA certificate.
         kmip_host_list (str): Hostname(s) or IP(s) of the KMIP server(s).
         timeout (int, optional): Timeout in seconds for creation & verification. Defaults to 300.
+        cluster_nodes (list, optional): Ceph cluster node list for resolving NFS hosts
+            when enabling coredump after spec apply.
 
     Returns:
-        int: 0 on success, 1 on failure.
+        list: One NFS spec dict per created instance on success.
+        int: ``1`` on failure.
     """
 
     try:
@@ -553,16 +721,17 @@ def create_multiple_nfs_instance_for_byok(
             replication_number=replication_number,
             installer=installer,
             timeout=timeout,
+            cluster_nodes=cluster_nodes,
         )
 
-        if result == 0:
+        if isinstance(result, list):
             log.info(
                 f"Successfully created {replication_number} BYOK-enabled "
                 f"NFS Ganesha instance(s) using base service_id '{spec.get('service_id')}'"
             )
-        else:
-            log.error(" Failed to create BYOK-enabled NFS Ganesha instances.")
-        return result
+            return result
+        log.error(" Failed to create BYOK-enabled NFS Ganesha instances.")
+        return 1
 
     except Exception as e:
         log.error(f"Unexpected error during BYOK NFS instance creation: {e}")
@@ -828,7 +997,13 @@ def create_in_file_certs(certs_dict, node):
         node = node[0]
 
     spec_file = node.remote_file(sudo=True, file_name=temp_file.name, file_mode="wb")
-    spec = yaml.dump(certs_dict, sort_keys=False, indent=2).encode("utf-8")
+    spec = yaml.dump(
+        certs_dict,
+        sort_keys=False,
+        indent=2,
+        default_flow_style=False,
+        Dumper=_LiteralPemDumper,
+    ).encode("utf-8")
     spec_file.write(spec)
     spec_file.flush()
     log.info(

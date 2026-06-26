@@ -28,6 +28,7 @@ from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
+from cli.utilities.filesys import Mount
 from compute.openstack import get_openstack_driver
 from tests.cephfs.exceptions import ValueMismatchError
 from utility.log import Log
@@ -2360,23 +2361,44 @@ class FsUtils(object):
             )
         return 0
 
+    @retry(CommandFailed, tries=30, delay=10, backoff=1)
+    def _wait_for_pid_signal(self, node, daemon, sig, pids_before, expect_exit):
+        out_after, rc_after = node.exec_command(
+            cmd=f"pgrep {daemon}",
+            container_exec=False,
+            check_ec=False,
+        )
+        pids_after = out_after.splitlines() if not rc_after else []
+        still_running = set(pids_before) & set(pids_after)
+        log.info(
+            f"PIDs after {sig.name}: {pids_after}, "
+            f"still running from before: {still_running}"
+        )
+        if expect_exit and still_running:
+            raise CommandFailed(
+                f"{sig.name} failed. PIDs still running: {still_running}"
+            )
+        if not expect_exit and not pids_after:
+            raise CommandFailed(f"{sig.name} failed. {daemon} exited unexpectedly")
+
     def pid_signal(
         self,
         node,
         daemon,
         sig=signal.SIGTERM,
         expect_exit=True,
-        wait=10,
     ):
         out, rc = node.exec_command(
             cmd=f"pgrep {daemon}",
             container_exec=False,
             check_ec=False,
         )
-        if rc:
-            log.info(f"No running process found for {daemon}")
+        pids_before = [pid for pid in out.splitlines() if pid.strip()] if not rc else []
+        if not pids_before:
+            log.info(
+                f"No running {daemon} process found on {node.hostname}, skipping {sig.name}"
+            )
             return 0
-        pids_before = [pid for pid in out.splitlines() if pid]
         log.info(f"PIDs before {sig.name}: {pids_before}")
         for pid in pids_before:
             node.exec_command(
@@ -2385,23 +2407,7 @@ class FsUtils(object):
                 container_exec=False,
                 check_ec=False,
             )
-        sleep(wait)
-        out_after, rc_after = node.exec_command(
-            cmd=f"pgrep {daemon}",
-            container_exec=False,
-            check_ec=False,
-        )
-        pids_after = out_after.splitlines() if not rc_after else []
-        log.info(f"PIDs after {sig.name}: {pids_after}")
-        if expect_exit:
-            if set(pids_before) & set(pids_after):
-                raise CommandFailed(
-                    f"{sig.name} failed. PIDs still running: "
-                    f"{set(pids_before) & set(pids_after)}"
-                )
-        else:
-            if not pids_after:
-                raise CommandFailed(f"{sig.name} failed. {daemon} exited unexpectedly")
+        self._wait_for_pid_signal(node, daemon, sig, pids_before, expect_exit)
         return 0
 
     def network_disconnect(self, ceph_object, sleep_time=20):
@@ -3284,6 +3290,8 @@ os.system('sudo systemctl start  network')
         :param nfs_export:
         :param nfs_mount_dir:
         """
+        Mount(client)._ensure_nfs_utils()
+
         client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mount_dir}")
         command = f"mount -t nfs -o vers=4,port={kwargs.get('port', '2049')} {nfs_server}:{nfs_export} {nfs_mount_dir}"
         if kwargs.get("fstab"):

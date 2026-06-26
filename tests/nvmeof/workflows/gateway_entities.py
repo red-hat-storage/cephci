@@ -43,29 +43,38 @@ def validate_subsystems(nvme_service, subsystem_config):
     if not subsystem_list:
         raise ValueError("No subsystems found after configuration")
 
-    if len(subsystem_list) != len(subsystem_config):
-        raise ValueError(
-            f"Mismatch in number of configured subsystems: "
-            f"expected {len(subsystem_config)}, found {len(subsystem_list)}"
-        )
-
-    for i, sub_cfg in enumerate(subsystem_config):
+    actual_nqns = {
+        s.get("nqn") or s.get("subnqn")
+        for s in subsystem_list
+        if s.get("nqn") or s.get("subnqn")
+    }
+    for sub_cfg in subsystem_config:
         nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
-        if nqn in subsystem_list[i].get("nqn", subsystem_list[i].get("subnqn")):
-            continue
-        raise ValueError(
-            f"Subsystem {sub_cfg.get('nqn') or sub_cfg.get('subnqn')} not found in configured subsystems"
+        if not nqn:
+            raise ValueError("Subsystem NQN not provided in subsystem_config")
+        if nqn not in actual_nqns:
+            raise ValueError(
+                f"Subsystem {nqn} not found in configured subsystems "
+                f"(have {sorted(actual_nqns)})"
+            )
+
+    if len(subsystem_list) > len(subsystem_config):
+        LOG.info(
+            "More subsystems present on gateway than in this test config "
+            "(%s from config, %s total); treating extras as pre-existing",
+            len(subsystem_config),
+            len(subsystem_list),
         )
 
 
-def configure_subsystems(nvme_service, ceph_cluster=None):
+def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None):
     """
     Configure subsystems, hosts, and namespaces for this gateway group.
     This is done once per group, not per gateway.
     Args:
         nvme_service: NvmeService instance
-        exec_parallel: Whether to execute subsystem configuration in parallel
-        (default: False, sequential execution)
+        ceph_cluster: Ceph cluster object
+        subsystem_config: Optional subsystem list; defaults to nvme_service.config
     """
 
     # Configure subsystem
@@ -104,6 +113,8 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
                 {"initiators": create_dhchap_key(sub_cfg, nvme_service.ceph_cluster)}
             )
             sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
+        elif sub_cfg.get("dhchap-key"):
+            sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
 
         # Add Subsystem
         release = nvme_service.ceph_cluster.rhcs_version
@@ -123,11 +134,16 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
         }
 
         if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+            if sub_cfg.get("listener_port"):
+                args["port"] = sub_cfg.get("listener_port")
+            if sub_cfg.get("secure_listener"):
+                args["secure_listeners"] = sub_cfg.get("secure_listener")
             args["network-mask"] = get_network_mask(nvme_service.gateways)
 
         gateway.subsystem.add(**{"args": args})
 
-    subsystem_config = nvme_service.config.get("subsystems", [])
+    if subsystem_config is None:
+        subsystem_config = nvme_service.config.get("subsystems", [])
     for sub_cfg in subsystem_config:
         with parallel() as p:
             p.spawn(configure_subsystem, nvme_service, sub_cfg)
@@ -344,6 +360,12 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
 
                 if bdev_cfg.get("pool"):
                     namespace_args.update({"rbd-pool": bdev_cfg["pool"]})
+
+                rados_namespace = bdev_cfg.get(
+                    "rados_namespace", sub_cfg.get("rados_namespace")
+                )
+                if rados_namespace:
+                    namespace_args.update({"rados-namespace": rados_namespace})
 
                 # consider adding option to create pool and image if it doesn't exist
                 # and also ns_create_image is false
@@ -604,8 +626,12 @@ def fetch_namespaces(gateway, failed_ana_grp_ids=[], get_list=False):
         if failed_ana_grp_ids:
             for ns in nspaces:
                 if ns["load_balancing_group"] in failed_ana_grp_ids:
-                    # <subsystem>|<nsid>|<pool_name>|<image>
-                    ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
+                    # <subsystem>|<nsid>|<pool_name>|<image> or <subsystem>|<nsid>|<pool_name>|<rados_namespace>/<image>
+                    # Handle both {pool}/{image} and {pool}/{rados_namespace}/{image} formats
+                    image_path = ns["rbd_image_name"]
+                    if ns.get("rados_namespace_name"):
+                        image_path = f"{ns['rados_namespace_name']}/{image_path}"
+                    ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{image_path}"
                     if get_list:
                         namespaces.append({"list": ns, "info": f"{sub_name}|{ns_info}"})
                     else:

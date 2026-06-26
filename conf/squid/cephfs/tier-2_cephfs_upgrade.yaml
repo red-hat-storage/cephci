@@ -20,20 +20,20 @@ globals:
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 20
       node5:
         role:
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 20
       node6:
         role:
           - osd
           - nfs
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 20
       node7:
         role:
           - mds
@@ -41,7 +41,7 @@ globals:
           - osd
           - grafana
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 20
 
       node8:
         role:

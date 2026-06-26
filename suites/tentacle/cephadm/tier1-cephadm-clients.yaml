@@ -86,6 +86,10 @@ tests:
                labels: apply-all-labels
                nodes:
                  - node4
+        - config:
+            args:
+              - "ceph config set mgr mgr/cephadm/use_agent true"
+            command: shell
       abort-on-fail: true
   - test:
       name: Service deployment with spec

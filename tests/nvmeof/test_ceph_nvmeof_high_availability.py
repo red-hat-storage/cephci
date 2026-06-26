@@ -43,13 +43,14 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     nvme_service = NVMeService(config, ceph_cluster)
     LOG.info("Deploy NVMe service")
     nvme_service.deploy()
+    config["nvme_service"] = nvme_service
     LOG.info("Initialize gateways")
     nvme_service.init_gateways()
     config.update({"nvme_service": nvme_service})
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
     ha.run()
 
     # Update the config
@@ -57,11 +58,13 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     service_name = get_nvme_service_name(rbd_pool, config.get("gw_group", None))
 
     # Deploy/Reconfigure the service without mTLS
-    # Remove nvme_service from config
-    config.pop("nvme_service")
     LOG.info("Deploy NVMe service without mTLS")
     nvme_service = NVMeService(config, ceph_cluster)
     nvme_service.deploy()
+    # Remove nvme_service from config
+    config.pop("nvme_service")
+    # Keep config in sync so run() finally can teardown if anything below fails
+    config["nvme_service"] = nvme_service
 
     LOG.info("Redeploy nvmeof service without mTLS")
 
@@ -98,7 +101,7 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
                 f"Failed to delete subsystem {sub['nqn']}: {out} with error {err}"
             )
     # Configure gateway entities
-    configure_gw_entities(nvme_service, rbd_obj=rbd_obj)
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
     config["nvme_service"] = nvme_service
 
 
@@ -200,7 +203,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     except Exception as err:
         LOG.error(err)
     finally:
-        if config.get("cleanup") and nvme_service is not None:
-            teardown(nvme_service, rbd_obj)
+        # test_case path often only updates config["nvme_service"]; local nvme_service
+        # stays None if the test raises before return, so read from config as fallback.
+        service_to_clean = nvme_service or config.get(
+            "nvme_service",
+        )
+        if config.get("cleanup") and service_to_clean is not None:
+            try:
+                teardown(service_to_clean, rbd_obj)
+            except Exception as teardown_err:
+                LOG.error(f"Teardown in finally failed: {teardown_err}")
 
     return 1

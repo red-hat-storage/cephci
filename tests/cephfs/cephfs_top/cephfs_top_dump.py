@@ -212,6 +212,13 @@ def verify_read_write_io_progress(before_total_read, before_total_write):
 
 
 def run(ceph_cluster, **kw):
+    fuse_mounting_dir_1 = None
+    fuse_mounting_dir_2 = None
+    fuse_mounting_dir_3 = None
+    kernel_mounting_dir_1 = None
+    kernel_mounting_dir_2 = None
+    cephfs_name1 = None
+    cephfs_name2 = None
     try:
         global fs_util, client1, fs_name, client_id
 
@@ -462,13 +469,19 @@ def run(ceph_cluster, **kw):
             fuse_mounting_dir_2,
             fuse_mounting_dir_3,
         ]:
-            fs_util.client_clean_up(
-                "umount", fuse_clients=[client1], mounting_dir=mount_dir
-            )
+            if mount_dir:
+                fs_util.client_clean_up(
+                    "umount", fuse_clients=[client1], mounting_dir=mount_dir
+                )
 
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[client1], mounting_dir=kernel_mounting_dir_1
-        )
+        for mount_dir in [kernel_mounting_dir_1, kernel_mounting_dir_2]:
+            if mount_dir:
+                fs_util.client_clean_up(
+                    "umount",
+                    kernel_clients=[client1],
+                    mounting_dir=mount_dir,
+                )
 
         for fs_delete in [cephfs_name1, cephfs_name2]:
-            fs_util.remove_fs(client1, fs_delete)
+            if fs_delete:
+                fs_util.remove_fs(client1, fs_delete)

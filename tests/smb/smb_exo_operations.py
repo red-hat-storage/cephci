@@ -1,5 +1,6 @@
 from time import sleep
 
+from smb_load import smb_load
 from smb_operations import (
     apply_smb_spec,
     check_ctdb_health,
@@ -238,6 +239,32 @@ def deploy_exo_smb(
         raise ConfigError(f"Fail to deploy samba services {e}")
 
 
+def Perfrom_load_test(sec_installer, sec_client, smb_nodes, smb_spec, load_test_config):
+    """Perfrom load with an external secondary cluster"""
+    try:
+        # Get smb service value from spec file
+        smb_shares = []
+        for spec in smb_spec:
+            if spec["resource_type"] == "ceph.smb.share":
+                smb_shares.append(spec["share_id"])
+            elif spec["resource_type"] == "ceph.smb.usersgroups":
+                smb_user_name = spec["values"]["users"][0]["name"]
+                smb_user_password = spec["values"]["users"][0]["password"]
+
+        # Load Test
+        smb_load(
+            sec_installer,
+            sec_client,
+            smb_nodes[0],
+            smb_shares[0],
+            smb_user_name,
+            smb_user_password,
+            load_test_config,
+        )
+    except Exception as e:
+        raise ConfigError(f"Load test failed {e}")
+
+
 def run(**kw):
     """Deploy samba with auth_mode 'user' using declarative style(Spec File)
     Args:
@@ -291,6 +318,9 @@ def run(**kw):
     # Get opertaions
     operations = config.get("operations", ["deploy_smb"])
 
+    # Get load test details
+    load_test_config = config.get("load_test")
+
     for operation in operations:
         if operation == "deploy_smb":
             # deploy smb services with an external secondary cluster
@@ -317,6 +347,12 @@ def run(**kw):
                 smb_spec,
                 sec_client,
             )
+        elif operation == "load_test":
+            # Perfrom load and multiconnection test
+            Perfrom_load_test(
+                sec_installer, sec_client, smb_nodes, smb_spec, load_test_config
+            )
+
         elif operation == "cleanup_smb":
             # Cleanup smb services
             cleanup_smb(

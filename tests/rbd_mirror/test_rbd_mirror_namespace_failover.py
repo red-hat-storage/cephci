@@ -267,18 +267,19 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                     level = snap_levels[0]
                     interval = snap_intervals[0]
 
-                    # Handle case when level is 'namespace' but no namespace is defined (i.e., default ns)
                     effective_level = (
                         "image" if level == "namespace" and not namespace else level
                     )
-
+                    snap_schedule_config = {
+                        "pool": pool,
+                        "image": image,
+                        "level": effective_level,
+                        "interval": interval,
+                    }
+                    if namespace:
+                        snap_schedule_config["namespace"] = namespace
                     out, err = add_snapshot_scheduling(
-                        rbd_primary,
-                        pool=pool,
-                        image=image,
-                        level=effective_level,
-                        interval=interval,
-                        namespace=namespace,
+                        rbd_primary, **snap_schedule_config
                     )
                     if err:
                         raise Exception(
@@ -295,7 +296,12 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                     "io-threads": 16,
                 }
 
-                out, err = rbd_secondary.bench(**bench_kw)
+                out, err = rbd_primary.bench(**bench_kw)
+                if err:
+                    raise Exception(
+                        "Failed to write IO to the image %s: %s" % (pri_image_spec, err)
+                    )
+                log.info("Successfully ran IO on image %s" % pri_image_spec)
 
                 time.sleep(
                     int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
@@ -307,7 +313,9 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                     "pool": pool,
                     "interval": interval,
                 }
-                if level == "namespace":
+                if level == "pool" and namespace:
+                    verify_args["namespace"] = namespace
+                elif level == "namespace":
                     verify_args["namespace"] = namespace
                 elif level == "image":
                     if namespace:
@@ -345,16 +353,17 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                 )
 
                 # Remove schedule from primary
-                out, err = remove_snapshot_scheduling(
-                    rbd_primary,
-                    pool=pool,
-                    image=image,
-                    level=level,
-                    interval=interval,
-                    namespace=namespace,
-                )
+                remove_args = {
+                    "pool": pool,
+                    "image": image,
+                    "level": level,
+                    "interval": interval,
+                }
+                if namespace:
+                    remove_args["namespace"] = namespace
+                out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
                 if err:
-                    log.error(f"Failed to remove snapshot schedule on primary: {err}")
+                    raise Exception("Failed to remove mirror snapshot schedule")
 
                 log.info(f"Demoting primary image {pri_image_spec} on Cluster-1")
                 out, err = rbd_primary.mirror.image.demote(
@@ -396,18 +405,19 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                     state_pattern="up+replaying",
                 )
 
-                # Handle case when level is 'namespace' but no namespace is defined (i.e., default ns)
                 effective_level = (
                     "image" if level == "namespace" and not remote_namespace else level
                 )
-
+                snap_schedule_config = {
+                    "pool": pool,
+                    "image": image,
+                    "level": effective_level,
+                    "interval": interval,
+                }
+                if remote_namespace:
+                    snap_schedule_config["namespace"] = remote_namespace
                 out, err = add_snapshot_scheduling(
-                    rbd_secondary,
-                    pool=pool,
-                    image=image,
-                    level=effective_level,
-                    interval=interval,
-                    namespace=remote_namespace,
+                    rbd_secondary, **snap_schedule_config
                 )
                 if err:
                     raise Exception(
@@ -448,7 +458,9 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                     "pool": pool,
                     "interval": interval,
                 }
-                if level == "namespace":
+                if level == "pool" and remote_namespace:
+                    verify_args["namespace"] = remote_namespace
+                elif level == "namespace":
                     verify_args["namespace"] = remote_namespace
                 elif level == "image":
                     if remote_namespace:
@@ -486,16 +498,17 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                 )
 
                 # Remove schedule from secondary
-                out, err = remove_snapshot_scheduling(
-                    rbd_secondary,
-                    pool=pool,
-                    image=image,
-                    level=level,
-                    interval=interval,
-                    namespace=remote_namespace,
-                )
+                remove_args = {
+                    "pool": pool,
+                    "image": image,
+                    "level": level,
+                    "interval": interval,
+                }
+                if remote_namespace:
+                    remove_args["namespace"] = remote_namespace
+                out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
                 if err:
-                    log.error(f"Failed to remove snapshot schedule on secondary: {err}")
+                    raise Exception("Failed to remove mirror snapshot schedule")
 
                 log.info(
                     f"Snapshot schedules removed for {pri_image_spec} and {sec_image_spec}"
@@ -576,13 +589,16 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                         "image" if level == "namespace" and not namespace else level
                     )
 
+                    snap_schedule_config = {
+                        "pool": pool,
+                        "image": image,
+                        "level": effective_level,
+                        "interval": interval,
+                    }
+                    if namespace:
+                        snap_schedule_config["namespace"] = namespace
                     out, err = add_snapshot_scheduling(
-                        rbd_primary,
-                        pool=pool,
-                        image=image,
-                        level=effective_level,
-                        interval=interval,
-                        namespace=namespace,
+                        rbd_primary, **snap_schedule_config
                     )
                     if err:
                         raise Exception(
@@ -639,7 +655,9 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                     "pool": pool,
                     "interval": interval,
                 }
-                if level == "namespace":
+                if level == "pool" and namespace:
+                    verify_args["namespace"] = namespace
+                elif level == "namespace":
                     verify_args["namespace"] = namespace
                 elif level == "image":
                     if namespace:
@@ -680,14 +698,15 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                 )
 
                 # Remove snapshot schedule from primary
-                out, err = remove_snapshot_scheduling(
-                    rbd_primary,
-                    pool=pool,
-                    image=image,
-                    level=level,
-                    interval=interval,
-                    namespace=namespace,
-                )
+                remove_args = {
+                    "pool": pool,
+                    "image": image,
+                    "level": level,
+                    "interval": interval,
+                }
+                if namespace:
+                    remove_args["namespace"] = namespace
+                out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
                 if err:
                     log.error(f"Failed to remove snapshot schedule on primary: {err}")
                 log.info(f"Snapshot schedule removed for {pri_image_spec}")
@@ -795,13 +814,16 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                 effective_level = (
                     "image" if level == "namespace" and not remote_namespace else level
                 )
+                snap_schedule_config = {
+                    "pool": pool,
+                    "image": image,
+                    "level": effective_level,
+                    "interval": interval,
+                }
+                if remote_namespace:
+                    snap_schedule_config["namespace"] = remote_namespace
                 out, err = add_snapshot_scheduling(
-                    rbd_secondary,
-                    pool=pool,
-                    image=image,
-                    level=effective_level,
-                    interval=interval,
-                    namespace=remote_namespace,
+                    rbd_secondary, **snap_schedule_config
                 )
                 if err:
                     raise Exception(f"Adding snapshot schedule failed with error {err}")
@@ -836,7 +858,9 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                     "pool": pool,
                     "interval": interval,
                 }
-                if level == "namespace":
+                if level == "pool" and remote_namespace:
+                    verify_args["namespace"] = remote_namespace
+                elif level == "namespace":
                     verify_args["namespace"] = remote_namespace
                 elif level == "image":
                     if remote_namespace:
@@ -877,14 +901,15 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
                 )
 
                 # Remove the snapshot schedule from the secondary image
-                out, err = remove_snapshot_scheduling(
-                    rbd_secondary,
-                    pool=pool,
-                    image=image,
-                    level=level,
-                    interval=interval,
-                    namespace=remote_namespace,
-                )
+                remove_args = {
+                    "pool": pool,
+                    "image": image,
+                    "level": level,
+                    "interval": interval,
+                }
+                if remote_namespace:
+                    remove_args["namespace"] = remote_namespace
+                out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
                 if err:
                     log.error(f"Failed to remove snapshot schedule on secondary: {err}")
 

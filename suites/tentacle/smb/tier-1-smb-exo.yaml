@@ -418,3 +418,112 @@ tests:
                  cephfs_user:
                   name: client.1
                   key: key
+
+  - test:
+      name: Deploy Samba services on an external secondary cluster and perform load & multiconnection testing
+      desc: Deploy Samba services on an external secondary cluster and perform load & multiconnection testing
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632314
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - client_connection
+              - load_test
+              - cleanup_smb
+            load_test:
+              total_load_process: 3
+              thread_per_load_process: 3
+              load_runtime: 50 # In sec
+              load_file_size: 3 # In mb
+              load_dir: loadtest
+              port: 445
+              actions:
+                - write
+                - read
+                - delete
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: user
+                user_group_settings:
+                  - {source_type: resource, ref: ug1}
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.usersgroups
+                users_groups_id: ug1
+                values:
+                  users:
+                    - {name: user1, password: passwd}
+                  groups: []
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key
+
+  - test:
+      name: Deploy Samba Services with an External Secondary Cluster and AD Integration (Samba Service Separation)
+      desc: Deploy Samba Services with an External Secondary Cluster and AD Integration (Samba Service Separation)
+      module: smb_exo_operations.py
+      polarion-id: CEPH-83632308
+      clusters:
+        ceph-sec:
+          config:
+            file_type: yaml
+            file_mount: /tmp
+            operations:
+              - deploy_smb
+              - verify_ctdb
+              - cleanup_smb
+            spec:
+              - resource_type: ceph.smb.cluster
+                cluster_id: ceph-sec
+                auth_mode: active-directory
+                domain_settings:
+                  realm: samba.qe
+                  join_sources:
+                    - source_type: resource
+                      ref: join1-admin
+                custom_dns:
+                  - 10.243.96.96
+                placement:
+                  label: smb
+                external_ceph_cluster: {ref: ceph-pri}
+              - resource_type: ceph.smb.join.auth
+                auth_id: join1-admin
+                auth:
+                  username: Administrator
+                  password: Redhat@123
+              - resource_type: ceph.smb.share
+                cluster_id: ceph-sec
+                share_id: share1
+                name: share1
+                cephfs:
+                  volume: cephfs
+                  path: /volume/smb/sv1/
+                  provider: samba-vfs/new
+              - resource_type: ceph.smb.ext.cluster
+                external_ceph_cluster_id: ceph-pri
+                cluster:
+                 fsid: fsid
+                 mon_host: '[mon_host]'
+                 cephfs_user:
+                  name: client.1
+                  key: key

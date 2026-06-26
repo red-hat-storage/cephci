@@ -24,6 +24,8 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
     global stop_flag
     stop_flag = False
     iter = 0
+    success = 0
+    failures = 0
     if timeout:
         stop = datetime.now() + timedelta(seconds=timeout)
     else:
@@ -33,12 +35,31 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
-        client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
-        fs_util.run_ios(client1, f"{mounting_dir}/run_ios_{iter}/", io_tools=["dd"])
-        client1.exec_command(
-            sudo=True, cmd=f"rm -rf {mounting_dir}/run_ios_{iter}", timeout=3600
-        )
+        try:
+            client1.exec_command(
+                sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}"
+            )
+            fs_util.run_ios(client1, f"{mounting_dir}/run_ios_{iter}/", io_tools=["dd"])
+            success += 1
+        except CommandFailed as e:
+            failures += 1
+            log.warning(f"IO command failed during disruption (expected): {e}")
+        except Exception as e:
+            failures += 1
+            log.warning(f"IO operation hit an error during disruption: {e}")
+        finally:
+            client1.exec_command(
+                sudo=True,
+                cmd=f"rm -rf {mounting_dir}/run_ios_{iter}",
+                timeout=3600,
+                check_ec=False,
+            )
         iter = iter + 1
+
+    log.info(f"IO loop summary: success={success}, failures={failures}")
+    if success == 0:
+        log.error("No successful IO during disruption window")
+        raise Exception("IO loop completed with zero successful iterations")
 
 
 @retry(CommandFailed, tries=3, delay=60)

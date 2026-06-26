@@ -62,7 +62,7 @@ def test_ceph_83575812(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         # Get Image name
         list_args = {}
@@ -109,7 +109,7 @@ def test_ceph_83575467(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         @retry(IOError, tries=5, delay=5)
         def list_subsystems(**sub_args):
@@ -178,7 +178,7 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         # Run IOS on nvme namespaces
         initiator.disconnect_all()
@@ -373,7 +373,7 @@ def test_ceph_83576084(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         cmd_args = {
             "transport": "tcp",
@@ -464,7 +464,7 @@ def test_ceph_83576085(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         json_format = {"output-format": "json"}
         _dir = f"/tmp/dir_{generate_unique_id(4)}"
@@ -523,7 +523,7 @@ def test_ceph_83576087(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         json_format = {"output-format": "json"}
         _dir = f"/tmp/dir_{generate_unique_id(4)}"
@@ -590,7 +590,7 @@ def test_ceph_83576093(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         json_format = {"output-format": "json"}
         _dir = f"/tmp/dir_{generate_unique_id(4)}"
@@ -685,7 +685,7 @@ def test_ceph_83575814(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         mon_host = ceph_cluster.get_nodes(role="mon")[0]
         with parallel() as p:
@@ -741,7 +741,7 @@ def test_ceph_83581753(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         list_args = {}
         list_args.setdefault("args", {}).update(
@@ -811,7 +811,7 @@ def test_ceph_83581945(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         list_args = {}
         list_args.setdefault("args", {}).update(
@@ -902,7 +902,7 @@ def test_ceph_83581755(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         list_args = {}
         list_args.setdefault("args", {}).update(
@@ -1040,11 +1040,14 @@ def test_ceph_83608266(
 
             # Configure Subsystem, listeners, host, namespaces
             if config.get("subsystems"):
-                configure_subsystems(nvme_service)
-                configure_listeners(nvme_service.gateways, nvme_service.config)
+                configure_subsystems(nvme_service, ceph_cluster=ceph_cluster)
+                ceph_version = get_ceph_version_from_cluster(nvme_service.clients[0])
+                if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+                    configure_listeners(nvme_service.gateways, nvme_service.config)
                 configure_hosts(
                     nvme_service.gateways[0],
                     nvme_service.config,
+                    ceph_cluster=ceph_cluster,
                 )
 
             for _ in range(2):
@@ -1207,7 +1210,8 @@ def test_ceph_83608266(
         )
         nvme_service.config["gw_node"] = gw_node.id
         nvme_service.group = "gw_group1"
-        if nvme_service.gateways:
+        name = getattr(nvme_service, "service_name", None)
+        if name is not None:
             teardown(nvme_service, rbd)
         return 0
 

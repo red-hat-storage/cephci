@@ -88,11 +88,7 @@ def run(ceph_cluster, **kw):
                 ):
                     log.error("Client old mountpoints cleanup didn't suceed")
                     fs_util.reboot_node(client_tmp)
-                client_tmp.exec_command(
-                    sudo=True,
-                    cmd="rm -f /etc/fstab.backup",
-                    check_ec=False,
-                )
+
         log.info("Setup test configuration")
         setup_params = cephfs_common_utils.test_setup(default_fs, client)
         setup_params.update({"cephfs_common_utils": cephfs_common_utils})
@@ -101,11 +97,7 @@ def run(ceph_cluster, **kw):
         mount_details = cephfs_common_utils.test_mount(
             clients, setup_params, mnt_type_list=["kernel", "fuse"]
         )
-        mon_node_ips = [node.ip_address for node in ceph_cluster.get_nodes(role="mon")]
-        mon_node_ip = ",".join(mon_node_ips)
-        if LooseVersion(build) >= LooseVersion("9.0"):
-            log.info("Add mountpoint to fstab due to BZ 2406981")
-            add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details)
+
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
@@ -271,9 +263,7 @@ def fscrypt_lifecycle(fscrypt_test_params):
 
     log.info("Validate file and directory names,file contents and ops before lock")
     if test_validate("unlock", fscrypt_sv, fscrypt_util):
-        # Due to BZ 2406981,masking unlock failures in kernel mount
-        if mnt_type != "kernel":
-            test_status += 1
+        test_status += 1
 
     log.info("fscrypt lock")
     for sv_name in fscrypt_sv:
@@ -326,9 +316,7 @@ def fscrypt_lifecycle(fscrypt_test_params):
         "Validate file and directory names,file contents and ops in unlocked state"
     )
     if test_validate("unlock", fscrypt_sv, fscrypt_util):
-        # Due to BZ 2406981,masking unlock failures in kernel mount
-        if mnt_type != "kernel":
-            test_status += 1
+        test_status += 1
 
     log.info("fscrypt purge")
     for sv_name in fscrypt_sv:
@@ -369,9 +357,7 @@ def fscrypt_lifecycle(fscrypt_test_params):
         "Validate file and directory names,file contents and ops in unlocked state"
     )
     if test_validate("unlock", fscrypt_sv, fscrypt_util):
-        # Due to BZ 2406981,masking unlock failures in kernel mount
-        if mnt_type != "kernel":
-            test_status += 1
+        test_status += 1
 
     log.info("fscrypt metadata destroy for policy and protector")
     for sv_name in fscrypt_sv:
@@ -453,7 +439,8 @@ def fscrypt_non_empty_dir(fscrypt_test_params):
             return 0
         else:
             log.error(
-                "FAIL: Incorrect error message for FScrypt on non_empty encrypt path"
+                "FAIL: Incorrect error message for FScrypt on non_empty encrypt path - %s",
+                str(ex),
             )
             return 1
 

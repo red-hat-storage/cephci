@@ -1,0 +1,5 @@
+# VM ``name`` values omitted from IBM VM cleanup CSV and delete flows (exact match).
+# Edit this list instead of hardcoding names in ibm_vm_cleanup.py.
+exclude_vm_names:
+  - smb-windows-ad-server-vm1
+  - au-sydrgw-vault-server-01

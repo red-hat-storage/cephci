@@ -3,8 +3,6 @@ globals:
       name: ceph
       node1:
         role:
-          - _admin
-          - installer
           - osd
           - mds
           - grafana
@@ -12,6 +10,8 @@ globals:
         disk-size: 15
       node2:
         role:
+          - _admin
+          - installer
           - osd
           - mon
           - mgr

@@ -117,7 +117,7 @@ def run(ceph_cluster, **kw):
         log.info("Make export as Readonly")
         client1.exec_command(
             sudo=True,
-            cmd="sed -i 's/RW/RO/g' export.conf",
+            cmd="sed -i 's/rw/ro/gI' export.conf",
         )
         out, rc = client1.exec_command(
             sudo=True,
@@ -145,7 +145,7 @@ def run(ceph_cluster, **kw):
         log.info("Make export as ReadWrite")
         client1.exec_command(
             sudo=True,
-            cmd="sed -i 's/RO/RW/g' export.conf",
+            cmd="sed -i 's/ro/rw/gI' export.conf",
         )
         out, rc = client1.exec_command(
             sudo=True,

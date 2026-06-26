@@ -16,7 +16,7 @@ tests:
       abort-on-fail: true
       config:
         args:
-          mon-ip: node1
+          mon-ip: node2
           allow-fqdn-hostname: true
           allow-overwrite: true
         command: bootstrap
@@ -92,13 +92,10 @@ tests:
             placement:
               nodes:
                 - node2
-            spec:
-              ssl: false
-              rgw_frontend_ssl_certificate: create-cert
       desc: "Deploying RGW endpoint which is SSL terminated."
       destroy-cluster: false
       module: test_rgw.py
-      name: "Test rgw ssl endpoint using spec"
+      name: "Test rgw without ssl endpoint using spec"
 
   - test:
       abort-on-fail: true
@@ -110,7 +107,7 @@ tests:
       desc: "Create and configure a volume with 2 MDS limit"
       destroy-cluster: false
       module: exec.py
-      name: "Create volume with"
+      name: Create volume with 2 MDS limit
 
   - test:
       abort-on-fail: true
@@ -125,7 +122,7 @@ tests:
       desc: Test deploying MDS daemons on hosts with label mds.
       destroy-cluster: false
       module: test_mds.py
-      name: Test OSD daemon deployment with all-available-devices enabled.
+      name: Deploy MDS
 
   - test:
       abort-on-fail: true
@@ -149,7 +146,7 @@ tests:
           - "radosgw-admin user create --uid=rgw-admin-ops-user --display_name='rgw-admin-ops-user' --email rgw-admin-ops-user@foo.foo"
       desc: Execute radosgw-admin commands for zone
       module: exec.py
-      name: rgw-admin-user
+      name: rgw-admin-user create ops user
 
   - test:
       abort-on-fail: true

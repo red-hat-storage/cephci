@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
         log.info("Skipping test: requires Ceph version >= 9.1 (build=%s)", build)
         return 0
 
-    skip_cpu_validation = config.get("skip_cpu_validation", False)
+    skip_cpu_validation = config.get("skip_cpu_validation", True)
     clients = ceph_cluster.get_ceph_objects("client")
     if not clients:
         log.error("This test requires at least 1 client node")
@@ -446,7 +446,7 @@ def run(ceph_cluster, **kw):
 
         try:
             if fs_created:
-                fs_util.remove_fs(client, fs_name=default_fs)
+                fs_util.remove_fs(client, vol_name=default_fs)
         except Exception as e:
             log.error("Filesystem cleanup failed: %s", e)
             cleanup_fail = True

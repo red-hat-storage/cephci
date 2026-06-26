@@ -324,7 +324,7 @@ def rw_ops_bw_enc_and_non_enc_sv(client, enc_path, non_enc_path):
     except CommandFailed as ex:
         log.error("RW ops between encrypted and non-encrypted path failed", str(ex))
         return 1
-    except BaseException as ex1:
+    except Exception as ex1:
         log.error(ex1)
         return 1
 

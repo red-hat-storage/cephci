@@ -488,3 +488,42 @@ tests:
         fio_numjobs: 4
         fio_runtime: 30
         fio_size: 256M
+
+  # Requires NFS clusters deployed with enable_rdma: true and rdma_port
+  # in their orch specs (e.g. via ceph orch apply nfs ... --enable-rdma).
+  # If enable_rdma is not set, the test logs a warning and mounts will
+  # fail with OperationFailedError after retries.
+  - test:
+      name: QoS PerShare RDMA mounts - 3 NFS clusters
+      desc: PerShare bandwidth QoS with RDMA mounts (proto=rdma) across 3 NFS clusters
+      module: qos.test_nfs_qos_3az_multi_export.py
+      polarion-id: CEPH-83611396
+      abort-on-fail: false
+      config:
+        test_scenario: cluster_bandwidth
+        qos_type: PerShare
+        control: bandwidth_control
+        rdma: true
+        nfs_clusters:
+          - nfs-DC1
+          - nfs-DC2
+          - nfs-DC3
+        cephfs_volumes:
+          - cephfs-DC1
+        num_exports_per_cluster: 3
+        subvol_group: ganeshagroup
+        nfs_export_prefix: /export_qos_rdma
+        nfs_mount_prefix: /mnt/nfs_qos_rdma
+        operation: none
+        fault_tolerance: 0.05
+        bw_limits:
+          - 25MB
+          - 50MB
+          - 75MB
+          - 100MB
+          - 150MB
+        fio_bs: 1M
+        fio_iodepth: 32
+        fio_numjobs: 4
+        fio_runtime: 300
+        fio_size: 1G

@@ -6,8 +6,8 @@ tests:
       name: "setup install pre-requisistes"
 
   - test:
-      name: Deploy IBMSC 8.x(GA) cluster with ceph services.
-      desc: Deploy IBMSC 8.x(GA) cluster with ceph services.
+      name: Deploy IBMSC 9.x(GA) cluster with ceph services.
+      desc: Deploy IBMSC 9.x(GA) cluster with ceph services.
       module: test_cephadm.py
       polarion-id: CEPH-83573777
       config:
@@ -16,8 +16,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.1-202508120158.ci.0/IBM-CEPH-8.1-202508120158.ci.0-rhel9.repo"
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-190"
+                rhcs-version: "9.0"
+                release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -70,10 +70,9 @@ tests:
         id: client.1
         node: node4
         install_packages:
-          - ceph-common
           - cifs-utils
           - samba-client
-      copy_admin_keyring: true
+        copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
@@ -114,16 +113,16 @@ tests:
               path: /
 
   - test:
-      name: Upgrade Ceph Cluster with SMB Services have share with casesensitive disable to Latest 8.x Version
-      desc: Upgrade Ceph Cluster with SMB Services have share with casesensitive disable to Latest 8.x Version
+      name: Upgrade Ceph Cluster with SMB Services to Latest 9.x Version
+      desc: Upgrade Ceph Cluster with SMB Services to Latest 9.x Version
       module: smb_upgrade_operations.py
-      polarion-id: CEPH-83627871
+      polarion-id: CEPH-83622441
       config:
-        initial_ga_version: 8.x
-        upgrade_target_version: 8.x
+        deployment_version: 9.0
+        deployment_release: released
         operations:
           - upgrade
-          - cleanup_smb
+          - cleanup
         file_type: yaml
         file_mount: /tmp
         spec:

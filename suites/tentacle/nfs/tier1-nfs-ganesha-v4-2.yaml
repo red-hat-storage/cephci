@@ -562,3 +562,135 @@ tests:
       config:
         nfs_version: 4.2
         clients: 2
+
+  - test:
+      name: Verify cluster and export level NFSv4 delegations
+      module: nfs_verify_cluster_level_delegations.py
+      desc: Enable cluster-level Delegations and validate export-level rw/ro/none delegations, then verify cluster-level disable.
+      polarion-id: CEPH-83632375
+      abort-on-fail: false
+      config:
+        run_export_level_checks: true
+        reset_to_default_on_exit: true
+
+  - test:
+      name: NFSv4 delegation read write and none scenarios
+      module: nfs_verify_delegation_rw_none_scenarios.py
+      desc: Validate read,write and none scenarios for NFSv4 delegation
+      polarion-id: CEPH-83632375
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        delegation_log_settle_seconds: 90
+
+  - test:
+      name: NFSv4 delegation revoke and recall multi-client
+      module: nfs_verify_delegation_revoke_recall.py
+      desc: >-
+        Multi-client recall (read/read, write/write, write-then-read) and revoke
+      polarion-id: CEPH-83632377
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        clients: 2
+        delegation_exit_wait_seconds: 120
+        delegation_log_settle_seconds: 90
+        delegation_return_wait_seconds: 15
+
+  - test:
+      name: NFSv4 delegation conflict recall multi-client
+      module: nfs_verify_delegation_conflict_scenarios.py
+      desc: READ/WRITE delegation recalled on SETATTR, REMOVE, RENAME, and cross-mode write conflicts.
+      polarion-id: CEPH-83632377
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        clients: 2
+        delegation_exit_wait_seconds: 120
+        delegation_log_settle_seconds: 90
+
+  - test:
+      name: NFSv4 delegation file operations under delegation
+      module: nfs_verify_delegation_file_operations.py
+      desc: >-
+        Open/close cycles, read-write IO with recall, lock/unlock, and
+        setattr/truncate while NFSv4 delegations are held.
+      polarion-id: CEPH-83632379
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        clients: 2
+        hold_mode: write
+        delegation_exit_wait_seconds: 120
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+        open_close_cycles: 5
+        lock_wait_seconds: 15
+
+  - test:
+      name: NFSv4 delegation WRITE grant new vs existing file
+      module: nfs_verify_delegation_write_grant_scenarios.py
+      desc: >-
+        Capture WRITE delegation on new-file create (logged) and require WRITE
+        delegation when reopening the same file for write.
+      polarion-id: CEPH-83632380
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        delegation_exit_wait_seconds: 120
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+
+  - test:
+      name: NFSv4 delegation WRITE peer access recall and grant
+      module: nfs_verify_delegation_write_peer_access.py
+      desc: >-
+        Peer write recalls holder WRITE delegation; after holder returns
+        delegation, peer can obtain WRITE delegation on the same file.
+      polarion-id: CEPH-83632380
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        clients: 2
+        delegation_exit_wait_seconds: 120
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+        delegation_return_wait_seconds: 15
+
+  - test:
+      name: NFSv4 delegation client unmount scenario
+      module: nfs_verify_delegation_client_lifecycle_scenarios.py
+      desc: Delegation is returned (DELEGRETURN) when client unmounts with active delegation.
+      polarion-id: CCEPH-83632378
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+
+  - test:
+      name: NFSv4 delegation stress and scale scenarios
+      module: nfs_verify_delegation_stress_scenarios.py
+      desc: >-
+        Up to 4 clients and 5 mounts per client run mixed read/write IO; cross-client
+        writes on a shared file trigger recalls.
+      polarion-id: CEPH-83632381
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        clients: 4
+        mounts_per_client: 5
+        workload_duration_seconds: 180
+        conflict_interval_seconds: 45
+        strict_log_validation: false
+        delegation_exit_wait_seconds: 120
+        delegation_log_settle_seconds: 90
+

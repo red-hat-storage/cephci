@@ -80,9 +80,7 @@ tests:
         rep_pool_config:
           pool: rbd
         cleanup:
-          - subsystems
           - initiators
-          - pool
           - gateway
         gw_groups:  # Configure gatewayGroups
           - gw_group: group1
@@ -227,9 +225,7 @@ tests:
         rep_pool_config:
           pool: rbd1
         cleanup:
-          - subsystems
           - initiators
-          - pool
           - gateway
         gw_groups: # Configure gatewayGroups
           - gw_group: group1
@@ -369,9 +365,7 @@ tests:
         rep_pool_config:
           pool: rbd10
         cleanup:
-          - subsystems
           - initiators
-          - pool
           - gateway
         gw_groups: # Configure gatewayGroups
           - gw_group: group1
@@ -511,9 +505,7 @@ tests:
         rep_pool_config:
           pool: rbd3
         cleanup:
-          - subsystems
           - initiators
-          - pool
           - gateway
         gw_groups: # Configure gatewayGroups
           - gw_group: group1
@@ -647,9 +639,7 @@ tests:
         rep_pool_config:
           pool: rbd3
         cleanup:
-          - subsystems
           - initiators
-          - pool
           - gateway
         gw_groups: # Configure gatewayGroups
           - gw_group: group1

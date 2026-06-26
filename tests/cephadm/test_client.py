@@ -7,6 +7,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from cephci.utils.build_info import CephTestManifest
+from cli.utilities.configure import setup_ibm_licence
 from utility import utils
 from utility.log import Log
 
@@ -65,6 +66,7 @@ def add(cls, config: Dict) -> None:
             rhcs_version = _build.get("release")
             _manifest_section = _build.get("tag")
             _node = get_node_by_id(cls.cluster, name)
+            manifest_obj = None
             _rpm_version = None
             if rhcs_version:
                 rhcs_version = str(rhcs_version)
@@ -98,25 +100,6 @@ def add(cls, config: Dict) -> None:
                 r"yum-config-manager --disable \*",
             ]
             cmd = 'subscription-manager repos --list-enabled | grep -i "Repo ID"'
-            # Added downstream test repos for RHEL 8 RHCS 6, Will add live repo once available.
-            cdn_ceph_repo = {
-                "7": {"4": ["rhel-7-server-rhceph-4-tools-rpms"]},
-                "8": {
-                    "4": ["rhceph-4-tools-for-rhel-8-x86_64-rpms"],
-                    "5": ["rhceph-5-tools-for-rhel-8-x86_64-rpms"],
-                    "6": [
-                        "http://download.eng.bos.redhat.com/rhel-8/composes/raw/"
-                        "ceph-6.1-rhel-8/RHCEPH-6.1-RHEL-8-20231004.t.1/compose/Tools/x86_64/os/"
-                    ],
-                },
-                "9": {
-                    "5": ["rhceph-5-tools-for-rhel-9-x86_64-rpms"],
-                    "6": ["rhceph-6-tools-for-rhel-9-x86_64-rpms"],
-                    "7": ["rhceph-7-tools-for-rhel-9-x86_64-rpms"],
-                    "8": ["rhceph-8-tools-for-rhel-9-x86_64-rpms"],
-                    "9": ["rhceph-9-tools-for-rhel-9-x86_64-rpms"],
-                },
-            }
 
             rhel_repos = {
                 "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
@@ -128,10 +111,10 @@ def add(cls, config: Dict) -> None:
                     "rhel-9-for-x86_64-appstream-rpms",
                     "rhel-9-for-x86_64-baseos-rpms",
                 ],
-                "10": {
+                "10": [
                     "rhel-10-for-x86_64-appstream-rpms",
                     "rhel-10-for-x86_64-baseos-rpms",
-                },
+                ],
             }
 
             # Collecting already enabled repos
@@ -143,6 +126,21 @@ def add(cls, config: Dict) -> None:
                     repo = entry.split(":")[-1].strip()
                     enabled_repos.append(repo)
             log.debug(f"Enabled repos on the system are : {enabled_repos}")
+
+            def enable_cdn_ceph_repo(manifest):
+                if manifest.product == "ibm":
+                    repo_url = manifest.build_info["repositories"]["default"][
+                        manifest.platform
+                    ]
+                    _node.exec_command(
+                        sudo=True,
+                        cmd=f"dnf config-manager --add-repo {repo_url}",
+                    )
+                elif manifest.repo_id:
+                    _node.exec_command(
+                        sudo=True,
+                        cmd=f"{enable_cmd}{manifest.repo_id}",
+                    )
 
             if rhcs_version != "default" and not _manifest_section:
                 try:
@@ -158,14 +156,12 @@ def add(cls, config: Dict) -> None:
                 for repos in rhel_repos[rhel_version]:
                     _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
 
-                for repos in cdn_ceph_repo[rhel_version][rhcs_version]:
-                    # This is workaround for  RHEL8 RHCS 6. Will remove once live repo available
-                    if rhel_version == "8" and rhcs_version == "6":
-                        _node.exec_command(
-                            sudo=True, cmd=f"yum-config-manager --add-repo={repos}"
-                        )
-                    else:
-                        _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
+                if manifest_obj:
+                    enable_cdn_ceph_repo(manifest_obj)
+                elif use_cdn:
+                    _manifest = cls.config.get("manifest")
+                    if _manifest:
+                        enable_cdn_ceph_repo(_manifest)
 
                 # Clearing the release preference set and cleaning all yum repos
                 # Observing selinux package dependency issues for ceph-base
@@ -196,6 +192,10 @@ def add(cls, config: Dict) -> None:
 
             # Install ceph-common
             if config.get("install_packages"):
+                _manifest = manifest_obj or cls.config.get("manifest")
+                if _manifest and _manifest.product == "ibm":
+                    setup_ibm_licence(_node, build_type=_manifest.build_type)
+
                 for pkg in config.get("install_packages"):
                     if _rpm_version:
                         pkg = f"{pkg}-{_rpm_version}"

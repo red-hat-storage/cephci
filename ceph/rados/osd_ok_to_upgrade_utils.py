@@ -129,7 +129,7 @@ class OsdOkToUpgradeCommand:
             ceph_version,
         )
 
-    def execute(self):
+    def execute(self, ignore_errors: bool = False):
         """
         Run the ok-to-upgrade command and return parsed output.
 
@@ -143,7 +143,7 @@ class OsdOkToUpgradeCommand:
         out, err = self.rados_obj.run_ceph_command(
             cmd=self.command, print_output=True, client_exec=True, return_err=True
         )
-        if len(err) > 0:
+        if ignore_errors is False and len(err) > 0:
             log.error("ok-to-upgrade command failed. err: %s", err)
             raise CommandFailed(f"Command execution failed. err: {err}")
 

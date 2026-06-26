@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import requests
 import urllib3
@@ -9,6 +10,50 @@ from utility.utils import generate_self_signed_certificate
 
 # Suppress the InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def _coerce_certificate_list(data: Any) -> List[Dict[str, Any]]:
+    """Normalize GET /certificates JSON across SKLM / GKLM 5.x."""
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if isinstance(data, dict):
+        for key in ("certificate", "certificates", "Certificate", "cert", "items"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return [x for x in v if isinstance(x, dict)]
+    return []
+
+
+def _extract_system_certificate_entries(data: Any) -> List[Dict[str, Any]]:
+    """Parse GET /system/certificates JSON (SKLM / GKLM 5.x shapes)."""
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if isinstance(data, dict):
+        for key in (
+            "certificate",
+            "certificates",
+            "systemCertificate",
+            "systemCertificates",
+            "Certificate",
+            "items",
+        ):
+            v = data.get(key)
+            if isinstance(v, list):
+                return [x for x in v if isinstance(x, dict)]
+    return []
+
+
+def _cert_entry_alias(entry: Dict[str, Any]) -> Optional[str]:
+    return (
+        entry.get("alias")
+        or entry.get("Alias")
+        or entry.get("certAlias")
+        or entry.get("name")
+    )
 
 
 class GklmCertificate:
@@ -31,7 +76,9 @@ class GklmCertificate:
         Raises:
             RuntimeError: If the HTTP request fails with an error status
         """
-        endpoint = "/system/certificates/export/{}".format(cert_name)
+        endpoint = "/system/certificates/export/{}".format(
+            quote(str(cert_name), safe="")
+        )
         url = "{}{}".format(self.base_url, endpoint)
 
         headers = self.auth._headers()
@@ -85,6 +132,36 @@ class GklmCertificate:
             return abs_path
         return generate_self_signed_certificate(subject)
 
+    def list_system_certificates(self) -> List[Dict[str, Any]]:
+        """
+        List **system** TLS/KMIP certificates (GET /system/certificates).
+
+        GKLM 5.x does not include these in GET /certificates; use this for BYOK CA checks.
+        """
+        url = "{}/system/certificates".format(self.base_url)
+        headers = self.auth._headers()
+        headers["Accept"] = "application/json"
+        resp = requests.get(url, headers=headers, verify=self.verify)
+        if resp.status_code != 200:
+            content_type = resp.headers.get("Content-Type", "")
+            if "application/json" in content_type:
+                err = resp.json().get("message", resp.text)
+            else:
+                err = resp.text or f"HTTP {resp.status_code}"
+            raise RuntimeError(
+                "List system certificates failed ({}): {}".format(resp.status_code, err)
+            )
+        return _extract_system_certificate_entries(resp.json())
+
+    def system_certificate_alias_exists(self, alias: str) -> bool:
+        """Return True if a system certificate with this alias is registered."""
+        want = str(alias)
+        for entry in self.list_system_certificates():
+            a = _cert_entry_alias(entry)
+            if a and str(a) == want:
+                return True
+        return False
+
     def list_certificates(self) -> List[Dict[str, Any]]:
 
         url = f"{self.base_url}/certificates"
@@ -97,7 +174,7 @@ class GklmCertificate:
                 err = resp.text or f"HTTP {resp.status_code}"
             raise RuntimeError(f"List certificates failed ({resp.status_code}): {err}")
 
-        return resp.json()
+        return _coerce_certificate_list(resp.json())
 
     def delete_certificate(self, alias: str) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/certificates/{alias}"
@@ -170,12 +247,21 @@ class GklmCertificate:
 
         resp = requests.post(url, json=payload, headers=headers, verify=self.verify)
         if resp.status_code in (200, 201):
-            # Return JSON payload
             try:
                 return resp.json()
             except ValueError:
-                # No JSON body but success status
                 return {"status": resp.status_code, "text": resp.text}
+        content_type = resp.headers.get("Content-Type", "")
+        if "application/json" in content_type and resp.text:
+            try:
+                err = resp.json().get("message", resp.text)
+            except ValueError:
+                err = resp.text
+        else:
+            err = resp.text or f"HTTP {resp.status_code}"
+        raise RuntimeError(
+            "Create system certificate failed ({}): {}".format(resp.status_code, err)
+        )
 
     def update_system_certificate(
         self, alias: str, add_usage_subtype: Optional[str] = None
@@ -210,6 +296,17 @@ class GklmCertificate:
                 return resp.json()
             except ValueError:
                 return {"status": resp.status_code, "text": resp.text}
+        content_type = resp.headers.get("Content-Type", "")
+        if "application/json" in content_type and resp.text:
+            try:
+                err = resp.json().get("message", resp.text)
+            except ValueError:
+                err = resp.text
+        else:
+            err = resp.text or f"HTTP {resp.status_code}"
+        raise RuntimeError(
+            "Update system certificate failed ({}): {}".format(resp.status_code, err)
+        )
 
     def delete_system_certificate(self, alias: str) -> Optional[Dict[str, Any]]:
         """
@@ -222,7 +319,9 @@ class GklmCertificate:
         Raises:
             RuntimeError: If the HTTP request fails with an error status
         """
-        url = "{}/system/certificates/{}".format(self.base_url, alias)
+        url = "{}/system/certificates/{}".format(
+            self.base_url, quote(str(alias), safe="")
+        )
 
         headers = self.auth._headers()
         headers["Accept"] = "application/json"
@@ -230,9 +329,18 @@ class GklmCertificate:
 
         resp = requests.delete(url, headers=headers, verify=self.verify)
         if resp.status_code in (200, 201):
-            # Return JSON payload
             try:
                 return resp.json()
             except ValueError:
-                # No JSON body but success status
                 return {"status": resp.status_code, "text": resp.text}
+        content_type = resp.headers.get("Content-Type", "")
+        if "application/json" in content_type and resp.text:
+            try:
+                err = resp.json().get("message", resp.text)
+            except ValueError:
+                err = resp.text
+        else:
+            err = resp.text or f"HTTP {resp.status_code}"
+        raise RuntimeError(
+            "Delete system certificate failed ({}): {}".format(resp.status_code, err)
+        )

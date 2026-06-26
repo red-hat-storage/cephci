@@ -180,7 +180,6 @@ def run(ceph_cluster, **kw):
                                 "enc_tag": enctag,
                                 "group_name": sv_iter.get("group_name", None),
                                 "fs_name": sv_iter["vol_name"],
-                                "add_suffix": False,
                             }
                             cephfs_common_utils.enc_tag(
                                 client1, "set", sv_iter["subvol_name"], **enc_args
