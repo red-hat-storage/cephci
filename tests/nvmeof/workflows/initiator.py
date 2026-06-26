@@ -1,4 +1,5 @@
 import json
+from time import sleep
 
 from ceph.ceph import CommandFailed
 from ceph.nvmeof.initiators.linux import Initiator
@@ -108,6 +109,7 @@ class NVMeInitiator(Initiator):
                         f"host_key={'set' if self.host_key else 'missing'}, "
                         f"subsys_key={'set' if self.subsys_key else 'missing'}"
                     )
+                # In nvme-cli connect-all doesn't accept dhchap-ctrl-secret for now
                 cmd_args.update(
                     {
                         "dhchap-secret": self.host_key,
@@ -127,30 +129,36 @@ class NVMeInitiator(Initiator):
             return
 
         # Connect to individual targets of a subsystem
+        listener_port = config.get("listener_port")
+        subsystems = config.get("subsystems")
         subsystem = config["nqn"]
+        if subsystem == "discover-all":
+            if not subsystems:
+                raise Exception("subsystems must be provided when nqn is discover-all")
+            allowed_subsystems = set(subsystems)
+        else:
+            allowed_subsystems = {subsystem}
         sub_endpoints = []
         discovered_records = json.loads(nqns_discovered)["records"]
 
         # Log what was discovered for debugging
-        LOG.debug(
-            f"Looking for subsystem: {subsystem}, listener_port: {config.get('listener_port')}"
-        )
+        LOG.debug(f"Looking for subsystem: {subsystem}, listener_port: {listener_port}")
         LOG.debug(f"Discovered records: {discovered_records}")
 
         # First, try to find exact match (both subnqn and trsvcid match)
         for nqn in discovered_records:
-            if nqn["subnqn"] == subsystem and nqn["trsvcid"] == str(
-                config["listener_port"]
+            if nqn["subnqn"] in allowed_subsystems and (
+                listener_port is None or nqn["trsvcid"] == str(listener_port)
             ):
                 sub_endpoints.append(nqn)
 
         # If no exact match, try matching by subnqn only (in case port differs)
         if not sub_endpoints:
             for nqn in discovered_records:
-                if nqn["subnqn"] == subsystem:
+                if nqn["subnqn"] in allowed_subsystems:
                     LOG.warning(
-                        f"Found subsystem {subsystem} but with different port "
-                        f"(discovered: {nqn['trsvcid']}, expected: {config.get('listener_port')}). "
+                        f"Found subsystem {nqn['subnqn']} but with different port "
+                        f"(discovered: {nqn['trsvcid']}, expected: {listener_port}). "
                         f"Using discovered port."
                     )
                     sub_endpoints.append(nqn)
@@ -167,10 +175,6 @@ class NVMeInitiator(Initiator):
             )
 
         for sub_endpoint in sub_endpoints:
-            conn_port = {"trsvcid": config["listener_port"]}
-            sub_args = {"nqn": sub_endpoint["subnqn"]}
-            cmd_args.update({"traddr": sub_endpoint["traddr"]})
-
             # Fallback: If auth is required but not configured, try to find auth from another
             # initiator on the same node (safety net in case prepare_io_execution didn't handle it)
             if (self.auth_mode or config.get("inband_auth")) and not self.host_key:
@@ -186,6 +190,12 @@ class NVMeInitiator(Initiator):
                             self.auth_mode = initiator.auth_mode
                         break
 
+            conn_args = {
+                "transport": "tcp",
+                "traddr": sub_endpoint["traddr"],
+                "trsvcid": sub_endpoint["trsvcid"],
+                "nqn": sub_endpoint["subnqn"],
+            }
             if self.auth_mode == "bidirectional":
                 if not self.host_key or not self.subsys_key:
                     raise Exception(
@@ -193,7 +203,7 @@ class NVMeInitiator(Initiator):
                         f"host_key={'set' if self.host_key else 'missing'}, "
                         f"subsys_key={'set' if self.subsys_key else 'missing'}"
                     )
-                sub_args.update(
+                conn_args.update(
                     {
                         "dhchap-secret": self.host_key,
                         "dhchap-ctrl-secret": self.subsys_key,
@@ -205,10 +215,10 @@ class NVMeInitiator(Initiator):
                         "Unidirectional auth requires host_key but it is not set. "
                         "Please ensure initiator is configured with authentication keys."
                     )
-                sub_args.update({"dhchap-secret": self.host_key})
-            _conn_cmd = {**cmd_args, **conn_port, **sub_args}
+                conn_args.update({"dhchap-secret": self.host_key})
 
-            LOG.debug(self.connect(**_conn_cmd))
+            LOG.debug(self.connect(**conn_args))
+        self.list()
 
     def gen_dhchap_key(self, **kwargs):
         """Generates the TLS key.
@@ -313,6 +323,7 @@ class NVMeInitiator(Initiator):
                 LOG.info(
                     f"Configured SSH MaxSessions to {required_sessions} for max_workers={max_workers}"
                 )
+                sleep(3)  # To ensure sshd restarted
             except Exception as e:
                 LOG.warning(f"Failed to configure SSH MaxSessions: {e}")
 

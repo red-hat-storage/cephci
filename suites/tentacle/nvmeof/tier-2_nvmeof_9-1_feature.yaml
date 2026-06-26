@@ -124,3 +124,45 @@ tests:
       module: test_ceph_nvmeof_ns_with_rados_ns.py
       name: Verify RADOS namespaces support in NVMeoF GWs
       polarion-id: CEPH-83632335
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        inband_auth_mode: true
+        redeploy_service: true
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        do_not_create_image: true
+        gw_group: group1
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        bdev_count: 2
+        bdev_size: 2G
+        listeners:
+          - node5
+          - node6
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: true
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            no-group-append: true
+        del_controller_key_on: nqn.2016-06.io.spdk:cnode2
+        dhchap_subsystem:
+          nqn: nqn.2016-06.io.spdk:cnode3
+          no-group-append: true
+        cleanup:
+          - gateway
+          - pool
+          - subsystems
+      desc: >
+        NVMe-oF encryption-key service with DHCHAP host/controller keys,
+        controller-key rotation, mutual exclusion, and FIO validation per host.
+      destroy-cluster: false
+      module: test_nvmeof_encryption_dhchap_per_host_e2e.py
+      name: Allow setting controller DHCHAP key per host
+      polarion-id: CEPH-83632329
