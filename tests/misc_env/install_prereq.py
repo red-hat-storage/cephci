@@ -219,6 +219,12 @@ def install_prereq(
             else:
                 enable_rhel_rpms(ceph, distro_ver)
 
+        elif cloud_type.lower() == "ibmc" and not has_enabled_repositories(ceph):
+            log.info(
+                "Enabling QE lab RHEL repositories for IBM cloud skip-subscription"
+            )
+            setup_ibmc_qe_lab_os_repos(ceph, distro_ver)
+
         if repo:
             setup_addition_repo(ceph, repo)
 
@@ -369,6 +375,43 @@ def subscription_manager_status(ceph):
         raise SubscriptionManagerError("Unexpected subscription manager status")
 
     return match.group(0)
+
+
+IBM_QE_LAB_REPO_MIRROR = "http://nginx-vm-01.qe.ceph.lab/repos"
+
+
+def has_enabled_repositories(ceph):
+    """Return True when the node has at least one enabled yum/dnf repository."""
+    out, _ = ceph.exec_command(
+        sudo=True,
+        cmd="dnf repolist --enabled -q 2>/dev/null | tail -n +2 | wc -l",
+        check_ec=False,
+    )
+    try:
+        return int(out.strip()) > 0
+    except ValueError:
+        return False
+
+
+def setup_ibmc_qe_lab_os_repos(ceph, distro_ver):
+    """Configure QE lab OS mirrors for unregistered IBM cloud nodes.
+
+    Live IBM inventories may not define yum_repos in cloud-init. Mirror the
+    repository layout used by conf/inventory/ibm-eu-rhel-*.yaml inventories.
+    """
+    version_parts = distro_ver.split(".")
+    major = version_parts[0]
+    minor = version_parts[1] if len(version_parts) > 1 else "0"
+    base_url = f"{IBM_QE_LAB_REPO_MIRROR}/{major}/{minor}"
+    pkg = Package(ceph)
+
+    for repo_name in ("AppStream", "BaseOS", "CRB"):
+        repo_url = f"{base_url}/{repo_name}/"
+        log.info("Adding IBM QE lab repository %s", repo_url)
+        pkg.add_repo(repo_url)
+
+    ceph.exec_command(sudo=True, cmd="dnf clean metadata", check_ec=False)
+    log.info("Added IBM QE lab RHEL repositories successfully")
 
 
 def setup_local_repos(ceph):
