@@ -749,7 +749,7 @@ def get_inconsistent_count(
         else:
             log.debug(f"Running deep-scrub on pg : {pg_id}")
             if rados_obj.start_check_deep_scrub_complete(
-                pg_id=pg_id, user_initiated=False, wait_time=3600, time_interval=5
+                pg_id=pg_id, user_initiated=False, wait_time=3600
             ):
                 log.info(f"Deep scrub completed on pg : {pg_id}")
                 time.sleep(30)

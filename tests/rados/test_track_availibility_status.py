@@ -1,8 +1,38 @@
 """
-This module is to verify the -
-1. The availability-status of the pool during various operations.
-2. The enable_availability_tracking parameter checking
-3. To clear the status by using the clear_availability_score command
+Verify pool availability tracking (MTBF, MTTR, and score) across cluster operations.
+
+Ceph monitors can track per-pool availability when ``mon enable_availability_tracking``
+is enabled. This module exercises ``ceph osd pool availability-status`` and validates
+the reported metrics during normal operation and under failure or maintenance scenarios.
+
+Metrics validated:
+   MTBF (Mean Time Between Failures) = floor(uptime / num_failures)
+   MTTR (Mean Time To Recover)       = floor(downtime / num_failures)
+   Score                             = MTBF / (MTBF + MTTR), within 10% tolerance
+
+Pool setup:
+   A test pool is created from either ``config['replicated_pool']`` or ``config['EC_pool']``.
+   Data is written to the pool before cases run. The pool is deleted in the ``finally`` block.
+
+Test cases are selected via ``config['case_to_run']``:
+   case1  - Verify MTBF, MTTR, and score formulas on the test pool.
+   case2  - Create 20 additional pools, verify availability-status lists them, delete one
+            pool and confirm it is removed, and verify related mon log messages.
+   case3  - Verify metrics after stopping an acting-set OSD, writing data, and recovery.
+   case4  - Verify metrics after marking an OSD out, writing data, and backfill.
+   case5  - Verify metrics after user-initiated scrub and deep-scrub.
+   case6  - Verify metrics after PG split and merge (pool needs sufficient PG capacity).
+   case7  - Verify metrics while the ceph balancer is enabled and crush items are reweighted.
+   case8  - Verify ``enable_availability_tracking``: default is false, command fails when
+            disabled, and metrics are available again after re-enabling.
+   case9  - Verify metrics while the quorum leader mon is stopped and after all mons restart.
+   case10 - Verify ``ceph osd pool clear-availability-status`` resets pool metrics.
+   case11 - Verify metrics after creating inconsistent objects; score must remain unchanged.
+   case12 - Verify metrics after stopping all OSDs in a PG acting set (inactive PG); score
+            must decrease.
+   case13 - Verify metrics after rebooting the host running the primary OSD in the acting set.
+
+Polarion: CEPH-83620501
 """
 
 import ast
@@ -29,19 +59,35 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw) -> int:
     """
-    Polarion#CEPH-83620501
-    1. Verify the Mean Time Between Failures(MTBF),Mean Time To Recover(MTTR) and score of the pool
-    2. Verification of the availability-status log messages
-    3. Verification of the MTBF,MTTR and score during recovery
-    4. Verification of the MTBF,MTTR and score during backfilling
-    5. Verification of the MTBF,MTTR and score after performing scrub operations
-    6. Verification of the MTBF,MTTR and score after split and merging of PG
-    7.Verification of the MTBF,MTTR and score during balancer activity
-    8.Verification of the enable_availability_tracking parameter functionality
-    9.Verification of the MTBF,MTTR and score after the MON operations
-    10.Verification of the clear_availability_score command
-    11.Verification of the MTBF,MTTR and score after creating inconsistent objects
-    12.Verification of the MTBF,MTTR and score after rebooting the primary osd node
+    Verify pool availability tracking across selected test cases.
+
+    Polarion: CEPH-83620501
+
+    Enables ``mon enable_availability_tracking`` for the test duration, creates a pool
+    from ``config['replicated_pool']`` or ``config['EC_pool']``, and runs the cases listed
+    in ``config['case_to_run']``.
+
+    Test cases (config['case_to_run']):
+      case1  - MTBF, MTTR, and score formula validation on the test pool.
+      case2  - Multiple-pool availability-status output and mon log message verification.
+      case3  - Metrics during PG recovery after an OSD stop/start cycle.
+      case4  - Metrics during PG backfill after marking an OSD out and back in.
+      case5  - Metrics after user-initiated scrub and deep-scrub.
+      case6  - Metrics after PG split and merge via the autoscaler bulk test.
+      case7  - Metrics during ceph balancer activity.
+      case8  - ``enable_availability_tracking`` disabled/enabled behavior.
+      case9  - Metrics during mon stop/restart operations.
+      case10 - ``ceph osd pool clear-availability-status`` resets pool metrics.
+      case11 - Metrics after inconsistent objects are created; score must not change.
+      case12 - Metrics when a PG becomes inactive; score must decrease.
+      case13 - Metrics after rebooting the primary OSD host.
+
+    Args:
+        ceph_cluster: Ceph cluster fixture providing node access.
+        **kw: Keyword arguments; expects ``config`` with pool and case configuration.
+
+    Returns:
+        0 on pass, 1 on failure.
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -880,15 +926,16 @@ def run(ceph_cluster, **kw) -> int:
 
 def create_data_pool(rados_object, config, pool_name, pool_type):
     """
-    Method is used to create the pool and push the data
+    Create a replicated or EC pool and write benchmark objects into it.
+
     Args:
-        pool_type: Type of pool replicated/ec
-        rados_object: Rados object
-        config: pool configuration
-        pool_name: pool name
-    Return:
-        True -> Successfully created pool and pushed the data
-        False-> Filed to create the pool and pushed the data
+        rados_object: Instance of RadosOrchestrator.
+        config: Pool creation parameters passed to create_pool or create_erasure_pool.
+        pool_name: Name of the pool to create.
+        pool_type: Either ``"replicated"`` or ``"ec"``.
+
+    Returns:
+        True if the pool was created and data was written successfully, False otherwise.
     """
     log.info("The pool type selected is - %s", pool_type)
     try:
@@ -908,11 +955,15 @@ def create_data_pool(rados_object, config, pool_name, pool_type):
 
 def get_pool_availability_status(rados_object):
     """
-    Method is used to get the availability status of cluster
+    Run ``ceph osd pool availability-status`` and return parsed pool metrics.
+
     Args:
-        rados_object : Rados object
+        rados_object: Instance of RadosOrchestrator.
+
     Returns:
-        available_data_in_dict :Available data is in json.
+        A tuple ``(success, data)`` where *success* is True and *data* is a list of
+        per-pool dicts on success. On failure, *success* is False and *data* holds
+        the error message or reason.
     """
     cmd = "ceph osd pool availability-status"
 
@@ -931,15 +982,16 @@ def get_pool_availability_status(rados_object):
 
 def test_MTBF_value(rados_object, pool_name):
     """
-    Method is used to test the Mean Time Between Failures (MTBF) value
-    Formula - Mean Time Between Failures (MTBF) = Total uptime of pool/No of Failures
-    Args:
-        rados_object: Rados object
-        pool_name : pool name
-    Returns:
-        True -> if the expected MTBF is same as the actual MTBF
-        False -> if the expected MTBF is not same as the actual MTBF
+    Verify MTBF reported by availability-status matches the expected formula.
 
+    MTBF = floor(uptime / num_failures). When num_failures is 0, MTBF is 0.
+
+    Args:
+        rados_object: Instance of RadosOrchestrator.
+        pool_name: Name of the pool to validate.
+
+    Returns:
+        True if reported MTBF matches the computed value, False otherwise.
     """
 
     success, track_available_data = get_pool_availability_status(rados_object)
@@ -978,14 +1030,16 @@ def test_MTBF_value(rados_object, pool_name):
 
 def test_MTTR_value(rados_object, pool_name):
     """
-    Method is used to test the Mean Time To Recover(MTTR) value.
-    Formula - Mean Time To Recover(MTTR) = Total downtime of pool/No of Failures
+    Verify MTTR reported by availability-status matches the expected formula.
+
+    MTTR = floor(downtime / num_failures). When num_failures is 0, MTTR is 0.
+
     Args:
-        rados_object: Rados object
-        pool_name : pool name
+        rados_object: Instance of RadosOrchestrator.
+        pool_name: Name of the pool to validate.
+
     Returns:
-        True -> if the expected MTTR is same as the actual MTTR
-        False -> if the expected MTTR is not same as the actual MTTR
+        True if reported MTTR matches the computed value, False otherwise.
     """
 
     success, track_available_data = get_pool_availability_status(rados_object)
@@ -1023,15 +1077,17 @@ def test_MTTR_value(rados_object, pool_name):
 
 def test_score_value(rados_object, pool_name):
     """
-    Method is used to test the score value
-    Formula - Score = MTBF/(MTBF+MTTR)
-        Args:
-            rados_object: Rados object
-            pool_name : pool name
-        Returns:
-            True -> if the expected score is same as the actual score
-            False -> if the expected score is not same as the actual score
+    Verify availability score reported by availability-status matches the expected formula.
 
+    Score = MTBF / (MTBF + MTTR). When MTBF is 0, the expected score is 1.
+    Values are compared with a 10% tolerance.
+
+    Args:
+        rados_object: Instance of RadosOrchestrator.
+        pool_name: Name of the pool to validate.
+
+    Returns:
+        True if reported score is within tolerance of the computed value, False otherwise.
     """
 
     success, track_available_data = get_pool_availability_status(rados_object)
@@ -1069,14 +1125,14 @@ def test_score_value(rados_object, pool_name):
 
 def test_all_values(rados_object, pool_name):
     """
-    Method is used to test the MTBF,MTTR and score values of a provided pool
-    Args:
-            rados_object: Rados object
-            pool_name : pool name
-    Returns:
-            True -> if the expected MTBF,MTTR and score values are same as the actual values
-            False -> if the expected MTBF,MTTR and score values are not same as the actual values
+    Run MTBF, MTTR, and score validation for a single pool.
 
+    Args:
+        rados_object: Instance of RadosOrchestrator.
+        pool_name: Name of the pool to validate.
+
+    Returns:
+        True if all three metric checks pass, False if any check fails.
     """
     msg_start_test = f"Performing the MTBF test on {pool_name} pool"
     log.info(msg_start_test)
@@ -1111,10 +1167,11 @@ def test_all_values(rados_object, pool_name):
 
 def cleanup_pools(rados_object, pool_names):
     """
-    Method is used to clean up the multiple pool created
+    Delete a list of pools created during multi-pool test cases.
+
     Args:
-         rados_object : Rados object
-         pool_names : pools list
+        rados_object: Instance of RadosOrchestrator.
+        pool_names: List of pool names to delete.
     """
     log.info("Deleting the created pools")
     for tmp_pool_name in pool_names:
@@ -1123,13 +1180,14 @@ def cleanup_pools(rados_object, pool_names):
 
 def get_score(rados_object, pool_name):
     """
-    Method is used to get the score of the pool
-    Args:
-        rados_object: Rados object
-        pool_name: pool name
+    Fetch the availability score for a pool from availability-status output.
 
-    Returns: None-> if the not able to get the score
-             score -> Score value
+    Args:
+        rados_object: Instance of RadosOrchestrator.
+        pool_name: Name of the pool.
+
+    Returns:
+        The rounded score as a float, or None if availability-status could not be retrieved.
     """
     success, track_available_data = get_pool_availability_status(rados_object)
     if not success:
