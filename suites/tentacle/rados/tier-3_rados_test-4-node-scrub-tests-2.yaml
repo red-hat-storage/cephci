@@ -226,14 +226,28 @@ tests:
         is_ecpool: True
 
   - test:
-      name: Validation of pool-level noscrub and nodeep-scrub settings.
-      desc: Verification of pool scrub settings and ensures user-initiated scrubs still run.
+      name: Case1-Validation of pool-level noscrub and nodeep-scrub settings
+      desc: Verify scheduled scrub runs on active pool but not on pool with scrub flags set.
       module: test_scrub_flag_pool_level.py
       polarion-id: CEPH-83621444
       config:
         pool_names:
           - active_pool
           - inactive_pool
+        case_to_run:
+          - case1
+
+  - test:
+      name: Case2-Validation of pool-level noscrub and nodeep-scrub settings
+      desc: Verify user-initiated scrub and deep-scrub take precedence over pool-level scrub flags.
+      module: test_scrub_flag_pool_level.py
+      polarion-id: CEPH-83621444
+      config:
+        pool_names:
+          - active_pool
+          - inactive_pool
+        case_to_run:
+          - case2
   - test:
       name: Case1-Verification of osd_scrub_load_threshold on EC Pool
       desc: Verification of osd_scrub_load_threshold parameter=0
