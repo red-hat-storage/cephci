@@ -164,6 +164,8 @@ tests:
           - ceph-common
           - rbd-nbd
           - ceph-fuse
+          - nfs-utils
+          - samba-client
         copy_admin_keyring: true
         caps:
           mon: "allow *"
@@ -384,6 +386,103 @@ tests:
         enable_nfs_thrashing: false
         enable_cephfs_subvolume_thrashing: false
 
+  - test:
+      name: OSD thrashing with NFS enhanced workflows
+      desc: OSD thrashing with NFS daemon failover, integrity, and protocol-state churn
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 40
+        duration: 1800
+        aggressive: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: false
+        inject_errors: false
+        inconsistent_object_fail: true
+        # Standard workloads
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: true
+        enable_cephfs_subvolume_thrashing: true
+        # NFS enhanced workflows
+        enable_nfs_thrashing: true
+        nfs_num_clusters: 1
+        nfs_exports_per_cluster: 2
+        nfs_placement: 2
+        enable_nfs_daemon_thrashing: true
+        nfs_daemon_kill_method: pkill
+        nfs_daemon_thrash_interval: 60
+        nfs_daemon_recovery_timeout: 180
+        enable_nfs_data_integrity: true
+        enable_nfs_protocol_state_thrash: true
+        nfs_client_churn_rate: 5
+        nfs_export_churn_enabled: true
+        nfs_admin_interleave_enabled: true
+        enable_smb_thrashing: false
+
+  - test:
+      name: OSD thrashing with SMB enhanced workflows
+      desc: OSD thrashing with SMB daemon chaos, client IO, and post-thrash validation
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 40
+        duration: 1800
+        aggressive: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: false
+        inject_errors: false
+        inconsistent_object_fail: true
+        # Standard workloads
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        # SMB enhanced workflows
+        enable_smb_thrashing: true
+        smb_cluster_ids:
+          - smb1
+        smb_auth_mode: user
+        smb_num_shares: 4
+        smb_user_name: smbuser
+        smb_user_password: smbpassword
+        enable_smb_rados_config_check: true
+
   # ===========================================================================
   # Bug #70390 ESB Extent Map Resharding Verification
   # ===========================================================================
@@ -498,4 +597,128 @@ tests:
 #        # Prefer NFS daemon placement on orch hosts labeled nfs-rdma
 #        nfs_placement_label: nfs-rdma
 #        enable_cephfs_subvolume_thrashing: true
+
+# NFS HA with VIP thrash tests, to run on grim031-037 (VIP 10.64.66.99)
+# VIP is managed by keepalived + haproxy ingress; floats between placement hosts.
+
+# VIP without RDMA (TCP-only ingress)
+#  - test:
+#      name: OSD thrashing with NFS HA VIP (TCP)
+#      desc: >-
+#        OSD thrashing with NFS ingress VIP failover over TCP, daemon kills,
+#        integrity verification, and protocol-state churn
+#      module: test_osd_thrashing.py
+#      polarion-id: CEPH-83632230
+#      config:
+#        pool_configs:
+#          - pool_type: erasure
+#            sample_pool_id: sample-pool-7
+#          - pool_type: replicated
+#            sample_pool_id: sample-pool-2
+#        iterations: 40
+#        duration: 600
+#        aggressive: true
+#        enable_crush_thrashing: true
+#        enable_pg_thrashing: true
+#        enable_scrub_thrashing: true
+#        enable_rgw_thrashing: false
+#        compression: false
+#        cleanup_pools: true
+#        enable_debug_logs: false
+#        inject_errors: false
+#        inconsistent_object_fail: true
+#        enable_fio_cephfs: true
+#        enable_fio_rbd: false
+#        enable_cephfs_snapshots: true
+#        enable_rbd_snapshots: false
+#        enable_ec_snapshots: false
+#        enable_osd_thrashing: true
+#        enable_mon_thrashing: false
+#        enable_mgr_thrashing: false
+#        enable_mds_thrashing: true
+#        # NFS HA with VIP over TCP (ingress + keepalived, no RDMA)
+#        enable_nfs_thrashing: true
+#        nfs_num_clusters: 1
+#        nfs_exports_per_cluster: 2
+#        nfs_placement: 2
+#        enable_nfs_daemon_thrashing: true
+#        nfs_daemon_kill_method: pkill
+#        nfs_daemon_thrash_interval: 60
+#        nfs_daemon_recovery_timeout: 180
+#        enable_nfs_data_integrity: true
+#        enable_nfs_protocol_state_thrash: true
+#        nfs_client_churn_rate: 5
+#        nfs_export_churn_enabled: true
+#        nfs_admin_interleave_enabled: true
+#        enable_nfs_rdma: false
+#        enable_nfsv3: true
+#        # TODO: VIP support requires adding nfs_virtual_ip and
+#        # nfs_enable_ingress params to create_nfs_clusters_and_exports.
+#        # Target VIP: 10.64.66.99 -- client mounts via ingress TCP port.
+#        # nfs_enable_ingress: true
+#        # nfs_virtual_ip: 10.64.66.99
+#        enable_cephfs_subvolume_thrashing: false
+#        enable_smb_thrashing: false
+
+# VIP with RDMA (RDMA + TCP ingress)
+#  - test:
+#      name: OSD thrashing with NFS HA VIP (RDMA)
+#      desc: >-
+#        OSD thrashing with NFS ingress VIP failover over RDMA, daemon kills,
+#        integrity verification, and protocol-state churn
+#      module: test_osd_thrashing.py
+#      polarion-id: CEPH-83632230
+#      config:
+#        pool_configs:
+#          - pool_type: erasure
+#            sample_pool_id: sample-pool-7
+#          - pool_type: replicated
+#            sample_pool_id: sample-pool-2
+#        iterations: 40
+#        duration: 600
+#        aggressive: true
+#        enable_crush_thrashing: true
+#        enable_pg_thrashing: true
+#        enable_scrub_thrashing: true
+#        enable_rgw_thrashing: false
+#        compression: false
+#        cleanup_pools: true
+#        enable_debug_logs: false
+#        inject_errors: false
+#        inconsistent_object_fail: true
+#        enable_fio_cephfs: true
+#        enable_fio_rbd: false
+#        enable_cephfs_snapshots: true
+#        enable_rbd_snapshots: false
+#        enable_ec_snapshots: false
+#        enable_osd_thrashing: true
+#        enable_mon_thrashing: false
+#        enable_mgr_thrashing: false
+#        enable_mds_thrashing: true
+#        # NFS HA with VIP over RDMA (ingress + keepalived + RDMA)
+#        enable_nfs_thrashing: true
+#        nfs_num_clusters: 1
+#        nfs_exports_per_cluster: 2
+#        nfs_placement: 2
+#        enable_nfs_daemon_thrashing: true
+#        nfs_daemon_kill_method: pkill
+#        nfs_daemon_thrash_interval: 60
+#        nfs_daemon_recovery_timeout: 180
+#        enable_nfs_data_integrity: true
+#        enable_nfs_protocol_state_thrash: true
+#        nfs_client_churn_rate: 5
+#        nfs_export_churn_enabled: true
+#        nfs_admin_interleave_enabled: true
+#        # NFS-over-RDMA with VIP: requires RDMA-capable hardware (grim031-037)
+#        enable_nfs_rdma: true
+#        nfs_rdma_port: 20050
+#        enable_nfsv3: true
+#        nfs_placement_label: nfs-rdma
+#        # TODO: VIP support requires adding nfs_virtual_ip and
+#        # nfs_enable_ingress params to create_nfs_clusters_and_exports.
+#        # Target VIP: 10.64.66.99 -- RDMA direct to VIP, TCP via ingress.
+#        # nfs_enable_ingress: true
+#        # nfs_virtual_ip: 10.64.66.99
+#        enable_cephfs_subvolume_thrashing: false
+#        enable_smb_thrashing: false
 

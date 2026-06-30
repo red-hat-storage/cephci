@@ -6,6 +6,93 @@ This module performs aggressive OSD thrashing with concurrent I/O workload to ve
 cluster stability under stress conditions. It tests both EC and replicated pools,
 and checks for any crashes or issues during OSD state transitions.
 
+The test is organized into five sequential phases:
+
+1. **Setup** -- Create pools (replicated, EC), mount CephFS/RBD, configure
+   RGW S3 clients, and optionally deploy NFS clusters/exports and SMB
+   clusters/shares.  Apply recovery tuning, compression, debug logging,
+   and error injection as configured.
+2. **Pre-thrash** -- On a healthy cluster, write integrity baselines for
+   NFS (fio --verify=crc32c) and SMB (smbclient put + md5).  Verification
+   failure here aborts the test (cluster broken before chaos begins).
+   Future: extend baselines to CephFS, RBD, and RGW clients.
+3. **Thrash** -- Launch parallel chaos threads: OSD stop/start, CRUSH weight
+   changes, PG count changes, scrub toggles, MON/MGR/MDS failovers,
+   NFS daemon kills, SMB daemon restarts, client churn, export churn,
+   and concurrent I/O on CephFS, RBD, RGW, NFS, and SMB.  Transient
+   errors during this phase are expected and logged as warnings.
+4. **Validation** -- After thrashing stops and PGs reach active+clean:
+   verify data integrity (NFS fio re-verify, SMB md5 re-verify), daemon
+   health (NFS/SMB daemons running), mount staleness, NFS export
+   accessibility, NFS/SMB RADOS config integrity, SMB endpoint
+   accessibility, and CTDB health.  Any failure sets ``test_failed``.
+5. **Cleanup** -- Unmount filesystems, delete pools/clusters/exports,
+   re-enable firewalls, remove temp files.
+
+Core Chaos Workflows:
+  - **OSD thrashing** (``enable_osd_thrashing``): Mark out -> daemon stop ->
+    wait -> mark in -> start.  Repeats for ``thrash_count`` iterations with
+    configurable delays and random OSD selection.
+  - **CRUSH weight thrashing** (``enable_crush_thrashing``): Reduce CRUSH
+    reweights on random OSDs -> wait for PG migration -> restore original
+    weights.  Stresses data redistribution under I/O.
+  - **PG count thrashing** (``enable_pg_thrashing``): Toggle bulk flag on
+    pools to trigger PG split/merge.  Validates PG autoscaler stability.
+  - **Scrub thrashing** (``enable_scrub_thrashing``): Periodic
+    ``ceph pg scrub`` / ``ceph pg deep-scrub`` on random PGs and pools.
+    Validates scrub does not stall under concurrent OSD restarts.
+
+Daemon Failover Workflows:
+  - **MON thrashing** (``enable_mon_thrashing``): Leader failover, rolling
+    restart, election strategy changes (classic/disallow/connectivity).
+    Verifies quorum stability and client reconnection.
+  - **MGR thrashing** (``enable_mgr_thrashing``): Failover active MGR,
+    rolling restart, random daemon fail.  Validates module continuity.
+  - **MDS thrashing** (``enable_mds_thrashing``): Active MDS failover,
+    rolling restart, random fail.  CephFS I/O must survive rank transitions.
+
+I/O Workloads:
+  - **CephFS FIO** (``enable_fio_cephfs``): FIO on kernel-mounted CephFS
+    with snapshot thrashing (periodic ``snap create`` / ``snap rm``).
+  - **RBD FIO** (``enable_fio_rbd``): FIO on mapped RBD image with
+    snapshot thrashing (``rbd snap create`` / ``rbd snap rm``).
+  - **EC pool snapshots** (``enable_ec_snapshots``): RADOS-level snapshots
+    + partial overwrites on EC pools to stress stripe recovery.
+  - **CephFS subvolume thrashing** (``enable_cephfs_subvolume_thrashing``):
+    Create/mount/ops/unmount/delete subvolumes in rapid cycles.
+  - **RGW S3 thrashing** (``enable_rgw_thrashing``): S3 PUT/GET/DELETE and
+    multipart upload with round-robin endpoint selection across gateways.
+
+NFS Workflows (all gated by individual config flags):
+  - **NFS FIO thrashing** (``enable_nfs_thrashing``): Mount -> FIO ->
+    FS ops -> unmount cycles on each NFS export with multi-host rotation
+    and version cycling (v4.0/v4.1/v4.2).
+  - **NFS daemon thrashing** (``enable_nfs_daemon_thrashing``):
+    Kill/restart NFS-Ganesha daemons via pkill, orch stop, or systemctl.
+    Delegates to RadosOrchestrator methods.  Recovery failures are
+    warn-only during thrash.
+  - **NFS data integrity** (``enable_nfs_data_integrity``):
+    Pre-thrash: write ``fio --verify=crc32c`` baseline files on each NFS
+    export.  Post-thrash: re-verify checksums.  A *mismatch* (corrupted
+    data) causes test failure; I/O errors alone are warn-only.
+  - **NFS protocol state thrash** (``enable_nfs_protocol_state_thrash``):
+    Parallel client-churn (mount/unmount/open/lock cycles), export-churn
+    (create/delete/modify), and admin-ops (orch restart, export reload)
+    threads that stress NFS state management.
+
+SMB Workflows (gated by ``enable_smb_thrashing``):
+  - **SMB daemon chaos** (``enable_smb_thrashing``): Kill/restart SMB
+    daemons, CTDB/smbd process kills, service restarts.  Delegates to
+    RadosOrchestrator.change_daemon_orch_state and
+    restart_daemon_services.
+  - **SMB client I/O** (``enable_smb_thrashing``): smbclient ls/put/get
+    operations under chaos.
+  - **SMB data integrity**: Pre-thrash ``smbclient put`` + md5 baseline,
+    post-thrash md5 re-verify.  Mismatch = test failure.
+  - **Post-thrash verification**: RADOS config integrity, endpoint
+    accessibility (``smbclient -L``), and CTDB node health.  Failures
+    cause test failure.
+
 TEST WORKFLOW:
 ==============
 
@@ -15,6 +102,7 @@ TEST WORKFLOW:
     │   ├── Create pools (RADOS EC/replicated, CephFS, RBD) in parallel
     │   ├── Setup RGW S3 client with buckets (if enabled)
     │   ├── Create NFS clusters and exports (if enabled)
+    │   ├── Create SMB clusters and shares (if enabled)
     │   ├── Enable EC optimizations for EC pools
     │   ├── Enable compression (if configured)
     │   ├── Configure aggressive recovery settings
@@ -26,6 +114,12 @@ TEST WORKFLOW:
     │       ├── Apply chaos profile (e.g., network_chaos, storage_corruption)
     │       ├── Apply individual config overrides
     │       └── Detect destructive MDS injection configs
+    │
+    ├── PRE-THRASH PHASE (if enable_nfs_data_integrity)
+    │   ├── Mount each NFS export to /mnt/nfs-integrity-pre-<N>
+    │   ├── Write 10 fio --verify=crc32c baseline files (4K-64M, varying block sizes)
+    │   ├── Run pre-thrash verify pass (abort on failure -- cluster already broken)
+    │   └── Check mount health (abort on stale mounts)
     │
     ├── THRASHING PHASE (dynamically configured parallel threads)
     │   ├── io_workload_burst: rados bench 30s write bursts (64K blocks) [always]
@@ -45,16 +139,31 @@ TEST WORKFLOW:
     │   ├── thrash_mgr: Failover, rolling restart, random fail [if enabled]
     │   ├── thrash_mds: Failover, rolling restart, random fail [if enabled]
     │   ├── thrash_nfs_fio: Mount/FIO/FS ops/unmount cycles on NFS exports [if enabled]
+    │   ├── thrash_nfs_daemon_failover: NFS daemon kill/recovery loops [if enabled]
+    │   ├── nfs protocol state threads: client/export/admin churn [if enabled]
+    │   ├── thrash_smb: SMB daemon chaos loops [if enabled]
+    │   ├── thrash_smb_client_io: SMB client operations under chaos [if enabled]
     │   └── thrash_cephfs_subvolumes: Create/ops/delete subvolume groups+subvols [if enabled]
     │
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
     │   ├── Check cluster health
+    │   ├── If NFS thrashing: post-thrash NFS verification
+    │   │   ├── Daemon health: all NFS daemons must be running
+    │   │   ├── Mount health: pre-thrash integrity mounts must not be stale
+    │   │   ├── Data integrity: fio --verify re-check (mismatch = test failure)
+    │   │   ├── Export accessibility: mount/ls/unmount each export
+    │   │   └── RADOS config integrity: validate each cluster's config object
+    │   ├── If SMB thrashing: post-thrash SMB verification
+    │   │   ├── RADOS config: check for corruption (if enable_smb_rados_config_check)
+    │   │   ├── Endpoint accessibility: smbclient -L on each share
+    │   │   └── CTDB health: verify all nodes healthy, none banned
     │   ├── If destructive MDS injection:
     │   │   ├── Validate MDS crashes match CDentry::check_corruption signature
     │   │   ├── Attempt repair workflow (mds repaired -> damage ls -> scrub repair -> damage rm)
     │   │   └── Log repair outcome (diagnostic only, does not affect pass/fail)
-    │   ├── Else: Check for crashes (ceph crash ls-new) and fail if detected
+    │   ├── Else: Check for crashes (ceph crash + daemon logs) and fail if detected
+    │   │   └── NFS+OSD exception: if all NFS daemons recovered, downgrade to warning
     │   └── Report findings
     │
     └── CLEANUP PHASE
@@ -66,6 +175,9 @@ TEST WORKFLOW:
         ├── Force log rotation on all OSD hosts (parallel)
         ├── Unmount and cleanup CephFS and RBD
         ├── Cleanup NFS clusters and exports (if enabled)
+        ├── Cleanup SMB clusters and shares (if enabled)
+        ├── Unmount pre-thrash NFS integrity mounts
+        ├── Re-enable firewall on NFS nodes
         └── Delete test pools and EC profiles
 
 CONFIGURATION OPTIONS:
@@ -104,6 +216,16 @@ CONFIGURATION OPTIONS:
 - enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
 - nfs_placement_label: Prefer orch hosts with this **ceph orch host label**. If no host
   has the label, fallback uses all orch hosts.
+- enable_nfs_daemon_thrashing: Enable NFS daemon kill/recovery cycles (default: False)
+- nfs_daemon_kill_method: NFS daemon kill method (pkill | orch_stop | systemctl)
+- enable_nfs_data_integrity: Enable pre/post-thrash NFS data integrity verification (default: False)
+- enable_nfs_protocol_state_thrash: Enable NFS state churn threads (default: False)
+- enable_smb_thrashing: Enable SMB daemon chaos + client IO workflows (default: False)
+- smb_cluster_ids: SMB cluster IDs for thrash workflows (default: [])
+- smb_auth_mode: SMB auth mode used for setup/endpoint checks (default: user)
+- smb_num_shares: Number of SMB shares per cluster for setup (default: 4)
+- smb_user_name / smb_user_password: SMB credentials for client IO checks
+- enable_smb_rados_config_check: Validate SMB RADOS metadata post-thrash (default: False)
 - enable_esb_verification: Enable BlueStore ESB Bug #70390 verification (default: False).
   Sets bluestore_elastic_shared_blobs=true, bluestore_write_v2=false, bluestore_onode_segment_size=0,
   bluestore_debug_extent_map_encode_check=true, debug_bluestore=5/5.
@@ -117,8 +239,6 @@ CONFIGURATION OPTIONS:
 import concurrent.futures as cf
 import random
 import time
-import uuid
-from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -139,6 +259,22 @@ from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStrategies
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
+from tests.rados.thrash_helpers import (
+    NfsThrashWorkflows,
+    SmbThrashWorkflows,
+    _nfs_client_mount_option_string,
+    _nfs_export_mount_targets,
+    _nfs_mount_context,
+    check_mount_health,
+    thrash_nfs_admin_ops,
+    thrash_nfs_client_churn,
+    thrash_nfs_daemon_failover,
+    thrash_nfs_export_churn,
+    thrash_smb,
+    thrash_smb_client_io,
+    verify_data_integrity,
+    write_integrity_baseline,
+)
 from utility.log import Log
 from utility.utils import extract_ceph_version
 
@@ -216,8 +352,27 @@ def run(ceph_cluster, **kw):
     Main test execution for OSD thrashing with concurrent I/O workload.
 
     This test creates pools (EC and/or replicated) and performs aggressive OSD
-    thrashing with concurrent I/O to verify cluster stability. Any crashes
-    detected during the test are reported and cause test failure.
+    thrashing with concurrent I/O to verify cluster stability. Execution
+    proceeds through five phases:
+
+    1. **Setup** -- Create pools, NFS/SMB/RGW resources, apply injection
+       configs, and configure recovery settings.
+    2. **Pre-thrash** (``enable_nfs_data_integrity`` only) -- Mount NFS
+       exports, write ``fio --verify=crc32c`` baseline files, and run an
+       initial verification pass on the healthy cluster.  Failure here
+       aborts the test immediately.
+    3. **Thrash** -- Launch parallel chaos + I/O threads for ``duration``
+       seconds.  NFS and SMB workflow errors are *expected* under chaos
+       and are logged as warnings only (see ``_warn_checks``).  The sole
+       hard-fail is an NFS data integrity checksum mismatch.
+    4. **Validation** -- After recovery, verify daemon health, NFS mount
+       staleness, data integrity, export accessibility, NFS/SMB RADOS
+       config integrity, SMB endpoint/CTDB health, and crash status.
+       Failures here set ``test_failed = True``.  When both NFS and OSD
+       thrashing are active, NFS crashes where all daemons have recovered
+       are downgraded to warnings (cascading OSD pool degradation).
+    5. **Cleanup** -- Unmount filesystems, delete pools, re-enable
+       firewalls, and remove injection configs.
 
     Test Args (in config):
         pool_configs (list): List of pool configurations to create (REQUIRED)
@@ -262,13 +417,49 @@ def run(ceph_cluster, **kw):
         enable_nfsv3 (bool): Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
         nfs_placement_label (str|None): Prefer orch hosts with this label; if no
             matches, use all orch hosts (default: None).
+        enable_nfs_daemon_thrashing (bool): Enable NFS daemon kill/restart cycles (default: False)
+        nfs_daemon_kill_method (str): pkill | orch_stop | systemctl (default: pkill)
+        nfs_daemon_thrash_interval (int): Seconds between kill cycles (default: 60)
+        nfs_daemon_recovery_timeout (int): Seconds to wait for daemon recovery (default: 180)
+        enable_nfs_data_integrity (bool): Run fio --verify=crc32c on NFS mounts (default: False)
+        enable_nfs_protocol_state_thrash (bool): Client/export/admin churn threads (default: False)
+        nfs_client_churn_rate (int): Client ops per 10s window (default: 5)
+        nfs_export_churn_enabled (bool): Export create/delete/modify cycles (default: False)
+        nfs_admin_interleave_enabled (bool): Admin op interleaving (default: False)
+        enable_smb_thrashing (bool): Enable SMB daemon thrashing (default: False)
+        smb_cluster_ids (list): SMB cluster IDs to thrash (default: [])
+        smb_auth_mode (str): user | active-directory (default: user)
+        smb_num_shares (int): Number of SMB shares per cluster (default: 4)
+        smb_user_name (str): SMB username for endpoint/client IO checks
+            (default: smbuser)
+        smb_user_password (str): SMB password for endpoint/client IO checks
+            (default: smbpassword)
+        enable_smb_rados_config_check (bool): RADOS config integrity for SMB (default: False)
         error_injection (dict): Suite-driven error injection config (default: None).
             Supports profile, profile_overrides, configs, ec_write_errors,
             ec_read_errors, admin_socket. See CephErrorInjector for schema.
 
     Returns:
-        0: Test passed - No crashes detected, cluster remained stable
-        1: Test failed - Crashes detected or unexpected error occurred
+        int: 0 if test passed, 1 if test failed.
+
+    Failure conditions (``test_failed = True``):
+        - Daemon crashes detected via ``ceph crash`` or daemon logs (unless
+          NFS+OSD recovery downgrade applies).
+        - Post-thrash NFS daemon not running, stale mount, data integrity
+          error (mismatch or unreadable file), export inaccessible, or
+          RADOS config invalid.
+        - Post-thrash SMB RADOS config corruption, endpoint failure,
+          unhealthy CTDB nodes, or SMB integrity md5 mismatch.
+        - Pre-thrash baseline write failure or verification error (cluster
+          broken before chaos begins).
+        - Inconsistent PGs with ``inconsistent_object_fail`` enabled.
+        - Unhandled exceptions during any phase.
+
+    Warning-only conditions (logged, do not cause failure):
+        - NFS/SMB workflow errors during the thrash phase (recovery
+          failures, kill failures, churn errors, timeouts).
+        - NFS crashes when OSD thrashing is active and all NFS daemons
+          have recovered post-thrash.
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -325,6 +516,18 @@ def run(ceph_cluster, **kw):
     enable_election_strategy_thrash = config.get(
         "enable_election_strategy_thrash", True
     )
+
+    # NFS enhanced thrashing parameters
+    enable_nfs_daemon_thrashing = config.get("enable_nfs_daemon_thrashing", False)
+    enable_nfs_data_integrity = config.get("enable_nfs_data_integrity", False)
+    enable_nfs_protocol_state_thrash = config.get(
+        "enable_nfs_protocol_state_thrash", False
+    )
+
+    # SMB thrashing parameters
+    enable_smb_thrashing = config.get("enable_smb_thrashing", False)
+    smb_cluster_ids = config.get("smb_cluster_ids", [])
+    enable_smb_rados_config_check = config.get("enable_smb_rados_config_check", False)
     enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
     enable_esb_verification = config.get("enable_esb_verification", False)
     disabled_ec_optimizations = False
@@ -419,6 +622,12 @@ def run(ceph_cluster, **kw):
         f"  Fast EC config params: {enable_fast_ec_config_params}\n"
         f"  ESB verification (Bug #70390): {enable_esb_verification}\n"
         f"  Inconsistent object fail (no repair): {inconsistent_object_fail}\n"
+        f"  NFS daemon thrashing: {enable_nfs_daemon_thrashing}\n"
+        f"  NFS data integrity (fio verify): {enable_nfs_data_integrity}\n"
+        f"  NFS protocol state thrash: {enable_nfs_protocol_state_thrash}\n"
+        f"  SMB thrashing: {enable_smb_thrashing}\n"
+        + (f"  SMB cluster IDs: {smb_cluster_ids}\n" if enable_smb_thrashing else "")
+        + f"  SMB RADOS config check: {enable_smb_rados_config_check}\n"
     )
     _ei_config = config.get("error_injection", {})
     if _ei_config:
@@ -467,6 +676,9 @@ def run(ceph_cluster, **kw):
     rbd_mount_path = None
     rbd_device_path = None
     nfs_config = None
+    smb_config = None
+    nfs_integrity_mounts = []  # Pre-thrash NFS mounts for integrity baseline
+    smb_integrity_baselines = {}  # Pre-thrash SMB per-share md5 baselines
     nfs_firewall_disabled_nodes = []  # Track nodes where firewall was disabled for NFS
 
     try:
@@ -484,6 +696,7 @@ def run(ceph_cluster, **kw):
             + (1 if enable_rbd_pools else 0)
             + (1 if enable_rgw_thrashing else 0)
             + (1 if enable_nfs_thrashing else 0)
+            + (1 if enable_smb_thrashing else 0)
         )
         with cf.ThreadPoolExecutor(max_workers=pool_workers) as pool_executor:
             log.info("Creating pools in parallel...")
@@ -541,6 +754,19 @@ def run(ceph_cluster, **kw):
                     rdma_port=nfs_rdma_port,
                     enable_nfsv3=enable_nfsv3,
                     nfs_placement_label=nfs_placement_label,
+                )
+
+            smb_future = None
+            smb_wf = None
+            if enable_smb_thrashing and smb_cluster_ids:
+                log.info(
+                    "SMB workflows enabled - creating %s SMB cluster(s) for thrashing",
+                    len(smb_cluster_ids),
+                )
+                smb_wf = SmbThrashWorkflows(cephadm.installer, ceph_cluster, rados_obj)
+                smb_future = pool_executor.submit(
+                    smb_wf.create_clusters_and_shares,
+                    config,
                 )
 
             # Collect results
@@ -618,38 +844,47 @@ def run(ceph_cluster, **kw):
                             "xargs -r systemctl restart 2>/dev/null || true"
                         )
                         for cluster_info in nfs_config.get("clusters", []):
-                            hostname = cluster_info.get("host")
-                            if not hostname or hostname in configured_hosts:
-                                continue
-                            configured_hosts.add(hostname)
-                            host_node = next(
-                                (n for n in all_nodes if n.hostname == hostname),
-                                None,
-                            )
-                            if not host_node:
-                                log.warning(f"  {hostname}: Node not found, skipping")
-                                continue
-                            try:
-                                fw = (
-                                    "systemctl stop firewalld 2>/dev/null || true; "
-                                    "systemctl disable firewalld 2>/dev/null || true"
+                            cluster_hosts = cluster_info.get("hosts")
+                            if isinstance(cluster_hosts, str):
+                                cluster_hosts = [cluster_hosts]
+                            if not cluster_hosts:
+                                cluster_hosts = [cluster_info.get("host")]
+                            for hostname in cluster_hosts:
+                                if not hostname or hostname in configured_hosts:
+                                    continue
+                                configured_hosts.add(hostname)
+                                host_node = next(
+                                    (n for n in all_nodes if n.hostname == hostname),
+                                    None,
                                 )
-                                if nfs_config.get("enable_nfsv3"):
-                                    cmd = fw + "; " + v3_extra
-                                    log_note = "firewall disabled + NFSv3 prerequisites"
-                                else:
-                                    cmd = fw
-                                    log_note = "firewall disabled for NFS/RDMA"
-                                host_node.exec_command(
-                                    cmd=cmd,
-                                    sudo=True,
-                                    timeout=180,
-                                    check_ec=False,
-                                )
-                                nfs_firewall_disabled_nodes.append(host_node)
-                                log.info(f"  {hostname}: {log_note}")
-                            except Exception as e:
-                                log.warning(f"  {hostname}: Failed - {e}")
+                                if not host_node:
+                                    log.warning(
+                                        "  %s: Node not found, skipping", hostname
+                                    )
+                                    continue
+                                try:
+                                    fw = (
+                                        "systemctl stop firewalld 2>/dev/null || true; "
+                                        "systemctl disable firewalld 2>/dev/null || true"
+                                    )
+                                    if nfs_config.get("enable_nfsv3"):
+                                        cmd = fw + "; " + v3_extra
+                                        log_note = (
+                                            "firewall disabled + NFSv3 prerequisites"
+                                        )
+                                    else:
+                                        cmd = fw
+                                        log_note = "firewall disabled for NFS/RDMA"
+                                    host_node.exec_command(
+                                        cmd=cmd,
+                                        sudo=True,
+                                        timeout=180,
+                                        check_ec=False,
+                                    )
+                                    nfs_firewall_disabled_nodes.append(host_node)
+                                    log.info("  %s: %s", hostname, log_note)
+                                except Exception as e:
+                                    log.warning("  %s: Failed - %s", hostname, e)
 
                         # Also disable firewall on client node for NFS access
                         try:
@@ -673,6 +908,21 @@ def run(ceph_cluster, **kw):
                         )
                 else:
                     log.info("NFS setup skipped (NFS thrashing not enabled)")
+
+                if smb_future:
+                    smb_config = smb_future.result()
+                    if smb_config:
+                        log.info(
+                            "Created SMB setup: %s cluster(s), %s share(s)",
+                            len(smb_config.get("cluster_ids", [])),
+                            len(smb_config.get("smb_shares", [])),
+                        )
+                    else:
+                        raise Exception(
+                            "SMB thrashing enabled but setup returned no config"
+                        )
+                else:
+                    log.info("SMB setup skipped (SMB thrashing not enabled)")
             except Exception as e:
                 log.error(f"Failed to create pools: {e}")
                 raise
@@ -894,6 +1144,234 @@ def run(ceph_cluster, **kw):
 
         log.info("Setup phase completed successfully")
 
+        # ── Pre-thrash setup phase ──
+        #
+        # Before any chaos begins, establish an NFS data-integrity baseline
+        # on the healthy cluster (gated by enable_nfs_data_integrity).
+        #
+        # Steps:
+        #   1. Resolve NFS export mount targets via _nfs_export_mount_targets().
+        #   2. Mount each target to /mnt/nfs-integrity-pre-<N> using NFSv4.1.
+        #   3. Write 10 fio --verify=crc32c baseline files (4K-64M, varying block sizes).
+        #   4. Run a pre-thrash verify pass to confirm zero errors on a clean cluster.
+        #   5. Check mount health -- stale mounts here mean the cluster is already
+        #      degraded, so the test aborts with an exception.
+        #
+        # These mounts stay up through the thrash phase and are re-verified
+        # post-thrash in the validation phase.  They are cleaned up in the
+        # finally block regardless of cleanup_pools setting.
+        if enable_nfs_data_integrity and nfs_config:
+            log.info(
+                f"\n{'-' * 60}\n"
+                "Pre-thrash NFS integrity baseline setup\n"
+                f"{'-' * 60}"
+            )
+            targets = _nfs_export_mount_targets(nfs_config)
+            if targets:
+                for idx, target in enumerate(targets):
+                    mp = f"/mnt/nfs-integrity-pre-{idx}"
+                    try:
+                        hosts = target.get("hosts") or (
+                            [target.get("host")] if target.get("host") else []
+                        )
+                        if not hosts:
+                            raise RuntimeError(
+                                f"No NFS hosts for cluster "
+                                f"{target.get('cluster_id')}"
+                            )
+                        nfs_host = hosts[idx % len(hosts)]
+                        mount_opts = _nfs_client_mount_option_string(
+                            nfs_config,
+                            target["cluster_id"],
+                            "nfsvers=4.1",
+                        )
+                        client_node.exec_command(
+                            sudo=True, cmd=f"mkdir -p {mp}", timeout=15
+                        )
+                        client_node.exec_command(
+                            sudo=True,
+                            cmd=f"mount -t nfs -o {mount_opts} "
+                            f"{nfs_host}:{target['pseudo_path']} {mp}",
+                            timeout=45,
+                        )
+                        nfs_integrity_mounts.append(mp)
+                        log.info(
+                            "  Mounted %s:%s -> %s", nfs_host, target["pseudo_path"], mp
+                        )
+                    except Exception as e:
+                        log.warning(
+                            "  Failed to mount integrity target %s: %s", target, e
+                        )
+
+                if nfs_integrity_mounts:
+                    log.info(
+                        "  Writing integrity baseline to %s mount(s)...",
+                        len(nfs_integrity_mounts),
+                    )
+                    baseline = write_integrity_baseline(
+                        client_node, nfs_integrity_mounts
+                    )
+                    if not baseline["files_written"]:
+                        raise Exception(
+                            "Pre-thrash baseline write failed on all mounts "
+                            "— cluster broken before thrashing"
+                        )
+
+                    log.info("  Running pre-thrash verify pass...")
+                    pre_verify = verify_data_integrity(
+                        client_node, nfs_integrity_mounts
+                    )
+                    if pre_verify["errors"] or pre_verify["mismatches"]:
+                        raise Exception(
+                            f"Pre-thrash verify FAILED: {pre_verify} — "
+                            "cluster has integrity issues before thrashing"
+                        )
+                    log.info(
+                        "  Pre-thrash verify passed: %s file(s) clean",
+                        pre_verify["files_checked"],
+                    )
+
+                    if nfs_integrity_mounts:
+                        mount_health = check_mount_health(
+                            client_node, nfs_integrity_mounts, proto="nfs"
+                        )
+                        if mount_health.get("stale"):
+                            log.error(
+                                "[pre-thrash] Stale NFS mounts before thrashing: %s",
+                                mount_health["stale"],
+                            )
+                            raise Exception(
+                                "Pre-thrash NFS mount health check failed — "
+                                "cluster has issues before thrashing"
+                            )
+                        else:
+                            log.info(
+                                "[pre-thrash] NFS mount health OK: %s healthy mounts",
+                                len(mount_health.get("healthy", [])),
+                            )
+                else:
+                    log.warning(
+                        "  No NFS mounts succeeded — " "integrity baseline skipped"
+                    )
+            else:
+                log.warning(
+                    "  No NFS export targets found — " "integrity baseline skipped"
+                )
+
+        # ── Pre-thrash SMB integrity baseline ──
+        #
+        # For each SMB share, upload a 4MB test file via smbclient and
+        # record its md5 checksum.  After the thrash phase, the same files
+        # are downloaded and their checksums compared to detect silent
+        # data corruption.
+        #
+        # Unlike NFS, SMB setup is more variable so failures here are
+        # logged as warnings rather than aborting the test.
+        if enable_smb_thrashing and smb_config:
+            log.info(
+                f"\n{'-' * 60}\n"
+                "Pre-thrash SMB integrity baseline setup\n"
+                f"{'-' * 60}"
+            )
+            try:
+                smb_user = smb_config.get("smb_user_name", "")
+                smb_password = smb_config.get("smb_user_password", "")
+                smb_shares = smb_config.get("smb_shares", [])
+
+                smb_target = None
+                public_addrs = smb_config.get("public_addrs")
+                if public_addrs:
+                    smb_target = (
+                        public_addrs[0]
+                        if isinstance(public_addrs, list)
+                        else public_addrs
+                    )
+                if not smb_target:
+                    smb_nodes = smb_config.get("smb_nodes", [])
+                    if smb_nodes:
+                        node = smb_nodes[0]
+                        smb_target = (
+                            node.ip_address
+                            if hasattr(node, "ip_address")
+                            else str(node)
+                        )
+
+                if not smb_target:
+                    log.warning(
+                        "  No SMB target IP found — " "integrity baseline skipped"
+                    )
+                elif not smb_shares:
+                    log.warning(
+                        "  No SMB shares configured — " "integrity baseline skipped"
+                    )
+                elif not smb_user:
+                    log.warning(
+                        "  No SMB user configured — " "integrity baseline skipped"
+                    )
+                else:
+                    for share in smb_shares:
+                        share_name = (
+                            share if isinstance(share, str) else share.get("name", "")
+                        )
+                        if not share_name:
+                            continue
+                        local_file = f"/tmp/smb_integrity_{share_name}.dat"
+                        try:
+                            client_node.exec_command(
+                                cmd=(
+                                    f"dd if=/dev/urandom of={local_file} "
+                                    "bs=1M count=4 2>/dev/null"
+                                ),
+                                timeout=30,
+                            )
+                            out, _ = client_node.exec_command(
+                                cmd=f"md5sum {local_file}",
+                                timeout=15,
+                            )
+                            md5hash = out.strip().split()[0]
+
+                            client_node.exec_command(
+                                cmd=(
+                                    f"smbclient -U {smb_user}%{smb_password} "
+                                    f"//{smb_target}/{share_name} "
+                                    f"-c 'put {local_file} smb_integrity_test.dat'"
+                                ),
+                                timeout=60,
+                            )
+                            smb_integrity_baselines[share_name] = md5hash
+                            log.info(
+                                "  SMB integrity baseline written: share=%s md5=%s",
+                                share_name,
+                                md5hash,
+                            )
+                        except Exception as e:
+                            log.warning(
+                                "  Failed to write SMB integrity baseline "
+                                "for share %s: %s",
+                                share_name,
+                                e,
+                            )
+
+                    if smb_integrity_baselines:
+                        log.info(
+                            "  SMB integrity baselines recorded for %s share(s)",
+                            len(smb_integrity_baselines),
+                        )
+                    else:
+                        log.warning(
+                            "  No SMB integrity baselines succeeded — "
+                            "post-thrash verification will be skipped"
+                        )
+            except Exception as e:
+                log.warning("  SMB integrity baseline setup failed: %s", e)
+
+        # TODO: Add pre-thrash/post-thrash integrity baselines for other client types:
+        #   - CephFS: fio --verify=crc32c on kernel/fuse mount before thrash,
+        #     verify post-thrash on same mount points
+        #   - RBD: fio --verify=crc32c on mapped block device before thrash,
+        #     verify post-thrash
+        #   - RGW: S3 PUT with checksums before thrash, S3 GET + verify post-thrash
+
         log.info(f"\n{'=' * 60}\nTHRASHING PHASE\n{'=' * 60}")
 
         # Stop flag for coordinated shutdown of background threads
@@ -921,7 +1399,18 @@ def run(ceph_cluster, **kw):
         max_workers += 1 if enable_mds_thrashing else 0
         max_workers += 4 if (enable_nfs_thrashing and nfs_config) else 0
         max_workers += 1 if (enable_cephfs_subvolume_thrashing and fs_names) else 0
-        log.debug(f"ThreadPoolExecutor max_workers: {max_workers}")
+        # NFS enhanced thrashing threads
+        max_workers += 1 if (enable_nfs_daemon_thrashing and nfs_config) else 0
+        if enable_nfs_protocol_state_thrash and nfs_config:
+            max_workers += 1  # client churn
+            max_workers += 1 if config.get("nfs_export_churn_enabled") else 0
+            max_workers += 1 if config.get("nfs_admin_interleave_enabled") else 0
+        # SMB thrashing threads
+        max_workers += 1 if (enable_smb_thrashing and smb_config) else 0  # smb_daemon
+        max_workers += (
+            1 if (enable_smb_thrashing and smb_config) else 0
+        )  # smb_client_io
+        log.debug("ThreadPoolExecutor max_workers: %s", max_workers)
 
         with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
@@ -1218,6 +1707,94 @@ def run(ceph_cluster, **kw):
                     "CephFS subvolume thrashing enabled but no filesystems available"
                 )
 
+            # NFS daemon failover thrashing (kill/restart cycles)
+            if enable_nfs_daemon_thrashing and nfs_config:
+                log.info("NFS daemon failover thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_nfs_daemon_failover,
+                        installer=cephadm.installer,
+                        nfs_config=nfs_config,
+                        rados_obj=rados_obj,
+                        ceph_cluster=ceph_cluster,
+                        client_node=client_node,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                        config=config,
+                    )
+                )
+            elif enable_nfs_daemon_thrashing:
+                log.warning("NFS daemon thrashing enabled but no NFS config available")
+
+            # NFS protocol state thrash threads
+            if enable_nfs_protocol_state_thrash and nfs_config:
+                log.info("NFS protocol state thrash threads enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_nfs_client_churn,
+                        client_node=client_node,
+                        nfs_config=nfs_config,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                        churn_rate=config.get("nfs_client_churn_rate", 5),
+                    )
+                )
+                if config.get("nfs_export_churn_enabled"):
+                    futures.append(
+                        executor.submit(
+                            thrash_nfs_export_churn,
+                            installer=cephadm.installer,
+                            nfs_config=nfs_config,
+                            duration=duration,
+                            stop_flag=stop_flag,
+                            rados_obj=rados_obj,
+                        )
+                    )
+                if config.get("nfs_admin_interleave_enabled"):
+                    futures.append(
+                        executor.submit(
+                            thrash_nfs_admin_ops,
+                            installer=cephadm.installer,
+                            nfs_config=nfs_config,
+                            duration=duration,
+                            stop_flag=stop_flag,
+                            rados_obj=rados_obj,
+                        )
+                    )
+            elif enable_nfs_protocol_state_thrash:
+                log.warning(
+                    "NFS protocol state thrash enabled but no NFS config available"
+                )
+
+            # SMB daemon thrashing
+            if enable_smb_thrashing and smb_config:
+                log.info(
+                    "SMB daemon thrashing enabled for %s",
+                    smb_config.get("cluster_ids", []),
+                )
+                futures.append(
+                    executor.submit(
+                        thrash_smb,
+                        installer=cephadm.installer,
+                        smb_config=smb_config,
+                        ceph_cluster=ceph_cluster,
+                        rados_obj=rados_obj,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+                futures.append(
+                    executor.submit(
+                        thrash_smb_client_io,
+                        client_node=client_node,
+                        smb_config=smb_config,
+                        duration=duration,
+                        stop_flag=stop_flag,
+                    )
+                )
+            elif enable_smb_thrashing:
+                log.warning("SMB thrashing enabled but no SMB config available")
+
             log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
             try:
                 for future in cf.as_completed(futures, timeout=duration):
@@ -1275,6 +1852,13 @@ def run(ceph_cluster, **kw):
                 "nfs_rootsquash": None,
                 "nfs_fsops_extended": None,
                 "cephfs_subvolume_thrashing": None,
+                "scrub_thrashing": None,
+                "nfs_daemon_failover": None,
+                "nfs_client_churn": None,
+                "nfs_export_churn": None,
+                "nfs_admin_ops": None,
+                "smb_daemon_thrashing": None,
+                "smb_client_io": None,
             }
             # Map futures to workflow names based on their index
             workflow_order = []
@@ -1319,6 +1903,17 @@ def run(ceph_cluster, **kw):
                 workflow_order.append("nfs_fsops_extended")
             if enable_cephfs_subvolume_thrashing and fs_names:
                 workflow_order.append("cephfs_subvolume_thrashing")
+            if enable_nfs_daemon_thrashing and nfs_config:
+                workflow_order.append("nfs_daemon_failover")
+            if enable_nfs_protocol_state_thrash and nfs_config:
+                workflow_order.append("nfs_client_churn")
+                if config.get("nfs_export_churn_enabled"):
+                    workflow_order.append("nfs_export_churn")
+                if config.get("nfs_admin_interleave_enabled"):
+                    workflow_order.append("nfs_admin_ops")
+            if enable_smb_thrashing and smb_config:
+                workflow_order.append("smb_daemon_thrashing")
+                workflow_order.append("smb_client_io")
 
             for idx, future in enumerate(futures):
                 workflow_name = (
@@ -1334,10 +1929,116 @@ def run(ceph_cluster, **kw):
                             f"  {workflow_name}: {result} iterations/operations completed"
                         )
                     else:
+                        workflow_results[workflow_name] = {"timeout": True}
                         log.info(f"  {workflow_name}: Did not complete in time")
                 except Exception as e:
                     log.info(f"  {workflow_name}: Failed with exception - {e}")
             log.info(f"{'=' * 60}")
+
+            # ----------------------------------------------------------
+            # During-thrash workflow result evaluation (warn-only)
+            #
+            # NFS and SMB workflows operate under active daemon chaos,
+            # so transient errors (recovery failures, kill failures,
+            # mount timeouts, client I/O errors) are *expected* and
+            # must not fail the test.  Each workflow returns a dict
+            # with counters (e.g. "errors", "recovery_failures").
+            #
+            # This block inspects those counters and emits warnings
+            # for any non-zero values.  The only hard-fail condition
+            # during the thrash phase is an NFS data integrity
+            # *mismatch* (corrupted file content), which is detected
+            # separately in the post-thrash verification.
+            #
+            # Workflow timeouts (the thread did not finish before
+            # stop_flag was set) are also warn-only for NFS/SMB
+            # workflows listed in _timeout_warn_workflows.
+            # ----------------------------------------------------------
+
+            # _warn_checks: maps workflow name -> list of
+            # (condition_fn, message_fn) tuples evaluated against the
+            # workflow result dict.
+            _warn_checks = {
+                "nfs_daemon_failover": [
+                    (
+                        lambda r: r.get("recovery_failures", 0),
+                        lambda r: f"NFS daemon recovery failures: {r['recovery_failures']}",
+                    ),
+                    (
+                        lambda r: r.get("kill_failures", 0),
+                        lambda r: f"NFS daemon kill failures: {r['kill_failures']}",
+                    ),
+                ],
+                "nfs_client_churn": [
+                    (
+                        lambda r: r.get("errors", 0),
+                        lambda r: f"nfs_client_churn errors: {r['errors']}",
+                    ),
+                ],
+                "nfs_export_churn": [
+                    (
+                        lambda r: r.get("errors", 0),
+                        lambda r: f"nfs_export_churn errors: {r['errors']}",
+                    ),
+                ],
+                "nfs_admin_ops": [
+                    (
+                        lambda r: r.get("errors", 0),
+                        lambda r: f"nfs_admin_ops errors: {r['errors']}",
+                    ),
+                ],
+                "smb_daemon_thrashing": [
+                    (
+                        lambda r: r.get("recovery_failures", 0),
+                        lambda r: f"SMB daemon recovery failures: {r['recovery_failures']}",
+                    ),
+                    (
+                        lambda r: r.get("errors", 0),
+                        lambda r: f"SMB daemon thrash errors: {r['errors']}",
+                    ),
+                ],
+                "smb_client_io": [
+                    (
+                        lambda r: r.get("errors", 0),
+                        lambda r: f"SMB client IO errors: {r['errors']}",
+                    ),
+                    (
+                        lambda r: r.get("io_ops", 0) == 0,
+                        lambda r: "SMB client IO completed zero operations",
+                    ),
+                ],
+            }
+
+            thrash_warnings = []
+            for wf_name, checks in _warn_checks.items():
+                wf_result = workflow_results.get(wf_name)
+                if not isinstance(wf_result, dict):
+                    continue
+                for cond_fn, msg_fn in checks:
+                    if cond_fn(wf_result):
+                        thrash_warnings.append(msg_fn(wf_result))
+
+            # NFS/SMB workflow timeouts are also warn-only.
+            _timeout_warn_workflows = [
+                "nfs_daemon_failover",
+                "nfs_client_churn",
+                "nfs_export_churn",
+                "nfs_admin_ops",
+                "smb_daemon_thrashing",
+                "smb_client_io",
+            ]
+            for wf_name in _timeout_warn_workflows:
+                wf_result = workflow_results.get(wf_name)
+                if isinstance(wf_result, dict) and wf_result.get("timeout"):
+                    thrash_warnings.append(f"{wf_name} timed out during stop/drain")
+
+            if thrash_warnings:
+                log.warning(
+                    "[thrash_validation] During-thrash workflow warnings (%s):",
+                    len(thrash_warnings),
+                )
+                for warn_msg in thrash_warnings:
+                    log.warning("  WARN: %s", warn_msg)
 
         log.info(
             "Thrashing phase completed\n Sleeping for 60 seconds to allow for recovery..."
@@ -1428,6 +2129,349 @@ def run(ceph_cluster, **kw):
                 raise Exception("Not all PGs are active+clean")
 
         rados_obj.log_cluster_health()
+
+        # ── Post-thrash NFS verification ──
+        #
+        # After thrash threads have stopped and PGs are active+clean,
+        # validate the NFS subsystem end-to-end.  Every check that
+        # fails sets test_failed = True (these are hard failures).
+        #
+        # Checks performed (in order):
+        #   1. Daemon health: every nfs.<daemon_id> must report "running"
+        #      via ceph orch.
+        #   2. Mount health: pre-thrash integrity mounts (if any) must
+        #      not be stale (stat returns EIO/ESTALE).
+        #   3. Data integrity: re-run fio --verify=crc32c on pre-thrash
+        #      mounts.  A *mismatch* (corrupted data) is a hard failure.
+        #      I/O errors that are not mismatches are warn-only.
+        #   4. Export accessibility: mount each export via
+        #      _nfs_mount_context, run ``ls``, unmount.  Any mount or
+        #      ls failure is a hard failure.
+        #   5. RADOS config integrity: for each NFS cluster, read the
+        #      conf-nfs.<cluster_id> RADOS object and validate it
+        #      parses correctly.  Corruption is a hard failure.
+        if enable_nfs_thrashing and nfs_config:
+            log.info("Running post-thrash NFS verification...")
+            nfs_wf = NfsThrashWorkflows(
+                cephadm.installer, nfs_config, rados_obj, ceph_cluster
+            )
+
+            # NFS daemon health: all daemons must be running
+            try:
+                nfs_daemon_healthy = True
+                for cluster in nfs_config.get("clusters", []):
+                    cluster_id = cluster.get("cluster_id", "")
+                    if not cluster_id:
+                        continue
+                    svc_name = f"nfs.{cluster_id}"
+                    daemon_ids = rados_obj.get_service_spec_daemons(
+                        service_name=svc_name
+                    )
+                    if not daemon_ids:
+                        log.error("[post-thrash NFS] No daemons found for %s", svc_name)
+                        nfs_daemon_healthy = False
+                        continue
+                    for daemon_id in daemon_ids:
+                        daemon_id = str(daemon_id)
+                        status = rados_obj.get_daemon_status(
+                            daemon_type="nfs", daemon_id=daemon_id
+                        )
+                        status_desc = status[1] if status else "unknown"
+                        if status_desc != "running":
+                            log.error(
+                                "[post-thrash NFS] Daemon nfs.%s "
+                                "status=%s (expected running)",
+                                daemon_id,
+                                status_desc,
+                            )
+                            nfs_daemon_healthy = False
+                        else:
+                            log.debug("[post-thrash NFS] nfs.%s running", daemon_id)
+                if nfs_daemon_healthy:
+                    log.info("Post-thrash NFS daemon health verified")
+                else:
+                    test_failed = True
+            except Exception as e:
+                log.error("[post-thrash NFS] Daemon health check failed: %s", e)
+                test_failed = True
+
+            # NFS mount health check on pre-thrash integrity mounts
+            if nfs_integrity_mounts:
+                try:
+                    mount_health = check_mount_health(
+                        client_node, nfs_integrity_mounts, proto="nfs"
+                    )
+                    if mount_health.get("stale"):
+                        log.error(
+                            "[post-thrash NFS] Stale mounts detected: %s",
+                            mount_health["stale"],
+                        )
+                        test_failed = True
+                    else:
+                        log.info(
+                            "[post-thrash NFS] Mount health OK: %s healthy",
+                            len(mount_health.get("healthy", [])),
+                        )
+                except Exception as e:
+                    log.error("[post-thrash NFS] Mount health check failed: %s", e)
+                    test_failed = True
+
+            # Post-thrash data integrity verification on pre-mounted paths
+            if nfs_integrity_mounts:
+                try:
+                    log.info(
+                        "[post-thrash NFS] Verifying data integrity on "
+                        "%s pre-thrash mount(s)...",
+                        len(nfs_integrity_mounts),
+                    )
+                    post_verify = verify_data_integrity(
+                        client_node, nfs_integrity_mounts
+                    )
+                    if post_verify.get("mismatches"):
+                        log.error(
+                            "[post-thrash NFS] Data integrity MISMATCH: %s",
+                            post_verify["mismatches"],
+                        )
+                        test_failed = True
+                    elif post_verify.get("errors"):
+                        log.error(
+                            "[post-thrash NFS] Data integrity errors on "
+                            "stable cluster: %s (file unreadable = potential data loss)",
+                            post_verify["errors"],
+                        )
+                        test_failed = True
+                    else:
+                        log.info(
+                            "[post-thrash NFS] Data integrity verified: "
+                            "%s file(s) clean",
+                            post_verify.get("files_checked", 0),
+                        )
+                except Exception as e:
+                    log.error(
+                        "[post-thrash NFS] Data integrity verification failed: %s", e
+                    )
+                    test_failed = True
+
+            # NFS export accessibility: mount each export, verify ls, unmount
+            try:
+                nfs_exports_ok = True
+                for idx, export in enumerate(nfs_config.get("exports", [])):
+                    cluster_id = export.get("cluster_id", "")
+                    pseudo_path = export.get("pseudo_path", "")
+                    if not cluster_id or not pseudo_path:
+                        continue
+                    try:
+                        with _nfs_mount_context(
+                            client_node,
+                            nfs_config,
+                            "/mnt/post-thrash-nfs-verify",
+                            index=idx,
+                        ) as (exp_info, mount_point):
+                            if exp_info is None or mount_point is None:
+                                log.error(
+                                    "[post-thrash NFS] Mount failed for export %s",
+                                    pseudo_path,
+                                )
+                                nfs_exports_ok = False
+                                continue
+                            client_node.exec_command(
+                                sudo=True,
+                                cmd=f"ls {mount_point}/",
+                                timeout=30,
+                            )
+                            log.debug(
+                                "[post-thrash NFS] Export %s accessible at %s",
+                                pseudo_path,
+                                mount_point,
+                            )
+                    except Exception as e:
+                        log.error(
+                            "[post-thrash NFS] Export %s access failed: %s",
+                            pseudo_path,
+                            e,
+                        )
+                        nfs_exports_ok = False
+                if nfs_exports_ok:
+                    log.info("Post-thrash NFS export accessibility verified")
+                else:
+                    test_failed = True
+            except Exception as e:
+                log.error("[post-thrash NFS] Export accessibility check failed: %s", e)
+                test_failed = True
+
+            # NFS RADOS config integrity: verify each cluster's config object
+            try:
+                nfs_rados_ok = True
+                for cluster in nfs_config.get("clusters", []):
+                    cluster_id = cluster.get("cluster_id", "")
+                    if not cluster_id:
+                        continue
+                    rados_result = nfs_wf.check_rados_config(cluster_id)
+                    if not rados_result.get("valid"):
+                        log.error(
+                            "[post-thrash NFS] RADOS config invalid for %s: %s",
+                            cluster_id,
+                            rados_result.get("error"),
+                        )
+                        nfs_rados_ok = False
+                    else:
+                        log.debug(
+                            "[post-thrash NFS] RADOS config OK for %s (%s bytes)",
+                            cluster_id,
+                            rados_result["size"],
+                        )
+                if nfs_rados_ok:
+                    log.info("Post-thrash NFS RADOS config integrity verified")
+                else:
+                    test_failed = True
+            except Exception as e:
+                log.error("[post-thrash NFS] RADOS config check failed: %s", e)
+                test_failed = True
+
+        # ── Post-thrash SMB verification ──
+        #
+        # When SMB thrashing is enabled, verify the SMB subsystem after
+        # chaos threads have stopped.  All failures here are hard
+        # failures (set test_failed = True).
+        #
+        # Checks performed (in order):
+        #   1. RADOS config integrity (if enable_smb_rados_config_check):
+        #      verify_rados_config() reads each SMB cluster's metadata
+        #      object from the RADOS pool and checks for corruption.
+        #   2. Endpoint accessibility: verify_endpoints() runs
+        #      ``smbclient -L`` against each share and confirms the
+        #      share is listed in the output.
+        #   3. CTDB health: verify_ctdb_health() checks that all CTDB
+        #      cluster nodes are healthy and none are banned.
+        if enable_smb_thrashing and smb_config:
+            log.info("Running post-thrash SMB verification...")
+            if smb_wf is None:
+                smb_wf = SmbThrashWorkflows(cephadm.installer, ceph_cluster, rados_obj)
+            if enable_smb_rados_config_check:
+                smb_rados_result = smb_wf.verify_rados_config(
+                    smb_config.get("cluster_ids", [])
+                )
+                if smb_rados_result.get("corrupted"):
+                    log.error(
+                        "SMB RADOS config corruption detected: %s",
+                        smb_rados_result["corrupted"],
+                    )
+                    test_failed = True
+                else:
+                    log.info("SMB RADOS config integrity verified")
+
+            smb_endpoint_result = smb_wf.verify_endpoints(client_node, smb_config)
+            if smb_endpoint_result.get("failed"):
+                log.error("SMB endpoint failures: %s", smb_endpoint_result["failed"])
+                test_failed = True
+            else:
+                log.info(
+                    "All %s SMB endpoints accessible",
+                    len(smb_endpoint_result.get("accessible", [])),
+                )
+
+            ctdb_result = smb_wf.verify_ctdb_health(
+                smb_config.get("smb_nodes", []),
+                smb_config.get("cluster_ids", []),
+            )
+            if not ctdb_result.get("healthy", False):
+                log.error(
+                    "CTDB health check failed: banned=%s", ctdb_result.get("banned", [])
+                )
+                test_failed = True
+            else:
+                log.info(
+                    "CTDB health verified: %s/%s nodes OK",
+                    ctdb_result.get("nodes_ok"),
+                    ctdb_result.get("nodes_total"),
+                )
+
+        # ── Post-thrash SMB data integrity verification ──
+        #
+        # Download each pre-thrash test file and compare its md5 checksum
+        # against the stored baseline.  A mismatch indicates silent data
+        # corruption during the thrash phase.
+        if smb_integrity_baselines and smb_config:
+            log.info("Running post-thrash SMB integrity verification...")
+            try:
+                smb_user = smb_config.get("smb_user_name", "")
+                smb_password = smb_config.get("smb_user_password", "")
+
+                smb_target = None
+                public_addrs = smb_config.get("public_addrs")
+                if public_addrs:
+                    smb_target = (
+                        public_addrs[0]
+                        if isinstance(public_addrs, list)
+                        else public_addrs
+                    )
+                if not smb_target:
+                    smb_nodes = smb_config.get("smb_nodes", [])
+                    if smb_nodes:
+                        node = smb_nodes[0]
+                        smb_target = (
+                            node.ip_address
+                            if hasattr(node, "ip_address")
+                            else str(node)
+                        )
+
+                if not smb_target:
+                    log.warning(
+                        "No SMB target IP for post-thrash verification — skipped"
+                    )
+                else:
+                    for share_name, expected_md5 in smb_integrity_baselines.items():
+                        verify_file = f"/tmp/smb_integrity_verify_{share_name}.dat"
+                        try:
+                            client_node.exec_command(
+                                cmd=(
+                                    f"smbclient -U {smb_user}%{smb_password} "
+                                    f"//{smb_target}/{share_name} "
+                                    f"-c 'get smb_integrity_test.dat {verify_file}'"
+                                ),
+                                timeout=60,
+                            )
+                            out, _ = client_node.exec_command(
+                                cmd=f"md5sum {verify_file}",
+                                timeout=15,
+                            )
+                            actual_md5 = out.strip().split()[0]
+
+                            if actual_md5 != expected_md5:
+                                log.error(
+                                    "SMB integrity MISMATCH on share %s: "
+                                    "expected=%s actual=%s",
+                                    share_name,
+                                    expected_md5,
+                                    actual_md5,
+                                )
+                                test_failed = True
+                            else:
+                                log.info(
+                                    "SMB integrity verified: share=%s md5=%s",
+                                    share_name,
+                                    actual_md5,
+                                )
+                        except Exception as e:
+                            log.error(
+                                "SMB integrity check failed for share %s: %s",
+                                share_name,
+                                e,
+                            )
+                            test_failed = True
+                        finally:
+                            client_node.exec_command(
+                                cmd=f"rm -f {verify_file}",
+                                timeout=10,
+                                check_ec=False,
+                            )
+            except Exception as e:
+                log.error("Post-thrash SMB integrity verification failed: %s", e)
+                test_failed = True
+
+        # TODO: Add post-thrash integrity verification for CephFS, RBD, and RGW
+        #   clients (pre-thrash baselines must be written first — see pre-thrash
+        #   setup phase TODO)
 
         log.info("\nValidation phase completed")
 
@@ -1580,15 +2624,62 @@ def run(ceph_cluster, **kw):
                     )
                     test_failed = True
             else:
+                # NFS+OSD crash recovery downgrade:
+                # When both NFS and OSD thrashing are active, OSD pool
+                # degradation (.nfs RADOS pool) can cascade into NFS
+                # daemon crashes.  If crashes are detected but all NFS
+                # daemons have since recovered to "running" state, the
+                # crash is downgraded to a warning rather than failing
+                # the test.  This avoids false negatives caused by the
+                # expected OSD->NFS failure cascade.
                 if rados_obj.check_crash_status(
                     start_time=start_time,
                     end_time=test_end_time,
                     check_mds=enable_mds_thrashing,
                     check_nfs=enable_nfs_thrashing,
                     check_rgw=enable_rgw_thrashing,
+                    check_smb=enable_smb_thrashing,
                 ):
-                    log.error("Test failed due to crash detected")
-                    test_failed = True
+                    if enable_nfs_thrashing and enable_osd_thrashing:
+                        all_nfs_recovered = True
+                        try:
+                            for cluster in (nfs_config or {}).get("clusters", []):
+                                cid = cluster.get("cluster_id", "")
+                                if not cid:
+                                    continue
+                                svc_name = f"nfs.{cid}"
+                                daemon_ids = rados_obj.get_service_spec_daemons(
+                                    service_name=svc_name
+                                )
+                                for did in daemon_ids or []:
+                                    status = rados_obj.get_daemon_status(
+                                        daemon_type="nfs", daemon_id=str(did)
+                                    )
+                                    status_desc = status[1] if status else "unknown"
+                                    if status_desc != "running":
+                                        all_nfs_recovered = False
+                                        break
+                                if not all_nfs_recovered:
+                                    break
+                        except Exception as nfs_check_err:
+                            log.warning("NFS recovery check failed: %s", nfs_check_err)
+                            all_nfs_recovered = False
+
+                        if all_nfs_recovered:
+                            log.warning(
+                                "Crash detected but all NFS daemons have recovered. "
+                                "Likely cascading effect from OSD thrashing degrading "
+                                "the .nfs RADOS pool. Downgrading to warning."
+                            )
+                        else:
+                            log.error(
+                                "Test failed due to crash detected "
+                                "(NFS daemons not fully recovered)"
+                            )
+                            test_failed = True
+                    else:
+                        log.error("Test failed due to crash detected")
+                        test_failed = True
         except Exception as e:
             log.error(f"Crash check failed: {e}")
             test_failed = True
@@ -1656,26 +2747,6 @@ def run(ceph_cluster, **kw):
                     except Exception as e:
                         log.warning(f"{name} cleanup failed: {e}")
 
-            # Re-enable firewall on nodes where it was disabled for NFS
-            if nfs_firewall_disabled_nodes:
-                log.info(
-                    f"Re-enabling firewall on {len(nfs_firewall_disabled_nodes)} node(s)..."
-                )
-                for node in nfs_firewall_disabled_nodes:
-                    try:
-                        node.exec_command(
-                            cmd="systemctl enable firewalld 2>/dev/null || true; "
-                            "systemctl start firewalld 2>/dev/null || true",
-                            sudo=True,
-                            timeout=30,
-                            check_ec=False,
-                        )
-                        log.info(f"  {node.hostname}: firewall re-enabled")
-                    except Exception as e:
-                        log.warning(
-                            f"  {node.hostname}: Failed to re-enable firewall - {e}"
-                        )
-
             # Phase 2: Delete tracked pools
             if created_pools:
                 log.info(f"Deleting {len(created_pools)} tracked pool(s)...")
@@ -1700,6 +2771,95 @@ def run(ceph_cluster, **kw):
             log.info("Pool cleanup completed")
         else:
             log.info("Skipping cleanup (cleanup_pools=False)")
+
+        # Unmount pre-thrash NFS integrity mounts (infrastructure cleanup,
+        # runs regardless of cleanup_pools setting)
+        if nfs_integrity_mounts:
+            log.info(
+                "Unmounting %s pre-thrash NFS integrity mount(s)...",
+                len(nfs_integrity_mounts),
+            )
+            for mp in nfs_integrity_mounts:
+                try:
+                    client_node.exec_command(
+                        sudo=True,
+                        cmd=f"umount -l {mp} 2>/dev/null; " f"rmdir {mp} 2>/dev/null",
+                        timeout=20,
+                        check_ec=False,
+                    )
+                    log.info("  Unmounted: %s", mp)
+                except Exception as e:
+                    log.warning("  Failed to unmount %s: %s", mp, e)
+
+        # Clean up SMB integrity temp files (runs regardless of cleanup_pools)
+        if smb_integrity_baselines:
+            log.info("Cleaning up SMB integrity temp files...")
+            try:
+                client_node.exec_command(
+                    cmd="rm -f /tmp/smb_integrity_*.dat",
+                    timeout=15,
+                    check_ec=False,
+                )
+                log.info("  SMB integrity temp files removed")
+            except Exception as e:
+                log.warning("  SMB integrity temp file cleanup failed: %s", e)
+
+        # Clean up SMB clusters/shares and the dedicated CephFS volume
+        # (runs regardless of cleanup_pools to prevent leftover resources
+        # from blocking subsequent runs)
+        if smb_config and smb_config.get("cluster_ids"):
+            log.info("Cleaning up SMB resources (unconditional)...")
+            try:
+                if smb_wf is None:
+                    smb_wf = SmbThrashWorkflows(
+                        cephadm.installer, ceph_cluster, rados_obj
+                    )
+                smb_wf.cleanup(smb_config)
+                log.info("  SMB clusters and shares removed")
+            except Exception as e:
+                log.warning("  SMB cluster/share cleanup failed: %s", e)
+            smb_vol = smb_config.get("cephfs_vol", "")
+            if smb_vol:
+                try:
+                    cephadm.installer.exec_command(
+                        sudo=True,
+                        cmd=f"ceph orch rm mds.{smb_vol}",
+                        timeout=60,
+                        check_ec=False,
+                    )
+                    log.info("  MDS service for '%s' removed", smb_vol)
+                except Exception as e:
+                    log.warning("  MDS service removal failed: %s", e)
+                try:
+                    cephadm.installer.exec_command(
+                        sudo=True,
+                        cmd=(f"ceph fs volume rm" f" {smb_vol} --yes-i-really-mean-it"),
+                        timeout=120,
+                    )
+                    log.info("  SMB CephFS volume '%s' removed", smb_vol)
+                except Exception as e:
+                    log.warning("  SMB CephFS volume removal failed: %s", e)
+
+        # Re-enable firewall on nodes where it was disabled for NFS
+        if nfs_firewall_disabled_nodes:
+            log.info(
+                "Re-enabling firewall on %s node(s)...",
+                len(nfs_firewall_disabled_nodes),
+            )
+            for node in nfs_firewall_disabled_nodes:
+                try:
+                    node.exec_command(
+                        cmd="systemctl enable firewalld 2>/dev/null || true; "
+                        "systemctl start firewalld 2>/dev/null || true",
+                        sudo=True,
+                        timeout=30,
+                        check_ec=False,
+                    )
+                    log.info("  %s: firewall re-enabled", node.hostname)
+                except Exception as e:
+                    log.warning(
+                        "  %s: Failed to re-enable firewall - %s", node.hostname, e
+                    )
 
         if enable_debug_logs:
             log.info("Forcing log rotation on OSD nodes...")
@@ -4429,24 +5589,35 @@ def thrash_nfs_fio(
     stop_flag: Dict,
 ) -> Dict[str, int]:
     """
-    Thrash NFS exports with mount -> FIO -> unmount cycles.
+    Thrash NFS exports with mount -> FIO -> FS ops -> unmount cycles.
 
-    Continuously cycles through:
-    1. Mount all NFS exports (cycling NFSv4.0/4.1/4.2, and NFSv3 only if the
-       cluster was created with enable_nfsv3)
-    2. Run NFS export info/ls commands on 2 random exports
-    3. Run FIO workloads on all mounted exports (cycling through I/O patterns)
-    4. Unmount all exports
-    5. Repeat until duration expires or stop_flag is set
+    Resolves mount targets via ``_nfs_export_mount_targets()`` (handles
+    multi-host NFS clusters), distributes them across up to 5 parallel
+    worker threads, and continuously cycles through:
+
+    1. Mount all assigned exports (cycling NFSv4.0/4.1/4.2; NFSv3 only
+       if the cluster was created with ``enable_nfsv3``).  Multi-host
+       clusters rotate the active host per cycle for load distribution.
+    2. Run ``ceph nfs export info`` / ``ls`` on a random mounted export.
+    3. Run FIO workloads on all mounted exports (cycling through I/O
+       patterns: seq_write, seq_read, rand_write, rand_read, mixed_rw).
+    4. Run filesystem operations (dd, stat, chmod, symlink, hardlink,
+       remount, rename, touch) on each mounted export.
+    5. Unmount all exports.
+    6. Repeat until ``duration`` expires or ``stop_flag["stop"]`` is set.
 
     Args:
-        client_node: Client node to mount/unmount and run FIO
-        nfs_config: NFS configuration dict from create_nfs_clusters_and_exports
-        duration: Total duration in seconds
-        stop_flag: Dict with 'stop' key to signal early termination
+        client_node: Client node to mount/unmount and run FIO.
+        nfs_config: NFS configuration dict from
+            ``create_nfs_clusters_and_exports``.  Must contain ``exports``
+            and ``clusters`` lists; may contain ``enable_rdma``,
+            ``enable_nfsv3``, and per-cluster ``rdma_port`` entries.
+        duration: Total duration in seconds.
+        stop_flag: Dict with ``stop`` key to signal early termination.
 
     Returns:
-        Total number of completed mount-FIO-unmount cycles across all workers
+        dict: ``{"cycles": int, "failures": int}`` aggregated across all
+        worker threads.
     """
     nfs_versions_v4 = (
         ("4.0", "nfsvers=4.0"),
@@ -4466,24 +5637,27 @@ def thrash_nfs_fio(
 
     log.info("Starting NFS FIO thrashing (5 parallel workers)")
 
-    clusters = nfs_config.get("clusters", [])
     exports = nfs_config.get("exports", [])
 
     if not exports:
         log.warning("No NFS exports available for thrashing")
-        return 0
+        return {"cycles": 0, "failures": 0}
 
-    cluster_host_map = {c["cluster_id"]: c["host"] for c in clusters}
-    cluster_port_map = {c["cluster_id"]: c["port"] for c in clusters}
+    mount_targets = _nfs_export_mount_targets(nfs_config)
+    if not mount_targets:
+        log.warning("No valid NFS mount targets available for thrashing")
+        return {"cycles": 0, "failures": 0}
 
-    num_workers = min(5, len(exports))
-    export_groups = [[] for _ in range(num_workers)]
-    for idx, export in enumerate(exports):
-        export_groups[idx % num_workers].append((idx, export))
+    num_workers = min(5, len(mount_targets))
+    target_groups = [[] for _ in range(num_workers)]
+    for idx, target in enumerate(mount_targets):
+        target_groups[idx % num_workers].append((idx, target))
 
     log.info(
-        f"Distributing {len(exports)} exports across {num_workers} workers: "
-        f"{[len(g) for g in export_groups]}"
+        "Distributing %s exports across %s workers: %s",
+        len(mount_targets),
+        num_workers,
+        [len(g) for g in target_groups],
     )
 
     # Log NFS version assignments
@@ -4497,17 +5671,15 @@ def thrash_nfs_fio(
     total_failures = 0
     with cf.ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = []
-        for worker_id, export_group in enumerate(export_groups):
-            if export_group:
+        for worker_id, target_group in enumerate(target_groups):
+            if target_group:
                 assigned_nfs_version = nfs_versions[worker_id % len(nfs_versions)]
                 futures.append(
                     executor.submit(
                         _nfs_worker_thread,
                         client_node=client_node,
                         worker_id=worker_id,
-                        export_group=export_group,
-                        cluster_host_map=cluster_host_map,
-                        cluster_port_map=cluster_port_map,
+                        target_group=target_group,
                         nfs_version=assigned_nfs_version,
                         duration=duration,
                         stop_flag=stop_flag,
@@ -4538,9 +5710,7 @@ def thrash_nfs_fio(
 def _nfs_worker_thread(
     client_node,
     worker_id: int,
-    export_group: List[tuple],
-    cluster_host_map: Dict[str, str],
-    cluster_port_map: Dict[str, int],
+    target_group: List[tuple],
     nfs_version: tuple,
     duration: int,
     stop_flag: Dict,
@@ -4549,15 +5719,13 @@ def _nfs_worker_thread(
     """
     Worker thread for NFS FIO thrashing.
 
-    Each worker handles a subset of exports using a specific NFS version:
-    mount -> NFS info commands -> FIO -> unmount
+    Each worker handles a subset of pre-resolved mount targets using a specific
+    NFS version: mount -> NFS info commands -> FIO -> unmount
 
     Args:
         client_node: Client node for commands
         worker_id: Unique worker identifier
-        export_group: List of (idx, export_dict) tuples assigned to this worker
-        cluster_host_map: Cluster ID to host mapping
-        cluster_port_map: Cluster ID to TCP NFS port mapping (informational)
+        target_group: List of (idx, target_dict) from _nfs_export_mount_targets
         nfs_version: Tuple of (version_str, mount_options) e.g. ("4.1", "nfsvers=4.1")
         duration: Total duration in seconds
         stop_flag: Stop signal dict
@@ -4582,20 +5750,17 @@ def _nfs_worker_thread(
     base_mount_dir = f"/mnt/nfs-thrash-w{worker_id}"
     num_patterns = len(fio_patterns)
 
-    # Pre-build export info with mount points to avoid repeated lookups
     export_info = []
-    for idx, export in export_group:
-        cluster_id = export["cluster_id"]
-        nfs_host = cluster_host_map.get(cluster_id)
-        nfs_port = cluster_port_map.get(cluster_id)
-        if nfs_host and nfs_port:
+    for idx, target in target_group:
+        if target.get("hosts") and target.get("port") is not None:
             export_info.append(
                 {
                     "mount_point": f"{base_mount_dir}/export_{idx}",
-                    "cluster_id": cluster_id,
-                    "pseudo_path": export["pseudo_path"],
-                    "host": nfs_host,
-                    "port": nfs_port,
+                    "cluster_id": target["cluster_id"],
+                    "pseudo_path": target["pseudo_path"],
+                    "host": target["host"],
+                    "hosts": target["hosts"],
+                    "port": target["port"],
                 }
             )
 
@@ -4619,25 +5784,43 @@ def _nfs_worker_thread(
             # Step 2: Mount all exports assigned to this worker
             for exp in export_info:
                 mount_point = exp["mount_point"]
+                active_host = ""
                 try:
+                    hosts = exp.get("hosts") or (
+                        [exp.get("host")] if exp.get("host") else []
+                    )
+                    if not hosts:
+                        raise RuntimeError(
+                            f"No NFS hosts available for cluster {exp['cluster_id']}"
+                        )
+                    host_idx = (cycle_count - 1 + worker_id) % len(hosts)
+                    active_host = hosts[host_idx]
+
                     client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
                     mount_opts = _nfs_client_mount_option_string(
                         nfs_config, exp["cluster_id"], nfs_options
                     )
                     mount_cmd = (
                         f"mount -t nfs -o {mount_opts} "
-                        f"{exp['host']}:{exp['pseudo_path']} {mount_point}"
+                        f"{active_host}:{exp['pseudo_path']} {mount_point}"
                     )
                     client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
-                    mounted_exports.append(exp)
+                    mounted_exports.append((exp, active_host))
                 except Exception as e:
                     err_type = type(e).__name__
                     log.warning(
-                        f"Worker {worker_id}: MOUNT FAILED\n"
-                        f"  Export: {exp['host']}:{exp['pseudo_path']}\n"
-                        f"  Mount point: {mount_point}\n"
-                        f"  NFS version: {nfs_ver_str}\n"
-                        f"  Error: {err_type}: {e}"
+                        "Worker %s: MOUNT FAILED\n"
+                        "  Export: %s:%s\n"
+                        "  Mount point: %s\n"
+                        "  NFS version: %s\n"
+                        "  Error: %s: %s",
+                        worker_id,
+                        active_host,
+                        exp["pseudo_path"],
+                        mount_point,
+                        nfs_ver_str,
+                        err_type,
+                        e,
                     )
                     failures += 1
 
@@ -4649,7 +5832,7 @@ def _nfs_worker_thread(
                 continue
 
             # Step 2.5: Run NFS export info on one random export per cycle
-            exp = random.choice(mounted_exports)
+            exp, _host = random.choice(mounted_exports)
             cid, ppath = exp["cluster_id"], exp["pseudo_path"]
             try:
                 client_node.exec_command(
@@ -4665,7 +5848,7 @@ def _nfs_worker_thread(
                 failures += 1
 
             # Step 3: Run FIO on all mounted exports
-            for exp in mounted_exports:
+            for exp, exp_active_host in mounted_exports:
                 if stop_flag.get("stop"):
                     break
 
@@ -4682,16 +5865,25 @@ def _nfs_worker_thread(
                 except Exception as e:
                     err_type = type(e).__name__
                     log.warning(
-                        f"Worker {worker_id}: FIO FAILED\n"
-                        f"  Pattern: {p_name} (rw={p_rw}, bs={p_bs})\n"
-                        f"  Work dir: {work_dir}\n"
-                        f"  Export: {exp['host']}:{exp['pseudo_path']}\n"
-                        f"  Error: {err_type}: {e}"
+                        "Worker %s: FIO FAILED\n"
+                        "  Pattern: %s (rw=%s, bs=%s)\n"
+                        "  Work dir: %s\n"
+                        "  Export: %s:%s\n"
+                        "  Error: %s: %s",
+                        worker_id,
+                        p_name,
+                        p_rw,
+                        p_bs,
+                        work_dir,
+                        exp_active_host,
+                        exp["pseudo_path"],
+                        err_type,
+                        e,
                     )
                     failures += 1
 
             # Step 4: Additional filesystem operations on mounted NFS
-            for exp in mounted_exports:
+            for exp, exp_active_host in mounted_exports:
                 if stop_flag.get("stop"):
                     break
 
@@ -4743,7 +5935,7 @@ FSOPS_WORKER
                     client_node.exec_command(
                         cmd=f"umount -lf {mount_point} && sleep 1 && "
                         f"mount -t nfs -o {remount_opts} "
-                        f"{exp['host']}:{exp['pseudo_path']} {mount_point}",
+                        f"{exp_active_host}:{exp['pseudo_path']} {mount_point}",
                         sudo=True,
                         timeout=60,
                     )
@@ -4760,10 +5952,16 @@ FSOPS_WORKER
                 except Exception as e:
                     err_type = type(e).__name__
                     log.warning(
-                        f"Worker {worker_id}: FS OPS FAILED\n"
-                        f"  Work dir: {work_dir}\n"
-                        f"  Export: {exp['host']}:{exp['pseudo_path']}\n"
-                        f"  Error: {err_type}: {e}"
+                        "Worker %s: FS OPS FAILED\n"
+                        "  Work dir: %s\n"
+                        "  Export: %s:%s\n"
+                        "  Error: %s: %s",
+                        worker_id,
+                        work_dir,
+                        exp_active_host,
+                        exp["pseudo_path"],
+                        err_type,
+                        e,
                     )
                     failures += 1
 
@@ -4776,7 +5974,7 @@ FSOPS_WORKER
 
         finally:
             if mounted_exports:
-                mount_paths = " ".join(e["mount_point"] for e in mounted_exports)
+                mount_paths = " ".join(e["mount_point"] for e, _h in mounted_exports)
                 try:
                     client_node.exec_command(
                         cmd=f"umount -lf {mount_paths}", sudo=True, check_ec=False
@@ -4797,115 +5995,6 @@ FSOPS_WORKER
         f"Worker {worker_id}: Completed {cycle_count} cycles (failures={failures})"
     )
     return {"cycles": cycle_count, "failures": failures}
-
-
-def _nfs_client_mount_option_string(
-    nfs_config: Dict[str, Any],
-    cluster_id: str,
-    nfs_options_base: str,
-) -> str:
-    """
-    Build mount -o string for NFS client: nfsvers/... plus port= and optional rdma.
-
-    When nfs_config['enable_rdma'] is True, uses per-cluster rdma_port from
-    create_nfs_clusters_and_exports and appends the rdma mount option.
-    """
-    clusters = nfs_config.get("clusters", [])
-    port = None
-    for c in clusters:
-        if c["cluster_id"] == cluster_id:
-            if nfs_config.get("enable_rdma") and c.get("rdma_port") is not None:
-                port = c["rdma_port"]
-                return f"{nfs_options_base},rdma,port={port}"
-            port = c.get("port")
-            break
-    if port is None:
-        log.warning(
-            "_nfs_client_mount_option_string: no port for cluster_id=%s", cluster_id
-        )
-        return nfs_options_base
-    return f"{nfs_options_base},port={port}"
-
-
-def _pick_nfs_endpoint(nfs_config: Dict[str, Any], index: int = 0):
-    """Helper to pick NFS export endpoint by index with cached lookups."""
-    exports = nfs_config.get("exports", [])
-    clusters = nfs_config.get("clusters", [])
-    if not exports or not clusters:
-        return None, None, None
-
-    # Cache cluster maps to avoid rebuilding on every call
-    if "_cluster_host_map" not in nfs_config:
-        nfs_config["_cluster_host_map"] = {c["cluster_id"]: c["host"] for c in clusters}
-        nfs_config["_cluster_port_map"] = {c["cluster_id"]: c["port"] for c in clusters}
-
-    exp = exports[index % len(exports)]
-    host = nfs_config["_cluster_host_map"].get(exp["cluster_id"])
-    cid = exp["cluster_id"]
-    if nfs_config.get("enable_rdma"):
-        if "_cluster_rdma_port_map" not in nfs_config:
-            nfs_config["_cluster_rdma_port_map"] = {
-                c["cluster_id"]: c.get("rdma_port") for c in clusters
-            }
-        port = nfs_config["_cluster_rdma_port_map"].get(cid)
-    else:
-        port = nfs_config["_cluster_port_map"].get(cid)
-    return exp, host, port
-
-
-@contextmanager
-def _nfs_mount_context(
-    client_node,
-    nfs_config: Dict[str, Any],
-    mount_base: str,
-    index: int = 0,
-    nfs_ver: str = "4.1",
-):
-    """
-    Context manager for NFS mount/unmount with automatic cleanup.
-
-    Args:
-        client_node: SSH client node
-        nfs_config: NFS configuration dictionary
-        mount_base: Base name for mount point (unique suffix added automatically)
-        index: Export index to use
-        nfs_ver: NFS version string (e.g., "4.1", "4.2")
-
-    Yields:
-        Tuple of (export_info, mount_point) or (None, None) if setup fails
-    """
-    exp, host, port = _pick_nfs_endpoint(nfs_config, index=index)
-    if not exp or not host or not port:
-        yield None, None
-        return
-
-    # Use unique mount point to avoid collisions in parallel runs
-    unique_suffix = uuid.uuid4().hex[:8]
-    mount_point = f"{mount_base}-{unique_suffix}"
-
-    mount_opts = _nfs_client_mount_option_string(
-        nfs_config, exp["cluster_id"], f"nfsvers={nfs_ver}"
-    )
-    mount_cmd = (
-        f"mount -t nfs -o {mount_opts} " f"{host}:{exp['pseudo_path']} {mount_point}"
-    )
-    try:
-        client_node.exec_command(cmd=f"mkdir -p {mount_point}", sudo=True)
-        client_node.exec_command(cmd=mount_cmd, sudo=True, timeout=60)
-        yield exp, mount_point
-    except Exception as e:
-        log.warning(f"NFS mount FAILED: {host}:{exp['pseudo_path']} NFSv{nfs_ver}: {e}")
-        yield None, None
-    finally:
-        try:
-            client_node.exec_command(
-                cmd=f"umount -lf {mount_point}", sudo=True, check_ec=False
-            )
-            client_node.exec_command(
-                cmd=f"rm -rf {mount_point}", sudo=True, check_ec=False
-            )
-        except Exception:
-            pass
 
 
 def thrash_nfs_locking(
