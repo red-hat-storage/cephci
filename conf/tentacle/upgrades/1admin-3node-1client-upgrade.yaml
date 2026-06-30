@@ -13,8 +13,8 @@ globals:
           - grafana
           - prometheus
           - crash
-        no-of-volumes: 3
-        disk-size: 10
+        no-of-volumes: 6
+        disk-size: 15
       node2:
         role:
           - osd
@@ -25,8 +25,8 @@ globals:
           - alertmanager
           - crash
           - rgw
-        no-of-volumes: 3
-        disk-size: 10
+        no-of-volumes: 6
+        disk-size: 15
       node3:
         role:
           - mon
@@ -35,8 +35,8 @@ globals:
           - crash
           - rgw
           - mds
-        no-of-volumes: 3
-        disk-size: 10
+        no-of-volumes: 6
+        disk-size: 15
       node4:
         role:
           - client

@@ -126,8 +126,10 @@ def run(ceph_cluster, **kw):
     for flag in osd_flags:
         if CephAdm(installer).ceph.osd.unset(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
-    # Check cluster health after upgrade
-    health = wait_for_cluster_health(client, "HEALTH_OK", 300, 10)
-    if not health:
-        raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
+    # Check cluster health after upgrade (skip if configured)
+    skip_health_check = config.get("skip_health_check", False)
+    if not skip_health_check:
+        health = wait_for_cluster_health(client, "HEALTH_OK", 300, 10)
+        if not health:
+            raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
     return 0
