@@ -1286,8 +1286,39 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
     log.info("Firewall rules reloaded successfully")
 
 
+def chown_mount_for_cephuser(client, mount_name):
+    """Transfer mount point ownership to cephuser for non-root client IO."""
+    # Verify cephuser exists
+    try:
+        client.exec_command(sudo=True, cmd="id cephuser")
+    except CommandFailed:
+        log.error("cephuser does not exist on client")
+        raise OperationFailedError("cephuser not found - cannot transfer ownership")
+
+    # Perform chown with verification
+    try:
+        client.exec_command(sudo=True, cmd=f"chown cephuser:cephuser {mount_name}")
+        # Verify ownership changed
+        out, _ = client.exec_command(sudo=True, cmd=f"stat -c '%U:%G' {mount_name}")
+        if "cephuser:cephuser" not in out:
+            raise OperationFailedError(f"Ownership verification failed: {out}")
+        log.info("Transferred ownership of %s to cephuser", mount_name)
+    except CommandFailed as e:
+        log.error(f"Failed to chown {mount_name}: {e}")
+        raise OperationFailedError(f"chown operation failed: {e}")
+
+
 @retry((OperationFailedError, MountFailedError), tries=3, delay=5, backoff=2)
-def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kwargs):
+def mount_retry(
+    client,
+    mount_name,
+    version,
+    port,
+    nfs_server,
+    export_name,
+    **kwargs,
+):
+    chown_cephuser = kwargs.pop("chown_cephuser", False)
     Mount(client).nfs(
         mount=mount_name,
         version=version,
@@ -1296,6 +1327,8 @@ def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kw
         export=export_name,
         **kwargs,
     )
+    if chown_cephuser:
+        chown_mount_for_cephuser(client, mount_name)
     return True
 
 
