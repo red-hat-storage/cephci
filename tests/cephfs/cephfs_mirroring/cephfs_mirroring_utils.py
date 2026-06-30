@@ -23,6 +23,28 @@ from utility.utils import get_ceph_version_from_cluster
 log = Log(__name__)
 
 
+def _normalize_asok_peer_status(data):
+    """Normalize raw ``fs mirror peer status`` JSON to the legacy flat format.
+
+    Newer Ceph builds wrap the path metrics under ``{"metrics": {<path>: {"peer":
+    {"<uuid>": {<fields>}}}}}`` whereas older builds return the flat structure
+    ``{<path>: {"state": ..., "snaps_synced": ..., ...}}``.
+
+    This helper transparently converts both formats to the flat legacy shape so
+    that callers can always access ``result[path]["snaps_synced"]`` etc. directly.
+    """
+    if "metrics" in data:
+        data = data["metrics"]
+    normalized = {}
+    for path, path_data in data.items():
+        if isinstance(path_data, dict) and "peer" in path_data:
+            peer_uuid = next(iter(path_data["peer"]), None)
+            normalized[path] = path_data["peer"][peer_uuid] if peer_uuid else path_data
+        else:
+            normalized[path] = path_data
+    return normalized
+
+
 class CephfsMirroringUtils(object):
     def __init__(self, source_ceph_cluster, target_ceph_cluster):
         """
@@ -643,9 +665,13 @@ class CephfsMirroringUtils(object):
         self, cephfs_mirror_node, fsid, daemon_names
     ):
         """
-        Fetch an accessible asok file by matching the daemon ID suffix
-        (e.g. 'zddvsp' from 'cephfs-mirror.mero006.zddvsp') to the asok
-        files on each node.
+        Fetch an accessible asok file for the cephfs-mirror daemon.
+
+        The function first resolves which node the daemon is *actually* running
+        on via ``ceph orch ps``, then falls back to the inventory-declared
+        nodes in ``cephfs_mirror_node``.  This avoids searching nodes that
+        carry the 'cephfs-mirror' inventory label but where the daemon is not
+        running (e.g. node5 in a cluster where the daemon lives on node6).
 
         Returns:
             dict: {hostname: [node, asok_file_path]}
@@ -653,28 +679,54 @@ class CephfsMirroringUtils(object):
         accessible_asok_files = {}
         daemon_ids = {n.rsplit(".", 1)[-1] for n in daemon_names if "." in n}
 
-        for node in cephfs_mirror_node:
-            node.exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
+        # --- Resolve the node(s) where the daemon is actually running -------
+        # ceph orch ps tells us the real hostname; use that to pick the right
+        # node object instead of blindly iterating the inventory list.
+        actual_nodes = self._resolve_mirror_nodes(
+            self.source_clients[0], cephfs_mirror_node
+        )
+        log.info(
+            "Searching for asok on resolved mirror nodes: %s",
+            [
+                n.node.hostname if hasattr(n, "node") else n.hostname
+                for n in actual_nodes
+            ],
+        )
+
+        asok_dir = f"/var/run/ceph/{fsid}"
+        for node in actual_nodes:
+            try:
+                node.exec_command(
+                    sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+                )
+            except CommandFailed as e:
+                log.warning(
+                    "dnf install ceph-common failed on %s (non-fatal): %s",
+                    getattr(getattr(node, "node", node), "hostname", node),
+                    e,
+                )
             file_output, _ = node.exec_command(
                 sudo=True,
-                cmd=f"ls -1tr /var/run/ceph/{fsid}/ceph-client.cephfs-mirror.* 2>/dev/null",
+                cmd=f"ls -1tr {asok_dir}/ceph-client.cephfs-mirror.* 2>/dev/null",
                 check_ec=False,
             )
-            asok_dir = f"/var/run/ceph/{fsid}"
             for asok_file_path in (
                 f.strip() for f in file_output.split("\n") if f.strip()
             ):
-                if not any(did in asok_file_path for did in daemon_ids):
+                if daemon_ids and not any(did in asok_file_path for did in daemon_ids):
                     continue
                 asok_basename = asok_file_path.rsplit("/", 1)[-1]
                 test_cmd = f"cd {asok_dir} && ceph --admin-daemon {asok_basename} help"
                 out, err = node.exec_command(sudo=True, cmd=test_cmd, check_ec=False)
                 if out and "fs mirror peer status" in out:
-                    accessible_asok_files[node.node.hostname] = [node, asok_file_path]
-                    log.info(f"Connected to asok: {asok_file_path}")
+                    hostname = getattr(
+                        getattr(node, "node", node), "hostname", str(node)
+                    )
+                    accessible_asok_files[hostname] = [node, asok_file_path]
+                    log.info("Connected to asok: %s on %s", asok_file_path, hostname)
                     break
                 else:
-                    log.warning(f"Cannot reach asok {asok_file_path}: {err}")
+                    log.warning("Cannot reach asok %s: %s", asok_file_path, err)
 
         if not accessible_asok_files:
             log.warning("No accessible asok files found")
@@ -855,7 +907,7 @@ class CephfsMirroringUtils(object):
             f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
         )
         out, _ = cephfs_mirror_node.exec_command(sudo=True, cmd=cmd)
-        data = json.loads(out)
+        data = _normalize_asok_peer_status(json.loads(out))
         for path, status in data.items():
             last_synced_snap = status.get("last_synced_snap")
             if last_synced_snap:
@@ -904,22 +956,18 @@ class CephfsMirroringUtils(object):
         )
         if not asok_files:
             raise CommandFailed("No accessible cephfs-mirror admin socket found")
-        log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_files}")
-        if not asok_files:
-            raise CommandFailed(
-                "No valid admin socket files found for cephfs-mirror daemon"
-            )
+        log.info("Admin Socket file of cephfs-mirror daemon : %s", asok_files)
         filesystem_id = self.get_filesystem_id_by_name(self.source_clients[0], fs_name)
-        log.info(f"filesystem id of {fs_name} is : {filesystem_id}")
+        log.info("filesystem id of %s is : %s", fs_name, filesystem_id)
         peer_uuid = self.get_peer_uuid_by_name(self.source_clients[0], fs_name)
-        log.info(f"peer uuid of {fs_name} is : {peer_uuid}")
+        log.info("peer uuid of %s is : %s", fs_name, peer_uuid)
         for node, asok in asok_files.items():
             try:
                 asok[0].exec_command(
                     sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
                 )
             except CommandFailed as e:
-                log.warning(f"dnf install ceph-common failed (non-fatal): {e}")
+                log.warning("dnf install ceph-common failed (non-fatal): %s", e)
             asok_basename = asok[1].rsplit("/", 1)[-1]
             asok_dir = f"/var/run/ceph/{fsid}"
             cmd = (
@@ -927,22 +975,28 @@ class CephfsMirroringUtils(object):
                 f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
             )
             out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
-            data = json.loads(out)
-            for path, status in data.items():
-                last_synced_snap = status.get("last_synced_snap")
-                if last_synced_snap:
-                    if last_synced_snap.get("name") == snapshot_name:
-                        sync_duration = last_synced_snap.get("sync_duration")
-                        sync_time_stamp = last_synced_snap.get("sync_time_stamp")
-                        snaps_synced = status.get("snaps_synced")
-                        log.info("All snapshots are synced")
-                        return {
-                            "snapshot_name": snapshot_name,
-                            "sync_duration": sync_duration,
-                            "sync_time_stamp": sync_time_stamp,
-                            "snaps_synced": snaps_synced,
-                        }
-        log.info("snapshot status: %s", status.get("state"))
+            data = _normalize_asok_peer_status(json.loads(out))
+            for path, path_status in data.items():
+                last_synced_snap = path_status.get("last_synced_snap")
+                if not last_synced_snap:
+                    continue
+                if last_synced_snap.get("name") == snapshot_name:
+                    raw_duration = last_synced_snap.get("sync_duration", "")
+                    sync_duration = raw_duration.rstrip("s") if raw_duration else None
+                    log.info(
+                        "Snapshot %s synced: duration=%s, bytes=%s, files=%s",
+                        snapshot_name,
+                        sync_duration,
+                        last_synced_snap.get("sync_bytes"),
+                        last_synced_snap.get("sync_files"),
+                    )
+                    return {
+                        "snapshot_name": snapshot_name,
+                        "sync_duration": sync_duration,
+                        "sync_time_stamp": last_synced_snap.get("sync_time_stamp"),
+                        "snaps_synced": path_status.get("snaps_synced"),
+                    }
+
         log.error("%s not synced, last synced data is %s", snapshot_name, data)
         raise CommandFailed("One or more snapshots are not synced")
 
@@ -1744,13 +1798,15 @@ class CephfsMirroringUtils(object):
                 f"fs mirror peer status {fs_name}@{filesystem_id} {peer_uuid} -f json",
             )
             fs_mirror_status = json.loads(out)
-            return fs_mirror_status
+            return _normalize_asok_peer_status(fs_mirror_status)
 
     def validate_snaps_status_increment(self, json_before, json_after, snap_status):
+        json_before = _normalize_asok_peer_status(json_before)
+        json_after = _normalize_asok_peer_status(json_after)
         validation_results = {}
         for path in json_before:
             before_snaps_synced = json_before[path].get(snap_status, 0)
-            after_snaps_synced = json_after[path].get(snap_status, 0)
+            after_snaps_synced = json_after.get(path, {}).get(snap_status, 0)
             validation_results[path] = after_snaps_synced > before_snaps_synced
         return validation_results
 
@@ -2243,7 +2299,7 @@ class CephfsMirroringUtils(object):
             f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
         )
         out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
-        data = json.loads(out)
+        data = _normalize_asok_peer_status(json.loads(out))
         log.info(f"Paths found in mirror status: {list(data.keys())}")
         absolute_path = path.rstrip("/")
 
@@ -2287,7 +2343,7 @@ class CephfsMirroringUtils(object):
             f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
         )
         out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
-        data = json.loads(out)
+        data = _normalize_asok_peer_status(json.loads(out))
         log.info(f"Paths found in mirror status: {list(data.keys())}")
         absolute_path = path.rstrip("/")
 
@@ -2423,14 +2479,15 @@ def wait_for_sync_idle(fs_name, fsid, asok_file, filesystem_id, peer_uuid, paths
         f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
     )
     out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
-    data = json.loads(out)
+    data = _normalize_asok_peer_status(json.loads(out))
 
     for path in paths:
         absolute_path = path.rstrip("/")
         if absolute_path not in data:
             raise CommandFailed(f"Path '{absolute_path}' not found in mirror status")
-        state = data[absolute_path].get("state", "unknown")
-        synced = data[absolute_path].get("snaps_synced", 0)
+        path_data = data[absolute_path]
+        state = path_data.get("state", "unknown")
+        synced = path_data.get("snaps_synced", 0)
         log.info("%s state=%s snaps_synced=%s", absolute_path, state, synced)
         if state != "idle":
             raise CommandFailed(

@@ -6,7 +6,10 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
-from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
+from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
+    CephfsMirroringUtils,
+    _normalize_asok_peer_status,
+)
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
@@ -209,51 +212,65 @@ def run(ceph_cluster, **kw):
         asok_files = fs_mirroring_utils.get_asok_file(
             cephfs_mirror_node, fsid, daemon_names
         )
-        log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_files}")
+        log.info("Admin Socket file of cephfs-mirror daemon : %s", asok_files)
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
         )
-        log.info(f"filesystem id of {source_fs} is : {filesystem_id}")
+        log.info("filesystem id of %s is : %s", source_fs, filesystem_id)
         peer_uuid = fs_mirroring_utils.get_peer_uuid_by_name(
             source_clients[0], source_fs
         )
-        log.info(f"peer uuid of {source_fs} is : {peer_uuid}")
+        log.info("peer uuid of %s is : %s", source_fs, peer_uuid)
 
+        # Use the first available asok entry; get_asok_file may have found the
+        # daemon on a node that differs from cephfs_mirror_node[0].
+        first_asok_entry = next(iter(asok_files.values()))
+        asok_node, asok_path = first_asok_entry[0], first_asok_entry[1]
         cmd = (
-            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_files[cephfs_mirror_node[0].node.hostname][1]} "
+            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_path} "
             f"fs mirror peer status "
             f"{source_fs}@{filesystem_id} {peer_uuid} -f json"
         )
         for node in cephfs_mirror_node:
-            node.exec_command(sudo=True, cmd="yum install -y ceph-common --nogpgcheck")
+            node.exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
         retry_exec_command = retry(CommandFailed, tries=3, delay=30)(
-            cephfs_mirror_node[0].exec_command
+            asok_node.exec_command
         )
         log.info(
             "=" * 50
             + "\nSceneario 1 : Disconnect the mirroring Node network for 90 seconds.\n"
             + "=" * 50
         )
-        while True:
+        # Poll until snap1 has synced OR the daemon is currently syncing it
+        # (in which case we inject a 90s network disconnect to test resilience).
+        # Guard with a deadline so the loop cannot hang indefinitely.
+        deadline = time.time() + 10 * 60  # 10-minute ceiling
+        state = None
+        last_synced_snap = None
+        while time.time() < deadline:
             out, _ = retry_exec_command(sudo=True, cmd=cmd)
-            data = json.loads(out)
+            data = _normalize_asok_peer_status(json.loads(out))
             log.info(data)
-            for path, status in data.items():
+            for _path, status in data.items():
                 state = status.get("state")
                 if state == "syncing":
                     fs_util_ceph1.network_disconnect_v1(
                         cephfs_mirror_node[0], sleep_time="90"
                     )
                     break
-                time.sleep(3)
                 last_synced_snap = status.get("last_synced_snap")
-                if last_synced_snap:
-                    if last_synced_snap.get("name") == snap1:
-                        break
+                if last_synced_snap and last_synced_snap.get("name") == snap1:
+                    break
             if state == "syncing" or (
                 last_synced_snap and last_synced_snap.get("name") == snap1
             ):
                 break
+            time.sleep(3)
+        else:
+            raise CommandFailed(
+                "Timed out waiting for %s to reach 'syncing' state or complete sync"
+                % snap1
+            )
 
         fs_mirroring_utils.validate_snapshot_sync_status(
             cephfs_mirror_node,
