@@ -1,26 +1,29 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-ha-upgrade-7x-to-7x-latest.yaml
-# Scenario: Upgrade Ceph 7(GA) cluster to Ceph 7(Latest) with NFS-Ganesha HA in RHEL9
+# Test-Suite: tier1-nfs-ganesha-upgrade-rhcs-7x-to-7x-latest.yaml
+# Scenario: Upgrade RHCS 7(GA) cluster to RHCS 7(Latest) with NFS-Ganesha in RHEL9
 #
 # Cluster Configuration: Conf: conf/reef/nfs/1admin-3client-7node.yaml
 #
 # Test Steps:
-# - Deploy Ceph 7(GA) cluster in RHEL 9
-# - Deploy Ceph 7 client
-# - Deploy NFS-Ganesha with HA
-# - Upgrade cluster
+# - Deploy RHCS 7(GA) cluster in RHEL 9
+# - Deploy RHCS 7 client
+# - Upgrade cluster along with NFS-Ganesha IOs parllel
 ################################################################################################
 tests:
   - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
-      name: setup pre-requisites
+      abort-on-fail: true
 
   - test:
-      abort-on-fail: true
+      name: Bootstrap RHCS 7.0(GA) cluster and deploy services with label placements.
+      desc: Bootstrap RHCS 7.0(GA) cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
       config:
+        verify_cluster_health: true
         steps:
           - config:
               command: bootstrap
@@ -37,6 +40,18 @@ tests:
               args:
                 attach_ip_address: true
                 labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
           - config:
               command: apply
               service: osd
@@ -72,106 +87,95 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      desc: bootstrap and deploy services.
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
+      abort-on-fail: true
 
   - test:
-      abort-on-fail: true
+      name: Configure client1
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
       config:
         command: add
         id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client2
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client3
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.3
         node: node6
         install_packages:
           - ceph-common
           - ceph-fuse
         copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      module: test_client.py
-      name: configure client
+      abort-on-fail: true
 
   - test:
-      abort-on-fail: true
+      name: Configure client4
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
       config:
         command: add
-        id: client.2
+        id: client.4
         node: node7
         install_packages:
           - ceph-common
           - ceph-fuse
         copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
       abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node8
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
 
   - test:
-      abort-on-fail: true
+      name: Setup NFS-Ganesha cluster
+      desc: Setup NFS-Ganesha cluster
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      polarion-id: CEPH-83581304
+      abort-on-fail: false
       config:
-        command: add
-        id: client.4
-        node: node9
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
+        nfs_version: 4.1
+        clients: 4
+        io: false
+        cleanup: false
 
   - test:
-      name: NFS-Ganesha cluster with HA using spec file
-      desc: Deploy nfs-ganesha cluster with HA using spec file
-      module: test_cephadm.py
-      polarion-id: CEPH-83577557
+      name: Nfs Verify multiple parallel io and lookups
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      desc: Perform look ups while multiple parallel io are in progress
+      polarion-id: CEPH-83581304
+      abort-on-fail: false
       config:
-        steps:
-          - config:
-              command: apply_spec
-              service: orch
-              validate-spec-services: true
-              specs:
-                - service_type: nfs
-                  service_id: nfs-service
-                  placement:
-                    nodes:
-                      - node2
-                      - node3
-                  spec:
-                    port: 3333
-          - config:
-              command: apply_spec
-              service: orch
-              validate-spec-services: true
-              specs:
-                - service_type: ingress
-                  service_id: nfs.nfs-service
-                  placement:
-                    count: 2
-                  spec:
-                    backend_service: nfs.nfs-service
-                    frontend_port: 2049
-                    monitor_port: 9000
-                    virtual_ip: 10.8.128.255/21
+        nfs_version: 4.1
+        clients: 4
+        setup: false
 
   - test:
       name: Upgrade cluster to latest RHCS 7.x
@@ -184,3 +188,57 @@ tests:
         base_cmd_args:
           verbose: true
         verify_cluster_health: true
+
+  - test:
+      name: Nfs Verify rm write lookups in parellel from multi clients
+      module: nfs_verify_parallel_rm_write_lookup.py
+      desc: Perform lookups rm and write at the same time
+      polarion-id: CEPH-83577591
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+
+  - test:
+      name: Nfs Verify read write operation permissions
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write without permissions on nfs share
+      polarion-id: CEPH-83575941
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_permission
+
+  - test:
+      name: Nfs verify read and write non existing file
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write of no existing file on nfs share
+      polarion-id: CEPH-83575927
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_non_existing_file
+
+  - test:
+      name: Nfs verify export unexport while nfs share is in use
+      module: nfs_verify_stress.py
+      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
+      polarion-id: CEPH-83575994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000

@@ -210,7 +210,7 @@ tests:
                 verbose: true
               args:
                 rhcs-version: 8.1
-                release: rc
+                release: released
         - test:
             name: nfs operations during upgrade
             module: test_nfs_io_operations_during_upgrade.py
