@@ -1268,7 +1268,15 @@ tests:
         crash_setup : 1
         daemon_list : ['mds','osd','mgr','mon']
 
-
+  ### Add all disks of same type to OSD
+  -
+    test:
+      abort-on-fail: true
+      desc: Add all disks of same type to OSD
+      module: cephfs_system.cephfs_systest_disruptive_tests.py
+      name: "Add all disks of same type to OSD"
+      config:
+        test_name: "add_all_disks_same_type"
 ### Scale Tests
 
   - test:
@@ -1544,6 +1552,13 @@ tests:
             desc: Run MDS ops
             module: cephfs_system.cephfs_systest_mds_ops.py
             name: "CephFS System Test MDS ops"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run FS recovery with large mds log
+            module: cephfs_bugs.test_fs_recovery_with_large_mds_log.py
+            name: "CephFS System Test FS recovery with large mds log"
+            polarion-id: CEPH-83632603
         -
           test:
             abort-on-fail: true

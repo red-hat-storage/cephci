@@ -12,6 +12,7 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -311,6 +312,15 @@ def run(ceph_cluster, **kw):
             fs_util.deamon_op(active_mds_node, rf"mds\.{fs_name}\.", "restart")
             log.info("Restarted active MDS daemon on host %s", active_host)
 
+            @retry(RuntimeError, tries=6, delay=10)
+            def _wait_for_active_mds():
+                active_mds = FsUtils.get_active_mdss(client, fs_name=fs_name)
+                if not active_mds:
+                    raise RuntimeError("No active MDS found after restart operation")
+                return 0
+
+            _wait_for_active_mds()
+
         def _restart_active_mgr_daemon():
             client.exec_command(sudo=True, cmd="ceph orch restart mgr")
             log.info("Restarted active MGR daemon: mgr")
@@ -372,9 +382,15 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph orch apply mds {fs_name} --placement='{len(fs_hosts)} {full_placement}'",
             )
+
             if _wait_for_mds_daemon_count(
                 client, fs_name, expected_count=len(fs_hosts)
             ):
+                out, _ = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph fs status {fs_name}",
+                )
+                log.info("FS status: %s", out)
                 raise RuntimeError("MDS count did not converge after add operation")
 
             log.info("Completed MDS service remove/add for fs %s", fs_name)
