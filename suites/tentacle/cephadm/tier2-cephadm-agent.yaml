@@ -1,0 +1,415 @@
+---
+# ==================================================================================
+# Tier-level: 2
+# Test-Suite: tier2-cephadm-agent.yaml
+# Test-Case: Comprehensive Cephadm Agent test suite
+#
+# Test Plan Mapping (IBM_Ceph_9.1_Cephadm_Agent_Comprehensive_Test_Plan.docx):
+#
+#   Test Plan ID  | Our Test                  | Description
+#   ------------- | ------------------------- | ----------------------------------
+#   TC-DEP-001    | deployment                | Agent auto-deployed on host add
+#   TC-DEP-002    | listener_port_change      | Custom port deployment
+#   TC-DEP-003    | port_conflict             | Port conflict handling
+#   TC-DEP-004    | systemd_validation        | Systemd & ephemeral container check
+#   TC-CFG-001    | agent_toggle              | Enable/Disable agent
+#   TC-CFG-002    | refresh_rate              | Refresh rate configuration (10s/60s)
+#   TC-CFG-003    | down_multiplier           | Down multiplier detection timing
+#   TC-CFG-004    | config_persistence        | Config persistence across MGR restart
+#   TC-FUNC-001   | host_facts, daemon_status | Metadata collection validation
+#   TC-FUNC-002   | restart                   | Agent health monitoring & timeout
+#   TC-FUNC-003   | communication             | Agent bidirectional communication
+#   TC-FUNC-004   | restart                   | Restart and auto-recovery
+#   TC-PERF-001   | resource_leak             | Resource usage baseline
+#   TC-PERF-003   | scale                     | Scalability test
+#   TC-HA-001     | graceful_shutdown, restart | Agent failure recovery
+#   TC-HA-002     | multi_agent_failure       | Multiple agent failures
+#   TC-HA-003     | network_partition         | Network partition handling
+#   TC-SEC-001    | security, tls_cert        | Agent authentication & TLS
+#   TC-SEC-003    | log_security              | Log security (no sensitive data)
+#   TC-KI-*       | defect_* tests            | Known issues validation
+#
+# Additional tests (beyond test plan scope):
+#   config_validation, counter_sync, data_path_isolation,
+#   keyring_runtime_deletion, corrupt_metadata_payload,
+#   defect_stale_metadata, defect_stale_timestamp,
+#   defect_zero_division, defect_cache_leak,
+#   defect_auth_response, defect_silent_listener,
+#   defect_failover_resilience
+#
+# Not automated (need 300+ nodes or active upgrade):
+#   TC-SCALE-001 to 005, TC-UPG-002, TC-UPG-003,
+#   TC-PERF-002, TC-PERF-004, TC-KI-001 to 004
+#
+# Cluster Configuration:
+#   conf/tentacle/cephadm/1admin-4node-1client-cluster.yaml
+#
+#   Node1 - Mon, Mgr, Installer, OSD
+#   Node2 - Mon, Mgr, OSD
+#   Node3 - Mon, OSD
+#   Node4 - Client
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: Installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap
+      desc: Bootstrap cluster with cephadm agent enabled
+      module: test_bootstrap.py
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: "node1"
+          orphan-initial-daemons: true
+          skip-monitoring-stack: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Add host node2
+      desc: Add node2 to cluster
+      module: test_host.py
+      config:
+        service: host
+        command: add
+        args:
+          node: node2
+          attach_ip_address: true
+          labels:
+            - mon
+            - mgr
+            - osd
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Add host node3
+      desc: Add node3 to cluster
+      module: test_host.py
+      config:
+        service: host
+        command: add
+        args:
+          node: node3
+          attach_ip_address: true
+          labels:
+            - mon
+            - osd
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy core services
+      desc: Deploy Mon, Mgr, OSD, crash services
+      module: test_orch.py
+      config:
+        command: apply_spec
+        service: orch
+        specs:
+          - service_type: mon
+            placement:
+              label: mon
+          - service_type: mgr
+            placement:
+              label: mgr
+          - service_type: osd
+            service_id: all-available-devices
+            placement:
+              host_pattern: "*"
+            spec:
+              data_devices:
+                all: true
+          - service_type: crash
+            placement:
+              host_pattern: "*"
+      abort-on-fail: true
+
+  # ---- Cephadm Agent Test Suite ----
+  # Test Plan Reference: IBM_Ceph_9.1_Cephadm_Agent_Comprehensive_Test_Plan.docx
+
+  # --- Deployment Tests (TC-DEP) ---
+
+  - test:
+      name: Agent Deployment Test
+      desc: Verify agent is auto-deployed on all hosts when use_agent is enabled
+      module: cephadm_agent.test_agent_deployment.py
+      config:
+        tests: deployment
+      # TC-DEP-001: Agent Deployment and Verification
+
+  - test:
+      name: Agent Systemd Validation Test
+      desc: Verify systemd service config and ephemeral container behavior
+      module: cephadm_agent.test_agent_deployment.py
+      config:
+        tests: systemd_validation
+      # TC-DEP-004: Systemd Service and Ephemeral Container Validation
+
+  - test:
+      name: Agent Listener Port Change Test
+      desc: Change agent_starting_port and verify agent listens on new port
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: listener_port_change
+      # TC-DEP-002: Agent Deployment with Custom Port
+
+  - test:
+      name: Agent Port Conflict Test
+      desc: Verify agent uses next available port when default is occupied
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: port_conflict
+      # TC-DEP-003: Agent Port Conflict Handling
+
+  # --- Configuration Tests (TC-CFG) ---
+
+  - test:
+      name: Agent Toggle Test
+      desc: Disable and re-enable agent, verify lifecycle
+      module: cephadm_agent.test_agent_deployment.py
+      config:
+        tests: agent_toggle
+      # TC-CFG-001: Enable/Disable Agent
+
+  - test:
+      name: Agent Refresh Rate Test
+      desc: Verify changing refresh rate affects metadata posting frequency
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: refresh_rate
+      # TC-CFG-002: Refresh Rate Configuration (Including 60s for Scale)
+
+  - test:
+      name: Agent Down Multiplier Test
+      desc: Verify down multiplier affects agent down detection timing
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: down_multiplier
+      # TC-CFG-003: Down Multiplier Configuration
+
+  - test:
+      name: Agent Config Persistence Test
+      desc: Verify agent configurations persist across MGR failover
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: config_persistence
+      # TC-CFG-004: Configuration Persistence Across MGR Restart
+
+  - test:
+      name: Agent Config Validation Test
+      desc: Verify agent fails to start without required config files
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: config_validation
+      # TC-CFG (additional): Missing config file prevents startup
+
+  # --- Functional Tests (TC-FUNC) ---
+
+  - test:
+      name: Agent Host Facts Test
+      desc: Verify host facts cache refresh returns correct data
+      module: cephadm_agent.test_agent_data.py
+      config:
+        tests: host_facts
+      # TC-FUNC-001: Metadata Collection Validation (host facts)
+
+  - test:
+      name: Agent Daemon Status Test
+      desc: Stop a daemon and verify orch ps --refresh reflects the change
+      module: cephadm_agent.test_agent_data.py
+      config:
+        tests: daemon_status
+      # TC-FUNC-001: Metadata Collection Validation (daemon status)
+
+  - test:
+      name: Agent Communication Test
+      desc: Block host-to-mgr traffic and verify failure detection
+      module: cephadm_agent.test_agent_communication.py
+      config:
+        tests: communication
+      # TC-FUNC-003: Agent Communication Test
+
+  - test:
+      name: Agent Restart Test
+      desc: Verify health warning on agent stop and clear on restart
+      module: cephadm_agent.test_agent_deployment.py
+      config:
+        tests: restart
+      # TC-FUNC-002: Agent Health Monitoring
+      # TC-FUNC-004: Agent Restart and Auto-Recovery
+
+  - test:
+      name: Agent Counter Sync Test
+      desc: Verify counter-based metadata freshness mechanism
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: counter_sync
+      # TC-FUNC (additional): Counter-based metadata freshness
+
+  - test:
+      name: Agent TLS Certificate Test
+      desc: Verify agent handles corrupted root cert safely
+      module: cephadm_agent.test_agent_config.py
+      config:
+        tests: tls_cert
+      # TC-SEC-001: Agent Authentication (TLS validation)
+
+  # --- Performance Tests (TC-PERF) ---
+
+  - test:
+      name: Agent Resource Leak Test
+      desc: Monitor memory/FD/socket stability over 3 minutes
+      module: cephadm_agent.test_agent_resource_leak.py
+      config:
+        tests: resource_leak
+      # TC-PERF-001: Resource Usage Baseline
+
+  - test:
+      name: Agent Scale Test
+      desc: Verify multi-host refresh with no stale state or perf regression
+      module: cephadm_agent.test_agent_data.py
+      config:
+        tests: scale
+      # TC-PERF-003: Scalability Test
+      # TC-SCALE-004: Large Host Count (partial - limited to test env)
+
+  - test:
+      name: Agent Data Path Isolation Test
+      desc: Verify client I/O continues while agent is stopped
+      module: cephadm_agent.test_agent_data.py
+      config:
+        tests: data_path_isolation
+      # TC-PERF (additional): Agent failure does not impact data path
+
+  # --- High Availability Tests (TC-HA) ---
+
+  - test:
+      name: Agent Mgr Failover Test
+      desc: Fail active mgr and verify agent reconnects to new active
+      module: cephadm_agent.test_agent_communication.py
+      config:
+        tests: mgr_failover
+      # TC-HA-001 (partial): Agent recovery after MGR failure
+
+  - test:
+      name: Agent Multiple Failures Test
+      desc: Verify cluster remains operational when multiple agents fail
+      module: cephadm_agent.test_agent_communication.py
+      config:
+        tests: multi_agent_failure
+      # TC-HA-002: Multiple Agent Failures
+
+  - test:
+      name: Agent Network Partition Test
+      desc: Verify agent handles iptables REJECT/DROP and recovers
+      module: cephadm_agent.test_agent_communication.py
+      config:
+        tests: network_partition
+      # TC-HA-003: Network Partition Handling
+
+  # --- Security Tests (TC-SEC) ---
+
+  - test:
+      name: Agent Security Test
+      desc: Verify agent fails safely with wrong keyring
+      module: cephadm_agent.test_agent_security.py
+      config:
+        tests: security
+      # TC-SEC-001: Agent Authentication
+
+  - test:
+      name: Agent Keyring Runtime Deletion Test
+      desc: Verify agent continues with in-memory keyring after file deletion
+      module: cephadm_agent.test_agent_security.py
+      config:
+        tests: keyring_runtime_deletion
+      # TC-SEC (additional): Runtime keyring resilience
+
+  - test:
+      name: Agent Corrupt Metadata Payload Test
+      desc: Corrupt data files with valid keyring to check if MGR detects bad payload
+      module: cephadm_agent.test_agent_security.py
+      config:
+        tests: corrupt_metadata_payload
+      # TC-SEC (additional): Corrupt payload handling
+
+  - test:
+      name: Agent Log Security Test
+      desc: Verify agent logs do not expose sensitive data (keys, passwords)
+      module: cephadm_agent.test_agent_security.py
+      config:
+        tests: log_security
+      # TC-SEC-003: Agent Log Security
+
+  # --- Known Issues / Defect Validation Tests (TC-KI) ---
+
+  - test:
+      name: Agent Stale Metadata Overwrite Test
+      desc: Verify stale agent data does not overwrite fresh inventory (counter/ack desync)
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_stale_metadata
+      # TC-KI (additional): Counter/ack desync defect
+
+  - test:
+      name: Agent Stale Timestamp Test
+      desc: Agent POSTing to wrong port should trigger CEPHADM_AGENT_DOWN
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_stale_timestamp
+      # TC-KI (additional): Wrong port detection defect
+
+  - test:
+      name: Agent Rapid Restart Test
+      desc: Rapid agent restarts should not crash agent with ZeroDivisionError
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_zero_division
+      # TC-KI (additional): ZeroDivisionError crash defect
+
+  - test:
+      name: Agent Graceful Shutdown Test
+      desc: systemctl stop should not leave orphan agent processes
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_graceful_shutdown
+      # TC-HA-001 (partial): Agent Failure and Automatic Recovery
+
+  - test:
+      name: Agent Host Removal Cache Leak Test
+      desc: Check agent config-key store for stale entries after host operations
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_cache_leak
+      # TC-KI (additional): Config-key store leak defect
+
+  - test:
+      name: Agent Auth Response Code Test
+      desc: Verify agent detects auth rejection from mgr (HTTP 200 on bad keyring)
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_auth_response
+      # TC-KI (additional): HTTP 200 on auth failure defect
+
+  - test:
+      name: Agent Silent Listener Failure Test
+      desc: Corrupted listener cert kills mgr_listener but agent appears healthy
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_silent_listener
+      # TC-KI (additional): Silent listener thread death defect
+
+  - test:
+      name: Agent MGR Failover Resilience Test
+      desc: Agent misses config push when stopped during MGR failover
+      module: cephadm_agent.test_agent_defects.py
+      config:
+        tests: defect_failover_resilience
+      # TC-KI (additional): Missed config push during failover defect
