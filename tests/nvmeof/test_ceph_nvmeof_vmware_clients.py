@@ -14,8 +14,9 @@ import paramiko
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmegw_cli.common import NVMeCLI
+from ceph.nvmeof.cli.v1 import NVMeGWCLI
 from ceph.utils import get_node_by_id
+from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -117,14 +118,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = deepcopy(kwargs["config"])
     LOG.info(config)
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    overrides = kwargs.get("test_data", {}).get("custom-config")
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
     nguid_list = []
 
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeCLI.CEPH_NVMECLI_IMAGE = value
-            break
-    nvme_cli = NVMeCLI(gw_node, config.get("port", 5500))
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
+    nvme_cli = NVMeGWCLI(gw_node, port=config.get("port", 5500))
 
     try:
         LOG.info("Get subsystems from ceph nvmeof GW.")
