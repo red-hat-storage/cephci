@@ -2881,10 +2881,6 @@ def setup_gklm_prereq(ceph_cluster, cloud_type, custom_config):
         raise GKLMSetupError(
             "gklm-auth-cert-path not passed as custom-config which is required for gklm tests prerequisites"
         )
-    if gklm_endpoint_openstack is None or gklm_endpoint_ibmc is None:
-        raise GKLMSetupError(
-            "gklm-endpoint not passed as custom-config which is required for gklm tests prerequisites"
-        )
 
     for rgw_node_obj in rgw_nodes:
         rgw_node = rgw_node_obj.node
