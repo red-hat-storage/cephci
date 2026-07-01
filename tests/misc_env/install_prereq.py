@@ -398,17 +398,38 @@ def setup_ibmc_qe_lab_os_repos(ceph, distro_ver):
 
     Live IBM inventories may not define yum_repos in cloud-init. Mirror the
     repository layout used by conf/inventory/ibm-eu-rhel-*.yaml inventories.
+
+    Repo files must use the standard names (appstream.repo, baseos.repo,
+    crb.repo) so they survive remove_repos() during cephadm upgrade tests.
     """
     version_parts = distro_ver.split(".")
     major = version_parts[0]
     minor = version_parts[1] if len(version_parts) > 1 else "0"
     base_url = f"{IBM_QE_LAB_REPO_MIRROR}/{major}/{minor}"
-    pkg = Package(ceph)
 
-    for repo_name in ("AppStream", "BaseOS", "CRB"):
-        repo_url = f"{base_url}/{repo_name}/"
+    repo_defs = {
+        "appstream.repo": ("appstream", "AppStream", "AppStream"),
+        "baseos.repo": ("baseos", "BaseOS", "BaseOS"),
+        "crb.repo": ("crb", "codeready-builder", "CRB"),
+    }
+
+    for repo_file, (repo_id, repo_name, repo_path) in repo_defs.items():
+        repo_url = f"{base_url}/{repo_path}/"
         log.info("Adding IBM QE lab repository %s", repo_url)
-        pkg.add_repo(repo_url)
+        repo_content = (
+            f"[{repo_id}]\n"
+            f"name={repo_name}\n"
+            f"baseurl={repo_url}\n"
+            f"enabled=1\n"
+            f"gpgcheck=0\n"
+        )
+        repo = ceph.remote_file(
+            sudo=True,
+            file_name=f"/etc/yum.repos.d/{repo_file}",
+            file_mode="w",
+        )
+        repo.write(repo_content)
+        repo.flush()
 
     ceph.exec_command(sudo=True, cmd="dnf clean metadata", check_ec=False)
     log.info("Added IBM QE lab RHEL repositories successfully")
