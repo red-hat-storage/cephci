@@ -44,10 +44,14 @@ def run(ceph_cluster, **kw):
         show_details = config.get("show_details", False)
         filter_by = bool(config.get("expression"))
         expression = config.get("expression")
+        log.info(f"Listing certificates with include_cephadm_signed={include_cephadm_signed}, show_details={show_details}")
         out = CephAdm(installer).ceph.orch.certmgr.ls(
             "cert", show_details, include_cephadm_signed, filter_by, expression
         )
+        log.info(f"Certificate list output: {out}")
+        log.info(f"Looking for certificate: {_cert_name}")
         if _cert_name not in out:
+            log.error(f"Certificate '{_cert_name}' not found in output. Available certificates: {out}")
             raise OperationFailedError(f"{_cert_name} is not set on the cluster")
         log.info(f"{_cert_name} is successfully set on the cluster")
     if action == "set":
