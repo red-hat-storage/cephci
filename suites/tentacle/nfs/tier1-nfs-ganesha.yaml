@@ -535,3 +535,21 @@ tests:
         fio_bs: 4k
         fio_runtime: 300
         timeout: 7200
+
+  - test:
+      name: TLS stunnel client IO with tcpdump encryption verification
+      module: security.test_tls_feature.py
+      desc: >
+        Deploy TLS Ganesha, configure stunnel on client (no kTLS/tlshd), mount via
+        127.0.0.1:49152 proxy, run fio I/O under tcpdump, verify wire traffic is encrypted.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        operation: tls_stunnel_io_tcpdump_encryption
+        stunnel_accept_port: 49152
+        fio_size: 100M
+        fio_bs: 4k
+        fio_runtime: 300
+        timeout: 7200
