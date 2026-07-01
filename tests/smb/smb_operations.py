@@ -38,6 +38,7 @@ def deploy_smb_service_imperative(
     custom_dns,
     clustering="default",
     earmark=None,
+    client_compat=None,
 ):
     """Deploy smb services
     Args:
@@ -80,6 +81,7 @@ def deploy_smb_service_imperative(
             smb_user_password,
             custom_dns,
             clustering,
+            client_compat,
         )
 
         # Check smb cluster
@@ -355,6 +357,7 @@ def create_smb_cluster(
     smb_user_password,
     custom_dns,
     clustering,
+    client_compat,
 ):
     """Create smb cluster
     Args:
@@ -368,23 +371,45 @@ def create_smb_cluster(
     """
     try:
         if auth_mode == "user":
-            CephAdm(installer).ceph.smb.cluster.create(
-                smb_cluster_id,
-                auth_mode,
-                define_user_pass=f"{smb_user_name}%{smb_user_password}",
-                placement="label:smb",
-                clustering=clustering,
-            )
+            if client_compat:
+                CephAdm(installer).ceph.smb.cluster.create(
+                    smb_cluster_id,
+                    auth_mode,
+                    define_user_pass=f"{smb_user_name}%{smb_user_password}",
+                    placement="label:smb",
+                    clustering=clustering,
+                    client_compat=client_compat,
+                )
+            else:
+                CephAdm(installer).ceph.smb.cluster.create(
+                    smb_cluster_id,
+                    auth_mode,
+                    define_user_pass=f"{smb_user_name}%{smb_user_password}",
+                    placement="label:smb",
+                    clustering=clustering,
+                )
         elif auth_mode == "active-directory":
-            CephAdm(installer).ceph.smb.cluster.create(
-                smb_cluster_id,
-                auth_mode,
-                domain_realm=domain_realm,
-                domain_join_user_pass=f"{smb_user_name}%{smb_user_password}",
-                custom_dns=custom_dns,
-                placement="label:smb",
-                clustering=clustering,
-            )
+            if client_compat:
+                CephAdm(installer).ceph.smb.cluster.create(
+                    smb_cluster_id,
+                    auth_mode,
+                    domain_realm=domain_realm,
+                    domain_join_user_pass=f"{smb_user_name}%{smb_user_password}",
+                    custom_dns=custom_dns,
+                    placement="label:smb",
+                    clustering=clustering,
+                    client_compat=client_compat,
+                )
+            else:
+                CephAdm(installer).ceph.smb.cluster.create(
+                    smb_cluster_id,
+                    auth_mode,
+                    domain_realm=domain_realm,
+                    domain_join_user_pass=f"{smb_user_name}%{smb_user_password}",
+                    custom_dns=custom_dns,
+                    placement="label:smb",
+                    clustering=clustering,
+                )
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to create smb cluster, Error {e}")
 

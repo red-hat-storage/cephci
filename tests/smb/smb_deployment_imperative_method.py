@@ -71,6 +71,12 @@ def run(ceph_cluster, **kw):
     # Check ctdb clustering
     clustering = config.get("clustering", "default")
 
+    # Get subvolume earmaked
+    earmark = config.get("earmark", None)
+
+    # Get client compat
+    client_compat = config.get("client_compat", None)
+
     try:
         # deploy smb services
         deploy_smb_service_imperative(
@@ -88,6 +94,8 @@ def run(ceph_cluster, **kw):
             domain_realm,
             custom_dns,
             clustering,
+            earmark,
+            client_compat,
         )
 
         # Verify ctdb clustering
