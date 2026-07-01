@@ -55,7 +55,8 @@ Case 6: High CPU load with stress-ng
 - Stops stress-ng and cleans up
 
 Initial Setup:
-- Verifies default osd_scrub_load_threshold value is 10.0
+- Verifies that the default osd_scrub_load_threshold value is 10.0 for versions greater than or equal to 9.0,
+  and 0.500000 for versions earlier than 9.0.
 - Disables PG autoscaler
 - Creates a replicated pool or EC pool (based on config) and writes test data (10,000 objects, 5K each)
 - Retrieves PG ID and acting OSD set
@@ -101,7 +102,8 @@ def run(ceph_cluster, **kw):
        - Disables PG autoscaler
        - Creates a replicated pool or EC pool (based on config) and writes test data (10,000 objects, 5K each)
        - Retrieves PG ID and acting OSD set
-       - Verifies default osd_scrub_load_threshold value is 10.0
+       - Verifies that the default osd_scrub_load_threshold value is 10.0 for versions greater than or equal to 9.0,
+         and 0.500000 for versions earlier than 9.0.
 
     2. Test Cases (executed based on config['case_to_run']):
 
@@ -526,8 +528,8 @@ def run(ceph_cluster, **kw):
         if "case3" in case_to_run:
             try:
                 log.info(
-                    "===Scenario 3: Verification of the osd_scrub_load_threshold parameter with the default ==="
-                    "value which is 10.0"
+                    "===Scenario 3:Verify the osd_scrub_load_threshold parameter using its default value (10.0) "
+                    "for Ceph versions >= 9.0, and by setting it to 10.0 for Ceph versions < 9.0. ====="
                 )
                 default_threshold_value = mon_obj.get_config(
                     section="osd", param="osd_scrub_load_threshold"
