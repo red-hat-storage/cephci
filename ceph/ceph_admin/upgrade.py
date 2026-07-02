@@ -49,6 +49,8 @@ class UpgradeMixin:
                     daemon_types: "mon,mgr" # Optional: comma-separated daemon types
                     hosts: "host1,host2"    # Optional: comma-separated host names
                     services: "mon,mgr"     # Optional: comma-separated service names
+                    crush_bucket_type: "rack" # Optional: CRUSH bucket type for rack-based upgrades
+                    crush_bucket_name: "A"  # Optional: CRUSH bucket name for rack-based upgrades
 
         """
         cmd = ["ceph", "orch"]
@@ -74,6 +76,14 @@ class UpgradeMixin:
         # Add optional services argument
         if args and "services" in args:
             cmd.append(f"--services {args['services']}")
+
+        # Add optional crush_bucket_type argument
+        if args and "crush_bucket_type" in args:
+            cmd.append(f"--crush_bucket_type {args['crush_bucket_type']}")
+
+        # Add optional crush_bucket_name argument
+        if args and "crush_bucket_name" in args:
+            cmd.append(f"--crush_bucket_name {args['crush_bucket_name']}")
 
         skip_license = None
         if (args and "skip_license" in args) or config.get("skip_license"):

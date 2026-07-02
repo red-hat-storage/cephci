@@ -1,0 +1,85 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+          - iscsi
+      node2:
+        role:
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+      node3:
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+          - node-exporter
+          - crash
+        rack: A
+        no-of-volumes: 2
+        disk-size: 10
+      node4:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        rack: A
+        no-of-volumes: 2
+        disk-size: 10
+      node5:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        rack: A
+        no-of-volumes: 2
+        disk-size: 10
+      node6:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        rack: B
+        no-of-volumes: 2
+        disk-size: 10
+      node7:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        rack: B
+        no-of-volumes: 2
+        disk-size: 10
+      node8:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        rack: C
+        no-of-volumes: 2
+        disk-size: 10
+      node9:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        rack: C
+        no-of-volumes: 2
+        disk-size: 10
+      node10:
+        role:
+          - client
