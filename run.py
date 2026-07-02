@@ -623,6 +623,7 @@ def run(args):
     ibm_build = False
     # disable coredump collection by default
     collect_coredump = False
+    crimson = False
 
     # Custom or override configurations
     kernel_repo = args.get("--kernel-repo")
@@ -646,6 +647,9 @@ def run(args):
 
             product = "ibm"
 
+    if "crimson" in custom_config_dict.keys():
+        crimson = bool(custom_config_dict["crimson"])
+
     # Setting to released by default is not right as there is case wherein it
     # would be unavailable. Hence switching accordingly to released or nightly.
     if build == "released":
@@ -657,7 +661,9 @@ def run(args):
             build = "nightly"
 
     # Now handle the manifest. At this point we are allowing failures
-    ctm: CephTestManifest = CephTestManifest(product, release, build, platform)
+    ctm: CephTestManifest = CephTestManifest(
+        product, release, build, platform, crimson=crimson
+    )
 
     base_url = args.get("--rhs-ceph-repo")
     docker_registry = args.get("--docker-registry")

@@ -11,6 +11,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.pool_io_monitor import PoolIoMonitor
 from ceph.rados.rados_scrub import RadosScrubber
 from utility.log import Log
 
@@ -817,6 +818,42 @@ class PoolFunctions:
         _cmd = f"ceph osd pool stats {pool}"
         pool_stat = self.rados_obj.run_ceph_command(cmd=_cmd, client_exec=True)
         return pool_stat[0]
+
+    def monitor_pool_ios(
+        self,
+        pools,
+        interval: int = 5,
+        grace_samples: int = 1,
+        io_threshold: float = 0,
+        expect_continuous_io: bool = True,
+    ) -> PoolIoMonitor:
+        """
+        Create a background monitor that polls fetch_pool_stats() and detects IO gaps.
+
+        Args:
+            pools: Pool name or list of pool names to monitor
+            interval: Seconds between polls (default: 5)
+            grace_samples: Idle polls before a gap is reported (default: 1)
+            io_threshold: Minimum client_io_rate value treated as active IO
+            expect_continuous_io: Track and report gaps when client IO stops
+
+        Returns:
+            PoolIoMonitor instance; call start()/stop() or use as a context manager
+
+        Example:
+            with pool_obj.monitor_pool_ios(pool_name, interval=5) as monitor:
+                rados_obj.bench_write(pool_name=pool_name, background=True)
+                time.sleep(120)
+            monitor.verify_continuous_io(pool=pool_name)
+        """
+        return PoolIoMonitor(
+            pool_functions=self,
+            pools=pools,
+            interval=interval,
+            grace_samples=grace_samples,
+            io_threshold=io_threshold,
+            expect_continuous_io=expect_continuous_io,
+        )
 
     def modify_autoscale_threshold(self, threshold: float):
         """
