@@ -7,7 +7,7 @@
 # EC pool 4+2 configuration
 
 # The deployment is evaluated by running IOs across the environments.
-# global-conf: conf/tentacle/rgw/ms-ec-profile-4+2-cluster.yaml
+# global-conf: conf/tentacle/rgw/ms-ec-profile-4+2-cluster-2rgw
 ---
 tests:
 
@@ -77,13 +77,34 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.pri
+                      service_id: shared.pri.io
                       spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
                         generate_cert: true
                         ssl: true
                       placement:
+                        count-per-host: 2
                         nodes:
-                          - node7
+                          - node6
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
+                        generate_cert: true
+                        ssl: true
+                      placement:
+                        count-per-host: 2
+                        nodes:
+                            - node7
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -139,13 +160,34 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.sec
+                      service_id: shared.sec.io
                       spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
                         generate_cert: true
                         ssl: true
                       placement:
+                        count-per-host: 2
                         nodes:
-                          - node7
+                          - node6
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
+                        generate_cert: true
+                        ssl: true
+                      placement:
+                        count-per-host: 2
+                        nodes:
+                            - node7
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -259,35 +301,30 @@ tests:
       clusters:
         ceph-pri:
           config:
+            cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7} --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node7} --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7}:443,https://{node_ip:node7}:8443 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node7}:443,https://{node_ip:node7}:8443 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
-              - "ceph config set client.rgw rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
-              - "ceph orch restart {service_name:shared.pri}"
-              - "sleep 20"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+              - "sleep 120"
         ceph-sec:
           config:
+            cephadm: true
             commands:
-              - "ceph config set client.rgw rgw_verify_ssl False"
-              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7}:443,https://{node_ip:ceph-pri#node7}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7}:443,https://{node_ip:ceph-pri#node7}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7}:443,https://{node_ip:node7}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
-              - "ceph orch restart {service_name:shared.sec}"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
               - "sleep 120"
       desc: Setting up RGW multisite replication environment
       module: exec.py
