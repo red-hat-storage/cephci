@@ -35,23 +35,40 @@ tests:
               service: osd
               args:
                 all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-                  nodes:
-                    - node4
-                    - node3
-                    - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
       polarion-id: CEPH-83573713
       module: test_cephadm.py
       name: RHCS deploy cluster using cephadm
+
+  - test:
+      name: RGW Service deployment with spec
+      desc: Add RGW services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574640
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.1
+                  placement:
+                    count_per_host: 1
+                    nodes:
+                      - node3
+                      - node4
+                      - node5
+                  spec:
+                    rgw_frontend_port: 80
+                    rgw_frontend_extra_args:
+                      - "max_header_size=65536"
+          - config:
+              command: shell
+              args:              # sleep to get all services deployed
+                - sleep
+                - "120"
 
   - test:
       abort-on-fail: true
