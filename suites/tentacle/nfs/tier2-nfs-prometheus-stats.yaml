@@ -1,0 +1,279 @@
+#===============================================================================================
+# NFS-Ganesha Scalable Statistics (Prometheus) — combined suite
+# S-*, F-*, A-*, R-*, X-*, SC-*, N-* (HA-* remains baremetal/tier1-nfs-prometheus-stats-ha.yaml)
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Backend: Ceph FSAL only (GPFS cases excluded)
+# Requires 2 clients (S-07, F-09). Accuracy/scale use 4 clients (node4–node7).
+# Run with cluster reuse or uncomment bootstrap below.
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: false
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      desc: Bootstrap and deploy Ceph services for NFS Prometheus stats testing.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 1
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client 2
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 2
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client 3
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 3
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client 4
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 4
+
+  - test:
+      name: NFS Prometheus scalable statistics sanity
+      module: test_nfs_prometheus_stats.py
+      desc: Sanity S-01 through S-08
+      polarion-id: CEPH-83632504
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632504
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 2
+        nfs_version: 4.1
+        port: 2049
+        idle_wait_seconds: 120
+        idle_in_flight_max: 5
+        idle_max_counter_drift: 100
+        prometheus_query_wait_seconds: 30
+        prometheus_increase_window: 2m
+        s07_min_clients: 2
+        s07_max_client_series_when_disabled: 0
+        s08_fio_runtime: 60
+        s08_fio_size: 64M
+
+  - test:
+      name: NFS Prometheus scalable statistics functional
+      module: test_nfs_prometheus_stats.py
+      desc: Functional F-01 through F-10
+      polarion-id: CEPH-83632505
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632505
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 2
+        nfs_version: 4.1
+        port: 2049
+        f01_invalid_monitoring_port: 99999
+        f01_typo_line: "Enable_metrics xxxx = true;"
+        f01_redeploy_settle_seconds: 30
+        f02_alt_monitoring_port: 9588
+        f02_reload_wait_seconds: 5
+        f03_scrape_wait_seconds: 45
+        f04_parallel_scrapes: 10
+        f05_file_count: 100
+        f06_fio_runtime: 120
+        f06_fio_size: 256M
+        f10_file_count: 500
+        prometheus_query_wait_seconds: 30
+        prometheus_targets_timeout: 120
+        prometheus_targets_poll_interval: 10
+
+  - test:
+      name: NFS Prometheus scalable statistics accuracy
+      module: test_nfs_prometheus_stats.py
+      desc: Accuracy A-01 through A-14
+      polarion-id: CEPH-83632506
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632506
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 4
+        nfs_version: 4.1
+        port: 2049
+        fio_runtime: 120
+        read_size_mb: 128
+        write_size_mb: 128
+        num_exports: 5
+        target_clients: 50
+        idle_wait_seconds: 20
+        a09_idle_wait_seconds: 15
+        bytes_tolerance_pct: 15
+        prometheus_query_wait_seconds: 30
+        prometheus_targets_timeout: 120
+        prometheus_targets_poll_interval: 10
+
+  - test:
+      name: NFS Prometheus scalable statistics regression
+      module: test_nfs_prometheus_stats.py
+      desc: Regression R-01 through R-06
+      polarion-id: CEPH-83632509
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632509
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+        prometheus_query_wait_seconds: 30
+
+  - test:
+      name: NFS Prometheus scalable statistics failure and recovery
+      module: test_nfs_prometheus_stats.py
+      desc: Failure and recovery X-01 through X-08
+      polarion-id: CEPH-83632510
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632510
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+        f03_scrape_wait_seconds: 45
+        prometheus_query_wait_seconds: 30
+        prometheus_targets_timeout: 120
+        prometheus_targets_poll_interval: 10
+
+  - test:
+      name: NFS Prometheus scalable statistics scale
+      module: test_nfs_prometheus_stats.py
+      desc: Scale SC-01 through SC-08
+      polarion-id: CEPH-83632507
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632507
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 4
+        nfs_version: 4.1
+        port: 2049
+        num_exports: 5
+        fio_runtime: 60
+        sc04_fio_runtime: 30
+        prometheus_query_wait_seconds: 30
+
+  - test:
+      name: NFS Prometheus scalable statistics negative and edge
+      module: test_nfs_prometheus_stats.py
+      desc: Negative N-01 through N-04
+      polarion-id: CEPH-83632511
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632511
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+        prometheus_query_wait_seconds: 30
