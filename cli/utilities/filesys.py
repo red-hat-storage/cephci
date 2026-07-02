@@ -30,8 +30,11 @@ class Mount(Cli):
 
         The resulting command looks like::
 
-            mount -t nfs -o vers=<version>,port=<port>[,proto=<proto>]
-                [,xprtsec=<xprtsec>] <server>:<export> <mount>
+            mount -t nfs -o vers=<version>[,port=<port>][,proto=<proto>]
+                [,xprtsec=<xprtsec>][,sec=<sec>] <server>:<export> <mount>
+
+        When ``sec`` is set (RPCSEC_GSS), ``port`` is omitted by default because
+        many RHEL ``nfs-utils`` builds reject ``port=`` together with ``sec=krb5*``.
 
         Args:
             mount (str): Local mount-point path.
@@ -47,6 +50,14 @@ class Mount(Cli):
                 ``-o``.  Pass ``"rdma"`` for NFS-over-RDMA mounts.
             xprtsec (str): Transport-security option (e.g. ``"tls"``
                 for RPC-with-TLS).
+            sec (str): RPCSEC_GSS flavor (e.g. ``"krb5"``, ``"krb5i"``,
+                ``"krb5p"``). Implies Kerberos authentication on the mount.
+            fstype (str): Mount filesystem type (``"nfs"`` or ``"nfs4"``).
+                Defaults to ``"nfs4"`` when ``sec`` is set and version is 4.x.
+            use_nfsvers (bool): Use ``nfsvers=`` instead of ``vers=`` in ``-o``.
+                Defaults to True when ``sec`` is set.
+            include_port_with_sec (bool): If True, append ``port=`` even when
+                ``sec`` is set (default False).
 
         Raises:
             MountFailedError: If the mount point does not appear in
@@ -59,13 +70,32 @@ class Mount(Cli):
         if not out[0]:
             self.execute(cmd=f"mkdir {mount}", sudo=True)
 
-        cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port}"
+        sec = kwargs.get("sec")
+        fstype = kwargs.get("fstype")
+        if fstype is None:
+            fstype = "nfs4" if sec and str(version).startswith("4") else "nfs"
+        use_nfsvers = kwargs.get("use_nfsvers", bool(sec))
+        include_port_with_sec = kwargs.get("include_port_with_sec", False)
+
+        opts = []
+        if sec and fstype == "nfs4":
+            # RHEL Kerberos mounts: mount.nfs4 -o sec=krb5 (no vers/nfsvers in -o).
+            opts.append(f"sec={sec}")
+        else:
+            ver_opt = "nfsvers" if use_nfsvers else "vers"
+            opts.append(f"{ver_opt}={version}")
+            if sec:
+                opts.append(f"sec={sec}")
+        if port and (not sec or include_port_with_sec):
+            opts.append(f"port={port}")
         proto = kwargs.get("proto")
         if proto:
-            cmd += f",proto={proto}"
+            opts.append(f"proto={proto}")
         xprtsec = kwargs.get("xprtsec")
         if xprtsec:
-            cmd += f",xprtsec={xprtsec}"
+            opts.append(f"xprtsec={xprtsec}")
+
+        cmd = f"{self.base_cmd} -t {fstype} -o {','.join(opts)}"
         cmd += f" {server}:{export} {mount}"
 
         self.execute(sudo=True, long_running=True, cmd=cmd)

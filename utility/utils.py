@@ -1499,6 +1499,11 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
                 [
                     x509.DNSName(f"*.{subject['common_name']}"),
                     x509.DNSName(subject["common_name"]),
+                    *[
+                        x509.DNSName(name)
+                        for name in subject.get("extra_dns_names", [])
+                        if name and name != subject["common_name"]
+                    ],
                     x509.IPAddress(ip_address(subject["ip_address"])),
                 ]
             ),
