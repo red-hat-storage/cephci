@@ -6,7 +6,7 @@ from typing import List
 
 from looseversion import LooseVersion
 
-from ceph.ceph import CephNode, CommandFailed
+from ceph.ceph import CephNode
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.crushtool_workflows import CrushToolWorkflows
@@ -23,6 +23,15 @@ from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
+
+# Constants for test configuration
+DEFAULT_PG_NUM = 4096
+DEFAULT_PG_NUM_MIN = 4096
+DEFAULT_EC_K = 2  # Erasure code data chunks
+DEFAULT_EC_M = 1  # Erasure code parity chunks
+DEFAULT_CEPH_VERSION = "20.2.1-120.el9cp"
+MAX_FLAG_SMALL = 2  # Small max value for testing
+MAX_FLAG_LARGE = 100  # Large max value for testing
 
 
 class InvalidScenarioException(Exception):
@@ -66,10 +75,15 @@ def run(ceph_cluster, **kw):
     scenarios = config.get("scenarios", [])
     log.debug("Test workflow started. Start time: %s", start_time)
     crushtool = CrushToolWorkflows(node=cephadm)
-    pg_num = config.get("pg_num", 2048)
-    pg_num_min = config.get("pg_num_min", 2048)
+    pg_num = config.get("pg_num", DEFAULT_PG_NUM)
+    pg_num_min = config.get("pg_num_min", DEFAULT_PG_NUM_MIN)
     ceph_nodes = kw.get("ceph_nodes")
-    # ceph version check
+    erasure_coded_pool = config.get("erasure_coded_pool", False)
+    ec_k = config.get("ec_k", DEFAULT_EC_K)
+    ec_m = config.get("ec_m", DEFAULT_EC_M)
+    ceph_version = DEFAULT_CEPH_VERSION
+    mon_config_method = MonConfigMethods(rados_obj=rados_obj)
+
     if LooseVersion(str(config.get("release"))) < LooseVersion("9.1"):
         log.error(
             "This test module is a 9.1 feature. Skipping test in ceph versions less than 9.1."
@@ -81,8 +95,17 @@ def run(ceph_cluster, **kw):
             log.error("config.scenarios cannot be empty")
             return 1
 
-        osd_hosts: List[CephNode] = ceph_cluster.get_nodes(role="osd")
+        # Validate erasure code parameters
+        if erasure_coded_pool:
+            if not isinstance(ec_k, int) or ec_k < 2:
+                log.error(f"Invalid ec_k parameter: {ec_k}. Must be an integer >= 2.")
+                return 1
+            if not isinstance(ec_m, int) or ec_m < 1:
+                log.error(f"Invalid ec_m parameter: {ec_m}. Must be an integer >= 1.")
+                return 1
 
+        osd_hosts: List[CephNode] = ceph_cluster.get_nodes(role="osd")
+        host0 = [host_ob for host_ob in osd_hosts if "installer" in host_ob.hostname][0]
         log.info("============== crush heirarchy =================")
         rados_obj.client.exec_command(
             cmd="ceph orch host ls -f yaml", pretty_print=True
@@ -90,6 +113,10 @@ def run(ceph_cluster, **kw):
 
         rados_obj.client.exec_command(cmd="ceph osd tree", pretty_print=True)
         log.info("=============================================")
+
+        mon_config_method.set_config(
+            section="global", name="mon_max_pg_per_osd", value="500"
+        )
 
         if "scenario1" in scenarios:
             log.info("===========================================")
@@ -107,24 +134,19 @@ def run(ceph_cluster, **kw):
             log.info("Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean")
             pool_name = "ok-to-upgrade-rack-fd"
             failure_domain = "rack"
-            crush_rule = CrushRule(
-                rados_obj=rados_obj,
-                crush_rule_name=f"{failure_domain}_failure_domain"
-                + "".join(random.choices(string.ascii_letters, k=6)),
-                failure_domain=failure_domain,
-                crushtool=crushtool,
-            )
-            crush_rule.create()
-            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
-            rados_obj.create_pool(
+            crush_rule = create_pool_with_failure_domain(
                 pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
                 pg_num=pg_num,
                 pg_num_min=pg_num_min,
-                crush_rule=crush_rule.crush_rule_name,
-            ), "Failed to create pool"
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
             rados_obj.wait_for_clean_pg_sets()
 
-            host0 = [host for host in osd_hosts if "installer" in host.hostname][0]
             all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
             osd_id = all_osds_host0[0]
             all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
@@ -134,7 +156,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=f"osd.{osd_id}",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -150,7 +172,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=host0.hostname,
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -166,7 +188,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="rack1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -182,7 +204,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="chassis1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -216,26 +238,22 @@ def run(ceph_cluster, **kw):
             )
             pool_name = "ok-to-upgrade-chassis-fd"
             failure_domain = "chassis"
-            crush_rule = CrushRule(
-                rados_obj=rados_obj,
-                crush_rule_name=f"{failure_domain}_failure_domain"
-                + "".join(random.choices(string.ascii_letters, k=6)),
-                failure_domain=failure_domain,
-                crushtool=crushtool,
-            )
-            crush_rule.create()
-            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
-            rados_obj.create_pool(
+            crush_rule = create_pool_with_failure_domain(
                 pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
                 pg_num=pg_num,
                 pg_num_min=pg_num_min,
-                crush_rule=crush_rule.crush_rule_name,
-            ), "Failed to create pool"
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
             rados_obj.wait_for_clean_pg_sets()
 
             all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
             all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
-            host0 = [host for host in osd_hosts if "installer" in host.hostname][0]
+
             all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
             osd_id = all_osds_host0[0]
 
@@ -243,7 +261,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="rack1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -259,7 +277,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=host0.hostname,
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -275,7 +293,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="chassis1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -291,7 +309,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=f"osd.{osd_id}",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -323,25 +341,21 @@ def run(ceph_cluster, **kw):
             log.info("Step 1: Create CRUSH rule (host FD) and pool, wait for PGs clean")
             pool_name = "ok-to-upgrade-scenario9"
             failure_domain = "host"
-            crush_rule = CrushRule(
-                rados_obj=rados_obj,
-                crush_rule_name=f"{failure_domain}_failure_domain"
-                + "".join(random.choices(string.ascii_letters, k=6)),
-                failure_domain=failure_domain,
-                crushtool=crushtool,
-            )
-            crush_rule.create()
-            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
-            rados_obj.create_pool(
+            crush_rule = create_pool_with_failure_domain(
                 pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
                 pg_num=pg_num,
                 pg_num_min=pg_num_min,
-                crush_rule=crush_rule.crush_rule_name,
-            ), "Failed to create pool"
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
             rados_obj.wait_for_clean_pg_sets()
 
             all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
-            host0 = [host for host in osd_hosts if "installer" in host.hostname][0]
+
             all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
             all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
 
@@ -351,7 +365,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="rack1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -368,7 +382,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=host0.hostname,
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -384,7 +398,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="chassis1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -400,7 +414,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=f"osd.{osd_id}",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -432,25 +446,21 @@ def run(ceph_cluster, **kw):
             log.info("Step 1: Create CRUSH rule (OSD FD) and pool, wait for PGs clean")
             pool_name = "ok-to-upgrade-scenario10"
             failure_domain = "osd"
-            crush_rule = CrushRule(
-                rados_obj=rados_obj,
-                crush_rule_name=f"{failure_domain}_failure_domain"
-                + "".join(random.choices(string.ascii_letters, k=6)),
-                failure_domain=failure_domain,
-                crushtool=crushtool,
-            )
-            crush_rule.create()
-            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
-            rados_obj.create_pool(
+            crush_rule = create_pool_with_failure_domain(
                 pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
                 pg_num=pg_num,
                 pg_num_min=pg_num_min,
-                crush_rule=crush_rule.crush_rule_name,
-            ), "Failed to create pool"
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
             rados_obj.wait_for_clean_pg_sets()
 
             all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
-            host0 = [host for host in osd_hosts if "installer" in host.hostname][0]
+
             all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
             all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
             osd_id = all_osds_host0[0]
@@ -459,7 +469,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="rack1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version="20.2.1-120.el10cp",
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -475,7 +485,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=host0.hostname,
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -491,7 +501,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket="chassis1",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -507,7 +517,7 @@ def run(ceph_cluster, **kw):
             rados_obj.wait_for_clean_pg_sets()
             actual = OsdOkToUpgradeCommand(
                 crush_bucket=f"osd.{osd_id}",
-                ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                ceph_version=ceph_version,
                 rados_obj=rados_obj,
             ).execute()
             expected = OsdOkToUpgradeCommandOutput(
@@ -543,29 +553,23 @@ def run(ceph_cluster, **kw):
             pool_name = "ok-to-upgrade-scenario7"
             failure_domain = "rack"
 
-            crush_rule = CrushRule(
-                rados_obj=rados_obj,
-                crush_rule_name=f"{failure_domain}_failure_domain"
-                + "".join(random.choices(string.ascii_letters, k=6)),
-                failure_domain=failure_domain,
-                crushtool=crushtool,
-            )
-
-            crush_rule.create()
-            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
-
-            rados_obj.create_pool(
+            crush_rule = create_pool_with_failure_domain(
                 pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
                 pg_num=pg_num,
                 pg_num_min=pg_num_min,
-                crush_rule=crush_rule.crush_rule_name,
-            ), "Failed to create pool"
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
 
             rados_obj.wait_for_clean_pg_sets()
 
             rados_obj.collect_osd_daemon_ids("default")
             all_osds_in_rack = rados_obj.collect_osd_daemon_ids("rack1")
-            host0 = [host for host in osd_hosts if "installer" in host.hostname][0]
+
             all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
             all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
             osd_id = all_osds_host0[0]
@@ -662,7 +666,7 @@ def run(ceph_cluster, **kw):
             )
             log.info("===========================================")
             log.info("Step 1: Set mgr debug, get active mgr")
-            mon_config_method = MonConfigMethods(rados_obj=rados_obj)
+
             mgr_config_method = MgrWorkflows(node=cephadm)
             assert mon_config_method.set_config(
                 section="mgr", name="debug_mgr", value="20/20"
@@ -671,31 +675,25 @@ def run(ceph_cluster, **kw):
             failure_domain = "rack"
             pool_name = "ok-to-upgrade-scenario6"
             log.info("Step 2: Create CRUSH rule (rack FD) and pool, wait for PGs clean")
-            crush_rule = CrushRule(
-                rados_obj=rados_obj,
-                crush_rule_name=f"{failure_domain}_failure_domain"
-                + "".join(random.choices(string.ascii_letters, k=6)),
-                failure_domain=failure_domain,
-                crushtool=crushtool,
-            )
-
-            crush_rule.create()
-            crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
-
-            rados_obj.create_pool(
+            crush_rule = create_pool_with_failure_domain(
                 pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
                 pg_num=pg_num,
                 pg_num_min=pg_num_min,
-                crush_rule=crush_rule.crush_rule_name,
-            ), "Failed to create pool"
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
 
             rados_obj.wait_for_clean_pg_sets()
 
             # Stop all OSDs on host[1] for the logic to search safe set of osds
-            host_to_stop = osd_hosts[1]
+            host_to_stop = osd_hosts[2]
             stopped_osds = rados_obj.collect_osd_daemon_ids(osd_node=host_to_stop)
             assert (
-                stopped_osds
+                len(stopped_osds) > 0
             ), f"No OSDs found on host {host_to_stop.hostname} for scenario 6"
             for osd_id in stopped_osds:
                 assert rados_obj.change_osd_state(
@@ -715,7 +713,7 @@ def run(ceph_cluster, **kw):
                         name="mgr_osd_upgrade_check_convergence_factor",
                         value=convergence_factor,
                     )
-                    ceph_version = "20.3.0-3803-g63ca1ffb5a21"
+                    ceph_version = ceph_version
                     osd_host = osd_hosts[0]
                     osds_in_host = get_node_osd_list(
                         rados_obj, ceph_nodes, osd_host.hostname
@@ -725,19 +723,20 @@ def run(ceph_cluster, **kw):
                     )
                     assert rados_obj.rotate_logs([node])
                     print("OSDs in host ", osds_in_host)
+
                     try:
                         actual = OsdOkToUpgradeCommand(
                             osd_host.hostname, ceph_version, rados_obj=rados_obj
                         ).execute()
-                    except CommandFailed as e:
-                        log.debug(f"expected error:- {str(e)}")
-                        log.info("Continuing with the test case")
+                    except Exception as e:
+                        log.error(f"Expected exception: {e}")
 
                     fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
-
+                    log_file = f"/var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log"
                     lines = node.exec_command(
                         sudo=True,
-                        cmd=f"grep -E '*_check_offlines_pgs*' /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
+                        cmd="awk '/_maximize_ok_to_upgrade_set/{gate=1; next} /Device or resource busy/{gate=0} gate' "
+                        + log_file,
                     )
                     lines = lines[0].split("\n")[:-1]
                     assert len(lines) != 0
@@ -756,6 +755,735 @@ def run(ceph_cluster, **kw):
                     time.sleep(5)
                 log.info("Restarted all OSDs on host %s", host_to_stop.hostname)
             log.info("Scenario 6 passed: convergence factor checks")
+
+        elif "scenario7" in scenarios:
+            log.info(
+                """
+            Scenario 7: Rack failure domain with max=100 - osd, host, rack, chassis buckets
+              Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean
+              Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output
+              Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output
+              Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output
+              Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output
+            """
+            )
+            log.info("Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean")
+            pool_name = "ok-to-upgrade-rack-fd"
+            failure_domain = "rack"
+            crush_rule = create_pool_with_failure_domain(
+                pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
+            osd_id = all_osds_host0[0]
+            all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
+            all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=all_osds_rack1,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=all_osds_chassis1,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+
+            log.info(
+                "Step 6: Run ok-to-upgrade (max=2) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+
+            log.info(
+                "Step 7: Run ok-to-upgrade (max=2) for host bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_host0, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 8: Run ok-to-upgrade (max=2) for rack bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_rack1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            # https://ibm-ceph.atlassian.net/browse/IBMCEPH-15754
+            # assert expected == actual
+            assert len(expected["osds_ok_to_upgrade"]) == len(
+                actual["osds_ok_to_upgrade"]
+            )
+
+            log.info(
+                "Step 9: Run ok-to-upgrade (max=2) for chassis bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_chassis1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            # https://ibm-ceph.atlassian.net/browse/IBMCEPH-15754
+            # assert expected == actual
+            assert len(expected["osds_ok_to_upgrade"]) == len(
+                actual["osds_ok_to_upgrade"]
+            )
+
+            log.info(
+                "Scenario 7 passed: rack FD with max=100 (osd, host, rack, chassis buckets)"
+            )
+
+        elif "scenario8" in scenarios:
+            log.info(
+                """Scenario 8: Chassis failure domain with max=100 - osd, host, rack, chassis"
+                 Step 1: Create CRUSH rule (chassis FD) and pool, wait for PGs clean
+                 Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output
+                 Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output
+                 Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output
+                 Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"""
+            )
+            log.info("===========================================")
+            log.info(
+                "Step 1: Create CRUSH rule (chassis FD) and pool, wait for PGs clean"
+            )
+            pool_name = "ok-to-upgrade-chassis-fd-max"
+            failure_domain = "chassis"
+            crush_rule = create_pool_with_failure_domain(
+                pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                erasure_coded_pool=False,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
+            osd_id = all_osds_host0[0]
+            all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
+            all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=100,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=all_osds_chassis1,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=100,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=all_osds_chassis1,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+
+            log.info(
+                "Step 6: Run ok-to-upgrade (max=2) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 7: Run ok-to-upgrade (max=2) for host bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_host0, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 8: Run ok-to-upgrade (max=2) for rack bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_rack1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 9: Run ok-to-upgrade (max=2) for chassis bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_chassis1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+
+            # https://ibm-ceph.atlassian.net/browse/IBMCEPH-15754
+            # assert expected == actual
+            assert len(expected["osds_ok_to_upgrade"]) == len(
+                actual["osds_ok_to_upgrade"]
+            )
+
+            log.info("Scenario 8 passed: chassis failure domain with max=100 and max=2")
+
+        elif "scenario9" in scenarios:
+            log.info(
+                """
+                Scenario 9: Host failure domain with max=100 - osd, host, rack, chassis"
+                Step 1: Create CRUSH rule (host FD) and pool, wait for PGs clean"
+                Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+                Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+                Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+                Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"""
+            )
+            log.info("Step 1: Create CRUSH rule (host FD) and pool, wait for PGs clean")
+            pool_name = "ok-to-upgrade-host-fd-max"
+            failure_domain = "host"
+            crush_rule = create_pool_with_failure_domain(
+                pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
+            osd_id = all_osds_host0[0]
+            all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
+            all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=all_osds_host0,
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+
+            log.info(
+                "Step 6: Run ok-to-upgrade (max=2) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=2) for host bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_host0, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=2) for rack bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_host0, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            # NOTE: Full equality assertion disabled due to IBMCEPH-15754
+            # The order of OSDs in osds_ok_to_upgrade may differ between expected and actual
+            # when multiple OSDs have the same PG count, causing non-deterministic ordering.
+            # We verify the count matches as a workaround until the issue is resolved.
+            # TODO: Re-enable full assertion once IBMCEPH-15754 is fixed
+            # assert expected == actual
+            assert len(expected["osds_ok_to_upgrade"]) == len(
+                actual["osds_ok_to_upgrade"]
+            ), f"Expected {len(expected['osds_ok_to_upgrade'])} OSDs, got {len(actual['osds_ok_to_upgrade'])}"
+
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=2) for chassis bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_chassis1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_SMALL,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=sorted_osds[:MAX_FLAG_SMALL],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            # NOTE: Full equality assertion disabled due to IBMCEPH-15754
+            # The order of OSDs in osds_ok_to_upgrade may differ between expected and actual
+            # when multiple OSDs have the same PG count, causing non-deterministic ordering.
+            # We verify the count matches as a workaround until the issue is resolved.
+            # TODO: Re-enable full assertion once IBMCEPH-15754 is fixed
+            # assert expected == actual
+            assert len(expected["osds_ok_to_upgrade"]) == len(
+                actual["osds_ok_to_upgrade"]
+            ), f"Expected {len(expected['osds_ok_to_upgrade'])} OSDs, got {len(actual['osds_ok_to_upgrade'])}"
+
+            log.info("Scenario 9 passed: host failure domain with max=100")
+
+        elif "scenario10" in scenarios:
+            log.info(
+                """
+                Scenario 10: OSD failure domain with max=100 - osd, host, rack, chassis"
+                  Step 1: Create CRUSH rule (OSD FD) and pool, wait for PGs clean"
+                  Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+                  Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+                  Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+                  Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"""
+            )
+
+            log.info("Step 1: Create CRUSH rule (OSD FD) and pool, wait for PGs clean")
+            pool_name = "ok-to-upgrade-osd-fd-max"
+            failure_domain = "osd"
+            crush_rule = create_pool_with_failure_domain(
+                pool_name=pool_name,
+                failure_domain=failure_domain,
+                rados_obj=rados_obj,
+                crushtool=crushtool,
+                pg_num=pg_num,
+                pg_num_min=pg_num_min,
+                erasure_coded_pool=erasure_coded_pool,
+                ec_k=ec_k,
+                ec_m=ec_m,
+            )
+            rados_obj.wait_for_clean_pg_sets()
+
+            all_osds_host0 = rados_obj.collect_osd_daemon_ids(host0)
+            osd_id = all_osds_host0[0]
+            all_osds_rack1 = rados_obj.collect_osd_daemon_ids("rack1")
+            all_osds_chassis1 = rados_obj.collect_osd_daemon_ids("chassis1")
+
+            log.info(
+                "Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output"
+            )
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=f"osd.{osd_id}",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=[osd_id],
+                osds_ok_to_upgrade=[osd_id],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_host0, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket=host0.hostname,
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_host0,
+                osds_ok_to_upgrade=[sorted_osds[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info(
+                "Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_rack1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="rack1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_rack1,
+                osds_ok_to_upgrade=[sorted_osds[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            # NOTE: Full equality assertion disabled due to IBMCEPH-15754
+            # The order of OSDs in osds_ok_to_upgrade may differ between expected and actual
+            # when multiple OSDs have the same PG count, causing non-deterministic ordering.
+            # We verify the count matches as a workaround until the issue is resolved.
+            # TODO: Re-enable full assertion once IBMCEPH-15754 is fixed
+            assert len(expected["osds_ok_to_upgrade"]) == len(
+                actual["osds_ok_to_upgrade"]
+            ), f"Expected {len(expected['osds_ok_to_upgrade'])} OSDs, got {len(actual['osds_ok_to_upgrade'])}"
+            log.info(
+                "Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output"
+            )
+            sorted_osds = sort_osds_by_increasing_pg_count(all_osds_chassis1, rados_obj)
+            rados_obj.wait_for_clean_pg_sets()
+            actual = OsdOkToUpgradeCommand(
+                crush_bucket="chassis1",
+                ceph_version=ceph_version,
+                rados_obj=rados_obj,
+                max=MAX_FLAG_LARGE,
+            ).execute()
+            expected = OsdOkToUpgradeCommandOutput(
+                ok_to_upgrade=True,
+                all_osds_upgraded=False,
+                osds_in_crush_bucket=all_osds_chassis1,
+                osds_ok_to_upgrade=[sorted_osds[0]],
+                osds_upgraded=[],
+                bad_no_version=[],
+            )
+            assert expected == actual
+            log.info("Scenario 10 passed: OSD failure domain with max=100")
 
         elif "negative" in scenarios:
             log.info("=" * 80)
@@ -776,7 +1504,7 @@ def run(ceph_cluster, **kw):
             execute_negative_scenario(
                 command=OsdOkToUpgradeCommand(
                     crush_bucket=f"osd.{osd_id}",
-                    ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                    ceph_version=ceph_version,
                     rados_obj=rados_obj,
                     max="-100",
                 ),
@@ -790,7 +1518,7 @@ def run(ceph_cluster, **kw):
             execute_negative_scenario(
                 command=OsdOkToUpgradeCommand(
                     crush_bucket="default",
-                    ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                    ceph_version=ceph_version,
                     rados_obj=rados_obj,
                 ),
                 expected_err_substring="valid types are: 'rack', 'chassis', 'host' and 'osd'",
@@ -801,7 +1529,7 @@ def run(ceph_cluster, **kw):
             execute_negative_scenario(
                 command=OsdOkToUpgradeCommand(
                     crush_bucket="test",
-                    ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                    ceph_version=ceph_version,
                     rados_obj=rados_obj,
                 ),
                 expected_err_substring="does not exist",
@@ -831,7 +1559,7 @@ def run(ceph_cluster, **kw):
             execute_negative_scenario(
                 command=OsdOkToUpgradeCommand(
                     crush_bucket="rack11",
-                    ceph_version="20.3.0-3803-g63ca1ffb5a21",
+                    ceph_version=ceph_version,
                     rados_obj=rados_obj,
                 ),
                 expected_err_substring="has no children",
@@ -858,7 +1586,8 @@ def run(ceph_cluster, **kw):
 
         if "negative" not in scenarios:
             rados_obj.delete_pool(pool_name)
-            crush_rule.remove()
+            if not erasure_coded_pool:
+                crush_rule.remove()
 
         rados_obj.log_cluster_health()
 
@@ -972,29 +1701,185 @@ class CrushRule:
         log.info("Modified crush rule failure domains to %s", new_failure_domain)
 
 
+def sort_osds_by_increasing_pg_count(
+    osds: List[int], rados_obj: RadosOrchestrator
+) -> List[int]:
+    """
+    Return the given OSD IDs sorted by increasing PG count (PGS from ``ceph osd df``).
+
+    Args:
+        osds: List of OSD IDs to sort.
+        rados_obj: RadosOrchestrator used to run ``ceph osd df``.
+
+    Returns:
+        Same OSD IDs in ascending order of ``pgs``. OSDs missing from osd df output
+        are ordered last (treated as 0 PGs).
+    """
+    if not osds:
+        return []
+
+    osd_df = rados_obj.run_ceph_command(cmd="ceph osd df")
+    """
+        $ ceph osd df -fjson-pretty
+            {
+            "id": 7,
+            "device_class": "hdd",
+            "name": "osd.7",
+            "type": "osd",
+            "type_id": 0,
+            "crush_weight": 0.01458740234375,
+            "depth": 4,
+            "pool_weights": {},
+            "reweight": 1,
+            "kb": 15724544,
+            "kb_used": 89032,
+            "kb_used_data": 21488,
+            "kb_used_omap": 94,
+            "kb_used_meta": 67425,
+            "kb_avail": 15635512,
+            "utilization": 0.56619765889554574,
+            "var": 0.94894756195697172,
+            "pgs": 245,
+            "status": "up"
+        },
+    """
+    # Build a mapping of OSD ID to PG count from ceph osd df output
+    pg_by_osd = {
+        node["id"]: node["pgs"]
+        for node in osd_df.get("nodes", [])
+        if node.get("type") == "osd"
+    }
+
+    # Helper function to get PG count for an OSD (defaults to 0 if not found)
+    def get_pg_count(osd_id: int) -> int:
+        return pg_by_osd.get(int(osd_id), 0)
+
+    # Sort OSDs by increasing PG count
+    sorted_osds = sorted(osds, key=get_pg_count)
+
+    log.info(
+        "OSDs sorted by increasing PG count: %s (pg counts: %s)",
+        sorted_osds,
+        [get_pg_count(osd_id) for osd_id in sorted_osds],
+    )
+    return sorted_osds
+
+
+def create_pool_with_failure_domain(
+    pool_name: str,
+    failure_domain: str,
+    rados_obj: RadosOrchestrator,
+    crushtool: CrushToolWorkflows,
+    pg_num: int,
+    pg_num_min: int,
+    erasure_coded_pool: bool = False,
+    ec_k: int = DEFAULT_EC_K,
+    ec_m: int = DEFAULT_EC_M,
+) -> CrushRule:
+    """
+    Create a pool with specified failure domain, handling both replicated and EC pools.
+
+    For replicated pools, creates a custom CRUSH rule and applies it to the pool.
+    For erasure-coded pools, the CRUSH rule is created automatically via the erasure
+    profile, with the failure domain specified during pool creation.
+
+    Args:
+        pool_name: Name of the pool to create
+        failure_domain: CRUSH failure domain (e.g., 'host', 'rack', 'chassis', 'osd')
+        rados_obj: RadosOrchestrator instance for pool operations
+        crushtool: CrushToolWorkflows instance for CRUSH rule management
+        pg_num: Number of placement groups
+        pg_num_min: Minimum number of placement groups
+        erasure_coded_pool: If True, create EC pool; if False, create replicated pool
+        ec_k: Erasure code data chunks (only used for EC pools)
+        ec_m: Erasure code parity chunks (only used for EC pools)
+
+    Returns:
+        CrushRule: The created or modified CRUSH rule object
+
+    Raises:
+        Exception: If pool creation fails
+    """
+    # Create CRUSH rule with unique name
+    crush_rule = CrushRule(
+        crush_rule_name=f"{failure_domain}_failure_domain"
+        + "".join(random.choices(string.ascii_letters, k=6)),
+        failure_domain=failure_domain,
+        crushtool=crushtool,
+        rados_obj=rados_obj,
+    )
+
+    # For replicated pools, create a custom CRUSH rule
+    # For EC pools, the erasure profile handles CRUSH rule creation automatically
+    if not erasure_coded_pool:
+        crush_rule.create()
+
+    # Modify all failure domains in the CRUSH map
+    crush_rule.modify_all_failure_domains(new_failure_domain=failure_domain)
+
+    # Create the pool based on type
+    if not erasure_coded_pool:
+        # Replicated pool: explicitly specify the CRUSH rule
+        result = rados_obj.create_pool(
+            pool_name=pool_name,
+            pg_num=pg_num,
+            pg_num_min=pg_num_min,
+            crush_rule=crush_rule.crush_rule_name,
+        )
+        if not result:
+            raise Exception(f"Failed to create replicated pool: {pool_name}")
+    else:
+        # Erasure-coded pool: CRUSH rule is created via erasure profile
+        # The failure domain is specified directly in pool creation
+        ec_pool_params = {
+            "pool_name": pool_name,
+            "k": ec_k,
+            "m": ec_m,
+            "pg_num": pg_num,
+            "pg_num_min": pg_num_min,
+            "crush-failure-domain": failure_domain,
+        }
+        if not rados_obj.create_erasure_pool(**ec_pool_params):
+            log.error(f"Failed to create EC pool: {pool_name}")
+            raise Exception(f"Failed to create EC pool: {pool_name}")
+
+    log.info(
+        f"Successfully created {'EC' if erasure_coded_pool else 'replicated'} pool "
+        f"'{pool_name}' with failure domain '{failure_domain}'"
+    )
+    return crush_rule
+
+
 def validate_convergence_factor(log_lines, convergence_factor, osds_in_crush_bucket):
     """
     Validate that mgr log lines show convergence steps matching the given factor.
 
-    Parses log lines for _check_offlines_pgs [osd1,osd2,...] and checks that the
+    Parses log lines for operator() [osd1,osd2,...] and checks that the
     sequence of OSD list sizes matches repeated application of convergence_factor
     (e.g. size, then int(size*conv), ... until <= 1). Returns True if the sequence
     matches; raises AssertionError otherwise.
     """
     all_osds: List[List[str]] = []
-    regex = re.compile(r".* _check_offlines_pgs \[(.*)\] ->.*")
+
+    # Updated Regex to catch the "operator() [22,19,23,...]" log format
+    regex = re.compile(r".* mgr\.server operator\(\) \[(.*)\] ->.*")
+
     log.info("-------------- log lines --------------")
     log.info(log_lines)
     log.info("-------------- end of log lines --------------")
+
     for line in log_lines:
         match = regex.search(line)
         if match:
-            osds = match.group(1).split(",")
+            # Clean empty strings if any trailing spaces slip into the brackets split
+            osds = [osd.strip() for osd in match.group(1).split(",") if osd.strip()]
             all_osds.append(osds)
 
     conv = convergence_factor
     length_of_osds_in_crush_bucket = len(osds_in_crush_bucket)
     convergence_list_size = []
+
+    # Calculate the expected matrix size steps down
     while length_of_osds_in_crush_bucket > 1:
         convergence_list_size.append(length_of_osds_in_crush_bucket)
         log.debug(
@@ -1004,13 +1889,22 @@ def validate_convergence_factor(log_lines, convergence_factor, osds_in_crush_buc
             int(length_of_osds_in_crush_bucket * conv),
         )
         length_of_osds_in_crush_bucket = int(length_of_osds_in_crush_bucket * conv)
-    convergence_list_size.append(1)
+
+    # Only append 1 if the iteration hasn't already accounted for it
+    if not convergence_list_size or convergence_list_size[-1] != 1:
+        convergence_list_size.append(1)
 
     log.info(f"Calculated array sizes : {convergence_list_size}")
     log.info(f"array sizes in logs : {[len(osd_list) for osd_list in all_osds]}")
+
+    # Verify log outputs match calculations
+    assert (
+        len(all_osds) > 0
+    ), "No matching convergence steps were parsed out of the manager log lines!"
+
     for i in range(min(len(all_osds), len(convergence_list_size))):
         assert convergence_list_size[i] == len(all_osds[i]), (
-            f"Convergence factor check failed: expected {convergence_list_size[i]} "
+            f"Convergence factor check failed at step {i}: expected {convergence_list_size[i]} "
             f"actual {len(all_osds[i])}"
         )
 
