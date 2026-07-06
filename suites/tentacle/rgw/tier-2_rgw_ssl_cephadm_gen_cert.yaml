@@ -66,6 +66,9 @@ tests:
                       spec:
                         generate_cert: true
                         ssl: true
+                        zonegroup_hostnames:
+                          - pri.s3.example.com
+                        wildcard_enabled: true
                       placement:
                         nodes:
                           - node5
@@ -114,6 +117,9 @@ tests:
                       spec:
                         generate_cert: true
                         ssl: true
+                        zonegroup_hostnames:
+                          - sec.s3.example.com
+                        wildcard_enabled: true
                       placement:
                         nodes:
                           - node5
@@ -299,3 +305,27 @@ tests:
           config:
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
+
+  # test rgw-ssl SAN virtual_host_bucket_access
+
+  - test:
+      name: Test rgw-ssl SAN virtual_host_bucket_access
+      desc: Test rgw-ssl SAN virtual_host_bucket_access
+      polarion-id: CEPH-83604472
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../curl/test_rgw_using_curl.py
+            config-file-name: ../../curl/configs/test_rgw_ssl_SAN_virtual_host_bkt_access.yaml
+
+  - test:
+      name: Test rgw-ssl SAN virtual_host_bucket_access multipart_upload
+      desc: Test rgw-ssl SAN virtual_host_bucket_access multipart_upload
+      polarion-id: CEPH-83604472
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../curl/test_rgw_using_curl.py
+            config-file-name: ../../curl/configs/test_rgw_ssl_SAN_virtual_host_bkt_access_multipart_upload.yaml
