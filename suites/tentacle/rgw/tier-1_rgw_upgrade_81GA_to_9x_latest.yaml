@@ -34,16 +34,21 @@ tests:
                 labels: apply-all-labels
           - config:
               command: apply
-              service: mgr
-              args:
-                placement:
-                  label: mgr
-          - config:
-              command: apply
               service: mon
               args:
                 placement:
-                  label: mon
+                  nodes:
+                  - node1
+                  - node2
+                  - node3
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  nodes:
+                  - node1
+                  - node2
           - config:
               command: apply
               service: osd
@@ -56,6 +61,7 @@ tests:
                 - rgw.1
               args:
                 placement:
+                  count_per_host: 2
                   label: rgw
                   nodes:
                     - node3
@@ -91,6 +97,9 @@ tests:
           - node3:80
           - node4:80
           - node5:80
+          - node3:81
+          - node4:81
+          - node5:81
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
