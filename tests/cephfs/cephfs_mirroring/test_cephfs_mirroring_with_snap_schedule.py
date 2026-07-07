@@ -6,6 +6,7 @@ import traceback
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
     CephfsMirroringUtils,
+    _normalize_asok_peer_status,
     wait_for_sync_idle,
 )
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -465,7 +466,7 @@ def get_snaps_synced(fs_name, fsid, asok_file, filesystem_id, peer_uuid, path):
         f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
     )
     out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
-    data = json.loads(out)
+    data = _normalize_asok_peer_status(json.loads(out))
     log.info(f"Paths found in mirror status: {list(data.keys())}")
     absolute_path = path.rstrip("/")
 
