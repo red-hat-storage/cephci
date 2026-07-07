@@ -62,6 +62,7 @@ rpm_packages = {
         "kernel-modules-extra",
         "iproute-tc",
         "firewalld",
+        "jq",
     ],
 }
 deb_packages = ["wget", "git-core", "python-virtualenv", "lsb-release", "ntp"]
