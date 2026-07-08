@@ -460,3 +460,15 @@ tests:
         test-version: v2
         script-name: test_user_bucket_rename.py
         config-file-name: test_bucket_rename.yaml
+
+  # GKLM tests
+  - test:
+      config:
+        git_clone_configs_repo: true
+        setup_gklm_prerequisites: true
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload.yaml
+      desc: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload
+      module: sanity_rgw.py
+      name: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload
+      polarion-id: CEPH-83592485
