@@ -221,6 +221,8 @@ tests:
                    clients: 1
                    restart_interval: 2 #in minutes
                    longevity: true
+                   wait_for_healthy: true
+                   healthy_wait_timeout: 300
                    # longevity_duration: 1 # in hours
                    longevity_loop: 3 # 3 iterations/loops
 
