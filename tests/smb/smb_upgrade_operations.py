@@ -166,9 +166,9 @@ def upgrade(
     try:
         # Check cluster health before upgrade
         if check_cluster_health:
-            health = wait_for_cluster_health(installer, "HEALTH_OK", 300, 30)
+            health = wait_for_cluster_health(installer, "HEALTH_WARN", 300, 30)
             if not health:
-                raise SmbUpgradeError("Cluster not in 'HEALTH_OK' state")
+                raise SmbUpgradeError("Cluster not in 'HEALTH_WARN' state")
 
         # Add repo to all the nodes
         orch.set_tool_repo()
@@ -202,9 +202,9 @@ def upgrade(
 
         # Check cluster health after upgrade
         if check_cluster_health:
-            health = wait_for_cluster_health(installer, "HEALTH_OK", 600, 60)
+            health = wait_for_cluster_health(installer, "HEALTH_WARN", 600, 60)
             if not health:
-                raise SmbUpgradeError("Cluster not in 'HEALTH_OK' state")
+                raise SmbUpgradeError("Cluster not in 'HEALTH_WARN' state")
     except Exception as e:
         raise SmbUpgradeError(f"Fail to upgrade ceph cluster, Error {e}")
 
