@@ -477,7 +477,7 @@ def op_tls_logs_openssl_probe(installer_node, client_node, nfs_node, config, nfs
                 config, "nfs_tls12_ciphers", "tc_03_tls_ciphers", default="ALL"
             ),
             tls_ktls=config.get("tls_ktls", True),
-            tls_debug=config.get("tls_debug", True),
+            tls_debug=False,
         )
         redeploy_wait = int(
             tls_config_get(
@@ -779,7 +779,7 @@ def op_tls_io_tcpdump_encryption(
         tls_min_version=config.get("tls_min_version", "TLSv1.3"),
         tls_ciphers=config.get("tls_ciphers", "ALL"),
         tls_ktls=config.get("tls_ktls", True),
-        tls_debug=config.get("tls_debug", True),
+        tls_debug=False,
     )
     setup_tls_client(client_node, ca_cert)
 
@@ -902,7 +902,7 @@ def run(ceph_cluster, **kw):
                 tls_min_version=config.get("tls_min_version", "TLSv1.3"),
                 tls_ciphers=config.get("tls_ciphers", "ALL"),
                 tls_ktls=config.get("tls_ktls", True),
-                tls_debug=config.get("tls_debug", True),
+                tls_debug=False,
             )
             setup_tls_client(client_node, ca_cert)
 

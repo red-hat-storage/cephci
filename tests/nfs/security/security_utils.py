@@ -897,7 +897,7 @@ def setup_tls_nfs_cluster(
     tls_min_version="TLSv1.3",
     tls_ciphers="ALL",
     tls_ktls=True,
-    tls_debug=True,
+    tls_debug=False,
 ):
     """
     Creates an NFS-Ganesha cluster with TLS enabled by generating a self-signed
