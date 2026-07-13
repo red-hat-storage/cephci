@@ -981,8 +981,12 @@ class CephfsMirroringUtils(object):
                 if not last_synced_snap:
                     continue
                 if last_synced_snap.get("name") == snapshot_name:
-                    raw_duration = last_synced_snap.get("sync_duration", "")
-                    sync_duration = raw_duration.rstrip("s") if raw_duration else None
+                    raw_duration = last_synced_snap.get("sync_duration")
+                    sync_duration = (
+                        str(raw_duration).rstrip("s")
+                        if raw_duration is not None
+                        else None
+                    )
                     log.info(
                         "Snapshot %s synced: duration=%s, bytes=%s, files=%s",
                         snapshot_name,
