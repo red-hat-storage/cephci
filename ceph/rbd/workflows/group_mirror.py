@@ -251,63 +251,220 @@ def group_mirror_status_verify(
             raise Exception("Global ids of both the clusters are not same")
 
 
-def wait_for_idle(rbd, **group_kw):
+def get_peer_image_global_ids(rbd, image_names, **group_kw):
     """
-    Wait for 300 seconds for group mirroring replay state to be idle for all images in the group
+    Return peer-site image name to global_id mapping from group mirror status.
     Args:
-        rbd: Rbd object
+        rbd: RBD object
+        image_names: Image names to include (e.g. image_1, image_2)
+        **group_kw: Group spec or pool/group/namespace status spec
+    Returns:
+        dict: image name -> global_id for matching peer images
+    """
+    out, err = rbd.mirror.group.status(**group_kw, format="json")
+    if err:
+        raise Exception("Getting group mirror status failed : " + str(err))
+    ids = {}
+    for peer in json.loads(out).get("peer_sites", []):
+        for img in peer.get("images", []):
+            if img.get("name") in image_names and img.get("global_id"):
+                ids[img["name"]] = img["global_id"]
+    return ids
+
+
+def mirror_group_snapshot_add_and_wait_sync(
+    rbd_primary,
+    rbd_secondary,
+    max_wait_sec=600,
+    poll_interval=5,
+    **group_kw,
+):
+    """
+    Create a mirror group snapshot on the primary and wait until it is copied
+    on the secondary. Required after block I/O when group mirroring uses snapshot mode.
+    Args:
+        rbd_primary: RBD object for the primary cluster
+        rbd_secondary: RBD object for the secondary cluster
+        max_wait_sec: Maximum time to wait for snapshot copy
+        poll_interval: Seconds between copy-status polls
+        **group_kw: Group spec, e.g. group-spec or pool/group/namespace
+    """
+    out, err = rbd_primary.mirror.group.snapshot.add(**group_kw)
+    if err:
+        raise Exception("Failed to add mirror group snapshot: " + str(err))
+    snapshot_id = out.strip().split(":")[1].strip()
+    log.info("Created mirror group snapshot id=%s", snapshot_id)
+
+    time.sleep(10)
+    start = time.time()
+    while True:
+        snap_kw = dict(group_kw)
+        snap_kw.setdefault("format", "json")
+        copied = get_mirror_group_snap_copied_status(
+            rbd_secondary, snapshot_id, **snap_kw
+        )
+        log.info(
+            "Mirror group snapshot %s copied status on secondary: %s",
+            snapshot_id,
+            copied,
+        )
+        if copied:
+            break
+        if time.time() - start > max_wait_sec:
+            raise Exception(
+                "Mirror group snapshot "
+                + snapshot_id
+                + " not copied to secondary within "
+                + str(max_wait_sec)
+                + "s"
+            )
+        time.sleep(poll_interval)
+
+    wait_for_idle(rbd_primary, rbd_secondary=rbd_secondary, **group_kw)
+    time.sleep(30)
+
+
+def verify_peer_image_global_ids_unchanged(
+    rbd, baseline_ids, after_event="", **group_kw
+):
+    """
+    Verify peer image global_ids are unchanged after adding images to a group.
+    Args:
+        rbd: RBD object
+        baseline_ids: name -> global_id captured before the change
+        after_event: Description of the change (for logging and errors)
+        **group_kw: Group spec or pool/group/namespace status spec
+    """
+    current_ids = get_peer_image_global_ids(rbd, list(baseline_ids.keys()), **group_kw)
+    for name, old_id in baseline_ids.items():
+        if current_ids.get(name) != old_id:
+            raise Exception("Image " + name + " global_id changed after " + after_event)
+    if after_event:
+        log.info(
+            "Verified existing images global_ids unchanged after %s",
+            after_event,
+        )
+
+
+def group_images_replay_idle(group_mirror_status, expected_count, from_peer=True):
+    """
+    Return True when every image in the status payload reports replay_state idle.
+    Args:
+        group_mirror_status: Parsed rbd mirror group status JSON
+        expected_count: Number of images that must be present and idle
+        from_peer: When True, inspect peer_sites images (primary view of secondary).
+                   When False, inspect local images (secondary replay state).
+    """
+    if from_peer:
+        peer_sites = group_mirror_status.get("peer_sites", [])
+        images = peer_sites[0].get("images", []) if peer_sites else []
+    else:
+        images = group_mirror_status.get("images", [])
+
+    if len(images) < expected_count:
+        return False
+
+    idle_count = 0
+    for image in images:
+        description = image.get("description", "")
+        desc_tail = description.split(", ")[-1] if description else ""
+        if "PREPARE_REPLAY" in desc_tail:
+            return False
+        try:
+            replay_state = json.loads(desc_tail)["replay_state"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return False
+        if replay_state == "idle":
+            idle_count += 1
+
+    return idle_count >= expected_count
+
+
+def wait_for_idle(rbd, rbd_secondary=None, **group_kw):
+    """
+    Wait for group mirroring replay state to be idle for all images in the group.
+    On the primary, peer-site image replay must be idle. When rbd_secondary is
+    provided, local image replay on the secondary must also be idle.
+    Args:
+        rbd: Rbd object (typically primary)
+        rbd_secondary: Optional Rbd object for the secondary cluster
         **group_kw: Group spec <pool_name>/<group_name>
     """
+    list_kw = dict(group_kw)
+    list_kw.setdefault("format", "json")
+    group_image_list, err = rbd.group.image.list(**list_kw)
+    if err:
+        raise Exception("Getting group image list failed: " + str(err))
+    expected_count = len(json.loads(group_image_list))
+
     retry = 0
+    stalled_image = None
     while retry < 60:
         time.sleep(10)
         group_mirror_status, err = rbd.mirror.group.status(**group_kw, format="json")
-        group_mirror_status = str(group_mirror_status).strip("'<>() ").replace("'", '"')
-        group_mirror_status = json.loads(group_mirror_status)
-        cnt = 0
-        if len(group_mirror_status["peer_sites"][0]["images"]) != 0:
-            for image in group_mirror_status["peer_sites"][0]["images"]:
-                if "PREPARE_REPLAY" in image["description"].split(", ")[-1]:
-                    continue
-                replay_state = json.loads(image["description"].split(", ")[-1])[
-                    "replay_state"
-                ]
-                if replay_state == "idle":
-                    cnt = cnt + 1
-            if cnt == len(group_mirror_status["peer_sites"][0]["images"]):
-                break
-            else:
-                time.sleep(5)
-                retry = retry + 1
-        else:
+        if err:
+            raise Exception("Getting group mirror status failed: " + str(err))
+        group_mirror_status = json.loads(
+            str(group_mirror_status).strip("'<>() ").replace("'", '"')
+        )
+        if not group_images_replay_idle(
+            group_mirror_status, expected_count, from_peer=True
+        ):
+            retry += 1
             time.sleep(5)
-            retry = retry + 1
-    if retry == 60:
+            continue
+
+        if rbd_secondary:
+            secondary_status, err = rbd_secondary.mirror.group.status(
+                **group_kw, format="json"
+            )
+            if err:
+                raise Exception("Getting secondary group mirror status failed: " + err)
+            secondary_status = json.loads(
+                str(secondary_status).strip("'<>() ").replace("'", '"')
+            )
+            if not group_images_replay_idle(
+                secondary_status, expected_count, from_peer=False
+            ):
+                retry += 1
+                time.sleep(5)
+                continue
+
+        break
+    else:
+        peer_images = group_mirror_status.get("peer_sites", [{}])[0].get("images", [])
+        if peer_images:
+            stalled_image = peer_images[-1]
         raise Exception(
-            "Replay state is not idle for image " + image + " even after 300 seconds"
+            "Replay state is not idle for all group images even after 600 seconds; "
+            "last image status: " + str(stalled_image)
         )
 
 
 def verify_group_snapshot_schedule(rbd, pool, group, interval="1m", **kw):
     """
-    This will verify the group snapshot rolls over when the group
-    snapshot based mirroring is enabled
-    - verifies the 'schedule ls' has the expected interval listed
-    - verifies the group snapshot gets created as per the schedule
+    Verify the group snapshot schedule is active by confirming that a new
+    mirror snapshot is created within 2x the schedule interval.
+
+    Strategy: poll ``rbd group snap list`` for new mirror snapshot IDs.
+    This avoids the unreliable comparison of ``rbd mirror group status``
+    "snapshots", which is a fixed-size retention window. New snapshots
+    replace old ones, so the visible list may not change even when the
+    scheduler fires correctly.
+
     Args:
         rbd: rbd object
         pool: pool name
         group: group name
-        interval : this is interval and specified in min
-        kw: optional args
+        interval: schedule interval, e.g. "1m"
+        kw: optional args (namespace, etc.)
     Returns:
-        0 if snapshot schedule is verified successfully
-        1 if fails
+        0 if a new scheduled snapshot is detected within the timeout
+        1 if the check fails
     """
     try:
         namespace = kw.get("namespace", "")
         status_spec = {"pool": pool, "group": group, "format": "json"}
-        group_spec = None
         if namespace:
             status_spec.update({"namespace": namespace})
             group_spec = pool + "/" + namespace + "/" + group
@@ -315,36 +472,64 @@ def verify_group_snapshot_schedule(rbd, pool, group, interval="1m", **kw):
             group_spec = pool + "/" + group
 
         verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec)
-        output, err = rbd.mirror.group.status(**status_spec)
+
+        # Capture the set of mirror snapshot IDs currently on the primary.
+        def _mirror_snap_ids(rbd_obj, spec):
+            out, err = rbd_obj.group.snap.list(**spec)
+            if err:
+                return None, err
+            snaps = json.loads(out) if out else []
+            return {
+                s.get("id")
+                for s in snaps
+                if s.get("id") and s.get("namespace", {}).get("type") == "mirror"
+            }, None
+
+        ids_before, err = _mirror_snap_ids(rbd, status_spec)
         if err:
-            log.error(
-                "Error while fetching mirror group status for group %s", group_spec
-            )
+            log.error("Error fetching group snap list for %s: %s", group_spec, err)
             return 1
-        json_dict = json.loads(output)
-        log.info(f"Group status : \n {json_dict}")
-        snapshot_names = [i["name"] for i in json_dict.get("snapshots")]
-        log.info(f"Group snapshot_names Before : {snapshot_names}")
+        log.info("Mirror snapshot IDs before schedule check: %s", ids_before)
+
         interval_int = int(interval[:-1])
-        wait_time = interval_int * 120
-        log.info("Waiting for %s sec for snapshot to be rolled over", wait_time)
-        time.sleep(wait_time)
-        output, err = rbd.mirror.group.status(**status_spec)
-        if err:
-            log.error(
-                "Error while fetching mirror group status for group %s", group_spec
-            )
-            return 1
-        json_dict = json.loads(output)
-        log.info(f"Group status : \n {json_dict}")
-        snapshot_names_1 = [i["name"] for i in json_dict.get("snapshots")]
-        log.info(f"Group snapshot_names After : {snapshot_names_1}")
-        if snapshot_names != snapshot_names_1:
+        max_wait = interval_int * 120  # 2x interval in seconds
+        poll_sec = 15
+        elapsed = 0
+        log.info(
+            "Polling every %ss for up to %ss for a new mirror snapshot on %s",
+            poll_sec,
+            max_wait,
+            group_spec,
+        )
+        while elapsed < max_wait:
+            time.sleep(poll_sec)
+            elapsed += poll_sec
+            ids_after, err = _mirror_snap_ids(rbd, status_spec)
+            if err:
+                log.error("Error fetching group snap list for %s: %s", group_spec, err)
+                continue
             log.info(
-                "Snapshot schedule verification successful for group %s", group_spec
+                "Mirror snapshot IDs after %ss schedule check: %s",
+                elapsed,
+                ids_after,
             )
-            return 0
-        log.error("Snapshot schedule verification failed for group %s", group_spec)
+            new_ids = ids_after - ids_before
+            if new_ids:
+                log.info(
+                    "Snapshot schedule verification successful for group %s "
+                    "(new snapshot IDs: %s, elapsed: %ss)",
+                    group_spec,
+                    new_ids,
+                    elapsed,
+                )
+                return 0
+
+        log.error(
+            "Snapshot schedule verification failed for group %s - "
+            "no new mirror snapshot appeared within %ss",
+            group_spec,
+            max_wait,
+        )
         return 1
     except Exception as e:
         log.error(
@@ -366,12 +551,21 @@ def verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec):
         0 if snapshot schedule is verified successfully
         1 if fails
     """
-    out, err = rbd.mirror.group.snapshot.schedule.ls(**status_spec)
+    ls_spec = dict(status_spec)
+    ls_spec.setdefault("format", "json")
+    out, err = rbd.mirror.group.snapshot.schedule.ls(**ls_spec)
     if err:
         log.error(
             "Error while fetching snapshot schedule list for group  %s, %s",
             group_spec,
             err,
+        )
+        return 1
+    if not out or not str(out).strip():
+        log.error(
+            "Empty snapshot schedule list for group %s at interval %s",
+            group_spec,
+            interval,
         )
         return 1
     out = str(out).strip("'<>() ").replace("'", '"')
@@ -443,8 +637,7 @@ def get_mirror_group_snap_copied_status(rbd, snapshot_id, **status_spec):
 
         ns = snap.get("namespace", {})
         if ns.get("type") != "mirror":
-            if ns.get("type") != "mirror":
-                raise Exception(f"Snapshot {snapshot_id} is not a mirror snapshot")
+            raise Exception(f"Snapshot {snapshot_id} is not a mirror snapshot")
 
         state = snap.get("state")
         log.info(f"Snapshot {snapshot_id} state={state}")
