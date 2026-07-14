@@ -2038,18 +2038,16 @@ def configure_kafka_cluster_with_security(ceph_cluster, cloud_type):
     redeploy_rgw_service_for_kafka_security(rgw_node1)
 
 
-def config_keystone_ldap(rgw_node, cloud_type):
-    """Set the keystone config option on the cluster at startup"""
+def config_keystone_ldap(rgw_node, client_node, cloud_type):
+    """Set the keystone config option on the cluster at startup and run deploy_keystone_on_client.sh"""
     cephci_config = get_cephci_config()
     keystone_cfg = cephci_config.get("keystone", {})
     ldap_cfg = cephci_config.get("ldap", {})
     # OneCloud may share keystone/ldap with openstack; fallback if onecloud not configured
     lookup = cloud_type if cloud_type in keystone_cfg else "openstack"
-    keystone_server = keystone_cfg.get(lookup, keystone_cfg.get("openstack", {})).get(
-        "url"
-    )
+
     ldap_url = ldap_cfg.get(lookup, ldap_cfg.get("openstack", {})).get("url")
-    if not keystone_server or not ldap_url:
+    if not ldap_url:
         raise ConfigError(
             f"keystone/ldap config missing for cloud_type '{cloud_type}'. "
             "Add keystone.{cloud} and ldap.{cloud} to cephci config."
@@ -2059,11 +2057,37 @@ def config_keystone_ldap(rgw_node, cloud_type):
     rgw_name = out[0].split()[0]
     rgw_node.exec_command(
         sudo=True,
-        cmd=f"ceph config set client.{rgw_name} rgw_keystone_url {keystone_server}",
+        cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
     )
+
+    # Get deploy_keystone_on_client.sh from the rgw_configs repo and run it
+    clone_configs_repo(client_node, "rgw_configs")
+    final_repo_path = "/home/cephuser/configs/"
+    keystone_path = "/home/cephuser/configs/rgw/keystone/"
+
+    # Path to the deploy_keystone_on_client.sh script in the repo
+    script_path = os.path.join(
+        final_repo_path, "rgw", "keystone", "deploy_keystone_on_client.sh"
+    )
+
+    try:
+        # Read the script from the local repo
+        # Make the script executable and run it
+        client_node.exec_command(sudo=True, cmd="pip install podman-compose")
+        client_node.exec_command(sudo=True, cmd="pip install python-openstackclient python-swiftclient")
+        client_node.exec_command(sudo=True, cmd=f"chmod +x {script_path}")
+        client_node.exec_command(sudo=True, cmd=f"{script_path} {keystone_path}")
+        log.info(
+            "Successfully deployed keystone on client using deploy_keystone_on_client.sh"
+        )
+    except BaseException as be:
+        log.debug(f"Failed to run deploy_keystone_on_client.sh: {be}")
+
+    client_ip = client_node.ip_address
+    keystone_server = f"http://{client_ip}:15000"
     rgw_node.exec_command(
         sudo=True,
-        cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
+        cmd=f"ceph config set client.{rgw_name} rgw_keystone_url {keystone_server}",
     )
     # Restart rgw service and wait for it to come up
     restart_rgw_and_wait(rgw_node, rgw_name)

@@ -180,7 +180,7 @@ def run(ceph_cluster, **kw):
         configure_kafka_security(rgw_node, cloud_type)
 
     if install_keystone_ldap:
-        config_keystone_ldap(rgw_node, cloud_type)
+        config_keystone_ldap(rgw_node, client_node, cloud_type)
 
     out, err = exec_from.exec_command(cmd="ls -l venv", check_ec=False)
     if not out:
