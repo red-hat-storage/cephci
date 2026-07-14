@@ -54,6 +54,8 @@ magna_server = "http://magna002.ceph.redhat.com"
 magna_url = f"{magna_server}/cephci-jenkins/"
 magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
 KAFKA_HOME = "/usr/local/kafka"
+GKLM_HOME = "/usr/local/gklm"
+GKLM_CONFIGS_DIR = "/home/cephuser/configs/rgw/gklm"
 MANIFEST_URL = (
     "https://raw.githubusercontent.com/ibmstorage/qe-ceph-manifest/refs/heads/main/"
 )
@@ -2850,61 +2852,44 @@ def restart_rgw_and_wait(rgw_node, rgw_service_name):
         log.info("RGW daemons are up and running")
 
 
-def setup_gklm_prereq(ceph_cluster, cloud_type, custom_config):
+def setup_gklm_prereq(ceph_cluster, cloud_type):
     """setup GKLM authentication certs on the rgw nodes, redeploy rgw to mounted gklm certs path
     and set ceph configs for sse-kms-kmip"""
     log.info("setting up GKLM prerequisites")
     rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
-    gklm_auth_cert_path_remote = "/usr/local/gklm/rgwselfsigned.cert"
-    gklm_auth_key_path_remote = "/usr/local/gklm/rgwselfsigned.key"
-    gklm_auth_cert_path_local = None
-    gklm_auth_key_path_local = None
-    gklm_endpoint_openstack = None
-    gklm_endpoint_ibmc = None
-
-    for config_item in custom_config:
-        key, value = config_item.split("=")
-        if key == "gklm-auth-cert-path":
-            gklm_auth_cert_path_local = value.strip()
-        if key == "gklm-auth-key-path":
-            gklm_auth_key_path_local = value.strip()
-        if key == "gklm-endpoint-openstack":
-            gklm_endpoint_openstack = value.strip()
-        if key == "gklm-endpoint-ibmc":
-            gklm_endpoint_ibmc = value.strip()
-
-    if gklm_auth_cert_path_local is None:
+    gklm_auth_cert_path_remote = f"{GKLM_HOME}/rgwselfsigned.cert"
+    gklm_auth_key_path_remote = f"{GKLM_HOME}/rgwselfsigned.key"
+    cp_cert_cmd = (
+        f"cp {GKLM_CONFIGS_DIR}/rgwselfsigned.cert {gklm_auth_cert_path_remote}"
+    )
+    cp_key_cmd = f"cp {GKLM_CONFIGS_DIR}/rgwselfsigned.key {gklm_auth_key_path_remote}"
+    endpoint_files = {
+        "openstack": f"{GKLM_CONFIGS_DIR}/gklm_endpoint_openstack",
+        "ibmc": f"{GKLM_CONFIGS_DIR}/gklm_endpoint_ibmc",
+    }
+    if cloud_type not in endpoint_files:
         raise GKLMSetupError(
-            "gklm-auth-cert-path not passed as custom-config which is required for gklm tests prerequisites"
+            f"unsupported cloud_type {cloud_type!r} for GKLM tests; "
+            "expected openstack or ibmc"
         )
-    if gklm_auth_key_path_local is None:
-        raise GKLMSetupError(
-            "gklm-auth-cert-path not passed as custom-config which is required for gklm tests prerequisites"
-        )
-    if gklm_endpoint_openstack is None or gklm_endpoint_ibmc is None:
-        raise GKLMSetupError(
-            "gklm-endpoint not passed as custom-config which is required for gklm tests prerequisites"
-        )
+    endpoint_file = endpoint_files[cloud_type]
 
     for rgw_node_obj in rgw_nodes:
         rgw_node = rgw_node_obj.node
         log.info(f"setting up auth certs on node {rgw_node.ip_address}")
-        rgw_node.exec_command(sudo=True, cmd="mkdir -p /usr/local/gklm")
-        # copy gklm_auth_cert
+        rgw_node.exec_command(sudo=True, cmd=f"mkdir -p {GKLM_HOME}")
         log.info(
-            f"copying local file '{gklm_auth_cert_path_local}' to remote file '{gklm_auth_cert_path_remote}'. "
-            + f"remote node ip: {rgw_node.ip_address}"
+            f"copying GKLM cert/key from configs repo to {GKLM_HOME} on node "
+            f"{rgw_node.ip_address}"
         )
-        rgw_node.upload_file(
-            sudo=True, src=gklm_auth_cert_path_local, dst=gklm_auth_cert_path_remote
-        )
-        # copy gklm_auth_key
-        log.info(
-            f"copying local file '{gklm_auth_key_path_local}' to remote file '{gklm_auth_key_path_remote}'. "
-            + f"remote node ip: {rgw_node.ip_address}"
-        )
-        rgw_node.upload_file(
-            sudo=True, src=gklm_auth_key_path_local, dst=gklm_auth_key_path_remote
+        rgw_node.exec_command(sudo=True, cmd=f"{cp_cert_cmd} && {cp_key_cmd}")
+
+    gklm_endpoint, _ = rgw_nodes[0].node.exec_command(cmd=f"cat {endpoint_file}")
+    gklm_endpoint = gklm_endpoint.strip()
+    if not gklm_endpoint:
+        raise GKLMSetupError(
+            f"GKLM endpoint not found in {endpoint_file} on node "
+            f"{rgw_nodes[0].node.ip_address}"
         )
 
     # set ceph configs for kmip
@@ -2917,30 +2902,16 @@ def setup_gklm_prereq(ceph_cluster, cloud_type, custom_config):
     )
     client_node.exec_command(
         sudo=True,
-        cmd="ceph config set client.rgw rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert",
+        cmd=f"ceph config set client.rgw rgw_crypt_kmip_client_cert {gklm_auth_cert_path_remote}",
     )
     client_node.exec_command(
         sudo=True,
-        cmd="ceph config set client.rgw rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key",
+        cmd=f"ceph config set client.rgw rgw_crypt_kmip_client_key {gklm_auth_key_path_remote}",
     )
-    if cloud_type == "openstack":
-        if gklm_endpoint_openstack is None:
-            raise GKLMSetupError(
-                "gklm-endpoint-openstack not passed as custom-config which is required for gklm tests prerequisites"
-            )
-        client_node.exec_command(
-            sudo=True,
-            cmd=f"ceph config set client.rgw rgw_crypt_kmip_addr {gklm_endpoint_openstack}:5696",
-        )
-    elif cloud_type == "ibmc":
-        if gklm_endpoint_ibmc is None:
-            raise GKLMSetupError(
-                "gklm-endpoint-ibmc not passed as custom-config which is required for gklm tests prerequisites"
-            )
-        client_node.exec_command(
-            sudo=True,
-            cmd=f"ceph config set client.rgw rgw_crypt_kmip_addr {gklm_endpoint_ibmc}:5696",
-        )
+    client_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.rgw rgw_crypt_kmip_addr {gklm_endpoint}:5696",
+    )
 
     # redeploy rgw to mount gklm certs path to rgw container
     client_node.exec_command(
