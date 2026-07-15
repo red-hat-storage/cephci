@@ -1,7 +1,10 @@
+import time
+
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.execute import execute
+from ceph.rbd.workflows.rbd_mirror import check_image_mirror_status
 from ceph.rbd.workflows.snap_scheduling import run_io_verify_snap_schedule
 from utility.log import Log
 
@@ -134,10 +137,15 @@ def run(**kw):
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
 
+        rbd_primary = None
+        rbd_secondary = None
         for val in mirror_obj.values():
             if not val.get("is_secondary", False):
                 rbd = val.get("rbd")
+                rbd_primary = rbd
                 client = val.get("client")
+            else:
+                rbd_secondary = val.get("rbd")
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
@@ -184,6 +192,84 @@ def run(**kw):
             if rc:
                 log.error(f"Run IOs after upgrade failed for pool type {pool_type}")
                 return 1
+
+        log.info("Verify mirror image states post-upgrade")
+        retry_interval = 60
+        max_wait = 300
+        for pool_type in pool_types:
+            # --- Primary: expect up+stopped ---
+            log.info(
+                f"Checking primary cluster image state is up+stopped for {pool_type}"
+            )
+            elapsed = 0
+            primary_ok = False
+            while elapsed <= max_wait:
+                rc = check_image_mirror_status(
+                    status="up+stopped",
+                    pool_type=pool_type,
+                    rbd=rbd_primary,
+                    **kw,
+                )
+                if rc == 0:
+                    log.info(
+                        f"Primary image state is up+stopped for {pool_type} "
+                        f"(elapsed {elapsed}s)"
+                    )
+                    primary_ok = True
+                    break
+                log.info(
+                    f"Primary image state not yet up+stopped for {pool_type} "
+                    f"(elapsed {elapsed}s), retrying in {retry_interval}s ..."
+                )
+                time.sleep(retry_interval)
+                elapsed += retry_interval
+
+            if not primary_ok:
+                log.error(
+                    f"Primary mirror image state is not up+stopped after "
+                    f"{max_wait}s for {pool_type}"
+                )
+                return 1
+
+            # --- Secondary: expect up+replaying ---
+            if rbd_secondary:
+                log.info(
+                    f"Checking secondary cluster image state is up+replaying for {pool_type}"
+                )
+                elapsed = 0
+                secondary_ok = False
+                while elapsed <= max_wait:
+                    rc = check_image_mirror_status(
+                        status="up+replaying",
+                        pool_type=pool_type,
+                        rbd=rbd_secondary,
+                        **kw,
+                    )
+                    if rc == 0:
+                        log.info(
+                            f"Secondary image state is up+replaying for {pool_type} "
+                            f"(elapsed {elapsed}s)"
+                        )
+                        secondary_ok = True
+                        break
+                    log.info(
+                        f"Secondary image state not yet up+replaying for {pool_type} "
+                        f"(elapsed {elapsed}s), retrying in {retry_interval}s ..."
+                    )
+                    time.sleep(retry_interval)
+                    elapsed += retry_interval
+
+                if not secondary_ok:
+                    log.error(
+                        f"Secondary mirror image state is not up+replaying after "
+                        f"{max_wait}s for {pool_type}"
+                    )
+                    return 1
+
+        log.info(
+            "Post-upgrade mirror state verification successful: "
+            "primary=up+stopped, secondary=up+replaying"
+        )
     except Exception as e:
         log.error(
             f"Rbd mirror cluster upgrade with snapshot mirroring enabled failed with error {str(e)}"
