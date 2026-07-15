@@ -283,6 +283,7 @@ def run_io_verify_snap_schedule_single_image(**kw):
     image_config = kw.get("image_config")
 
     io_size = image_config.get("io_size", int(int(image_config["size"][:-1]) / 3))
+    run_time = image_config.get("run_time", 300)
     io_config = {
         "rbd_obj": rbd,
         "client": client,
@@ -290,6 +291,7 @@ def run_io_verify_snap_schedule_single_image(**kw):
         "do_not_create_image": True,
         "config": {
             "file_size": io_size,
+            "run_time": run_time,
             "file_path": [f"{kw['mount_path']}"],
             "get_time_taken": True,
             "image_spec": [image_spec],
