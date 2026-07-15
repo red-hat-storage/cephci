@@ -1,0 +1,225 @@
+# Suite is to be used to verify the Bluefs spillover feature on 4 nodes
+# to be run in regression conf: 4-node-ec-cluster-1-client.yaml
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_spec_non_collocated
+                  placement:
+                    host_pattern: '*'
+                  spec:
+                    data_devices:
+                      paths:
+                        - /dev/vdb
+                        - /dev/vdc
+                        - /dev/vdd
+                        - /dev/vde
+                        - /dev/vdf
+                    db_devices:
+                      paths:
+                         - /dev/vdg
+                    block_db_size: '2G'
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:  CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node6                     # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Case 1 - BlueFS spillover feature validation
+      desc: Verify BlueFS spillover warning and spillover cleaner behavior
+      module: test_bluefs_spillover_feature.py
+      abort-on-fail: true
+      config:
+        case_to_run:
+          - case1
+        pool_name: test_pool
+        pool_config:
+          pg_num: 128
+        rados_write_duration: 600
+        byte_size: 4096
+        spillover_timeout: 900
+        cleaner_timeout: 900
+        poll_interval: 10
+
+  - test:
+      name: Case 2 - BlueFS spillover cleaner toggle validation
+      desc: Toggle spillover cleaner, verify migrated and pending stats, and verify HEALTH_OK
+      module: test_bluefs_spillover_feature.py
+      abort-on-fail: true
+      config:
+        case_to_run:
+          - case2
+        pool_name: test_pool_case2
+        pool_config:
+          pg_num: 128
+        rados_write_duration: 600
+        byte_size: 4096
+        spillover_timeout: 900
+        cleaner_timeout: 900
+        cleaner_stats_timeout: 300
+        health_ok_timeout: 900
+        cleaner_config_delay: 5
+        cleaner_toggle_wait: 0
+        poll_interval: 10
+
+  - test:
+      name: Case 3 - BlueFS spillover idle time validation
+      desc: Verify bluefs_spillover_idle_time using migrated OSD log timestamps
+      module: test_bluefs_spillover_feature.py
+      abort-on-fail: true
+      config:
+        case_to_run:
+          - case3
+        pool_name: test_pool_case3
+        pool_config:
+          pg_num: 128
+        rados_write_duration: 600
+        byte_size: 4096
+        spillover_timeout: 900
+        cleaner_timeout: 900
+        health_ok_timeout: 900
+        poll_interval: 10
+        post_action_wait: 10
+        bluefs_spillover_idle_time: 300
+        debug_bluefs: 10/10
+        min_osds_for_idle_time_verify: 1
+
