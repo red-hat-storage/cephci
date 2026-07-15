@@ -5,7 +5,8 @@
 # and secondary (sec) zones within this group. The master zone is part of the pri
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 
-# global-conf: conf/tentacle/rgw/ms-ec-profile-4+2-cluster.yaml
+# global-conf: conf/tentacle/rgw/ms-ec-profile-4+2-cluster-2rgw.yaml
+
 tests:
 
   - test:
@@ -78,13 +79,34 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.pri
-                      placement:
-                        nodes:
-                          - node7
+                      service_id: shared.pri.io
                       spec:
-                        ssl: true
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
                         generate_cert: true
+                        ssl: true
+                      placement:
+                        count_per_host: 2
+                        nodes:
+                          - node6
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
+                        generate_cert: true
+                        ssl: true
+                      placement:
+                        count_per_host: 2
+                        nodes:
+                            - node7
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -146,13 +168,34 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.sec
-                      placement:
-                        nodes:
-                          - node7
+                      service_id: shared.sec.io
                       spec:
-                        ssl: true
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
                         generate_cert: true
+                        ssl: true
+                      placement:
+                        count_per_host: 2
+                        nodes:
+                          - node6
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
+                        generate_cert: true
+                        ssl: true
+                      placement:
+                        count_per_host: 2
+                        nodes:
+                            - node7
       desc: RHCS-ssl multisite cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -245,6 +288,55 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.rgw6
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.rgw6
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Copy admin keyring/conf to RGW node6
+      destroy-cluster: false
+      module: test_client.py
+      name: configure rgw node6 client access
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.rgw7
+            node: node7
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.rgw7
+            node: node7
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Copy admin keyring/conf to RGW node7 (zone endpoint host)
+      destroy-cluster: false
+      module: test_client.py
+      name: configure rgw node7 client access
+      polarion-id: CEPH-83573758
 
   - test:
       abort-on-fail: true
@@ -254,11 +346,13 @@ tests:
             roles:
               - rgw
               - client
+              - installer
         ceph-sec:
           config:
             roles:
               - rgw
               - client
+              - installer
       desc: Copy cephadm root CA cert to rgw and client nodes
       module: copy_cephadm_root_ca_cert.py
       name: copy cephadm root ca cert
@@ -269,6 +363,7 @@ tests:
       clusters:
         ceph-pri:
           config:
+            cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
               - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7} --master --default"
@@ -277,27 +372,26 @@ tests:
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
               - "ceph config set client.rgw rgw_verify_ssl False"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
-              - "ceph orch restart {service_name:shared.pri}"
-              - "sleep 20"
+              - "ceph config set client.rgw.shared.pri.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.pri.sync rgw_verify_ssl False"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+              - "sleep 120"
         ceph-sec:
           config:
+            cephadm: true
             commands:
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
-              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw rgw_verify_ssl False"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
-              - "ceph orch restart {service_name:shared.sec}"
+              - "radosgw-admin --rgw_verify_ssl=false realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin --rgw_verify_ssl=false period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin --rgw_verify_ssl=false period update --rgw-realm india --commit"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec.sync rgw_verify_ssl False"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
               - "sleep 120"
       desc: Setting up RGW multisite replication environment
       module: exec.py
