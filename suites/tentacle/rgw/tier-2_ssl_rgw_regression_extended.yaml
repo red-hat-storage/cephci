@@ -142,6 +142,7 @@ tests:
       name: Test NFS V4 mount
       desc: Test NFS V4 mount
       polarion-id: CEPH-83574598
+      comments: known issue in 9.2-IBMCEPH-16569
       module: sanity_rgw.py
       config:
         script-name: ../nfs_ganesha/nfs_cluster.py
