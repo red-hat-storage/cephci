@@ -12,7 +12,7 @@ instance:
     disable_root: false
     ssh_pwauth: true
 
-     # Refresh package metadata (package upgrades are done via `dnf update -y` below)
+    # Refresh package metadata (package upgrades are done via `dnf update -y` below)
     package_update: true
 
     groups:
