@@ -1,10 +1,19 @@
 globals:
     openstack-credentials:
-        username: '73cf50f58d7a4ebf8c7d8dc9ac930483'
-        password: 'just_the_work'
+        username: '<user_name>'
+        password: '<user_password>'
         auth-url: 'https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000'
-        auth-version: '3.x_appcred'
-        tenant-name: 'ceph-sys-test'
+        auth-version: '3.x_password'
+        tenant-name: 'ceph-ci'
         service-region: 'regionOne'
         domain: 'redhat.com'
         tenant-domain-id: '62cf1b5ec006489db99e2b0ebfb55f57'
+    ibm-credentials:
+        access-key: '<user_access_key>'
+        service-url: 'https://xxxx.iaas.cloud.ibm.com/v1'
+        private_key_path: '<private_key_file_path>'
+        zone_name: '<dns_zone>'
+        vpc_name: '<vpc_name>'
+        zone_id_model_name: '<vpc_datacenter_name>'
+        resource_group_id: "<UUID of the resource group>"
+        dns_svc_id: "<GUID of the DNS service hosted>"
