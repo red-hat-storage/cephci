@@ -58,6 +58,7 @@ from utility.log import Log
 from utility.utils import (
     configure_kafka_cluster_with_security,
     configure_kafka_security,
+    copy_file_from_node_to_node,
     install_start_kafka,
     retain_bucket_pol_at_archive,
     set_config_param,
@@ -249,8 +250,8 @@ def run(**kw):
     if install_start_kafka_broker_archive:
         install_start_kafka(archive_rgw_node, cloud_type)
     if configure_kafka_broker_security:
-        configure_kafka_security(primary_rgw_node, cloud_type)
-        configure_kafka_security(secondary_rgw_node, cloud_type)
+        configure_kafka_security(primary_cluster, cloud_type)
+        configure_kafka_security(secondary_cluster, cloud_type)
 
     configure_kafka_cluster = config.get("configure_kafka_cluster_with_security")
     if configure_kafka_cluster:
@@ -462,55 +463,3 @@ def set_test_env(config, rgw_node):
             rgw_node.exec_command(
                 cmd=f"venv/bin/pip install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt"
             )
-
-
-def copy_file_from_node_to_node(src_file, src_node, dest_node, dest_file):
-    """
-    Copies file from one node to another node
-
-    :param src_file: filename to be copied
-    :param src_node: node to be copied from
-    :param dest_node: node to copied to
-    :param dest_file: destination filename
-
-    """
-    log.info(f"copying {src_file} from {src_node.ip_address} to {dest_node.ip_address}")
-    src_file_obj = read_file_from_node(src_file, src_node)
-    write_file_to_node(src_file_obj, dest_file, dest_node)
-
-
-def read_file_from_node(file_name, node):
-    """
-    read file_name from node and returns
-    remote_file object
-
-    :param file_name: file_name to read
-    :param node: ceph node
-    :return: remote file object
-    """
-
-    log.info(f"reading {file_name} from {node.ip_address}")
-    try:
-        file_obj = node.remote_file(
-            sudo=True, file_name=file_name, file_mode="r"
-        ).read()
-
-        return file_obj
-
-    except FileNotFoundError:
-        raise FileNotFoundError(f"file to read is missing here: {file_name}")
-
-
-def write_file_to_node(file_obj, file_name, node):
-    """
-    write to file from ceph node using remote_file obj
-    :param file_obj: remote_file object
-    :param file_name: destination file name
-    :param node: ceph node to write
-
-    """
-
-    log.info(f"write to {file_name} in node: {node.ip_address}")
-    dest_file_obj = node.remote_file(sudo=True, file_name=file_name, file_mode="w")
-    dest_file_obj.write(file_obj)
-    dest_file_obj.flush()
