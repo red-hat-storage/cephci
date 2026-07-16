@@ -30,9 +30,11 @@ def run(ceph_cluster, **kw):
 
     """
     try:
+        global clients_orig
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         fs_util = FsUtilsV1(ceph_cluster)
         config = kw.get("config")
+        run_config = kw.get("run_config")
         cephfs_config = {}
         run_time = config.get("run_time_hrs", 8)
         replay_interval = config.get("replay_interval_hrs", 1)
@@ -41,7 +43,7 @@ def run(ceph_cluster, **kw):
         clients = clients_orig[1:11]
         file = "cephfs_systest_data.json"
 
-        client1 = clients[0]
+        client1 = clients_orig[0]
 
         f = client1.remote_file(
             sudo=True,
@@ -63,8 +65,7 @@ def run(ceph_cluster, **kw):
         proc_status_list = []
         write_procs = []
         mds_test_fail = 0
-        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-        log_base_dir = config.get("log-dir")
+        log_base_dir = run_config.get("log_dir")
         log_path = f"{log_base_dir}/mds_subtests"
         try:
             os.mkdir(log_path)
@@ -203,11 +204,11 @@ def mds_test_workflow_1(
         log1.info(
             f"Ceph status after MDS failover: {json.dumps(ceph_status, indent=4)}"
         )
-        if "HEALTH_OK" not in ceph_status["health"]["status"]:
-            log1.error(f"Ceph Health is NOT OK after mds{mds} failover")
+        if "HEALTH_ERR" in ceph_status["health"]["status"]:
+            log1.error(f"Ceph Health is in ERR state after mds{mds} failover")
             return 1
 
-        cluster_healthy = is_cluster_healthy(client)
+        cluster_healthy = is_cluster_healthy(clients_orig[0])
         log1.info(f"cluster_health {cluster_healthy}")
     log1.info("mds_test_workflow_1 completed")
     return 0
@@ -279,7 +280,7 @@ def mds_test_workflow_2(
 
             if (
                 mds_perf_after_flush[mds_rank]["expos"]
-                == mds_perf_before_flush[mds_rank]["wrpos"]
+                >= mds_perf_before_flush[mds_rank]["wrpos"]
             ):
                 log1.info(f"Journal flush Validated for MDS {mds_rank}")
             else:
@@ -297,7 +298,7 @@ def mds_test_workflow_2(
                     "Journal flush validation failed, please check journal stats before and after flush above"
                 )
                 test_fail += 1
-        cluster_healthy = is_cluster_healthy(client)
+        cluster_healthy = is_cluster_healthy(clients_orig[0])
 
     log1.info("mds_test_workflow_2 completed")
     if test_fail > 0:

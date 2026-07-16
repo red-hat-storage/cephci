@@ -29,27 +29,25 @@ def run(ceph_cluster, **kw):
 
     1. Add OSD and run snapshot creation parallel, verify snapshot create suceeds
     2. Remove OSD and run snapshot creation parallel, verify snapshot create suceeds
+    3. Verify all disks of same disk type are added to cluster, else add them.
     """
     try:
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
+        run_config = kw.get("run_config")
         cephfs_config = {}
         run_time = config.get("run_time_hrs", 8)
         # Derive OSD usage limit to trigger OSD removal
         osd_rm_limit_def = random.randrange(5, 26)
         osd_rm_limit = config.get("osd_rm_limit", osd_rm_limit_def)
-        clients = ceph_cluster.get_ceph_objects("client")
+        clients_orig = ceph_cluster.get_ceph_objects("client")
+        clients_cnt = len(clients_orig)
+        # Skipping client.0 as it is used for monitoring and execution
+        clients = clients_orig[1:clients_cnt]
         file = "cephfs_systest_data.json"
-        client1 = clients[0]
+        client1 = clients_orig[0]
 
-        f = client1.remote_file(
-            sudo=True,
-            file_name=f"/home/cephuser/{file}",
-            file_mode="r",
-        )
-        cephfs_config = json.load(f)
-        log.info("cephfs_config:%s", cephfs_config)
         nearfull_ratio = config.get("nearfull_ratio", 0.5)
         nearfull_cmd = f"ceph osd set-nearfull-ratio {nearfull_ratio}"
         log.info("Set OSD nearfull ratio to %s", nearfull_ratio)
@@ -57,17 +55,19 @@ def run(ceph_cluster, **kw):
         disruptive_tests = {
             "add_osd_during_systest": "Add OSD and run snapshot create on test subvolumes in parallel",
             "remove_osd_during_systest": "Remove OSD and run snapshot create on test subvolumes in parallel",
+            "add_all_disks_same_type": "Add all disks of same type to cluster",
         }
         test_case_name = config.get("test_name", "all_tests")
         if test_case_name in disruptive_tests:
             test_list = [test_case_name]
         else:
             test_list = disruptive_tests.keys()
+            # This test is not supported in disruptive tests,it needs to be run as setup test
+            test_list.remove("add_all_disks_same_type")
         proc_status_list = []
         write_procs = []
         mds_test_fail = 0
-        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-        log_base_dir = config.get("log-dir")
+        log_base_dir = run_config.get("log_dir")
         log_path = f"{log_base_dir}/disruptive_subtests"
         try:
             os.mkdir(log_path)
@@ -78,24 +78,33 @@ def run(ceph_cluster, **kw):
 
         for test_name in test_list:
             log.info("Running %s : %s", test_name, disruptive_tests[test_name])
-            test_proc_check_status = Value("i", 0)
-            proc_status_list.append(test_proc_check_status)
-            p = Thread(
-                target=disruptive_test_runner,
-                args=(
-                    test_proc_check_status,
-                    test_name,
-                    run_time,
-                    osd_rm_limit,
-                    log_path,
-                    clients,
-                    cephfs_common_utils,
-                    fs_system_utils,
-                    cephfs_config,
-                ),
-            )
-            p.start()
-            write_procs.append(p)
+            if test_name == "add_all_disks_same_type":
+                mds_test_fail = add_all_disks_same_type(client1, ceph_cluster)
+            else:
+                f = client1.remote_file(
+                    sudo=True,
+                    file_name=f"/home/cephuser/{file}",
+                    file_mode="r",
+                )
+                cephfs_config = json.load(f)
+                test_proc_check_status = Value("i", 0)
+                proc_status_list.append(test_proc_check_status)
+                p = Thread(
+                    target=disruptive_test_runner,
+                    args=(
+                        test_proc_check_status,
+                        test_name,
+                        run_time,
+                        osd_rm_limit,
+                        log_path,
+                        clients,
+                        cephfs_common_utils,
+                        fs_system_utils,
+                        cephfs_config,
+                    ),
+                )
+                p.start()
+                write_procs.append(p)
         for write_proc in write_procs:
             write_proc.join()
         for proc_status in proc_status_list:
@@ -164,6 +173,70 @@ def disruptive_test_runner(
             cephfs_config,
         )
     log.info("%s status after test : %s", test_name, test_proc_check_status.value)
+
+
+def add_all_disks_same_type(client, ceph_cluster):
+    """
+    This method is used for test case "Add all disks of same type to cluster", ideally before running the test.
+    Params:
+    Required -
+    client : client object
+    ceph_cluster : ceph cluster object
+    """
+    # Get disk type from currently assigned OSD nodes
+    cmd = "ceph osd tree --format json"
+    out, _ = client.exec_command(sudo=True, cmd=cmd)
+    parsed_data = json.loads(out)
+    disk_type_list = [
+        node["device_class"]
+        for node in parsed_data.get("nodes", [])
+        if node.get("type") == "osd" and node.get("device_class")
+    ]
+    log.info("Disk types from ceph osd tree: %s", disk_type_list)
+    if not disk_type_list:
+        log.error("No device_class found in ceph osd tree output")
+        return 1
+    disk_type = list(set(disk_type_list))[0]
+    # Get disk size of any existing osd node
+    cmd = "ceph orch device ls --refresh --f json"
+    out, _ = client.exec_command(sudo=True, cmd=cmd)
+    host_devices = json.loads(out)
+    device_list = {}
+    for host_entry in host_devices:
+        hostname = host_entry.get("name") or host_entry.get("addr")
+        if not hostname:
+            continue
+        device_list.setdefault(hostname, [])
+        for device in host_entry.get("devices", []):
+            if (
+                device.get("available")
+                and device.get("human_readable_type") == disk_type
+            ):
+                device_list[hostname].append(device["path"])
+    log.info("Available %s disks per host: %s", disk_type, device_list)
+    if not any(device_list.values()):
+        log.info("No available %s disks found on any host", disk_type)
+        return 0
+    max_osd_id = get_max_osd_id(client)
+    osd_procs = []
+    try:
+        for hostname, device_paths in device_list.items():
+            for device_path in device_paths:
+                max_osd_id += 1
+                p = Thread(
+                    target=add_osd,
+                    args=(ceph_cluster, hostname, device_path, max_osd_id),
+                )
+                p.start()
+                osd_procs.append(p)
+        for p in osd_procs:
+            p.join()
+        log.info("All disks of same type added to cluster")
+        return 0
+    except Exception as e:
+        log.error("Error adding all disks of same type to cluster: %s", e)
+        log.error(traceback.format_exc())
+        return 1
 
 
 def add_osd_during_systest(
@@ -304,7 +377,7 @@ def remove_osd_during_systest(
                 osd_node_name = osd_node.node.hostname
                 osd_id_list = non_available_disks[osd_node_name]
                 osd_id = max(osd_id_list)
-                if len(non_available_disks[osd_node_name]) >= 3:
+                if len(non_available_disks[osd_node_name]) >= 2:
                     sv_info_list = get_sv_list(cephfs_config, fs_system_utils)
                     rand_str = "".join(
                         random.choice(string.ascii_lowercase + string.digits)

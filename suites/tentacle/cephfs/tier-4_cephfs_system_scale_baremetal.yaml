@@ -1268,7 +1268,15 @@ tests:
         crash_setup : 1
         daemon_list : ['mds','osd','mgr','mon']
 
-
+  ### Add all disks of same type to OSD
+  -
+    test:
+      abort-on-fail: true
+      desc: Add all disks of same type to OSD
+      module: cephfs_system.cephfs_systest_disruptive_tests.py
+      name: "Add all disks of same type to OSD"
+      config:
+        test_name: "add_all_disks_same_type"
 ### Scale Tests
 
   - test:

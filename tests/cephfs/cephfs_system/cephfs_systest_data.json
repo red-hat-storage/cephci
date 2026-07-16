@@ -1,15 +1,15 @@
 {
-    "cephfs": {
+    "cephfs-scale": {
         "group": {
             "default": {
                 "shared": {"sv_prefix": "cephfs_systest_def_shared", "sv_cnt": "10"},
-                "unique": {"sv_prefix": "cephfs_systest_def", "sv_cnt": "15"},
+                "unique": {"sv_prefix": "cephfs_systest_def", "sv_cnt": "15"}
             },
             "svg1": {
                 "shared": {"sv_prefix": "cephfs_systest_def_shared", "sv_cnt": "10"},
-                "unique": {"sv_prefix": "cephfs_systest_def", "sv_cnt": "15"},
-            },
+                "unique": {"sv_prefix": "cephfs_systest_def", "sv_cnt": "15"}
+            }
         },
-        "mds": {"active": 3, "standby_replay": "true"},
+        "mds": {"active": 3, "standby_replay": "true"}
     }
 }
