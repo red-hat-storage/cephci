@@ -826,7 +826,7 @@ def op_tls_stunnel_io_tcpdump_encryption(
                 config,
                 "max_tls_cleartext_hits",
                 "tc_stunnel_max_cleartext_hits",
-                default=0,
+                default=50,
             )
         ),
         **pcap_kwargs,
