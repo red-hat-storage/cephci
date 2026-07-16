@@ -1074,7 +1074,12 @@ def _first_kmip_pem(val):
 
 
 def create_nfs_via_file_and_verify(
-    installer_node, nfs_objects, timeout, nfs_nodes=None, cluster_nodes=None
+    installer_node,
+    nfs_objects,
+    timeout,
+    nfs_nodes=None,
+    cluster_nodes=None,
+    **kwargs,
 ):
     """
     Create a temporary YAML file with NFS Ganesha configuration.
@@ -1086,6 +1091,8 @@ def create_nfs_via_file_and_verify(
         cluster_nodes: Optional full cluster node list; when ``nfs_nodes`` does not
             resolve to any host, used with ``ceph orch ps`` via
             ``_resolve_nfs_nodes_for_service_ids`` to find Ganesha daemon nodes.
+        **kwargs: Optional ``timings`` dict and ``timings_key`` str to record when
+            ``ceph orch apply`` completes.
     Returns:
         bool: True if apply and verification succeeded, else False.
     """
@@ -1121,6 +1128,18 @@ def create_nfs_via_file_and_verify(
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
             input=remote_spec, check_ec=True, pos_args=pos_args
         )
+        timings = kwargs.get("timings")
+        timings_key = kwargs.get("timings_key")
+        if timings is not None and timings_key:
+            from datetime import datetime
+
+            triggered_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timings[timings_key] = triggered_at
+            log.info(
+                "Orchestrator apply recorded at %s (key=%s)",
+                triggered_at,
+                timings_key,
+            )
         verify_nfs_ganesha_service(node=installer_node, timeout=timeout)
         log.info("NFS Ganesha spec file applied successfully.")
         nodes_for_coredump = None
