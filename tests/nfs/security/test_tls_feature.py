@@ -15,12 +15,15 @@ from tests.nfs.security.security_utils import (
     check_mount_fails,
     ensure_package_installed,
     full_tls_stack_cleanup,
+    mount_export_via_stunnel,
     normalize_fio_buffer_pattern,
     probe_tls_handshake_with_openssl,
     setup_plain_nfs_cluster,
+    setup_stunnel_client,
     setup_tls_client,
     setup_tls_nfs_cluster,
     start_tcpdump_capture,
+    stop_stunnel_client,
     stop_tcpdump_capture,
     tls_config_get,
     verify_ceph_orch_nfs_running,
@@ -54,13 +57,17 @@ OP_TLS_DEPLOY_MOUNT_VERIFY = "tls_deploy_mount_verify"
 OP_TLS_EXPORT_ENFORCEMENT = "tls_export_enforcement"
 OP_TLS_LOGS_OPENSSL_PROBE = "tls_logs_openssl_probe"
 OP_TLS_IO_TCPDUMP_ENCRYPTION = "tls_io_tcpdump_encryption"
+OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION = "tls_stunnel_io_tcpdump_encryption"
 OP_TLS_FULL_WORKFLOW = "tls_full_workflow"
 _TLS_FULL_SEQUENCE = [
     OP_TLS_DEPLOY_MOUNT_VERIFY,
     OP_TLS_EXPORT_ENFORCEMENT,
     OP_TLS_LOGS_OPENSSL_PROBE,
 ]
-_TLS_STANDALONE_OPERATIONS = _TLS_FULL_SEQUENCE + [OP_TLS_IO_TCPDUMP_ENCRYPTION]
+_TLS_STANDALONE_OPERATIONS = _TLS_FULL_SEQUENCE + [
+    OP_TLS_IO_TCPDUMP_ENCRYPTION,
+    OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION,
+]
 # fio --buffer_pattern requires hex (e.g. 0xCEFACEFE), not ASCII strings.
 DEFAULT_TLS_IO_MARKER = "0xCEFACEFE"
 _FIO_SIZE_RE = re.compile(r"^\d+[kKmMgGtT]?$")
@@ -117,6 +124,7 @@ def _operations_to_run(config):
             "config.operation is required. Use one of: "
             f"{OP_TLS_DEPLOY_MOUNT_VERIFY}, {OP_TLS_EXPORT_ENFORCEMENT}, "
             f"{OP_TLS_LOGS_OPENSSL_PROBE}, {OP_TLS_IO_TCPDUMP_ENCRYPTION}, "
+            f"{OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION}, "
             f"{OP_TLS_FULL_WORKFLOW} (or tls_all_in_one)."
         )
     op = _normalize_operation(raw)
@@ -648,6 +656,192 @@ def _run_capture_fio_phase(
             log.error("Failed to cleanup temp files on %s: %s", mount_path, err)
 
 
+def _run_stunnel_capture_fio_phase(
+    client_node,
+    export_path,
+    mount_path,
+    version,
+    accept_port,
+    server_host,
+    server_port,
+    pcap_path,
+    snaplen,
+    config,
+):
+    """Start tcpdump on server:port, mount via stunnel, run fio, stop capture."""
+    capture_pid = None
+    mount_created = False
+    try:
+        log.info(
+            "[Step 4/6] Start tcpdump on %s:%s (capture TLS wire to Ganesha)",
+            server_host,
+            server_port,
+        )
+        capture_pid = start_tcpdump_capture(
+            client_node,
+            server_host=server_host,
+            port=server_port,
+            pcap_path=pcap_path,
+            snaplen=snaplen,
+        )
+        log.info(
+            "[Step 5/6] Mount export via stunnel local proxy (port=%s)", accept_port
+        )
+        mount_export_via_stunnel(
+            client_node, export_path, mount_path, version, accept_port
+        )
+        mount_created = True
+        log.info("[Step 6/6] Run fio write/read while capture is active")
+        return _run_fio_write_read_on_mount(client_node, mount_path, config)
+    finally:
+        if capture_pid:
+            try:
+                stop_tcpdump_capture(client_node, pcap_path, pid=capture_pid)
+            except Exception as err:
+                log.error("Failed to stop tcpdump: %s", err)
+        if mount_created:
+            try:
+                client_node.exec_command(
+                    sudo=True,
+                    cmd=f"umount -l {mount_path}",
+                    check_ec=False,
+                )
+                log.info("Unmounted %s", mount_path)
+            except Exception as err:
+                log.error("Failed to unmount %s: %s", mount_path, err)
+
+
+def op_tls_stunnel_io_tcpdump_encryption(
+    installer_node, client_node, nfs_node, config, nfs_name
+):
+    """
+    TLS Ganesha + stunnel client (no kTLS/tlshd): mount through local stunnel proxy,
+    run fio I/O under tcpdump, verify wire traffic is encrypted (no cleartext pattern).
+    """
+    log.info("=== Operation: tls_stunnel_io_tcpdump_encryption ===")
+    fs_name = config.get("fs_name", "cephfs")
+    tls_nfs_name = nfs_name or config.get("nfs_cluster_name", DEFAULT_NFS_TLS_CLUSTER)
+    export_name = tls_config_get(
+        config,
+        "stunnel_export_path",
+        "tc_stunnel_export",
+        default="/tls_export_stunnel",
+    )
+    mount_name = tls_config_get(
+        config,
+        "stunnel_mount_path",
+        "tc_stunnel_mount",
+        default="/mnt/tls_stunnel_tc",
+    )
+    pcap_path = tls_config_get(
+        config,
+        "stunnel_pcap_path",
+        "tc_stunnel_pcap_path",
+        default="/tmp/tls_pcap/stunnel_tc.pcap",
+    )
+    version = config.get("nfs_version", "4.2")
+    server_port = int(config.get("port", 2049))
+    accept_port = int(
+        tls_config_get(
+            config,
+            "stunnel_accept_port",
+            "tc_stunnel_accept_port",
+            default=49152,
+        )
+    )
+    server_host = nfs_node.ip_address or nfs_node.hostname
+    snaplen = int(
+        tls_config_get(
+            config, "tcpdump_snaplen", "tc_stunnel_tcpdump_snaplen", default=512
+        )
+    )
+    min_tls_app_records = int(
+        tls_config_get(
+            config,
+            "min_tls_app_records",
+            "tc_stunnel_min_tls_app_records",
+            default=5,
+        )
+    )
+    pcap_kwargs = _pcap_analysis_kwargs(config)
+    ca_cert = config.get("_tls_ca_cert")
+    if not ca_cert:
+        raise OperationFailedError(
+            "Missing TLS CA (run() should deploy TLS cluster before this operation)"
+        )
+
+    log.info("[Step 1/6] Install tcpdump, fio, and stunnel on client")
+    _setup_tls_io_capture_prerequisites(client_node)
+    ensure_package_installed(client_node, "stunnel")
+
+    log.info("[Step 2/6] Configure stunnel on client (no kTLS/tlshd)")
+    setup_stunnel_client(
+        client_node,
+        ca_cert,
+        server_host=server_host,
+        server_port=server_port,
+        accept_port=accept_port,
+        ssl_version=config.get("stunnel_ssl_version", "TLSv1.3"),
+        ciphers=config.get("stunnel_ciphers", "ALL"),
+        verify_level=int(config.get("stunnel_verify", 2)),
+    )
+
+    ok, _ = verify_ceph_orch_nfs_running(client_node, tls_nfs_name)
+    if not ok:
+        raise OperationFailedError(
+            f"TLS NFS service {tls_nfs_name} not reported in ceph orch ps"
+        )
+
+    log.info("[Step 3/6] Create TLS export %r on cluster %r", export_name, tls_nfs_name)
+    export_path, mount_path = _create_nfs_export_for_capture(
+        client_node,
+        fs_name,
+        tls_nfs_name,
+        export_name,
+        mount_name,
+        xprtsec="tls",
+    )
+
+    fio_stats = _run_stunnel_capture_fio_phase(
+        client_node,
+        export_path,
+        mount_path,
+        version,
+        accept_port,
+        server_host,
+        server_port,
+        pcap_path,
+        snaplen,
+        config,
+    )
+
+    log.info("Analyzing pcap %s for encrypted wire traffic", pcap_path)
+    tls_analysis = verify_tls_encrypted_traffic_in_pcap(
+        client_node,
+        pcap_path,
+        cleartext_marker=fio_stats["cleartext_marker"],
+        min_tls_app_records=min_tls_app_records,
+        max_cleartext_marker_hits=int(
+            tls_config_get(
+                config,
+                "max_tls_cleartext_hits",
+                "tc_stunnel_max_cleartext_hits",
+                default=50,
+            )
+        ),
+        **pcap_kwargs,
+    )
+    log.info(
+        "tls_stunnel_io_tcpdump_encryption completed: cleartext_hits=%s "
+        "(allowed<=%s) tls_record_signal=%s packets=%s",
+        tls_analysis["cleartext_marker_hits"],
+        tls_analysis["allowed_cleartext_marker_hits"],
+        tls_analysis["tls_record_signal"],
+        tls_analysis["packet_count"],
+    )
+    stop_stunnel_client(client_node)
+
+
 def op_tls_io_tcpdump_encryption(
     installer_node, client_node, nfs_node, config, nfs_name
 ):
@@ -856,6 +1050,9 @@ _OP_DISPATCH = {
     OP_TLS_IO_TCPDUMP_ENCRYPTION: lambda inst, c, n, cfg, name: op_tls_io_tcpdump_encryption(
         inst, c, n, cfg, name
     ),
+    OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION: lambda inst, c, n, cfg, name: op_tls_stunnel_io_tcpdump_encryption(
+        inst, c, n, cfg, name
+    ),
 }
 
 
@@ -865,6 +1062,7 @@ def run(ceph_cluster, **kw):
 
     config.operation: tls_deploy_mount_verify | tls_export_enforcement |
         tls_logs_openssl_probe | tls_io_tcpdump_encryption |
+        tls_stunnel_io_tcpdump_encryption |
         tls_full_workflow (or tls_all_in_one)
     """
     log.info("Starting NFS TLS feature tests (independent mode)")
@@ -892,6 +1090,7 @@ def run(ceph_cluster, **kw):
     )
     fs_name = config.get("fs_name", "cephfs")
     tcpdump_self_contained = steps == [OP_TLS_IO_TCPDUMP_ENCRYPTION]
+    stunnel_op = OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION in steps
 
     try:
         if not tcpdump_self_contained:
@@ -904,7 +1103,14 @@ def run(ceph_cluster, **kw):
                 tls_ktls=config.get("tls_ktls", True),
                 tls_debug=False,
             )
-            setup_tls_client(client_node, ca_cert)
+            config["_tls_ca_cert"] = ca_cert
+            if not stunnel_op:
+                setup_tls_client(client_node, ca_cert)
+            else:
+                log.info(
+                    "Skipping kTLS/tlshd client setup; %s uses stunnel",
+                    OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION,
+                )
 
         for step in steps:
             _OP_DISPATCH[step](installer, client_node, nfs_node, config, nfs_name)
@@ -919,6 +1125,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Full TLS stack cleanup (umount, exports, cluster, subvolumes)")
         try:
+            if stunnel_op:
+                stop_stunnel_client(client_node)
             if tcpdump_self_contained:
                 full_tls_stack_cleanup(client_node, plain_nfs_name, fs_name=fs_name)
             full_tls_stack_cleanup(client_node, nfs_name, fs_name=fs_name)

@@ -20,7 +20,14 @@ TLS_TEST_MOUNT_CANDIDATES = [
     "/mnt/tls_tc1_0",
     "/mnt/plain_tc4_0",
     "/mnt/tls_tc4_0",
+    "/mnt/tls_stunnel_tc",
 ]
+STUNNEL_DIR = "/etc/stunnel"
+STUNNEL_CA_PATH = f"{STUNNEL_DIR}/tls_ca_cert.pem"
+STUNNEL_CONF_PATH = f"{STUNNEL_DIR}/stunnel.conf"
+STUNNEL_RUN_DIR = "/run/stunnel"
+STUNNEL_PID_PATH = "/var/run/stunnel/stunnel.pid"
+DEFAULT_STUNNEL_ACCEPT_PORT = 49152
 
 
 def _nfs_ls_to_cluster_names(clusters):
@@ -291,6 +298,211 @@ def check_mount_fails(client_node, mount_cmd):
     except CommandFailed:
         log.info("Mount failed as expected.")
         return True
+
+
+def mount_path_is_active(client_node, mount_path):
+    """Return True if ``mount_path`` appears in the remote ``mount`` output."""
+    out, _ = client_node.exec_command(sudo=True, cmd="mount", check_ec=False)
+    return mount_path.rstrip("/") in str(out or "")
+
+
+def _write_remote_pem(client_node, file_path, pem_text):
+    """Write PEM material to ``file_path`` on the remote client."""
+    try:
+        remote = client_node.remote_file(sudo=True, file_name=file_path, file_mode="w")
+        remote.write(pem_text)
+        remote.flush()
+    except AttributeError:
+        remote = client_node.remote_file(sudo=True, file_name=file_path, file_mode="wb")
+        remote.write(pem_text.encode("utf-8"))
+        remote.flush()
+
+
+def build_stunnel_nfs_mount_cmd(export_path, mount_path, version, accept_port):
+    """Return mount command for NFS through local stunnel (no xprtsec/tlshd)."""
+    return (
+        f"mount -vv -t nfs -o rw,vers={version},port={accept_port} "
+        f"127.0.0.1:{export_path} {mount_path}"
+    )
+
+
+def _build_stunnel_conf(
+    server_host,
+    server_port,
+    accept_host,
+    accept_port,
+    ssl_version="TLSv1.3",
+    ciphers="ALL",
+    verify_level=2,
+):
+    """Return stunnel client configuration for NFS-over-TLS via local proxy."""
+    return (
+        f"pid = {STUNNEL_PID_PATH}\n"
+        f"CAfile = {STUNNEL_CA_PATH}\n"
+        "socket = r:TCP_NODELAY=1\n"
+        "foreground = no\n"
+        "debug = 7\n"
+        "output = /var/log/stunnel.log\n"
+        "renegotiation = no\n"
+        "\n"
+        "[nfs4]\n"
+        "client = yes\n"
+        f"accept = {accept_host}:{accept_port}\n"
+        f"connect = {server_host}:{server_port}\n"
+        f"sslVersion = {ssl_version}\n"
+        f"ciphers = {ciphers}\n"
+        f"verify = {verify_level}\n"
+    )
+
+
+def setup_stunnel_runtime_dirs(client_node):
+    """Create stunnel pid/log runtime directories on the client."""
+    log.info("[stunnel] Creating runtime directories on %s", client_node.hostname)
+    client_node.exec_command(sudo=True, cmd=f"mkdir -p {STUNNEL_DIR}", check_ec=False)
+    client_node.exec_command(
+        sudo=True, cmd=f"mkdir -p {STUNNEL_RUN_DIR}", check_ec=False
+    )
+    client_node.exec_command(
+        sudo=True, cmd=f"mkdir -p $(dirname {STUNNEL_PID_PATH})", check_ec=False
+    )
+    client_node.exec_command(
+        sudo=True,
+        cmd=f"chown root:root {STUNNEL_RUN_DIR}",
+        check_ec=False,
+    )
+    client_node.exec_command(
+        sudo=True,
+        cmd=f"chmod 755 {STUNNEL_RUN_DIR}",
+        check_ec=False,
+    )
+
+
+def setup_stunnel_client(
+    client_node,
+    ca_cert,
+    server_host,
+    server_port=2049,
+    accept_host="127.0.0.1",
+    accept_port=DEFAULT_STUNNEL_ACCEPT_PORT,
+    ssl_version="TLSv1.3",
+    ciphers="ALL",
+    verify_level=2,
+):
+    """
+    Install stunnel, deploy CA + stunnel.conf, and start the NFS TLS client proxy.
+
+    NFS mounts use ``127.0.0.1:<accept_port>`` (plain NFS locally); stunnel wraps
+    traffic to ``server_host:server_port`` with TLS.
+    """
+    log.info(
+        "[stunnel] Installing stunnel on %s (proxy %s:%s -> %s:%s)",
+        client_node.hostname,
+        accept_host,
+        accept_port,
+        server_host,
+        server_port,
+    )
+    ensure_package_installed(client_node, "stunnel")
+    setup_stunnel_runtime_dirs(client_node)
+
+    log.info("[stunnel] Writing CA to %s", STUNNEL_CA_PATH)
+    _write_remote_pem(client_node, STUNNEL_CA_PATH, ca_cert.rstrip("\n") + "\n")
+    client_node.exec_command(
+        sudo=True, cmd=f"restorecon -Rv {STUNNEL_DIR}", check_ec=False
+    )
+
+    conf_body = _build_stunnel_conf(
+        server_host=server_host,
+        server_port=server_port,
+        accept_host=accept_host,
+        accept_port=accept_port,
+        ssl_version=ssl_version,
+        ciphers=ciphers,
+        verify_level=verify_level,
+    )
+    log.info("[stunnel] Writing %s", STUNNEL_CONF_PATH)
+    _write_remote_pem(client_node, STUNNEL_CONF_PATH, conf_body)
+
+    stop_stunnel_client(client_node)
+    log.info("[stunnel] Enabling and starting stunnel service")
+    client_node.exec_command(sudo=True, cmd="systemctl enable stunnel", check_ec=False)
+    client_node.exec_command(sudo=True, cmd="systemctl restart stunnel", check_ec=False)
+    time.sleep(2)
+    verify_stunnel_listening(client_node, accept_host, accept_port)
+    log.info("[stunnel] Client proxy ready on %s:%s", accept_host, accept_port)
+
+
+def verify_stunnel_listening(client_node, accept_host="127.0.0.1", accept_port=49152):
+    """Raise if stunnel is not listening on the local accept port."""
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"ss -ltn | grep -F '{accept_host}:{accept_port}'",
+        check_ec=False,
+        timeout=30,
+    )
+    if not out or str(accept_port) not in str(out):
+        status_out, _ = client_node.exec_command(
+            sudo=True,
+            cmd="systemctl status stunnel --no-pager -l",
+            check_ec=False,
+        )
+        log_out, _ = client_node.exec_command(
+            sudo=True,
+            cmd="tail -50 /var/log/stunnel.log 2>/dev/null || true",
+            check_ec=False,
+        )
+        raise OperationFailedError(
+            f"stunnel not listening on {accept_host}:{accept_port}. "
+            f"systemctl status:\n{status_out}\nstunnel.log:\n{log_out}"
+        )
+    log.info(
+        "[stunnel] Verified listener on %s:%s — %s",
+        accept_host,
+        accept_port,
+        str(out).strip(),
+    )
+
+
+def stop_stunnel_client(client_node):
+    """Stop stunnel on the client if running."""
+    log.info("[stunnel] Stopping stunnel on %s", client_node.hostname)
+    client_node.exec_command(
+        sudo=True, cmd="systemctl stop stunnel", check_ec=False, timeout=60
+    )
+    client_node.exec_command(
+        sudo=True, cmd="pkill -x stunnel", check_ec=False, timeout=30
+    )
+
+
+def mount_export_via_stunnel(
+    client_node, export_path, mount_path, version, accept_port
+):
+    """Mount an NFS export through the local stunnel proxy."""
+    client_node.create_dirs(dir_path=mount_path, sudo=True)
+    mount_cmd = build_stunnel_nfs_mount_cmd(
+        export_path, mount_path, version, accept_port
+    )
+    log.info("[stunnel] Mount command: %s", mount_cmd)
+    out, err, exit_code, _duration = client_node.exec_command(
+        sudo=True,
+        cmd=mount_cmd,
+        check_ec=False,
+        verbose=True,
+        timeout=120,
+    )
+    if exit_code != 0:
+        raise OperationFailedError(
+            f"Stunnel NFS mount failed (exit={exit_code}): {err or out}"
+        )
+    if not mount_path_is_active(client_node, mount_path):
+        raise OperationFailedError(
+            f"Stunnel mount command succeeded but {mount_path} not in mount table"
+        )
+    log.info(
+        "[stunnel] Mount succeeded on %s at %s",
+        client_node.hostname,
+        mount_path,
+    )
 
 
 def full_tls_stack_cleanup(
