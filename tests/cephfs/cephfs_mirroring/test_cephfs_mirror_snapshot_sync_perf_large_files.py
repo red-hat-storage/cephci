@@ -53,6 +53,8 @@ def run(ceph_cluster, **kw):
 
     Returns:
         0 on success, 1 on failure.
+        Also fails if any multi-thread sync duration is slower than the
+        1-thread baseline for the same mount type.
     """
 
     source_clients = None
@@ -596,6 +598,9 @@ def run(ceph_cluster, **kw):
             )
         log.info("CSV results written to %s", csv_file)
 
+        if not _compare_and_validate_sync_durations(results):
+            return 1
+
         return 0
 
     except Exception as e:
@@ -706,6 +711,119 @@ def run(ceph_cluster, **kw):
 def _fmt(val, suffix=""):
     """Format a float value for summary display, returning 'None' for missing values."""
     return f"{val:.1f}{suffix}" if val is not None else "None"
+
+
+def _compare_and_validate_sync_durations(results):
+    """
+    Log a sync-duration comparison table and improvement vs 1-thread.
+
+    Multi-thread sync must be equal or faster than the 1-thread baseline
+    for the same mount type. Returns False if any multi-thread run is slower.
+    """
+    durations = {}
+    thread_counts = sorted({r["thread_count"] for r in results})
+    mount_types = []
+    for r in results:
+        mtype = r["mount_type"]
+        if mtype not in durations:
+            durations[mtype] = {}
+            mount_types.append(mtype)
+        durations[mtype][r["thread_count"]] = r.get("sync_duration_sec")
+
+    log.info("=" * 70)
+    log.info("SYNC DURATION COMPARISON TABLE (seconds)")
+    log.info("=" * 70)
+    header = f"{'Mount':<10}" + "".join(f"{('t=' + str(t)):>14}" for t in thread_counts)
+    log.info(header)
+    log.info("-" * len(header))
+    for mtype in mount_types:
+        row = f"{mtype:<10}"
+        for t in thread_counts:
+            dur = durations[mtype].get(t)
+            row += f"{_fmt(dur):>14}"
+        log.info(row)
+
+    log.info("=" * 70)
+    log.info("SYNC DURATION IMPROVEMENT VS 1-THREAD")
+    log.info("Rule: multi-thread must be equal or faster than 1-thread")
+    log.info("=" * 70)
+
+    failed = False
+    for mtype in mount_types:
+        single = durations[mtype].get(1)
+        if single is None or single <= 0:
+            log.warning(
+                "No valid 1-thread baseline for mount=%s; skipping validation", mtype
+            )
+            continue
+
+        log.info("Mount=%s | 1-thread baseline: %.1fs", mtype, single)
+        prev_t = 1
+        prev_dur = single
+        for t in thread_counts:
+            if t == 1:
+                continue
+            multi = durations[mtype].get(t)
+            if multi is None:
+                log.error(
+                    "Missing sync duration for mount=%s threads=%d", mtype, t
+                )
+                failed = True
+                continue
+
+            saved_sec = single - multi
+            improve_pct = (saved_sec / single) * 100.0
+            vs_prev_sec = prev_dur - multi
+            vs_prev_pct = (vs_prev_sec / prev_dur) * 100.0 if prev_dur > 0 else 0.0
+
+            if multi > single:
+                log.error(
+                    "FAIL: mount=%s threads=%d duration=%.1fs is SLOWER than "
+                    "1-thread %.1fs (delta %+0.1fs / %+0.1f%%)",
+                    mtype,
+                    t,
+                    multi,
+                    single,
+                    multi - single,
+                    -improve_pct,
+                )
+                failed = True
+            elif multi == single:
+                log.info(
+                    "OK: mount=%s threads=%d duration=%.1fs EQUAL to 1-thread "
+                    "(no change)",
+                    mtype,
+                    t,
+                    multi,
+                )
+            else:
+                log.info(
+                    "OK: mount=%s threads=%d duration=%.1fs | improved by "
+                    "%.1fs (%.1f%%) vs 1-thread | vs t=%d: %+0.1fs (%+.1f%%)",
+                    mtype,
+                    t,
+                    multi,
+                    saved_sec,
+                    improve_pct,
+                    prev_t,
+                    vs_prev_sec,
+                    vs_prev_pct,
+                )
+            prev_t = t
+            prev_dur = multi
+
+    if failed:
+        log.error(
+            "Single vs multi-thread validation FAILED: "
+            "multi-thread sync duration must be equal or faster than 1-thread"
+        )
+        return False
+
+    log.info(
+        "Single vs multi-thread validation PASSED: "
+        "all multi-thread sync durations are equal or faster than 1-thread"
+    )
+    return True
 
 
 def _is_nfs_mount_alive(client, mount_dir):
