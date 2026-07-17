@@ -1,4 +1,5 @@
 import random
+import re
 import traceback
 
 from looseversion import LooseVersion
@@ -433,8 +434,12 @@ def fscrypt_non_empty_dir(fscrypt_test_params):
         )
         return 1
     except CommandFailed as ex:
-        exp_msg = "cannot be encrypted because it is non-empty"
-        if exp_msg in str(ex):
+        match = re.search(
+            r"cannot(.*?)be(.*?)encrypted(.*?)because(.*?)it(.*?)is(.*?)non-empty",
+            str(ex),
+            flags=re.DOTALL,
+        )
+        if match:
             log.info("PASS:FScrypt didn't suceed on non_empty encrypt path")
             return 0
         else:
