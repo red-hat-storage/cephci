@@ -7,6 +7,7 @@ It contains all the re-useable functions related to cephfs mirroring feature
 import csv
 import json
 import random
+import re
 import secrets
 import string
 import time
@@ -21,6 +22,41 @@ from utility.retry import retry
 from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
+
+
+def parse_sync_duration_to_seconds(raw_duration):
+    """Convert daemon sync_duration values to float seconds.
+
+    Accepts numeric values and human-readable strings such as ``49s``,
+    ``1m 16``, ``1m 16s``, ``1h 2m 3s``, or plain ``76.5``.
+    Returns None when the value is missing or unparseable.
+    """
+    if raw_duration is None:
+        return None
+    if isinstance(raw_duration, (int, float)):
+        return float(raw_duration)
+
+    text = str(raw_duration).strip().lower()
+    if not text:
+        return None
+
+    try:
+        return float(text.rstrip("s").strip())
+    except ValueError:
+        pass
+
+    total = 0.0
+    matched = False
+    for value, unit in re.findall(r"([0-9]*\.?[0-9]+)\s*([hms]?)", text):
+        matched = True
+        val = float(value)
+        if unit == "h":
+            total += val * 3600
+        elif unit == "m":
+            total += val * 60
+        else:
+            total += val
+    return total if matched else None
 
 
 def _normalize_asok_peer_status(data):
@@ -982,15 +1018,12 @@ class CephfsMirroringUtils(object):
                     continue
                 if last_synced_snap.get("name") == snapshot_name:
                     raw_duration = last_synced_snap.get("sync_duration")
-                    sync_duration = (
-                        str(raw_duration).rstrip("s")
-                        if raw_duration is not None
-                        else None
-                    )
+                    sync_duration = parse_sync_duration_to_seconds(raw_duration)
                     log.info(
-                        "Snapshot %s synced: duration=%s, bytes=%s, files=%s",
+                        "Snapshot %s synced: duration=%s (raw=%s), bytes=%s, files=%s",
                         snapshot_name,
                         sync_duration,
+                        raw_duration,
                         last_synced_snap.get("sync_bytes"),
                         last_synced_snap.get("sync_files"),
                     )
@@ -1001,7 +1034,13 @@ class CephfsMirroringUtils(object):
                         "snaps_synced": path_status.get("snaps_synced"),
                     }
 
-        log.error("%s not synced, last synced data is %s", snapshot_name, data)
+        # Expected while still syncing; @retry will re-poll. Keep at info to avoid
+        # flooding .err with false failures during normal sync wait.
+        log.info(
+            "%s not synced yet (still syncing or pending). peer_status=%s",
+            snapshot_name,
+            data,
+        )
         raise CommandFailed("One or more snapshots are not synced")
 
     def remove_snapshot_mirror_peer(self, source_clients, fs_name, peer_uuid):

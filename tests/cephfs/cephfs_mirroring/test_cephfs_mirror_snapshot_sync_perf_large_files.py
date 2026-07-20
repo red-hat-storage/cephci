@@ -6,7 +6,11 @@ import time
 import traceback
 
 from ceph.ceph import CommandFailed
-from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
+from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
+    CephfsMirroringUtils,
+    parse_sync_duration_to_seconds,
+    wait_for_sync_idle,
+)
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
@@ -448,19 +452,21 @@ def run(ceph_cluster, **kw):
                     return 1
 
                 raw_duration = result_snap.get("sync_duration")
-                if raw_duration is not None:
-                    daemon_sync_duration = float(raw_duration)
-                else:
-                    daemon_sync_duration = None
+                daemon_sync_duration = parse_sync_duration_to_seconds(raw_duration)
+                if daemon_sync_duration is None:
+                    log.error(
+                        "Snapshot %s (%s) reported synced but sync_duration is "
+                        "missing/unparseable (raw=%r)",
+                        snap_name,
+                        mtype,
+                        raw_duration,
+                    )
+                    return 1
                 log.info(
-                    "Snapshot %s synced: daemon_duration=%s, "
+                    "Snapshot %s synced: daemon_duration=%.1fs, "
                     "wall_clock=%.1fs, snaps_synced=%s",
                     snap_name,
-                    (
-                        f"{daemon_sync_duration:.1f}s"
-                        if daemon_sync_duration is not None
-                        else "None"
-                    ),
+                    daemon_sync_duration,
                     wall_clock_sec,
                     result_snap["snaps_synced"],
                 )
@@ -538,6 +544,29 @@ def run(ceph_cluster, **kw):
                 )
 
                 _append_csv_row(csv_file, result_entry)
+
+            log.info(
+                "Waiting for all mirrored paths to reach idle after "
+                "thread_count=%d syncs",
+                thread_count,
+            )
+            try:
+                wait_for_sync_idle(
+                    source_fs,
+                    fsid,
+                    asok_file,
+                    filesystem_id,
+                    peer_uuid,
+                    mirroring_paths,
+                )
+            except Exception as e:
+                log.error(
+                    "Not all paths reached idle after syncs for "
+                    "thread_count=%d: %s",
+                    thread_count,
+                    e,
+                )
+                return 1
 
             # ---- 7. Cleanup this iteration (snapshots + data only) ----
             log.info("Cleaning up iteration for thread_count=%d", thread_count)
@@ -865,7 +894,7 @@ def _generate_large_files_on_client(client, io_dir, num_files, file_size_mb, tim
         f"set -e; "
         f"for i in $(seq 1 {num_files}); do "
         f"dd if=/dev/urandom of='{io_dir}/large_file_$i' "
-        f"bs=1M count={file_size_mb}; "
+        f"bs=1M count={file_size_mb} status=none; "
         f"done"
     )
     client.exec_command(sudo=True, timeout=timeout, cmd=cmd, long_running=True)
