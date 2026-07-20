@@ -151,7 +151,20 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
+  - test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      clusters:
+        ceph1:
+          config:
+            crash_setup: 1
+            daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']
+        ceph2:
+          config:
+            crash_setup: 1
+            daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']
   - test:
       abort-on-fail: false
       desc: "Pre-upgrade validate snapdiff perf on 10MB X 100 Files"
@@ -308,3 +321,18 @@ tests:
       module: cephfs_mirroring.validate_snapdiff_perf_results.py
       name: Validate sync duration of 10MB X 100 Files by comparing between 2 releases
       polarion-id: "CEPH-83595260"
+
+  - test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      clusters:
+        ceph1:
+          config:
+            crash_check: 1
+            daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']
+        ceph2:
+          config:
+            crash_check: 1
+            daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']
