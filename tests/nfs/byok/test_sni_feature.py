@@ -137,14 +137,29 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Step 3: generating certificates and keys, and CA_cert from GKLM")
-        if gklm_hostname not in [
-            x.get("alias") for x in gklm_rest_client.certificates.list_certificates()
-        ]:
-            log.info(f"Not Found CA cert alias {gklm_cert_alias}, creating ")
+        # System CA lives under GET /system/certificates (not client /certificates).
+        # Re-login before export; GKLM sessions can expire between suite tests (401 CTGKM6004E).
+        gklm_rest_client.login()
+        sys_aliases = set()
+        for entry in gklm_rest_client.certificates.list_system_certificates():
+            a = (
+                entry.get("alias")
+                or entry.get("Alias")
+                or entry.get("certAlias")
+                or entry.get("name")
+            )
+            if a:
+                sys_aliases.add(str(a))
+        if gklm_hostname not in sys_aliases:
+            log.info(
+                "Not Found system CA cert alias %s, creating KEYSERVING_TLS cert",
+                gklm_hostname,
+            )
             gklm_rest_client.certificates.create_system_certificate(
                 {
                     "type": "Self-signed",
                     "alias": gklm_hostname,
+                    "cn": gklm_hostname,
                     "validity": "3650",
                     "algorithm": "RSA",
                     "usageSubtype": "KEYSERVING_TLS",
@@ -157,9 +172,22 @@ def run(ceph_cluster, **kw):
                 check_interval=10,
                 initial_wait=10,
             )
-        ca_cert = gklm_rest_client.certificates.get_system_certificate(
-            cert_name=gklm_hostname
-        )
+            gklm_rest_client.login()
+        try:
+            ca_cert = gklm_rest_client.certificates.get_system_certificate(
+                cert_name=gklm_hostname
+            )
+        except RuntimeError as e:
+            if "401" in str(e) or "CTGKM6004E" in str(e) or "not authenticated" in str(
+                e
+            ).lower():
+                log.warning("GKLM session expired fetching CA cert; re-login and retry")
+                gklm_rest_client.login()
+                ca_cert = gklm_rest_client.certificates.get_system_certificate(
+                    cert_name=gklm_hostname
+                )
+            else:
+                raise
 
         rsa_key, cert, _ = gklm_rest_client.certificates.get_certificates(
             subject={
@@ -215,10 +243,12 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Using disable validation with servername set but verify_hostname unset"
             )
+            # Omit verify_hostname entirely. An empty string is serialized into
+            # Ganesha as verify_hostname="" and breaks KMIP key fetch (runt/missing
+            # key / mount ENOENT). Omitting the field disables hostname validation.
             kmip_host_list = {
                 "addr": gklm_hostname,
                 "servername": gklm_hostname,
-                "verify_hostname": "",
             }
         elif operation == "No SNI - Validate Other Hostname":
             log.info(
@@ -357,6 +387,11 @@ def run(ceph_cluster, **kw):
                 "Mount failed as expected due to hostname mismatch in GKLM certificate."
             )
             return 0
+        log.error(
+            "Mount failed unexpectedly for operation %r",
+            operation,
+        )
+        return 1
 
     except Exception as e:
         log.error(e)
@@ -391,9 +426,28 @@ def run(ceph_cluster, **kw):
                             f"Failed to unmount FUSE mount {mount} on {client.hostname}"
                         )
         log.info("Cleaning up cluster mounts and exports")
-        cleanup_custom_nfs_cluster_multi_export_client(
-            clients, nfs_mount, nfs_name, nfs_export, export_num, nfs_nodes=nfs_nodes
-        )
+        try:
+            cleanup_custom_nfs_cluster_multi_export_client(
+                clients,
+                nfs_mount,
+                nfs_name,
+                nfs_export,
+                export_num,
+                nfs_nodes=nfs_nodes,
+            )
+        except Exception as e:
+            # Do not mask the original test failure (e.g. port conflict) with
+            # "NFS daemons still present" from a stuck prior nfs_byok.
+            log.warning("SNI NFS cleanup raised: %s", e)
+            try:
+                Ceph(clients[0]).nfs.cluster.delete(nfs_name)
+            except Exception as del_e:
+                log.warning("Best-effort delete of %r failed: %s", nfs_name, del_e)
+            # Also clear leftover default BYOK cluster that often holds :2049
+            try:
+                Ceph(clients[0]).nfs.cluster.delete("nfs_byok")
+            except Exception:
+                pass
 
         if gklm_rest_client is not None and operation in _CUSTOM_SNI_OPS:
             try:
@@ -412,9 +466,12 @@ def run(ceph_cluster, **kw):
 
         # Clean GKLM resources
         if gklm_rest_client is not None:
-            clean_up_gklm(
-                gklm_rest_client=gklm_rest_client,
-                gkml_client_name=gkml_client_name,
-                gklm_cert_alias=gklm_cert_alias,
-            )
+            try:
+                clean_up_gklm(
+                    gklm_rest_client=gklm_rest_client,
+                    gkml_client_name=gkml_client_name,
+                    gklm_cert_alias=gklm_cert_alias,
+                )
+            except Exception as e:
+                log.warning("SNI GKLM cleanup raised: %s", e)
         log.info("Cleanup completed for all test resources.")

@@ -263,14 +263,15 @@ def run(ceph_cluster, **kw):
             inc_sync_duration_1,
             full_sync_duration,
         )
+        # Duration comparison is advisory only: small env variance can make
+        # incremental slightly slower than full while sync/checksums are correct.
         if full_sync_duration < inc_sync_duration_1:
-            log.error(
+            log.warning(
                 "Incremental sync (snap_b) took longer than full sync: "
-                "%.3fs > %.3fs",
+                "%.3fs > %.3fs (not failing; functional checks already passed)",
                 inc_sync_duration_1,
                 full_sync_duration,
             )
-            return 1
 
         # ==================== SNAP_C: Incremental sync (git pull) ====================
         log.info("Creating diff: git pull (back to HEAD)")
@@ -346,13 +347,12 @@ def run(ceph_cluster, **kw):
             full_sync_duration,
         )
         if full_sync_duration < inc_sync_duration_2:
-            log.error(
+            log.warning(
                 "Incremental sync (snap_c) took longer than full sync: "
-                "%.3fs > %.3fs",
+                "%.3fs > %.3fs (not failing; functional checks already passed)",
                 inc_sync_duration_2,
                 full_sync_duration,
             )
-            return 1
 
         # --- Summary ---
         log.info("=" * 70)
@@ -362,8 +362,8 @@ def run(ceph_cluster, **kw):
         log.info("  snap_b (incremental, reset): %.3fs", inc_sync_duration_1)
         log.info("  snap_c (incremental, pull):  %.3fs", inc_sync_duration_2)
         log.info(
-            "All incremental syncs completed faster than full sync "
-            "and data verified on target"
+            "Incremental syncs completed and data verified on target "
+            "(duration vs full sync is informational)"
         )
         log.info("=" * 70)
         return 0

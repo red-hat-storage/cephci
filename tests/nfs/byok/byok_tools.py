@@ -26,6 +26,19 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
 )
 from utility.gklm_client.gklm_client import build_gklm_client
 
+# GKLM needs ~50s after a client cert is assigned before KMIP can serve keys
+# for that identity. Mounting too early yields empty key / export ENOENT.
+GKLM_CERT_PARSE_WAIT_SEC = 50
+
+
+def wait_for_gklm_cert_parse(seconds: int = GKLM_CERT_PARSE_WAIT_SEC) -> None:
+    """Block until GKLM has finished parsing/activating a newly assigned cert."""
+    log.info(
+        "Waiting %ss for GKLM to parse/activate newly assigned KMIP certificate(s)",
+        seconds,
+    )
+    time.sleep(seconds)
+
 
 def remove_gklm_kmip_client_and_legacy_certs(
     gklm_rest_client,
@@ -149,6 +162,9 @@ def get_enctag(
                 f"{created_client_data if created_client_data is not None else gkml_client_name} "
                 f"and assigned certificate {assign_cert_data}"
             )
+            # Without this wait, Ganesha KMIP get_key often returns len=0 and
+            # mounts fail with "No such file or directory" (export not loaded).
+            wait_for_gklm_cert_parse()
 
         log.info(
             f"Creating symmetric key object for client '{gkml_client_name}', alias prefix 'AUT'"
@@ -259,6 +275,46 @@ def create_nfs_instance_for_byok(
     log.info(
         f"Creating NFS Ganesha service '{nfs_name}' with BYOK/KMIP security configuration from node {nfs_node.hostname}"
     )
+    # Remove a leftover cluster with the same id (common after mount-fail paths
+    # that previously skipped cleanup) so ports 2049/9587/31311 are free.
+    installer_node = installer[0] if isinstance(installer, list) else installer
+    try:
+        existing = Ceph(installer_node).nfs.cluster.ls()
+        names = existing if isinstance(existing, list) else [existing]
+        if nfs_name in [str(n).strip() for n in names if n]:
+            log.warning(
+                "NFS cluster %r already present; deleting before BYOK recreate",
+                nfs_name,
+            )
+            Ceph(installer_node).nfs.cluster.delete(nfs_name)
+            time.sleep(30)
+    except Exception as e:
+        log.warning(
+            "Pre-create list of NFS clusters failed (%s); "
+            "best-effort delete of %r anyway",
+            e,
+            nfs_name,
+        )
+        try:
+            Ceph(installer_node).nfs.cluster.delete(nfs_name)
+            time.sleep(30)
+        except Exception as del_e:
+            log.warning("Best-effort pre-create delete of %r failed: %s", nfs_name, del_e)
+
+    # Drop verify_hostname="" only when servername is set (Disable Validation).
+    # Empty verify_hostname with a non-empty servername breaks KMIP key fetch.
+    # Keep verify_hostname="" when servername is also empty (No SNI - No
+    # Validation): that disables TLS hostname verification so KMIP can connect
+    # when GKLM is presenting a custom KEYSERVING cert without SNI.
+    if (
+        isinstance(kmip_host_list, dict)
+        and kmip_host_list.get("verify_hostname") == ""
+        and kmip_host_list.get("servername")
+    ):
+        kmip_host_list = {
+            k: v for k, v in kmip_host_list.items() if k != "verify_hostname"
+        }
+
     nfs_cluster_dict = {
         "service_type": "nfs",
         "service_id": nfs_name,
