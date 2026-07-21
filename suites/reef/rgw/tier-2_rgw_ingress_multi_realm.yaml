@@ -163,11 +163,12 @@ tests:
                       - node4
                   spec:
                     backend_service: rgw.rgw.realm1
-                    virtual_ip: 10.0.195.174/24 # floating ip1 in rhos-01
+                    virtual_ip: auto  # unused IP from host subnet (IBMC-safe)
+                    virtual_interface_networks: auto
                     frontend_port: 443
                     monitor_port: 1967
                     ssl: true
-                    certificate_source: cephadm-signed
+                    ssl_cert: create-cert  # certificate_source unsupported on reef
 
   - test:
       name: Deploy RGW Ingress daemon
@@ -190,6 +191,7 @@ tests:
                       - node6
                   spec:
                     backend_service: rgw.rgw.realm2
-                    virtual_ip: 10.0.195.111/24 # floating ip2 in rhos-01
+                    virtual_ip: auto  # unused IP from host subnet (IBMC-safe)
+                    virtual_interface_networks: auto
                     frontend_port: 8083
-                    monitor_port: 1967
+                    monitor_port: 1968
