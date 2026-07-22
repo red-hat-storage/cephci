@@ -413,7 +413,7 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
-    check_nfs_daemons_removed(clients[0])
+    check_nfs_daemons_removed(clients[0], nfs_name)
 
     # Delete the subvolume
     for i in range(len(clients)):
@@ -704,7 +704,7 @@ def cleanup_custom_nfs_cluster_multi_export_client(
 
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
-    check_nfs_daemons_removed(clients[0])
+    check_nfs_daemons_removed(clients[0], nfs_name)
 
     # Delete the subvolume
     for i in range(len(clients)):
@@ -991,12 +991,50 @@ def removeattr(client, file_path, attribute_name):
     return out
 
 
-def check_nfs_daemons_removed(client):
+def _assert_no_stale_nfs_deps(client, nfs_name, prefix_cephadm=False):
+    names = [nfs_name] if isinstance(nfs_name, str) else list(nfs_name)
+    prefixes = tuple(f"nfs.{n}." for n in names)
+    prefix = "cephadm shell -- " if prefix_cephadm else ""
+    out, _ = client.exec_command(
+        sudo=True, cmd=f"{prefix}ceph config-key ls -f json", check_ec=False
+    )
+    keys = [
+        k
+        for k in json.loads(out or "[]")
+        if k.startswith("mgr/cephadm/host.") and ".devices." not in k
+    ]
+    stale = {}
+    for key in keys:
+        out, _ = client.exec_command(
+            sudo=True, cmd=f"{prefix}ceph config-key get '{key}'", check_ec=False
+        )
+        if not out:
+            continue
+        cache = json.loads(out)
+        host = key.split("mgr/cephadm/host.", 1)[1].split(";")[0]
+        bad = [
+            d
+            for d in cache.get("daemon_config_deps", {})
+            if d.startswith(prefixes) and d not in cache.get("daemons", {})
+        ]
+        if bad:
+            stale[host] = bad
+    if stale:
+        raise OperationFailedError(f"Stale daemon_config_deps for {names}: {stale}")
+    log.info("No stale daemon_config_deps for NFS cluster(s) %s", names)
+
+
+def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
+    """Check NFS daemons are removed; verify deleted cluster deps are cleared.
+
+    Use prefix_cephadm=True when running on installer (no host ceph binary).
     """
-    Check if NFS daemons are removed.
-    Wait until there are no NFS daemons listed by 'ceph orch ls'.
-    """
-    check_nfs_daemons_removed_retry(client)
+    if not prefix_cephadm:
+        check_nfs_daemons_removed_retry(client)
+    if nfs_name:
+        ceph_version = get_ceph_version(client, prefix_cephadm=prefix_cephadm)
+        if ceph_version and LooseVersion(ceph_version) >= LooseVersion("20.2.2-75"):
+            _assert_no_stale_nfs_deps(client, nfs_name, prefix_cephadm=prefix_cephadm)
 
 
 @retry(OperationFailedError, tries=30, delay=10, backoff=1)
@@ -1193,6 +1231,8 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
                 + "=" * 30,
                 w._attempt * w.interval,
             )
+            # Installer has no host ceph binary; use cephadm shell for host-cache check
+            check_nfs_daemons_removed(installer_node, clusters, prefix_cephadm=True)
             return True
         else:
             log.error(
@@ -1613,7 +1653,7 @@ def dynamic_cleanup_common_names(
 
     # Step 5: Wait for all NFS daemons to be removed
     log.info("Waiting for all NFS daemons to be removed from the cluster...")
-    check_nfs_daemons_removed(client)
+    check_nfs_daemons_removed(client, clusters)
     for nfs_node in nfs_nodes:
         if check_coredump_generated(nfs_node, coredump_path, setup_start_time):
             log.error(f"Coredump found on {nfs_node.hostname} after test execution.")
