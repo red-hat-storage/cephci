@@ -177,6 +177,11 @@ def run(ceph_cluster, **kw):
     custom_data = kw.get("test_data", {})
     cephci_data = get_cephci_config()
 
+    cloud_type = str(config.get("cloud-type", "")).lower()
+    if cloud_type == "aws":
+        log.info("Skipping BYOK single/multi restart test: not supported on AWS")
+        return 0
+
     # Cluster nodes and setup
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     nfs_node = nfs_nodes[0]  # Use the first NFS node for certificate operations
