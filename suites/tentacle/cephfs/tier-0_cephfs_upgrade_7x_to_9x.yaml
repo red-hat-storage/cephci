@@ -118,6 +118,14 @@ tests:
       name: "configure client"
   - test:
       abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+        crash_setup: 1
+        daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']
+  - test:
+      abort-on-fail: false
       desc: Creates all the fs related components before upgrade
       module: cephfs_upgrade.upgrade_pre_req.py
       name: "creation of Prerequisites for Upgrade"
@@ -221,3 +229,11 @@ tests:
       module: quota.quota_bytes.py
       polarion-id: CEPH-83573399
       desc: Tests the Byte attr
+  - test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check: 1
+        daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']

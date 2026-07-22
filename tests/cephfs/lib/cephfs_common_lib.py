@@ -68,6 +68,23 @@ class CephFSCommonUtils(FsUtils):
                     )
                     log.warning("Cluster health can be OK, current state : %s", out)
                     ceph_healthy = 1
+                elif "node-exporter" in str(out) and "is in unknown state" in str(out):
+                    log.warning(
+                        "node-exporter is in unknown state; redeploying. Health detail: %s",
+                        out,
+                    )
+                    client.exec_command(
+                        sudo=True, cmd="ceph orch redeploy node-exporter"
+                    )
+                    try:
+                        self.validate_services(client, "node-exporter")
+                        log.info("node-exporter service is up after redeploy")
+                        ceph_healthy = 1
+                    except CommandFailed as ex:
+                        log.error(
+                            "node-exporter did not come up after redeploy: %s", ex
+                        )
+                        time.sleep(5)
                 else:
                     log.info(
                         "Wait for sometime to check if Cluster health can be OK, current state : %s",

@@ -106,7 +106,9 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=
         print("Timeout: Two active MDS not found within the specified time.")
     ```
     """
-    retry_exec_command = retry(CommandFailed, tries=3, delay=30)(client1.exec_command)
+    retry_exec_command = retry(CommandFailed, tries=10, delay=30, backoff=1)(
+        client1.exec_command
+    )
     start_time = time.time()
     while time.time() - start_time < max_wait_time:
         out, rc = retry_exec_command(
