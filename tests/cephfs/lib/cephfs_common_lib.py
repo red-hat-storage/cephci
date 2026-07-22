@@ -6,6 +6,7 @@ This is cephfs utilsV1 extension to include further common reusable methods for 
 import datetime
 import json
 import random
+import re
 import secrets
 import string
 import time
@@ -68,6 +69,46 @@ class CephFSCommonUtils(FsUtils):
                     )
                     log.warning("Cluster health can be OK, current state : %s", out)
                     ceph_healthy = 1
+                elif "node-exporter" in str(out) and "is in unknown state" in str(out):
+                    log.warning(
+                        "node-exporter is in unknown state; redeploying. Health detail: %s",
+                        out,
+                    )
+                    client.exec_command(
+                        sudo=True, cmd="ceph orch redeploy node-exporter"
+                    )
+                    try:
+                        self.validate_services(client, "node-exporter")
+                        log.info("node-exporter service is up after redeploy")
+                    except CommandFailed as ex:
+                        log.error(
+                            "node-exporter did not come up after redeploy: %s", ex
+                        )
+                        time.sleep(5)
+                elif "SLOW_OPS" in out:
+                    log.warning("SLOW_OPS detected in ceph health: %s", out)
+                    daemon_names = re.findall(
+                        r"((?:mds|mgr|mon|osd)\.[\w.-]+)", str(out)
+                    )
+                    # Preserve order while removing duplicates
+                    unique_daemons = list(dict.fromkeys(daemon_names))
+                    if not unique_daemons:
+                        log.warning(
+                            "SLOW_OPS present but no mds/mgr/mon/osd daemon name "
+                            "matched in health detail"
+                        )
+                    for daemon_name in unique_daemons:
+                        log.info(
+                            "Collecting ops dump for daemon with slow ops: %s",
+                            daemon_name,
+                        )
+                        ops_out, _ = client.exec_command(
+                            sudo=True,
+                            cmd=f"ceph daemon {daemon_name} ops",
+                            check_ec=False,
+                        )
+                        log.info("ceph daemon %s ops output:\n%s", daemon_name, ops_out)
+                    time.sleep(5)
                 else:
                     log.info(
                         "Wait for sometime to check if Cluster health can be OK, current state : %s",
