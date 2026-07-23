@@ -5,7 +5,9 @@ This is cephfs utilsV1 extension to include further common reusable methods for 
 
 import datetime
 import json
+import os
 import random
+import re
 import secrets
 import string
 import time
@@ -79,7 +81,6 @@ class CephFSCommonUtils(FsUtils):
                     try:
                         self.validate_services(client, "node-exporter")
                         log.info("node-exporter service is up after redeploy")
-                        ceph_healthy = 1
                     except CommandFailed as ex:
                         log.error(
                             "node-exporter did not come up after redeploy: %s", ex
@@ -103,6 +104,27 @@ class CephFSCommonUtils(FsUtils):
                 wait_time,
                 out,
             )
+            if "SLOW_OPS" in out:
+                log.warning("SLOW_OPS detected in ceph health: %s", out)
+                daemon_names = re.findall(r"((?:mds|mgr|mon|osd)\.[\w.-]+)", str(out))
+                # Preserve order while removing duplicates
+                unique_daemons = list(dict.fromkeys(daemon_names))
+                if not unique_daemons:
+                    log.warning(
+                        "SLOW_OPS present but no mds/mgr/mon/osd daemon name "
+                        "matched in health detail"
+                    )
+                for daemon_name in unique_daemons:
+                    log.info(
+                        "Collecting ops dump for daemon with slow ops: %s",
+                        daemon_name,
+                    )
+                    ops_out, _ = client.exec_command(
+                        sudo=True,
+                        cmd=f"ceph tell {daemon_name} ops",
+                        check_ec=False,
+                    )
+                    log.info("ceph daemon %s ops output:\n%s", daemon_name, ops_out)
             return 1
         return 0
 
@@ -761,4 +783,105 @@ class CephFSCommonUtils(FsUtils):
         except Exception as ex:
             log.warning("Filesystem volume cleanup skipped or partial: %s", ex)
             return 1
+        return 0
+
+    def nfs_debug_logs(self, client, nfs_name, log_dir, nfs_nodes, dump_output=False):
+        """
+        This method will collect NFS debug logs and copy to log directory
+        Args:
+            client: Client object to execute the command
+            nfs_name: NFS name
+            log_dir: Log directory
+            nfs_nodes: NFS nodes
+        Returns:
+            0 on success, 1 on failure
+        """
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=(f"ceph orch ls --service_name nfs.{nfs_name};ceph health detail"),
+            check_ec=False,
+        )
+        log.info(f"NFS Service Status and Health Detail: {out}")
+        log.info(
+            "Collecting NFS container debug logs from NFS nodes " "after mount failure"
+        )
+        nfs_log_dst = os.path.join(log_dir, "nfs_container_logs")
+        os.makedirs(nfs_log_dst, exist_ok=True)
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=(f"ceph orch ps --service_name nfs.{nfs_name} " "--format json"),
+            check_ec=False,
+        )
+        daemons = json.loads(out) if out and out.strip() else []
+        if not daemons:
+            log.warning(
+                "No NFS daemons found for service nfs.%s while "
+                "collecting container logs",
+                nfs_name,
+            )
+        for daemon in daemons:
+            daemon_name = daemon.get("daemon_name")
+            hostname = daemon.get("hostname")
+            container_id = daemon.get("container_id", "")
+            if not daemon_name or not hostname:
+                continue
+            nfs_node = next(
+                (n for n in nfs_nodes if n.node.hostname == hostname),
+                None,
+            )
+            if not nfs_node:
+                log.warning(
+                    "NFS node object not found for hostname %s",
+                    hostname,
+                )
+                continue
+            remote_log = f"/tmp/{daemon_name}_cephadm.log"
+            nfs_node.exec_command(
+                sudo=True,
+                cmd=f"cephadm logs --name {daemon_name} > {remote_log}",
+                check_ec=False,
+            )
+            if dump_output:
+                out, _ = nfs_node.exec_command(
+                    sudo=True,
+                    cmd=f"ls -l {remote_log}",
+                    check_ec=False,
+                )
+                log.info(f"NFS container logs file: {out}")
+                out, _ = nfs_node.exec_command(
+                    sudo=True,
+                    cmd=f"cephadm logs --name {daemon_name}",
+                    check_ec=False,
+                )
+                log.info(f"NFS container logs: {out}")
+            local_log = os.path.join(
+                nfs_log_dst, f"{daemon_name}_{hostname}_cephadm.log"
+            )
+            nfs_node.download_file(src=remote_log, dst=local_log, sudo=True)
+            log.info(
+                "Copied NFS cephadm container log for %s to %s",
+                daemon_name,
+                local_log,
+            )
+            if container_id:
+                remote_podman_log = f"/tmp/{daemon_name}_podman.log"
+                nfs_node.exec_command(
+                    sudo=True,
+                    cmd=(f"podman logs {container_id} " f"> {remote_podman_log} 2>&1"),
+                    check_ec=False,
+                )
+                local_podman_log = os.path.join(
+                    nfs_log_dst,
+                    f"{daemon_name}_{hostname}_podman.log",
+                )
+                nfs_node.download_file(
+                    src=remote_podman_log,
+                    dst=local_podman_log,
+                    sudo=True,
+                )
+                log.info(
+                    "Copied NFS podman container log for %s to %s",
+                    daemon_name,
+                    local_podman_log,
+                )
         return 0
