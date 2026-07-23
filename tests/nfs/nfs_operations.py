@@ -415,21 +415,8 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
     sleep(30)
     check_nfs_daemons_removed(clients[0])
 
-    # Delete the subvolume
-    for i in range(len(clients)):
-        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
-        out = client.exec_command(sudo=True, cmd=cmd)
-        json_string, _ = out
-        data = json.loads(json_string)
-        # Extract names of subvolume
-        for item in data:
-            subvol = item["name"]
-            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
-            client.exec_command(sudo=True, cmd=cmd)
-
-    # Delete the subvolume group
-    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
-    client.exec_command(sudo=True, cmd=cmd)
+    # Delete the subvolume group (best-effort if setup never created it)
+    _cleanup_ganeshagroup_subvolumes(clients[0])
 
 
 def setup_custom_nfs_cluster_multi_export_client(
@@ -706,21 +693,8 @@ def cleanup_custom_nfs_cluster_multi_export_client(
     sleep(30)
     check_nfs_daemons_removed(clients[0])
 
-    # Delete the subvolume
-    for i in range(len(clients)):
-        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
-        out = client.exec_command(sudo=True, cmd=cmd)
-        json_string, _ = out
-        data = json.loads(json_string)
-        # Extract names of subvolume
-        for item in data:
-            subvol = item["name"]
-            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
-            client.exec_command(sudo=True, cmd=cmd)
-
-    # Delete the subvolume group
-    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
-    client.exec_command(sudo=True, cmd=cmd)
+    # Delete the subvolume group (best-effort if setup never created it)
+    _cleanup_ganeshagroup_subvolumes(clients[0])
 
 
 def _nfs_mount_version_key_is_v3(key):
@@ -989,6 +963,38 @@ def removeattr(client, file_path, attribute_name):
     cmd = f"setfattr -x user.{attribute_name} {file_path}"
     out = client.exec_command(sudo=True, cmd=cmd)
     return out
+
+
+def _cleanup_ganeshagroup_subvolumes(client):
+    """Best-effort remove ganeshagroup subvolumes; no-op if the group is missing."""
+    cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
+    try:
+        out = client.exec_command(sudo=True, cmd=cmd)
+    except Exception as e:
+        if "does not exist" in str(e) or "ENOENT" in str(e):
+            log.warning(
+                "Subvolume group ganeshagroup missing during cleanup; skipping: %s",
+                e,
+            )
+            return
+        raise
+    json_string, _ = out
+    data = json.loads(json_string)
+    for item in data:
+        subvol = item["name"]
+        client.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup",
+        )
+    try:
+        client.exec_command(
+            sudo=True, cmd="ceph fs subvolumegroup rm cephfs ganeshagroup --force"
+        )
+    except Exception as e:
+        if "does not exist" in str(e) or "ENOENT" in str(e):
+            log.warning("ganeshagroup already absent during cleanup: %s", e)
+        else:
+            raise
 
 
 def check_nfs_daemons_removed(client):
@@ -1338,13 +1344,18 @@ def mount_retry(
     **kwargs,
 ):
     chown_cephuser = kwargs.pop("chown_cephuser", False)
+    # BYOK helpers pass enctag/kmip kwargs into create_export_and_mount; do not
+    # forward those to mount.nfs (only proto/xprtsec are mount options).
+    mount_kwargs = {
+        k: v for k, v in kwargs.items() if k in ("proto", "xprtsec") and v is not None
+    }
     Mount(client).nfs(
         mount=mount_name,
         version=version,
         port=port,
         server=nfs_server,
         export=export_name,
-        **kwargs,
+        **mount_kwargs,
     )
     if chown_cephuser:
         chown_mount_for_cephuser(client, mount_name)
@@ -1513,17 +1524,23 @@ def create_multiple_nfs_instance_via_spec_file(
 
 
 def dynamic_cleanup_common_names(
-    clients, mounts_common_name, clusters=None, mount_point="/mnt/", group_name=None
+    clients,
+    mounts_common_name,
+    clusters=None,
+    mount_point="/mnt/",
+    group_name=None,
+    nfs_nodes=None,
 ):
     """
     Dynamically clean up NFS resources by common name.
 
     Steps performed:
-        1. Unmount and remove all directories matching the given mount name prefix on all clients.
-        2. Delete all NFS exports in the specified clusters.
-        3. Delete all CephFS subvolumes associated with the exports.
-        4. Delete all NFS clusters.
-        5. Check for NFS coredumps and raise if found.
+        1. Collect Ganesha/container logs via nfs_log_parser (while NFS is still up).
+        2. Unmount and remove all directories matching the given mount name prefix on all clients.
+        3. Delete all NFS exports in the specified clusters.
+        4. Delete all CephFS subvolumes associated with the exports.
+        5. Delete all NFS clusters.
+        6. Check for NFS coredumps and raise if found.
 
     Args:
         clients (list): List of client nodes.
@@ -1531,17 +1548,50 @@ def dynamic_cleanup_common_names(
         clusters (list, optional): List of NFS cluster names to clean up. If None, will auto-discover.
         mount_point (str, optional): Base mount directory. Default is "/mnt/".
         group_name (str, optional): CephFS subvolume group name.
+        nfs_nodes (list, optional): NFS server nodes for log collection / coredump checks.
+            Falls back to global ceph_cluster_obj NFS nodes when unset.
     Raises:
         NfsCleanupFailed: If coredump is found or cleanup times out.
         OperationFailedError: If unmount or resource deletion fails.
     """
     if not isinstance(clients, list):
         clients = [clients]
-    # Check for NFS coredump on all NFS nodes before cleanup
-    nfs_nodes = []
     coredump_path = "/var/lib/systemd/coredump"
-    if ceph_cluster_obj:
+    if nfs_nodes is None and ceph_cluster_obj:
         nfs_nodes = ceph_cluster_obj.get_nodes("nfs")
+    if not nfs_nodes:
+        nfs_nodes = []
+    elif not isinstance(nfs_nodes, list):
+        nfs_nodes = [nfs_nodes]
+
+    client = clients[0]
+    if not clusters:
+        clusters = Ceph(client).nfs.cluster.ls()
+        log.info(f"Auto-discovered clusters for cleanup: {clusters}")
+    if not isinstance(clusters, list):
+        clusters = [clusters]
+
+    # Collect logs first — NFS daemon must still be running for podman/cephadm logs
+    if nfs_nodes and clusters:
+        for cluster in clusters:
+            try:
+                log.info(
+                    "Collecting NFS/Ganesha logs for cluster '%s' before cleanup",
+                    cluster,
+                )
+                nfs_log_parser(client=client, nfs_node=nfs_nodes, nfs_name=cluster)
+            except Exception as log_err:
+                log.error(
+                    "nfs_log_parser failed for cluster '%s': %s", cluster, log_err
+                )
+    else:
+        log.warning(
+            "Skipping nfs_log_parser during cleanup "
+            "(nfs_nodes=%s, clusters=%s). Pass nfs_nodes= when "
+            "ceph_cluster_obj is unset.",
+            [n.hostname for n in nfs_nodes] if nfs_nodes else [],
+            clusters,
+        )
 
     # Step 1: Unmount and remove all matching mount directories on each client
     for client in clients:
@@ -1582,11 +1632,6 @@ def dynamic_cleanup_common_names(
 
     # Step 2: Delete all exports in each cluster
     client = clients[0]
-    if not clusters:
-        clusters = Ceph(client).nfs.cluster.ls()
-        log.info(f"Auto-discovered clusters for cleanup: {clusters}")
-    if not isinstance(clusters, list):
-        clusters = [clusters]
 
     # Step 3: Delete all CephFS subvolumes associated with the exports
     subvols = json.loads(
@@ -1613,9 +1658,16 @@ def dynamic_cleanup_common_names(
             )
             sub_vols_infos.append(subvol_info)
             for export in exports:
-                # Check if export is referenced in the subvolume's pool_namespace
-                if re.findall(export, subvol_info["pool_namespace"])[1:]:
-                    log.info(f"Export '{export}' found in subvolume '{subvol['name']}'")
+                # pool_namespace looks like fsvolumens__ganeshagroup_export_byok_0;
+                # export looks like /export_byok_0. Match on subvolume name == export
+                # leaf. The old ``re.findall(export, ns)[1:]`` never matched (leading
+                # slash + requiring 2+ hits), so BYOK subvolumes leaked across tests.
+                export_leaf = str(export).strip("/").split("/")[-1]
+                name = subvol.get("name", "") or ""
+                if export_leaf and name == export_leaf:
+                    log.info(
+                        f"Export '{export}' associated with subvolume '{subvol['name']}'"
+                    )
                     Ceph(client).fs.sub_volume.rm(
                         volume="cephfs",
                         subvolume=subvol["name"],
@@ -1625,6 +1677,7 @@ def dynamic_cleanup_common_names(
                     log.info(
                         f"Deleted subvolume '{subvol['name']}' in group '{group_name}'"
                     )
+                    break
 
         # Step 4: Remove the NFS cluster itself
         Ceph(clients[0]).nfs.cluster.delete(cluster)

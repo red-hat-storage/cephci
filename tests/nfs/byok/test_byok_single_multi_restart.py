@@ -12,10 +12,10 @@ from tests.nfs.byok.byok_tools import (
     load_gklm_config,
     perform_io_operations_and_validate_fuse,
     setup_gklm_infrastructure,
+    wait_for_gklm_cert_parse,
     wait_for_gklm_server_restart,
 )
 from tests.nfs.nfs_operations import (
-    cleanup_custom_nfs_cluster_multi_export_client,
     dynamic_cleanup_common_names,
     get_ganesha_info_from_container,
 )
@@ -94,6 +94,7 @@ def validate_sighup(
     )
 
     log.info(f"Successfully assigned new certificate {assign_cert_data}")
+    wait_for_gklm_cert_parse()
 
     log.info("Updating NFS Ganesha instance with new cert and key")
     create_nfs_instance_for_byok(
@@ -216,6 +217,7 @@ def run(ceph_cluster, **kw):
     gkml_client_name = "automation"
     gklm_cert_alias = "cert2"
     client_export_mount_dict = None
+    gklm_rest_client = None
     spec = config.get("spec")
 
     try:
@@ -478,51 +480,92 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
-        if config.get("check_sighup", False):
-            all_certs = []
-            for x in gklm_rest_client.certificates.list_system_certificates():
-                a = x.get("alias") or x.get("Alias")
-                if a:
-                    all_certs.append(a)
-            for x in gklm_rest_client.certificates.list_certificates():
-                a = x.get("alias") or x.get("Alias")
-                if a:
-                    all_certs.append(a)
-            if "certsighup" in all_certs:
-                gklm_cert_alias = "certsighup"
+        try:
+            if config.get("check_sighup", False) and gklm_rest_client is not None:
+                all_certs = []
+                for x in gklm_rest_client.certificates.list_system_certificates():
+                    a = x.get("alias") or x.get("Alias")
+                    if a:
+                        all_certs.append(a)
+                for x in gklm_rest_client.certificates.list_certificates():
+                    a = x.get("alias") or x.get("Alias")
+                    if a:
+                        all_certs.append(a)
+                if "certsighup" in all_certs:
+                    gklm_cert_alias = "certsighup"
+        except Exception as e:
+            log.warning("SIGHUP cert alias resolution during cleanup failed: %s", e)
 
-        # Cleanup single cluster or multi cluster accordingly
-        if nfs_replication_number == 1 and client_export_mount_dict is not None:
-            log.info("Cleaning up single-cluster mounts and exports")
-            cleanup_custom_nfs_cluster_multi_export_client(
-                clients, nfs_mount, nfs_name, nfs_export, export_num
-            )
-            log.info("Cleaning up single-cluster FUSE mounts")
-            for client in clients:
-                for mount in [
-                    m + "_fuse"
-                    for m in client_export_mount_dict.get(client, {}).get("mount", [])
-                ]:
-                    client.exec_command(
-                        sudo=True, cmd=f"rm -rf {mount}/*", long_running=True
+        # Always tear down NFS on failure paths too. Mount failures leave
+        # client_export_mount_dict as None; skipping cleanup keeps nfs_byok on
+        # :2049 and breaks later SNI tests with "ports already in use".
+        try:
+            if nfs_replication_number == 1:
+                log.info("Cleaning up single-cluster mounts, exports, and NFS service")
+                try:
+                    dynamic_cleanup_common_names(
+                        clients,
+                        mounts_common_name=nfs_mount.rstrip("/").split("/")[-1]
+                        or "nfs_byok",
+                        clusters=[nfs_name],
+                        group_name=subvolume_group,
+                        nfs_nodes=nfs_nodes,
                     )
-                    if Unmount(client).unmount(mount):
-                        raise OperationFailedError(
-                            f"Failed to unmount FUSE mount {mount} on {client.hostname}"
-                        )
-        elif nfs_replication_number > 1:
-            log.info("Cleaning up multi-cluster mounts and exports")
-            dynamic_cleanup_common_names(
-                clients,
-                mounts_common_name=config.get("nfs_mount_common_name", "nfs_byok"),
-                group_name=subvolume_group,
-            )
+                except Exception as e:
+                    log.warning(
+                        "dynamic_cleanup_common_names failed (%s); "
+                        "best-effort nfs cluster delete",
+                        e,
+                    )
+                    try:
+                        Ceph(clients[0]).nfs.cluster.delete(nfs_name)
+                    except Exception as del_e:
+                        log.warning("Best-effort nfs cluster delete failed: %s", del_e)
 
-        # Clean GKLM resources
-        clean_up_gklm(
-            gklm_rest_client=gklm_rest_client,
-            gkml_client_name=gkml_client_name,
-            gklm_cert_alias=gklm_cert_alias,
-        )
+                if client_export_mount_dict is not None:
+                    log.info("Cleaning up single-cluster FUSE mounts")
+                    for client in clients:
+                        for mount in [
+                            m + "_fuse"
+                            for m in client_export_mount_dict.get(client, {}).get(
+                                "mount", []
+                            )
+                        ]:
+                            try:
+                                client.exec_command(
+                                    sudo=True,
+                                    cmd=f"rm -rf {mount}/*",
+                                    long_running=True,
+                                )
+                                Unmount(client).unmount(mount)
+                            except Exception as fuse_e:
+                                log.warning(
+                                    "FUSE cleanup failed for %s on %s: %s",
+                                    mount,
+                                    client.hostname,
+                                    fuse_e,
+                                )
+            elif nfs_replication_number > 1:
+                log.info("Cleaning up multi-cluster mounts and exports")
+                dynamic_cleanup_common_names(
+                    clients,
+                    mounts_common_name=config.get(
+                        "nfs_mount_common_name", "nfs_byok"
+                    ),
+                    group_name=subvolume_group,
+                    nfs_nodes=nfs_nodes,
+                )
+        except Exception as e:
+            log.warning("NFS cleanup raised: %s", e)
+
+        try:
+            if gklm_rest_client is not None:
+                clean_up_gklm(
+                    gklm_rest_client=gklm_rest_client,
+                    gkml_client_name=gkml_client_name,
+                    gklm_cert_alias=gklm_cert_alias,
+                )
+        except Exception as e:
+            log.warning("GKLM cleanup raised: %s", e)
 
         log.info("Cleanup completed for all test resources.")

@@ -243,6 +243,7 @@ def sv1_mount(mount_type="fuse"):
             smb_user_password="passwd",
             custom_dns="",
             clustering="default",
+            client_compat=None,
         )
 
         # Check smb cluster
