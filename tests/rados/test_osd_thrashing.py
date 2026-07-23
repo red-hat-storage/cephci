@@ -44,10 +44,16 @@ Core Chaos Workflows:
 
 Daemon Failover Workflows:
   - **MON thrashing** (``enable_mon_thrashing``): Leader failover, rolling
-    restart, election strategy changes (classic/disallow/connectivity).
-    Verifies quorum stability and client reconnection.
+    restart, SIGKILL daemon kill, election strategy changes
+    (classic/disallow/connectivity).  Verifies quorum stability and client
+    reconnection under both graceful and abrupt daemon exits.
   - **MGR thrashing** (``enable_mgr_thrashing``): Failover active MGR,
-    rolling restart, random daemon fail.  Validates module continuity.
+    rolling restart, random daemon fail, SIGKILL daemon kill.  Validates
+    module continuity and orchestrator auto-restart after abrupt crashes.
+  - **OSD SIGKILL thrashing** (``enable_osd_sigkill_thrashing``): Kill
+    random OSD processes with ``kill -9`` to simulate abrupt crashes,
+    bypassing all shutdown handlers.  Stresses PG peering, journal replay,
+    and BlueStore recovery.
   - **MDS thrashing** (``enable_mds_thrashing``): Active MDS failover,
     rolling restart, random fail.  CephFS I/O must survive rank transitions.
 
@@ -131,11 +137,12 @@ TEST WORKFLOW:
     │   ├── thrash_rbd_snapshots: 4 snaps/iter, protect, clone, flatten, ~20% deletion [if enabled]
     │   ├── thrash_ec_pool_snapshots: RADOS-level snapshots + partial writes [if enabled]
     │   ├── thrash_osds: Mark out → orch daemon stop → wait → mark in → start [if enabled]
+    │   ├── thrash_osd_sigkill: kill -9 random OSD processes → auto-restart [if enabled]
     │   ├── thrash_crush_weights: Reduce to 50% → restore [if enabled]
     │   ├── thrash_pg_count: Bulk flag toggle for PG split/merge [if enabled]
     │   ├── thrash_scrubs: Periodic scrub/deep-scrub on pools/OSDs/cluster [if enabled]
     │   ├── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW [if enabled]
-    │   ├── thrash_mon: Leader failover, rolling restart, election strategy [if enabled]
+    │   ├── thrash_mon: Leader failover, rolling restart, sigkill, election strategy [if enabled]
     │   ├── thrash_mgr: Failover, rolling restart, random fail [if enabled]
     │   ├── thrash_mds: Failover, rolling restart, random fail [if enabled]
     │   ├── thrash_nfs_fio: Mount/FIO/FS ops/unmount cycles on NFS exports [if enabled]
@@ -199,6 +206,7 @@ CONFIGURATION OPTIONS:
 - enable_rbd_snapshots: Enable RBD snapshot thrashing (default: True)
 - enable_ec_snapshots: Enable EC pool snapshot thrashing (default: True)
 - enable_osd_thrashing: Enable OSD thrashing operations (default: True)
+- enable_osd_sigkill_thrashing: Enable OSD SIGKILL thrashing - kill -9 crashes (default: False)
 - enable_rgw_thrashing: Enable RGW S3 thrashing (default: False)
 - enable_mon_thrashing: Enable MON thrashing - leader failover/restart (default: False)
 - enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
@@ -265,11 +273,14 @@ from tests.rados.thrash_helpers import (
     _nfs_client_mount_option_string,
     _nfs_export_mount_targets,
     _nfs_mount_context,
+    _thrash_mgr_sigkill,
+    _thrash_mon_sigkill,
     check_mount_health,
     thrash_nfs_admin_ops,
     thrash_nfs_client_churn,
     thrash_nfs_daemon_failover,
     thrash_nfs_export_churn,
+    thrash_osd_sigkill,
     thrash_smb,
     thrash_smb_client_io,
     verify_data_integrity,
@@ -400,6 +411,7 @@ def run(ceph_cluster, **kw):
         enable_rbd_snapshots (bool): Enable RBD snapshot thrashing (default: True)
         enable_ec_snapshots (bool): Enable EC pool snapshot thrashing (default: True)
         enable_osd_thrashing (bool): Enable OSD thrashing - main thrash operation (default: True)
+        enable_osd_sigkill_thrashing (bool): Enable OSD SIGKILL thrashing - kill -9 (default: False)
         enable_scrub_thrashing (bool): Enable independent scrub/deep-scrub cycles (default: True)
         enable_mon_thrashing (bool): Enable MON thrashing - leader failover/restart (default: False)
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
@@ -497,6 +509,7 @@ def run(ceph_cluster, **kw):
     enable_rbd_snapshots = config.get("enable_rbd_snapshots", True)
     enable_ec_snapshots = config.get("enable_ec_snapshots", True)
     enable_osd_thrashing = config.get("enable_osd_thrashing", True)
+    enable_osd_sigkill_thrashing = config.get("enable_osd_sigkill_thrashing", False)
     enable_mon_thrashing = config.get("enable_mon_thrashing", True)
     enable_mgr_thrashing = config.get("enable_mgr_thrashing", False)
     enable_mds_thrashing = config.get("enable_mds_thrashing", False)
@@ -528,6 +541,7 @@ def run(ceph_cluster, **kw):
     enable_smb_thrashing = config.get("enable_smb_thrashing", False)
     smb_cluster_ids = config.get("smb_cluster_ids", [])
     enable_smb_rados_config_check = config.get("enable_smb_rados_config_check", False)
+
     enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
     enable_esb_verification = config.get("enable_esb_verification", False)
     disabled_ec_optimizations = False
@@ -604,6 +618,7 @@ def run(ceph_cluster, **kw):
         f"  RBD snapshot thrashing: {enable_rbd_snapshots}\n"
         f"  EC pool snapshot thrashing: {enable_ec_snapshots}\n"
         f"  OSD thrashing: {enable_osd_thrashing}\n"
+        f"  OSD SIGKILL thrashing: {enable_osd_sigkill_thrashing}\n"
         f"  MON thrashing: {enable_mon_thrashing}\n"
         f"  MGR thrashing: {enable_mgr_thrashing}\n"
         f"  MDS thrashing: {enable_mds_thrashing}\n"
@@ -1390,6 +1405,7 @@ def run(ceph_cluster, **kw):
         max_workers += 1 if enable_rbd_snapshots else 0
         max_workers += 1 if enable_ec_snapshots else 0
         max_workers += 1 if enable_osd_thrashing else 0
+        max_workers += 1 if enable_osd_sigkill_thrashing else 0
         max_workers += 1 if enable_crush_thrashing else 0
         max_workers += 1 if enable_pg_thrashing else 0
         max_workers += 1 if enable_scrub_thrashing else 0
@@ -1543,6 +1559,19 @@ def run(ceph_cluster, **kw):
                         aggressive=aggressive,
                         stop_flag=stop_flag,
                         reboot_osd=reboot_osd,
+                    )
+                )
+
+            # OSD SIGKILL thrashing (kill -9 to simulate abrupt crashes)
+            if enable_osd_sigkill_thrashing:
+                log.info("OSD SIGKILL thrashing enabled")
+                futures.append(
+                    executor.submit(
+                        thrash_osd_sigkill,
+                        rados_obj=rados_obj,
+                        osd_list=osd_list,
+                        iterations=iterations // 2,
+                        stop_flag=stop_flag,
                     )
                 )
 
@@ -1882,6 +1911,8 @@ def run(ceph_cluster, **kw):
                 workflow_order.append("ec_pool_snapshots")
             if enable_osd_thrashing:
                 workflow_order.append("osd_thrashing")
+            if enable_osd_sigkill_thrashing:
+                workflow_order.append("osd_sigkill_thrashing")
             if enable_crush_thrashing:
                 workflow_order.append("crush_weight_thrashing")
             if enable_pg_thrashing:
@@ -5062,9 +5093,10 @@ def thrash_mon(
     ops_completed = 0
     end_time = time.time() + duration
     iteration = 0
+    cluster_fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
 
     # Build list of available operations
-    operations = ["leader_failover", "rolling_restart"]
+    operations = ["leader_failover", "rolling_restart", "sigkill"]
     if enable_election_strategy_thrash:
         operations.append("election_strategy")
 
@@ -5085,6 +5117,8 @@ def thrash_mon(
                 result = _thrash_mon_election_strategy(mon_election_obj)
             elif operation == "rolling_restart":
                 result = _thrash_mon_rolling_restart(rados_obj, mon_workflow_obj)
+            elif operation == "sigkill":
+                result = _thrash_mon_sigkill(rados_obj, mon_workflow_obj, cluster_fsid)
             else:
                 result = False
 
@@ -5240,6 +5274,7 @@ def thrash_mgr(
     1. Failover - Fail active MGR to trigger failover to standby
     2. Rolling restart - Restart MGR daemons via orchestrator
     3. Random fail - Fail a random MGR (active or standby)
+    4. SIGKILL - Kill random MGR process with kill -9 (abrupt crash)
 
     Args:
         rados_obj: RadosOrchestrator instance
@@ -5253,8 +5288,9 @@ def thrash_mgr(
     ops_completed = 0
     end_time = time.time() + duration
     iteration = 0
+    cluster_fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
 
-    operations = ["failover", "rolling_restart", "random_fail"]
+    operations = ["failover", "rolling_restart", "random_fail", "sigkill"]
 
     log.info(
         f"Starting MGR thrashing with operations: {operations} "
@@ -5273,6 +5309,8 @@ def thrash_mgr(
                 result = _thrash_mgr_rolling_restart(rados_obj)
             elif operation == "random_fail":
                 result = _thrash_mgr_random_fail(mgr_workflow_obj)
+            elif operation == "sigkill":
+                result = _thrash_mgr_sigkill(rados_obj, mgr_workflow_obj, cluster_fsid)
             else:
                 result = False
 
