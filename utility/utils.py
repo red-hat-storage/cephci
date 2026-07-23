@@ -1690,6 +1690,11 @@ def check_build_overrides(
 
 def install_start_kafka(rgw_node, cloud_type):
     """Install kafka package and start zookeeper and kafka services."""
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="java -version || yum install -y https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm",
+        long_running=True,
+    )
     install_kafka(rgw_node, cloud_type)
     start_kafka(rgw_node)
 
