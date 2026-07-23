@@ -12,9 +12,18 @@ from tests.nfs.nfs_operations import (
     mount_retry,
 )
 from tests.nfs.security.security_utils import (
+    assert_mount_failed,
+    assert_tlshd_handshake_failure,
+    attempt_nfs_mount_expect_failure,
+    build_tls_nfs_mount_cmd,
+    capture_tlshd_status,
     check_mount_fails,
+    corrupt_pem_material,
+    deploy_tls_nfs_cluster_with_certs,
     ensure_package_installed,
     full_tls_stack_cleanup,
+    generate_mismatched_tls_trust_cert,
+    generate_tls_cert_bundle,
     mount_export_via_stunnel,
     normalize_fio_buffer_pattern,
     probe_tls_handshake_with_openssl,
@@ -33,6 +42,7 @@ from tests.nfs.security.security_utils import (
     wait_for_tls_strings_in_nfs_logs,
     wait_until_ceph_orch_nfs_ps_ready,
     wait_until_nfs_export_visible,
+    write_client_tls_ca_cert,
 )
 from tests.nfs.test_nfs_io_operations_during_upgrade import (
     create_export_and_mount_for_existing_nfs_cluster,
@@ -58,6 +68,7 @@ OP_TLS_EXPORT_ENFORCEMENT = "tls_export_enforcement"
 OP_TLS_LOGS_OPENSSL_PROBE = "tls_logs_openssl_probe"
 OP_TLS_IO_TCPDUMP_ENCRYPTION = "tls_io_tcpdump_encryption"
 OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION = "tls_stunnel_io_tcpdump_encryption"
+OP_TLS_NEGATIVE_INVALID_CERTS = "tls_negative_invalid_certs"
 OP_TLS_FULL_WORKFLOW = "tls_full_workflow"
 _TLS_FULL_SEQUENCE = [
     OP_TLS_DEPLOY_MOUNT_VERIFY,
@@ -67,6 +78,7 @@ _TLS_FULL_SEQUENCE = [
 _TLS_STANDALONE_OPERATIONS = _TLS_FULL_SEQUENCE + [
     OP_TLS_IO_TCPDUMP_ENCRYPTION,
     OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION,
+    OP_TLS_NEGATIVE_INVALID_CERTS,
 ]
 # fio --buffer_pattern requires hex (e.g. 0xCEFACEFE), not ASCII strings.
 DEFAULT_TLS_IO_MARKER = "0xCEFACEFE"
@@ -125,6 +137,7 @@ def _operations_to_run(config):
             f"{OP_TLS_DEPLOY_MOUNT_VERIFY}, {OP_TLS_EXPORT_ENFORCEMENT}, "
             f"{OP_TLS_LOGS_OPENSSL_PROBE}, {OP_TLS_IO_TCPDUMP_ENCRYPTION}, "
             f"{OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION}, "
+            f"{OP_TLS_NEGATIVE_INVALID_CERTS}, "
             f"{OP_TLS_FULL_WORKFLOW} (or tls_all_in_one)."
         )
     op = _normalize_operation(raw)
@@ -143,13 +156,23 @@ def _parse_fio_json(fio_stdout, rw_type):
     raw = str(fio_stdout).strip()
     try:
         data = json.loads(raw)
-        rw_stats = data["jobs"][0][rw_type]
-    except (json.JSONDecodeError, KeyError, IndexError) as err:
+        if not isinstance(data, dict) or "jobs" not in data:
+            raise ValueError("Missing 'jobs' key in fio output")
+        if not isinstance(data["jobs"], list) or not data["jobs"]:
+            raise ValueError("'jobs' is not a non-empty list")
+        rw_stats = data["jobs"][0].get(rw_type)
+        if not rw_stats:
+            raise ValueError(f"Missing '{rw_type}' in job stats")
+        bw = rw_stats.get("bw")
+        iops = rw_stats.get("iops")
+        if bw is None or iops is None:
+            raise ValueError(f"Missing 'bw' or 'iops' in {rw_type} stats")
+        return float(bw) / 1024.0, float(iops)
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError) as err:
         raise OperationFailedError(
             f"Could not parse fio {rw_type} JSON output: {err}\n"
             f"Raw (first 500 chars): {raw[:500]}"
         ) from err
-    return rw_stats["bw"] / 1024.0, rw_stats["iops"]
 
 
 def _run_fio_write_read_on_mount(client_node, mount_path, config):
@@ -504,6 +527,494 @@ def op_tls_logs_openssl_probe(installer_node, client_node, nfs_node, config, nfs
             )
 
     log.info("tls_logs_openssl_probe completed.")
+
+
+_NEG_SCENARIO_SERVER = "Scenario-1 invalid-server-certs"
+_NEG_SCENARIO_CLIENT = "Scenario-2 invalid-client-certs"
+
+
+def _log_neg_step(scenario, step, total, message):
+    """Emit a numbered step line for negative TLS scenario execution."""
+    log.info("[%s] Step %s/%s: %s", scenario, step, total, message)
+
+
+def _log_neg_step_done(scenario, step, total, message):
+    """Emit completion of a numbered negative TLS scenario step."""
+    log.info("[%s] Step %s/%s complete: %s", scenario, step, total, message)
+
+
+def _negative_cert_scenarios_to_run(config):
+    """Resolve which negative TLS cert scenarios to run (server, client, or both)."""
+    raw = tls_config_get(
+        config, "negative_cert_scenario", "tc_neg_scenario", default="both"
+    )
+    op = _normalize_operation(raw)
+    if op in ("both", "all"):
+        return ["server", "client"]
+    if op in ("server", "invalid_server", "server_certs"):
+        return ["server"]
+    if op in ("client", "invalid_client", "client_certs"):
+        return ["client"]
+    raise OperationFailedError(
+        f"Unknown negative_cert_scenario {raw!r}; expected server, client, or both"
+    )
+
+
+def _tls_cluster_tls_options(config):
+    return {
+        "tls_min_version": config.get("tls_min_version", "TLSv1.3"),
+        "tls_ciphers": config.get("tls_ciphers", "ALL"),
+        "tls_ktls": config.get("tls_ktls", True),
+        "tls_debug": config.get("tls_debug", True),
+        "orch_wait_timeout": int(
+            tls_config_get(
+                config,
+                "negative_redeploy_orch_wait_timeout_sec",
+                "tc_neg_redeploy_orch_wait_timeout_sec",
+                default=300,
+            )
+        ),
+    }
+
+
+def _restore_valid_tls_stack(
+    installer, client_node, nfs_node, nfs_name, config, scenario_label="inter-scenario"
+):
+    """Redeploy valid server certs and restore the client tlshd trust anchor."""
+    log.info(
+        "[%s] Restoring valid TLS server certs and client trust before next scenario",
+        scenario_label,
+    )
+    _log_neg_step(scenario_label, 1, 3, "Generate fresh valid TLS certificate bundle")
+    cert_key, cert, ca_cert = generate_tls_cert_bundle(nfs_node)
+    _log_neg_step_done(scenario_label, 1, 3, "Valid cert bundle generated")
+
+    _log_neg_step(
+        scenario_label,
+        2,
+        3,
+        f"Redeploy NFS cluster {nfs_name!r} with valid server certificates",
+    )
+    deploy_tls_nfs_cluster_with_certs(
+        installer_node=installer,
+        nfs_node=nfs_node,
+        nfs_name=nfs_name,
+        cert_key=cert_key,
+        cert=cert,
+        ca_cert=ca_cert,
+        **_tls_cluster_tls_options(config),
+    )
+    _log_neg_step_done(scenario_label, 2, 3, "Valid server TLS redeploy applied")
+
+    _log_neg_step(
+        scenario_label,
+        3,
+        3,
+        f"Restore client tlshd trust anchor on {client_node.hostname}",
+    )
+    setup_tls_client(client_node, ca_cert)
+    redeploy_wait = int(
+        tls_config_get(
+            config,
+            "negative_redeploy_orch_wait_timeout_sec",
+            "tc_neg_redeploy_orch_wait_timeout_sec",
+            default=300,
+        )
+    )
+    if not wait_until_ceph_orch_nfs_ps_ready(
+        client_node, nfs_name, timeout=redeploy_wait, interval=5
+    ):
+        raise OperationFailedError(
+            f"NFS service {nfs_name} not ready after valid TLS redeploy"
+        )
+    _log_neg_step_done(
+        scenario_label,
+        3,
+        3,
+        f"Client trust restored; nfs.{nfs_name} ready in ceph orch ps",
+    )
+
+
+def _run_small_io_on_tls_mount(client_node, mount_path, label="neg_tls", scenario=None):
+    """Quick IO sanity check on a TLS mount (lookup, dd write/read, delete)."""
+    if scenario:
+        log.info("[%s] Running small IO (lookup, 1MiB dd write/read, delete)", scenario)
+    lookup_in_directory(client_node, mount_path)
+    io_file = f"{label}_io"
+    create_file(client_node, mount_path, io_file)
+    write_to_file_using_dd_command(client_node, mount_path, io_file, 1)
+    read_from_file_using_dd_command(client_node, mount_path, io_file, 1)
+    delete_file(client_node, mount_path, io_file)
+    log.info(
+        "Small IO on %s completed successfully%s",
+        mount_path,
+        f" [{scenario}]" if scenario else "",
+    )
+
+
+def _mount_tls_export_expect_success(
+    client_node,
+    nfs_node,
+    export_path,
+    mount_path,
+    version,
+    port,
+    scenario=None,
+):
+    """Mount a TLS export and verify it appears in the mount table."""
+    client_node.create_dirs(dir_path=mount_path, sudo=True)
+    mount_cmd = build_tls_nfs_mount_cmd(
+        nfs_node.hostname, export_path, mount_path, version, port
+    )
+    if scenario:
+        log.info("[%s] Mount command: %s", scenario, mount_cmd)
+    result = attempt_nfs_mount_expect_failure(client_node, mount_cmd)
+    if result["exit_code"] != 0:
+        raise OperationFailedError(
+            f"TLS mount failed unexpectedly: {result['stderr'] or result['stdout']}"
+        )
+    out, _ = client_node.exec_command(sudo=True, cmd="mount", check_ec=False)
+    if mount_path.rstrip("/") not in str(out or ""):
+        raise OperationFailedError(f"TLS mount missing from mount table: {mount_path}")
+    log.info(
+        "TLS mount succeeded on %s at %s%s",
+        client_node.hostname,
+        mount_path,
+        f" [{scenario}]" if scenario else "",
+    )
+
+
+def _log_negative_mount_failure(context, mount_result, tlshd_status):
+    """Log mount failure details and full tlshd status for negative TLS scenarios."""
+    log.info(
+        "%s: mount failed as expected (exit=%s, cmd=%r)",
+        context,
+        mount_result.get("exit_code"),
+        mount_result.get("mount_cmd"),
+    )
+    if mount_result.get("stderr"):
+        log.info("%s mount stderr:\n%s", context, mount_result["stderr"])
+    if mount_result.get("stdout"):
+        log.info("%s mount stdout:\n%s", context, mount_result["stdout"])
+    log.info("%s tlshd status:\n%s", context, tlshd_status)
+
+
+def _attempt_tls_mount_and_capture_tlshd(
+    client_node,
+    nfs_node,
+    export_path,
+    mount_path,
+    version,
+    port,
+    context,
+    scenario=None,
+    mount_step=None,
+    tlshd_step=None,
+    total_steps=None,
+):
+    """Attempt a TLS mount expecting failure; return mount result and tlshd status."""
+    if scenario and mount_step and total_steps:
+        _log_neg_step(
+            scenario,
+            mount_step,
+            total_steps,
+            "Attempt TLS mount (expect failure); capture mount error output",
+        )
+    client_node.create_dirs(dir_path=mount_path, sudo=True)
+    mount_cmd = build_tls_nfs_mount_cmd(
+        nfs_node.hostname, export_path, mount_path, version, port
+    )
+    log.info("[%s] Mount command: %s", context, mount_cmd)
+    mount_result = attempt_nfs_mount_expect_failure(client_node, mount_cmd)
+    if scenario and mount_step and total_steps:
+        _log_neg_step_done(
+            scenario,
+            mount_step,
+            total_steps,
+            f"Mount attempt finished (exit={mount_result.get('exit_code')})",
+        )
+
+    if scenario and tlshd_step and total_steps:
+        _log_neg_step(
+            scenario,
+            tlshd_step,
+            total_steps,
+            "Capture full systemctl status tlshd output",
+        )
+    tlshd_status = capture_tlshd_status(client_node)
+    if scenario and tlshd_step and total_steps:
+        _log_neg_step_done(
+            scenario,
+            tlshd_step,
+            total_steps,
+            "tlshd status captured; verifying handshake failure in journal",
+        )
+
+    _log_negative_mount_failure(context, mount_result, tlshd_status)
+    assert_mount_failed(
+        mount_result, context, client_node=client_node, mount_path=mount_path
+    )
+    assert_tlshd_handshake_failure(tlshd_status, context)
+    return mount_result, tlshd_status
+
+
+def _scenario_invalid_server_certs(
+    installer, client_node, nfs_node, config, nfs_name, export_path, mount_path
+):
+    """Valid TLS IO, redeploy Ganesha with corrupted certs, mount must fail."""
+    scenario = _NEG_SCENARIO_SERVER
+    version = config.get("nfs_version", "4.2")
+    port = str(config.get("port", "2049"))
+    total = 7
+    log.info("=== %s: invalid server certificates on Ganesha ===", scenario)
+    log.info(
+        "[%s] Plan: valid mount+IO baseline → corrupt Ganesha certs → "
+        "expect mount failure + tlshd handshake error",
+        scenario,
+    )
+
+    _log_neg_step(
+        scenario,
+        1,
+        total,
+        f"Mount TLS export {export_path!r} at {mount_path!r} "
+        f"(valid Ganesha certs, xprtsec=tls)",
+    )
+    _mount_tls_export_expect_success(
+        client_node,
+        nfs_node,
+        export_path,
+        mount_path,
+        version,
+        port,
+        scenario=scenario,
+    )
+    _log_neg_step_done(scenario, 1, total, "Baseline TLS mount succeeded")
+
+    _log_neg_step(scenario, 2, total, "Run small IO on mount to verify TLS path works")
+    _run_small_io_on_tls_mount(
+        client_node, mount_path, label="valid_server", scenario=scenario
+    )
+    _log_neg_step_done(scenario, 2, total, "Baseline IO succeeded")
+
+    _log_neg_step(scenario, 3, total, f"Umount {mount_path!r} before cert redeploy")
+    Unmount(client_node).unmount(mount_path)
+    _log_neg_step_done(scenario, 3, total, "Mount point released")
+
+    _log_neg_step(
+        scenario,
+        4,
+        total,
+        "Generate corrupted server ssl_key/ssl_cert/ssl_ca_cert and redeploy Ganesha",
+    )
+    cert_key, cert, ca_cert = generate_tls_cert_bundle(nfs_node)
+    bad_key = corrupt_pem_material(cert_key)
+    bad_cert = corrupt_pem_material(cert)
+    bad_ca = corrupt_pem_material(ca_cert)
+    deploy_tls_nfs_cluster_with_certs(
+        installer_node=installer,
+        nfs_node=nfs_node,
+        nfs_name=nfs_name,
+        cert_key=bad_key,
+        cert=bad_cert,
+        ca_cert=bad_ca,
+        **_tls_cluster_tls_options(config),
+    )
+    _log_neg_step_done(
+        scenario, 4, total, f"NFS cluster {nfs_name!r} redeployed with invalid PEMs"
+    )
+
+    _log_neg_step(
+        scenario,
+        5,
+        total,
+        f"Wait for nfs.{nfs_name} daemon ready in ceph orch ps after redeploy",
+    )
+    redeploy_wait = int(
+        tls_config_get(
+            config,
+            "negative_redeploy_orch_wait_timeout_sec",
+            "tc_neg_redeploy_orch_wait_timeout_sec",
+            default=300,
+        )
+    )
+    if not wait_until_ceph_orch_nfs_ps_ready(
+        client_node, nfs_name, timeout=redeploy_wait, interval=5
+    ):
+        raise OperationFailedError(
+            f"NFS service {nfs_name} not ready after invalid-cert redeploy"
+        )
+    _log_neg_step_done(scenario, 5, total, "Ganesha daemon running with invalid certs")
+
+    _attempt_tls_mount_and_capture_tlshd(
+        client_node,
+        nfs_node,
+        export_path,
+        mount_path,
+        version,
+        port,
+        "invalid_server_certs",
+        scenario=scenario,
+        mount_step=6,
+        tlshd_step=7,
+        total_steps=total,
+    )
+    log.info(
+        "[%s] PASSED — mount and tlshd correctly rejected invalid server certs",
+        scenario,
+    )
+
+
+def _scenario_invalid_client_certs(
+    client_node, nfs_node, config, export_path, mount_path
+):
+    """Valid TLS IO, install mismatched client trust anchor, mount must fail."""
+    scenario = _NEG_SCENARIO_CLIENT
+    version = config.get("nfs_version", "4.2")
+    port = str(config.get("port", "2049"))
+    total = 7
+    log.info("=== %s: invalid client trust anchor (tlshd) ===", scenario)
+    log.info(
+        "[%s] Plan: valid mount+IO baseline → install mismatched client CA → "
+        "expect mount failure + tlshd handshake error",
+        scenario,
+    )
+
+    _log_neg_step(
+        scenario,
+        1,
+        total,
+        f"Mount TLS export {export_path!r} at {mount_path!r} "
+        f"(valid client trust anchor, xprtsec=tls)",
+    )
+    _mount_tls_export_expect_success(
+        client_node,
+        nfs_node,
+        export_path,
+        mount_path,
+        version,
+        port,
+        scenario=scenario,
+    )
+    _log_neg_step_done(scenario, 1, total, "Baseline TLS mount succeeded")
+
+    _log_neg_step(scenario, 2, total, "Run small IO on mount to verify TLS path works")
+    _run_small_io_on_tls_mount(
+        client_node, mount_path, label="valid_client", scenario=scenario
+    )
+    _log_neg_step_done(scenario, 2, total, "Baseline IO succeeded")
+
+    _log_neg_step(
+        scenario, 3, total, f"Umount {mount_path!r} before client cert change"
+    )
+    Unmount(client_node).unmount(mount_path)
+    _log_neg_step_done(scenario, 3, total, "Mount point released")
+
+    _log_neg_step(
+        scenario,
+        4,
+        total,
+        f"Install mismatched trust anchor on {client_node.hostname} "
+        f"(valid PEM, wrong CN/IP — does not match Ganesha server cert)",
+    )
+    invalid_ca = generate_mismatched_tls_trust_cert(nfs_node)
+    write_client_tls_ca_cert(client_node, invalid_ca)
+    _log_neg_step_done(
+        scenario,
+        4,
+        total,
+        "Client trust anchor replaced; tlshd restarted",
+    )
+
+    _log_neg_step(scenario, 5, total, "Wait for tlshd to settle after trust change")
+    sleep(2)
+    _log_neg_step_done(scenario, 5, total, "Settle wait complete")
+
+    _attempt_tls_mount_and_capture_tlshd(
+        client_node,
+        nfs_node,
+        export_path,
+        mount_path,
+        version,
+        port,
+        "invalid_client_certs",
+        scenario=scenario,
+        mount_step=6,
+        tlshd_step=7,
+        total_steps=total,
+    )
+    log.info(
+        "[%s] PASSED — mount and tlshd correctly rejected invalid client trust",
+        scenario,
+    )
+
+
+def op_tls_negative_invalid_certs(installer, client_node, nfs_node, config, nfs_name):
+    log.info("=== Operation: tls_negative_invalid_certs ===")
+    fs_name = config.get("fs_name", "cephfs")
+    export_name = tls_config_get(
+        config, "tls_negative_export", "tc_neg_export", default="/tls_export_neg"
+    )
+    mount_path = tls_config_get(
+        config, "tls_negative_mount", "tc_neg_mount", default="/mnt/tls_neg_tc"
+    )
+    scenarios = _negative_cert_scenarios_to_run(config)
+    log.info(
+        "Negative TLS cert test layout: export=%r mount=%r scenarios=%s",
+        export_name,
+        mount_path,
+        scenarios,
+    )
+    log.info(
+        "Pre-run: TLS cluster %r and client tlshd were configured by run() before "
+        "this operation",
+        nfs_name,
+    )
+
+    log.info(
+        "[Setup] Step 1/2: Create TLS export %r on cluster %r (--xprtsec tls)",
+        export_name,
+        nfs_name,
+    )
+    Ceph(client_node).nfs.export.create(
+        fs_name=fs_name,
+        nfs_name=nfs_name,
+        nfs_export=export_name,
+        fs=fs_name,
+        xprtsec="tls",
+    )
+    log.info("[Setup] Step 2/2: Wait until export is visible in ceph nfs export ls")
+    wait_until_nfs_export_visible(client_node, nfs_name, export_name)
+    log.info("[Setup] Export %r ready for negative TLS scenarios", export_name)
+
+    if "server" in scenarios:
+        _scenario_invalid_server_certs(
+            installer,
+            client_node,
+            nfs_node,
+            config,
+            nfs_name,
+            export_name,
+            mount_path,
+        )
+
+    if "client" in scenarios:
+        if "server" in scenarios:
+            _restore_valid_tls_stack(
+                installer,
+                client_node,
+                nfs_node,
+                nfs_name,
+                config,
+                scenario_label="inter-scenario-restore",
+            )
+        _scenario_invalid_client_certs(
+            client_node, nfs_node, config, export_name, mount_path
+        )
+
+    log.info("[Cleanup] Lazy-umount %r if still mounted", mount_path)
+    client_node.exec_command(sudo=True, cmd=f"umount -l {mount_path}", check_ec=False)
+    log.info("tls_negative_invalid_certs completed successfully.")
 
 
 def _setup_tls_io_capture_prerequisites(client_node):
@@ -1053,6 +1564,9 @@ _OP_DISPATCH = {
     OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION: lambda inst, c, n, cfg, name: op_tls_stunnel_io_tcpdump_encryption(
         inst, c, n, cfg, name
     ),
+    OP_TLS_NEGATIVE_INVALID_CERTS: lambda inst, c, n, cfg, name: op_tls_negative_invalid_certs(
+        inst, c, n, cfg, name
+    ),
 }
 
 
@@ -1062,7 +1576,7 @@ def run(ceph_cluster, **kw):
 
     config.operation: tls_deploy_mount_verify | tls_export_enforcement |
         tls_logs_openssl_probe | tls_io_tcpdump_encryption |
-        tls_stunnel_io_tcpdump_encryption |
+        tls_stunnel_io_tcpdump_encryption | tls_negative_invalid_certs |
         tls_full_workflow (or tls_all_in_one)
     """
     log.info("Starting NFS TLS feature tests (independent mode)")
