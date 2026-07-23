@@ -1,10 +1,11 @@
-# Tier 1: RGW extension suites
+# Tier 2: RGW SSL regression extended suite with HAProxy SSL passthrough
 
-# This test suite is executed in QE pipeline. The primary objective of
-# the test suite is to evaluate the STS functionality of RGW.
+# This test suite deploys SSL-encrypted RGWs with HAProxy ingress in
+# SSL passthrough mode (HAProxy forwards TCP traffic as-is to SSL RGWs).
+# End-to-end: Client -> HTTPS -> HAProxy (TCP passthrough) -> HTTPS -> RGW (SSL backend)
 
-# Requires a 5 node cluster layout having only one node with RGW role.
-# global-conf: conf/tentacle/rgw/tier-0_rgw.yaml
+# Requires a 6-node cluster layout: 2 RGW nodes, 1 ingress node, and 1 client.
+# global-conf: conf/tentacle/rgw/tier-2_rgw_ssl_ingress.yaml
 
 tests:
   - test:
@@ -28,29 +29,34 @@ tests:
                 skip-monitoring-stack: true
                 initial-dashboard-password: admin@123
                 dashboard-password-noupdate: true
+
           - config:
               command: add_hosts
               service: host
               args:
                 attach_ip_address: true
                 labels: apply-all-labels
+
           - config:
               command: apply
               service: mgr
               args:
                 placement:
                   label: mgr
+
           - config:
               command: apply
               service: mon
               args:
                 placement:
                   label: mon
+
           - config:
               command: apply
               service: osd
               args:
                 all-available-devices: true
+
           - config:
               command: apply_spec
               service: orch
@@ -61,15 +67,33 @@ tests:
                     nodes:
                       - node3
                       - node4
-                      - node5
                   spec:
                     ssl: true
                     generate_cert: true
-      desc: RHCS cluster deployment using cephadm.
+
+          - config:
+              command: shell
+              args:
+                - sleep
+                - "120"
+
+      desc: RHCS cluster deployment with SSL RGW.
       destroy-cluster: false
       module: test_cephadm.py
-      name: deploy cluster
+      name: deploy cluster with SSL RGW
       polarion-id: CEPH-83574478
+
+  - test:
+      abort-on-fail: true
+      name: Deploy ingress with SSL passthrough
+      desc: Deploy HAProxy ingress in TCP passthrough mode with floating VIP
+      polarion-id: CEPH-10363
+      module: test_ssl_ingress_deploy.py
+      config:
+        backend_service: rgw.rgw.ssl
+        frontend_port: 443
+        monitor_port: 1967
+        use_tcp_mode_over_rgw: true
 
   - test:
       name: Monitoring Services deployment
@@ -88,19 +112,24 @@ tests:
                     count: 1
                     nodes:
                       - node1
+
                 - service_type: grafana
                   placement:
                     nodes:
                       - node1
+
                 - service_type: alertmanager
                   placement:
                     count: 1
+
                 - service_type: node-exporter
                   placement:
                     host_pattern: "*"
+
                 - service_type: crash
                   placement:
                     host_pattern: "*"
+
   - test:
       abort-on-fail: true
       config:
@@ -122,10 +151,87 @@ tests:
         roles:
           - rgw
           - client
-      desc: Copy cephadm root CA cert to rgw and client nodes
+          - ingress
+      desc: Copy cephadm root CA cert to rgw, client, and ingress nodes
       module: copy_cephadm_root_ca_cert.py
       name: copy cephadm root ca cert
       polarion-id: CEPH-10362
+
+  - test:
+      name: Verify SSL passthrough via ingress VIP
+      desc: Verify HTTPS connectivity via HAProxy SSL passthrough to RGW
+      module: exec.py
+      config:
+        sudo: true
+        role: installer
+        commands:
+          - "cephadm shell -- ceph orch ls ingress --format json"
+          - |
+            VIP=$(cat /tmp/ingress_vip)
+            curl -k -s -o /dev/null -w '%{http_code}' https://${VIP}:443
+          - "curl -k -s -o /dev/null -w '%{http_code}' https://{node_ip:node3}:443"
+
+  # --- Ingress IO tests (use-ingress: true) ---
+
+  - test:
+      name: Test no crash during deleting bucket with aborted multipart upload
+      desc: Test no crash during deleting bucket with aborted multipart upload
+      polarion-id: CEPH-83574831
+      module: sanity_rgw.py
+      config:
+        use-ingress: true
+        script-name: test_LargeObjGet_GC.py
+        config-file-name: test_bucket_remove_with_multipart_abort.yaml
+
+  - test:
+      name: Test functionality of bucket check fix
+      desc: Test functionality of bucket check fix
+      polarion-id: CEPH-83574832
+      module: sanity_rgw.py
+      config:
+        use-ingress: true
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bucket_check_fix.yaml
+
+  - test:
+      name: Test functionality of user stat reset
+      desc: Test functionality of user stat reset
+      polarion-id: CEPH-83575439
+      module: sanity_rgw.py
+      config:
+        use-ingress: true
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_user_stats_reset.yaml
+
+  # Checksum tests using Go
+
+  - test:
+      name: Test checksum with Go script
+      desc: Test checksum using a Go script. RGW SSL is required for chunked uploads with trailing checksums.
+      module: sanity_rgw.py
+      polarion-id: CEPH-83591699
+      config:
+        use-ingress: true
+        script-name: ../go_scripts/test_rgw_using_go.py
+        config-file-name: ../../go_scripts/configs/test_checksum_using_go.yaml
+
+  # Kafka broker with persistent flag enabled
+
+  - test:
+      name: Notify put and delete events with persistent Kafka broker and RGW SSL
+      desc: Notify put and delete events with persistent Kafka broker and RGW SSL
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574489
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - jdk
+        git_clone_configs_repo: true
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
+
+  # --- Non-ingress tests (NFS, run directly on RGW) ---
 
   - test:
       name: Test NFS cluster and export create
@@ -151,60 +257,8 @@ tests:
   - test:
       name: NFS export delete
       desc: NFS cluster and exports delete
-      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      polarion-id: CEPH-83574600 # Also covers CEPH-83574601
       module: sanity_rgw.py
       config:
         script-name: ../nfs_ganesha/nfs_cluster.py
         config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
-
-  - test:
-      name: Test no crash during deleting bucket with aborted multipart upload
-      desc: Test no crash during deleting bucket with aborted multipart upload
-      polarion-id: CEPH-83574831
-      module: sanity_rgw.py
-      config:
-        script-name: test_LargeObjGet_GC.py
-        config-file-name: test_bucket_remove_with_multipart_abort.yaml
-
-  - test:
-      name: Test functionality of bucket check fix
-      desc: Test functionality of bucket check fix
-      polarion-id: CEPH-83574832
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_bucket_check_fix.yaml
-
-  - test:
-      name: Test functionality of user stat reset
-      desc: Test functionality of user stat reset
-      polarion-id: CEPH-83575439
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_user_stats_reset.yaml
-
-  # kafka broker type broker with persistent flag enabled
-  - test:
-      name: notify put,delete events with kafka_broker_persistent with rgw ssl
-      desc: notify put,delete events with kafka_broker_persistent with rgw ssl
-      module: sanity_rgw.py
-      polarion-id: CEPH-83574489
-      config:
-        run-on-rgw: true
-        extra-pkgs:
-          - jdk
-        git_clone_configs_repo: true
-        install_start_kafka: true
-        script-name: test_bucket_notifications.py
-        config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
-
-  # checksum tests with go
-  - test:
-      name: test checksum with go script
-      desc: test checksum with go script. rgw ssl required for chunked upload with trailing checksum
-      module: sanity_rgw.py
-      polarion-id: CEPH-83591699
-      config:
-        script-name: ../go_scripts/test_rgw_using_go.py
-        config-file-name: ../../go_scripts/configs/test_checksum_using_go.yaml
