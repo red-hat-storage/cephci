@@ -305,7 +305,7 @@ def _delete_cluster(client, nfs_name):
     except Exception as e:
         log.warning("Cluster rm for %s: %s", nfs_name, e)
     sleep(30)
-    check_nfs_daemons_removed(client)
+    check_nfs_daemons_removed(client, nfs_name)
 
 
 def _delete_exports_and_subvols(client, nfs_name, export_paths):

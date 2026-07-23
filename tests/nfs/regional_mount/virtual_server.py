@@ -1035,7 +1035,7 @@ def cleanup_virtual_server(
 
     sleep(30)
     try:
-        check_nfs_daemons_removed(client)
+        check_nfs_daemons_removed(client, nfs_name)
     except Exception as exc:
         log.warning("NFS daemon removal check: %s", exc)
 
