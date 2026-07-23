@@ -480,12 +480,6 @@ def write_client_tls_ca_cert(client_node, ca_cert):
     client_node.exec_command(sudo=True, cmd="systemctl restart tlshd")
 
 
-def mount_path_is_active(client_node, mount_path):
-    """Return True if ``mount_path`` appears in the remote ``mount`` output."""
-    out, _ = client_node.exec_command(sudo=True, cmd="mount", check_ec=False)
-    return mount_path.rstrip("/") in str(out or "")
-
-
 def _write_remote_pem(client_node, file_path, pem_text):
     """Write PEM material to ``file_path`` on the remote client."""
     try:
