@@ -1,0 +1,208 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+          - ceph-fuse
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy samba with byok and verify keybridge service
+      desc: Deploy samba with byok and verify keybridge service.
+      module: smb_byok_setup.py
+      polarion-id: CEPH-83627654
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - { source_type: resource, ref: ug1 }
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - { name: user1, password: passwd }
+              groups: [ ]
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: sharebyok1
+            intent: present
+            readonly: false
+            browseable: true
+            cephfs:
+              volume: cephfs
+              path: /
+              subvolumegroup: smb-byok-grp
+              subvolume: svol1
+              fscrypt_key:
+                scope: kmip
+
+  - test:
+      name: Test mount encrypted share through CIFS.
+      desc: Test mount encrypted share through CIFS.
+      module: smb_byok_cifs_operations.py
+      polarion-id: CEPH-83627657
+      config:
+        smb_cluster_id: smb1
+        cifs_mount_point: /mnt/smb
+        byok_operation: test_cifs_mount
+        path: "/"
+
+  - test:
+      name: Verify IO read/write operations on encrypted shares through CIFS mount
+      desc: Verify IO read/write operations on encrypted shares through CIFS mount
+      module: smb_byok_ceph_fuse_operations.py
+      polarion-id: CEPH-83627656
+      config:
+        smb_cluster_id: smb1
+        cifs_mount_point: /mnt/smb
+        byok_operation: test_io_cifs_mount
+        path: "/"
+
+  - test:
+      name: Test ceph-fuse mount and verify data is encrypted on share.
+      desc: Test ceph-fuse mount and verify data is encrypted on share.
+      module: smb_byok_cifs_operations.py
+      polarion-id: CEPH-83632299
+      config:
+        smb_cluster_id: smb1
+        cifs_mount_point: /mnt/smb
+        byok_operation: test_ceph_fuse_mount
+        path: "/"
+
+  - test:
+      name: Verify IO read/write operations fail on encrypted shares through Ceph-fuse mount
+      desc: Verify IO read/write operations fail on encrypted shares through Ceph-fuse mount
+      module: smb_byok_ceph_fuse_operations.py
+      polarion-id: CEPH-83632299
+      config:
+        smb_cluster_id: smb1
+        mount_point: /mnt/mount
+        sub_dir: /volumes/smb/sv1
+        byok_operation: test_io_ceph_fuse_mount
+        path: "/"
+
+  - test:
+      name: Verify file operations fail on encrypted shares through Ceph-fuse mount
+      desc: Verify file operations fail on encrypted shares through Ceph-fuse mount
+      module: smb_byok_ceph_fuse_operations.py
+      polarion-id: CEPH-83632299
+      config:
+        smb_cluster_id: smb1
+        mount_point: /mnt/mount
+        sub_dir: /volumes/smb/sv1
+        byok_operation: test_io_ceph_fuse_mount
+        path: "/"
+
+  - test:
+      name: Test BYOK with samba cluster having both encrypted and normal shares.
+      desc: Test BYOK with samba cluster having both encrypted and normal shares.
+      module: smb_byok_cifs_operations.py
+      polarion-id: CEPH-83632299
+      config:
+        smb_cluster_id: smb1
+        cifs_mount_point: /mnt/smb
+        byok_operation: test_encrypted_and_normal_shares
+        path: "/"
+
+  - test:
+      name: Test BYOK with samba cluster with multiple encrypted shares.
+      desc: Test BYOK with samba cluster with multiple encrypted shares.
+      module: smb_byok_cifs_operations.py
+      polarion-id: CEPH-83628788
+      config:
+        smb_cluster_id: smb1
+        cifs_mount_point: /mnt/smb
+        byok_operation: test_multiple_encrypted_shares
+        path: "/"
+
+  - test:
+      name: Test delete encrypted share from samba cluster
+      desc: Test delete encrypted share from samba cluster
+      module: smb_byok_cifs_operations.py
+      polarion-id: CEPH-83632299
+      config:
+        smb_cluster_id: smb1
+        mount_point: /mnt/mount
+        cifs_mount_point: /mnt/smb
+        sub_dir: /volumes/smb/sv1
+        smb_cluster_cleanup: true
+        byok_operation: test_delete_encrypted_share
+        path: "/"

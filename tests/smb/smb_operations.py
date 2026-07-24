@@ -1055,3 +1055,16 @@ def samba_kernel_mount(samba_client, mount_point, mon_node_ip, sub_dir):
             f"Ceph Kernel Command failed with error: {cmd_rc}"
         )
     return cmd_rc
+
+
+def ceph_smb_show(installer, smb_resource):
+    """Get SMB shares
+    Args:
+        installer (obj): Installer node obj
+        smb_resource (str): Smb resource type
+    Return:
+        List of shares
+    """
+    smb_show = CephAdm(installer).ceph.smb.show(smb_resource)
+    smb_resouce_dict = json.loads(smb_show)
+    return smb_resouce_dict
