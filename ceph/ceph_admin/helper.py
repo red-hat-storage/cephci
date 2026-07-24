@@ -2,6 +2,7 @@
 Contains helper functions that can used across the module.
 """
 
+import ipaddress
 import json
 import os
 import tempfile
@@ -171,6 +172,54 @@ class GenerateServiceSpec:
         gw = node_sub.split("/")[0]
         cidr = node_sub.split("/")[1]
         return gw, cidr
+
+    def _get_cluster_subnets(self):
+        """Return unique node subnets from the cluster."""
+        subnets = []
+        for node in self.cluster.get_nodes():
+            subnet = getattr(node, "subnet", None)
+            if subnet and subnet not in subnets:
+                subnets.append(subnet)
+        return subnets
+
+    def _allocate_ingress_vip(self, placement_hosts=None):
+        """
+        Pick an unused IP from the host subnet for keepalived VIP.
+
+        Prefers the subnet of placement hosts when available so the VIP is on
+        the same L2/L3 domain as the ingress NICs (required on IBMC where
+        reserved floating IPs are outside the VM private CIDR).
+        """
+        subnet = None
+        if placement_hosts:
+            for node in self.cluster.get_nodes():
+                if node.hostname in placement_hosts and getattr(node, "subnet", None):
+                    subnet = node.subnet
+                    break
+        if not subnet:
+            subnets = self._get_cluster_subnets()
+            if not subnets:
+                raise ValueError("virtual_ip: auto set but no node subnets found")
+            subnet = subnets[0]
+
+        network = ipaddress.ip_network(subnet, strict=False)
+        used = set()
+        for node in self.cluster.get_nodes():
+            ip = getattr(node, "ip_address", None)
+            if ip:
+                used.add(str(ipaddress.ip_address(ip)))
+
+        allocated = getattr(self.cluster, "_cephci_allocated_ingress_vips", set())
+        # Prefer high addresses to stay clear of gateway / DHCP low range
+        for host_ip in reversed(list(network.hosts())):
+            ip_str = str(host_ip)
+            if ip_str in used or ip_str in allocated:
+                continue
+            allocated.add(ip_str)
+            self.cluster._cephci_allocated_ingress_vips = allocated
+            return f"{ip_str}/{network.prefixlen}"
+
+        raise ValueError(f"virtual_ip: auto found no free address in {subnet}")
 
     def get_hostnames(self, node_names):
         """
@@ -711,7 +760,8 @@ class GenerateServiceSpec:
                   label: rgw
                 spec:
                   backend_service: rgw.ceph-scale-test-y7nmci-node2
-                  virtual_ip: 10.0.208.0/22
+                  virtual_ip: auto | <ip>/<prefix>   # auto = unused host-subnet IP
+                  virtual_interface_networks: auto | [<cidr>, ...]
                   frontend_port: 8000
                   monitor_port: 1967
                   ssl_cert: create-cert | <contents of crt>
@@ -724,7 +774,24 @@ class GenerateServiceSpec:
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
-        if spec["spec"].get("ssl_cert") == "create-cert":
+        # Opt-in only: suite must set virtual_ip / virtual_interface_networks: auto
+        ingress_spec = spec.setdefault("spec", {})
+        if ingress_spec.get("virtual_ip") == "auto":
+            ingress_spec["virtual_ip"] = self._allocate_ingress_vip(
+                placement_hosts=spec["placement"].get("hosts")
+            )
+            LOG.info("Resolved virtual_ip: auto -> %s", ingress_spec["virtual_ip"])
+
+        if ingress_spec.get("virtual_interface_networks") == "auto":
+            subnets = self._get_cluster_subnets()
+            if not subnets:
+                raise ValueError(
+                    "virtual_interface_networks: auto set but no node subnets found"
+                )
+            ingress_spec["virtual_interface_networks"] = subnets
+            LOG.info("Resolved virtual_interface_networks: auto -> %s", subnets)
+
+        if ingress_spec.get("ssl_cert") == "create-cert":
             subject = {
                 "common_name": spec["placement"]["hosts"][0],
                 "ip_address": self.cluster.get_node_by_hostname(
@@ -734,10 +801,8 @@ class GenerateServiceSpec:
             key, cert, ca = generate_self_signed_certificate(subject=subject)
             pem = key + cert + ca
             cert_value = "|\n" + pem
-            spec["spec"]["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
+            ingress_spec["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
             LOG.debug(pem)
-            vip_node = get_node_by_id(self.cluster, node_names[0])
-            _, vip_cidr = self.get_gateway_cidr(vip_node)
 
         return template.render(spec=spec)
 
