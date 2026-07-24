@@ -1,0 +1,80 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: folio02.ceph.redhat.com
+          ip: 10.1.172.222
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        - hostname: folio15.ceph.redhat.com
+          ip: 10.8.128.131
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - mon
+            - mgr
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+        - hostname: folio16.ceph.redhat.com
+          ip: 10.8.128.132
+          root_password: passwd
+          role:
+            - osd
+            - nfs
+            - mon
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+        - hostname: folio17.ceph.redhat.com
+          ip: 10.8.128.133
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - mds
+          volumes:
+            - /dev/nvme7n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+        - hostname: folio07.ceph.redhat.com
+          ip: 10.1.172.227
+          root_password: passwd
+          role:
+            - client
+        - hostname: folio08.ceph.redhat.com
+          ip: 10.1.172.228
+          root_password: passwd
+          role:
+            - client
+        - hostname: folio09.ceph.redhat.com
+          ip: 10.1.172.229
+          root_password: passwd
+          role:
+            - client
+        - hostname: folio10.ceph.redhat.com
+          ip: 10.1.172.230
+          root_password: passwd
+          role:
+            - client

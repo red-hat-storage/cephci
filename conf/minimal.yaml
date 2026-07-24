@@ -1,0 +1,72 @@
+# Small Ceph cluster layout with all roles and one client.
+# Cluster Configuration:
+#    5 Node cluster with 1 client
+#    Monitoring stack
+#     - alertmanager
+#     - grafana
+#     - node-exporter
+#     - prometheus
+#   Ceph Daemons
+#     - mds
+#     - mgr
+#     - mon
+#     - nfs
+#     - osd
+#   Clients
+#     - rgw
+# This is best used with ci.m1.large spec.
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - alertmanager
+          - crash
+          - grafana
+          - installer
+          - mgr
+          - mon
+          - node-exporter
+          - prometheus
+      node2:
+        role:
+          - alertmanager
+          - crash
+          - mgr
+          - mon
+          - node-exporter
+          - osd
+          - prometheus
+        no-of-volumes: 3
+        disk-size: 20
+      node3:
+        role:
+          - alertmanager
+          - crash
+          - mds
+          - mon
+          - nfs
+          - node-exporter
+          - osd
+        no-of-volumes: 3
+        disk-size: 20
+      node4:
+        role:
+          - alertmanager
+          - crash
+          - mds
+          - nfs
+          - node-exporter
+          - osd
+        no-of-volumes: 3
+        disk-size: 20
+      node5:
+        role:
+          - alertmanager
+          - crash
+          - node-exporter
+          - rgw
+      node6:
+        role:
+          - client

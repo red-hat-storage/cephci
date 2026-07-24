@@ -1,0 +1,352 @@
+# ===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_group_mirror_misc.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/squid/rbd/5-node-2-clusters.yaml
+#    No of Clusters : 2
+#    Node 2 must be a client node
+# ===============================================================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup to deploy the required pre-requisites for running the tests
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      desc: verify snapshot schedules when client is blocklisted
+      name: >
+        Add or remove group mirror snapshot schedule when
+        client is blocklisted
+      module: test_rbd_group_mirror_misc.py
+      polarion-id: CEPH-83613275
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            operation: CEPH-83613275
+            fio:
+              size: 1G
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: Verify Toggle enable and disable for group mirroring
+      name: Test Toggle enable and disable for group mirroring
+      module: test_group_mirror.py
+      polarion-id: CEPH-83613271
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83613271
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: verify unsupported operations on group mirror
+      name: >
+        Image, pool level promote, demote when group
+        mirroring is enabled, disabled
+      module: test_rbd_group_mirror_misc.py
+      polarion-id: CEPH-83614239
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            operation: CEPH-83614239
+
+  - test:
+      desc: >
+        Verify Adding removing listing mirror group snapshot
+        schedule when group mirroring is disabled
+      name: >
+        Test Adding removing listing mirror group snapshot
+        schedule when group mirroring is disabled
+      module: test_group_mirror_neg_case.py
+      polarion-id: CEPH-83620497
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83620497
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+
+  - test:
+      desc: Verify data is consistent for both manual and scheduled snapshots
+      name: >
+        Verify mirror group snapshot schedule & manual mirror
+        group snapshot for consistency
+      module: test_rbd_group_mirror_consistency.py
+      polarion-id: CEPH-83610861
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            snap_schedule_interval: 1m
+            operation: CEPH-83610861
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: >
+        Verify multi-group two-way mirroring
+      name: >
+        Verify multiple mirrored groups with multiple images,
+        some primary on cluster1 and some on cluster2
+      module: test_rbd_group_multi_two_way_mirror.py
+      polarion-id: CEPH-83613276
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              mirror_level: group
+              do_not_create_image: true
+              size: 1G
+              mode: image
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              mirror_level: group
+              do_not_create_image: true
+              size: 1G
+              mode: image
+            fio:
+              size: 500M
+              runtime: 30
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw

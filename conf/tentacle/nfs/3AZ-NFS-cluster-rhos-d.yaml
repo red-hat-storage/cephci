@@ -1,0 +1,141 @@
+# 3 AZ NFS cluster configuration across different subnets
+# Suite: suites/tentacle/nfs/tier-2_nfs_test-3-AZ-Cluster.yaml
+#
+# Topology: 9 OSD nodes + 3 client nodes
+#   DC1 (provider_net_cci_15): node1, node2, node3
+#   DC2 (provider_net_cci_13): node4, node5, node6
+#   DC3 (provider_net_cci_16): node7, node8, node9
+#   Clients:                   node10, node11, node12
+#
+# Service label distribution (each group spans all 3 DCs):
+#   nfs-DC1 / mds-DC1: node1, node4, node7
+#   nfs-DC2 / mds-DC2: node2, node5, node8
+#   nfs-DC3 / mds-DC3: node3, node6, node9
+#
+# Daemons: 9 MONs, 6 MGRs, 9 OSDs (4 volumes each, 15GB)
+
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_15
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+          - osd
+          - nfs-DC1
+          - mds-DC1
+        no-of-volumes: 4
+        disk-size: 15
+      node2:
+        networks:
+          - provider_net_cci_15
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+          - nfs-DC2
+          - mds-DC2
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        networks:
+          - provider_net_cci_15
+        role:
+          - osd
+          - mon
+          - mds
+          - nfs-DC3
+          - mds-DC3
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        networks:
+          - provider_net_cci_13
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+          - alertmanager
+          - grafana
+          - prometheus
+          - nfs-DC1
+          - mds-DC1
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        networks:
+          - provider_net_cci_13
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+          - nfs-DC2
+          - mds-DC2
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        networks:
+          - provider_net_cci_13
+        role:
+          - osd
+          - mon
+          - mds
+          - nfs-DC3
+          - mds-DC3
+        no-of-volumes: 4
+        disk-size: 15
+      node7:
+        networks:
+          - provider_net_cci_16
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+          - alertmanager
+          - grafana
+          - prometheus
+          - nfs-DC1
+          - mds-DC1
+        no-of-volumes: 4
+        disk-size: 15
+      node8:
+        networks:
+          - provider_net_cci_16
+        role:
+          - mon
+          - mgr
+          - osd
+          - nfs-DC2
+          - mds-DC2
+        no-of-volumes: 4
+        disk-size: 15
+      node9:
+        networks:
+          - provider_net_cci_16
+        role:
+          - osd
+          - mon
+          - nfs-DC3
+          - mds-DC3
+        no-of-volumes: 4
+        disk-size: 15
+      node10:
+        role:
+          - client
+      node11:
+        role:
+          - client
+      node12:
+        role:
+          - client

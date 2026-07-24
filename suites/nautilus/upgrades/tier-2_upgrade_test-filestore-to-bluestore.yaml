@@ -1,0 +1,83 @@
+#############################################################################
+# - Automation support for RPM based cluster with ceph disk osd scenario and object store as filestore
+#
+# Cluster configuration: (conf/nautilus/upgrades/upgrades.yaml)
+# --------------------------------------------------------------------------
+# Nodes:
+#   - 3 MONS, 1 MGRs, 3 OSDs, 1 RGW, 2 ISCSIGW's, 2 MDS's, 1 NFS, 1 GRAFANA, 1 CLIENT
+#
+# Test steps:
+# ---------------------------------------------------------------------
+# - Deploy Nautilus Ceph cluster using CDN RPMS with ceph disk osd scenario and object store as filestore
+# - Run some I/O's
+# - Upgrade to Nautilus using rolling upgrade
+# - Run filestore to bluestore migration playbook
+# - Purge cluster
+#
+#############################################################################
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    abort-on-fail: True
+
+- test:
+    name: ceph ansible install rhcs 3.x cdn
+    module: test_ansible.py
+    polarion-id: CEPH-83571467
+    config:
+      use_cdn: True
+      build: '3.x'
+      ansi_config:
+        ceph_origin: repository
+        ceph_repository: rhcs
+        osd_objectstore: filestore
+        ceph_repository_type: cdn
+        ceph_rhcs_version: 3
+        ceph_stable_release: luminous
+        osd_scenario: collocated
+        osd_auto_discovery: False
+        copy_admin_key: True
+    desc: test cluster ceph-disk 3.x cdn setup using ceph-ansible
+    abort-on-fail: True
+
+- test:
+    name: Upgrade ceph ansible to 4.x implicit ceph-volume
+    polarion-id: CEPH-11110
+    module: test_ansible_upgrade.py
+    config:
+      build: '4.x'
+      ansi_config:
+        ceph_origin: distro
+        osd_objectstore: filestore
+        ceph_stable_release: nautilus
+        ceph_repository: rhcs
+        osd_scenario: collocated
+        osd_auto_discovery: False
+        ceph_stable: True
+        ceph_stable_rh_storage: True
+        fetch_directory: ~/fetch
+        copy_admin_key: true
+        dashboard_enabled: False
+        upgrade_ceph_packages: True
+        ceph_rhcs_version: 4
+        ceph_iscsi_config_dev: false
+        node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+        grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+        prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:4.6
+        alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:4.6
+    desc: Test Ceph-Ansible rolling update - 3.x on rhel7 -> 4.x on rhel7
+    abort-on-fail: True
+
+- test:
+    name: filestore to bluestore migration
+    polarion-id: CEPH-83573539
+    module: filestore_to_bluestore.py
+    desc: filestore to bluestore migration
+
+- test:
+    name: ceph ansible purge
+    polarion-id: CEPH-83571498
+    module: purge_cluster.py
+    desc: Purge ceph cluster
+    abort-on-fail: True

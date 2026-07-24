@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <style>
+    table.full-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+    table.half-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 75%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    p { margin:0 }
+    </style>
+</head>
+<body>
+    <h3><u>Job {{ test_results["result"] }}</u></h3>
+    <table>
+        <tr><td>RHCS Version</td><td>{{ test_results["rhcephVersion"] }}</td></tr>
+        <tr><td>Ceph Version</td><td>{{ test_results["cephVersion"] }}</td></tr>
+        {% if test_results.get("composeLabel") %}
+        <tr><td>Compose Label</td><td>{{ test_results["composeLabel"] }}</td></tr>
+        {% endif %}
+        {% if test_results.get("composeId") %}
+        <tr><td>Compose ID</td><td>{{ test_results["composeId"] }}</td></tr>
+        {% endif %}
+        {% if test_results.get("composeUrl") %}
+        <tr><td>Compose URL</td><td>{{ test_results["composeUrl"] }}</td></tr>
+        {% endif %}
+        {% if test_results.get("containerImage") %}
+        <tr><td>Container Image</td><td>{{ test_results["containerImage"] }}</td></tr>
+        {% endif %}
+        {% if test_results["result"] != "SUCCESS" %}
+        <tr><td>{{ test_results["result"] }} Reason</td><td>{{ test_results["failureReason"] }}</td></tr>
+        <tr><td>UMB Message</td><td>{{ test_results["ciMsg"] }}</td></tr>
+        {% endif %}
+        <tr><td>Jenkins Build</td><td>{{ test_results["jobUrl"] }}</td></tr>
+    </table>
+</body>

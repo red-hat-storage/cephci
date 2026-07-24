@@ -1,0 +1,150 @@
+# ======================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_rgw_test-lc-multiple-bucket.yaml
+# Test-Case: RGW  object expiration through lc for multiple buckets
+#
+# Cluster Configuration:
+#    cephci/conf/nautilus/rgw/tier-0_rgw.yaml
+#
+# Test Steps:
+#   (1) Install Pre-requisites, and Deploy Ceph using ceph-ansible
+#   (2) check cluster health
+#   (3) RGW object expiration through lc for multiple buckets
+# ======================================================================================
+tests:
+
+  - test:
+      abort-on-fail: true
+      config:
+        is_production: true
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      name: setup install pre-requisistes
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Bucket Lifecycle expiration Tests
+      desc: Test lifecycle with 100 bucket containing 10 objects each
+      polarion-id: CEPH-11177
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_bucket_lc_multiple_bucket.yaml
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests for 100 buckets
+      desc: Test Bucket Lifecycle Object_transition_tests for 100 buckets
+      polarion-id: CEPH-83574043
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_multiple_bucket.yaml
+
+  - test:
+      name: Enable lifecycle and disable it on a bucket before objects expires
+      desc: Enable lifecycle and disable it on a bucket before the objects get expired
+      polarion-id: CEPH-11196
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_disable_object_exp.yaml
+
+  - test:
+      name: Add a new lifecycle configuration to a bucket
+      desc: Apply lc configuration to bucket which already has lc configuration set
+      polarion-id: CEPH-11199
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_add_new_lc_to_bucket.yaml
+
+  - test:
+      name: Add a lifecycle configuration to a bucket with tenant user
+      desc: Apply lc configuration to bucket with tenant user and perform get lc with other users of tenant
+      polarion-id: CEPH-11206
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_bucket_put_get_lifecycle_configuration_with_tenant_users.yaml

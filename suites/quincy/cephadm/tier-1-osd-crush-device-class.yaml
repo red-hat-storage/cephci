@@ -1,0 +1,82 @@
+#============================================================
+# Test-Case: Verify osd spec class crush_device_class
+#
+# Cluster Configuration:
+#    conf/quincy/cephadm/tier-0.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap a cluster along with a spec file using class field 'crush_device_class' to create osd.
+      desc: Bootstrap a cluster along with a spec file using class field 'crush_device_class' to create osd.
+      polarion-id: CEPH-83575604
+      module: test_cephadm_bootstrap.py
+      config:
+        ansible_preflight: true
+        bootstrap:
+          mon-ip: node1
+          apply-spec:
+            file_type: yaml
+            spec:
+              - service_type: host
+                hostname: node1
+                addr: node1
+              - service_type: host
+                hostname: node2
+                addr: node2
+              - service_type: host
+                hostname: node3
+                addr: node3
+              - service_type: mon
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: mgr
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: mds
+                service_id: test_mds
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: alertmanager
+                placement:
+                  hosts:
+                    - node1
+              - service_type: grafana
+                placement:
+                  hosts:
+                    - node1
+              - service_type: osd
+                service_id: osd_using_paths
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+                crush_device_class: ssd     # Using crush_device_class=ssd to deploy osd
+                spec:
+                  data_devices:
+                    paths:
+                      - /dev/vdb
+                      - /dev/vdc
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Verify osd spec class crush_device_class
+      desc: Verify osd spec class crush_device_class
+      module: test_osd_crush_device_class.py
+      polarion-id: CEPH-83575349
+      config:
+        crush_device_class: ssd
+      abort-on-fail: true

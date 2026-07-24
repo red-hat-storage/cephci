@@ -1,0 +1,101 @@
+# Tier2: Extended RBD trash related testing
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component related to trash purge.
+#
+# Conf File - conf/pacific/rbd/tier-0_rbd.yaml
+#
+# The following tests are covered
+#   - CEPH-83574482 - 'rbd trash purge' should purge all images without snapshots or clones in the pool specified
+#   - CEPH-83573660 - Schedule periodic trash purge operations via the CLI and check the behavior
+
+tests:
+
+  # Setup the cluster
+
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  # Test cases to be executed
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      desc: Perform trash purge on images with clone and images without clone
+      module: rbd_trash_purge.py
+      config:
+        do_not_create_image: True # to prevent initial_rbd_config from creating an image
+        no_of_images: 10 # number of images to create for testing
+        no_of_clones: 4 # number of images for which clones to be created
+      name: Test to perform trash purge on images with and without clone
+      polarion-id: CEPH-83574482
+
+  - test:
+      desc: Add trash purge schedule and verify the schedule
+      module: test_rbd_trash_purge_schedule.py
+      name: Test to verify trash purge schedule
+      config:
+        do_not_create_image: True
+      polarion-id: CEPH-83573660

@@ -1,0 +1,27 @@
+*~
+.*.sw[nmop]
+*.pyc
+.tox
+__pycache__
+ven*
+*egg*
+.idea
+*.iml
+config.yaml
+.vscode
+*.bak
+result.html
+result.props
+*.crt
+*.key
+
+# ignore Logs
+*.log
+
+# ignore cephci execution residues
+osd_scenarios_*node*
+version_info.json
+rerun
+sut.yaml
+
+**/.coverage

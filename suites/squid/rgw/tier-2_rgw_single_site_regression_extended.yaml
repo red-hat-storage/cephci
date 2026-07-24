@@ -1,0 +1,410 @@
+# RHCS 8.x Tier-2 RGW regression test suite for RGW daemon.
+
+# Runs the Object Gateway tests from the repo
+# https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre requisites for cluster deployment
+      module: install_prereq.py
+      name: setup pre requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83573713
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node3:80
+          - node4:80
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
+      name: Test LC transition with rule by lc process
+      desc: Test LC transition with rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_lc_process.yaml
+
+  - test:
+      name: Test LC transition without rule by lc process
+      desc: Test LC transition without rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_process_without_applying_rule.yaml
+
+  - test:
+      name: Test user creation with placement and storage class cold
+      desc: Test user creation with placement and storage class cold
+      polarion-id: CEPH-83575880
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_user_with_placement_id_storage_class_cold.yaml
+
+  - test:
+      name: Test user creation with placement and storage class
+      desc: Test user creation with placement and storage class
+      polarion-id: CEPH-83575880
+      comments: known issue (BZ-2311474) targetted to 9.0
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_user_with_placement_id_storage_class.yaml
+
+  - test:
+      abort-on-fail: false
+      config:
+        suite:
+          - JavaS3
+        kms_keyid: testKey01
+        ssl: false
+      desc: Java S3tests
+      destroy-cluster: false
+      module: java_s3tests.py
+      name: execute Java s3tests
+      polarion-id: CEPH-83586289
+
+  - test:
+      abort-on-fail: false
+      config:
+        suite:
+          - maven
+        ssl: false
+      desc: Java Maven Test suite
+      destroy-cluster: false
+      module: java_s3tests.py
+      name: execute Java Maven test suite
+      polarion-id: CEPH-83586289
+
+  - test:
+      name: Test bi put with incomplete multipart upload
+      desc: Test bi put with incomplete multipart upload
+      polarion-id: CEPH-83574876
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bi_put_with_incomplete_multipart_upload.yaml
+
+  - test:
+      name: Test anonymous PUT to bucket with public read write ACL
+      desc: Test anonymous PUT to bucket with public read write ACL
+      polarion-id: CEPH-83604473
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_acl.py
+        config-file-name: ../../aws/configs/test_public_read_write_acl.yaml
+
+  - test:
+      name: Test Inditex hotfix bz CORS presigned put url
+      desc: CORS ACLs prevents access to buckets with presigned PUT URIs with ACL private header
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_cors_presigned_put_url_using_curl.yaml
+
+  - test:
+      name: Greater test coverage for bucket CORS
+      desc: Enhanced test coverage for bucket CORS
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: test_cors.py
+        config-file-name: test_cors.yaml
+
+  - test:
+      name: Greater test coverage for bucket CORS with wildcards
+      desc: Enhanced test coverage for bucket CORS with wildcards
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: test_cors.py
+        config-file-name: test_cors_wildcard.yaml
+
+  - test:
+      name: Greater test coverage for bucket CORS with multiple rules
+      desc: Enhanced test coverage for bucket CORS with multiple rules
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: test_cors.py
+        config-file-name: test_cors_multiple_rules.yaml
+
+  - test:
+      name: Test Tags added during multipart upload are retrievable
+      desc: Test Tags added during multipart upload are retrievable
+      polarion-id: CEPH-83604857
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_multipart_upload_with_tagging.yaml
+
+  - test:
+      name: Test No crash with upload part copy having % in obj name
+      desc: Test No crash with upload part copy having % in obj name
+      polarion-id: CEPH-83622325
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_tail_deletion_during_copy_object.py
+        config-file-name: ../../aws/configs/test_aws_rgw_crash_with_part_copy_with_object_name_%_init.yaml
+
+  - test:
+      name: Test No crash with empty copy source
+      desc: Test No crash with empty copy source
+      polarion-id: CEPH-83622325
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_tail_deletion_during_copy_object.py
+        config-file-name: ../../aws/configs/test_crash_with_empty_copy_source.yaml
+
+  # test customer RFE: Public access block
+
+  - test:
+      name: test public access block pre bucket policy
+      desc: test public access block pre bucket policy
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_pre_bucket_policy.yaml
+  - test:
+      name: test public access block post bucket policy
+      desc: test public access block post bucket policy
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_post_bucket_policy.yaml
+  - test:
+      name: test public access block BlockPublicAcls
+      desc: test public access block BlockPublicAcls
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_acl.yaml
+      comments: known issue - Bug 2413969 targeted to 8.1z5
+  - test:
+      name: test public access block IgnorePublicAcls
+      desc: test public access block IgnorePublicAcls
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_ignore_acl.yaml
+  - test:
+      name: test public access block RestrictPublicBuckets
+      desc: test public access block RestrictPublicBuckets
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_restricted_public_buckets.yaml
+      comments: known issue - Bug 2344730 targetted to 9.0
+
+  - test:
+      name: verify parquet object access after bucket reshard
+      desc: verify objects with parquet files uploaded are accessible post reshard of the bucket
+      polarion-id: CEPH-83575183
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select_resharding.py
+        config-file-name: test_s3select_parquet_resharding.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Dynamic Resharding tests without bucket delete
+      desc: Resharding test dynamic without bucket delete
+      polarion-id: CEPH-83571740 # also applies to ceph-11479, ceph-11477
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Manual Resharding tests without bucket delete
+      desc: Resharding test manual without bucket delete
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
+
+  # test checksum with awscli v1 and v2
+
+  - test:
+      name: test checksum with awscli_v1_v2 small objects
+      desc: test checksum with awscli_v1_v2 small objects
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_small_objects.yaml
+  - test:
+      name: test checksum with awscli_v1_v2 non-multipart objects
+      desc: test checksum with awscli_v1_v2 non-multipart objects
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_non_multipart.yaml
+  - test:
+      name: test checksum with awscli_v1_v2 multipart objects
+      desc: test checksum with awscli_v1_v2 multipart objects
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_multipart.yaml
+
+  - test:
+      name: Test large omap creation and clearance
+      desc: Test large omap creation and clearance
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_green_field.yaml
+        run-on-haproxy: true
+
+  # Downshard and bucket instance deletion tests
+
+  - test:
+      name: Test bucket instance deletion on bucket delete
+      desc: Test bucket instance deletion on bucket delete
+      polarion-id: CEPH-83591444
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bucket_instance_delete.yaml
+
+  - test:
+      name: Test scenario of object deletion with version id
+      desc: Test scenario of object deletion with version id
+      polarion-id: CEPH-83576431
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_delete_version_id_null.py
+        config-file-name: ../../aws/configs/test_no_crash_while_ver_deletion.yaml
+
+  - test:
+      name: Object Unlink
+      desc: RGW Object unlink BZ 2401174
+      polarion-id: CEPH-83572908
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_user_bucket_rename.py
+        config-file-name: test_object_unlink.yaml

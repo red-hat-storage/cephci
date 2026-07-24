@@ -1,0 +1,302 @@
+---
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_cephfs_cg_quiesce_systemic
+# Conf file : conf/reef/cephfs/tier_1_cephfs_cg_quiesce.yaml
+# Test-Case Covered:
+#	CEPH-83581468 CG quiesce Stress and Scalability tests
+#===============================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: ~
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node5
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node6
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+        node: node8
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.5
+        install_packages:
+          - ceph-common
+        node: node9
+      desc: "Configure the Cephfs client system 5"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.6
+        install_packages:
+          - ceph-common
+        node: node10
+      desc: "Configure the Cephfs client system 6"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.7
+        install_packages:
+          - ceph-common
+        node: node11
+      desc: "Configure the Cephfs client system 7"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.8
+        install_packages:
+          - ceph-common
+        node: node12
+      desc: "Configure the Cephfs client system 8"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.9
+        install_packages:
+          - ceph-common
+        node: node13
+      desc: "Configure the Cephfs client system 9"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.10
+        install_packages:
+          - ceph-common
+        node: node14
+      desc: "Configure the Cephfs client system 10"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.11
+        install_packages:
+          - ceph-common
+        node: node15
+      desc: "Configure the Cephfs client system 11"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+        ENABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
+        daemon_dbg_level : {'mds':10,'client':10,'osd':5,'mgr':5,'mon':5}
+  - test:
+      abort-on-fail: false
+      desc: "Set size limit for log rotation"
+      name: size limit for log rotation
+      module: cephfs_logs_util.py
+      config:
+        LOG_ROTATE_SIZE : 1
+        log_size : '200M'
+  -
+    test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+        crash_setup : 1
+        daemon_list : ['mds','osd','mgr','mon']
+  -
+    test:
+      abort-on-fail: true
+      desc: "CG snap systemic test"
+      config:
+        qs_cnt: 10
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_system_test.py
+      name: "cg_snap_system_test"
+      polarion-id: CEPH-83581468
+  -
+    test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+        DISABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']

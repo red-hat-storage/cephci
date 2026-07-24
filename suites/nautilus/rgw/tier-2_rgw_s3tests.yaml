@@ -1,0 +1,65 @@
+# Objective: Execute external S3Tests
+# Conf: 5-node-cluster.yaml
+# Platform: independent
+# Ceph: RGW using EC pool 4+2 configuration for data.
+---
+tests:
+  - test:
+      name: initial vm configuration
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        ansi_config:
+          ceph_test: true
+          ceph_origin: distro
+          ceph_repository: rhcs
+          ceph_rhcs_version: 4
+          osd_scenario: lvm
+          copy_admin_key: true
+          dashboard_enabled: true
+          dashboard_admin_user: admin
+          dashboard_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_admin_password: p@ssw0rd
+          node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+          grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+          prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+          alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+          rgw_create_pools:
+            "{{ rgw_zone }}.rgw.buckets.data":
+              type: ec
+              ec_profile: rgwecprofile01
+              ec_k: 4
+              ec_m: 2
+          ceph_conf_overrides:
+            global:
+              mon_warn_on_insecure_global_id_reclaim_allowed: false
+              osd_pool_default_pg_autoscale_mode: "on"
+      desc: test deploying of cluster setup using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
+      polarion-id: CEPH-83572684
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        commands:
+          - "ceph -s"
+          - "ceph osd dump"
+        sudo: true
+      desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
+
+  - test:
+      name: s3 tests
+      module: test_s3.py
+      config:
+        branch: ceph-nautilus
+      desc: execution of s3 tests against radosgw
+      polarion-id: CEPH-83575225
+      destroy-cluster: false

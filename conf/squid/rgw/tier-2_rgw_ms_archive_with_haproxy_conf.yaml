@@ -1,0 +1,112 @@
+# System Under Test environment configuration for RGW-MS + Archive suites
+# Every cluster has 4 nodes, where node4 is client and rgw roles
+# suite file : suites/squid/rgw/tier-2_rgw_ms_archive_with_haproxy.yaml
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+
+      node1:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
+
+
+  - ceph-cluster:
+      name: ceph-sec
+      node1:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
+  - ceph-cluster:
+      name: ceph-arc
+      node1:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client

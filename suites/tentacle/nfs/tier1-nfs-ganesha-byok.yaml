@@ -1,0 +1,353 @@
+# ===============================================================================
+# Test Suite: NFS Ganesha v4.2 with BYOK (Bring Your Own Key)
+# Configuration: conf/tentacle/nfs/1admin-7node-3client.yaml
+#
+# This suite performs end-to-end testing of:
+#   - GKLM integration for key and certificate management (BYOK/KMIP)
+#   - Deployment and configuration of NFS Ganesha v4.2
+#   - I/O operations validation on NFS exports
+#   - Encryption enforcement verification via FUSE mounts
+#
+# Prerequisites:
+#   • CephCI environment configured for your cloud (openstack or baremetal)
+#   • GKLM credentials supplied via:
+#       a) --custom-config-file <gklm_file.yaml>
+#          gklm_file.yaml should include:
+#            gklm:
+#              gklm_ip:           "0.0.0.0"    # GKLM server IP
+#              gklm_user:         "admin"      # GKLM REST API user
+#              gklm_password:     "password"   # GKLM REST API password
+#              gklm_node_username:"user"       # SSH user on GKLM host
+#              gklm_node_password:"password"   # SSH password on GKLM host
+#              gklm_hostname:     "myhost"     # GKLM server hostname
+#
+#       OR
+#       b) Multiple --custom-config entries:
+#          --custom-config "gklm_ip=0.0.0.0"
+#          --custom-config "gklm_user=admin"
+#          --custom-config "gklm_password=password"
+#          --custom-config "gklm_node_username=user"
+#          --custom-config "gklm_node_password=password"
+#          --custom-config "gklm_hostname=myhost"
+#
+#       OR
+#       c) In ~/.cephci.yaml under 'gklm_config':
+#          gklm_config:
+#            openstack:
+#              gklm_ip:             "0.0.0.0"
+#              gklm_user:           "user"
+#              gklm_password:       "password"
+#              gklm_node_username:  "user"
+#              gklm_node_password:  "password"
+#              gklm_hostname:       "hostname"
+#            ibmc:
+#              gklm_ip:             "0.0.0.0"
+#              gklm_user:           "user"
+#              gklm_password:       "password"
+#              gklm_node_username:  "user"
+#              gklm_node_password:  "password"
+#              gklm_hostname:       "hostname"
+# ===============================================================================
+---
+tests:
+     - test:
+         abort-on-fail: true
+         desc: Install software pre-requisites for cluster deployment.
+         module: install_prereq.py
+         name: setup pre-requisites
+
+     - test:
+         abort-on-fail: true
+         config:
+           steps:
+             - config:
+                 command: bootstrap
+                 service: cephadm
+                 args:
+                   mon-ip: node1
+             - config:
+                 command: add_hosts
+                 service: host
+                 args:
+                   attach_ip_address: true
+                   labels: apply-all-labels
+             - config:
+                 command: apply
+                 service: osd
+                 args:
+                   all-available-devices: true
+             - config:
+                 command: apply
+                 service: rgw
+                 pos_args:
+                   - rgw.1
+                 args:
+                   placement:
+                     label: rgw
+             - config:
+                 args:
+                   - "ceph fs volume create cephfs"
+                 command: shell
+             - config:
+                 args:
+                   placement:
+                     label: mds
+                 base_cmd_args:
+                   verbose: true
+                 command: apply
+                 pos_args:
+                   - cephfs
+                 service: mds
+             - config:
+                 args:
+                   - "ceph osd pool create rbd"
+                 command: shell
+             - config:
+                 args:
+                   - "rbd pool init rbd"
+                 command: shell
+         desc: bootstrap and deploy services.
+         destroy-cluster: false
+         polarion-id: CEPH-83573713
+         module: test_cephadm.py
+         name: Deploy cluster using cephadm
+
+     - test:
+         abort-on-fail: true
+         config:
+           command: add
+           id: client.1
+           node: node4
+           install_packages:
+             - ceph-common
+             - ceph-fuse
+           copy_admin_keyring: true
+         desc: Configure the RGW,RBD client system
+         destroy-cluster: false
+         module: test_client.py
+         name: configure client
+
+     - test:
+         abort-on-fail: true
+         config:
+           command: add
+           id: client.2
+           node: node5
+           install_packages:
+             - ceph-common
+             - ceph-fuse
+           copy_admin_keyring: true
+         desc: Configure the RGW,RBD client system
+         destroy-cluster: false
+         module: test_client.py
+         name: configure client
+
+     - test:
+         abort-on-fail: true
+         config:
+           command: add
+           id: client.3
+           node: node6
+           install_packages:
+             - ceph-common
+             - ceph-fuse
+           copy_admin_keyring: true
+         desc: Configure the RGW,RBD client system
+         destroy-cluster: false
+         module: test_client.py
+         name: configure client
+
+     - test:
+         abort-on-fail: true
+         config:
+           command: add
+           id: client.4
+           node: node7
+           install_packages:
+             - ceph-common
+             - ceph-fuse
+           copy_admin_keyring: true
+         desc: Configure the RGW,RBD client system
+         destroy-cluster: false
+         module: test_client.py
+         name: configure client
+
+
+     - test:
+         name: Test Encryption with the correct keys (single cluster)
+         module: byok.test_byok_single_multi_restart.py
+         desc: BYOK single-cluster with FUSE encryption validation
+         polarion-id: CEPH-83625072
+         config:
+            nfs_version: 4.2
+            total_export_num: 4
+            clients: 1
+            nfs_replication_number: 1           # Single cluster mode
+            nfs_mount: /mnt/nfs_byok
+            nfs_export: /export_byok
+            nfs_instance_name: nfs_byok
+
+     - test:
+         name: byok multicluster with io and restart - parallel module
+         module: test_parallel.py
+         desc: byok multicluster + restart - parallel module
+         parallel:
+           - test:
+               name: Test multiple clusters with IO
+               module: byok.test_byok_single_multi_restart.py
+               desc: Test multiple clusters with IO
+               polarion-id: CEPH-83627655
+               config:
+                 nfs_version: 4.2
+                 total_export_num: 4
+                 clients: 2
+                 nfs_replication_number: 2           # Multi-cluster mode - number of clusters
+                 nfs_mount_common_name: nfs_byok     # Used for multi-cluster cleanup naming
+                 nfs_export: /export_byok
+                 spec:                              # Multi-cluster NFS deployment spec
+                   service_type: nfs
+                   service_id: nfs_byok
+                   placement:
+                     host_pattern: ""
+                   spec:
+                     port: 60000
+                     monitoring_port: 60500
+
+           - test:
+                 name: Restart NFS Ganesha services -byok
+                 desc: Restart NFS Ganesha services for given time - byok
+                 module: scripts_tools.restart_nfs_ganesha_services.py
+                 config:
+                   clients: 1
+                   restart_interval: 2 #in minutes
+                   longevity: true
+                   # longevity_duration: 1 # in hours
+                   longevity_loop: 3 # 3 iterations/loops
+
+     - test:
+         name: Test SIGHUP-reload after KMIP and nfs update (single cluster)
+         module: byok.test_byok_single_multi_restart.py
+         desc: Confirm nfs receives SIGHUP and reloads after KMIP certs in existing NFS service spec update
+         polarion-id: CEPH-83628800
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byok
+           check_sighup: true
+
+     - test:
+         name: Test SNI Default Secure Case
+         module: byok.test_sni_feature.py
+         desc: Default Secure Case,servername and verify_hostname match
+         polarion-id: CEPH-83632231
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byoksni
+           operation: Default Secure Case
+
+     - test:
+         name: Test SNI Mismatch Validation Hostname
+         module: byok.test_sni_feature.py
+         desc: Mismatch Validation Hostname, servername and verify_hostname unmatch
+         polarion-id: CEPH-83632232
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byoksni
+           operation: Mismatch Validation Hostname
+
+     - test:
+         name: Test SNI Disable Validation
+         module: byok.test_sni_feature.py
+         desc: Disable Validation, validate_hostname empty
+         polarion-id: CEPH-83632236
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byoksni
+           operation: Disable Validation
+
+     - test:
+         name: Test No SNI, Validate Other Hostname
+         module: byok.test_sni_feature.py
+         desc: Disable Validation, servername is empty and different hostname
+         polarion-id: CEPH-83632237
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byoksni
+           operation: No SNI - Validate Other Hostname
+
+     - test:
+         name: Test Custom SNI - Validation Hostname
+         module: byok.test_sni_feature.py
+         desc: Disable Validation, servername and verify_hostname with other cert
+         polarion-id: CEPH-83632233
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byoksni
+           operation: Custom SNI - Validation Hostname
+
+     - test:
+         name: Test Different SNI and Validation
+         module: byok.test_sni_feature.py
+         desc: Disable Validation, servername and verify_hostname points other certs
+         polarion-id: CEPH-83632234
+         config:
+           nfs_version: 4.2
+           total_export_num: 4
+           clients: 1
+           nfs_replication_number: 1           # Single cluster mode
+           nfs_mount: /mnt/nfs_byok
+           nfs_export: /export_byok
+           nfs_instance_name: nfs_byoksni
+           operation: Different SNI and Validation
+
+     - test:
+        name: Test No SNI - No Validation
+        module: byok.test_sni_feature.py
+        desc: Disable Validation, servername and verify_hostname empty
+        polarion-id: CEPH-83632235
+        config:
+          nfs_version: 4.2
+          total_export_num: 4
+          clients: 1
+          nfs_replication_number: 1           # Single cluster mode
+          nfs_mount: /mnt/nfs_byok
+          nfs_export: /export_byok
+          nfs_instance_name: nfs_byoksni
+          operation: No SNI - No Validation
+
+     - test:
+         name: Test Encryption with the incorrect key and kmip certs (single cluster)
+         module: byok.test_byok_neg_incorrect_key_cert.py
+         desc: BYOK Negative test Incorrect key kmip certs
+         polarion-id: CEPH-83628801
+         config:
+           nfs_version: 4.2

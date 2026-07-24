@@ -1,0 +1,58 @@
+tests:
+  - test:
+      name: Setup pre-requisites
+      desc: Setup packages and configuration for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              service: cephadm
+              command: bootstrap
+              args:
+                mon-ip: node1
+          - config:
+              service: host
+              command: add_hosts
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              service: osd
+              command: apply
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - "ceph osd pool create rbd"
+          - config:
+              command: shell
+              args:
+                - "rbd pool init rbd"
+      abort-on-fail: true
+      verify_cluster_health: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        node: node4
+      desc: "Configure the client system"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+      polarion-id: CEPH-83573758

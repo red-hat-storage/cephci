@@ -1,0 +1,5 @@
+# This requirements are specific to upload objects as part of CI
+ibm-cos-sdk == 2.14.2
+ibm-cos-sdk-core == 2.14.2
+ibm-cos-sdk-s3transfer == 2.14.2
+awscli

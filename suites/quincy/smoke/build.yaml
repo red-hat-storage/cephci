@@ -1,0 +1,41 @@
+#===============================================================================================
+#-------------------------------------
+#-----    Smoke Test suite     ------
+#-------------------------------------
+# Conf: conf/quincy/smoke/1admin-4node-1client-bvt.yaml
+# Smoke test cases for
+#    - Setup pre-requisites-
+#    - Validate package versions
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      desc: Validate package versions
+      module: test_package_validation.py
+      name: Validate package versions
+      config:
+        server_packages:
+          cephadm-ansible: "2.15"
+        default_packages:
+          chrony: "4.2"
+          lvm2: "2.03"
+          podman: "4.1"
+        dependent_packages:
+          ansible-core: "2.12"
+          ansible-collection-ansible-posix: "1.2"
+          ansible-collection-community-general: "4.0"
+        client_packages:
+          ceph-common: "16.2"
+          ceph-fuse: "16.2"
+          cephfs-top: "16.2"
+        monitoring_images:
+          ose-prometheus-node-exporter: "v4.13.0"
+          ose-prometheus: "v4.13.0"
+          ose-prometheus-alertmanager: "v4.13.0"

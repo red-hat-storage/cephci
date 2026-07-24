@@ -1,0 +1,50 @@
+# This conf needs to use only for openstack environment as this subnets are from rhos-d infra.
+# node1, node2, node3 are part of subnet provider_net_cci_9 with CIDR(10.0.104.0/22)
+# node4, node5 are part of subnet provider_net_cci_11 with CIDR(10.0.204.0/22)
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_9
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        networks:
+          - provider_net_cci_9
+        role:
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 3
+        disk-size: 15
+      node3:
+        networks:
+          - provider_net_cci_9
+        role:
+          - mon
+          - osd
+        no-of-volumes: 3
+        disk-size: 15
+      node4:
+        networks:
+          - provider_net_cci_11
+        role:
+          - mon
+          - osd
+        no-of-volumes: 3
+        disk-size: 15
+      node5:
+        networks:
+          - provider_net_cci_11
+        role:
+          - mon
+          - mgr

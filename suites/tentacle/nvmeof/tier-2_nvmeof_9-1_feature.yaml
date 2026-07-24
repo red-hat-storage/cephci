@@ -1,0 +1,168 @@
+# Ceph-NvmeoF Test suite
+# cluster configuration file: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
+---
+tests:
+
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                allow-overwrite: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  #  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node7
+        copy_admin_keyring: true
+        install_packages:
+          - ceph-common
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node:
+          - node5
+          - node6
+        rbd_pool: rbd_ns
+        nvme_metadata_pool: rbd
+        install: true
+        gw_group: group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd_ns
+        image_size: 4G
+        rados_ns1: rados_ns_1
+        rados_ns2: rados_ns_2
+        cleanup:
+          - subsystems
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:  # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            bdevs:
+              count: 1
+              size: 4G
+              ns_create_image: true
+            listeners:
+              - node5
+              - node6
+            listener_port: 4420
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            bdevs:
+              count: 1
+              size: 3G
+              ns_create_image: true
+            listeners:
+              - node5
+              - node6
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        fault-injection-methods:                # Failure induction
+          - tool: systemctl
+            nodes:
+              - node5
+      desc: >
+            Verifies the rados namespace option in ns add cli
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_with_rados_ns.py
+      name: Verify RADOS namespaces support in NVMeoF GWs
+      polarion-id: CEPH-83632335
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        inband_auth_mode: true
+        redeploy_service: true
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        do_not_create_image: true
+        gw_group: group1
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        bdev_count: 2
+        bdev_size: 2G
+        listeners:
+          - node5
+          - node6
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: true
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            no-group-append: true
+        del_controller_key_on: nqn.2016-06.io.spdk:cnode2
+        dhchap_subsystem:
+          nqn: nqn.2016-06.io.spdk:cnode3
+          no-group-append: true
+        cleanup:
+          - gateway
+          - pool
+          - subsystems
+      desc: >
+        NVMe-oF encryption-key service with DHCHAP host/controller keys,
+        controller-key rotation, mutual exclusion, and FIO validation per host.
+      destroy-cluster: false
+      module: test_nvmeof_encryption_dhchap_per_host_e2e.py
+      name: Allow setting controller DHCHAP key per host
+      polarion-id: CEPH-83632329

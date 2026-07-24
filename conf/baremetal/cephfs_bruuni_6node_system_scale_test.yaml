@@ -1,0 +1,129 @@
+---
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.0.0.0/8']
+      nodes:
+        -
+          hostname: bruuni001
+          id: node1
+          ip: 10.64.0.220
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+            - crash
+        -
+          hostname: bruuni002
+          id: node2
+          ip: 10.64.0.221
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - mds
+            - node-exporter
+            - alertmanager
+            - crash
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: bruuni003
+          id: node3
+          ip: 10.64.0.222
+          root_password: passwd
+          role:
+            - mon
+            - mds
+            - node-exporter
+            - crash
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: bruuni004
+          id: node4
+          ip: 10.64.0.223
+          root_password: passwd
+          role:
+            - mds
+            - node-exporter
+            - crash
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: bruuni005
+          id: node5
+          ip: 10.64.0.224
+          root_password: passwd
+          role:
+            - mds
+            - osd
+            - nfs
+            - node-exporter
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: bruuni006
+          id: node6
+          ip: 10.64.0.225
+          root_password: passwd
+          role:
+            - mds
+            - osd
+            - nfs
+            - node-exporter
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: cephfs-client-vm01
+          id: node7
+          ip: 10.64.26.238
+          role:
+          - client
+          root_password: passwd
+        - hostname: cephfs-client-vm02
+          id: node8
+          ip: 10.64.26.125
+          role:
+          - client
+          root_password: passwd
+        - hostname: cephfs-client-vm03
+          id: node9
+          ip: 10.64.26.201
+          role:
+          - client
+          root_password: passwd
+        - hostname: cephfs-client-vm04
+          id: node10
+          ip: 10.64.27.93
+          role:
+          - client
+          root_password: passwd
+        - hostname: cephfs-client-vm05
+          id: node11
+          ip: 10.64.26.162
+          role:
+          - client
+          root_password: passwd

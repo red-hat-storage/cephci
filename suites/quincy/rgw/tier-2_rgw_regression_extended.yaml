@@ -1,0 +1,231 @@
+# ======================================================================================
+# Cluster Configuration:
+#    cephci/conf/quincy/rgw/tier-0_rgw.yaml
+
+# ======================================================================================
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83573713
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
+      name: Test non-current deletion via s3cmd
+      desc: Test non-current deletion via s3cmd
+      polarion-id: CEPH-83573543
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_lifecycle_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
+
+  - test:
+      name: Bucket Lifecycle expiration of incomplete multipart
+      desc: Bucket Lifecycle expiration of incomplete multipart
+      polarion-id: CEPH-11195
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_incomplete_multipart.yaml
+  - test:
+      name: S3CMD small and multipart object download
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Swift user with read access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_read.yaml
+
+  - test:
+      name: Swift user with write access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_write.yaml
+
+  - test:
+      name: Swift user with readwrite access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_readwrite.yaml
+
+  - test:
+      name: Test LC with custom worktime
+      desc: Test LC with custom worktime
+      polarion-id: CEPH-83583080
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_custom_worktime.yaml
+
+  - test:
+      name: Test Etag not empty for complete multipart upload in aws
+      desc: Test Etag not empty for complete multipart upload in aws
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
+
+  - test:
+      name: Test S3 PUT requests with non ascii characters in body
+      desc: Test S3 PUT requests with non ascii characters in body
+      polarion-id: CEPH-83572765
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
+
+  - test:
+      name: Test LC transition with rule by lc process
+      desc: Test LC transition with rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_lc_process.yaml
+
+  - test:
+      name: Test LC transition without rule by lc process
+      desc: Test LC transition without rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_process_without_applying_rule.yaml
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-quincy
+      desc: Run the external S3test suites.
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests
+      polarion-id: CEPH-83575225
+      comments: known issue 55614 fixed in Ceph quincy - v17.2.7, current builds at build is 17.2.6 and BZ2266411 is a known issue for release below 7.1

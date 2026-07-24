@@ -1,0 +1,13 @@
+
+[mon]
+mon_cluster_log_to_syslog = true
+
+[osd]
+debug_osd = 5/5
+
+[mgr]
+mgr_stats_period = 10
+debug_mgr = 5/5
+
+[mds]
+mds_op_history_size = 40

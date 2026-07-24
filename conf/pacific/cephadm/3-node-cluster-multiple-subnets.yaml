@@ -1,0 +1,27 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_12
+          - provider_net_cci_11
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 1
+        disk-size: 15
+      node2:
+        networks:
+          - provider_net_cci_8
+          - provider_net_cci_7
+        role:
+          - osd
+          - mon
+          - mgr
+          - mds
+          - rgw
+        no-of-volumes: 1
+        disk-size: 15

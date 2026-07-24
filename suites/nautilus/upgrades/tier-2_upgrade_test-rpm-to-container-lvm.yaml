@@ -1,0 +1,101 @@
+#############################################################################
+# - Automation support for container based cluster with lvm osd scenario
+#
+# Cluster configuration: (conf/nautilus/upgrades/tier-2_upgrade.yaml)
+# --------------------------------------------------------------------------
+# Nodes:
+#   - 3 MONS, 1 MGRs, 3 OSDs, 1 RGW, 2 ISCSIGW's, 2 MDS's, 1 NFS, 1 GRAFANA, 1 CLIENT
+#
+# Test steps:
+# ---------------------------------------------------------------------
+# - Deploy  Nautilus Ceph cluster using CDN RPMS with lvm osd scenario
+# - Run some I/O's
+# - Upgrade to Nautilus using rolling upgrades
+# - Purge cluster
+#
+#############################################################################
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    abort-on-fail: True
+- test:
+    name: ceph ansible install rhcs 3.x cdn
+    polarion-id: CEPH-83571467
+    module: test_ansible.py
+    config:
+      use_cdn: True
+      build: '3.x'
+      ansi_config:
+        ceph_origin: repository
+        ceph_repository: rhcs
+        ceph_repository_type: cdn
+        ceph_rhcs_version: 3
+        ceph_stable_release: luminous
+        osd_scenario: lvm
+        osd_auto_discovery: False
+        copy_admin_key: True
+    desc: test cluster ceph-volume 3.x cdn setup using ceph-ansible
+    abort-on-fail: True
+- test:
+    name: Upgrade ceph ansible to 4.x
+    polarion-id: CEPH-11110
+    module: test_ansible_upgrade.py
+    config:
+      build: '4.x'
+      ansi_config:
+        ceph_origin: distro
+        ceph_stable_release: nautilus
+        ceph_repository: rhcs
+        osd_scenario: lvm
+        osd_auto_discovery: False
+        ceph_stable: True
+        ceph_stable_rh_storage: True
+        fetch_directory: ~/fetch
+        copy_admin_key: true
+        dashboard_enabled: False
+        upgrade_ceph_packages: True
+        ceph_rhcs_version: 4
+        ceph_iscsi_config_dev: false
+        node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+        grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+        prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+        alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+    desc: Test Ceph-Ansible rolling update - 3.x on rhel7 -> 4.x on rhel7
+    abort-on-fail: True
+- test:
+    name: librbd workunit
+    module: test_workunit.py
+    config:
+      test_name: rbd/test_librbd_python.sh
+      branch: nautilus
+      role: mon
+    desc: Test librbd unit tests
+- test:
+    name: check-ceph-health
+    module: exec.py
+    config:
+      cmd: ceph -s
+      sudo: True
+    desc: Check for ceph health debug info
+- test:
+    name: rados_bench_test
+    module: radosbench.py
+    config:
+      pg_num: '128'
+      pool_type: 'normal'
+    desc: run rados bench for 360 - normal profile
+- test:
+    name: deep scrub and osd memory utilization
+    module: test_bz_1754078.py
+    config:
+          pg_count: 128
+          timeout: 20
+    desc: run deep scrub and check each osd daemon memory usage
+- test:
+    name: ceph ansible purge
+    polarion-id: CEPH-83571498
+    module: purge_cluster.py
+    desc: Purge ceph cluster
+    abort-on-fail: True
+

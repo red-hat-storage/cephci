@@ -1,0 +1,109 @@
+# ==================================================================================
+# NOTE: This test suite is for different subnet configured cluster
+# as per it's conf file it needs to be run only openstack env.
+#
+# Tier-level: 2
+# Test-Case:
+#   cephadm cluster bootstrap with mutiple public network
+# Test-Suite:
+#   tier-2_multiple_subnet_openstack_only.yaml
+# Cluster Configuration: conf/squid/cephadm/rhosd-1admin-5node-multiple-subnet.yaml
+# Node1 - admin, Mon, Mgr, Installer, alertmanager, grafana,
+#         prometheus, node-exporter , crash
+# Node2 - Mon, Mgr, OSD
+# Node3 - Mon, OSD
+# Node4 - Mon, OSD
+# Node5 - Mon, Mgr
+# Test steps:
+#   (1) Bootstrap cluster with options,
+##       - registry-json: <registry-URL>
+##       - mon-ip: <monitor IP address: Required>
+##       - public-network: <CIDR of provider_net_cci_4 and provider_net_cci_5
+##   (2) Copy SSH keys to nodes.
+##   (3) Add nodes to cluster with address and role labels attached to it using
+#        Host spec yaml file.
+##   (4) Deploy services using apply spec option,
+#        (" ceph orch apply -i <spec_file>)
+##       - 5 Mon on node1, node2, node3, node4 and node5 using host placements.
+##       - MGR using host placement on node1, node2 and node5.
+##       - addition of OSD's using "all-avialable-devices" option.
+##       - crash and node-exporter on all nodes using placement="*".
+##   (5) Test to validate multiple public network
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cluster deployment with multiple subnet
+      desc: Ceph cluster with multiple public network
+      module: test_cephadm.py
+      polarion-id: CEPH-83575132
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                custom_image: true
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                config:
+                  global:
+                    public_network: 10.0.144.0/22,10.0.148.0/22
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                nodes:
+                  - node2
+                  - node3
+                  - node4
+                  - node5
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: crash
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: validate multiple public network
+      desc: Verify multiple public network option
+      module: test_config.py
+      config:
+        public_network: 10.0.148.0/22,10.0.144.0/22
+      polarion-id: CEPH-83575132
+      abort-on-fail: true

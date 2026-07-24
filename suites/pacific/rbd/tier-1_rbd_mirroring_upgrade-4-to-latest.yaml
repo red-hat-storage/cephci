@@ -1,0 +1,223 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_rbd_mirroring_upgrade-4-to-latest.yaml
+# Test-Case: Configure RBD Mirror setup and run IOs
+# Polarion ID : CEPH-83573329 - RBD HA MirroringDraft
+#
+# Cluster Configuration:
+#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
+#    No of Clusters : 2
+#    Each cluster configuration
+#    6-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client
+#     Node3 - OSD, Mon, Mgr
+#     Node4 - OSD, Mon
+#     Node5 - OSD
+#     Node6 - RBD Mirror
+
+# Execution flow:
+# 1) Create two clusters with rbd-mirroring daemons on RHCS 4x.
+# 2) Run IOs.
+# 3) Upgrade clusters one by one to RHCS 5x latest with IOs running in parallel
+#===============================================================================================
+tests:
+  - test:
+      name: pre-req
+      module: install_prereq.py
+      abort-on-fail: true
+      desc: install ceph pre requisites
+      config:
+        is_production: True
+
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      clusters:
+        ceph-rbd1:
+          config:
+            use_cdn: True
+            build: '4.x'
+            ansi_config:
+              ceph_origin: repository
+              ceph_repository: rhcs
+              ceph_repository_type: cdn
+              containerized_deployment: true
+              ceph_stable_release: nautilus
+              osd_scenario: lvm
+              copy_admin_key: true
+              dashboard_enabled: False
+              ceph_conf_overrides:
+                global:
+                  osd_pool_default_pg_num: 64
+                  osd_default_pool_size: 2
+                  osd_pool_default_pgp_num: 64
+                  mon_max_pg_per_osd: 1024
+                mon:
+                  mon_allow_pool_delete: true
+        ceph-rbd2:
+          config:
+            use_cdn: True
+            build: '4.x'
+            ansi_config:
+              ceph_origin: repository
+              ceph_repository: rhcs
+              ceph_repository_type: cdn
+              containerized_deployment: true
+              ceph_stable_release: nautilus
+              osd_scenario: lvm
+              copy_admin_key: true
+              dashboard_enabled: False
+              ceph_conf_overrides:
+                global:
+                  osd_pool_default_pg_num: 64
+                  osd_default_pool_size: 2
+                  osd_pool_default_pgp_num: 64
+                  mon_max_pg_per_osd: 1024
+                mon:
+                  mon_allow_pool_delete: true
+      desc: setup two clusters using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Add rbd-mirror daemons
+      module: add_rbd_mirror_daemon.py
+      clusters:
+        ceph-rbd1:
+          config:
+            build: '4.x'
+            ansi_config:
+              ceph_rbd_mirror_configure: true
+              ceph_rbd_mirror_pool: "rbd"
+              ceph_rbd_mirror_mode: image
+              ceph_rbd_mirror_remote_cluster: "primary"
+              ceph_rbd_mirror_local_user: "client.rbd-mirror-peer"
+              ceph_rbd_mirror_local_user_secret: "AQC+eM1iKKBXFBAAVpunJvqpkodHSYmljCFCnw=="
+              ceph_rbd_mirror_remote_user: "client.rbd-mirror-peer"
+              ceph_rbd_mirror_remote_key: "AQC+eM1iKKBXFBAAVpunJvqpkodHSYmljCFCnw=="
+        ceph-rbd2:
+          config:
+            build: '4.x'
+            ansi_config:
+              ceph_rbd_mirror_configure: true
+              ceph_rbd_mirror_pool: "rbd"
+              ceph_rbd_mirror_mode: image
+              ceph_rbd_mirror_remote_cluster: "secondary"
+              ceph_rbd_mirror_local_user: "client.rbd-mirror-peer"
+              ceph_rbd_mirror_local_user_secret: "AQC+eM1iKKBXFBAAVpunJvqpkodHSYmljCFCnw=="
+              ceph_rbd_mirror_remote_user: "client.rbd-mirror-peer"
+              ceph_rbd_mirror_remote_key: "AQC+eM1iKKBXFBAAVpunJvqpkodHSYmljCFCnw=="
+      polarion-id: CEPH-83573366
+      desc: add rbd-mirror daemons using ceph-ansible
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: test_rbd_mirror
+      module: test_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            resize_to: 5G
+            peer_mode: manual #default is bootstrap for 4x and above and manual for others
+            rbd_client: client.rbd-mirror-peer
+            build: '4.x'
+      polarion-id: CEPH-83573329
+      desc: Create RBD mirrored image and run IOs
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: True
+      desc: Check for ceph health debug info
+
+  - test:
+      name: Upgrade along with IOs
+      module: test_parallel.py
+      clusters:
+        ceph-rbd1:
+          parallel:
+            - test:
+                name: test_rbd_mirror_image
+                module: test_rbd_mirror_image.py
+                clusters:
+                  ceph-rbd1:
+                    config:
+                      build: '5.x'
+                      imagesize: 2G
+                      io-total: 200M
+                polarion-id: CEPH-83573329
+                desc: Create RBD mirrored images in pool and run IOs
+            - test:
+                name: rbd-io
+                module: rbd_faster_exports.py
+                config:
+                  io-total: 100M
+                  cleanup: false
+                desc: Perform export during read/write,resizing,flattening,lock operations
+            - test:
+                name: Upgrade containerized ceph to 5.x latest
+                polarion-id: CEPH-83573679
+                module: test_ansible_upgrade.py
+                config:
+                  build: '5.x'
+                  verify_cephadm_containers: True
+                  ansi_config:
+                    ceph_origin: distro
+                    ceph_stable_release: pacific
+                    ceph_repository: rhcs
+                    ceph_rhcs_version: 5
+                    osd_scenario: lvm
+                    fetch_directory: ~/fetch
+                    copy_admin_key: true
+                    containerized_deployment: true
+                    upgrade_ceph_packages: True
+                    dashboard_enabled: False
+                desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
+        ceph-rbd2:
+          parallel:
+            - test:
+                name: test_rbd_mirror_image
+                module: test_rbd_mirror_image.py
+                clusters:
+                  ceph-rbd1:
+                    config:
+                      build: '5.x'
+                      imagesize: 2G
+                      io-total: 200M
+                polarion-id: CEPH-83573329
+                desc: Create RBD mirrored images in pool and run IOs
+            - test:
+                name: rbd-io
+                module: rbd_faster_exports.py
+                config:
+                  io-total: 100M
+                  cleanup: false
+                desc: Perform export during read/write,resizing,flattening,lock operations
+            - test:
+                name: Upgrade containerized ceph to 5.x latest
+                polarion-id: CEPH-83573679
+                module: test_ansible_upgrade.py
+                config:
+                  build: '5.x'
+                  verify_cephadm_containers: True
+                  ansi_config:
+                    ceph_origin: distro
+                    ceph_stable_release: pacific
+                    ceph_repository: rhcs
+                    ceph_rhcs_version: 5
+                    osd_scenario: lvm
+                    fetch_directory: ~/fetch
+                    copy_admin_key: true
+                    containerized_deployment: true
+                    upgrade_ceph_packages: True
+                    dashboard_enabled: False
+                desc: Test Ceph-Ansible rolling update 4.x cdn -> 5.x latest -> cephadm adopt
+      desc: Running upgrade 4.x cdn to 5.x latest then cephadm adopt playbook and i/o's parallelly
+      abort-on-fail: True

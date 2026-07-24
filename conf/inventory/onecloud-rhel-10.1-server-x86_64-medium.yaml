@@ -1,0 +1,16 @@
+---
+# RedHat Enterprise Linux 10.1 - MEDIUM profile (4 vCPUs / 16GB / 100GB + 3x50GB)
+# Same image as onecloud-rhel-10.1-server-x86_64.yaml, different profile
+# OneCloud ignores userData; bootstrap is done via subprocess SSH in ceph.py
+version_id: 10.1
+id: rhel
+instance:
+  create:
+    image_id: 22
+    projectID: 21
+    site: POK
+    groupID: 1
+    VLAN: 2231
+    resources: medium
+    arch: x86_64
+    os: RHEL

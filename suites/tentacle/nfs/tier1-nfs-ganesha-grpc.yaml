@@ -1,0 +1,250 @@
+#===============================================================================================
+#-------------------------------------
+#---  NFS Ganesha gRPC Tests Suite ---
+#-------------------------------------
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Test cases for NFS Ganesha gRPC service functionality:
+#    - Verify gRPC Service Port Availability (port 50051)
+#    - Verify gRPC Service Discovery
+#    - Grace Period Events (Event IDs 0, 2, 4, 5)
+#    - Client and Session ID verification
+#    - ID Updates After Client Unmount
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      desc: Bootstrap and deploy Ceph services for NFS gRPC testing.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client 1 for NFS testing
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 1
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client 2 for NFS testing
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 2
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client 3 for NFS testing
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 3
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client 4 for NFS testing
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 4
+
+  # =============================================================================
+  # Test Scenario 1: Verify gRPC Service Port Availability
+  # =============================================================================
+  - test:
+      name: NFS gRPC - Verify Port 50051 Availability
+      module: test_nfs_grpc.py
+      desc: Verify gRPC service port 50051 is listening with ganesha.nfsd process
+      polarion-id: CEPH-83630609
+      abort-on-fail: false
+      config:
+        operation: verify_port
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # Test Scenario 2: Verify gRPC Service Discovery
+  # =============================================================================
+  - test:
+      name: NFS gRPC - Verify Service Discovery
+      module: test_nfs_grpc.py
+      desc: Verify gRPC service discovery and list available methods
+      polarion-id: CEPH-83630610
+      abort-on-fail: false
+      config:
+        operation: verify_discovery
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # Test Scenario 3: Start Grace Period (Event ID 0)
+  # =============================================================================
+  - test:
+      name: NFS gRPC - Start Grace Period (Event ID 0)
+      module: test_nfs_grpc.py
+      desc: Test starting NFS grace period via gRPC with Event ID 0
+      polarion-id: CEPH-83630611
+      abort-on-fail: false
+      config:
+        operation: grace_event_0
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # Test Scenario 4: Release IP from Grace (Event ID 2)
+  # =============================================================================
+  - test:
+      name: NFS gRPC - Release IP from Grace (Event ID 2)
+      module: test_nfs_grpc.py
+      desc: Test release IP from grace via gRPC with Event ID 2
+      polarion-id: CEPH-83630612
+      abort-on-fail: false
+      config:
+        operation: grace_event_2
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # Test Scenario 5: Node Takeover (Event ID 4)
+  # =============================================================================
+  - test:
+      name: NFS gRPC - Node Takeover (Event ID 4)
+      module: test_nfs_grpc.py
+      desc: Test node takeover event via gRPC with Event ID 4
+      polarion-id: CEPH-83630613
+      abort-on-fail: false
+      config:
+        operation: grace_event_4
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # Test Scenario 6: IP Takeover (Event ID 5)
+  # =============================================================================
+  - test:
+      name: NFS gRPC - IP Takeover (Event ID 5)
+      module: test_nfs_grpc.py
+      desc: Test IP takeover event via gRPC with Event ID 5
+      polarion-id: CEPH-83630614
+      abort-on-fail: false
+      config:
+        operation: grace_event_5
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # Test Scenario 7: Verify Client and Session IDs for 3 Clients
+  # =============================================================================
+  - test:
+      name: NFS gRPC - Verify Client and Session IDs (3 Clients)
+      module: test_nfs_grpc.py
+      desc: Mount export on 3 clients and verify unique client_ids and session_ids
+      polarion-id: CEPH-83630615
+      abort-on-fail: false
+      config:
+        operation: verify_client_session_ids
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 3
+        nfs_version: 4.1
+        port: 2049
+

@@ -1,0 +1,17 @@
+# Placeholder for RadosGW functional testing at scale.
+---
+tests:
+  -
+    test:
+      abort-on-fail: false
+      config:
+        branch: ceph-quincy
+        kms_keyid: testKey01
+        ssl: false
+        host: argo024
+        port: 5000
+      desc: "Executing s3-tests against load balanced RadosGW"
+      destroy-cluster: false
+      module: test_s3.py
+      name: "Evaluate RadosGW using s3-tests"
+      polarion-id: CEPH-83575225

@@ -1,0 +1,167 @@
+# Test-Case: Perform cephadm operations using cephadm ansible modules
+#
+# Cluster Configuration:
+#    conf/squid/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#------------------------------------------------------------------------------
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/bootstrap-cluster.yaml' playbook
+      polarion-id: CEPH-83575201
+      module: test_cephadm_ansible_bootstrap.py
+      config:
+        bootstrap:
+          playbook: bootstrap-with-registry-details.yaml
+          module_args:
+            mon_ip: node1
+      abort-on-fail: true
+
+  - test:
+      name: Add host with labels to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'playbooks/add-host-to-cluster.yaml' playbook
+      polarion-id: CEPH-83575206
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_host:
+          playbook: add-ceph-orch-host.yaml
+          module_args:
+            name: node2
+            address: node2
+            labels: osd.1
+      abort-on-fail: true
+
+  - test:
+      name: Deploy OSD service to cluster using cephadm-ansible wrapper modules
+      desc: Execute 'deploy-osd-service.yaml' playbook
+      polarion-id: CEPH-83575213
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_apply:
+          playbook: deploy-osd-service.yaml
+          module_args:
+            label: osd.1
+      abort-on-fail: true
+
+  - test:
+      name: Get 'mgr' config using cephadm-ansible module 'ceph_config'
+      desc: Execute 'get-mgr-config.yaml' playbook
+      polarion-id: CEPH-83575215
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_config:
+          playbook: get-ceph-config.yaml
+          module_args:
+            who: osd
+            option: osd_memory_target_autotune
+
+  - test:
+      name: Set 'osd' config using cephadm-ansible module 'ceph_config'
+      desc: Execute 'set-ceph-config.yaml' playbook
+      polarion-id: CEPH-83575214
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_config:
+          playbook: set-ceph-config.yaml
+          module_args:
+            who: osd
+            option: osd_memory_target_autotune
+            value: true
+
+  - test:
+      name: Set 'osd' global config using cephadm-ansible module 'ceph_config'
+      desc: Execute 'set-ceph-config.yaml' playbook
+      polarion-id: CEPH-83575594
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_config:
+          playbook: set-ceph-config.yaml
+          module_args:
+            who: global
+            option: osd_pool_default_size
+            value: 2
+
+  - test:
+      name: Restart 'osd' service using cephadm-ansible module 'ceph_orch_daemon'
+      desc: Execute 'set-ceph-orch-daemon-state.yaml' playbook
+      polarion-id: CEPH-83575212
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_daemon:
+          playbook: set-ceph-orch-daemon-state.yaml
+          wait_for_state: up
+          module_args:
+            daemon_id: 1
+            daemon_type: osd
+            state: restarted
+
+  - test:
+      name: Stop 'osd' service using cephadm-ansible module 'ceph_orch_daemon'
+      desc: Execute 'set-ceph-orch-daemon-state.yaml' playbook
+      polarion-id: CEPH-83575211
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_daemon:
+          playbook: set-ceph-orch-daemon-state.yaml
+          module_args:
+            daemon_id: 1
+            daemon_type: osd
+            state: stopped
+
+  - test:
+      name: Start service using cephadm-ansible module 'ceph_orch_daemon'
+      desc: Execute 'set-ceph-orch-daemon-state.yaml' playbook
+      polarion-id: CEPH-83575210
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_daemon:
+          playbook: set-ceph-orch-daemon-state.yaml
+          module_args:
+            daemon_id: 1
+            daemon_type: osd
+            state: started
+
+  - test:
+      name: Set host to drain state using cephadm-ansible module 'ceph_orch_host'
+      desc: Execute 'set-ceph-orch-host-state.yml' playbook
+      polarion-id: CEPH-83575208
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_host:
+          playbook: set-ceph-orch-host-state.yaml
+          module_args:
+            name: node4
+            address: node4
+            state: drain
+
+  - test:
+      name: Remove host from cluster using cephadm-ansible module 'ceph_orch_host'
+      desc: Execute 'set-ceph-orch-host-state.yaml' playbook
+      polarion-id: CEPH-83575209
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_host:
+          playbook: set-ceph-orch-host-state.yaml
+          module_args:
+            name: node4
+            address: node4
+            state: absent
+
+  - test:
+      name: Add host for mon with admin label set to true
+      desc: Execute 'add-ceph-orch-host.yaml' playbook
+      polarion-id: CEPH-83575207
+      module: test_cephadm_ansible_operations.py
+      config:
+        ceph_orch_host:
+          playbook: add-ceph-orch-host.yaml
+          module_args:
+            name: node4
+            address: node4
+            labels: admin

@@ -1,0 +1,94 @@
+globals:
+  -
+    ceph-cluster:
+      networks:
+        public: ['10.1.172.0/23']
+      nodes:
+        -
+          hostname:  depressa007.ceph.redhat.com
+          ip: "10.1.172.207"
+          role:
+            - _admin
+            - installer
+            - alertmanager
+            - grafana
+            - prometheus
+            - mon
+            - mgr
+            - osd
+          root_password: redhat
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        -
+          hostname:  depressa008.ceph.redhat.com
+          ip: "10.1.172.208"
+          role:
+            - mon
+            - mgr
+            - osd
+          root_password: redhat
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        -
+          hostname:  depressa009.ceph.redhat.com
+          ip: "10.1.172.209"
+          role:
+            - osd
+            - mds
+            - rgw
+          root_password: redhat
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        -
+          hostname:  depressa010.ceph.redhat.com
+          ip: "10.1.172.210"
+          role:
+            - osd
+            - mon
+          root_password: redhat
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        -
+          hostname:  depressa011.ceph.redhat.com
+          ip: "10.1.172.211"
+          role:
+            - osd
+            - mgr
+          root_password: redhat
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        -
+          hostname:  depressa012.ceph.redhat.com
+          ip: "10.1.172.212"
+          role:
+            - mds
+            - rgw
+            - osd
+            - client
+          root_password: redhat
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1

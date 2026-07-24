@@ -1,0 +1,18 @@
+# OneCloud credentials for osp-cred file (e.g. ~/osp-cred-ci-2.yaml)
+# Add under globals.
+#
+# Two SSH keys are required:
+# 1) bootstrap_key_path - CISO cert key for initial SSH via OpenSSH (e.g. id_ecdsa_ciso)
+# 2) private_key_path   - Regular key for Paramiko connections (e.g. id_ed25519_onecloud)
+#    Generate with: ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_onecloud -N ""
+
+globals:
+  onecloud-credentials:
+    api_key: "<JWT_TOKEN>"
+    base_url: "https://portal.onecloud.wdc.app.cirrus.ibm.com/api/v3"
+    site: POK  # AUS, POK, RCH, TUC
+    ssh_user: "onecloud-user"  # Default cloud-init user; customizable in OneCloud portal
+    bootstrap_key_path: "~/.ssh/id_ecdsa_ciso"       # CISO key for initial OpenSSH bootstrap
+    bootstrap_key_password: "<passphrase>"           # Passphrase for CISO key (from step ssh certificate)
+    private_key_path: "~/.ssh/id_ed25519_onecloud"   # Regular key for Paramiko connections
+    # verify_ssl: false  # If corporate CA causes SSL errors

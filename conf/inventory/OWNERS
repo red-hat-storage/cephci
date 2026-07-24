@@ -1,0 +1,9 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - ceph-infra-team
+
+labels:
+  - ceph-ci-review

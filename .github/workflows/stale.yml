@@ -1,0 +1,69 @@
+# This workflow warns and then closes issues and PRs that have had no activity for a specified amount of time.
+#
+# You can adjust the behavior by modifying this file.
+# For more information, see:
+# https://github.com/actions/stale
+name: Mark stale issues and pull requests
+
+on:
+  schedule:
+  - cron: '0 * * * *'
+
+jobs:
+  stale:
+
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+    - uses: actions/stale@v5
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+        # STALE
+        # Duration of inactivity before making Issues/PRs stale
+        days-before-pr-stale: 15
+        days-before-issue-stale: 60
+
+        # Stale Comment
+        stale-pr-message: >
+            This Pull request has been automatically marked as STALE due to inactivity for 15 days
+            and will be CLOSED on further inactivity on the PR for another 15 days.
+        stale-issue-message: >
+            This Issue has been marked as STALE due to inactivity for 60 days.
+            and will be CLOSED after another 30 days on further inactivity.
+
+        # stale label
+        stale-pr-label: 'stale-warning-on-inactivity'
+        stale-issue-label: 'stale-warning-on-inactivity'
+
+        # remove stale label when updated.
+        remove-stale-when-updated: true
+
+        # CLOSE
+        # Duration of inactivity before closing stale Issues/PRs
+        days-before-pr-close: 15
+        days-before-issue-close: 30
+
+        # closing Comment on the staled Issues/PRs
+        close-pr-message: >
+            This pull request has been automatically CLOSED,
+            because there has been no activity for 15 days after marking PR as STALE.
+        close-issue-message: >
+            This Issue has been automatically CLOSED,
+            because there has been no activity for 30 days after marking issue as STALE.
+
+        # close Issue/pr label
+        close-pr-label: "closed-due-to-inactivity"
+        close-issue-label: "closed-due-to-inactivity"
+
+        # Change the order used to fetch the issues and pull requests
+        ascending: true
+
+        # labels to exempt from stale action
+        exempt-pr-labels: "pinned,need-help"
+
+        # Maximum number of operations per run
+        operations-per-run: 300

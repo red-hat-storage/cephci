@@ -1,0 +1,37 @@
+# Cluster config file: conf/squid/common/5node-2client-rh.yaml
+tests:
+  - test:
+      name: Ceph iSCSI Sanity e2e test
+      desc: Configure iSCSI gateways, initiators and run IO
+      module: iscsi_test.py
+      polarion-id: CEPH-83605167
+      destroy-clster: false
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: iscsi_pool
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: iscsi_pool
+        install: true
+        cleanup:
+          - initiators
+          - gateway
+          - pool
+        targets:
+          - iqn: iscsi-target1
+            gateways:
+              - node4
+              - node5
+            hosts:
+              - client_iqn: iqn.2025-01.com.redhat.iscsi-gw:rh-client
+                disks:
+                - count: 5
+                  size: 1G
+        initiators:
+          - iqn: iqn.2025-01.com.redhat.iscsi-gw:rh-client
+            node: node7
+            type: linux
+            target: all

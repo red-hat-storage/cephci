@@ -1,0 +1,89 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        image-name: RHEL-8.6.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        image-name: RHEL-8.6.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+      node3:
+        image-name: RHEL-8.6.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node4:
+        image-name: RHEL-8.6.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node5:
+        image-name: RHEL-8.6.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 25
+      node6:
+        image-name: RHEL-8.6.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - crash
+      node7:
+        image-name: RHEL-9.1.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_9
+        role:
+          - client
+      node8:
+        image-name: RHEL-9.1.0-x86_64-ga-latest
+        networks:
+          - provider_net_cci_12
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+          - rgw

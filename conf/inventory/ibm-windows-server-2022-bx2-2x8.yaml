@@ -1,0 +1,23 @@
+---
+version_id: 2022 Standard Edition
+id: windows
+instance:
+  create:
+    image-name: ibm-windows-server-2022-full-standard-amd64-24
+    network_name: ci-sn-01
+    private_key: cephci-ssh-rsa-key
+    group_access: sec-grp-ci-vpc-01
+    profile: bx2-2x8
+
+  setup: |
+    #cloud-config
+    users:
+      - name: cephuser
+        gecos: Ceph User
+        primary_group: Users
+        groups: cloud-users
+        passwd: Paspiyrw#$*97521
+        inactive: False
+        expiredate: 2025-10-01
+        ssh_authorized_keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDWI1yTobDBZvOeFjjEGmKHKR1k1duXYu8fPBMFB2tsJAkG/2GqYHCf3IpCRFVALbCh3Ky0tYjMQfb1C/R0zHatRPVXqwlgLeK4JaPpH5UpnJ6Xv//BkeTyJ2LqIJ+narJYXdYz31kTGw8etpC9XOftmMgnjEziwtZCN+MswY89AO3a+JMmNM0fWWxo4A2dldeS0XjXwP2+OOwe3qFR9pmOw9ORjWIxizLLBNlnJbhTYTcI2/b+QRs6gpcw0tZYEwS9CO5w/FN4F7oazGc51xtFqwfhHGFV2Crs2ghAKuMUBWdedL/eZ6fsgpShY74+3zZex9jR2cYuxwvvngQvEWxDau+106RnV/m1u9cDl6ZQIhPJlKXtnJLEs2sPnNaOhXqqs75Mk7uZkDWHnTHiCm95jYWVFytkMb5UcW4YkS53VXlpLVUwVFQs0XjIPxyfizTP8bsv0WWZDreZ3cgjwQ4XCTNtPi45M86TmmRVJJwEr587H0S+VQB2wtMl6kowsod2++AvvHfRleZ3FcUgpuHtgntxsfnoPgeJZQLVVQu6mqTdl4rkYWKVKOFBdHccjV+8OuYMEcSVwLd5ZlY9FpkSalxT4Ou4KcdLKpdP0cit+gi+nARKz5J6nzQL3Q5wnXGpT2MnF6NmVvHPhPEZyacG3+ahaCZ49onlD3WSgmQU/w==

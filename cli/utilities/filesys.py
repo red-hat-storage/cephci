@@ -1,0 +1,147 @@
+from cli import Cli
+from cli.ceph.auth.auth import Auth
+from cli.exceptions import OperationFailedError
+
+
+class MountFailedError(Exception):
+    pass
+
+
+class Mount(Cli):
+    """This module provides CLI support for mount operations"""
+
+    def __init__(self, nodes):
+        super(Mount, self).__init__(nodes)
+        self.base_cmd = "mount"
+
+    def _ensure_nfs_utils(self):
+        """Check if nfs-utils is installed on the client and install it if missing."""
+        out = self.execute(cmd="rpm -qa nfs-utils", sudo=True)
+        if isinstance(out, tuple):
+            out = out[0]
+        if not out.strip():
+            self.execute(cmd="dnf install -y nfs-utils", sudo=True, timeout=600)
+
+    def nfs(self, mount, version, port, server, export, **kwargs):
+        """Perform an NFS mount on the client node.
+
+        Installs nfs-utils if missing, creates the mount directory,
+        and runs ``mount -t nfs`` with the assembled option string.
+
+        The resulting command looks like::
+
+            mount -t nfs -o vers=<version>,port=<port>[,proto=<proto>]
+                [,xprtsec=<xprtsec>] <server>:<export> <mount>
+
+        Args:
+            mount (str): Local mount-point path.
+            version (str): NFS version string (e.g. "3", "4.0",
+                "4.1", "4.2").
+            port (str): NFS port to connect to.  When using RDMA
+                this should be the RDMA listener port.
+            server (str): NFS server hostname or IP address.
+            export (str): NFS export pseudo-path.
+
+        Keyword Args:
+            proto (str): Transport protocol option appended to
+                ``-o``.  Pass ``"rdma"`` for NFS-over-RDMA mounts.
+            xprtsec (str): Transport-security option (e.g. ``"tls"``
+                for RPC-with-TLS).
+
+        Raises:
+            MountFailedError: If the mount point does not appear in
+                the ``mount`` table after the command completes.
+        """
+        self._ensure_nfs_utils()
+
+        # Check if mount dir is present, else create
+        out = self.execute(cmd=f"ls {mount}", sudo=True)
+        if not out[0]:
+            self.execute(cmd=f"mkdir {mount}", sudo=True)
+
+        cmd = f"{self.base_cmd} -t nfs -o vers={version},port={port}"
+        proto = kwargs.get("proto")
+        if proto:
+            cmd += f",proto={proto}"
+        xprtsec = kwargs.get("xprtsec")
+        if xprtsec:
+            cmd += f",xprtsec={xprtsec}"
+        cmd += f" {server}:{export} {mount}"
+
+        self.execute(sudo=True, long_running=True, cmd=cmd)
+
+        out = self.execute(sudo=True, cmd="mount")
+        if isinstance(out, tuple):
+            out = out[0]
+
+        if not mount.rstrip("/") in out:
+            raise MountFailedError(f"Nfs mount failed: {out}")
+
+
+class Unmount(Cli):
+    def __init__(self, nodes):
+        super(Unmount, self).__init__(nodes)
+        self.base_cmd = "umount"
+
+    def unmount(self, mount, lazy=True):
+        """
+        Perform unmount of volume
+        Args:
+            mount (str): path to mount point
+            lazy (bool): Perform a lazy unmount or not
+        Returns:
+
+        """
+        cmd = f"{self.base_cmd} {mount}"
+        if lazy:
+            cmd += " -l"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
+
+
+class FuseMount(Cli):
+    """Supports CephFS mounts using ceph-fuse."""
+
+    def __init__(self, nodes):
+        super().__init__(nodes)
+        self.base_cmd = "ceph-fuse"
+        self.auth_tool = Auth(nodes, base_cmd="ceph")
+
+    def mount(self, mount_point, client_hostname, extra_params=None):
+        """
+        Mount CephFS using FUSE.
+
+        Args:
+            mount_point (str): Local path to mount CephFS.
+            client_hostname (str): Ceph client ID (host shortname).
+            extra_params (str): Optional ceph-fuse arguments.
+
+        Returns:
+            str: Mount command's STDOUT on success.
+
+        Raises:
+            FuseMountError: On authentication or mount failure.
+        """
+        # Ensure keyring exists
+        try:
+            self.auth_tool.get_or_create_client_keyring(client_hostname)
+        except Exception as e:
+            raise OperationFailedError(
+                f"Failed to prepare auth for client.{client_hostname}: {e}"
+            )
+
+        # Ensure mount directory exists
+        out = self.execute(cmd=f"ls {mount_point}", sudo=True)
+        if not out[0]:
+            self.execute(cmd=f"mkdir -p {mount_point}", sudo=True)
+
+        # Run ceph-fuse command
+        cmd = f"{self.base_cmd} -n client.{client_hostname} {mount_point}"
+        if extra_params:
+            cmd += f" {extra_params}"
+
+        out = self.execute(sudo=True, long_running=True, cmd=cmd)
+        stdout = out[0].strip() if isinstance(out, tuple) else out
+        return stdout

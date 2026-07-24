@@ -1,0 +1,17 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - vamahaja
+  - tintumathew10
+
+reviewers:
+  - pavankumarag
+  - vdas-redhat
+  - obannak
+  - Adarsha1999
+  - deepssin
+
+labels:
+  - ceph-ci-review

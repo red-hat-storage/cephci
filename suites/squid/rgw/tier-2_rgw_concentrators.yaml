@@ -1,0 +1,87 @@
+# Test suite for evaluating RGW with concentrator deployment + scenarios.
+#
+# This suite deploys rgw with concentrator i.e local haproxy [local haproxy + multiple rgw's]
+# The deployment is evaluated by running IOs across the environments.
+# conf : conf/squid/rgw/tier-2_rgw_concentrators_conf.yaml
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: foo
+                  service_name: rgw.foo
+                  placement:
+                    count_per_host: 2
+                    nodes:
+                      - node5
+                  spec:
+                    concentrator: haproxy
+                    concentrator_frontend_port: 5000
+                    concentrator_monitor_port: 1967
+                    concentrator_monitor_user: admin
+      desc: RGW Service Deployment Configuration and Basic Validation[with concentrator]
+      destroy-cluster: false
+      polarion-id: CEPH-83607417
+      module: test_cephadm.py
+      name: RGW Service Deployment Configuration [with concentrator]
+      comments: This testcase is expected to fail with the ceph version less than 8.1 [not a defect].
+  - test:
+      config:
+        script-name: test_rgw_concentrators.py
+        config-file-name: test_rgw_concentrators_upload_download.yaml
+      desc: test create buckets upload and download objects with rgw concentrator endpoint
+      module: sanity_rgw.py
+      name: test create buckets upload and download objects with rgw concentrator endpoint
+      polarion-id: CEPH-83607626
+  - test:
+      config:
+        script-name: test_rgw_concentrators.py
+        config-file-name: test_rgw_concentrators.yaml
+      desc: RGW and HAProxy Service Behavior and Traffic Handling Verificatios.
+      module: sanity_rgw.py
+      name: RGW and HAProxy Service Behavior and Traffic Handling Verificatio
+      polarion-id: CEPH-83607420

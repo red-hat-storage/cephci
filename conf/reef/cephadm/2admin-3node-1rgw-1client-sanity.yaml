@@ -1,0 +1,51 @@
+
+# CephAdm tier-1 test configuration
+# Deployment for all the ceph daemons , with 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 6
+        disk-size: 15
+      node2:
+        role:
+          - _admin
+          - osd
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+          - rgw
+          - haproxy
+        no-of-volumes: 6
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - mds
+          - haproxy
+        no-of-volumes: 6
+        disk-size: 15
+      node4:
+        role:
+          - rgw
+      node5:
+        role:
+          - client

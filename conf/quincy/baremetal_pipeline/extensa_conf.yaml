@@ -1,0 +1,186 @@
+globals:
+- ceph-cluster:
+    name: ceph
+    networks:
+      public:
+      - 10.8.128.0/21
+    nodes:
+    - hostname: extensa001
+      id: node1
+      ip: 10.8.130.201
+      role:
+      - _admin
+      - installer
+      - mon
+      root_password: passwd
+    - hostname: extensa003
+      id: node2
+      ip: 10.8.130.203
+      role:
+      - mds
+      - mgr
+      - mon
+      - _admin
+      root_password: passwd
+    - hostname: extensa004
+      id: node3
+      ip: 10.8.130.204
+      role:
+      - mds
+      - mon
+      root_password: passwd
+    - hostname: extensa005
+      id: node4
+      ip: 10.8.130.205
+      role:
+      - osd
+      - rgw
+      - nfs
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa006
+      id: node5
+      ip: 10.8.130.206
+      role:
+      - osd
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa007
+      id: node6
+      ip: 10.8.130.207
+      role:
+      - osd
+      - rgw
+      - nfs
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa008
+      id: node7
+      ip: 10.8.130.208
+      role:
+      - osd
+      root_password: passwd
+      volumes:
+      - /dev/sda
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa009
+      id: node8
+      ip: 10.8.130.209
+      role:
+      - osd
+      root_password: passwd
+      volumes:
+      - /dev/sda
+      - /dev/sdb
+      - /dev/sdd
+      - /dev/sde
+      - /dev/nvme0n1
+    - hostname: extensa011
+      id: node9
+      ip: 10.8.130.211
+      role:
+      - osd
+      - mds
+      - _admin
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa012
+      id: node10
+      ip: 10.8.130.212
+      role:
+      - client
+      root_password: passwd
+    - hostname: extensa013
+      id: node11
+      ip: 10.8.130.213
+      role:
+      - client
+      root_password: passwd
+    - hostname: extensa014
+      id: node12
+      ip: 10.8.130.214
+      role:
+      - osd
+      - mon
+      - mds
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa015
+      id: node13
+      ip: 10.8.130.215
+      role:
+      - osd
+      - mon
+      - mgr
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+    - hostname: extensa016
+      id: node14
+      ip: 10.8.130.216
+      role:
+      - osd
+      - rgw
+      - nfs
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+    - hostname: extensa017
+      id: node15
+      ip: 10.8.130.217
+      role:
+      - osd
+      - rgw
+      - nfs
+      root_password: passwd
+      volumes:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+      - /dev/sde
+      - /dev/nvme0n1
+    - hostname: extensa018
+      id: node16
+      ip: 10.8.130.218
+      role:
+      - client
+      root_password: passwd
+    - hostname: extensa019
+      id: node17
+      ip: 10.8.130.219
+      role:
+      - client
+      root_password: passwd
+    - hostname: extensa020
+      id: node18
+      ip: 10.8.130.220
+      role:
+      - client
+      root_password: passwd

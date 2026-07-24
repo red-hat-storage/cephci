@@ -1,0 +1,184 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for NFS v4 ACL Tests (Tentacle) ---
+#-------------------------------------
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# ACL test cases covering:
+#    - Functional: ACL ops, ACE eval, permissions, identity, flags/inheritance,
+#      POSIX interaction, symlinks, recursive, persistence (rename, hardlink,
+#      restart, reboot)
+#    - Negative: atomic failure, deny ordering, append-only, delete control,
+#      UID/GID denial, symlink skip/traversal
+#    - Scale: large ACL (2000+ ACEs), performance, overwrite/append/duplicate,
+#      scale limit, persistence after remount
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # ====================== ACL Tests (NFS mount) ======================
+
+  - test:
+      name: NFS ACL - Functional Tests (NFS mount)
+      module: acl.test_nfs_acl_functional.py
+      desc: >
+        Verify core ACL features using standard NFS mount - ACL ops
+        (get/set/replace/incremental/spec-file), ACE ordering, read/write
+        permissions, UID/GID identity, inheritance flags, POSIX interaction,
+        symlink follow, recursive apply, and persistence across rename,
+        hard-link, service restart, and node reboot.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        mount_type: nfs
+      comments: "IBMCEPH-13880, IBMCEPH-13881"
+
+  - test:
+      name: NFS ACL - Negative Tests (NFS mount)
+      module: acl.test_nfs_acl_negative.py
+      desc: >
+        Verify denial and failure paths using standard NFS mount - atomic
+        failure on invalid spec, deny-before-allow ordering, append-only
+        enforcement, delete control, UID mismatch, non-member denial,
+        UID-vs-GID precedence, and symlink skip (-P) / traversal difference.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        mount_type: nfs
+      comments: "IBMCEPH-13884"
+
+  - test:
+      name: NFS ACL - Scale Tests (NFS mount)
+      module: acl.test_nfs_acl_scale.py
+      desc: >
+        Verify large ACL handling using standard NFS mount - apply 2000+ ACEs,
+        ACE count verification, random access validation, non-listed user
+        denial, performance check, overwrite/append/duplicate behaviour,
+        scale limit (3276 entries), and persistence after NFS remount.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        mount_type: nfs

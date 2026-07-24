@@ -1,0 +1,306 @@
+#===============================================================================================
+#------------------------------------------------------------
+#---    Test Suite for Nfs Ganesha with Windows clients   ---
+#------------------------------------------------------------
+# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+#===============================================================================================
+tests:
+  - test:
+      name: Nfs Verify nfs mount on windows client
+      module: nfs_verify_windows_client.py
+      desc: Verify accessing and performing mount on windows client
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+        win-clients:
+          - ip: 10.70.46.29
+            user: manishasaini
+            password: Redhat
+
+  - test:
+      name: NFS-Ganesha Verify mount the NFS volume via V3 on both windows and linux client and run IO's in parallel
+      desc: Verify Mount the NFS volume via V3 on both windows and linux client and run IO's in parallel
+      polarion-id: CEPH-83581037
+      module: nfs_verify_v3_mount_window_linux.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify file rename operation from 1 client and parallel lookups from other clients
+      desc: Verify file rename operation from 1 client and parallel lookups from other clients
+      polarion-id: CEPH-83581037
+      module: nfs_verify_window_clinets_file_rename_lookups.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+          - ip: 10.70.45.133
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify Mount the NFS share on windows (v3) and linux (v4.1) and run IO's i. parallel
+      desc: Verify Mount the NFS share on windows (v3) and linux (v4.1) and run IO's i. parallel
+      polarion-id: CEPH-83581037
+      module: nfs_verify_mount_linux_v4_windows_clinet_v3.py
+      config:
+        nfs_version: [4.2: 1, 3: 1]
+        linux_clients: 2
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: Verify rootsquash operation post mounting the NFS volume on windows client
+      desc: Enable rootsquash post running some IO's from windows client
+      polarion-id: CEPH-83581042
+      module: nfs_rootsquash_post_io_operation_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify rootsquash volume set operation on windows
+      desc: Verify rootsquash mount on V3 windows
+      polarion-id: CEPH-83581040
+      module: nfs_export_rootsquash_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha multi-exports with rootsquash enable-disable
+      desc: Verify exports with rootsquash enable-disable
+      polarion-id: CEPH-83581041
+      module: nfs_multivolume_rootsquash.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha remount NFS share
+      desc: Verify remount of NFS share on windows client
+      polarion-id: CEPH-83581037
+      module: nfs_test_remount_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha simultaneous mount of same export on both linux and windows
+      desc:  Test simultaneous mount of same export on both linux (v4.1) and windows (v3)
+      polarion-id: CEPH-83584506
+      module: nfs_verify_mount_mutli_os_with_mount_combinations.py
+      config:
+        nfs_version: 4.2
+        linux_clients: 1
+        use_same_mount: True
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha mount different export on windows and linux client via v3
+      desc:  Test v3 mount different export on windows and linux client and run parallel IO's from both the clients
+      polarion-id: CEPH-83581045
+      module: nfs_verify_mount_mutli_os_with_mount_combinations.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        use_same_mount: False
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha Verify access file from both v3 (windows) mount and linux v 4.1 mount
+      desc: Verify access file from both v3 (windows) mount and linux v 4.1 mount. Update the file content from 1 client and check the consistency of file from other client
+      polarion-id: CEPH-83581052
+      module: nfs_verify_file_access_linux_v4_windows_v3.py
+      config:
+        operations: [create_file]
+        nfs_version: 4.2
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+
+  - test:
+      name: NFS-Ganesha Verify delete file from windows client and check if the file is deleted from v4.1 linux client
+      desc: Verify delete file from windows client and check if the file is deleted from v4.1 linux client
+      polarion-id: CEPH-83581053
+      module: nfs_verify_file_access_linux_v4_windows_v3.py
+      config:
+        operations: [create_file,delete_file]
+        nfs_version: 4.2
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+
+  - test:
+      name: NFS-Ganesha mount the same export on windows and linux client via v3 protocol and run parallel IO's from both the client
+      desc: Verify mount the same export on windows and linux client via v3 protocol and run parallel IO's from both the client
+      polarion-id: CEPH-83584509
+      module: nfs_verify_linux_windows_clients_v3_io.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha test parallel readdir operations from multiple windows Mount
+      desc: Verify parallel readdir operations from multiple windows Mount
+      polarion-id: CEPH-83581056
+      module: nfs_verify_windows_parallel_readdir.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+          - ip: 10.70.45.133
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha test readonly export permission
+      desc: Verify readonly permission of NFS share on windows client
+      polarion-id: CEPH-83581047
+      module: test_nfs_export_readonly_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha test readdir operation with rootsquash enable
+      desc: Verify rootsquash with readdir operation on windows client
+      polarion-id: CEPH-83581043
+      module: nfs_verify_readdir_operation.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+          - ip: 10.70.45.133
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha export config to mount with 1 client access
+      desc: Verify edit the export config to mount with allow access to only 1 client
+      module: nfs_edit_export_config_with_1client_access.py
+      polarion-id: CEPH-83578397
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS-Ganesha enable rootsquash on an export and mount volume on both windows (v3) and linux(v4.1)
+      desc: Verify Enable rootsquash on an export and mount volume on both windows (v3) and linux(v4.1)
+      polarion-id: CEPH-83581056
+      module: nfs_verify_enable_rootsquash_window_v3_linux_v4.py
+      config:
+        nfs_version: 4.2
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+
+  - test:
+      name: NFS-Ganesha multi node mount with v3 and v4.1 and perform node reboot
+      desc: Verify node reboot when cluister mounted on linux and windows clients
+      polarion-id: CEPH-83581307
+      module: nfs_verify_multi_client_reboot_with_io.py
+      config:
+        nfs_version: 4.2
+        linux_clients: 1
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat

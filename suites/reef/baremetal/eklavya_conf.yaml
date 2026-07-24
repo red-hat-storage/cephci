@@ -1,0 +1,180 @@
+globals:
+  -
+    ceph-cluster:
+      name: ceph-pri
+      networks:
+        public: ['10.0.0.0/12']
+      nodes:
+        -
+          hostname: depressa013.ceph.redhat.com
+          ip: 10.1.172.213
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: depressa014.ceph.redhat.com
+          ip: 10.1.172.214
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: depressa015.ceph.redhat.com
+          ip: 10.1.172.215
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+
+        -
+          hostname: extensa024.ceph.redhat.com
+          ip: 10.1.172.124
+          root_password: r
+          role:
+            - rgw
+
+        -
+          hostname: extensa025.ceph.redhat.com
+          ip: 10.1.172.125
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa026.ceph.redhat.com
+          ip: 10.1.172.126
+          root_password: r
+          role:
+            - rgw
+
+        -
+          hostname: extensa027.ceph.redhat.com
+          ip: 10.1.172.127
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa028.ceph.redhat.com
+          ip: 10.1.172.128
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa029.ceph.redhat.com
+          ip: 10.1.172.129
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa022.ceph.redhat.com
+          ip: 10.1.172.122
+          root_password: r
+          role:
+            - client
+
+  -
+    ceph-cluster:
+      name: ceph-sec
+      networks:
+        public: ['10.0.0.0/12']
+      nodes:
+        -
+          hostname: depressa016.ceph.redhat.com
+          ip: 10.1.172.216
+          root_password: r
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: depressa017.ceph.redhat.com
+          ip: 10.1.172.217
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: depressa018.ceph.redhat.com
+          ip: 10.1.172.218
+          root_password: r
+          role:
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+
+        -
+          hostname: extensa031.ceph.redhat.com
+          ip: 10.1.172.131
+          root_password: r
+          role:
+            - rgw
+
+        -
+          hostname: extensa032.ceph.redhat.com
+          ip: 10.1.172.132
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa033.ceph.redhat.com
+          ip: 10.1.172.133
+          root_password: r
+          role:
+            - rgw
+
+        -
+          hostname: extensa034.ceph.redhat.com
+          ip: 10.1.172.134
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa035.ceph.redhat.com
+          ip: 10.1.172.135
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa036.ceph.redhat.com
+          ip: 10.1.172.136
+          root_password: r
+          role:
+            - rgw
+        -
+          hostname: extensa030.ceph.redhat.com
+          ip: 10.1.172.130
+          root_password: r
+          role:
+            - client

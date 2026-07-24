@@ -1,0 +1,42 @@
+######################################################
+# This conf file is for RGW tests with upgrade scenario
+######################################################
+
+globals:
+  - ceph-cluster:
+     name: ceph
+     node1:
+       role:
+         - _admin
+         - mon
+         - mgr
+         - osd
+         - installer
+       no-of-volumes: 1
+       disk-size: 40
+     node2:
+       role:
+         - mon
+         - mgr
+         - osd
+         - grafana
+       no-of-volumes: 1
+       disk-size: 40
+     node3:
+       role:
+         - mon
+         - mgr
+         - osd
+         - mds
+       no-of-volumes: 1
+       disk-size: 40
+     node4:
+       role:
+         - rgw
+         - iscsi-gw
+
+     node5:
+       role:
+         - rgw
+         - iscsi-gw
+         - client

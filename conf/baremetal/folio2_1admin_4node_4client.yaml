@@ -1,0 +1,89 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: folio03.ceph.redhat.com
+          ip: 10.1.172.223
+          id: node1
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+        - hostname: folio18.ceph.redhat.com
+          ip: 10.8.128.134
+          id: node2
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - mon
+            - mgr
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+        - hostname: folio19.ceph.redhat.com
+          ip: 10.8.128.135
+          id: node3
+          root_password: passwd
+          role:
+            - osd
+            - mds
+            - mon
+            - rgw
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+        - hostname: folio20.ceph.redhat.com
+          ip: 10.8.128.136
+          id: node4
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - nfs
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme7n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+        - hostname: folio11.ceph.redhat.com
+          ip: 10.1.172.231
+          id: node5
+          root_password: passwd
+          role:
+            - client
+        - hostname: folio12.ceph.redhat.com
+          ip: 10.1.172.232
+          id: node6
+          root_password: passwd
+          role:
+            - client
+        - hostname: folio13.ceph.redhat.com
+          ip: 10.1.172.233
+          id: node7
+          root_password: passwd
+          role:
+            - client
+        - hostname: folio14.ceph.redhat.com
+          ip: 10.1.172.234
+          id: node8
+          root_password: passwd
+          role:
+            - client

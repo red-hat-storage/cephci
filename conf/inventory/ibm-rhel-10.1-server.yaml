@@ -1,0 +1,40 @@
+---
+version_id: 10.1
+id: rhel
+instance:
+  create:
+    image-name: rhel-101-server-amd64-kvm
+
+  setup: |
+    #cloud-config
+    no_ssh_fingerprints: true
+    disable_root: false
+    ssh_pwauth: true
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(root) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOwmsOkNX16LikH7spbmVVOLhGOSsNSlAYSk0ifhLpaO
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoKGCTzMmNvHFY4THKNpZYFLeEgB7Do8y2JAEy+ZvIZ ceph-qe-sa
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
+
+    chpasswd:
+      expire: false
+      users:
+        - name: cephuser
+          password: $y$j9T$PxJ09a3yVNnPj0Veb8QDT.$bdWoyLq1IdGwlimyJC98P5OsSFE2w7.9ac68z4eoa01
+        - name: root
+          password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
+
+    runcmd:
+      - timedatectl set-timezone Etc/UTC
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/50-ceph-qe.conf
+      - systemctl restart sshd
+      - touch /ceph-qa-ready

@@ -1,0 +1,500 @@
+import json
+import random
+import string
+import time
+import traceback
+
+from ceph.ceph import CommandFailed
+from tests.cephfs.cephfs_utilsV1 import FsUtils
+from utility.log import Log
+
+log = Log(__name__)
+
+
+def umount_fs(client, mounting_dir):
+    log.info("Unmount the File sytem")
+    client.exec_command(sudo=True, cmd=f"umount {mounting_dir}")
+    # Wait until kernel releases mount
+    for _ in range(10):
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"mount | grep {mounting_dir}",
+            check_ec=False,
+        )
+        if rc != 0:
+            return
+        time.sleep(1)
+
+    raise CommandFailed("Mount point still present after umount")
+
+
+def run(ceph_cluster, **kw):
+    """
+    Test Cases Covered:
+    CEPH-83575389 - [Kernel] - Ensure kernel mounts works with all available options and validate the
+                   functionality of each option.
+    We are covering below options as part of this script
+    1. conf
+    2. mount_timeout
+    3. ms_mode
+    4. mon_addr
+    5. fsid
+    6. secret
+    7. secretfile
+    8. recover_session
+    """
+    try:
+        log.info(f"MetaData Information {log.metadata} in {__name__}")
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+
+        config = kw.get("config")
+        build = config.get("build", config.get("rhbuild"))
+        clients = ceph_cluster.get_ceph_objects("client")
+        rhbuild = config.get("rhbuild")
+        os_ver = rhbuild.split("-")[-1]
+        fs_util.prepare_clients(clients, build)
+        fs_util.auth_list(clients)
+        if not build.startswith(("3", "4", "5")):
+            if not fs_util.validate_fs_info(clients[0], "cephfs"):
+                log.error("FS info Validation failed")
+                return 1
+        mounting_dir = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(10))
+        )
+
+        kernel_mounting_dir = f"/mnt/cephfs_kernel{mounting_dir}/"
+        mon_node_ips = fs_util.get_mon_node_ips()
+        log.info("Validate conf option while mounting the cluster")
+        log.info("mount with invalid conf file path")
+
+        clients[0].exec_command(
+            sudo=True, cmd="cp /etc/ceph/ceph.conf /home/cephuser/ceph_dup.conf"
+        )
+        clients[0].exec_command(
+            sudo=True, cmd="sed -i 's/fsid = /fsid = t1/g' /home/cephuser/ceph_dup.conf"
+        )
+        mon_node_ip = ",".join(mon_node_ips)
+        kernel_cmd = (
+            f"mount -t ceph {mon_node_ip}:/ {kernel_mounting_dir} "
+            f"-o conf=/home/cephuser/ceph_dup.conf"
+        )
+        out, rc = clients[0].exec_command(sudo=True, cmd=kernel_cmd, check_ec=False)
+        log.info(
+            f"Returned code for the invalid conf file path is {rc} and out is {out}"
+        )
+        if not rc:
+            raise CommandFailed(
+                f"Mount command succeed where it is expected to fail with rc 32 but rc returned is {rc}"
+            )
+
+        log.info("mount with Valid conf file path")
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",conf=/etc/ceph/ceph.conf",
+            validate=True,
+        )
+
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/valid_conf_file_path bs=10M count=10",
+        )
+
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with Valid conf file path and mount_timeout")
+        rc = fs_util.kernel_mount(
+            clients,
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",conf=/etc/ceph/ceph.conf,mount_timeout=100,",
+            validate=True,
+        )
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/valid_conf_file_path_timeout bs=10M count=10",
+        )
+
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with Valid conf file path and mount_timeout")
+        rc = fs_util.kernel_mount(
+            clients,
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",conf=/home/cephuser/ceph_dup.conf,mount_timeout=300,",
+            validate=True,
+        )
+
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        clients[0].exec_command(
+            sudo=True, cmd="rm -rf /home/cephuser/ceph_dup.conf", check_ec=False
+        )
+
+        log.info("mount with Valid conf file path and mount_timeout and ms_mode")
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",conf=/etc/ceph/ceph.conf,mount_timeout=100,ms_mode=legacy",
+            validate=True,
+        )
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/ms_mode bs=10M count=10",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount secret as argument")
+        secert_file = f"/etc/ceph/{clients[0].node.hostname}.secret"
+        out, _ = clients[0].exec_command(cmd=f"cat {secert_file}", sudo=True)
+        log.info("Output : %s" % out)
+        mon_node_ip = ",".join(mon_node_ips)
+        kernel_cmd = (
+            f"mount -t ceph {mon_node_ip}:/ {kernel_mounting_dir} "
+            f"-o name={clients[0].node.hostname},"
+            f"secret={out}"
+        )
+        clients[0].exec_command(sudo=True, cmd=kernel_cmd)
+        fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/secret bs=10M count=10",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+        # https://bugzilla.redhat.com/show_bug.cgi?id=2165889
+        # Skipping the validation because of above issue for RHEL-8
+        if int(os_ver) > 8:
+            log.info("mount with mon_address")
+            kernel_cmd = (
+                f"mount -t ceph {clients[0].node.hostname}@.cephfs=/ {kernel_mounting_dir} "
+                f"-o name={clients[0].node.hostname},"
+                f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,mon_addr={mon_node_ip.replace(',', '/')}"
+            )
+            clients[0].exec_command(sudo=True, cmd=kernel_cmd)
+            fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/mon_address bs=10M count=10",
+            )
+            umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with invalid fsid")
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",fsid=test_dup",
+            validate=False,
+        )
+        if rc == 0:
+            raise CommandFailed(
+                f"Mount command succeed where it is expected to fail with rc 32 but rc returned is {rc}"
+            )
+        log.info("mount with valid fsid")
+        out, rc = clients[0].exec_command(sudo=True, cmd="ceph fsid -f json")
+        fsid = json.loads(out)["fsid"]
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",fsid={fsid}",
+            validate=True,
+        )
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={kernel_mounting_dir}/fsid bs=10M count=10",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with recovery_session Options")
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], default_fs)
+        log.info("mount with recovery_session with option no")
+        subvolume = {
+            "vol_name": default_fs,
+            "subvol_name": "subvol_recover_session_no",
+            "size": "5368706371",
+        }
+        fs_util.create_subvolume(clients[0], **subvolume)
+        log.info("Get the path of sub volume")
+        subvol_path, rc = clients[0].exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume getpath {default_fs} subvol_recover_session_no",
+        )
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",conf=/etc/ceph/ceph.conf,mount_timeout=100,recover_session=no,fs={default_fs}",
+            validate=True,
+        )
+        active_mds = fs_util.get_active_mdss(clients[0], default_fs)
+        out, rc = clients[0].exec_command(
+            sudo=True, cmd=f"ceph tell mds.{active_mds[0]} client ls -f json"
+        )
+
+        get_client_details = json.loads(out)
+
+        evict_client = None
+        for kernel_client in get_client_details:
+            root = kernel_client.get("client_metadata", {}).get("root", "")
+            if "subvol_recover_session_no" in root:
+                evict_client = kernel_client
+                break
+        if not evict_client:
+            raise CommandFailed(
+                "Kernel client for subvol_recover_session_no not found in mds client ls output"
+            )
+        log.info("write data to client before evicting")
+        fs_util.create_file_data(
+            clients[0], kernel_mounting_dir, 3, "snap1", "data_from_fuse_mount "
+        )
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"ceph tell mds.{active_mds[0]} client evict id={evict_client.get('id')}",
+        )
+        out, rc = clients[0].exec_command(
+            sudo=True,
+            cmd=f"touch {kernel_mounting_dir}/test_{mounting_dir}",
+            check_ec=False,
+        )
+        if rc == 0:
+            raise CommandFailed(
+                "we are able to Access directory even after evict.. which is not correct"
+            )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",conf=/etc/ceph/ceph.conf,mount_timeout=100,recover_session=clean,fs={default_fs}",
+            validate=True,
+        )
+        out, rc = clients[0].exec_command(
+            sudo=True, cmd="ceph tell mds.0 client ls -f json"
+        )
+        get_client_details = json.loads(out)
+        for kernel_client in get_client_details:
+            if "subvol_recover_session_no" in kernel_client.get("client_metadata").get(
+                "root"
+            ):
+                evict_client = kernel_client
+                break
+        log.info("write data to client before evicting")
+        clients[0].exec_command(
+            sudo=True, cmd=f"ceph tell mds.0 client evict id={evict_client.get('id')}"
+        )
+        out, rc = clients[0].exec_command(
+            sudo=True, cmd=f"touch {kernel_mounting_dir}/test_{mounting_dir}"
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with read_from_replica=balance and validate persistence")
+        test_file = f"{kernel_mounting_dir}/rfr_balance_test_file"
+        test_content = [
+            "I am here to read from replica - balance",
+        ]
+
+        # Mount with read_from_replica=balance
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=balance",
+            validate=True,
+        )
+
+        # Create file and write content
+        for line in test_content:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'echo "{line}" > {test_file}',
+            )
+
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content before remount:\n{out}")
+
+        # Ensure data is flushed
+        clients[0].exec_command(sudo=True, cmd="sync")
+        time.sleep(1)
+
+        # Unmount
+        umount_fs(clients[0], kernel_mounting_dir)
+        time.sleep(1)
+
+        # Remount with same option
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=balance",
+            validate=True,
+        )
+
+        # Validate file content
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content after remount:\n{out}")
+        for line in test_content:
+            if line not in out:
+                raise CommandFailed(
+                    "File content mismatch after remount with read_from_replica=balance"
+                )
+        log.info("File content persists after remount with read_from_replica=balance")
+
+        # Cleanup mount
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"rm -rf {test_file}",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with read_from_replica=no and validate persistence")
+        test_file = f"{kernel_mounting_dir}/rfr_off_test_file"
+        test_content = [
+            "I am here to read from replica - no",
+        ]
+
+        # Mount with read_from_replica=off
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=no",
+            validate=True,
+        )
+
+        # Create file and write content
+        for line in test_content:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'echo "{line}" > {test_file}',
+            )
+
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content before remount:\n{out}")
+
+        # Ensure data is flushed
+        clients[0].exec_command(sudo=True, cmd="sync")
+        time.sleep(1)
+
+        # Unmount
+        umount_fs(clients[0], kernel_mounting_dir)
+        time.sleep(1)
+
+        # Remount with same option
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=no",
+            validate=True,
+        )
+
+        # Validate file content
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content after remount:\n{out}")
+        for line in test_content:
+            if line not in out:
+                raise CommandFailed(
+                    "File content mismatch after remount with read_from_replica=no"
+                )
+        log.info("File content persists after remount with read_from_replica=no")
+
+        # Cleanup mount
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"rm -rf {test_file}",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info(
+            "mount with read_from_replica=localize and crush_location and validate persistence"
+        )
+        test_file = f"{kernel_mounting_dir}/rfr_localize_test_file"
+        test_content = [
+            "I am here to read from replica - localize",
+        ]
+
+        # Mount with read_from_replica=localize and crush_location
+        mount_options = "read_from_replica=localize,crush_location=zone:east-zone1|region=east,_netdev"
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",{mount_options}",
+            validate=True,
+        )
+
+        # Create file and write content
+        for line in test_content:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'echo "{line}" > {test_file}',
+            )
+
+        # Log file content before unmount
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content before remount:\n{out}")
+
+        # Ensure data is flushed
+        clients[0].exec_command(sudo=True, cmd="sync")
+        time.sleep(1)
+
+        # Unmount
+        umount_fs(clients[0], kernel_mounting_dir)
+        time.sleep(1)
+
+        # Remount with same options
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",{mount_options}",
+            validate=True,
+        )
+
+        # Validate file content after remount
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content after remount:\n{out}")
+        for line in test_content:
+            if line not in out:
+                raise CommandFailed(
+                    "File content mismatch after remount with read_from_replica=localize and crush_location"
+                )
+        log.info(
+            "File content persists after remount with read_from_replica=localize and crush_location"
+        )
+
+        # Cleanup mount
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"rm -rf {test_file}",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        return 0
+
+    except Exception as e:
+        log.error(e)
+        log.error(traceback.format_exc())
+        return 1
+
+    finally:
+        log.info("Clean Up in progess")
+        fs_util.remove_subvolume(clients[0], **subvolume)

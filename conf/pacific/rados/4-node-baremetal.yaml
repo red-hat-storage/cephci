@@ -1,0 +1,75 @@
+# Cluster for Baremetal environment.
+# The below defined cluster has 11 nodes.
+# Cluster configuration:
+#      3 MONS, 2 MGR, 6 OSD, 2 MDS, 1 RGW service daemon(s)
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: cali003.ceph.redhat.com
+          id: node1
+          ip: 10.8.130.3
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+        -
+          hostname: cali004.ceph.redhat.com
+          id: node2
+          ip: 10.8.130.4
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+          role:
+            - mon
+            - mgr
+            - osd
+        -
+          hostname: cali005.ceph.redhat.com
+          id: node3
+          ip: 10.8.130.5
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+          role:
+            - osd
+            - mon
+            - client
+        -
+          hostname: clara015.ceph.redhat.com
+          id: node4
+          ip: 10.8.129.15
+          root_password: passwd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+          role:
+            - osd

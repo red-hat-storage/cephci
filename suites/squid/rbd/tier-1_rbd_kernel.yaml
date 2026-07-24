@@ -1,0 +1,184 @@
+# Tier1: Usecase to cover RBD kernel realted tests.
+# Tier-level: 1
+# Test-Suite: tier-1_rbd_kernel.yaml
+#
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#   Conf file - conf/squid/rbd/4-node-cluster-with-1-client.yaml
+#   Node 4 must be a client node
+
+tests:
+
+  - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: deploy cluster
+      module: test_cephadm.py
+      abort-on-fail: true
+      destroy-cluster: false
+      desc: RHCS cluster deployment using cephadm
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+
+  - test:
+      name: configure client
+      module: test_client.py
+      abort-on-fail: true
+      destroy-cluster: false
+      desc: Configure client node
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - git
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+
+  - test:
+      name: kernel update
+      module: kernel_update.py
+      abort-on-fail: true
+      desc: kernel update for RBD kernel bugs
+      polarion-id: CEPH-83575404
+
+  - test:
+      name: 2_rbd_cli_import_export
+      module: test_rbd.py
+      desc: Executing upstream RBD CLI Import Export scenarios
+      polarion-id: CEPH-83574240
+      config:
+        script: import_export.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: 5_librbd_python
+      module: test_rbd.py
+      desc: Executing upstream LibRBD scenarios
+      polarion-id: CEPH-83574524
+      config:
+        script: test_librbd_python.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: 6_rbd_permissions
+      module: test_rbd.py
+      desc: Executing upstream RBD permissions scenarios
+      polarion-id: CEPH-83574525
+      config:
+        script: permissions.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: 7_rbd_read_flags
+      module: test_rbd.py
+      desc: Executing upstream RBD Read Flag scenarios
+      polarion-id: CEPH-83574526
+      config:
+        script: read-flags.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: 9_journal
+      module: test_rbd.py
+      desc: Executing upstream RBD Journal scenarios
+      polarion-id: CEPH-83574527
+      config:
+        script: journal.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: 10_rbd_kernel
+      module: test_rbd.py
+      desc: Executing upstream RBD Kernel scenarios
+      polarion-id: CEPH-83574528
+      config:
+        script: kernel.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: 11_rbd_krbd_exclusive
+      module: test_rbd.py
+      desc: Executing upstream RBD kernel exclusive scenarios
+      polarion-id: CEPH-83574531
+      config:
+        script: krbd_exclusive_option.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: test delete clones with io
+      module: delete_clones_with_io.py
+      desc: Create clone of an image and delete while krbd IO is running
+      polarion-id: CEPH-9225
+
+  - test:
+      name: RBD Group-related commands validation
+      module: test_rbd_group_commands_validation.py
+      desc: Verify rbd group commands
+      polarion-id: CEPH-83594545
+      config:
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+
+  - test:
+      name: RBD image creation in the namespace
+      module: test_rbd_namespace_image_pool.py
+      desc: Run image creation in the namespace
+      polarion-id: CEPH-83582476
+      config:
+        rep-pool-only: true
+        rep_pool_config:
+          rbd: {}

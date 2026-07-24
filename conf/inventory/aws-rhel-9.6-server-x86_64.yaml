@@ -1,0 +1,39 @@
+---
+# AWS inventory: instance.create.image-name must be an AMI id (us-east-1).
+# Find RHEL 9 AMI: EC2 → AMIs → Public images → search "RHEL-9" or use AWS CLI.
+version_id: 9.6
+id: rhel
+instance:
+  create:
+    image-name: ami-04e1f008392c28dce   # Replace with your RHEL 9 AMI id in us-east-1
+    instance_type: t3.small   # EC2 instance type (e.g. t3.medium, m5.xlarge)
+
+  setup: |
+    #cloud-config
+
+    ssh_pwauth: true
+    disable_root: false
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+    chpasswd:
+      list: |
+        root:passwd
+        cephuser:pass123
+      expire: false
+
+    runcmd:
+      - timedatectl set-timezone Etc/UTC
+      - hostnamectl set-hostname $(hostname -s)
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - update-ca-trust
+      - touch /ceph-qa-ready
+
+    final_message: "Ready for ceph qa testing"

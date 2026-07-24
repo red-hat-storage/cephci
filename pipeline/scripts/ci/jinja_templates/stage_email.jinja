@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <style>
+    table.full-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+    table.half-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 75%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    p { margin:0 }
+    </style>
+</head>
+<body>
+    <h3><u>Test Summary</u></h3>
+    <table>
+        <tr>
+            <th>Test Suite</th>
+            <th>Result</th>
+        </tr>
+        {% for suite, results in test_results.items()  %}
+        <tr>
+            <td>{{ suite }}</td>
+            <td bgcolor={%+ if results["status"] == "FAIL" -%}F1948A{%+ else %}82E0AA{% endif -%}>
+                {% if results.get("logdir") %}
+                <a href={{ results["logdir"] }}>{{ results["status"] }}</a>
+                {% else %}
+                {{ results["status"] }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br />
+
+    {% if test_artifacts %}
+    <h3><u>Test Artifacts</u></h3>
+    <table>
+
+    {% if test_artifacts.get("product") %}
+    <tr><td>Product</td><td>{{ test_artifacts.get("product") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("version") %}
+    <tr><td>Version</td><td>{{ test_artifacts.get("version") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("ceph_version") %}
+    <tr><td>Ceph Version</td><td>{{ test_artifacts.get("ceph_version") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("composes") %}
+    <tr><td>Composes</td><td><table>
+    {% for ver, compose in test_artifacts.get("composes").items() %}
+    <tr><td>{{ ver }}</td><td>{{ compose }}</td></tr>
+    {% endfor %}
+    </table></td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("repository") %}
+    <tr><td>Container Image</td><td>{{ test_artifacts.get("repository") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("build_url") %}
+    <tr><td>Jenkins Build Url</td><td>{{ test_artifacts.get("build_url") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("report_portal") %}
+    <tr><td>Log</td><td>{{ test_artifacts.get("report_portal") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("buildArtifacts") %}
+    </table><h3><u>Build Artifacts</u></h3><table>
+
+    {% if test_artifacts.get("buildArtifacts").get("composes") %}
+    <tr><td>Build Composes</td><td><table>
+    {% for ver, compose in test_artifacts.get("buildArtifacts").get("composes").items() %}
+    <tr><td>{{ ver }}</td><td>{{ compose }}</td></tr>
+    {% endfor %}
+    </table></td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("buildArtifacts").get("repository") %}
+    <tr><td>Container Image</td><td>{{ test_artifacts.get("buildArtifacts").get("repository") }}</td></tr>
+    {% endif %}
+
+    {% endif %}
+
+    </table><br /></body></html>
+    {% endif %}
+</body>
+</html>

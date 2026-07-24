@@ -1,0 +1,88 @@
+# Physical/Bare-metal environment required for RBD persistent write back cache.
+# The below defined cluster has 5 nodes + 1 SSD cache node.
+# Cluster configuration:
+#      3 MONS, 2 MGR, 3 OSD nodes
+#      1 SSD Drive cache node
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: clara003
+          id: node1
+          ip: 10.8.129.3
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - mds
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: clara004
+          id: node2
+          ip: 10.8.129.4
+          root_password: passwd
+          role:
+            - mds
+            - mgr
+            - mon
+          volumes:
+            - /dev/sdd
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: clara006
+          id: node3
+          ip: 10.8.129.6
+          root_password: passwd
+          role:
+            - mds
+            - mon
+          volumes:
+            - /dev/sdd
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: clara007
+          id: node4
+          ip: 10.8.129.7
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+
+        -
+          hostname: clara009
+          id: node5
+          ip: 10.8.129.9
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdd
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: clara010
+          id: node6
+          ip: 10.8.129.10
+          root_password: passwd
+          role:
+            - client
+          volumes:
+            - /dev/sdd
+            - /dev/sdb
+            - /dev/sdc

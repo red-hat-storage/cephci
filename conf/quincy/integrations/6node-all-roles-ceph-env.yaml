@@ -1,0 +1,41 @@
+# This test config used for RHCS jenkins job ODF environment to validate with external Ceph cluster.
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - client
+      node2:
+        role:
+          - mon
+          - mgr
+      node3:
+        role:
+          - mon
+          - osd
+          - mds
+        no-of-volumes: 3
+        disk-size: 20
+      node4:
+        role:
+          - mds
+          - osd
+        no-of-volumes: 3
+        disk-size: 20
+      node5:
+        role:
+          - mds
+          - osd
+          - rgw
+        no-of-volumes: 3
+        disk-size: 20
+      node6:
+        role:
+          - osd
+          - mds
+        no-of-volumes: 3
+        disk-size: 20

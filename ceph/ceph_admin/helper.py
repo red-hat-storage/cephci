@@ -1,0 +1,1302 @@
+"""
+Contains helper functions that can used across the module.
+"""
+
+import json
+import os
+import tempfile
+from datetime import datetime, timedelta
+from os.path import dirname
+from time import sleep
+from typing import Optional
+
+from dateutil import parser
+from jinja2 import Template
+from looseversion import LooseVersion
+
+from ceph.ceph import CommandFailed
+from ceph.utils import get_node_by_id, get_nodes_by_ids
+from utility.log import Log
+from utility.ssl_certs import CertificateGenerator
+from utility.utils import generate_self_signed_certificate
+
+LOG = Log(__name__)
+
+
+class UnknownSpecFound(Exception):
+    pass
+
+
+def create_nvme_certificates(node, **kwargs):
+    """Create NVMe mTLS Server, client keys and certificates.
+
+    Args:
+        node: CephNode
+        kwargs: cert arguments
+    """
+    domain_name = kwargs["domain"]
+
+    _nodes = kwargs.get("nodes", [])
+    is_server = kwargs.get("is_server", False)
+    dest_path = "/etc/mtls"
+
+    if is_server:
+        key, cert = "server.key", "server.crt"
+        node_ips = [i.ip_address for i in _nodes]
+    else:
+        key, cert = "client.key", "client.crt"
+        node_ips = []
+
+    _nodes.append(node)
+    for node in _nodes:
+        node.exec_command(cmd=f"mkdir -p {dest_path}", sudo=True)
+
+    server_cert_gen = CertificateGenerator(_nodes, domain_name, ips=node_ips)
+    server_cert_gen.generate_key()
+    server_cert_gen.generate_certificate(is_server=is_server)
+    return server_cert_gen.save_files(key, cert, dest_path)
+
+
+class GenerateServiceSpec:
+    """Creates the spec yaml file for deploying services and daemons using cephadm."""
+
+    COMMON_SERVICES = [
+        "mon",
+        "mgr",
+        "alertmanager",
+        "crash",
+        "grafana",
+        "node-exporter",
+        "prometheus",
+    ]
+
+    def __init__(self, node, cluster, specs):
+        """
+        Initialize the GenerateServiceSpec
+
+        Args:
+            node (CephNode): ceph node where spec file to be created
+            cluster (Ceph.Ceph): ceph cluster (ceph-nodes)
+            specs (Dict): service specifications
+
+        Example::
+
+            specs:
+              - service_type: host
+                address: true
+                labels: apply-all-labels
+                nodes:
+                    - node2
+                    - node3
+              - service_type: mon
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+              - service_type: mgr
+                placement:
+                    count: 2
+              - service_type: alertmanager
+                placement:
+                    count: 1
+              - service_type: crash
+                placement:
+                    host_pattern: '*'
+              - service_type: grafana
+                placement:
+                    count: 1
+              - service_type: node-exporter
+                placement:
+                    host_pattern: '*'
+              - service_type: prometheus
+                placement:
+                    count: 1
+        """
+        self.cluster = cluster
+        self.node = node
+        self.specs = specs
+        self.template_path = dirname(__file__) + "/jinja_templates/"
+
+    @staticmethod
+    def get_hostname(node):
+        """
+        Returns Host Name of node
+
+        Args:
+            node (CephNode): node object
+
+        Returns:
+            hostname (Str)
+        """
+        return node.hostname
+
+    @staticmethod
+    def get_addr(node):
+        """
+        Returns IP Address of node
+
+        Args:
+            node (CephNode): node object
+
+        Returns:
+            IP Address (Str)
+        """
+        return node.ip_address
+
+    @staticmethod
+    def get_labels(node):
+        """
+        Returns role list of node
+
+        Args:
+            node (CephNode): node object
+
+        Returns:
+            node role list (List)
+        """
+        label_set = set(node.role.role_list)
+        return list(label_set)
+
+    @staticmethod
+    def get_gateway_cidr(node):
+        """
+        Returns the gateway and CIDR of a node
+
+        :param
+            node (CephNode): node object
+
+        :return: list (gateway, cidr)
+        """
+        node_sub = node.subnet
+        gw = node_sub.split("/")[0]
+        cidr = node_sub.split("/")[1]
+        return gw, cidr
+
+    def get_hostnames(self, node_names):
+        """
+        Return list of hostnames
+
+        Args:
+            node_names (List): node names
+
+        Returns:
+            list of hostanmes (List)
+        """
+        nodes = get_nodes_by_ids(self.cluster, node_names)
+        return [node.hostname for node in nodes]
+
+    def _get_template(self, service_type):
+        """
+        Return Jinja template based on the service_type
+
+        Args:
+            service_type (Str): service name (ex., "host")
+
+        Returns:
+            template
+        """
+        path = self.template_path + f"{service_type}.jinja"
+        with open(path) as fd:
+            template = fd.read()
+        return Template(template)
+
+    def generate_host_spec(self, spec):
+        """
+        Return hosts spec content based on host config
+
+        Args:
+            spec (Dict): hosts specification
+
+        Returns:
+            hosts_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: host
+                address: true
+                labels: apply-all-labels
+                nodes:
+                    - node2
+                    - node3
+        """
+        template = self._get_template("host")
+        hosts = []
+        address = spec.get("address")
+        for node_name in spec["nodes"]:
+            labels = spec.get("labels")
+            host = dict()
+            node = get_node_by_id(self.cluster, node_name)
+            host["hostname"] = self.get_hostname(node)
+            if address:
+                host["address"] = self.get_addr(node)
+
+            if labels:
+                # Skipping client node, if only client label is attached
+                if len(node.role.role_list) == 1 and ["client"] == node.role.role_list:
+                    continue
+
+                if isinstance(labels, str) and labels == "apply-all-labels":
+                    labels = self.get_labels(node)
+                host["labels"] = labels
+
+            if spec.get("location"):
+                host["location"] = spec["location"]
+
+            hosts.append(host)
+
+        return template.render(hosts=hosts)
+
+    def generate_generic_spec(self, spec):
+        """
+        Return spec content for common services
+        which is mentioned in COMMON_SERVICES::
+
+             - mon
+             - mgr
+             - alertmanager
+             - crash
+             - grafana
+             - node-exporter
+             - prometheus
+
+        Args:
+            spec (Dict): common service spec config
+
+        Returns:
+            service_spec
+
+        Example::
+
+            spec:
+              - service_type: mon
+                unmanaged: boolean    # true or false
+                placement:
+                  count: 2
+                  label: "mon"
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                spec:
+                  crush_locations:
+                    node1:
+                    - datacenter=DC1
+                    node2:
+                    - datacenter=DC2
+        """
+        template = self._get_template("common_svc_template")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        # Ensure 'crush_locations' under 'spec' are handled if present
+        if "spec" in spec and "crush_locations" in spec["spec"]:
+            crush_locations = {}
+            for host in spec["spec"]["crush_locations"].keys():
+                hostname = self.get_hostnames([host])[0]
+                crush_locations[hostname] = spec["spec"]["crush_locations"][host]
+            spec["spec"]["crush_locations"] = crush_locations
+
+        return template.render(spec=spec)
+
+    def generate_osd_spec(self, spec):
+        """
+        Return spec content for osd service
+
+        Args:
+            spec (Dict): osd service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: osd
+                unmanaged: boolean    # true or false
+
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                data_devices:
+                    all: boolean      # true or false
+                encrypted: boolean    # true or false
+
+            spec:
+              - service_type: osd
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                spec:
+                    data_devices:         # all - consider all device/LVs from node
+                        paths: all        # else whatever values provided from config.
+                    encrypted: boolean    # true or false
+                extra_container_args:
+                    - "--cpus=2"
+        """
+        template = self._get_template("osd")
+        node_names = spec["placement"].pop("nodes", None)
+
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+        for item, values in spec["spec"].items():
+            if item in ["data_devices", "db_devices", "wal_devices"]:
+                if values.get("paths"):
+                    if values["paths"] == "all":
+                        devs = []
+                        for host in spec["placement"]["hosts"]:
+                            node = get_node_by_id(self.cluster, host)
+                            devs.extend(
+                                [
+                                    i if isinstance(i, str) else i.path
+                                    for i in node.volume_list
+                                ]
+                            )
+                        spec["spec"][item]["paths"] = [i for i in set(devs)]
+
+        return template.render(spec=spec)
+
+    def generate_mds_spec(self, spec):
+        """
+        Return spec content for mds service
+
+        Args:
+            spec (Dict): mds service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: mds
+                service_id: cephfs
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: mds
+
+        :Note: make sure volume is already created.
+
+        """
+        template = self._get_template("mds")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
+    def generate_nfs_spec(self, spec):
+        """
+        Return spec content for nfs service
+
+        Args:
+            spec (Dict): mds service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: nfs
+                service_id: nfs-name
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: nfs
+                spec:
+                  pool: pool-name
+                  namespace: namespace-name
+
+        :Note: make sure pool is already created.
+        """
+        template = self._get_template("nfs")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
+    def generate_nvmeof_spec(self, spec):
+        """Return spec content for nvmeof service.
+
+        If mTLS is required, then
+
+        Args:
+            spec (Dict): nvmeof service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: nvmeof
+                service_id: rbd
+                unmanaged: boolean    # true or false
+                mtls: true
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: nvmeof
+                spec:
+                   pool: rbd
+                   enable_auth: true
+                   group: group1
+                   server_cert: <server-cert>
+                   server_key: <server-key>
+                   client_cert: <client-cert>
+                   client_key: <client-key>
+        """
+        template = self._get_template("nvmeof")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        mtls = spec.pop("mtls", None)
+        encryption = spec.pop("encryption", None)
+        nodes = get_nodes_by_ids(self.cluster, node_names)
+
+        # encryption key
+        if encryption:
+            key_file = "encryption.key"
+            installer_node = self.cluster.get_ceph_object("installer")
+            installer_node.exec_command(
+                cmd=f"openssl req -newkey rsa:512 -noenc -noout -keyout {key_file} -batch 2> /dev/null",
+                sudo=True,
+            )
+
+            # Read the encryption key content from the installer node
+            key, _ = installer_node.exec_command(f"cat {key_file}", sudo=True)
+            spec["spec"]["encryption_key"] = key.strip()
+
+        if mtls:
+            spec["spec"]["enable_auth"] = True
+
+            # server cert
+            key, cert = create_nvme_certificates(
+                self.node,
+                domain="nvme.server",
+                nodes=nodes,
+                is_server=True,
+            )
+            spec["spec"]["root_ca_cert"] = cert.strip()
+            spec["spec"]["server_cert"] = cert.strip()
+            spec["spec"]["server_key"] = key.strip()
+
+            # client cert
+            key, cert = create_nvme_certificates(
+                self.node,
+                domain="nvme.client",
+                nodes=nodes,
+                is_server=False,
+            )
+            spec["spec"]["client_cert"] = cert.strip()
+            spec["spec"]["client_key"] = key.strip()
+
+        return template.render(spec=spec)
+
+    def generate_rgw_spec(self, spec):
+        """
+        Return spec content for rgw service
+
+        Args:
+            spec (Dict): rgw service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: rgw
+                service_id: my-rgw
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: rgw
+                spec:
+                  rgw_frontend_port: 8080
+                  rgw_realm: east
+                  rgw_zone: india
+                  rgw_frontend_ssl_certificate: create-cert | <contents of crt>
+
+            contents of rgw_spec.yaml file
+
+                service_type: rgw
+                service_id: rgw.india
+                placement:
+                  hosts:
+                    - node5
+                spec:
+                  ssl: true
+                  rgw_frontend_ssl_certificate: |
+                    -----BEGIN PRIVATE KEY------
+                    ...
+
+        :Note: make sure realm, zone group and zone is already created.
+
+        """
+        template = self._get_template("rgw")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        if spec.get("spec", False):
+            if spec["spec"].get("rgw_frontend_ssl_certificate", False):
+                if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
+                    subject = {
+                        "common_name": spec["placement"]["hosts"][0],
+                        "ip_address": self.cluster.get_node_by_hostname(
+                            spec["placement"]["hosts"][0]
+                        ).ip_address,
+                    }
+                    key, cert, ca = generate_self_signed_certificate(subject=subject)
+                    pem = key + cert + ca
+                    cert_value = "|\n" + pem
+                    spec["spec"]["rgw_frontend_ssl_certificate"] = "\n    ".join(
+                        cert_value.split("\n")
+                    )
+                    LOG.debug(pem)
+
+        LOG.info(f"Generated rgw specification : {spec}")
+
+        return template.render(spec=spec)
+
+    def generate_snmp_spec(self, spec):
+        """
+        Return spec content for snmp-destination
+
+        Args:
+            spec (Dict): snmp-destination service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example1::
+
+        specs:
+              - service_type: snmp-destination
+                spec:
+                  credentials:
+                    snmp_v3_auth_username: myadmin
+                    snmp_v3_auth_password: mypassword
+        Example2::
+
+        specs:
+              - service_type: snmp-destination
+                spec:
+                  credentials:
+                    snmp_community: public
+
+        """
+        template = self._get_template("snmp")
+        destination_node = spec["spec"].pop("snmp_destination", None)
+        node = get_node_by_id(self.cluster, destination_node)
+        if destination_node:
+            spec["spec"]["snmp_destination"] = self.get_addr(node) + ":162"
+        node_installer = get_node_by_id(self.cluster, "node1")
+        cmd = "cephadm shell ceph fsid"
+        out, err = node_installer.exec_command(sudo=True, cmd=cmd)
+        LOG.info(f"fsid: {out}")
+        engine_id = out.replace("-", "")
+        if engine_id:
+            spec["spec"]["engine_id"] = engine_id
+        # Check whether SNMPv2 or SNMPv3 credentials are present in spec
+        if "snmp_community" in spec["spec"]["credentials"]:
+            # Use SNMPv2
+            spec["spec"]["snmp_version"] = "V2c"
+        elif (
+            "snmp_v3_auth_username" in spec["spec"]["credentials"]
+            and "snmp_v3_auth_password" in spec["spec"]["credentials"]
+        ):
+            # Use SNMPv3
+            spec["spec"]["snmp_version"] = "V3"
+        else:
+            # Raise an exception for unexpected credentials
+            raise ValueError("Unexpected credentials")
+        return template.render(spec=spec)
+
+    def generate_snmp_dest_conf(self, spec):
+        """
+        Return conf content for snmp-gateway service
+
+        Args:
+            spec (Dict): snmp-gateway service config
+
+        Returns:
+            destination_conf (Str)
+
+        Example1::
+
+            spec:
+                - service_type: snmp-gateway
+                  service_name: snmp-gateway
+                  placement:
+                    count: 1
+                  spec:
+                    credentials:
+                      snmp_v3_auth_username: <user_name>
+                      snmp_v3_auth_password: <password>
+                    port: 9464
+                    snmp_destination: node
+                    snmp_version: V3
+        Example2::
+
+            spec:
+                - service_type: snmp-gateway
+                  service_name: snmp-gateway
+                  placement:
+                    count: 1
+                  spec:
+                    credentials:
+                      snmp_community: public
+                    port: 9464
+                    snmp_destination: node
+                    snmp_version: V2c
+
+        """
+        template = self._get_template("snmp_destination")
+        node = get_node_by_id(self.cluster, "node1")
+        cmd = "cephadm shell ceph fsid"
+        out, err = node.exec_command(sudo=True, cmd=cmd)
+        LOG.info(f"fsid: {out}")
+        fsid = out.replace("-", "")
+        engine_id = fsid[0:32]
+        if engine_id:
+            spec["spec"]["engine_id"] = engine_id
+        LOG.info(f"fsid:{engine_id}")
+
+        return template.render(spec=spec)
+
+    def generate_ingress_spec(self, spec):
+        """
+        Return spec content for ha proxy ingress service
+
+        Args:
+            spec (Dict): ha proxy ingress service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: ingress
+                service_id: rgw.my-rgw
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: rgw
+                spec:
+                  backend_service: rgw.ceph-scale-test-y7nmci-node2
+                  virtual_ip: 10.0.208.0/22
+                  frontend_port: 8000
+                  monitor_port: 1967
+                  ssl_cert: create-cert | <contents of crt>
+
+        :Note: make sure rgw service is already created.
+
+        """
+        template = self._get_template("ingress")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        if spec["spec"].get("ssl_cert") == "create-cert":
+            subject = {
+                "common_name": spec["placement"]["hosts"][0],
+                "ip_address": self.cluster.get_node_by_hostname(
+                    spec["placement"]["hosts"][0]
+                ).ip_address,
+            }
+            key, cert, ca = generate_self_signed_certificate(subject=subject)
+            pem = key + cert + ca
+            cert_value = "|\n" + pem
+            spec["spec"]["ssl_cert"] = "\n    ".join(cert_value.split("\n"))
+            LOG.debug(pem)
+            vip_node = get_node_by_id(self.cluster, node_names[0])
+            _, vip_cidr = self.get_gateway_cidr(vip_node)
+
+        return template.render(spec=spec)
+
+    def generate_iscsi_spec(self, spec):
+        """
+        Return spec content for iscsi service
+
+        Args:
+            spec (Dict): iscsi service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: iscsi
+                service_id: rbd
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: iscsi
+                spec:
+                  pool: pool-name
+                  trusted_ip_list: ip1,ip2
+
+        :Note: make sure pool is already created.
+        """
+        template = self._get_template("iscsi")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
+    def _get_render_method(self, service_type):
+        """
+        Return render definition based on service_type
+
+        Args:
+            service_type (Str): service name
+
+        Returns:
+            method (Func)
+        """
+        render_definitions = {
+            "host": self.generate_host_spec,
+            "osd": self.generate_osd_spec,
+            "mds": self.generate_mds_spec,
+            "nfs": self.generate_nfs_spec,
+            "rgw": self.generate_rgw_spec,
+            "snmp-gateway": self.generate_snmp_spec,
+            "snmp-destination": self.generate_snmp_dest_conf,
+            "ingress": self.generate_ingress_spec,
+            "nvmeof": self.generate_nvmeof_spec,
+            "iscsi": self.generate_iscsi_spec,
+        }
+
+        try:
+            if service_type in self.COMMON_SERVICES:
+                return self.generate_generic_spec
+            return render_definitions[service_type]
+        except KeyError:
+            raise NotImplementedError
+
+    def create_spec_file(self):
+        """
+        Create spec file based on spec config and return file name
+
+        Returns:
+            temp_filename (Str)
+
+        """
+        spec_content = ""
+        for spec in self.specs:
+            method = self._get_render_method(spec["service_type"])
+            if not method:
+                raise UnknownSpecFound(f"unknown spec found - {spec}")
+            spec_content += method(spec=spec)
+
+        LOG.info(f"Spec yaml file content:\n{spec_content}")
+        # Create spec yaml file
+        temp_file = tempfile.NamedTemporaryFile(dir="/tmp", suffix=".yaml")
+        spec_file = self.node.node.remote_file(
+            sudo=True, file_name=temp_file.name, file_mode="w"
+        )
+        spec_file.write(spec_content)
+        spec_file.flush()
+
+        return temp_file.name
+
+    def create_snmp_conf_file(self):
+        """
+        Create snmp conf file based on spec config and return file name
+
+        Returns:
+            temp_filename (Str)
+
+        """
+        spec_content = ""
+        for spec in self.specs:
+            method = self._get_render_method(spec["service_type"])
+            if not method:
+                raise UnknownSpecFound(f"unknown spec found - {spec}")
+            spec_content += method(spec=spec)
+        LOG.info(f"SNMP Conf file content:\n{spec_content}")
+        temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+        conf_file = self.node.remote_file(
+            sudo=True, file_name=temp_file.name, file_mode="w"
+        )
+        conf_file.write(spec_content)
+        conf_file.flush()
+        return temp_file.name
+
+
+def create_ceph_config_file(node, config):
+    """
+    Create config file based on config options and return file name
+
+    Returns:
+        temp_filename (Str)
+
+    """
+    path = dirname(__file__) + "/jinja_templates/config.jinja"
+    with open(path) as fd:
+        template = fd.read()
+
+    conf_content = Template(template).render(config=config)
+
+    LOG.info(f"Conf yaml file content:\n{conf_content}")
+    # Create conf yaml file
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+    conf_file = node.node.remote_file(
+        sudo=True, file_name=temp_file.name, file_mode="w"
+    )
+    conf_file.write(conf_content)
+    conf_file.flush()
+
+    return temp_file.name
+
+
+def get_cluster_state(cls, commands=None):
+    """
+    fetch cluster state using commands provided along
+    with the default set of commands::
+
+        - ceph status
+        - ceph orch ls -f json-pretty
+        - ceph orch ps -f json-pretty
+        - ceph health detail -f yaml
+
+    Args:
+        cls (CephAdmin): ceph.ceph_admin instance with shell access
+        commands (List): list of commands
+
+    """
+    __CLUSTER_STATE_COMMANDS = [
+        "ceph status",
+        "ceph orch host ls",
+        "ceph orch ls -f json-pretty",  # https://bugzilla.redhat.com/show_bug.cgi?id=2068366
+        "ceph orch ps -f json-pretty",
+        "ceph health detail -f yaml",
+        "ceph mgr dump",  # https://bugzilla.redhat.com/show_bug.cgi?id=2033165#c2
+        "ceph mon stat",
+    ]
+
+    commands = commands if commands else list()
+
+    __CLUSTER_STATE_COMMANDS.extend(commands)
+
+    for cmd in __CLUSTER_STATE_COMMANDS:
+        cls.shell(args=[cmd], pretty_print=True)
+
+
+def get_host_osd_map(cls):
+    """
+    Method to get the OSDs deployed in each of the hosts
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        Dictionary with host names as keys and osds deployed as value list
+    """
+    out, _ = cls.shell(args=["ceph", "osd", "tree", "-f", "json"])
+    osd_obj = json.loads(out)
+    osd_dict = {}
+    for obj in osd_obj["nodes"]:
+        if obj["type"] == "host":
+            osd_dict[obj["name"]] = obj["children"]
+
+    return osd_dict
+
+
+def get_host_daemon_map(cls):
+    """
+    Method to get the daemons deployed in each of the hosts
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        Dictionary with host names as keys and names of the daemons deployed as value
+        list
+    """
+    out, _ = cls.shell(args=["ceph", "orch", "ps", "-f", "json"])
+    daemon_obj = json.loads(out)
+    daemon_dict = dict()
+    for daemon in daemon_obj:
+        daemon_name = daemon["daemon_type"] + "." + daemon["daemon_id"]
+        if daemon["hostname"] in daemon_dict.keys():
+            daemon_dict[daemon["hostname"]].append(daemon_name)
+        else:
+            daemon_dict[daemon["hostname"]] = [daemon_name]
+
+    return daemon_dict
+
+
+def get_hosts_deployed(cls):
+    """
+    Method to get all the hosts deployed in the cluster
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        List of the names of hosts deployed in the cluster
+    """
+    out, _ = cls.shell(args=["ceph", "orch", "host", "ls", "-f", "json"])
+    hosts = list()
+    host_obj = json.loads(out)
+    for host in host_obj:
+        hosts.append(host["hostname"])
+
+    return hosts
+
+
+def file_or_path_exists(node, file_or_path):
+    """Method to check abs path exists.
+
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+
+    Returns:
+        boolean
+    """
+    try:
+        out, _ = node.exec_command(cmd=f"ls -l {file_or_path}", sudo=True)
+        LOG.info(f"Output : {out}")
+        return True
+    except CommandFailed as err:
+        LOG.error(f"Error: {err}")
+
+    return False
+
+
+def file_or_path_updated(node, file_or_path, interval=120):
+    """
+    Method to check if the given file or directory was updated in the given interval
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+        interval: if mentioned checks whether the file existing in the given path
+                              was updated anytime between now and the interval given here.
+
+    Returns:
+        boolean
+    """
+    try:
+        out, _ = node.exec_command(cmd=f"date -u -r {file_or_path}", sudo=True)
+        LOG.info(f"Output : {out}")
+    except CommandFailed as err:
+        LOG.error(f"Error: {err}")
+        return False
+
+    modified_time = parser.parse(out).replace(tzinfo=None)
+    time_now = datetime.utcnow().replace(tzinfo=None)
+    time_diff = (time_now - modified_time).seconds
+    LOG.info(f"Time difference between now and gz file modified date : {time_diff}")
+    if time_diff > interval:
+        LOG.error(
+            f"The gz file was not created within the previous {time_diff} seconds"
+        )
+        return False
+    return True
+
+
+def monitoring_file_existence(node, file_or_path, file_exist=True, timeout=180):
+    """Method to monitor a file existence.
+
+    Args:
+        node: node object where file should be exists
+        file_or_path: ceph file or directory path
+        file_exist: checks file existence (default =True)
+        timeout (Int):  In seconds, the maximum allowed time (default=180)
+
+    Returns:
+        boolean
+    """
+    end_time = datetime.now() + timedelta(seconds=timeout)
+    while end_time > datetime.now():
+        if file_exist == file_or_path_exists(node, file_or_path):
+            return True
+        sleep(3)
+    return False
+
+
+def validate_log_file_after_enable(cls):
+    """
+    Verify generation of log files in default log directory when logging not enabled.
+
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        boolean
+    """
+    out, _ = cls.shell(args=["ceph", "config", "set", "global", "log_to_file", "true"])
+    out, _ = cls.shell(args=["ceph", "fsid"])
+    fsid = out.strip()
+    log_file_path = os.path.join("/var/log/ceph", fsid)
+    daemon_dict = get_host_daemon_map(cls)
+    roles_to_validate = ["mon", "mgr", "osd", "rgw", "mds"]
+
+    daemon_valid = {
+        k: [val for val in v if val.split(".")[0] in roles_to_validate]
+        for (k, v) in daemon_dict.items()
+    }
+
+    for node in cls.cluster.get_nodes():
+        try:
+            if node.hostname not in daemon_valid.keys():
+                continue
+            daemons = daemon_valid[node.hostname]
+            for daemon in daemons:
+                file = os.path.join(log_file_path, f"ceph-{daemon}.log")
+                if "rgw" in daemon:
+                    file = os.path.join(log_file_path, f"ceph-client.{daemon}.log")
+                LOG.info(
+                    f"Verifying existence of log file {file} in host {node.hostname}"
+                )
+                file_exists = file_or_path_exists(node, file)
+                if not file_exists:
+                    LOG.error(
+                        f"Log for {daemon} is not present in the node {node.ip_address}"
+                    )
+                    return False
+            LOG.info(f"Log verification on node {node.ip_address} successful")
+        except CommandFailed as err:
+            LOG.error("Error: %s" % err)
+            return False
+
+    return True
+
+
+def validate_log_rotate(cls):
+    """
+    Verify logrotation of cephadm.log file
+    Args:
+        cls: cephadm instance object
+
+    Returns:
+        boolean
+    """
+    # step 1: check for the files in current log directory
+    if not file_or_path_exists(cls.installer, "/var/log/ceph/cephadm.log"):
+        LOG.error("Log rotation failed: Logs not present in /var/log/ceph folder")
+        return False
+
+    # step 2: apply logrotate on cephadm.log
+    out = cls.installer.exec_command(
+        cmd="logrotate --force /etc/logrotate.d/cephadm", sudo=True
+    )
+    # if logrotate doesn't result in logs being zipped return False
+    if not file_or_path_updated(
+        cls.installer, "/var/log/ceph/cephadm.log.1.gz", 120
+    ) and file_or_path_exists(cls.installer, "/var/log/ceph/cephadm.log"):
+        LOG.error("Log rotation failed while enabling rotate")
+        return False
+
+    # step 3: perform any operation that would result in cephadm log be written
+    out, _ = cls.shell(args=["ceph", "orch", "ps", "--format", "json"])
+    daemons = json.loads(out)
+    daemon = [d for d in daemons if "mon" in d["daemon_name"]][0]
+    out, _ = cls.shell(
+        args=["ceph", "orch", "daemon", "redeploy", daemon["daemon_name"]]
+    )
+
+    # step 4: check new cephadm.log file is created
+    if not file_or_path_exists(cls.installer, "/var/log/ceph/cephadm.log"):
+        LOG.error(
+            "Log rotation failed: Logs not present in /var/log/ceph folder after logrotate"
+        )
+        return False
+
+    return True
+
+
+def check_service_exists(
+    installer,
+    service_name: Optional[str] = None,
+    service_type: Optional[str] = None,
+    timeout: int = 1800,
+    interval: int = 20,
+    rhcs_version: Optional[LooseVersion] = None,
+) -> bool:
+    """
+    Verify the provided service is running for the given list of ids.
+
+    Args:
+        installer (CephNode): ceph installer node
+        service_name (str): The name of the service to be checked.
+        service_type (str): The type of the service to be checked.
+        timeout (int):  In seconds, the maximum allowed time (default=1800)
+        interval (int): In seconds, the polling interval time (default=20)
+        rhcs_version (LooseVersion):  RHCS version
+
+    Returns:
+        Boolean: True if the service and the list of daemons are running else False.
+
+    """
+    end_time = datetime.now() + timedelta(seconds=timeout)
+    cmd_args = ["cephadm", "shell", "--", "ceph", "orch", "ls"]
+    if service_name:
+        cmd_args += ["--service_name", service_name]
+
+    # Due to a BZ, the running field is always 0 for RGW daemon. This has been fixed in
+    # the later release.
+    if rhcs_version and rhcs_version == "5.0" and service_type == "rgw":
+        cmd_args += ["--format", "json", "--refresh"]
+    else:
+        cmd_args += ["--service_type", service_type, "--format", "json", "--refresh"]
+
+    _retries = 3  # cross-verification retries
+    _count = 0
+    while end_time > datetime.now():
+        sleep(interval)
+        out, _ = installer.exec_command(
+            sudo=True, cmd=" ".join(cmd_args), check_ec=True
+        )
+        if "No services reported" in out:
+            LOG.warning(out)
+            continue
+        out = json.loads(out)[0]
+        running = out["status"]["running"]
+        count = out["status"]["size"]
+
+        LOG.info(f"{running}/{count} {service_name or service_type} up... retrying")
+
+        if count + running < 1:
+            continue
+
+        if count == running and _count == count:
+            if _retries < 1:
+                return True
+            _retries -= 1
+
+        if _count != count:
+            _count = count
+            _retries = 3
+
+    # Identify the failure
+    out, err = installer.exec_command(sudo=True, cmd=" ".join(cmd_args))
+    out = json.loads(out)
+    LOG.error(f"{service_name or service_type} failed with \n{out[0].get('events')}")
+    return False
+
+
+def validate_spec_services(installer, specs, rhcs_version) -> None:
+    """
+    This method ensures the services provided in the spec file are in running state.
+
+    Args:
+        installer       The node having cephadm package
+        specs           A list of CephAdm spec file
+        rhcs_version    The version of Ceph
+    """
+    LOG.info("Validating spec services")
+    for spec in specs:
+        svc_type = spec["service_type"]
+        svc_id = spec.get("service_id")
+        svc_name = None
+
+        # continue if it is host
+        if "host" == svc_type:
+            continue
+
+        if svc_id:
+            svc_name = f"{svc_type}.{spec['service_id']}"
+
+        if not check_service_exists(
+            installer=installer,
+            service_name=svc_name,
+            service_type=svc_type,
+            rhcs_version=rhcs_version,
+        ):
+            raise Exception(f"{svc_name or svc_type} service deployment failed!!!")
+
+
+def add_remove_osd(command, osd_nodes, ceph_nodes, orch_obj, osd_obj, ceph_admin):
+    """
+    Performs the operation specified in command on all the OSDs in the osd_nodes specified
+    Args:
+        command: add, rm
+        osd_nodes: [node4,node5]
+        config:
+            ceph_cluster_config
+    """
+    if command == "add":
+        try:
+            add_config = {
+                "service": "orch",
+                "validate-spec-services": "true",
+                "specs": [
+                    {
+                        "service_type": "osd",
+                        "service_id": "osd_add_nodes",
+                        "placement": {"nodes": osd_nodes},
+                        "spec": {"data_devices": {"all": "true"}},
+                    }
+                ],
+            }
+            orch_obj.apply_spec(add_config)
+            add_config.update({"validate-spec-services": "false"})
+            add_config["specs"][0].update({"unmanaged": "true"})
+            orch_obj.apply_spec(add_config)
+        except BaseException as e:
+            LOG.error(f"Adding OSDs failed on nodes {osd_nodes} with error {e}")
+            return 1
+        return 0
+
+    if command == "rm":
+        nodes = get_nodes_by_ids(ceph_nodes, osd_nodes)
+        for node in nodes:
+            osds = json.loads(
+                orch_obj.ps(
+                    {
+                        "base_cmd_args": {"format": "json"},
+                        "args": {"hostname": node.hostname},
+                    }
+                )[0]
+            )
+            for osd in osds[:-1]:
+                try:
+                    rm_config = {
+                        "command": command,
+                        "base_cmd_args": {"zap": "true"},
+                        "pos_args": [osd["daemon_id"]],
+                    }
+                    osd_obj.rm(rm_config)
+                except BaseException as e:
+                    LOG.error(
+                        f"OSD removal failed for osd {osd['daemon_id']} with error {e}"
+                    )
+                    return 1
+
+            LOG.info(
+                f"Fetching cluster state after removal of OSD from node {node.hostname}"
+            )
+            get_cluster_state(cls=ceph_admin)
+        return 0

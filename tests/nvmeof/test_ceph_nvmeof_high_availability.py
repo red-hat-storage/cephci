@@ -1,0 +1,217 @@
+"""
+Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
+ with supported entities like subsystems , etc.,
+
+"""
+
+from ceph.ceph import Ceph
+from ceph.ceph_admin.helper import check_service_exists
+from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
+from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_service import NVMeService
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    get_nvme_service_name,
+)
+from tests.rbd.rbd_utils import initial_rbd_config
+from utility.log import Log
+from utility.retry import retry
+
+LOG = Log(__name__)
+
+
+def test_ceph_83595464(ceph_cluster, config, rbd_obj):
+    """Switch mTLS to non-mTLS and Vice Versa in NVMe service.
+
+    This test case is partially automated due to Bug,
+    which doesn't hold the spec file data structure with certs.
+    In this case, Invalid data structure create problematic with redeployment.
+
+    Todo: Need to revisit once the fix is available.
+
+    Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2299705
+
+    - Get the NVMe service config.
+    - Disable the mTLS setting.
+    - Run NVMe CLI w/o certs, keys to validate the scenario
+
+    Args:
+        obj: HA instance object
+    """
+    rbd_pool = config["rbd_pool"]
+
+    nvme_service = NVMeService(config, ceph_cluster)
+    LOG.info("Deploy NVMe service")
+    nvme_service.deploy()
+    config["nvme_service"] = nvme_service
+    LOG.info("Initialize gateways")
+    nvme_service.init_gateways()
+    config.update({"nvme_service": nvme_service})
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.gateways = nvme_service.gateways
+
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
+    ha.run()
+
+    # Update the config
+    config["mtls"] = False
+    service_name = get_nvme_service_name(rbd_pool, config.get("gw_group", None))
+
+    # Deploy/Reconfigure the service without mTLS
+    LOG.info("Deploy NVMe service without mTLS")
+    nvme_service = NVMeService(config, ceph_cluster)
+    nvme_service.deploy()
+    # Remove nvme_service from config
+    config.pop("nvme_service")
+    # Keep config in sync so run() finally can teardown if anything below fails
+    config["nvme_service"] = nvme_service
+
+    LOG.info("Redeploy nvmeof service without mTLS")
+
+    @retry(IOError, tries=3, delay=3)
+    def redeploy_svc():
+        ha.orch.op("redeploy", {"pos_args": [service_name]})
+        if not check_service_exists(
+            ha.orch.installer,
+            service_type="nvmeof",
+            service_name=service_name,
+            interval=20,
+            timeout=600,
+        ):
+            raise IOError("service check failed, Try again....")
+
+    redeploy_svc()
+
+    # Validate the deployment without mTLS
+    ha.mtls = False
+    for gw in ha.gateways:
+        gw.mtls = False
+        gw.setter("mtls", False)
+
+    LOG.info("Initialize the gateways")
+    nvme_service.init_gateways()
+    # Delete the existing subsystems
+    for sub in nvme_service.config["subsystems"]:
+        gateway = nvme_service.gateways[0]
+        out, err = gateway.subsystem.delete(
+            **{"args": {"subsystem": sub["nqn"], "force": True}}
+        )
+        if "success" not in out.lower():
+            raise Exception(
+                f"Failed to delete subsystem {sub['nqn']}: {out} with error {err}"
+            )
+    # Configure gateway entities
+    configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
+    config["nvme_service"] = nvme_service
+
+
+testcases = {"CEPH-83595464": test_ceph_83595464}
+
+
+def run(ceph_cluster: Ceph, **kwargs) -> int:
+    """Return the status of the Ceph NVMEof HA test execution.
+
+    - Configure Gateways
+    - Configures Initiators and Run FIO on NVMe targets.
+    - Perform failover and failback.
+    - Validate the IO continuation prior and after to failover and failback
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        kwargs: Key/value pairs of configuration information to be used in the test.
+
+    Returns:
+        int - 0 when the execution is successful else 1 (for failure).
+
+    Example:
+
+        # Execute the nvmeof GW test
+            - test:
+                name: Ceph NVMeoF deployment
+                desc: Configure NVMEoF gateways and initiators
+                config:
+                    gw_nodes:
+                     - node6
+                    rbd_pool: rbd
+                    do_not_create_image: true
+                    rep-pool-only: true
+                    cleanup-only: true                          # only for cleanup
+                    rep_pool_config:
+                      pool: rbd
+                    install: true                               # Run SPDK with all pre-requisites
+                    subsystems:                                 # Configure subsystems with all sub-entities
+                      - nqn: nqn.2016-06.io.spdk:cnode3
+                        serial: 3
+                        bdevs:
+                          count: 1
+                          size: 100G
+                        listener_port: 5002
+                        allow_host: "*"
+                    initiators:                             # Configure Initiators with all pre-req
+                      - nqn: connect-all
+                        listener_port: 4420
+                        node: node10
+                    fault-injection-methods:                # fail-tool: systemctl, nodes-to-be-failed: node names
+                      - tool: systemctl
+                        nodes: node6
+    """
+    LOG.info("Starting Ceph Ceph NVMEoF deployment.")
+    config = kwargs["config"]
+    rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+    nvme_service = None
+
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
+
+    try:
+        # Any test case to run
+        if config.get("test_case"):
+            test_case_run = testcases[config["test_case"]]
+            test_case_run(ceph_cluster, config, rbd_obj)
+            nvme_service = config.get("nvme_service")
+            return 0
+
+        if config.get("install"):
+            LOG.info("Deploy NVMe service")
+            nvme_service = NVMeService(config, ceph_cluster)
+            nvme_service.deploy()
+            LOG.info("Initialize gateways")
+            nvme_service.init_gateways()
+
+        LOG.info("Initialize HA")
+        config.update({"nvme_service": nvme_service})
+        ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+        ha.gateways = nvme_service.gateways
+
+        # Configure Subsystem
+        LOG.info("Configure subsystems")
+        if config.get("subsystems"):
+            configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
+
+        # HA failover and failback
+        if config.get("iodepth"):
+            iodepth = [int(iodepth) for iodepth in config["iodepth"]]
+            for iodepth in iodepth:
+                LOG.info(f"Running HA failover and failback with IO depth: {iodepth}")
+                ha.run(iodepth=iodepth)
+                LOG.info(f"HA failover and failback with IO depth: {iodepth} completed")
+        else:
+            LOG.info("Running HA failover and failback")
+            ha.run()
+            LOG.info("HA failover and failback completed")
+        return 0
+    except Exception as err:
+        LOG.error(err)
+    finally:
+        # test_case path often only updates config["nvme_service"]; local nvme_service
+        # stays None if the test raises before return, so read from config as fallback.
+        service_to_clean = nvme_service or config.get(
+            "nvme_service",
+        )
+        if config.get("cleanup") and service_to_clean is not None:
+            try:
+                teardown(service_to_clean, rbd_obj)
+            except Exception as teardown_err:
+                LOG.error(f"Teardown in finally failed: {teardown_err}")
+
+    return 1

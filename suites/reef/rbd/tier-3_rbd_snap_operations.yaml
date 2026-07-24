@@ -1,0 +1,102 @@
+# Tier3: Test suite to cover RBD snap related tests in scale
+# Tier-level: 3
+# Test-Suite: tier-3_rbd_snap_operations.yaml
+#
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#    Conf file - Baremetal config
+#    Node 10 must to be a client node
+tests:
+
+  # Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node10
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Install rbd-nbd and remove any epel packages
+      module: exec.py
+      name: Install rbd-nbd
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+          - "dnf install rbd-nbd -y"
+
+  - test:
+      desc: Run all image snap operations in scale
+      module: test_rbd_image_snap_operations.py
+      name: RBD image snap operations in scale
+      polarion-id: CEPH-83584063
+      config:
+        rep_pool_config:
+          rbd_scale_snap_pool:
+            rbd_scale_snap_image:
+              size: 1G
+              num_of_snaps: 5
+          test_ops_parallely: true
+        ec_pool_config:
+          rbd_ec_scale_snap_pool:
+            data_pool: rbd_ec_pool
+            rbd_ec_scale_snap_image:
+              size: 1G
+              num_of_snaps: 500
+          test_ops_parallely: true

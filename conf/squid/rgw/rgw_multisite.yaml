@@ -1,0 +1,85 @@
+# System Under Test environment configuration for RGW multi site suites.
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+
+      node1:
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mgr
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node5:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - osd
+          - rgw
+
+      node6:
+        role:
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+
+      node1:
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mgr
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node5:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - osd
+          - rgw
+
+      node6:
+        role:
+          - client

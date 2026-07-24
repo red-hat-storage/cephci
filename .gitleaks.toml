@@ -1,0 +1,5 @@
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''conf\/inventory\/*.yaml'''
+  ]

@@ -1,0 +1,255 @@
+# Tier1: cephfs build evaluation
+#
+# This test suite evaluates the build to determine the execution of identified
+# regression test suites. This suite is executed against all new builds released by the
+# development team.
+#
+# The following testing is carried out
+#   - Deploy MDS with default values using cephadm
+#   - cephfs basic operations
+#   - Deploy mds using cephadm and increase & decrease number of mds
+---
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: cluster deployment
+      desc: Deploy cluster with enforcing mode(default mode).
+      module: test_cephadm.py
+      polarion-id: CEPH-83573740
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-data-ec
+                - "64"
+                - erasure
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-metadata
+                - "64"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs-data-ec
+                - allow_ec_overwrites
+                - "true"
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - new
+                - cephfs-ec
+                - cephfs-metadata
+                - cephfs-data-ec
+                - --force
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  label: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Add Active Active configuration of MDS
+      desc: Add Active Active configuration of MDS for cephfs
+      module: test_bootstrap.py
+      polarion-id: CEPH-11344
+      config:
+        command: shell
+        args: # arguments to ceph orch
+          - ceph
+          - fs
+          - set
+          - cephfs
+          - max_mds
+          - "2"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+        abort-on-fail: true
+        config:
+            command: add
+            id: client.1
+            node: node8
+            install_packages:
+                - ceph-common
+            copy_admin_keyring: true
+        desc: Configure the Cephfs client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+        abort-on-fail: true
+        config:
+            command: add
+            id: client.2
+            node: node9
+            install_packages:
+                - ceph-common
+            copy_admin_keyring: true
+        desc: Configure the Cephfs client system 2
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+        abort-on-fail: true
+        config:
+            command: add
+            id: client.3
+            node: node10
+            install_packages:
+                - ceph-common
+            copy_admin_keyring: true
+        desc: Configure the Cephfs client system 3
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+        abort-on-fail: true
+        config:
+            command: add
+            id: client.4
+            node: node11
+            install_packages:
+                - ceph-common
+            copy_admin_keyring: true
+        desc: Configure the Cephfs client system 4
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+  - test:
+      name: cephfs_volume_management
+      module: cephfs_volume_management.py
+      polarion-id: CEPH-83573445
+      desc: cephfs volume management
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+  - test:
+      name: cephfs_snapshot_management
+      module: cephfs_snapshot_management.py
+      polarion-id: CEPH-83571366
+      desc: cephfs snapshot management
+      abort-on-fail: false
+  - test:
+        name: cephfs_tier1_ops
+        module: cephfs_tier1_ops.py
+        polarion-id: CEPH-83573447
+        desc: cephfs tier1 operations
+        abort-on-fail: false
+  - test:
+        name: cephfs_client_authorize
+        module: client_authorize.py
+        polarion-id: CEPH-83574483
+        desc: client authorize test for cephfs
+        abort-on-fail: false
+  - test:
+      name: cephfs-mdsfailover-pinning-io
+      module: dir_pinning.py
+      config:
+        num_of_dirs: 200
+      polarion-id: CEPH-11227
+      desc: MDSfailover on active-active mdss,performing client IOs with no pinning at the first,later pin 10 dirs with IOs
+      abort-on-fail: false
+  - test:
+      name: cephfs subvolume authorize test
+      desc: Test cephfs subvolume client authorize
+      module: subvolume_authorize.py
+      polarion-id: CEPH-83574596
+      abort-on-fail: false
+  - test:
+      name: Clone Operations
+      module: bug-1980920.py
+      desc: Cancel the clone operation and validate error message
+      polarion-id: CEPH-83574681
+      abort-on-fail: false
+  - test:
+       name: Files-quota-test
+       module: quota.quota_files.py
+       polarion-id: CEPH-83573399
+       desc: Tests the file attributes on the directory
+       abort-on-fail: false
+  - test:
+       name: Bytes-quota-test
+       module: quota.quota_bytes.py
+       polarion-id: CEPH-83573399
+       desc: Tests the Byte attr

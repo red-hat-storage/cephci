@@ -1,0 +1,12 @@
+- name: Login to the image registry using url and credentials
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Login to image registry
+      cephadm_registry_login:
+        docker: "{{ docker | default(False) }}"
+        registry_url: "{{ registry_url }}"
+        registry_username: "{{ registry_username }}"
+        registry_password: "{{ registry_password }}"

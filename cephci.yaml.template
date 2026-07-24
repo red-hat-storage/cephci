@@ -1,0 +1,110 @@
+# Provide report-portal details
+
+# report-portal:
+#  endpoint: http://<hostname>:<port>
+#  project: <project_name>
+#  token: <user_token>
+
+# Provide polarion credentials
+
+# polarion:
+#  endpoint: <polarion_url>
+#  username: <polarion_user_name>
+#  password: <polarion_password>
+
+# Some test suites require a CDN login in order to pull packages from CDN
+# and also to pull GA'd images from registry.redhat.io.
+# For example, cephadm requires the prometheus images from
+# registry.redhat.io, so you must fill out the cdn_credentials section to run
+# the cephadm suites:
+
+# cdn_credentials:
+#  username: <user_name>
+#  password: <user_password>
+
+# Provide stage_credentials before running suites which needs
+# access to rhel and ceph repos that are configured on the staging CDN.
+
+# stage_credentials:
+#  username: <user_name>
+#  password: <user_password>
+
+# Provide container registry details for redhat and ibm images. Registry keyword should
+# start with 'rh' for redhat and 'ibm' for IBM builds
+
+# rh_registry_credentials:
+#  registry: <registry_url>
+#  username: <user_name>
+#  password: <user_password>
+
+# ibm_registry_credentials:
+#  registry: <registry_url>
+#  username: <user_name>
+#  password: <user_password>
+
+# Provide email address(es) in comma-seperated values
+# Example., address: email1, email2, ...... ,emailn
+# To completely disable all email, remove the "email:" and "address:" settings
+# entirely.
+
+# email:
+#  address: cephci@redhat.com
+
+# Provide IBM Cloud Object Storage API Key for uploading objects.
+# cos:
+#  api-key: <service-or-user-api-key>
+#  endpoint: <resource-public-endpoint>
+#  resource-id: <deployed-instance-resource-id>
+#  location-constraint: <storage-class>
+
+# Provide IBM Cloud API Key
+# This key is used for IBM IAM authentication in test scenarios.
+# ibm_cloud:
+#  api-key: <ibm-cloud-api-key>
+
+# [Depricated] URI to be used for retrieving the RHCS build details
+# build-url: <URI to fileserver>
+
+# Datacenter to be used for retrieving build details
+# datacenter: any of ["eu-de", "redhat", "tucson"]
+
+# Web based location to retrieve root CA key and cert
+root-ca-location: <URL to base location of rootCA cert>
+
+# Provide upstream and downstream RHEL or other repositories to be enabled
+# repos:
+#     local:
+#         rhel-9
+#         - <appstream>
+#         - <base-os>
+#         rhel-8
+#         - <appstream>
+#         - <base-os>
+#
+#     cdn:
+#         rhel-9
+#         - <appstream>
+#         - <base-os>
+#         rhel-8
+#         - <appstream>
+#         - <base-os>
+#
+#     stage:
+#         rhel-9
+#         - <appstream>
+#         - <base-os>
+#         rhel-8
+#         - <appstream>
+#         - <base-os>
+
+
+# Container Registry information
+# ===============================
+# registries:
+#   regsitry-1:
+#     user: user1
+#     password: password1
+#   registry-2:
+#     user: user2
+#     password: password2
+#   ...

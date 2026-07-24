@@ -1,0 +1,177 @@
+# RGW build evaluation
+#
+# This test suite is auto triggered via the Jenkins pipeline to determine if the
+# newly available binary of upstream meets the minimum acceptance criteria set forth by
+# the Object QE FG team.
+#
+# The following evaluations are carried out
+# - Build can be deployed using CephADM
+# - The cluster health is good
+# - End users can perform object operations.
+
+# Upstream sanity test suite for RGW daemon.
+# conf : conf/5-node-cluster-1-client-with-1-rgw.yaml
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  # Testing stage
+
+  - test:
+      name: Parallel run
+      desc: RGW tier-1 parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with delete
+            module: sanity_rgw.py
+            name: Test delete using M buckets with N objects
+            polarion-id: CEPH-14237
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+              install_common: false
+              run-on-haproxy: true
+            desc: test to create "M" no of buckets and "N" no of objects with download
+            module: sanity_rgw.py
+            name: Test download with M buckets with N objects
+            polarion-id: CEPH-14237
+
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+              install_common: false
+              run-on-rgw: true
+            desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+            module: sanity_rgw.py
+            name: Test multipart upload of M buckets with N objects
+            polarion-id: CEPH-9801
+        - test:
+            name: test_bi_purge for a bucket
+            desc: test bi_purge should not error
+            module: sanity_rgw.py
+            polarion-id: CEPH-83575234
+            config:
+              install_common: false
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_bi_purge.yaml
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests for Prefix filter and versioned buckets
+      desc: Test object transition for Prefixand versioned buckets
+      polarion-id: CEPH-83574050 # also applies to CEPH-83574049, CEPH-83574053
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_prefix_rule.yaml
+  - test:
+      name: S3CMD small and multipart object download
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+
+  - test:
+      name: Indexless buckets
+      desc: Indexless (blind) buckets
+      polarion-id: CEPH-10354 # also applies to CEPH-10357
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_indexless_buckets.py
+        config-file-name: test_indexless_buckets_s3.yaml

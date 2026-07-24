@@ -1,0 +1,116 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.1.172.0/22']
+      nodes:
+        - hostname: folio01.ceph.redhat.com
+          ip: 10.1.172.221
+          id: node1
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+            - crash
+        - hostname: folio02.ceph.redhat.com
+          ip: 10.1.172.222
+          id: node2
+          role:
+            - osd
+            - mon
+            - mgr
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sbd
+            - /dev/sbe
+        - hostname: folio03.ceph.redhat.com
+          ip: 10.1.172.223
+          id: node3
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sbd
+            - /dev/sbe
+        - hostname: folio04.ceph.redhat.com
+          ip: 10.1.172.224
+          id: node4
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sbd
+            - /dev/sbe
+        - hostname: folio05.ceph.redhat.com
+          ip: 10.1.172.225
+          id: node5
+          role:
+            - osd
+            - rgw
+            - mds
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sbd
+            - /dev/sbe
+        - hostname: folio09.ceph.redhat.com
+          ip: 10.1.172.229
+          id: node6
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sbd
+            - /dev/sbe
+        - hostname: folio10.ceph.redhat.com
+          ip: 10.1.172.230
+          id: node7
+          role:
+            - mon
+            - mgr
+            - node-exporter
+            - alertmanager
+            - crash
+        - hostname: folio13.ceph.redhat.com
+          ip: 10.1.172.233
+          id: node8
+          role:
+            - osd
+            - mds
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sbd
+            - /dev/sbe
+        - hostname: <>
+          ip: <>
+          id: node9
+          role:
+            - client
+        - hostname: <>
+          ip: <>
+          id: node10
+          role:
+            - client
+        - hostname: <>
+          ip: <>
+          id: node11
+          role:
+            - client
+        - hostname: <>
+          ip: <>
+          id: node12
+          role:
+            - client

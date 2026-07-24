@@ -1,0 +1,205 @@
+#
+# Objective: Test RHCS-5.3 fixes
+# 1.Test empty bucket notifications with kafka endpoint
+#       - with ack_type broker
+#       - w/o persistent flag
+# 2. Test bi purge for a bucket
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+
+      # kafka broker type with empty bucket notifcation
+  - test:
+      name: Parallel run test for empty bucket notification and bi purge
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: test bucket notifcation with empty configuration
+            desc: verify empty bucket notification deletes the existing configuration
+            module: sanity_rgw.py
+            polarion-id: CEPH-83575035
+            config:
+              run-on-rgw: true
+              install_common: false
+              extra-pkgs:
+                - jdk
+              git_clone_configs_repo: true
+              install_start_kafka: true
+              script-name: test_bucket_notifications.py
+              config-file-name: test_empty_bucket_notification_kafka_broker.yaml
+        - test:
+            name: test_bi_purge for a bucket
+            desc: test bi_purge should not error
+            module: sanity_rgw.py
+            polarion-id: CEPH-83575234
+            config:
+              install_common: false
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_bi_purge.yaml
+ # STS tests
+  - test:
+      name: Test rename of large object using sts user through AWS
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+  - test:
+      name: Test s3_copy_obj on user with admin flag through AWS
+      desc: TESCO-Segfault with s3CopyObj with admin user
+      polarion-id: CEPH-83575562
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_s3copyObj_admin_user.yaml
+
+ # testing rgw through curl
+  - test:
+      name: Test rgw through CURL
+      desc: Test rgw through CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
+
+  - test:
+      name: Test rgw put object through curl using transfer_encoding chunked
+      desc: Test rgw put object through curl using transfer_encoding chunked
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_curl_transfer_encoding_chunked.yaml
+
+  - test:
+      name: Test rgw multipart upload through curl
+      desc: Test rgw multipart upload through curl
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_curl_multipart_upload.yaml
+
+  - test:
+      name: Test rgw put bucket website with users of same and different tenant
+      desc: Test rgw put bucket website with users of same and different tenant
+      polarion-id: CEPH-11148
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
+
+  - test:
+      name: Test rgw get bucket website with users of same and different tenant
+      desc: Test rgw get bucket website with users of same and different tenant
+      polarion-id: CEPH-11150
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_get_bucket_website_with_tenant_same_and_different_user.yaml

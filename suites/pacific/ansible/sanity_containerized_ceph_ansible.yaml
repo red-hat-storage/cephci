@@ -1,0 +1,47 @@
+tests:
+   - test:
+       name: install ceph pre-requisites
+       module: install_prereq.py
+       abort-on-fail: true
+
+   - test:
+        name: containerized ceph ansible
+        polarion-id: CEPH-83571503
+        module: test_ansible.py
+        config:
+          is_mixed_lvm_configs: True
+          ansi_config:
+              ceph_test: True
+              ceph_origin: distro
+              ceph_stable_release: pacific
+              ceph_repository: rhcs
+              osd_scenario: lvm
+              osd_auto_discovery: False
+              ceph_stable: True
+              ceph_stable_rh_storage: True
+              ceph_docker_image: rhceph/rhceph-3-rhel7
+              ceph_docker_image_tag: latest
+              containerized_deployment: true
+              ceph_docker_registry: registry.access.redhat.com
+              copy_admin_key: true
+              dashboard_enabled: False
+              ceph_conf_overrides:
+                  global:
+                    osd_pool_default_pg_num: 64
+                    osd_default_pool_size: 2
+                    osd_pool_default_pgp_num: 64
+                    mon_max_pg_per_osd: 1024
+                  mon:
+                    mon_allow_pool_delete: true
+                  client:
+                    rgw crypt require ssl: false
+                    rgw crypt s3 kms encryption keys: testkey-1=YmluCmJvb3N0CmJvb3N0LWJ1aWxkCmNlcGguY29uZgo=
+                      testkey-2=aWIKTWFrZWZpbGUKbWFuCm91dApzcmMKVGVzdGluZwo=
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "8"
+                - name: "cephfs_metadata"
+                  pgs: "8"
+        desc: osd with collocated journal
+        destroy-cluster: False
+        abort-on-fail: true

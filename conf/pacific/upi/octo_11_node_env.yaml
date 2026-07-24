@@ -1,0 +1,144 @@
+# Cluster for Baremetal environment.
+# The below defined cluster has 11 nodes.
+# Cluster configuration:
+#      3 MONS, 2 MGR, 6 OSD, 2 MDS, 1 RGW service daemon(s)
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: magna064
+          id: node1
+          ip: 10.8.128.64
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - mds
+        -
+          hostname: magna065
+          id: node2
+          ip: 10.8.128.65
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - mds
+        -
+          hostname: magna067
+          id: node3
+          ip: 10.8.128.67
+          root_password: passwd
+          role:
+            - mon
+            - grafana
+        -
+          hostname: cali015
+          id: node4
+          ip: 10.8.130.15
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali016
+          id: node5
+          ip: 10.8.130.16
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali017
+          id: node6
+          ip: 10.8.130.17
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali018
+          id: node7
+          ip: 10.8.130.18
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali019
+          id: node8
+          ip: 10.8.130.19
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/nvme0n1
+        -
+          hostname: cali020
+          id: node9
+          ip: 10.8.130.20
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: magna068
+          id: node10
+          ip: 10.8.128.68
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: magna073
+          id: node11
+          ip: 10.8.128.73
+          root_password: passwd
+          role:
+            - client

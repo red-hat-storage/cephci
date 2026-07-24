@@ -1,0 +1,22 @@
+- name: Set ceph config "option" to "value"
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  vars:
+    value: "{{ value }}"
+  tasks:
+    - name: Set ceph config
+      ceph_config:
+        action: set
+        who: "{{ who }}"
+        option: "{{ option }}"
+        value: "{{ value }}"
+
+    - name: Validate ceph config
+      ceph_config:
+        action: get
+        who: "{{ who }}"
+        option: "{{ option }}"
+      register: result
+      failed_when: (value | string | lower) != (result.stdout | lower)

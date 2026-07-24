@@ -1,0 +1,11 @@
+{
+  "auths": {
+    "registry.redhat.io": {
+      "auth": "base64_encoded_username:password"
+    },
+    "registry.stage.redhat.io": {
+      "auth": "base64_encoded_username:password"
+    }
+  }
+}
+

@@ -1,0 +1,98 @@
+#
+# Objective: Test quota management
+#       - bucket quota max objects
+#       - bucket quota max size
+#       - user quota max objects
+#       - user quota max size
+#
+tests:
+  - test:
+      name: install ceph pre-requisities
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: ceph ansible
+      module: test_ansible.py
+      config:
+        ansi_config:
+          ceph_test: True
+          ceph_origin: distro
+          ceph_repository: rhcs
+          osd_scenario: lvm
+          osd_auto_discovery: False
+          journal_size: 1024
+          ceph_stable: True
+          ceph_stable_rh_storage: True
+          fetch_directory: ~/fetch
+          copy_admin_key: true
+          dashboard_enabled: true
+          dashboard_admin_user: admin
+          dashboard_admin_password: p@ssw0rd
+          grafana_admin_user: admin
+          grafana_admin_password: p@ssw0rd
+          node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+          grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+          prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+          alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+          ceph_conf_overrides:
+            global:
+              osd_pool_default_pg_num: 64
+              osd_default_pool_size: 2
+              osd_pool_default_pgp_num: 64
+              mon_max_pg_per_osd: 1024
+      desc: test cluster setup using ceph-ansible
+      polarion-id: CEPH-83571467
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: True
+      desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
+
+  # Testing stage
+
+  - test:
+      config:
+        script-name: test_quota_management.py
+        config-file-name: test_quota_bucket_max_objects.yaml
+        timeout: 300
+      desc: test bucket quota max objects
+      module: sanity_rgw.py
+      name: test bucket quota max objects
+      polarion-id: CEPH-83575330
+
+  - test:
+      config:
+        script-name: test_quota_management.py
+        config-file-name: test_quota_bucket_max_size.yaml
+        timeout: 300
+      desc: test bucket quota max size
+      module: sanity_rgw.py
+      name: test bucket quota max size
+      polarion-id: CEPH-83575330
+
+  - test:
+      config:
+        script-name: test_quota_management.py
+        config-file-name: test_quota_user_max_objects.yaml
+        timeout: 300
+      desc: test user quota max objects
+      module: sanity_rgw.py
+      name: test user quota max objects
+      polarion-id: CEPH-83575330
+
+  - test:
+      config:
+        script-name: test_quota_management.py
+        config-file-name: test_quota_user_max_size.yaml
+        timeout: 300
+      desc: test user quota max size
+      module: sanity_rgw.py
+      name: test user quota max size
+      polarion-id: CEPH-83575330

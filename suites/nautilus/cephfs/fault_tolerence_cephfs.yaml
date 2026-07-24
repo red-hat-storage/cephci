@@ -1,0 +1,59 @@
+---
+#=======================================================================================================================
+# Tier-level: 4
+# Test-Suite: fault_tolerence_cephfs
+# Conf file : conf/nautilus/cephfs/tier_0_fs.yaml
+# Description - This test suite contains tests which covers resiliency, Fault tolerence, recovery, data corruption
+# Test-Case Covered:
+# CEPH-83574833 - Performace test for file write_sync() on cephfs kernel mount
+#=======================================================================================================================
+tests:
+  - test:
+      name: install ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+     name: ceph ansible
+     module: test_ansible.py
+     config:
+       ansi_config:
+           ceph_test: True
+           ceph_origin: distro
+           ceph_repository: rhcs
+           osd_scenario: lvm
+           osd_auto_discovery: False
+           journal_size: 1024
+           ceph_stable: True
+           ceph_stable_rh_storage: True
+           fetch_directory: ~/fetch
+           copy_admin_key: true
+           dashboard_enabled: False
+           ceph_conf_overrides:
+               global:
+                 osd_pool_default_pg_num: 64
+                 osd_default_pool_size: 2
+                 osd_pool_default_pgp_num: 64
+                 mon_max_pg_per_osd: 1024
+               mon:
+                 mon_allow_pool_delete: true
+                 debug mon: 5
+               mds:
+                 mds_bal_split_size: 100
+                 mds_bal_merge_size: 5
+                 mds_bal_fragment_size_max: 10000
+                 debug mds: 5
+           cephfs_pools:
+             - name: "cephfs_data"
+               pgs: "8"
+             - name: "cephfs_metadata"
+               pgs: "8"
+     desc: test cluster setup using ceph-ansible
+     destroy-cluster: False
+     abort-on-fail: true
+  - test:
+      name: Performace test for file write+fsync on cephfs kernel mount
+      module: bug-2053724.py
+      polarion-id: CEPH-83574833
+      desc: Performace test for file write+fsync on cephfs kernel mount
+      abort-on-fail: false

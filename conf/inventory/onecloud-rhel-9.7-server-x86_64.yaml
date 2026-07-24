@@ -1,0 +1,16 @@
+---
+# RedHat Enterprise Linux 9.7
+# image_id: Get from OneCloud API (GET /vm/images) - replace placeholder
+# OneCloud ignores userData; bootstrap is done via subprocess SSH in ceph.py
+version_id: 9.7
+id: rhel
+instance:
+  create:
+    image_id: 26  # Replace with actual ID from OneCloud portal
+    projectID: 21
+    site: POK
+    groupID: 1
+    VLAN: 2231
+    resources: medium  # Profiles: small | medium | large
+    arch: x86_64
+    os: RHEL

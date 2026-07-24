@@ -1,0 +1,167 @@
+#===============================================================================================
+#----- Ceph code changes in 5.2 ------
+# Tier-level: 1
+# Test-Suite: test-raw_osd-deployment.yaml
+#
+# Cluster Configuration:
+#   cephci/conf/pacific/cephadm/tier-1_5node_cephadm_bootstrap.yaml
+#
+# Test steps:
+#   (1) Bootstrap cluster with options,
+#       - skip-monitoring-stack
+#       - orphan-initial-daemons
+#       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
+#       - initial-dashboard-user: admin123
+#       - initial-dashboard-password: admin@123,
+#       - registry-json: registry.json
+#       - apply-spec: <list of service specification containing multiple admin nodes, mon, mgr, raw osd and rgw deployment>
+#       - ssh-user: <ssh user name>
+#       - ssh-public-key: <path to the custom ssh public key file>
+#       - ssh-private-key: <path to the custom ssh private key file>
+#       - mon-ip: <monitor IP address: Required>
+#    (2) Apply raw mode OSD service
+#    (3) Run IOs
+#    (4) Remove raw mode OSD
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap with apply-spec option.
+      desc: bootstrap with apply-spec option.
+      module: test_bootstrap.py
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          orphan-initial-daemons: true
+          ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
+          apply-spec:
+            - service_type: host
+              address: true
+              labels:
+                - admin
+                - mgr
+                - alertmanager
+              nodes:
+                - node1
+                - node2
+                - node3
+            - service_type: mon
+              placement:
+                nodes:
+                  - node1
+                  - node2
+                  - node3
+            - service_type: mgr
+              placement:
+                label: mgr
+            - service_type: prometheus
+              placement:
+                count: 1
+                nodes:
+                  - node1
+            - service_type: grafana
+              placement:
+                nodes:
+                  - node1
+            - service_type: alertmanager
+              placement:
+                count: 2
+                label: alertmanager
+            - service_type: node-exporter
+              placement:
+                host_pattern: "*"
+            - service_type: crash
+              placement:
+                host_pattern: "*"
+            - service_type: osd
+              service_id: osd_first_node
+              placement:
+                nodes:
+                  - node1
+              spec:
+                data_devices:
+                  all: "true"
+                encrypted: "true"                     # boolean as string
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Cephadm support for raw mode OSDs using CLI
+      desc: Add raw osd on node2
+      module: test_daemon.py
+      polarion-id: CEPH-83574990
+      config:
+        command: add
+        service: osd
+        pos_args:
+          - "node2"
+          - "/dev/vdb"
+        args:
+          method: raw
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Cephadm support for raw mode OSDs using spec file
+      desc: Add raw OSD services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574991
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: raw_osd
+                  method: raw
+                  placement:
+                    nodes:
+                      - node3
+                      - node4
+                  spec:
+                    data_devices:
+                      all: "true"
+                    encrypted: "true"                     # boolean as string
+  - test:
+      name: Run IOs on the cluster
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+        - test:
+            name: rbd-io
+            module: rbd_faster_exports.py
+            config:
+              io-total: 100M
+            desc: Perform export during read/write,resizing,flattening,lock operations
+      desc: Running i/o's parallelly
+  - test:
+      name: Remove OSD daemon
+      desc: Remove single OSD daemon from the cluster
+      module: test_osd.py
+      config:
+        command: rm
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - 1
+      destroy-cluster: false
+      abort-on-fail: true

@@ -1,0 +1,11 @@
+- name: Set a service state using ceph orch daemon
+  hosts: installer
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Set the service to given state
+      ceph_orch_daemon:
+        state: "{{ state }}"
+        daemon_id: "{{ daemon_id }}"
+        daemon_type: "{{ daemon_type }}"

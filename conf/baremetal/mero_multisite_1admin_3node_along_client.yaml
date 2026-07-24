@@ -1,0 +1,253 @@
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: mero016
+          ip: 10.8.129.236
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero002
+          ip: 10.8.129.222
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero003
+          ip: 10.8.129.223
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero004
+          ip: 10.8.129.224
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - client
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero006
+          ip: 10.8.129.226
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero008
+          ip: 10.8.129.228
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+
+  - ceph-cluster:
+      name: ceph-sec
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        - hostname: mero005
+          ip: 10.8.129.225
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+        - hostname: mero009
+          ip: 10.8.129.229
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero011
+          ip: 10.8.129.231
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+        - hostname: mero013
+          ip: 10.8.129.233
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - client
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+        - hostname: mero010
+          ip: 10.8.129.230
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl
+        - hostname: mero012
+          ip: 10.8.129.232
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/sdl

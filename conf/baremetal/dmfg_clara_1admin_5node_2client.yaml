@@ -1,0 +1,103 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.8.128.0/21
+      nodes:
+        - hostname: clara002
+          id: node1
+          ip: 10.8.129.2
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - mds
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: clara003
+          id: node2
+          ip: 10.8.129.3
+          role:
+            - mgr
+            - mds
+            - mon
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: clara004
+          id: node3
+          ip: 10.8.129.4
+          role:
+            - mgr
+            - mds
+            - mon
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: clara005
+          id: node4
+          ip: 10.8.129.5
+          role:
+            - osd
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: clara006
+          id: node5
+          ip: 10.8.129.6
+          role:
+            - osd
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: clara007
+          id: node6
+          ip: 10.8.129.7
+          role:
+            - osd
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        - hostname: clara009
+          id: node7
+          ip: 10.8.129.9
+          root_password: passwd
+          role:
+            - client
+        - hostname: clara010
+          id: node8
+          ip: 10.8.129.10
+          root_password: passwd
+          role:
+            - client

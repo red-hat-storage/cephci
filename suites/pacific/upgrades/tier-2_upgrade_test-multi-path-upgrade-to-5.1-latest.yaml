@@ -1,0 +1,84 @@
+# Upgrade: Multihop upgrade evaluation
+#
+# Conf: conf/pacific/upgrades/5-0_upgrades.yaml
+#
+# This test suite is used to test upgrades from all previous ceph release versions
+# to the latest 5.x version. We start from RHCS 4 and install a CDN cluster
+# then proceed with upgrading to every released version after that
+# finally upgrading the cluster to the latest 5.x version selected from the CLI
+# using the configuration given in the suite
+#
+
+# RHCS 5.x multihop upgrade test suite.
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    abort-on-fail: True
+
+- test:
+    name: upgrade the RHCS cluster based on the path specified
+    polarion-id: "CEPH-83575288"
+    module: test_upgrade.py
+    config:
+      paths:
+        4.2:
+          config:
+            ansi_config:
+              osd_scenario: lvm
+              osd_auto_discovery: False
+              copy_admin_key: True
+              dashboard_enabled: True
+              dashboard_admin_user: admin
+              dashboard_admin_password: p@ssw0rd
+              grafana_admin_user: admin
+              grafana_admin_password: p@ssw0rd
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "32"
+                - name: "cephfs_metadata"
+                  pgs: "32"
+        4.3:
+          config:
+            ansi_config:
+              osd_scenario: lvm
+              osd_auto_discovery: False
+              copy_admin_key: True
+              dashboard_enabled: True
+              dashboard_admin_user: admin
+              dashboard_admin_password: p@ssw0rd
+              grafana_admin_user: admin
+              grafana_admin_password: p@ssw0rd
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "32"
+                - name: "cephfs_metadata"
+                  pgs: "32"
+          upgrade_steps:
+            step:
+              command: upgrade_all
+        5.1:
+          config:
+            verify_cephadm_containers: True
+            ansi_config:
+              osd_scenario: lvm
+              osd_auto_discovery: False
+              copy_admin_key: True
+              dashboard_enabled: True
+              dashboard_admin_user: admin
+              dashboard_admin_password: p@ssw0rd
+              grafana_admin_user: admin
+              grafana_admin_password: p@ssw0rd
+              containerized_deployment: True
+              upgrade_ceph_packages: True
+              cephfs_pools:
+                - name: "cephfs_data"
+                  pgs: "32"
+                - name: "cephfs_metadata"
+                  pgs: "32"
+          upgrade_steps:
+            step:
+              command: upgrade_all
+    desc: deploy ceph setup using ceph-ansible for RHCS 4.2 and upgrade following the path 4.2 -> 4.3 -> 5.1
+    destroy-cluster: False
+    abort-on-fail: True

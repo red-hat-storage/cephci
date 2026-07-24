@@ -1,0 +1,384 @@
+# Use cluster-conf file: conf/tentacle/rados/3AZ-cluster-rhos-1.yaml
+# 3 AZ cluster deployment tests
+# can be part of regression/weekly
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83609796
+      clusters:
+        ceph-pri:
+          config:
+            command: bootstrap
+            base_cmd_args:
+              verbose: true
+            args:
+              mon-ip: node1
+              platform: rhel-9
+              ssh-user: cephuser
+              apply-spec:
+                - service_type: host
+                  address: true
+                  labels: apply-all-labels
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+                  location:
+                    root: default
+                    datacenter: DC1
+                - service_type: host
+                  address: true
+                  labels: apply-all-labels
+                  nodes:
+                    - node4
+                    - node5
+                    - node6
+                  location:
+                    root: default
+                    datacenter: DC2
+                - service_type: host
+                  address: true
+                  labels: apply-all-labels
+                  nodes:
+                    - node7
+                    - node8
+                    - node9
+                  location:
+                    root: default
+                    datacenter: DC3
+                - service_type: mon
+                  spec:
+                    crush_locations:
+                      node1:
+                        - datacenter=DC1
+                      node2:
+                        - datacenter=DC1
+                      node3:
+                        - datacenter=DC1
+                      node4:
+                        - datacenter=DC2
+                      node5:
+                        - datacenter=DC2
+                      node6:
+                        - datacenter=DC2
+                      node7:
+                        - datacenter=DC3
+                      node8:
+                        - datacenter=DC3
+                      node9:
+                        - datacenter=DC3
+                  placement:
+                    label: mon
+                - service_type: mgr
+                  placement:
+                    label: mgr
+      destroy-cluster: false
+      abort-on-fail: false
+
+  - test:
+      name: Service deployment with spec
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      clusters:
+        ceph-pri:
+          config:
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: osd
+                      service_id: all-available-devices
+                      placement:
+                        label: osd
+                      spec:
+                        data_devices:
+                          all: "true" # boolean as string
+              - config:
+                  command: shell
+                  args: # display OSD tree
+                    - "ceph osd tree"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      clusters:
+        ceph-pri:
+          config:
+            steps:
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri
+                  args:
+                    placement:
+                      label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1 # client Id (<type>.<Id>)
+            node: node10
+            install_packages:
+              - ceph-common
+              - ceph-base
+            copy_admin_keyring: true # Copy admin keyring to node
+            caps: # authorize client capabilities
+              mon: "allow *"
+              osd: "allow *"
+              mds: "allow *"
+              mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      clusters:
+        ceph-pri:
+          config:
+            log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Config checks
+      module: rados_prep.py
+      polarion-id: CEPH-83574529
+      clusters:
+        ceph-pri:
+          config:
+            cluster_configuration_checks:
+              configure: true
+              disable_check_list:
+                - osd_mtu_size
+                - osd_linkspeed
+                - kernel_security
+              enable_check_list:
+                - kernel_security
+                - osd_linkspeed
+      desc: Enable Cluster Configuration checks
+
+  # RHOS-d run duration: 8 mins
+  - test:
+      name: autoscaler flags
+      module: test_pg_autoscale_flag.py
+      polarion-id: CEPH-83574794
+      clusters:
+        ceph-pri:
+          config:
+            pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+            create_ec_pool: true
+            create_re_pool: true
+      desc: verify autoscaler flags functionality
+  #      comments: "Active bug 2361441"
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec01 k=4 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec01"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec
+                  args:
+                    placement:
+                      nodes:
+                        - node7
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83575222
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node8
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph orch restart {service_name:shared.pri}"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node7}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
+              - "ceph orch restart {service_name:shared.sec}"
+      desc: Setting up RGW multisite replication environment
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+  - test:
+      name: Enable Stretch mode on all the pools of primary
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      clusters:
+        ceph-pri:
+          config:
+            enable_3AZ_stretch_pools:
+              pool_name: test-pool-11
+              stretch_bucket: datacenter
+              rule_name: 3az_rule
+      desc: Enable 3 AZ stretch mode on all pools of the primary cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on primary
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on secondary
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+      desc: create non-tenanted user
+      polarion-id: CEPH-83575199
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+
+  - test:
+      name: multipart upload on primary
+      desc: test_Mbuckets_with_Nobjects_multipart on primary
+      polarion-id: CEPH-14265
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            verify-io-on-site: ["ceph-sec"]
+            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml

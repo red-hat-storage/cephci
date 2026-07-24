@@ -1,0 +1,48 @@
+# 5 node Ceph cluster's with 2 COS Bench nodes for testing.
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - osd
+          - rgw
+
+      node5:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - osd
+
+      node6:
+        role:
+          - client
+
+      node7:
+        role:
+          - client

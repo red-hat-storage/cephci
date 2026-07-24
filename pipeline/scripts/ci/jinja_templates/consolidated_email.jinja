@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <style>
+    table.full-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: center;
+        padding: 8px;
+    }
+    table.half-table{
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    .artifacts td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+
+    p { margin:0 }
+    </style>
+</head>
+<body>
+    {% if test_artifacts %}
+    <h3><u>Test Artifacts</u></h3>
+    <table class="artifacts">
+
+    {% if test_artifacts.get("product") %}
+    <tr><td>Product</td><td>{{ test_artifacts.get("product") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("version") %}
+    <tr><td>Version</td><td>{{ test_artifacts.get("version") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("ceph_version") %}
+    <tr><td>Ceph Version</td><td>{{ test_artifacts.get("ceph_version") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("composes") %}
+    <tr><td>Composes</td><td><table>
+    {% for ver, compose in test_artifacts.get("composes").items() %}
+    <tr><td>{{ ver }}</td><td>{{ compose }}</td></tr>
+    {% endfor %}
+    </table></td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("repository") %}
+    <tr><td>Container Image</td><td>{{ test_artifacts.get("repository") }}</td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("buildArtifacts") %}
+    </table><h3><u>Build Artifacts</u></h3><table class="artifacts">
+
+    {% if test_artifacts.get("buildArtifacts").get("composes") %}
+    <tr><td>Build Composes</td><td><table>
+    {% for ver, compose in test_artifacts.get("buildArtifacts").get("composes").items() %}
+    <tr><td>{{ ver }}</td><td>{{ compose }}</td></tr>
+    {% endfor %}
+    </table></td></tr>
+    {% endif %}
+
+    {% if test_artifacts.get("buildArtifacts").get("repository") %}
+    <tr><td>Container Image</td><td>{{ test_artifacts.get("buildArtifacts").get("repository") }}</td></tr>
+    {% endif %}
+
+    {% endif %}
+
+    </table><br />
+    {% endif %}
+
+    <h3><u>Test Execution Details</u></h3>
+    <table class="artifacts">
+    <tr><th>Total Number of Test Cases Executed for the build</th>
+    <th>Total Number of Test Cases Passed</th>
+    <th>Total Number of Test Cases Failed</th>
+    <th>Total Number of Test Cases Skipped</th></tr>
+    <tr><td>{{ test_results["total_tcs"] }}</td><td>{{ test_results["pass_tcs"] }}</td>
+    <td>{{ test_results["fail_tcs"] }}</td><td>{{ test_results["skip_tcs"] }}</td></tr>
+    </table><br/>
+
+    <h3><u>Test Summary</u></h3>
+    {{ test_results["html_body"] }}
+    <br />
+
+    <h4>Consolidated test summary report for all ceph versions is present at
+    <a href=https://docs.engineering.redhat.com/pages/viewpage.action?spaceKey=rhcsqe&title=RHCS+Test+Execution+Summary>
+    RHCS Test Execution Summary</a></h4>
+
+    </body></html>
+
+
+
+</body>
+</html>

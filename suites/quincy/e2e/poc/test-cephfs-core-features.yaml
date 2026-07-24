@@ -1,0 +1,26 @@
+# Placeholder for cephFS functional testing at scale.
+---
+tests:
+  -
+    test:
+      abort-on-fail: false
+      desc: "Deploy MDS with default values using cephadm"
+      module: mds_default_values.py
+      name: "cephfs default values for mds"
+      polarion-id: "CEPH-83574284"
+
+  -
+    test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: "Evaluate cephFS core operations"
+      polarion-id: CEPH-11293
+
+  -
+    test:
+      abort-on-fail: false
+      desc: "Deploy mds using cephA and increase & decrease number of mds"
+      module: mds_inc_dec.py
+      name: "Evaluate crud operations on MDS daemons"
+      polarion-id: CEPH-83574286

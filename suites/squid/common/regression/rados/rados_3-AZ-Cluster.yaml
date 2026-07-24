@@ -1,0 +1,84 @@
+# 3 AZ cluster deployment tests
+# Conf: conf/squid/common/9node-1client-availability-zone.yaml
+# Deployment: suites/squid/common/regression/AZ_cluster_deploy_and_configure.yaml
+tests:
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Enable Stretch mode on pools
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      config:
+        enable_3AZ_stretch_pools:
+          pool_name: test-pool-11
+          stretch_bucket: datacenter
+          rule_name: 3az_rule
+      desc: Enable 3 AZ stretch mode on all pools of the cluster
+
+  - test:
+      name: Upgrade ceph cluster
+      desc: Upgrade cluster to latest version and check health warn
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83609797
+      config:
+        verify_warning: false
+        verify_daemons: true
+        verify_cluster_usage: false
+      abort-on-fail: true
+
+  - test:
+      name: Enable Stretch mode on pool post upgrade
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      config:
+        enable_3AZ_stretch_pools:
+          pool_name: test-pool-12
+          stretch_bucket: datacenter
+          rule_name: 3az_rule
+          pool_list:
+            - test-pool-12
+      desc: Enable 3 AZ stretch mode on new pools of the cluster post upgrade
+
+  - test:
+      name: Site-down Scenarios
+      module: test_stretch_n_az_site_down_scenarios.py
+      polarion-id: CEPH-83609869
+      config:
+        pool_name: test_stretch_pool6
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+      desc: Test stretch site down scenarios in 3 AZ cluster
+
+  - test:
+      name: Maintenance mode Scenarios
+      module: test_stretch_n_az_site_down_scenarios.py
+      polarion-id: CEPH-83609871
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+        scenarios_to_run:
+          - scenario-8
+          - scenario-9
+          - scenario-10
+      desc: Test stretch site maintenance mode scenarios in 3 AZ cluster
+
+  - test:
+      name: Netsplit Scenarios data-data sites
+      module: test_stretch_n-az_netsplit_scenarios.py
+      polarion-id: CEPH-83609870
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        netsplit_site_1: DC1
+        netsplit_site_2: DC3
+        delete_pool: true
+        rule_name: 3az_rule
+      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
+      comments: Bugzilla for feature 2318936, 2316900

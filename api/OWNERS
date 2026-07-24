@@ -1,0 +1,18 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - pranavprakash20
+  - vdas-redhat
+
+reviewers:
+  - sayaleeraut
+  - adityaramteke
+  - vinpapnoi
+  - msainiRedhat
+  - MohitBis
+
+labels:
+  - "RESTful API"
+  - DMFG

@@ -1,0 +1,265 @@
+#===============================================================================================
+# Tier-level: 1
+# Test-Case:
+#      Bootstrap cluster with multiple admin nodes and apply-spec options.
+#      Deploy HA proxy service and verify service disable, enable, restart options.
+#
+# Cluster Configuration:
+#    conf/squid/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#
+#    4-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#     Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana, prometheus, node-exporter
+#     Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter, haproxy
+#     Node3 - Mon, OSD, MDS, RGW, node-exporter, haproxy
+#     Node4 - RGW
+#     Node5 - Client
+#
+# Test steps:
+#   (1) Bootstrap cluster with options,
+#       - skip-monitoring-stack
+#       - orphan-initial-daemons
+#       - fsid : f64f341c-655d-11eb-8778-fa163e914bcc
+#       - initial-dashboard-user: admin123
+#       - initial-dashboard-password: admin@123,
+#       - registry-json: registry.json
+#       - apply-spec: <list of service specification containing multiple admin nodes, mon, mgr, osd and rgw deployment>
+#       - ssh-user: <ssh user name>
+#       - ssh-public-key: <path to the custom ssh public key file>
+#       - ssh-private-key: <path to the custom ssh private key file>
+#       - mon-ip: <monitor IP address: Required>
+#   (2) Copy the provided SSH keys to nodes and Add it to cluster with address and role labels attached to it.
+#   (3) Deploy HA proxy service on node2 and node3 using apply spec option.
+#   (4) Configure client node by adding ceph.conf and keying to node.
+#   (5) Setup S3cmd tool and prepare for RGW IO on client Node.     - TODO
+#   (6) Run IOs from S3cmd tool for 20 mins.                        - TODO
+#   (7) Kernel Mount:                                               - TODO
+#       - Create /mnt/cephfs directory and Mount cephfs on client node.
+#         sudo mount -t ceph 10.8.128.110:6789:/ /mnt/cephfs -o name=client.0,secret=<key>
+#       - using dd command create files on /mnt/cephfs directory.
+#   (8) Disable ha proxy and verify
+#   (9) Enable ha proxy and verify
+#   (10) Restart ha proxy and verify
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      name: Cephadm Bootstrap with multiple admin nodes
+      desc: bootstrap with multiple admin nodes and apply-spec option.
+      module: test_bootstrap.py
+      polarion-id: CEPH-83574674
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          custom_image: true
+          mon-ip: node1
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+          orphan-initial-daemons: true
+          ssh-user: cephuser
+          ssh-public-key: /home/cephuser/.ssh/id_rsa.pub # if ssh-public-key is provided then provide
+          ssh-private-key: /home/cephuser/.ssh/id_rsa # ssh-private-key also else validation fails
+          apply-spec:
+            - service_type: host
+              address: true
+              labels:
+                - admin
+                - mgr
+                - alertmanager
+              nodes:
+                - node1
+                - node2
+                - node3
+            - service_type: mon
+              placement:
+                nodes:
+                  - node1
+                  - node2
+                  - node3
+            - service_type: mgr
+              placement:
+                label: mgr
+            - service_type: prometheus
+              placement:
+                count: 1
+                nodes:
+                  - node1
+            - service_type: grafana
+              placement:
+                nodes:
+                  - node1
+            - service_type: alertmanager
+              placement:
+                count: 2
+                label: alertmanager
+            - service_type: node-exporter
+              placement:
+                host_pattern: "*"
+            - service_type: crash
+              placement:
+                host_pattern: "*"
+            - service_type: osd
+              service_id: all-available-devices
+              encrypted: "true"                     # boolean as string
+              placement:
+                host_pattern: "*"
+              spec:
+                data_devices:
+                  all: "true"                         # boolean as string
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Deploy HA Proxy and RGW
+      desc: Add RGW and HA Proxy services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574030,CEPH-83574653
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin realm create --rgw-realm=east --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin zonegroup create --rgw-zonegroup=asia --master --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin zone create --rgw-zonegroup=asia --rgw-zone=india --master --default"
+          - config:
+              command: shell
+              args:
+                - "radosgw-admin period update --rgw-realm=east --commit"
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: my-rgw
+                  placement:
+                    count_per_host: 2
+                    nodes:
+                      - node2
+                      - node3
+                  spec:
+                    rgw_frontend_port: 8080
+                    rgw_realm: east
+                    rgw_zone: india
+                  extra_container_args:
+                    - "--cpus=1"
+          - config:
+              command: shell
+              args: # sleep to get all services deployed
+                - sleep
+                - "120"
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: ingress
+                  service_id: rgw.my-rgw
+                  placement:
+                    nodes:
+                      - node2
+                      - node3
+                  spec:
+                    backend_service: rgw.my-rgw
+                    virtual_ip: 10.0.208.0/22
+                    frontend_port: 8000
+                    monitor_port: 1967
+  - test:
+      name: Restarting ha proxy service using cephadm
+      desc: Apply Ceph orch restart for all the daemons
+      module: test_orch.py
+      polarion-id: CEPH-83574654
+      config:
+        command: restart
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - "ingress.rgw.my-rgw"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: Configure client
+      desc: Configure client on node5
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node5                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        store-keyring: true               # /etc/ceph/ceph.client.1.keyring
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      name: check-ceph-health on client node5
+      desc: Check for ceph health debug info
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph status"
+  - test:
+      name: disable ha proxy service
+      desc: disable ha proxy service using systemctl commands
+      module: exec.py
+      polarion-id: CEPH-83574655
+      config:
+        sudo: True
+        check_status: True
+        role: haproxy
+        service_name: haproxy
+        commands:
+          - "systemctl disable"
+  - test:
+      name: check-ceph-health and crash status on client node5
+      desc: Check for ceph health and crash status after ha proxy has been disabled
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph status"
+          - "ceph health detail"
+          - "ceph crash stat"
+  - test:
+      name: enable ha proxy service
+      desc: enable ha proxy service using systemctl commands
+      module: exec.py
+      polarion-id: CEPH-83574656
+      config:
+        sudo: True
+        check_status: True
+        role: haproxy
+        service_name: haproxy
+        commands:
+          - "systemctl enable"
+  - test:
+      name: check-ceph-health and crash status on client node5
+      desc: Check for ceph health and crash status after ha proxy has be re-enabled
+      module: exec.py
+      polarion-id: CEPH-83574606
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph status"
+          - "ceph health detail"
+          - "ceph crash stat"

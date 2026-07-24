@@ -1,0 +1,102 @@
+# Physical/Bare-metal environment required for Ceph Nvme-oF.
+# The below defined cluster has 4 nodes + 2 Ceph-Nvmeof node + 1 Client node.
+# Cluster configuration:
+#      3 MONS, 2 MGR, 5 OSD nodes
+#      2 Ceph NVMeoF GW node
+#      1 NVMe initiator nodes
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.130.0/21']
+      nodes:
+        -
+          hostname: cali001
+          id: node1
+          ip: 10.8.130.1
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - osd
+            - mgr
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali004
+          id: node2
+          ip: 10.8.130.4
+          root_password: passwd
+          role:
+            - mon
+            - osd
+            - mgr
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sdf
+            - /dev/sde
+            - /dev/sdh
+            - /dev/nvme0n1
+        -
+          hostname: cali005
+          id: node3
+          ip: 10.8.130.5
+          root_password: passwd
+          role:
+            - mon
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sdf
+            - /dev/sde
+            - /dev/nvme0n1
+        -
+          hostname: cali008
+          id: node4
+          ip: 10.8.130.8
+          root_password: passwd
+          role:
+            - osd
+            - nvmeof-gw
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali010
+          id: node5
+          ip: 10.8.130.10
+          root_password: passwd
+          role:
+            - osd
+            - nvmeof-gw
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sde
+            - /dev/sdg
+            - /dev/nvme0n1
+        -
+          hostname: cali012
+          id: node6
+          ip: 10.8.130.12
+          root_password: passwd
+          role:
+            - client

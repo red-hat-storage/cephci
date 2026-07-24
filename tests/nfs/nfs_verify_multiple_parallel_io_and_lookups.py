@@ -1,0 +1,141 @@
+import time
+from threading import Thread
+
+from nfs_operations import cleanup_cluster, setup_nfs_cluster
+
+from cli.exceptions import ConfigError, OperationFailedError
+from cli.io.io import linux_untar
+from cli.utilities.utils import create_files
+from utility.log import Log
+
+log = Log(__name__)
+
+
+def run(ceph_cluster, **kw):
+    """Verify readdir ops
+    Args:
+        **kw: Key/value pairs of configuration information to be used in the test.
+    """
+    config = kw.get("config")
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
+    clients = ceph_cluster.get_nodes("client")
+
+    port = config.get("port", "2049")
+    version = config.get("nfs_version", "4.0")
+    no_clients = int(config.get("clients", "2"))
+    setup = config.get("setup", True)
+    io = config.get("io", True)
+    cleanup = config.get("cleanup", True)
+    sudo = config.get("sudo", False)
+
+    # If the setup doesn't have required number of clients, exit.
+    if no_clients > len(clients):
+        raise ConfigError("The test requires more clients than available")
+
+    clients = clients[:no_clients]  # Select only the required number of clients
+    nfs_node = nfs_nodes[0]
+    fs_name = "cephfs"
+    nfs_name = "cephfs-nfs"
+    nfs_export = "/export"
+    nfs_mount = "/mnt/nfs"
+    fs = "cephfs"
+    nfs_server_name = nfs_node.hostname
+
+    try:
+        if setup:
+            # Setup nfs cluster
+            setup_nfs_cluster(
+                clients,
+                nfs_server_name,
+                port,
+                version,
+                nfs_name,
+                nfs_mount,
+                fs_name,
+                nfs_export,
+                fs,
+                ceph_cluster=ceph_cluster,
+                enable_rdma=config.get("enable_rdma", False),
+                rdma_port=config.get("rdma_port"),
+            )
+
+        if io:
+            # Linux untar on client 1
+            th1 = Thread(
+                target=linux_untar,
+                args=(
+                    clients[0],
+                    nfs_mount,
+                ),
+            )
+
+            # Do file creation from client 2
+            th2 = Thread(
+                target=create_files,
+                args=(clients[1], nfs_mount, 100),
+                kwargs={"sudo": sudo},
+            )
+
+            th1.start()
+            th2.start()
+
+            # While the IO's are in progress, do the look ups in parallel
+            max_iterations = 1000  # Safety limit
+            iteration = 0
+            try:
+                while (th1.is_alive() or th2.is_alive()) and iteration < max_iterations:
+                    iteration += 1
+                    try:
+                        # Test 1: Perform Linux untar from 1 client and
+                        # do readir operation from other client (ls -lart)
+                        cmd = f"ls -lart {nfs_mount}"
+                        clients[1].exec_command(cmd=cmd, sudo=sudo, timeout=30)
+
+                        # Test 2: Perform Linux untar from 1 client and
+                        # do readir operation from other client (du -sh)
+                        cmd = f"du -sh {nfs_mount}"
+                        clients[2].exec_command(cmd=cmd, sudo=sudo, timeout=30)
+                    except TimeoutError as e:
+                        log.warning(
+                            f"Lookup iteration {iteration} timed out (expected): {e}"
+                        )
+                    except Exception as e:
+                        # Log as warning for expected failures during parallel IO
+                        error_msg = str(e)
+                        if "No such file" in error_msg or "failed" in error_msg.lower():
+                            log.warning(
+                                f"Lookup iteration {iteration} failed (expected): {e}"
+                            )
+                        else:
+                            log.error(
+                                f"Lookup iteration {iteration} failed unexpectedly: {e}"
+                            )
+                            raise
+
+                    time.sleep(0.5)  # Prevent tight loop
+
+                # Wait for threads with timeout
+                th1.join(timeout=300)
+                th2.join(timeout=300)
+
+                if th1.is_alive() or th2.is_alive():
+                    log.error("Threads did not complete within timeout")
+                    raise OperationFailedError("IO threads hung")
+
+            except Exception as e:
+                log.error(f"Parallel IO test failed: {e}")
+                raise
+        return 0
+    except Exception as e:
+        log.error(f"Failed to validate multiple ios and lookups : {e}")
+        return 1
+    finally:
+        if cleanup:
+            log.info("Cleaning up")
+            # Wait for NFS operations to stabilize before cleanup
+            log.info("Waiting 20s for NFS operations to stabilize")
+            time.sleep(20)
+            cleanup_cluster(
+                clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]
+            )
+            log.info("Cleaning up successful")

@@ -1,0 +1,81 @@
+# Upgrade: Multihop upgrade evaluation
+#
+# This test suite is used to test upgrades from all previous ceph release versions
+# to the latest 4.x version. We start from RHCS 3 and install a CDN cluster
+# then proceed with upgrading to every released version after that
+# finally upgrading the cluster to the latest 4.x version selected from the CLI
+# using the configuration given in the suite
+#
+
+# RHCS 4.x multihop upgrade test suite.
+tests:
+- test:
+    name: install ceph pre-requisites
+    module: install_prereq.py
+    abort-on-fail: True
+
+- test:
+    name: upgrade the RHCS cluster based on the path specified
+    polarion-id: ""
+    module: test_upgrade.py
+    config:
+      paths:
+        3.3:
+          config:
+            use_cdn: True
+            build: '3.x'
+            ansi_config:
+              ceph_origin: repository
+              ceph_repository: rhcs
+              ceph_repository_type: cdn
+              ceph_rhcs_version: 3
+              osd_scenario: collocated
+              osd_auto_discovery: False
+              copy_admin_key: True
+        4.2:
+          config:
+            ansi_config:
+              ceph_origin: distro
+              ceph_repository: rhcs
+              osd_scenario: collocated
+              osd_auto_discovery: False
+              ceph_stable: True
+              ceph_stable_rh_storage: True
+              fetch_directory: ~/fetch
+              copy_admin_key: true
+              dashboard_enabled: False
+              upgrade_ceph_packages: True
+              ceph_rhcs_version: 4
+              ceph_iscsi_config_dev: false
+              node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+              grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+              prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+              alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+          upgrade_steps:
+            step:
+              command: upgrade_all
+        4.3:
+          config:
+            ansi_config:
+              ceph_origin: distro
+              ceph_repository: rhcs
+              osd_scenario: collocated
+              osd_auto_discovery: False
+              ceph_stable: True
+              ceph_stable_rh_storage: True
+              fetch_directory: ~/fetch
+              copy_admin_key: true
+              dashboard_enabled: False
+              upgrade_ceph_packages: True
+              ceph_rhcs_version: 4
+              ceph_iscsi_config_dev: false
+              node_exporter_container_image: registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.6
+              grafana_container_image: registry.redhat.io/rhceph/rhceph-4-dashboard-rhel8:4
+              prometheus_container_image: registry.redhat.io/openshift4/ose-prometheus:v4.6
+              alertmanager_container_image: registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.6
+          upgrade_steps:
+            step:
+              command: upgrade_all
+    desc: deploy ceph setup using ceph-ansible and upgrade to the versions specified in paths
+    destroy-cluster: False
+    abort-on-fail: true

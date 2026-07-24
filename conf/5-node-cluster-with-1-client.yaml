@@ -1,0 +1,38 @@
+# System Under Test environment configuration for RBD test suites.
+# Cluster Configuration:
+#    5 Node cluster with 1 client
+#    3 MONS, 2 MGR, 3 OSD and 2 MDS service daemon(s)
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+      node2:
+        role:
+          - mon
+          - mgr
+      node3:
+        role:
+          - mon
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node4:
+        role:
+          - mds
+          - osd
+        no-of-volumes: 3
+        disk-size: 20
+      node5:
+        role:
+          - mds
+          - osd
+        no-of-volumes: 3
+        disk-size: 20
+      node6:
+        role:
+          - client

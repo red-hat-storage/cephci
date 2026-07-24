@@ -1,0 +1,32 @@
+# Sample osp-cred file for AWS (use with: --osp-cred <this-file> --cloud aws)
+# Account: 861790564636  |  IAM user: ceph-sys-test  |  Region: us-east-1
+#
+# SECURITY: Do not commit real access_key/secret_key. Use IAM access keys (not
+# console password). Create keys: IAM → Users → ceph-sys-test → Security credentials → Create access key.
+# Add this file to .gitignore if it contains secrets.
+
+globals:
+  aws-credentials:
+    region: "us-east-1"
+
+    # Existing VPC (project-vpc)
+    vpc_id: "vpc-054602def6d7de9be"
+
+    # Subnet in the VPC (project-subnet-public2-us-east-1b, us-east-1b)
+    subnet_id: "subnet-0702e32252b2102c0"
+
+    # Security group(s) in the VPC (e.g. default or one allowing SSH)
+    security_group_ids:
+      - "sg-xxxxxxxx"
+
+    # EC2 key pair name for SSH to instances
+    key_name: "your-key-pair-name"
+
+    # IAM access keys for ceph-sys-test (required for boto3; create in IAM console)
+    access_key: "AKIAxxxxxxxxxxxxxxxx"
+    secret_key: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+    # Path to private key for SSH (matches key_name)
+    private_key_path: "~/.ssh/your-key.pem"
+
+    # instance_type: "t3.medium"   # optional, default from conf/aws/default.yaml

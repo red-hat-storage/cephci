@@ -1,0 +1,13 @@
+{%- set nlt = "\n  " -%}
+
+{% for host in hosts %}---
+service_type: host
+hostname: {{ host['hostname'] }}
+{%+ if host['address'] -%}addr: {{ host['address'] }}
+{% endif %}
+{%- if host['labels'] -%}labels: {{ host['labels'] }}
+{% endif -%}
+{%- if host['location'] -%}location:
+{%- for key, data in host["location"].items() -%}{{ nlt }}{{ key }}: {{ data }}{% endfor %}
+{% endif -%}
+{% endfor -%}

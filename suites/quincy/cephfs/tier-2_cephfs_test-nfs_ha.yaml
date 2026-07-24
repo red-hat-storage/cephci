@@ -1,0 +1,199 @@
+---
+#=======================================================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_test-nfs_ha.yaml
+# Conf file :
+# Test-Case Covered:
+#  CEPH-83575092: Deploy NFS HA and validate the services are UP.
+#  CEPH-83575088: nfs-ha-create-using-spec-ingress
+#  CEPH-83575196: nfs-ha-failover
+#  CEPH-83575097: Deploy NFS HA on non-default port and perform failover.
+#  CEPH-83575195: nfs-ha-power-off
+#  CEPH-83575096: nfs-ha-node-replacement
+#  CEPH-83575091: nfs-ha-node-services
+#  CEPH-83574009: nfs-ha-snapshot-access
+#  CEPH-83575085: Mount NFS with all supported versions and perform failover
+#  CEPH-83575090: Update the NFS Configuration by adding an additional host on the fly.
+#  CEPH-83575095: Upgrade a Standalone NFS Cluster to an NFS HA Configuration
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      name: nfs-ha-deployment
+      module: cephfs_nfs.test_cephfs_nfs_ha_deployment_cli.py
+      desc: Deploy NFS HA and validate the services are UP.
+      polarion-id: CEPH-83575092
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-create-using-spec-ingress
+      module: cephfs_nfs.nfs_ha_create_using_spec_ingress.py
+      desc: nfs-ha-create-using-spec-ingress
+      polarion-id: CEPH-83575088
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-failover
+      module: cephfs_nfs.test_cephfs_nfs_ha_failover.py
+      desc: nfs-ha-failover
+      polarion-id: CEPH-83575196
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-deployment_on_non_default_port_and_perform_failover
+      module: cephfs_nfs.test_cephfs_nfs_ha_deployment_with_non_default_port.py
+      desc: Deploy NFS HA on non default port and perform failover.
+      polarion-id: CEPH-83575097
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-power-off
+      module: cephfs_nfs.test_cephfs_nfs_ha_active_power_off.py
+      desc: nfs-ha-power-off
+      polarion-id: CEPH-83575195
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-node-replacement
+      module: cephfs_nfs.test_cephfs_nfs_ha_node_replacement.py
+      desc: nfs-ha-node-replacement
+      polarion-id: CEPH-83575096
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-node-services
+      module: cephfs_nfs.test_cephfs_nfs_ha_keeplive_services.py
+      desc: nfs-ha-node-services
+      polarion-id: CEPH-83575091
+      abort-on-fail: false
+  - test:
+      name: nfs-ha-snapshot-access
+      module: cephfs_nfs.test_cephfs_nfs_ha_snapshot_access.py
+      desc: nfs-ha-snapshot-access
+      polarion-id: CEPH-83574009
+      abort-on-fail: false
+  - test:
+      name: perform-failover-with-mounts-on-all-supported-nfs-versions
+      module: cephfs_nfs.test_all_nfs_vers_mount_and_perform_failover.py
+      desc: Mount nfs with all supported versions and perform failover
+      polarion-id: CEPH-83575085
+      abort-on-fail: false
+  - test:
+      name: modification_of_nfs_ha_configuration
+      module: cephfs_nfs.nfs_ha_spec_file_add_host_while_IOs.py
+      desc: Update the NFS Configuraion by adding an additional host on the fly.
+      polarion-id: CEPH-83575090
+      abort-on-fail: false
+  - test:
+      name: upgrade_standalone_NFS_Cluster_to_NFS_HA_Cluster
+      module: cephfs_nfs.test_cephfs_upgrade_nfs_standalone_to_nfs_ha_cluster.py
+      desc: Upgrade a Standalone NFS Cluster to a NFS HA Configuration
+      polarion-id: CEPH-83575095
+      abort-on-fail: false
+
