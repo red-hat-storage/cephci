@@ -365,3 +365,15 @@ tests:
         erasure_coded_pool: true
         ec_k: 2
         ec_m: 2
+
+  - test:
+      name: ok-to-upgrade-negative-scenarios
+      desc: >-
+        Negative scenarios for ceph osd ok-to-upgrade - missing params,
+        invalid bucket type/name, version format validation, max < 0,
+        convergence factor boundary values (0.0, 1.0), empty bucket
+      module: test_ok_to_upgrade.py
+      polarion-id: CEPH-83632279
+      config:
+        scenarios:
+          - negative

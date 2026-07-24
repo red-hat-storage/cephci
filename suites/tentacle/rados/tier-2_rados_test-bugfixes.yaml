@@ -182,12 +182,13 @@ tests:
       polarion-id: CEPH-83594645
       desc: Ensure client connection over v1 port does not crash
 
-  - test:
-      name: Mon connection scores testing
-      desc: Verification of mon connection scores in different scenarios
-      module: test_mon_connection_scores.py
-      polarion-id: CEPH-83602911
-      comments: Intermittent bug 2357894
+  # Bug exists in 9.1z1 :- https://ibm-ceph.atlassian.net/browse/IBMCEPH-16972
+  # - test:
+  #     name: Mon connection scores testing
+  #     desc: Verification of mon connection scores in different scenarios
+  #     module: test_mon_connection_scores.py
+  #     polarion-id: CEPH-83602911
+  #     comments: Intermittent bug 2357894
 
   - test:
       name: Verify config values via cephadm-ansible
