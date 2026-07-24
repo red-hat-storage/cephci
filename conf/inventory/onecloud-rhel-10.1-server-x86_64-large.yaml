@@ -1,16 +1,16 @@
 ---
-# RedHat Enterprise Linux 10.1
+# RedHat Enterprise Linux 10.1 - LARGE profile (8 vCPUs / 32GB / 100GB + 6x30GB)
 # image_id: Get from OneCloud API (GET /vm/images)
 # OneCloud ignores userData; bootstrap is done via subprocess SSH in ceph.py
 version_id: 10.1
 id: rhel
 instance:
   create:
-    image_id: 383  # RHEL 10.1 from OneCloud (get from API/portal)
+    image_id: 451  # RHEL 10.1 from OneCloud (get from API/portal)
     projectID: 808  # IBM-Ceph-QE (get from API/portal)
-    site: POK
+    site: TUC
     groupID: 1
     VLAN: 2231
-    resources: small  # Profiles: small | medium | large
+    resources: large  # Profiles: small | medium | large
     arch: x86_64
     os: RHEL
