@@ -1,0 +1,31 @@
+# Sample osp-cred file for OCP Virtualization (use with: --osp-cred <this-file> --cloud ocpvirt)
+#
+# Prerequisites:
+#   - Namespace and StorageClass already exist on the cluster
+#   - KubeVirt + CDI (OpenShift Virtualization) installed
+#
+# Auth: ServiceAccount bearer token + API server URL in ocpvirt-credentials.
+# VM sizing (cpu, memory, root_disk_size) and image/cloud-init live in --inventory
+# (e.g. conf/inventory/ocpvirt-rhel-10-latest.yaml).
+
+globals:
+  ocpvirt-credentials:
+    # API server URL and ServiceAccount token (e.g. TenantServiceAccount permanent token)
+    server: "https://api.example.cluster:6443"
+    token: "<paste-sa-bearer-token-here>"
+
+    # Namespace where VirtualMachines will be created
+    namespace: "ceph-ci"
+
+    # Namespace of CDI DataSource used by inventory image-name datasource://<name>
+    datasource_namespace: "openshift-virtualization-os-images"
+
+    # StorageClass used for root and additional DataVolumes
+    storage_class: "ocs-storagecluster-ceph-rbd"
+
+    # PVC access modes (RWX required for many NFS-backed StorageClasses)
+    # access_modes:
+    #   - ReadWriteOnce
+
+    # NetworkAttachmentDefinition name, or "default" for pod masquerade networking
+    network: "default"
