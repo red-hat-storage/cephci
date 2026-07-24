@@ -163,27 +163,29 @@ tests:
             rep_pool_config:
               num_pools: 1
               num_images: 1
-              size: 1G
+              size: 10G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
                 - image
               snap_schedule_intervals: #one value for each level specified above
                 - 1m
-              io_size: 200M
+              io_size: 2G
+              run_time: 1800
             ec_pool_config:
               ec-pool-k-m: "2,1"
               ec_profile: "ec_profile"
               num_pools: 1
               num_images: 1
-              size: 1G
+              size: 10G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
                 - image
               snap_schedule_intervals: #one value for each level specified above
                 - 1m
-              io_size: 200M
+              io_size: 2G
+              run_time: 1800
             command: start
             service: upgrade
             verify_cluster_health: true
@@ -193,27 +195,67 @@ tests:
             rep_pool_config:
               num_pools: 1
               num_images: 1
-              size: 1G
+              size: 10G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
                 - image
               snap_schedule_intervals: #one value for each level specified above
                 - 1m
-              io_size: 200M
+              io_size: 2G
+              run_time: 1800
             ec_pool_config:
               ec-pool-k-m: "2,1"
               ec_profile: "ec_profile"
               num_pools: 1
               num_images: 1
-              size: 1G
+              size: 10G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
                 - image
               snap_schedule_intervals: #one value for each level specified above
                 - 1m
-              io_size: 200M
+              io_size: 2G
+              run_time: 1800
             command: start
             service: upgrade
             verify_cluster_health: true
+
+  - test:
+      desc: >
+        Verify dynamic addition of images to a mirror-enabled RBD consistency group
+        without disabling mirroring, during active I/O and snapshot scheduling
+      name: Test Dynamic Image Addition to Mirror-Enabled Group
+      module: test_group_mirror_dynamic.py
+      polarion-id: CEPH-83632349
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632349
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
