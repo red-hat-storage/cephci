@@ -25,6 +25,7 @@ setup(
         "jinja_markdown==1.210911",
         "jinja2==3.1.6",
         "junitparser==4.0.2",
+        "kubernetes>=28,<33",
         "looseversion==1.3.0",
         "paramiko==3.5.1",
         "plotly==6.1.2",
