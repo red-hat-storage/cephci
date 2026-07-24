@@ -7,6 +7,7 @@ from time import sleep
 
 from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
+from ceph.waiter import WaitUntil
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
@@ -56,44 +57,77 @@ def mds_standby_replay_setup(client, default_fs, mds_nodes, fs_util):
         return 1
 
 
-def validate_standby_replay_mds(
-    client, fs_name, fs_util, initial_mds_config, initial_mds_pair
-):
-    mds_config = fs_util.get_mds_config(client, fs_name)
-    initial_standby_replay_mds = {}
-    for mds in initial_mds_config:
-        if mds.get("state") == "standby-replay":
-            initial_standby_replay_mds.update({mds["name"]: {"events": mds["events"]}})
-    log.info(f"initial_standby_replay_mds:{initial_standby_replay_mds}")
+def _get_standby_replay_mds(mds_config):
     standby_replay_mds = {}
     for mds in mds_config:
         if mds.get("state") == "standby-replay":
-            standby_replay_mds.update({mds["name"]: {"events": mds["events"]}})
+            standby_replay_mds[mds["name"]] = {"events": mds["events"]}
+    return standby_replay_mds
+
+
+def validate_standby_replay_mds(
+    client,
+    fs_name,
+    fs_util,
+    initial_mds_config,
+    initial_mds_pair,
+    wait_timeout=120,
+    wait_interval=5,
+):
+    mds_config = fs_util.get_mds_config(client, fs_name)
+    initial_standby_replay_mds = _get_standby_replay_mds(initial_mds_config)
+    standby_replay_mds = _get_standby_replay_mds(mds_config)
+    log.info(f"initial_standby_replay_mds:{initial_standby_replay_mds}")
     log.info(f"standby_replay_mds:{standby_replay_mds}")
     log.info(f"initial_standby_replay_mds.keys():{initial_standby_replay_mds.keys()}")
     log.info(f"standby_replay_mds.keys():{standby_replay_mds.keys()}")
-    if len(initial_standby_replay_mds.keys()) == len(standby_replay_mds.keys()):
+    expected_count = len(initial_standby_replay_mds)
+    if len(standby_replay_mds) == expected_count:
         log.info("Standby-Replay MDS count before and after test are same")
     else:
-        str = f"Before : {initial_standby_replay_mds}, After : {standby_replay_mds}"
-        log.error(f"StandbyReplay MDS count before and after is not same,{str}")
+        mds_state = (
+            f"Before : {initial_standby_replay_mds}, After : {standby_replay_mds}"
+        )
+        log.error(f"StandbyReplay MDS count before and after is not same,{mds_state}")
         return 1
-    sleep(5)
-    mds_config1 = fs_util.get_mds_config(client, fs_name)
-    standby_replay_mds1 = {}
+
     mds_pair = fs_util.get_mds_standby_replay_pair(client, fs_name, mds_config)
     log.info(f"mds_pair before:{initial_mds_pair},mds_pair after: {mds_pair}")
-    for mds in mds_config1:
-        if mds.get("state") == "standby-replay":
-            standby_replay_mds1.update({mds["name"]: {"events": mds["events"]}})
-            log.info(f"Events before:{standby_replay_mds[mds['name']]['events']}")
-            log.info(f"Events now:{standby_replay_mds1[mds['name']]['events']}")
-            if (
-                standby_replay_mds1[mds["name"]]["events"]
-                != standby_replay_mds[mds["name"]]["events"]
-            ):
-                log.info(f"StandbyReplay MDS {mds['name']} is operational")
+
+    baseline_events = dict(standby_replay_mds)
+    waiter = WaitUntil(timeout=wait_timeout, interval=wait_interval)
+    for _ in waiter:
+        current_standby_replay_mds = _get_standby_replay_mds(
+            fs_util.get_mds_config(client, fs_name)
+        )
+        if len(current_standby_replay_mds) != expected_count:
+            log.info(
+                "Waiting for standby-replay MDS count to stabilize: "
+                f"{len(current_standby_replay_mds)} / {expected_count}"
+            )
+            continue
+
+        for name, info in current_standby_replay_mds.items():
+            events_now = info["events"]
+            if name not in baseline_events:
+                if events_now > 0:
+                    log.info(
+                        f"StandbyReplay MDS {name} is operational "
+                        f"(events={events_now})"
+                    )
+                    return 0
+                continue
+
+            events_before = baseline_events[name]["events"]
+            log.info(f"Events before:{events_before}")
+            log.info(f"Events now:{events_now}")
+            if events_now != events_before:
+                log.info(f"StandbyReplay MDS {name} is operational")
                 return 0
+
+    log.error(
+        "No standby-replay MDS showed replay activity within " f"{wait_timeout} seconds"
+    )
     return 1
 
 
