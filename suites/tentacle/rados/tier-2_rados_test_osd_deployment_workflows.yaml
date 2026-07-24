@@ -169,25 +169,26 @@ tests:
           - scenario4
       desc: OSD deployment tests - lvm data, db and wal device - spec file
 
-  - test:
-      name: 5 - OSD deployment tests - raw data and db device - spec file
-      module: osd_deploy_tests.py
-      polarion-id: CEPH-83632255
-      config:
-        deployment_type: spec
-        test_scenarios:
-          - scenario5
-      desc: OSD deployment tests - raw data and db device - spec file
+  # Bug - https://ibm-ceph.atlassian.net/browse/IBMCEPH-13839
+  # - test:
+  #     name: 5 - OSD deployment tests - raw data and db device - spec file
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: spec
+  #       test_scenarios:
+  #         - scenario5
+  #     desc: OSD deployment tests - raw data and db device - spec file
 
-  - test:
-      name: 6 - OSD deployment tests - raw data, db and wal device - spec file
-      module: osd_deploy_tests.py
-      polarion-id: CEPH-83632255
-      config:
-        deployment_type: spec
-        test_scenarios:
-          - scenario6
-      desc: OSD deployment tests - raw data, db and wal device - spec file
+  # - test:
+  #     name: 6 - OSD deployment tests - raw data, db and wal device - spec file
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: spec
+  #       test_scenarios:
+  #         - scenario6
+  #     desc: OSD deployment tests - raw data, db and wal device - spec file
 
   - test:
       name: Case1_CLI - OSD deployment tests - raw data device
@@ -235,25 +236,26 @@ tests:
           - scenario4
       desc: OSD deployment tests - lvm data, db and wal device - CLI
 
-  - test:
-      name: Case5_CLI - OSD deployment tests - raw data and db device
-      module: osd_deploy_tests.py
-      polarion-id: CEPH-83632255
-      config:
-        deployment_type: cli
-        test_scenarios:
-          - scenario5
-      desc: OSD deployment tests - raw data and db device - CLI
+  # Bug - https://ibm-ceph.atlassian.net/browse/IBMCEPH-13839
+  # - test:
+  #     name: Case5_CLI - OSD deployment tests - raw data and db device
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: cli
+  #       test_scenarios:
+  #         - scenario5
+  #     desc: OSD deployment tests - raw data and db device - CLI
 
-  - test:
-      name: Case6_CLI - OSD deployment tests - raw data, db and wal device
-      module: osd_deploy_tests.py
-      polarion-id: CEPH-83632255
-      config:
-        deployment_type: cli
-        test_scenarios:
-          - scenario6
-      desc: OSD deployment tests - raw data, db and wal device - CLI
+  # - test:
+  #     name: Case6_CLI - OSD deployment tests - raw data, db and wal device
+  #     module: osd_deploy_tests.py
+  #     polarion-id: CEPH-83632255
+  #     config:
+  #       deployment_type: cli
+  #       test_scenarios:
+  #         - scenario6
+  #     desc: OSD deployment tests - raw data, db and wal device - CLI
 
   - test:
       name: Remove the added backup host node5
