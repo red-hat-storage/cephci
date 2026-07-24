@@ -308,3 +308,12 @@ tests:
         script-name: ../s3cmd/test_lifecycle_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_lc_version_suspended_expired_delete_marker.yaml
 
+  - test:
+      name: Test LC noncurrent expiration after rgw_lc_debug_interval restart
+      desc: Test LC noncurrent expiration after rgw_lc_debug_interval restart
+      polarion-id: CEPH-83632905
+      module: sanity_rgw.py
+      config:
+        script-name: test_lc_noncurrent_exp_restart.py
+        config-file-name: test_lc_noncurrent_exp_restart.yaml
+
