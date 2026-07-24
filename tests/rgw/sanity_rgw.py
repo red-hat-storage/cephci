@@ -127,6 +127,13 @@ def run(ceph_cluster, **kw):
     elif run_on_haproxy:
         exec_from = client_node
         append_param = ""
+    elif config.get("use-ingress"):
+        installer = ceph_cluster.get_ceph_object("installer")
+        vip_out, _ = installer.exec_command(cmd="cat /tmp/ingress_vip")
+        ingress_vip = vip_out.strip()
+        log.info(f"Using ingress VIP: {ingress_vip}")
+        exec_from = client_node
+        append_param = " --rgw-node " + ingress_vip
     else:
         exec_from = client_node
         append_param = " --rgw-node " + str(rgw_node.ip_address)
@@ -224,6 +231,20 @@ def run(ceph_cluster, **kw):
         f_name = f"/home/cephuser/{test_folder}" + config_dir + config_file_name
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
+
+    if config.get("use-ingress"):
+        installer = ceph_cluster.get_ceph_object("installer")
+        vip_out, _ = installer.exec_command(cmd="cat /tmp/ingress_vip")
+        ingress_ip = vip_out.strip()
+        ingress_port = config.get("ingress-port", 443)
+        cfg_path = f"/home/cephuser/{test_folder}" + config_dir + config_file_name
+        out, _ = exec_from.exec_command(cmd=f"cat {cfg_path}")
+        cfg_data = yaml.safe_load(out)
+        cfg_data["config"]["endpoint_ip"] = ingress_ip
+        cfg_data["config"]["endpoint_port"] = ingress_port
+        remote_fp = exec_from.remote_file(file_name=cfg_path, file_mode="w", sudo=True)
+        remote_fp.write(yaml.dump(cfg_data, default_flow_style=False))
+        log.info(f"Injected ingress endpoint: {ingress_ip}:{ingress_port}")
 
     # Build env vars for test execution; inject IBM_CLOUD_API_KEY from env or cephci.yaml
     env_vars = list(config.get("env-vars", []))
