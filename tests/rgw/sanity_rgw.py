@@ -196,7 +196,7 @@ def run(ceph_cluster, **kw):
             raise Exception("rgw service restart failed")
 
     if install_keystone_ldap:
-        config_keystone_ldap(rgw_node, cloud_type)
+        config_keystone_ldap(rgw_node, client_node, cloud_type)
 
     out, err = exec_from.exec_command(cmd="ls -l venv", check_ec=False)
     if not out:
