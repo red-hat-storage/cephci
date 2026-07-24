@@ -33,6 +33,11 @@ from compute.onecloud import (
     resolve_image_for_site,
     resolve_project_for_site,
 )
+from compute.openshift import (
+    CephVMNodeOCP,
+    ensure_namespace_quota,
+    estimate_pvc_requirement,
+)
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.log import Log
 from utility.retry import retry
@@ -1045,6 +1050,178 @@ def setup_vm_node_aws(node, ceph_nodes, **params):
             no_of_volumes=params.get("no-of-volumes", 0),
         )
 
+        vm.role = params["role"]
+        vm.root_login = params["root-login"]
+        vm.osd_scenario = params.get("osd-scenario")
+        vm.location = params.get("location")
+        vm.id = params.get("id")
+        ceph_nodes[node] = vm
+    except RETRY_EXCEPTIONS as retry_except:
+        log.warning(retry_except, exc_info=True)
+        if vm is not None:
+            vm.delete()
+        raise
+    except BaseException as be:  # noqa
+        log.error(be, exc_info=True)
+        raise
+
+
+def create_ocpvirt_ceph_nodes(
+    cluster_conf,
+    inventory,
+    ocp_creds,
+    run_id,
+    instances_name=None,
+    custom_config=None,
+):
+    """
+    Create VirtualMachines on OCP Virtualization (KubeVirt).
+
+    Args:
+        cluster_conf: Configuration of cluster (from --global-conf).
+        inventory: Instance configuration (image-name, cloud-init setup).
+        ocp_creds: Credential file with globals["ocpvirt-credentials"].
+        run_id: Unique id for the run.
+        instances_name: Optional name prefix for instances.
+        custom_config: Optional CLI overrides (unused; API parity).
+    """
+    del custom_config  # accepted for API parity with other create_* helpers
+    log.info("Creating OCP Virtualization instances")
+    glbs = ocp_creds.get("globals")
+    if not glbs:
+        raise NodeError("Missing 'globals' section in OCP Virt credentials file")
+    ocp_cred = glbs.get("ocpvirt-credentials")
+    if not ocp_cred:
+        raise NodeError("Missing 'ocpvirt-credentials' section in globals")
+
+    ceph_cluster = cluster_conf.get("ceph-cluster")
+    params = dict()
+    ceph_nodes = dict()
+
+    if ceph_cluster.get("inventory"):
+        inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
+        with open(inventory_path, "r") as inventory_stream:
+            inventory = yaml.safe_load(inventory_stream)
+
+    node_count = 0
+    params["cloud-data"] = inventory.get("instance", {}).get("setup", "")
+    params["ocp-cred"] = ocp_cred
+    params["namespace"] = ocp_cred.get("namespace")
+    params["storage_class"] = ocp_cred.get("storage_class")
+    params["network"] = ocp_cred.get("network", "default")
+
+    if not params["namespace"]:
+        raise NodeError("namespace is required in ocpvirt-credentials")
+    if not params["storage_class"]:
+        raise NodeError("storage_class is required in ocpvirt-credentials")
+
+    inv_create = inventory.get("instance", {}).get("create") or {}
+    if ceph_cluster.get("image-name"):
+        params["image-name"] = ceph_cluster.get("image-name")
+    else:
+        params["image-name"] = inv_create.get("image-name")
+    if not params["image-name"]:
+        raise NodeError(
+            "OCP Virt create: image-name is required in inventory or cluster conf"
+        )
+
+    # VM sizing from inventory (instance.create)
+    params["cpu"] = inv_create.get("cpu", "4")
+    params["memory"] = inv_create.get("memory", "8Gi")
+    params["root_disk_size"] = inv_create.get("root_disk_size", "40Gi")
+    if inv_create.get("vm-size"):
+        # Allow vm-size like "4-8Gi" (cores-memory); overrides cpu/memory when set
+        vm_size = str(inv_create.get("vm-size"))
+        if "-" in vm_size:
+            cores, mem = vm_size.split("-", 1)
+            if cores.strip().isdigit():
+                params["cpu"] = cores.strip()
+            if mem.strip():
+                params["memory"] = mem.strip()
+
+    params["cluster-name"] = ceph_cluster.get("name")
+    params["root-login"] = True
+
+    pvc_needed = estimate_pvc_requirement(ceph_cluster)
+    ensure_namespace_quota(params["namespace"], pvc_needed)
+
+    with parallel() as p:
+        for node in range(1, 100):
+            node_key = "node" + str(node)
+            if not ceph_cluster.get(node_key):
+                break
+
+            node_dict = ceph_cluster.get(node_key)
+            node_params = params.copy()
+            node_params["role"] = RolesContainer(node_dict.get("role"))
+            node_params["id"] = node_dict.get("id") or node_key
+            node_params["location"] = node_dict.get("location")
+            node_params["node-name"] = generate_node_name(
+                node_params.get("cluster-name", "ceph"),
+                instances_name or os.getlogin(),
+                run_id,
+                node_key,
+                node_params["role"],
+            )
+
+            if node_dict.get("no-of-volumes"):
+                node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
+                node_params["size-of-disks"] = node_dict.get("disk-size")
+                node_params["osd-scenario"] = node_dict.get("osd-scenario")
+            else:
+                node_params["no-of-volumes"] = 0
+                node_params["size-of-disks"] = 0
+
+            if node_dict.get("image-name"):
+                img = node_dict["image-name"]
+                if isinstance(img, dict):
+                    node_params["image-name"] = img.get(
+                        "ocpvirt", node_params["image-name"]
+                    )
+                else:
+                    node_params["image-name"] = img
+
+            if node_dict.get("cloud-data"):
+                node_params["cloud-data"] = node_dict.get("cloud-data")
+
+            sleep(node_count * 5)
+            node_count += 1
+            p.spawn(setup_vm_node_ocpvirt, node_key, ceph_nodes, **node_params)
+
+    if node_count and len(ceph_nodes) != node_count:
+        log.error(
+            f"Mismatch error in number of VMs creation. "
+            f"Initiated: {node_count}  Spawned: {len(ceph_nodes)}"
+        )
+        raise NodeError("Required number of nodes not created")
+
+    log.info("Done creating OCP Virt nodes")
+    return ceph_nodes
+
+
+@retry(RETRY_EXCEPTIONS, tries=3, delay=10)
+def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
+    """
+    Create the VM node using OCP Virtualization (KubeVirt) API.
+
+    The retry decorator will trigger a rerun when a soft error is encountered. The VM
+    node is removed in exception scope before re-raising.
+    """
+    vm = None
+    try:
+        vm = CephVMNodeOCP(ocp_cred=params["ocp-cred"])
+        vm.create(
+            node_name=params["node-name"],
+            image_name=params["image-name"],
+            cloud_data=params.get("cloud-data", ""),
+            size_of_disks=params.get("size-of-disks", 0),
+            no_of_volumes=params.get("no-of-volumes", 0),
+            cpu=params.get("cpu"),
+            memory=params.get("memory"),
+            root_disk_size=params.get("root_disk_size"),
+            storage_class=params.get("storage_class"),
+            network=params.get("network"),
+        )
         vm.role = params["role"]
         vm.root_login = params["root-login"]
         vm.osd_scenario = params.get("osd-scenario")
