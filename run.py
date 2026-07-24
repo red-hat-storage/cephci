@@ -27,6 +27,7 @@ from ceph.utils import (
     create_baremetal_ceph_nodes,
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
+    create_ocpvirt_ceph_nodes,
     create_onecloud_ceph_nodes,
 )
 from cephci.cluster_info import collect_ceph_coredumps, get_ceph_var_logs
@@ -38,6 +39,7 @@ from cli.performance.memory_and_cpu_utils import (
 )
 from compute.aws_ec2 import cleanup_aws_ceph_nodes
 from compute.onecloud import cleanup_onecloud_ceph_nodes, expand_private_key_path
+from compute.openshift import cleanup_ocpvirt_ceph_nodes
 from utility import sosreport
 from utility.log import Log
 from utility.polarion import post_to_polarion
@@ -64,7 +66,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         (--platform <name>)
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
-        [--cloud <openstack> | <ibmc> | <aws> | <baremetal> | <onecloud>]
+        [--cloud <openstack> | <ibmc> | <aws> | <baremetal> | <onecloud> | <ocpvirt>]
         [--build <name>]
         [--inventory FILE]
         [--osp-cred <file>]
@@ -112,7 +114,7 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
-  --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal|onecloud) [default: openstack]
+  --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal|onecloud|ocpvirt) [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
@@ -232,6 +234,10 @@ def create_nodes(
         cleanup_onecloud_ceph_nodes(
             osp_cred, instances_name, custom_config=custom_config
         )
+    elif cloud_type == "ocpvirt":
+        cleanup_ocpvirt_ceph_nodes(
+            osp_cred, instances_name, custom_config=custom_config
+        )
 
     ceph_cluster_dict = {}
     clients = []
@@ -263,6 +269,10 @@ def create_nodes(
                 instances_name,
                 custom_config,
                 platform=platform,
+            )
+        elif cloud_type == "ocpvirt":
+            ceph_vmnodes = create_ocpvirt_ceph_nodes(
+                cluster, inventory, osp_cred, run_id, instances_name, custom_config
             )
         elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
@@ -322,6 +332,13 @@ def create_nodes(
                 private_key_path = aws_cfg.get("private_key_path", "")
                 private_ip = node.ip_address
                 look_for_key = True
+                ceph_nodename = node.hostname
+            elif cloud_type == "ocpvirt":
+                glbs = osp_cred.get("globals") or {}
+                ocp_cfg = glbs.get("ocpvirt-credentials") or {}
+                private_key_path = ocp_cfg.get("private_key_path", "")
+                private_ip = node.ip_address
+                look_for_key = bool(private_key_path)
                 ceph_nodename = node.hostname
             elif cloud_type == "onecloud":
                 private_ip = node.ip_address
@@ -580,6 +597,10 @@ def run(args):
             cleanup_onecloud_ceph_nodes(
                 osp_cred, cleanup_name, custom_config=args.get("--custom-config")
             )
+        elif cloud_type == "ocpvirt":
+            cleanup_ocpvirt_ceph_nodes(
+                osp_cred, cleanup_name, custom_config=args.get("--custom-config")
+            )
         else:
             log.warning("Unknown cloud type.")
 
@@ -591,7 +612,7 @@ def run(args):
     if (
         osp_cred_file is None
         and not reuse
-        and cloud_type in ["openstack", "ibmc", "aws"]
+        and cloud_type in ["openstack", "ibmc", "aws", "ocpvirt"]
     ):
         raise Exception("Require cloud credentials to create cluster.")
     if not reuse and cloud_type == "onecloud" and not osp_cred:
@@ -603,7 +624,7 @@ def run(args):
     if (
         inventory_file is None
         and not reuse
-        and cloud_type in ["openstack", "ibmc", "aws", "onecloud"]
+        and cloud_type in ["openstack", "ibmc", "aws", "onecloud", "ocpvirt"]
     ):
         raise Exception("Require system configuration information to provision.")
 
@@ -1200,6 +1221,10 @@ def run(args):
                 cleanup_aws_ceph_nodes(osp_cred, instances_name)
             elif cloud_type == "onecloud":
                 cleanup_onecloud_ceph_nodes(
+                    osp_cred, instances_name, custom_config=custom_config
+                )
+            elif cloud_type == "ocpvirt":
+                cleanup_ocpvirt_ceph_nodes(
                     osp_cred, instances_name, custom_config=custom_config
                 )
 

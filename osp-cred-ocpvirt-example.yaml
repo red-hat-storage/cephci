@@ -1,0 +1,27 @@
+# Sample osp-cred file for OCP Virtualization (use with: --osp-cred <this-file> --cloud ocpvirt)
+#
+# Prerequisites:
+#   - ~/.kube/config already configured (oc login / kubeconfig) for the target cluster
+#   - Namespace and StorageClass already exist on the cluster
+#   - KubeVirt + CDI (OpenShift Virtualization) installed
+#
+# VM sizing (cpu, memory, root_disk_size) and image/cloud-init live in --inventory
+# (e.g. conf/inventory/ocpvirt-rhel-10-latest.yaml).
+
+globals:
+  ocpvirt-credentials:
+    # Namespace where VirtualMachines will be created
+    namespace: "ceph-ci"
+
+    # StorageClass used for root and additional DataVolumes
+    storage_class: "ocs-storagecluster-ceph-rbd"
+
+    # PVC access modes (RWX required for many NFS-backed StorageClasses)
+    # access_modes:
+    #   - ReadWriteOnce
+
+    # NetworkAttachmentDefinition name, or "default" for pod masquerade networking
+    network: "default"
+
+    # Optional path to private key for SSH (if unset, password auth from cloud-init is used)
+    # private_key_path: "~/.ssh/id_rsa"
