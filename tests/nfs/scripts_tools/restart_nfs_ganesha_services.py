@@ -1,12 +1,58 @@
+import json
 import time
 
 from ceph.ceph import CommandFailed
 from cli.ceph.ceph import Ceph
-from cli.exceptions import ConfigError
+from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
 from utility.retry import retry
 
 log = Log(__name__)
+
+
+def wait_for_nfs_instances_healthy(client, nfs_instances, timeout=300, interval=10):
+    """
+    Wait until every discovered NFS orchestrator service has all daemons running.
+
+    Used when this script runs in parallel with NFS deployment so restarts do not
+    begin until orch apply has finished and each service reports running == size.
+    """
+    deadline = time.time() + timeout
+    expected = set(nfs_instances)
+
+    while time.time() < deadline:
+        services = json.loads(Ceph(client).orch.ls(format="json", service_type="nfs"))
+        matched = [s for s in services if s.get("service_id") in expected]
+        if len(matched) == len(expected) and all(
+            s["status"]["size"] > 0 and s["status"]["running"] == s["status"]["size"]
+            for s in matched
+        ):
+            log.info(
+                "All NFS instances are healthy before restart: %s",
+                nfs_instances,
+            )
+            return
+
+        for service in matched:
+            status = service.get("status", {})
+            log.info(
+                "Waiting for nfs.%s to become healthy (%s/%s running)...",
+                service.get("service_id"),
+                status.get("running"),
+                status.get("size"),
+            )
+        if len(matched) < len(expected):
+            missing = expected - {s.get("service_id") for s in matched}
+            log.info(
+                "Waiting for NFS orchestrator services to appear: %s",
+                sorted(missing),
+            )
+        time.sleep(interval)
+
+    raise OperationFailedError(
+        f"Timed out after {timeout}s waiting for NFS instances to become healthy: "
+        f"{sorted(expected)}"
+    )
 
 
 @retry(CommandFailed, tries=4, delay=5, backoff=2)
@@ -39,6 +85,9 @@ def run(ceph_cluster, **kw):
             - longevity_duration (float): Duration for longevity in hours (default: 0).
             - restart_interval (int): Interval between restarts in minutes (default: 0).
             - instances_to_restart (list): Specific NFS instances to restart (default: None).
+            - wait_for_healthy (bool): Wait for NFS daemons to be running before the
+              first restart (default: True). Disable only when instances are pre-provisioned.
+            - healthy_wait_timeout (int): Seconds to wait for healthy NFS services (default: 300).
     """
     config = kw.get("config")
     clients = ceph_cluster.get_nodes(role="client")
@@ -51,6 +100,8 @@ def run(ceph_cluster, **kw):
     longevity_duration = float(config.get("longevity_duration", 0))  # in hours
     restart_interval = config.get("restart_interval", 0)  # in minutes
     instances_to_restart = config.get("instances_to_restart", None)
+    wait_for_healthy = config.get("wait_for_healthy", True)
+    healthy_wait_timeout = int(config.get("healthy_wait_timeout", 300))
     longevity_duration = restart_duration if restart_duration else longevity_duration
 
     # Validate the number of clients
@@ -78,6 +129,18 @@ def run(ceph_cluster, **kw):
     if not nfs_to_restart:
         raise ConfigError(
             "No NFS instances found to restart. Please check the configuration."
+        )
+
+    if wait_for_healthy:
+        log.info(
+            "Waiting up to %s seconds for NFS instances to be healthy before restarting: %s",
+            healthy_wait_timeout,
+            nfs_to_restart,
+        )
+        wait_for_nfs_instances_healthy(
+            clients[0],
+            nfs_to_restart,
+            timeout=healthy_wait_timeout,
         )
 
     if longevity and longevity_duration > 0:
