@@ -1,0 +1,23 @@
+# Sample auth-only osp-cred file for OCP Virtualization.
+#
+# Use with:
+#   --cloud ocpvirt
+#   --osp-cred <this-file>
+#   --custom-config ocpvirt_namespace=rdu3_ceph_jenkins
+#
+# API server URL, namespace, storage, network, and datasource URLs live in
+# conf/ocpvirt/<name>.yaml. Cloud-init lives in --inventory; compute sizing uses
+# --custom-config ocpvirt_profile=<VirtualMachineClusterInstancetype>.
+
+globals:
+  ocpvirt-credentials:
+    token: "<paste-sa-bearer-token-here>"
+
+    # Optional: base64 CA from kubeconfig (certificate-authority-data)
+    # certificate_authority_data: "<base64-ca>"
+
+    # Optional: path to CA bundle when not using certificate_authority_data
+    # ssl_ca_cert: "/path/to/ca.crt"
+
+    # Optional path to private key for SSH (password auth from cloud-init otherwise)
+    # private_key_path: "~/.ssh/id_ed25519"
