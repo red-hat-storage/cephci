@@ -135,6 +135,10 @@ def run(**kw):
     if not skip_setup:
         execute_setup(cluster, config)
 
+    add_service2_sdk = config.get("add_service2_sdk", False)
+    if add_service2_sdk:
+        add_sevice2_sdk_extras(client_node)
+
     if not host:
         _, secure, _ = get_rgw_frontend(cluster)
 
@@ -398,7 +402,6 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
             f"--display_name={display_name} --email={display_name}@foo.bar"
         )
     else:
-
         cmd = f"radosgw-admin user create --uid={uid} --display_name={display_name}"
         cmd += " --email={email}@foo.bar".format(email=uid)
 
@@ -677,3 +680,28 @@ def _rgw_lc_debug(cluster: Ceph, add: bool = True) -> None:
 
     # Restart can take time
     sleep(30)
+
+
+def add_sevice2_sdk_extras(node: CephNode) -> None:
+    """
+    download service-2.sdk-extras.json into aws path
+
+    Args:
+        node        The node from which the test execution is triggered.
+
+    Returns:
+        None
+    """
+
+    log.info(
+        "downloading service-2.sdk-extras.json to enable extra functionality supported by Ceph Extension"
+    )
+    out, err = node.exec_command(sudo=True, cmd="mkdir -p ~/.aws/models/s3/2006-03-01/")
+    extras_json_path = "~/.aws/models/s3/2006-03-01/service-2.sdk-extras.json"
+    sdk_github = "https://github.com/boto/botocore/blob/develop/botocore/data/s3/2006-03-01/service-2.json?raw=true"
+    out, err = node.exec_command(
+        sudo=True, cmd=f"sudo curl -o {extras_json_path} -L {sdk_github}"
+    )
+    log.info(f"service-2.sdk-extras.json is downloaded to {extras_json_path}")
+    log.info("sleeping for 5 seconds")
+    sleep(5)

@@ -106,6 +106,7 @@ tests:
         execute_granular: true
         path: test_s3
         skip_setup : false
+        add_service2_sdk: true
       desc: Run the Granular external S3test suites test s3
       destroy-cluster: false
       module: test_s3.py
