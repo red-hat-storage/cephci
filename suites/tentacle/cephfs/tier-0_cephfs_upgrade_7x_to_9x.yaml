@@ -125,7 +125,7 @@ tests:
         crash_setup: 1
         daemon_list: ['mds', 'osd', 'mgr', 'mon','nfs']
   - test:
-      abort-on-fail: false
+      abort-on-fail: true
       desc: Creates all the fs related components before upgrade
       module: cephfs_upgrade.upgrade_pre_req.py
       name: "creation of Prerequisites for Upgrade"

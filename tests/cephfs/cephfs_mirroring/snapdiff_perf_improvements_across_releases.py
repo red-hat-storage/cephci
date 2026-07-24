@@ -1,10 +1,12 @@
 import concurrent.futures
 import os
+import re
 import signal
 import time
 import traceback
 
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 
@@ -92,18 +94,34 @@ def run(ceph_cluster, **kw):
                 subvol_name=subvol,
                 group_name=subvol_group_name,
             )
-
-        mount_paths, subvol_paths, export_binding = (
-            fs_mirroring_utils.mount_subvolumes_snapdiff(
-                source_client=source_clients[0],
-                fs_util_ceph1=fs_util_ceph1,
-                default_fs=source_fs,
-                subvolume_names=subvolume_names,
-                subvol_group_name=subvol_group_name,
-                nfs_server=nfs_server,
-                nfs_name=nfs_name,
+        try:
+            mount_paths, subvol_paths, export_binding = (
+                fs_mirroring_utils.mount_subvolumes_snapdiff(
+                    source_client=source_clients[0],
+                    fs_util_ceph1=fs_util_ceph1,
+                    default_fs=source_fs,
+                    subvolume_names=subvolume_names,
+                    subvol_group_name=subvol_group_name,
+                    nfs_server=nfs_server,
+                    nfs_name=nfs_name,
+                )
             )
-        )
+        except Exception as e:
+            log.error(f"Error mounting subvolumes: {e}")
+            if re.search(r"mount\.nfs:[\s\S]*Connection refused", str(e)):
+                nfs_nodes = ceph_cluster_dict.get("ceph1").get_ceph_objects("nfs")
+                cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
+                try:
+                    cephfs_common_utils.nfs_debug_logs(
+                        source_clients[0],
+                        nfs_name,
+                        log_dir,
+                        nfs_nodes,
+                        dump_output=True,
+                    )
+                except Exception as log_ex:
+                    log.error("Failed to collect NFS container debug logs: %s", log_ex)
+            raise Exception("Mount operation failed")
         log.info(f"Mount Paths : {mount_paths}")
         log.info(f"Sub Volume Paths : {subvol_paths}")
 
