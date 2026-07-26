@@ -506,8 +506,11 @@ def create_onecloud_ceph_nodes(
 
         node_dict = ceph_cluster.get(node_key)
         role = RolesContainer(node_dict.get("role") or ["pool"])
-        # OneCloud API: VM names must be 1-25 chars, alphanumeric + hyphens only
-        node_name = generate_onecloud_node_name(run_id, node_key, role)
+        # OneCloud API: VM names must be 1-25 chars, alphanumeric + hyphens only.
+        # Pass CLI instances_name only (not login/cephci default used for cluster name).
+        node_name = generate_onecloud_node_name(
+            run_id, node_key, role, instances_name=instances_name
+        )
         virtual_machines.append(
             {
                 "vmname": node_name,
