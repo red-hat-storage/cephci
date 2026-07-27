@@ -70,9 +70,9 @@ class CephFSCommonUtils(FsUtils):
                     )
                     log.warning("Cluster health can be OK, current state : %s", out)
                     ceph_healthy = 1
-                elif "node-exporter" in str(out) and "is in unknown state" in str(out):
+                elif "node-exporter" in str(out):
                     log.warning(
-                        "node-exporter is in unknown state; redeploying. Health detail: %s",
+                        "node-exporter is in unknown/error state; redeploying. Health detail: %s",
                         out,
                     )
                     client.exec_command(
