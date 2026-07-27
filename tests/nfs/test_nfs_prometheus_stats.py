@@ -28,6 +28,7 @@ from tests.nfs.nfs_prometheus_stats_utils import (
     drop_client_page_cache,
     firewall_allow_port,
     firewall_block_metrics_from_source,
+    firewall_remove_port,
     firewall_unblock_metrics_from_source,
     get_counter_total,
     get_histogram_count_sum,
@@ -143,6 +144,7 @@ class TestContext:
         self.extra_exports = []
         self.extra_mounts = []
         self.template_backup_exists = None
+        self.runtime_firewall_ports = set()
 
     def setup_cluster(self):
         setup_nfs_cluster(
@@ -178,6 +180,7 @@ class TestContext:
             self.installer, self.nfs_name, self.nfs_node
         )
         firewall_allow_port(self.nfs_node, self.monitoring_port)
+        self.runtime_firewall_ports.add(int(self.monitoring_port))
 
     def refresh_container_id(self):
         self.container_id = get_nfs_container_id(
@@ -193,6 +196,12 @@ class TestContext:
         return scrape_prometheus_metrics(self.client, self.nfs_ip, self.monitoring_port)
 
     def cleanup(self):
+        for port in list(self.runtime_firewall_ports):
+            try:
+                firewall_remove_port(self.nfs_node, port)
+            except Exception as exc:
+                log.warning("Firewall port cleanup %s: %s", port, exc)
+        self.runtime_firewall_ports.clear()
         for client, mount in self.extra_mounts:
             try:
                 unmount_export(client, mount)
@@ -469,6 +478,7 @@ def test_f_02(ctx):
         ctx.monitoring_port = alt_port
         ctx.refresh_container_id()
         firewall_allow_port(ctx.nfs_node, alt_port)
+        ctx.runtime_firewall_ports.add(alt_port)
         verify_monitoring_port_listening(ctx.nfs_node, alt_port)
         verify_exposition_has_metric(ctx.scrape(), "rpcs_received_total")
         log.info("F-02A: monitoring_port=%s active after redeploy", alt_port)
@@ -483,6 +493,10 @@ def test_f_02(ctx):
             ctx.monitoring_port = base_port
             ctx.refresh_container_id()
             firewall_allow_port(ctx.nfs_node, base_port)
+            ctx.runtime_firewall_ports.add(int(base_port))
+            if alt_port != base_port:
+                firewall_remove_port(ctx.nfs_node, alt_port)
+                ctx.runtime_firewall_ports.discard(alt_port)
         except Exception as exc:
             log.warning("F-02: failed to restore baseline ganesha config: %s", exc)
     log_test_passed(
@@ -1177,8 +1191,13 @@ def test_x_01(ctx):
     restart_nfs_container(ctx.nfs_node, ctx.container_id)
     wait_metrics_recovery(ctx.client, ctx.nfs_ip, ctx.monitoring_port, timeout=120)
     after = get_counter_total(ctx.scrape(), "rpcs_received_total")
-    if after > before:
-        log.warning("Counter did not reset after restart (may be expected)")
+    if after >= before:
+        log.warning(
+            "rpcs_received_total did not reset after restart "
+            "(before=%s, after=%s; may be expected)",
+            before,
+            after,
+        )
     perform_nfs_io(ctx.client, ctx.nfs_mount, mb=1)
     log_test_passed(
         "X-01",
@@ -1258,8 +1277,10 @@ def test_n_02(ctx):
     code = scrape_prometheus_metrics_http_code(
         ctx.client, ctx.nfs_ip, ctx.monitoring_port, path="/not-metrics"
     )
+    if code == "200":
+        raise OperationFailedError("N-02: /not-metrics unexpectedly returned HTTP 200")
     if code not in ("404", "000", "403"):
-        log.info("Non-metrics path returned HTTP %s", code)
+        log.info("Non-metrics path returned HTTP %s (acceptable non-200)", code)
     log_test_passed(
         "N-02",
         "non-metrics path /not-metrics returned HTTP %s (not 200)" % code,

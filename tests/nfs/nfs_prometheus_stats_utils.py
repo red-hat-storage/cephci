@@ -2,15 +2,17 @@
 
 import json
 import re
+import shlex
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 
+from ceph.ceph import CommandFailed
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
-from cli.utilities.filesys import Mount, Unmount
+from cli.utilities.filesys import Mount, MountFailedError, Unmount
 from tests.nfs.nfs_delegation_operations import (
     backup_ganesha_template,
     ensure_ceph_conf_and_admin_keyring_on_hosts,
@@ -24,6 +26,13 @@ log = Log(__name__)
 
 DEFAULT_MONITORING_PORT = 9587
 DEFAULT_PROMETHEUS_PORT = 9095
+# Keep curl scrapes from hanging CI when the endpoint/network stalls.
+CURL_CONNECT_TIMEOUT = 5
+CURL_MAX_TIME = 30
+CURL_TIMEOUT_OPTS = "--connect-timeout %s --max-time %s" % (
+    CURL_CONNECT_TIMEOUT,
+    CURL_MAX_TIME,
+)
 CONF_KEY = "mgr/cephadm/services/nfs/ganesha.conf"
 DEFAULT_TEMPLATE_PATH = (
     "/usr/share/ceph/mgr/cephadm/templates/services/nfs/ganesha.conf.j2"
@@ -428,7 +437,8 @@ def _patch_ganesha_work_template(cmd_host, config):
             )
         out, _ = cmd_host.exec_command(
             sudo=True,
-            cmd="grep -F %r %s" % (line, WORK_TEMPLATE_PATH),
+            cmd="grep -F -- %s %s"
+            % (shlex.quote(line), shlex.quote(WORK_TEMPLATE_PATH)),
             check_ec=False,
         )
         if line not in (out or ""):
@@ -868,7 +878,7 @@ def get_monitoring_port(nfs_node, nfs_name, config):
 
 
 def scrape_prometheus_metrics(node, host, port, path="/metrics"):
-    cmd = f"curl -sf http://{host}:{port}{path}"
+    cmd = "curl -sf %s http://%s:%s%s" % (CURL_TIMEOUT_OPTS, host, port, path)
     out, err = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
     body = (out or "").strip()
     if not body:
@@ -879,7 +889,12 @@ def scrape_prometheus_metrics(node, host, port, path="/metrics"):
 
 
 def scrape_prometheus_metrics_http_code(node, host, port, path="/metrics"):
-    cmd = f"curl -s -o /dev/null -w '%{{http_code}}' " f"http://{host}:{port}{path}"
+    cmd = "curl -s %s -o /dev/null -w '%%{http_code}' http://%s:%s%s" % (
+        CURL_TIMEOUT_OPTS,
+        host,
+        port,
+        path,
+    )
     out, _ = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
     return (out or "").strip()
 
@@ -955,7 +970,9 @@ def get_prometheus_api_url(ceph_cluster, installer, config=None):
 def fetch_prometheus_targets(scrape_node, api_base_url):
     url = "%s/api/v1/targets" % api_base_url.rstrip("/")
     out, err = scrape_node.exec_command(
-        sudo=True, cmd="curl -sf '%s'" % url, check_ec=False
+        sudo=True,
+        cmd="curl -sf %s '%s'" % (CURL_TIMEOUT_OPTS, url),
+        check_ec=False,
     )
     body = (out or "").strip()
     if not body:
@@ -1246,24 +1263,138 @@ def parse_prometheus_metrics(metrics_text):
     return names
 
 
+def _parse_prometheus_labels(label_part):
+    """Parse Prometheus label set; commas inside quoted values are preserved."""
+    labels = {}
+    key = []
+    value = []
+    state = "key"  # key | value | quoted
+    escaped = False
+    i = 0
+    length = len(label_part)
+    while i < length:
+        ch = label_part[i]
+        if state == "key":
+            if ch.isspace():
+                i += 1
+                continue
+            if ch == "=":
+                state = "value"
+                i += 1
+                continue
+            if ch == ",":
+                i += 1
+                continue
+            key.append(ch)
+            i += 1
+            continue
+        if state == "value":
+            if ch.isspace():
+                i += 1
+                continue
+            if ch == '"':
+                state = "quoted"
+                i += 1
+                continue
+            # Unquoted value until comma (rare in exposition, but tolerate).
+            while i < length and label_part[i] != ",":
+                value.append(label_part[i])
+                i += 1
+            labels["".join(key).strip()] = "".join(value).strip()
+            key = []
+            value = []
+            state = "key"
+            if i < length and label_part[i] == ",":
+                i += 1
+            continue
+        # quoted
+        if escaped:
+            if ch == "n":
+                value.append("\n")
+            elif ch == "\\":
+                value.append("\\")
+            elif ch == '"':
+                value.append('"')
+            else:
+                value.append(ch)
+            escaped = False
+            i += 1
+            continue
+        if ch == "\\":
+            escaped = True
+            i += 1
+            continue
+        if ch == '"':
+            labels["".join(key).strip()] = "".join(value)
+            key = []
+            value = []
+            state = "key"
+            i += 1
+            while i < length and label_part[i].isspace():
+                i += 1
+            if i < length and label_part[i] == ",":
+                i += 1
+            continue
+        value.append(ch)
+        i += 1
+    if key and value:
+        labels["".join(key).strip()] = "".join(value).strip()
+    return labels
+
+
+def _split_prometheus_sample_value(tail):
+    """Return sample value, ignoring optional trailing timestamp."""
+    parts = tail.strip().split()
+    if not parts:
+        raise ValueError("missing sample value")
+    return float(parts[0])
+
+
+def _split_labeled_prometheus_line(line):
+    """Split ``name{labels} value [timestamp]`` respecting quoted braces/commas."""
+    open_idx = line.find("{")
+    if open_idx < 0:
+        raise ValueError("no label set")
+    name = line[:open_idx].strip()
+    i = open_idx + 1
+    in_quotes = False
+    escaped = False
+    while i < len(line):
+        ch = line[i]
+        if in_quotes:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_quotes = False
+        else:
+            if ch == '"':
+                in_quotes = True
+            elif ch == "}":
+                label_part = line[open_idx + 1 : i]
+                value = _split_prometheus_sample_value(line[i + 1 :])
+                return name, label_part, value
+        i += 1
+    raise ValueError("unterminated label set")
+
+
 def parse_metric_samples(metrics_text):
     samples = []
     for line in metrics_text.splitlines():
         if not line or line.startswith("#"):
             continue
-        if "{" in line:
-            name, rest = line.split("{", 1)
-            label_part, value = rest.rsplit("}", 1)
-            labels = {}
-            for item in label_part.split(","):
-                if "=" in item:
-                    key, val = item.split("=", 1)
-                    labels[key.strip()] = val.strip().strip('"')
-            samples.append((name.strip(), labels, float(value.strip())))
-        else:
-            parts = line.split()
-            if len(parts) >= 2:
-                samples.append((parts[0], {}, float(parts[1])))
+        try:
+            if "{" in line:
+                name, label_part, value = _split_labeled_prometheus_line(line)
+                labels = _parse_prometheus_labels(label_part)
+                samples.append((name, labels, value))
+            else:
+                parts = line.split()
+                if len(parts) >= 2:
+                    samples.append((parts[0], {}, float(parts[1])))
+        except (ValueError, IndexError) as exc:
+            log.debug("Skipping unparsable metrics line %r: %s", line, exc)
     return samples
 
 
@@ -1400,7 +1531,9 @@ def assert_counter_increased(metrics_before, metrics_after, *metric_names):
 def prometheus_query_instant(scrape_node, api_base_url, promql):
     url = "%s/api/v1/query?query=%s" % (api_base_url.rstrip("/"), quote(promql))
     out, err = scrape_node.exec_command(
-        sudo=True, cmd="curl -sf '%s'" % url, check_ec=False
+        sudo=True,
+        cmd="curl -sf %s '%s'" % (CURL_TIMEOUT_OPTS, url),
+        check_ec=False,
     )
     body = (out or "").strip()
     if not body:
@@ -1959,19 +2092,11 @@ def verify_histogram_cumulative(metrics_text, metric_prefix):
 
 
 def verify_label_charset(metrics_text):
-    for line in metrics_text.splitlines():
-        if "{" not in line or line.startswith("#"):
-            continue
-        label_part = line.split("{", 1)[1].split("}", 1)[0]
-        for item in label_part.split(","):
-            if "=" not in item:
-                continue
-            key, val = item.split("=", 1)
-            key = key.strip()
-            val = val.strip().strip('"')
+    for name, labels, _ in parse_metric_samples(metrics_text):
+        for key, val in labels.items():
             if not PROMETHEUS_LABEL_RE.match(key):
                 raise OperationFailedError(f"Invalid label name: {key}")
-            if not val or '"' in val or "\n" in val:
+            if not val or "\n" in val:
                 raise OperationFailedError(f"Invalid label value for {key}: {val}")
 
 
@@ -2199,37 +2324,64 @@ def verify_concurrent_scrape_metrics(bodies):
 def verify_promtool_metrics(client, host, port, remote_path="/tmp/ganesha_live.prom"):
     client.exec_command(
         sudo=True,
-        cmd="curl -sf http://%s:%s/metrics -o %s" % (host, port, remote_path),
+        cmd="curl -sf %s http://%s:%s/metrics -o %s"
+        % (CURL_TIMEOUT_OPTS, host, port, remote_path),
     )
-    out, _ = client.exec_command(
-        sudo=True,
-        cmd="command -v promtool >/dev/null && promtool check metrics %s || echo SKIP"
-        % remote_path,
-        check_ec=False,
+    which_out, _ = client.exec_command(
+        sudo=True, cmd="command -v promtool", check_ec=False
     )
-    result = (out or "").strip()
-    if result == "SKIP":
+    if not (which_out or "").strip():
         log.info("promtool not installed on client; skipping promtool check metrics")
         verify_help_and_type(scrape_prometheus_metrics(client, host, port))
         return
-    if "SUCCESS" not in result.upper() and result:
-        raise OperationFailedError("promtool check metrics failed: %s" % result[-500:])
-    log.info("promtool check metrics passed")
+    try:
+        out, err = client.exec_command(
+            sudo=True, cmd="promtool check metrics %s" % remote_path
+        )
+    except CommandFailed as exc:
+        detail = str(exc)
+        raise OperationFailedError(
+            "promtool check metrics failed: %s" % detail[-500:]
+        ) from exc
+    result = "%s\n%s" % ((out or "").strip(), (err or "").strip())
+    log.info(
+        "promtool check metrics passed%s",
+        (": %s" % result.strip()[-200:]) if result.strip() else "",
+    )
+
+
+def _firewalld_is_running(node):
+    """Return True if firewalld is active on node; False if absent/inactive."""
+    try:
+        out, _ = node.exec_command(sudo=True, cmd="firewall-cmd --state")
+    except CommandFailed:
+        return False
+    return (out or "").strip().lower() == "running"
 
 
 def firewall_block_metrics_from_source(nfs_node, port, source_ip):
+    if not _firewalld_is_running(nfs_node):
+        raise OperationFailedError(
+            "firewalld is not running on %s; cannot block metrics port %s from %s"
+            % (nfs_node.hostname, port, source_ip)
+        )
     rule = (
         'rule family="ipv4" source address=%s port port="%s" protocol="tcp" reject'
         % (source_ip, port)
     )
-    nfs_node.exec_command(
-        sudo=True,
-        cmd="firewall-cmd --permanent --add-rich-rule='%s'" % rule,
-        check_ec=False,
-    )
-    nfs_node.exec_command(sudo=True, cmd="firewall-cmd --reload", check_ec=False)
+    try:
+        # Runtime-only so the block does not persist past the suite / firewalld restart.
+        nfs_node.exec_command(
+            sudo=True,
+            cmd="firewall-cmd --add-rich-rule='%s'" % rule,
+        )
+    except CommandFailed as err:
+        raise OperationFailedError(
+            "Failed to block metrics port %s from %s on %s: %s"
+            % (port, source_ip, nfs_node.hostname, err)
+        ) from err
     log.info(
-        "Blocked metrics port %s from source %s on %s",
+        "Blocked metrics port %s from source %s on %s (runtime)",
         port,
         source_ip,
         nfs_node.hostname,
@@ -2238,22 +2390,63 @@ def firewall_block_metrics_from_source(nfs_node, port, source_ip):
 
 
 def firewall_unblock_metrics_from_source(nfs_node, rule):
-    nfs_node.exec_command(
-        sudo=True,
-        cmd="firewall-cmd --permanent --remove-rich-rule='%s'" % rule,
-        check_ec=False,
-    )
-    nfs_node.exec_command(sudo=True, cmd="firewall-cmd --reload", check_ec=False)
+    if not _firewalld_is_running(nfs_node):
+        log.info(
+            "firewalld not running on %s; skip removing rich-rule",
+            nfs_node.hostname,
+        )
+        return
+    try:
+        nfs_node.exec_command(
+            sudo=True,
+            cmd="firewall-cmd --remove-rich-rule='%s'" % rule,
+        )
+    except CommandFailed as err:
+        raise OperationFailedError(
+            "Failed to remove firewall rich-rule on %s: %s" % (nfs_node.hostname, err)
+        ) from err
     log.info("Removed firewall rich-rule on %s", nfs_node.hostname)
 
 
 def firewall_allow_port(node, port):
-    node.exec_command(
-        sudo=True,
-        cmd=f"firewall-cmd --permanent --add-port={port}/tcp",
-        check_ec=False,
-    )
-    node.exec_command(sudo=True, cmd="firewall-cmd --reload", check_ec=False)
+    """Open a TCP port in firewalld for the current runtime only (not permanent)."""
+    if not _firewalld_is_running(node):
+        log.info(
+            "firewalld not running on %s; port %s assumed reachable",
+            node.hostname,
+            port,
+        )
+        return
+    try:
+        node.exec_command(
+            sudo=True,
+            cmd=f"firewall-cmd --add-port={port}/tcp",
+        )
+    except CommandFailed as err:
+        raise OperationFailedError(
+            "Failed to open firewall port %s/tcp on %s: %s" % (port, node.hostname, err)
+        ) from err
+    log.info("Opened runtime firewall port %s/tcp on %s", port, node.hostname)
+
+
+def firewall_remove_port(node, port):
+    """Remove a runtime firewalld TCP port opened by firewall_allow_port()."""
+    if not _firewalld_is_running(node):
+        return
+    try:
+        node.exec_command(
+            sudo=True,
+            cmd=f"firewall-cmd --remove-port={port}/tcp",
+        )
+    except CommandFailed as err:
+        log.warning(
+            "Failed to remove firewall port %s/tcp on %s: %s",
+            port,
+            node.hostname,
+            err,
+        )
+        return
+    log.info("Removed runtime firewall port %s/tcp on %s", port, node.hostname)
 
 
 def run_ganesha_stats(nfs_node, container_id, *args):
@@ -2672,21 +2865,22 @@ def create_exports(nfs_node, nfs_name, fs_name, count, prefix="/export_prom"):
 
 def mount_export(client, server, export, mount_path, version, port):
     client.create_dirs(dir_path=mount_path, sudo=True)
-    if Mount(client).nfs(
-        mount=mount_path,
-        version=version,
-        port=port,
-        server=server,
-        export=export,
-    ):
-        raise OperationFailedError(
-            f"Failed to mount {server}:{export} on {client.hostname}"
+    try:
+        Mount(client).nfs(
+            mount=mount_path,
+            version=version,
+            port=port,
+            server=server,
+            export=export,
         )
+    except MountFailedError as err:
+        raise OperationFailedError(
+            f"Failed to mount {server}:{export} on {client.hostname}: {err}"
+        ) from err
 
 
 def unmount_export(client, mount_path):
-    if Unmount(client).unmount(mount_path):
-        raise OperationFailedError(f"Failed to unmount {mount_path}")
+    Unmount(client).unmount(mount_path)
 
 
 def delete_exports(nfs_node, nfs_name, exports):
@@ -2698,10 +2892,40 @@ def delete_exports(nfs_node, nfs_name, exports):
 
 
 def inject_permission_error(client, mount_path):
+    """Exercise an NFS operation that should return EACCES/EPERM.
+
+    Creates a mode-000 file and reads it as an unprivileged user so the
+    client receives permission denied (not ENOENT from a missing path).
+    """
+    denied_path = f"{mount_path}/a06_perm_denied_{uuid.uuid4().hex[:8]}"
     client.exec_command(
+        sudo=True, cmd=f"touch {denied_path} && chmod 000 {denied_path}"
+    )
+    # Prefer nobody/cephuser so root_squash / local root bypass does not hide EACCES.
+    out, err = client.exec_command(
         sudo=True,
-        cmd=f"stat {mount_path}/no_such_file_for_getattr_test",
+        cmd=(
+            "runuser -u nobody -- cat {0} 2>&1 || "
+            "su -s /bin/bash nobody -c 'cat {0}' 2>&1 || "
+            "su -s /bin/bash cephuser -c 'cat {0}' 2>&1 || "
+            "true"
+        ).format(denied_path),
         check_ec=False,
+    )
+    combined = "%s\n%s" % ((out or "").strip(), (err or "").strip())
+    if not any(
+        token in combined.lower()
+        for token in ("permission denied", "operation not permitted")
+    ):
+        log.warning(
+            "inject_permission_error: expected EACCES/EPERM for %s; got: %s",
+            denied_path,
+            combined[-300:],
+        )
+    else:
+        log.info("inject_permission_error: permission-denied I/O on %s", denied_path)
+    client.exec_command(
+        sudo=True, cmd=f"chmod 644 {denied_path} && rm -f {denied_path}", check_ec=False
     )
 
 
