@@ -10,7 +10,7 @@ from urllib.parse import quote
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
-from cli.utilities.filesys import Mount, MountFailedError, Unmount
+from cli.utilities.filesys import Mount, Unmount
 from tests.nfs.nfs_delegation_operations import (
     backup_ganesha_template,
     ensure_ceph_conf_and_admin_keyring_on_hosts,
