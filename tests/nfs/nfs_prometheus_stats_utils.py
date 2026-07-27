@@ -1210,14 +1210,13 @@ def metric_available(names, metric_name):
 def verify_manifest_v1(metrics_text):
     names = parse_prometheus_metrics(metrics_text)
     missing = []
-    optional_missing = []
     for metric in MANIFEST_V1_COUNTERS + MANIFEST_V1_GAUGES + MANIFEST_V1_HISTOGRAMS:
-        if metric_available(names, metric):
-            continue
-        if metric in MANIFEST_V1_OPTIONAL:
-            optional_missing.append(metric)
-        else:
+        if not metric_available(names, metric):
             missing.append(metric)
+
+    optional_missing = [
+        metric for metric in MANIFEST_V1_OPTIONAL if not metric_available(names, metric)
+    ]
     if optional_missing:
         log.warning("Manifest v1 optional metrics not present: %s", optional_missing)
     if "mdcache_cache_hits_total" in missing and metric_available(
