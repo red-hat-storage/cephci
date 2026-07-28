@@ -819,6 +819,8 @@ class CephFSCommonUtils(FsUtils):
                 "collecting container logs",
                 nfs_name,
             )
+        else:
+            log.info(f"NFS daemons: {daemons}")
         for daemon in daemons:
             daemon_name = daemon.get("daemon_name")
             hostname = daemon.get("hostname")
@@ -835,12 +837,22 @@ class CephFSCommonUtils(FsUtils):
                     hostname,
                 )
                 continue
+            # Copy /var/log/messages file from nfs node to log directory
+            remote_messages_log = "/var/log/messages"
+            local_messages_log = os.path.join(nfs_log_dst, "messages.log")
+            nfs_node.download_file(
+                src=remote_messages_log, dst=local_messages_log, sudo=True
+            )
+            log.info(
+                f"Copied /var/log/messages file from {nfs_node.node.hostname} to {local_messages_log}"
+            )
             remote_log = f"/tmp/{daemon_name}_cephadm.log"
             nfs_node.exec_command(
                 sudo=True,
                 cmd=f"cephadm logs --name {daemon_name} > {remote_log}",
                 check_ec=False,
             )
+
             if dump_output:
                 out, _ = nfs_node.exec_command(
                     sudo=True,
@@ -853,7 +865,14 @@ class CephFSCommonUtils(FsUtils):
                     cmd=f"cephadm logs --name {daemon_name}",
                     check_ec=False,
                 )
-                log.info(f"NFS container logs: {out}")
+                log.info(f"NFS container cephadm logs: {out}")
+                if container_id:
+                    out_podman, _ = nfs_node.exec_command(
+                        sudo=True,
+                        cmd=f"podman logs {container_id}",
+                        check_ec=False,
+                    )
+                    log.info(f"NFS container podman logs: {out_podman}")
             local_log = os.path.join(
                 nfs_log_dst, f"{daemon_name}_{hostname}_cephadm.log"
             )
@@ -884,4 +903,5 @@ class CephFSCommonUtils(FsUtils):
                     daemon_name,
                     local_podman_log,
                 )
+
         return 0

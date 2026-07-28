@@ -40,6 +40,7 @@ def run(ceph_cluster, **kw):
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
         )
+        nfs_servers = ceph_cluster_dict.get("ceph1").get_ceph_objects("nfs")
         env = fs_mirroring_utils.prepare_env_snapdiff(
             config, ceph_cluster_dict, test_data
         )
@@ -56,7 +57,10 @@ def run(ceph_cluster, **kw):
         cephfs_mirror_node = env["cephfs_mirror_node"]
         nfs_server = env["nfs_server"]
         nfs_name = env["nfs_name"]
-
+        nfs_server_node = None
+        for nfs_server_iter in nfs_servers:
+            if nfs_server in nfs_server_iter.node.hostname:
+                nfs_server_node = nfs_server_iter
         target_user = "mirror_remote_user_snap_diff_1"
         target_site = "remote_site_snap_diff_1"
 
@@ -94,6 +98,32 @@ def run(ceph_cluster, **kw):
                 subvol_name=subvol,
                 group_name=subvol_group_name,
             )
+
+        def get_ganesha_pid(nfs_server_node):
+            try:
+                netstat_out, _ = nfs_server_node.exec_command(
+                    sudo=True, cmd="netstat -anp | grep ganesha"
+                )
+                log.info(f"NFS netstat: {netstat_out}")
+                pid_out, _ = nfs_server_node.exec_command(
+                    sudo=True, cmd="pgrep ganesha"
+                )
+                log.info(f"NFS pgrep: {pid_out}")
+                pid = pid_out.strip()
+                # if pid is null, return None
+                if not pid:
+                    return None
+                log.info(
+                    f"ganesha process PID for {nfs_server_node.node.hostname}: {pid}"
+                )
+                return pid
+            except Exception as e:
+                log.error(f"Error getting ganesha process PID: {e}")
+                return None
+
+        ganesha_pid = get_ganesha_pid(nfs_server_node)
+        if not ganesha_pid:
+            log.error("Failed to get ganesha process PID")
         try:
             mount_paths, subvol_paths, export_binding = (
                 fs_mirroring_utils.mount_subvolumes_snapdiff(
@@ -121,6 +151,9 @@ def run(ceph_cluster, **kw):
                     )
                 except Exception as log_ex:
                     log.error("Failed to collect NFS container debug logs: %s", log_ex)
+                ganesha_pid = get_ganesha_pid(nfs_server_node)
+                if not ganesha_pid:
+                    log.error("Failed to get ganesha process PID")
             raise Exception("Mount operation failed")
         log.info(f"Mount Paths : {mount_paths}")
         log.info(f"Sub Volume Paths : {subvol_paths}")
@@ -461,7 +494,14 @@ def run(ceph_cluster, **kw):
                 )
 
             fs_util_ceph1.remove_nfs_cluster(source_clients[0], nfs_name, validate=True)
-
+            fsid = fs_util_ceph1.get_fsid(source_clients[0])
+            try:
+                out, _ = nfs_server_node.exec_command(
+                    sudo=True, cmd=f"ls -l /var/lib/ceph/{fsid}/nfs*/"
+                )
+                log.error(f"nfs files: {out}")
+            except Exception as e:
+                log.info(f"nfs files doesn't exist in nfs node: {e}")
             log.info("Destroy CephFS Mirroring setup.")
             fs_mirroring_utils.destroy_cephfs_mirroring(
                 source_fs,

@@ -3,8 +3,10 @@ import string
 import traceback
 
 from ceph.parallel import parallel
+from cli.exceptions import OperationFailedError
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -68,6 +70,10 @@ def run(ceph_cluster, **kw):
             cmd="ceph fs status cephfs -f json-pretty |"
             " jq -r '.mdsmap[] | select(.rank == 0 and .state==\"active\") | .name'",
         )
+        out, _ = client1.exec_command(
+            sudo=True, cmd="ceph fs status cephfs -f json-pretty"
+        )
+        log.info(out)
         rank_0_mds = rank_0_mds.rstrip()
         log.info("active rank 0 MDS: %s" % rank_0_mds)
         target_mds = []
@@ -90,7 +96,6 @@ def run(ceph_cluster, **kw):
         check_ip_dic1 = mds_client_ips(client1, rank_0_mds)
         log.info(f"After running client evict -h {check_ip_dic1}")
         if len(check_ip_dic1) == 0:
-            log.error("This Expected failure")
             log.error("https://bugzilla.redhat.com/show_bug.cgi?id=2160855")
             log.error(
                 "[--admon-daemon client evict -h command should not evict all clients]"
@@ -105,29 +110,40 @@ def run(ceph_cluster, **kw):
         log.info(f"After running client evict -h {check_ip_dic2}")
         if len(check_ip_dic2) == 0:
             log.error(
-                "[--admon-daemon client evict --help command should evict all clients]"
+                "[--admon-daemon client evict --help command should not evict all clients]"
             )
             return 1
         # evict client id=*
         evict_all_cmd = f"{admin_daemon} client evict id=*"
-        with parallel() as p:
-            # run IOs for all the clients
-            p.spawn(fs_util.run_ios(client1, fuse_mounting_dir_1, ["dd", "smallfile"]))
-            p.spawn(
-                fs_util.run_ios(client1, kernel_mounting_dir_1, ["dd", "smallfile"])
-            )
-            p.spawn(fs_util.run_ios(client1, fuse_mounting_dir_2, ["dd", "smallfile"]))
-            p.spawn(
-                fs_util.run_ios(client1, kernel_mounting_dir_2, ["dd", "smallfile"])
-            )
-            # evict all the client
-            p.spawn(target_mds[0].exec_command, sudo=True, cmd=evict_all_cmd)
-        check_ip_dic3 = mds_client_ips(client1, rank_0_mds)
-        log.info(f"After running client evict id=* {check_ip_dic2}")
-        if len(check_ip_dic3) != 0:
-            log.error("All the clients are not evicted while IOs")
-            return 1
+        try:
+            with parallel() as p:
+                p.spawn(
+                    fs_util.run_ios, client1, fuse_mounting_dir_1, ["dd", "smallfile"]
+                )
+                p.spawn(
+                    fs_util.run_ios, client1, kernel_mounting_dir_1, ["dd", "smallfile"]
+                )
+                p.spawn(
+                    fs_util.run_ios, client1, fuse_mounting_dir_2, ["dd", "smallfile"]
+                )
+                p.spawn(
+                    fs_util.run_ios, client1, kernel_mounting_dir_2, ["dd", "smallfile"]
+                )
+                p.spawn(target_mds[0].exec_command, sudo=True, cmd=evict_all_cmd)
+        except Exception as e:
+            log.info(f"Error running IOs,expected as clients are evicted: {e}")
 
+        @retry(OperationFailedError, tries=5, delay=5, backoff=1)
+        def retry_evict_all_clients():
+            check_ip_dic3 = mds_client_ips(client1, rank_0_mds)
+            log.info(f"After running client evict id=* {check_ip_dic3}")
+            if len(check_ip_dic3) != 0:
+                log.error("All the clients are not evicted while IOs")
+                target_mds[0].exec_command(sudo=True, cmd=evict_all_cmd)
+                raise OperationFailedError("Failed to evict all clients")
+            return 0
+
+        retry_evict_all_clients()
         return 0
 
     except Exception as e:

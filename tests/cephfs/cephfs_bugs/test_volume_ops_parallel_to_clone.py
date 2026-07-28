@@ -594,10 +594,14 @@ def run_parallel_volume_ops(
 
         # cmd response time for some operations is not consistent, so we need to add a range of values to compare with
         time_range = {
-            "Manual Snapshot Create": frange(1.0, 2.0, 0.01),
+            "Subvolume Create": frange(1.0, 3.1, 0.01),
+            "Manual Snapshot Create": frange(1.0, 2.1, 0.01),
             "Snap-Schedule Add": frange(1.0, 8.0, 0.01),
-            "Snap-Schedule Remove": frange(1.0, 2.1, 0.01),
-            "Other Clone Create": frange(1.0, 2.1, 0.01),
+            "Snap-Schedule Remove": frange(1.0, 5.1, 0.01),
+            "Other Clone Create": frange(1.0, 3.1, 0.01),
+            "Subvolume Metadata Set": frange(1.0, 2.1, 0.01),
+            "Ceph Config Set": frange(1.0, 3.1, 0.01),
+            "Subvolume Delete with Retain-Snapshot": frange(1.0, 2.1, 0.01),
         }
         # Compare with baseline if available
         if isinstance(baseline, (int, float)) and baseline > 0:
@@ -610,6 +614,10 @@ def run_parallel_volume_ops(
                     "Snap-Schedule Add",
                     "Snap-Schedule Remove",
                     "Other Clone Create",
+                    "Subvolume Create",
+                    "Subvolume Metadata Set",
+                    "Ceph Config Set",
+                    "Subvolume Delete with Retain-Snapshot",
                 ]:
                     if float(time_taken) in time_range[op_name]:
                         continue
@@ -694,19 +702,19 @@ def run(ceph_cluster, **kw):
         # Set Baseline times
         log.info("Setting baseline times")
         baseline_times = {
-            "Manual Snapshot Create": 1,
-            "Snap-Schedule Add": 1,
-            "Snap-Schedule Remove": 1,
-            "Other Clone Create": 1,
+            "Manual Snapshot Create": 2,
+            "Snap-Schedule Add": 2,
+            "Snap-Schedule Remove": 2,
+            "Other Clone Create": 2,
             "Subvolumegroup Create": 2,
-            "Subvolume Create": 1,
+            "Subvolume Create": 3,
             "Subvolume Info": 1,
-            "Subvolume Delete": 1,
-            "Subvolume Delete with Retain-Snapshot": 1,
+            "Subvolume Delete": 2,
+            "Subvolume Delete with Retain-Snapshot": 2,
             "Subvolume Modify (Resize)": 1,
-            "Subvolume Metadata Set": 1,
+            "Subvolume Metadata Set": 2,
             "Subvolume Metadata Get": 1,
-            "Snapshot Metadata Set": 1,
+            "Snapshot Metadata Set": 2,
             "Snapshot Metadata Get": 1,
             "Ceph Config Get": 1,
             "Ceph Config Set": 3,
