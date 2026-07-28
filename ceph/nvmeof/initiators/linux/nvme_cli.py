@@ -132,6 +132,74 @@ class NVMeCLI(Cli):
 
         return namespace_list if nsid_device_pair else devices
 
+    def id_ctrl(self, device, **kwargs):
+        """Identify controller.
+
+        Example::
+
+            kwargs:
+                output-format: json             # output format
+                human-readable: True            # human readable (-H)
+        """
+        return self.execute(
+            cmd=f"nvme id-ctrl {device} {config_dict_to_string(kwargs)}",
+            sudo=True,
+        )
+
+    def id_ns(self, device, **kwargs):
+        """Identify namespace.
+
+        Example::
+
+            kwargs:
+                namespace-id: 1                   # NSID
+                output-format: json             # output format
+                human-readable: True            # human readable (-H)
+        """
+        return self.execute(
+            cmd=f"nvme id-ns {device} {config_dict_to_string(kwargs)}",
+            sudo=True,
+        )
+
+    def copy(self, device, **kwargs):
+        """Execute NVMe Copy (CNC) command.
+
+        Destination is ``device``. Source ranges use ``slbs``, ``blocks``,
+        ``snsids`` (comma-separated for multi-range). Use ``format=2`` for
+        cross-namespace copy descriptors.
+
+        Example::
+
+            kwargs:
+                sdlba: 1000
+                slbs: 5000                      # or "5000,9000"
+                blocks: 1255                    # or "99,199"
+                snsids: 1                       # or "1,1"
+                format: 2
+        """
+        check_ec = kwargs.pop("check_ec", True)
+        return self.execute(
+            cmd=f"nvme copy {device} {config_dict_to_string(kwargs)}",
+            sudo=True,
+            check_ec=check_ec,
+        )
+
+    def read(self, device, **kwargs):
+        """Read logical blocks from an NVMe namespace.
+
+        Example::
+
+            kwargs:
+                start-block: 1000
+                block-count: 99                 # 0-based count (NLB - 1)
+                data-size: 51200
+                data: /tmp/region.bin
+        """
+        return self.execute(
+            cmd=f"nvme read {device} {config_dict_to_string(kwargs)}",
+            sudo=True,
+        )
+
     def disconnect(self, **kwargs):
         """Disconnect controller connected to the subsystem.
 
