@@ -138,7 +138,12 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
                 args["port"] = sub_cfg.get("listener_port")
             if sub_cfg.get("secure_listener"):
                 args["secure_listeners"] = sub_cfg.get("secure_listener")
-            args["network-mask"] = get_network_mask(nvme_service.gateways)
+            # Prefer suite-defined network-mask; else derive from GW primary IPs
+            args["network-mask"] = (
+                sub_cfg.get("network_mask")
+                or sub_cfg.get("network-mask")
+                or get_network_mask(nvme_service.gateways)
+            )
 
         gateway.subsystem.add(**{"args": args})
 
@@ -419,6 +424,21 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
             validate_namespaces(gateway, expected_namespaces, nqn)
 
 
+def _hostnames_match(actual, expected):
+    """
+    Compare listener hostnames allowing short vs FQDN forms.
+
+    Baremetal cephci nodes often use ``hostname -s`` (e.g. tala010) while
+    NVMeoF auto-listeners register the cluster host FQDN
+    (e.g. tala010.ceph.tuc.ibm.com).
+    """
+    if actual == expected:
+        return True
+    if not actual or not expected:
+        return False
+    return str(actual).split(".")[0] == str(expected).split(".")[0]
+
+
 def validate_listeners(gateway, expected_listeners, nqn):
     """
     Validate that all the expected listeners are correctly configured in the gateway.
@@ -438,7 +458,9 @@ def validate_listeners(gateway, expected_listeners, nqn):
                 listener.get("traddr") == expected_listener.get("traddr")
                 and str(listener.get("trsvcid"))
                 == str(expected_listener.get("trsvcid"))
-                and listener.get("host_name") == expected_listener.get("host-name")
+                and _hostnames_match(
+                    listener.get("host_name"), expected_listener.get("host-name")
+                )
             ):
                 match_found = True
                 break

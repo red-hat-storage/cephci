@@ -1,0 +1,145 @@
+# Baremetal cluster for NVMeoF Auto-listeners + Refresh Network (ISCE-2203 / ISCE-5078)
+#
+# Minimum requirement: each NVMeoF GW node has >= 2 non-loopback IPv4 interfaces.
+# The suite discovers them via `ip a` (no hardcoded iface names):
+#   - primary   = IPv4 hosting the GW (node ip below)
+#   - secondary = another IPv4 on a different iface (used for add_network / refresh)
+#
+# Update hostname / ip / root_password / volumes to match the lab.
+#
+# Suggested run:
+#   conf/tentacle/nvmeof/ceph_nvmeof_refresh-network-baremetal.yaml
+#   suites/tentacle/nvmeof/tier-2_nvmeof_e2e_refresh-network.yaml
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.64.0.0/23
+      nodes:
+        - hostname: tala002
+          id: node1
+          ip: 10.64.0.188
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - installer
+            - _admin
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala003
+          id: node2
+          ip: 10.64.0.189
+          root_password: passwd
+          role:
+            - mon
+            - osd
+            - mgr
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala004
+          id: node3
+          ip: 10.64.0.190
+          root_password: passwd
+          role:
+            - mon
+            - osd
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala005
+          id: node4
+          ip: 10.64.0.191
+          root_password: passwd
+          role:
+            - osd
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        # 4x NVMeoF gateways — each must expose >= 2 IPv4 interfaces
+        - hostname: tala010
+          id: node5
+          ip: 10.64.0.196
+          root_password: passwd
+          role:
+            - nvmeof-gw
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala011
+          id: node6
+          ip: 10.64.0.197
+          root_password: passwd
+          role:
+            - nvmeof-gw
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala012
+          id: node7
+          ip: 10.64.0.198
+          root_password: passwd
+          role:
+            - nvmeof-gw
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala013
+          id: node8
+          ip: 10.64.0.199
+          root_password: passwd
+          role:
+            - nvmeof-gw
+          volumes:
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/nvme0n1
+
+        - hostname: tala001
+          id: node9
+          ip: 10.64.0.187
+          root_password: passwd
+          role:
+            - client

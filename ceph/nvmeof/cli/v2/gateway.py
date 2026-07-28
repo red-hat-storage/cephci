@@ -19,5 +19,9 @@ class Gateway:
     def set_log_level(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "set_log_level", **kwargs)
 
+    def refresh_network(self, **kwargs):
+        """Re-evaluate subsystem network masks and update auto-listeners."""
+        return self.base.run_nvme_cli(self.name, "refresh_network", **kwargs)
+
     def version(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "version", **kwargs)
