@@ -9,6 +9,12 @@ KEY_MAP = {
     "auto-resize-enabled-false": "auto-resize-enabled=false",
 }
 
+# Ceph CLI treats --force as a valued bool on several ns commands; bare --force
+# consumes the next arg (e.g. --gw_group). Map to --force=true like subsystem.del.
+FORCE_KEY_MAP = {
+    "force": "force=true",
+}
+
 
 class Namespace:
     """NVMeoF Namespace operations."""
@@ -21,6 +27,7 @@ class Namespace:
         """Adds namespace for subsystem."""
         return self.base.run_nvme_cli(self.name, "add", **kwargs)
 
+    @substitute_keys(FORCE_KEY_MAP)
     def add_host(self, **kwargs):
         """Add a host to a namespace."""
         return self.base.run_nvme_cli(self.name, "add_host", **kwargs)
@@ -31,10 +38,12 @@ class Namespace:
             self.name, "change_load_balancing_group", **kwargs
         )
 
+    @substitute_keys(FORCE_KEY_MAP)
     def change_visibility(self, **kwargs):
         """Change visibility for namespace under subsystem."""
         return self.base.run_nvme_cli(self.name, "change_visibility", **kwargs)
 
+    @substitute_keys(FORCE_KEY_MAP)
     def delete(self, **kwargs):
         """Delete a namespace from a subsystem."""
         return self.base.run_nvme_cli(self.name, "del", **kwargs)
@@ -47,15 +56,24 @@ class Namespace:
         """Get IO Stats for namespace."""
         return self.base.run_nvme_cli(self.name, "get_io_stats", **kwargs)
 
+    def get(self, **kwargs):
+        """Get namespace details."""
+        return self.base.run_nvme_cli(self.name, "get", **kwargs)
+
     def list(self, **kwargs):
         """Lists namespaces under subsystem."""
         return self.base.run_nvme_cli(self.name, "list", **kwargs)
+
+    def list_hosts(self, **kwargs):
+        """List hosts allowed for a namespace."""
+        return self.base.run_nvme_cli(self.name, "list_hosts", **kwargs)
 
     @substitute_keys(KEY_MAP)
     def resize(self, **kwargs):
         """Resize namespace under subsystem."""
         return self.base.run_nvme_cli(self.name, "resize", **kwargs)
 
+    @substitute_keys(FORCE_KEY_MAP)
     def set_qos(self, **kwargs):
         """Set QoS for a namespace."""
         return self.base.run_nvme_cli(self.name, "set_qos", **kwargs)

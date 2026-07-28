@@ -1,4 +1,4 @@
-# Ceph NVMeoF CLI Operations Suite - v9.0
+# Ceph NVMeoF CLI Operations Suite - v9.x
 # cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_sanity.yaml
 # Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
 
@@ -87,6 +87,14 @@ tests:
               args:
                 - rbd create -s 1G image1
           - config:
+              command: shell
+              args:
+                - rbd namespace create rbd/nvme_rns
+          - config:
+              command: shell
+              args:
+                - rbd create -s 1G rbd/nvme_rns/rns_image1
+          - config:
               command: apply
               service: nvmeof
               args:
@@ -120,8 +128,33 @@ tests:
               service: gateway
               command: info             # gateway info
           - config:
+              service: gateway
+              command: get_log_level    # gateway get_log_level
+              base_cmd_args:
+                format: json
+          - config:
+              service: gateway
+              command: set_log_level    # gateway set_log_level
+              args:
+                level: warning
+          - config:
+              service: gateway
+              command: get_log_level    # verify gateway set_log_level
+              base_cmd_args:
+                format: json
+          - config:
+              service: gateway
+              command: get_stats        # gateway get_stats
+              base_cmd_args:
+                format: json
+          - config:
+              service: gateway
+              command: get_thread_stats # gateway get_thread_stats
+              base_cmd_args:
+                format: json
+          - config:
               service: loglevel
-              command: get
+              command: get              # SPDK log level get
               base_cmd_args:
                 format: json
           - config:
@@ -138,10 +171,11 @@ tests:
                 format: json
           - config:
               service: subsystem
-              command: add              # Subsystem add with groupName
+              command: add              # Subsystem add with groupName + max_namespaces
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
                 serial-number: 1
+                max-namespaces: 256
               validate:
                 omap: true
           - config:
@@ -151,6 +185,34 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 serial-number: 2
                 no-group-append: true
+                max-namespaces: 128
+              validate:
+                omap: true
+          - config:
+              service: subsystem
+              command: add              # Subsystem add with network_mask/port at create
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode3
+                serial-number: 3
+                no-group-append: true
+                max-namespaces: 64
+                network-mask: node6
+                port: 4421
+              validate:
+                omap: true
+          - config:
+              service: subsystem
+              command: get              # Subsystem get (cnode3)
+              base_cmd_args:
+                format: json
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode3
+          - config:
+              service: subsystem
+              command: delete           # subsystem delete with --force
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode3
+                force: true
               validate:
                 omap: true
           - config:
@@ -162,6 +224,39 @@ tests:
               base_cmd_args:
                 format: json
           - config:
+              service: subsystem
+              command: list             # Subsystem list filtered by nqn
+              base_cmd_args:
+                format: json
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+          - config:
+              service: subsystem
+              command: list             # Subsystem list filtered by serial_number
+              base_cmd_args:
+                format: json
+              args:
+                serial-number: 2
+          - config:
+              service: subsystem
+              command: get              # Subsystem get
+              base_cmd_args:
+                format: json
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+          - config:
+              service: subsystem
+              command: add_network      # Subsystem add_network
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                network-mask: node6
+          - config:
+              service: subsystem
+              command: del_network      # Subsystem del_network
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                network-mask: node6
+          - config:
               service: connection
               command: list             # Subsystem connection list
               base_cmd_args:
@@ -170,12 +265,15 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
               service: listener
-              command: add                # Listener add
+              command: add                # Listener add with adrfam + verify-host-name + force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 host-name: node6
                 trsvcid: 5001
                 traddr: node6
+                adrfam: 0
+                verify-host-name: true
+                force: true
               validate:
                 omap: true
               base_cmd_args:
@@ -192,14 +290,17 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
               service: listener
-              command: delete             # listener del
+              command: delete             # listener del with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 host-name: node6
                 trsvcid: 5001
                 traddr: node6
+                force: true
               validate:
                 omap: true
+          # DHCHAP host/subsystem key ops require nvmeof encryption_key; covered by
+          # tier-2_nvmeof_encryption_dhchap_e2e / tier-2_nvmeof_9-1_feature / dhchap_controller tests.
           - config:
               service: host
               command: add              # add Host access
@@ -215,12 +316,16 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
               service: namespace
-              command: add              # Namespace add
+              command: add              # Namespace add with uuid/block_size/disable-auto-resize/force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 rbd-image: image1
                 rbd-pool: rbd
                 nsid: 1
+                uuid: 11111111-2222-3333-4444-555555555555
+                block-size: 512
+                disable-auto-resize: true
+                force: true
               validate:
                 omap: true
           - config:
@@ -265,11 +370,13 @@ tests:
                 omap: true
           - config:
               service: namespace
-              command: set_auto_resize              # Namespace add with set_auto_resize turnoff
+              command: add              # Namespace add with rados_namespace
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
-                nsid: 3
-                auto-resize-enabled: 'no'
+                rbd-image: rns_image1
+                rbd-pool: rbd
+                nsid: 5
+                rados-namespace: nvme_rns
               validate:
                 omap: true
           - config:
@@ -296,7 +403,22 @@ tests:
                 format: json
           - config:
               service: namespace
+              command: list             # namespace list using uuid filter
+              args:
+                uuid: 11111111-2222-3333-4444-555555555555
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
               command: list             # namespace list for all subsystems
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: get              # namespace get
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 1
               base_cmd_args:
                 format: json
           - config:
@@ -313,7 +435,7 @@ tests:
                 omap: true
           - config:
               service: namespace
-              command: set_qos             # namespace set_qos
+              command: set_qos             # namespace set_qos with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
@@ -321,6 +443,7 @@ tests:
                 rw-megabytes-per-second: 59
                 r-megabytes-per-second: 59
                 w-megabytes-per-second: 59
+                force: true
               validate:
                 omap: true
           - config:
@@ -387,14 +510,24 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 4
-                force: 'true'
+                force: true
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: delete           # namespace delete (rados_namespace image)
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 5
+                force: true
               validate:
                 omap: true
           - config:
               service: subsystem
-              command: delete           # subsystem delete
+              command: delete           # subsystem delete with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+                force: true
               validate:
                 omap: true
           - config:
@@ -409,12 +542,15 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
           - config:
               service: listener
-              command: add                # Listener add
+              command: add                # Listener add with adrfam + verify-host-name + force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 host-name: node6
                 trsvcid: 5001
                 traddr: node6
+                adrfam: 0
+                verify-host-name: true
+                force: true
               validate:
                 omap: true
               base_cmd_args:
@@ -434,9 +570,10 @@ tests:
                 omap: true
           - config:
               service: host
-              command: list             # List access hosts
+              command: list             # List access hosts with --clear-alerts
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                clear-alerts: true
           - config:
               service: gateway
               command: listener_info             # List ana states for subsystem
@@ -508,11 +645,11 @@ tests:
                 omap: true
           - config:
               service: namespace
-              command: set_auto_resize              # Namespace add with set_auto_resize turn-on
+              command: set_auto_resize              # set_auto_resize enable (BZ 2402045 KEY_MAP)
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 4
-                auto-resize-enabled: 'yes'
+                auto-resize-enabled-true: true
               validate:
                 omap: true
           - config:
@@ -544,11 +681,28 @@ tests:
                 format: json
           - config:
               service: namespace
-              command: add_host             # namespace add_host
+              command: get              # namespace get
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 1
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: add_host             # namespace add_host with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 3
                 host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080b
+                force: true
+          - config:
+              service: namespace
+              command: list_hosts           # namespace list_hosts after add_host
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 3
+              base_cmd_args:
+                format: json
           - config:
               service: namespace
               command: add_host             # namespace add_host
@@ -556,6 +710,14 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 4
                 host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080c
+          - config:
+              service: namespace
+              command: list_hosts           # namespace list_hosts after add_host
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 4
+              base_cmd_args:
+                format: json
           - config:
               service: namespace
               command: list             # namespace list
@@ -577,7 +739,7 @@ tests:
                 omap: true
           - config:
               service: namespace
-              command: set_qos             # namespace set_qos
+              command: set_qos             # namespace set_qos with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
@@ -585,6 +747,7 @@ tests:
                 rw-megabytes-per-second: 59
                 r-megabytes-per-second: 59
                 w-megabytes-per-second: 59
+                force: true
               validate:
                 omap: true
           - config:
@@ -643,11 +806,12 @@ tests:
                 host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080c
           - config:
               service: namespace
-              command: change_visibility              # Namespace change_visibility
+              command: change_visibility              # Namespace change_visibility with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 3
                 auto-visible: 'yes'
+                force: true
           - config:
               service: namespace
               command: change_visibility              # Namespace change_visibility
@@ -657,11 +821,12 @@ tests:
                 auto-visible: 'yes'
           - config:
               service: namespace
-              command: change_visibility              # Namespace change_visibility
+              command: change_visibility              # Namespace change_visibility with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
                 auto-visible: 'no'
+                force: true
           - config:
               service: namespace
               command: change_visibility              # Namespace change_visibility
@@ -676,6 +841,16 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
               base_cmd_args:
                 format: json
+          # Exercise set_auto_resize disable via KEY_MAP (auto-resize-enabled=false)
+          - config:
+              service: namespace
+              command: set_auto_resize              # set_auto_resize disable (BZ 2402045 KEY_MAP)
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 3
+                auto-resize-enabled-false: true
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
@@ -714,32 +889,35 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 5
-                force: 'true'
+                force: true
               validate:
                 omap: true
           - config:
               service: listener
-              command: delete             # listener del
+              command: delete             # listener del with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 host-name: node6
                 trsvcid: 5001
                 traddr: node6
+                force: true
               validate:
                 omap: true
           - config:
               service: host
-              command: delete           # access host del
+              command: delete           # access host del with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 host: '"*"'
+                force: true
               validate:
                 omap: true
           - config:
               service: subsystem
-              command: delete           # subsystem delete
+              command: delete           # subsystem delete with --force
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                force: true
               validate:
                 omap: true
           - config:
@@ -754,7 +932,6 @@ tests:
       destroy-cluster: false
       module: test_nvme_cli.py
       name: Manage nvmeof gateway entities
-      comments: product bug 2402045
       polarion-id: CEPH-83575783
 
   - test:

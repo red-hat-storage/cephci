@@ -5,6 +5,7 @@ The intent of the suite is to simulate a standard operating procedure expected b
 customer.
 """
 
+import ipaddress
 from copy import deepcopy
 
 from ceph.ceph import Ceph
@@ -20,6 +21,36 @@ from tests.nvmeof.workflows.nvme_utils import (
 from utility.log import Log
 
 LOG = Log(__name__)
+
+
+def _resolve_network_mask(ceph_cluster, network_mask, fallback_node=None):
+    """Resolve node-id based network-mask values to CIDR (e.g. node6 -> x.x.x.0/24).
+
+    Raises ValueError if a non-CIDR value cannot be resolved to a node IP.
+    """
+    if not network_mask or "/" in str(network_mask):
+        return network_mask
+
+    node = get_node_by_id(ceph_cluster, network_mask)
+    if node is None and fallback_node is not None:
+        # Suites often use the GW CLI node id (e.g. node6) as network-mask shorthand.
+        fb_id = getattr(fallback_node, "id", None)
+        fb_host = getattr(fallback_node, "hostname", "") or ""
+        if network_mask == fb_id or network_mask in fb_host.split("-"):
+            node = fallback_node
+
+    if node is None:
+        raise ValueError(
+            f"Unable to resolve network-mask '{network_mask}' to a CIDR; "
+            "provide a CIDR (e.g. 10.0.0.0/24) or a valid cluster node id"
+        )
+
+    ip = getattr(node, "ip_address", None)
+    if not ip:
+        raise ValueError(
+            f"Node '{network_mask}' has no ip_address; cannot build network-mask CIDR"
+        )
+    return str(ipaddress.ip_network(f"{ip}/24", strict=False))
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
@@ -83,13 +114,32 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             command = cfg.pop("command")
 
             _cls = fetch_method(nvmegwcli, service)
-            if service in "listener" and command in ["add", "delete"]:
+            if service == "listener" and command in ["add", "delete"]:
                 gw_node = get_node_by_id(ceph_cluster, cfg["args"]["host-name"])
                 cfg["args"].update(
                     {"host-name": gw_node.hostname, "traddr": gw_node.ip_address}
                 )
                 if nvmegwcli.cli_version != "v2":
                     cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
+            # Resolve node-id network masks (e.g. node6 -> x.x.x.0/24) for any
+            # subsystem command that accepts network_mask (add, add_network, del_network).
+            # Required for suite step subsystem add cnode3 (network-mask: node6).
+            if service == "subsystem" and cfg.get("args"):
+                for key in ("network-mask", "network_mask"):
+                    if key in cfg["args"]:
+                        resolved = _resolve_network_mask(
+                            ceph_cluster,
+                            cfg["args"][key],
+                            fallback_node=node,
+                        )
+                        LOG.info(
+                            "Resolved subsystem %s %s=%r -> %r",
+                            command,
+                            key,
+                            cfg["args"][key],
+                            resolved,
+                        )
+                        cfg["args"][key] = resolved
             func = fetch_method(_cls, command)
             func(**cfg)
 
