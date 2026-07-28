@@ -1,0 +1,263 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_mirror_enhancements_92.yaml
+# Test-Case: CephFS Mirroring 9.2 Enhancements — Functional Tests
+#
+# Covers:
+#   - Improved Stats: R1, R2, R5, R7, R12, R16 (dual asok + MGR validation)
+#   - Disruptive Ops: R8 (sync failure, recovery)
+#   - Table 0: Asok Metrics — 12 scenarios (schema, sync-mode, ETA, crawl,
+#                throughput, failure, zero-file, snapdiff, monotonicity)
+#   - Table 1: MGR Interface — 10 scenarios (status, OMAP, cache, stale,
+#                module bounce, CLI sanity, disabled error)
+#   - Table 2: Checkpoints — 6 scenarios (lifecycle, state transitions, pruning)
+#   - Table 3: Perf Dumps — 6 scenarios (counter groups, dir_state, BPS, Prometheus)
+#   - Table 4: Tri-Interface — 4 scenarios (consistency, failure, lifecycle, multi-dir)
+#
+# Cluster Configuration:
+#    No of Clusters : 2
+#    Cluster 1 :
+#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 CEPHFS MIRROR, 1 Client
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - Mon, Mgr
+#     Node3 - Mon, OSD
+#     Node4 - OSD, MDS
+#     Node5 - OSD, MDS
+#     Node6 - CephFS Mirror
+#     Node7 - Client
+#    Cluster 2 :
+#    3 MONS, 2 MGR, 2 MDS, 3 OSD and 1 Client
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - Mon, Mgr
+#     Node3 - Mon, OSD
+#     Node4 - OSD, MDS
+#     Node5 - OSD, MDS
+#     Node6 - Client
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: shell
+                  args:
+                    - "ceph fs volume create cephfs"
+              - config:
+                  command: apply
+                  service: mds
+                  base_cmd_args:
+                    verbose: true
+                  pos_args:
+                    - cephfs
+                  args:
+                    placement:
+                      nodes:
+                        - node4
+                        - node5
+              - config:
+                  command: apply
+                  service: cephfs-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node6
+        ceph2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: shell
+                  args:
+                    - "ceph fs volume create cephfs"
+              - config:
+                  command: apply
+                  service: mds
+                  base_cmd_args:
+                    verbose: true
+                  pos_args:
+                    - cephfs
+                  args:
+                    placement:
+                      nodes:
+                        - node4
+                        - node5
+      desc: CephFS Mirror cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      polarion-id: CEPH-83574114
+      name: deploy cephfs-mirror clusters
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph1:
+          config:
+            command: add
+            copy_admin_keyring: true
+            id: client.1
+            install_packages:
+              - ceph-common
+              - ceph-fuse
+            node: node7
+        ceph2:
+          config:
+            command: add
+            copy_admin_keyring: true
+            id: client.1
+            install_packages:
+              - ceph-common
+              - ceph-fuse
+            node: node6
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: false
+      desc: "Validate improved mirroring stats with dual-interface (asok + MGR) checks"
+      clusters:
+        ceph1:
+          config:
+            name: Validate improved mirroring stats for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_improved_stats.py
+      name: Validate improved mirroring stats for 9.2
+      polarion-id: "CEPH-83575001"
+
+  - test:
+      abort-on-fail: false
+      desc: "Validate sync failure does not corrupt metrics (failure injection + recovery)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate mirroring disruptive ops for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_disruptive_ops.py
+      name: Validate mirroring disruptive ops for 9.2
+      polarion-id: "CEPH-83575002"
+
+  - test:
+      abort-on-fail: false
+      desc: "Validate asok mirroring metrics (schema, sync-mode, ETA, crawl, failure, snapdiff)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate asok mirroring metrics for 9.2 enhancements
+      module: cephfs_mirroring.test_cephfs_mirror_asok_metrics_92.py
+      name: Validate asok mirroring metrics for 9.2 enhancements
+      polarion-id: "CEPH-83632744"
+
+  - test:
+      abort-on-fail: false
+      desc: "Validate MGR mirror status interface (OMAP, stale, cache, CLI sanity)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate MGR mirror status interface for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_mgr_interface_92.py
+      name: Validate MGR mirror status interface for 9.2
+      polarion-id: "CEPH-83632824"
+
+  - test:
+      abort-on-fail: false
+      desc: "Validate mirroring checkpoint commands (lifecycle, state transitions, pruning)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate mirroring checkpoints for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_checkpoints_92.py
+      name: Validate mirroring checkpoints for 9.2
+      polarion-id: "CEPH-83632782"
+
+  # Table 3: Perf Dumps — 6 functional scenarios
+  - test:
+      abort-on-fail: false
+      desc: "Validate enhanced cephfs_mirror_directory perf counters (schema, lifecycle, BPS)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate enhanced perf dump counters for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_perf_dumps_92.py
+      name: Validate enhanced perf dump counters for 9.2
+      polarion-id: "CEPH-83632798"
+
+  # Table 4: Tri-Interface Consistency — 4 functional scenarios
+  - test:
+      abort-on-fail: false
+      desc: "Validate tri-interface consistency (asok vs MGR vs perf counters)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate tri-interface consistency for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_tri_interface_92.py
+      name: Validate tri-interface consistency for 9.2
+      polarion-id: "CEPH-83632819"
