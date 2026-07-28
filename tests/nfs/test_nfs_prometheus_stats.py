@@ -4,6 +4,8 @@ NFS-Ganesha Scalable Statistics (Prometheus) — CephCI automation.
 Each suite entry sets ``polarion-id`` on the test block (for reporting) and in
 ``config`` (for test dispatch). Internal plan IDs (S-01, F-02, etc.) are mapped
 in ``POLARION_TEST_IDS``.
+
+Requires RHCS ``--rhbuild`` >= 9.2 or Ceph >= 20.2.2. Older builds skip with exit 0.
 """
 
 from time import sleep
@@ -57,6 +59,7 @@ from tests.nfs.nfs_prometheus_stats_utils import (
     run_ganesha_stats_subcommands,
     scrape_prometheus_metrics,
     scrape_prometheus_metrics_http_code,
+    skip_prometheus_stats_tests_unless_supported,
     unmount_export,
     update_prometheus_ganesha_params,
     verify_client_label_present,
@@ -1274,17 +1277,45 @@ def test_n_01(ctx):
 
 
 def test_n_02(ctx):
+    """Non-/metrics path handling on the monitoring port.
+
+    Ganesha's Prometheus exporter is path-agnostic on Monitoring_Port and
+    commonly returns HTTP 200 with the same exposition for any URI (including
+    /not-metrics). Other implementations may return 404/403. Both are accepted.
+    Fail on an empty/broken 200 body, curl transport failure (HTTP code 000),
+    or any other unexpected status.
+    """
     code = scrape_prometheus_metrics_http_code(
         ctx.client, ctx.nfs_ip, ctx.monitoring_port, path="/not-metrics"
     )
+    if code == "000":
+        raise OperationFailedError(
+            "N-02: /not-metrics transport failure (curl http_code=000); "
+            "monitoring port may be down or unreachable"
+        )
     if code == "200":
-        raise OperationFailedError("N-02: /not-metrics unexpectedly returned HTTP 200")
-    if code not in ("404", "000", "403"):
-        log.info("Non-metrics path returned HTTP %s (acceptable non-200)", code)
-    log_test_passed(
-        "N-02",
-        "non-metrics path /not-metrics returned HTTP %s (not 200)" % code,
-    )
+        body = scrape_prometheus_metrics(
+            ctx.client, ctx.nfs_ip, ctx.monitoring_port, path="/not-metrics"
+        )
+        names = parse_prometheus_metrics(body)
+        if not names:
+            raise OperationFailedError(
+                "N-02: /not-metrics returned HTTP 200 but no parseable metrics"
+            )
+        log_test_passed(
+            "N-02",
+            "path-agnostic exporter: /not-metrics returned HTTP 200 with "
+            "%s metric families (Ganesha Monitoring_Port serves exposition "
+            "for any path)" % len(names),
+        )
+        return
+    if code in ("404", "403"):
+        log_test_passed(
+            "N-02",
+            "non-metrics path /not-metrics returned HTTP %s" % code,
+        )
+        return
+    raise OperationFailedError("N-02: /not-metrics returned unexpected HTTP %s" % code)
 
 
 def test_n_03(ctx):
@@ -1527,6 +1558,8 @@ def _log_subtest_result(
 
 def run(ceph_cluster, **kw):
     config = kw.get("config", {})
+    if skip_prometheus_stats_tests_unless_supported(config, ceph_cluster):
+        return 0
     polarion_id, test_ids = _resolve_test_ids(kw)
     for test_id in test_ids:
         if test_id not in TEST_HANDLERS:
