@@ -145,6 +145,17 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert
+      polarion-id: CEPH-10362
   - test:
       abort-on-fail: true
       config:

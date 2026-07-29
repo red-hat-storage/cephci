@@ -9,9 +9,9 @@ from tests.nfs.security.kerberos_helper import (
     DEFAULT_DOMAIN,
     DEFAULT_KDC_HOSTNAME,
     DEFAULT_REALM,
-    DEFAULT_TEST_PASSWORD,
     DEFAULT_TEST_USER,
     MITKDCSetup,
+    get_default_master_password,
 )
 from tests.nfs.security.krb_security_utils import (
     DEFAULT_NFS_KRB_CLUSTER,
@@ -125,13 +125,9 @@ def _build_kdc_setup(config, kdc_node):
         kdc_hostname=krb_config_get(
             config, "kdc_hostname", default=DEFAULT_KDC_HOSTNAME
         ),
-        master_password=krb_config_get(
-            config, "kdc_master_password", default="cephci-kdc-master"
-        ),
+        master_password=krb_config_get(config, "kdc_master_password", default=None)
+        or get_default_master_password(),
         test_user=krb_config_get(config, "test_user", default=DEFAULT_TEST_USER),
-        test_password=krb_config_get(
-            config, "test_password", default=DEFAULT_TEST_PASSWORD
-        ),
     )
 
 
@@ -218,7 +214,7 @@ def op_krb_infra_bootstrap(
         config,
     )
     principal = kdc_setup.test_principal
-    kinit_user(client_nodes[0], principal, kdc_setup.test_password)
+    kinit_user(client_nodes[0], principal)
     log.info("Kerberos infra bootstrap OK (realm=%s)", kdc_setup.realm)
     return kdc_setup
 
@@ -271,7 +267,7 @@ def op_krb_deploy_mount_verify(
     )
 
     principal = kdc_setup.test_principal
-    kinit_user(client_node, principal, kdc_setup.test_password)
+    kinit_user(client_node, principal)
     prepare_client_mount_dir(client_node, mount_path)
 
     mount_cmd = build_krb_mount_cmd(nfs_fqdn, export_path, mount_path, version, sec=sec)
@@ -283,7 +279,7 @@ def op_krb_deploy_mount_verify(
             "check_mount_fails_without_ticket returned None - check implementation"
         )
 
-    kinit_user(client_node, principal, kdc_setup.test_password)
+    kinit_user(client_node, principal)
     mount_krb5(
         client_node,
         mount_path,
@@ -366,7 +362,7 @@ def op_krb_sec_flavors(
         )
         wait_until_nfs_export_visible(client_node, nfs_name, export_path)
 
-        kinit_user(client_node, principal, kdc_setup.test_password)
+        kinit_user(client_node, principal)
         prepare_client_mount_dir(client_node, mount_path)
         mount_krb5(
             client_node,
@@ -433,7 +429,7 @@ def op_krb_export_enforcement(
     )
 
     principal = kdc_setup.test_principal
-    kinit_user(client_node, principal, kdc_setup.test_password)
+    kinit_user(client_node, principal)
 
     # Mixed export: allow AUTH_SYS and krb5 (omitting --sectype defaults to sys-only).
     create_kerberos_export(
@@ -555,7 +551,7 @@ def op_krb_multi_client(
     principal = kdc_setup.test_principal
     for idx, client in enumerate(client_nodes[:2]):
         mount_path = mount_paths[idx]
-        kinit_user(client, principal, kdc_setup.test_password)
+        kinit_user(client, principal)
         prepare_client_mount_dir(client, mount_path)
         mount_krb5(
             client,
@@ -638,7 +634,7 @@ def op_krb_spn_mismatch(
         [nfs_fqdn, nfs_node.hostname],
     )
     principal = kdc_setup.test_principal
-    kinit_user(client_node, principal, kdc_setup.test_password)
+    kinit_user(client_node, principal)
 
     wrong_cmd = build_krb_mount_cmd(
         wrong_host, export_path, wrong_mount, version, sec=sec
@@ -652,7 +648,7 @@ def op_krb_spn_mismatch(
         client_node, nfs_node.ip_address, [nfs_fqdn, nfs_node.hostname]
     )
     prepare_client_mount_dir(client_node, good_mount)
-    kinit_user(client_node, principal, kdc_setup.test_password)
+    kinit_user(client_node, principal)
     mount_krb5(
         client_node,
         good_mount,
@@ -729,7 +725,7 @@ def op_krb_multi_sectype(
     prepare_client_mount_dir(client_node, mount_base)
     for flavor in sectypes:
         mount_path = "{}/{}".format(mount_base.rstrip("/"), flavor)
-        kinit_user(client_node, principal, kdc_setup.test_password)
+        kinit_user(client_node, principal)
         prepare_client_mount_dir(client_node, mount_path)
         mount_krb5(
             client_node,

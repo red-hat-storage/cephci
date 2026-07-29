@@ -295,5 +295,8 @@ def run(ceph_cluster, **kw):
             f"Completed check of fragmentation & min-alloc scores on OSDs : {pg_set}. Pass"
         )
 
+    if config.get("setup-crimson-pre-req"):
+        rados_obj.setup_crimson_pre_req(**config)
+
     log.info("All the test cases have been completed. Pass")
     return 0

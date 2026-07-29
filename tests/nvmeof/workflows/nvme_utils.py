@@ -667,16 +667,16 @@ def validate_io(orch, namespaces, negative=False):
 
     def io_value(ns):
         sub_ns, pool, image = ns.rsplit("|", 2)
+        # Handle both {pool}/{image} and {pool}/{namespace}/{image} formats
+        rbd_path = f"{pool}/{image}"
         count = 3
         samples = []
         for _ in range(count):
-            out, _ = orch.shell(
-                args=[f"rbd --format json du {pool}/{image}"], timeout=600
-            )
+            out, _ = orch.shell(args=[f"rbd --format json du {rbd_path}"], timeout=600)
             out = json.loads(out)["images"][0]
             samples.append(out)
             time.sleep(6)
-        return sub_ns, f"{pool}/{image}", samples
+        return sub_ns, rbd_path, samples
 
     def validate_incremetal_io(write_samples):
         for i in range(len(write_samples) - 1):

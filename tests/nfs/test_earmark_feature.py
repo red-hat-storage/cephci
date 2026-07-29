@@ -124,4 +124,4 @@ def run(ceph_cluster, **kw):
         nfs_log_parser(client=clients[0], nfs_name=nfs_name, nfs_node=nfs_node)
         Ceph(clients[0]).nfs.cluster.delete(nfs_name)
         sleep(30)
-        check_nfs_daemons_removed(clients[0])
+        check_nfs_daemons_removed(clients[0], nfs_name)

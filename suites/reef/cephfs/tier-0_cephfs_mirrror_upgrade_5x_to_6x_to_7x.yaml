@@ -19,7 +19,7 @@ tests:
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 5.3
-                    release: rc
+                    release: released
                     orphan-initial-daemons: true
                     skip-monitoring-stack: true
               - config:
@@ -79,7 +79,7 @@ tests:
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 5.3
-                    release: rc
+                    release: released
                     orphan-initial-daemons: true
                     skip-monitoring-stack: true
               - config:
@@ -191,7 +191,7 @@ tests:
                     verbose: true
                   args:
                     rhcs-version: 6.1  #Need change in version when there is minor version change
-                    release: rc
+                    release: released
                   benchmark:
                     type: rados
                     pool_per_client: true

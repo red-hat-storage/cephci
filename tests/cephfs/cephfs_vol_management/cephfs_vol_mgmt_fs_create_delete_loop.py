@@ -201,7 +201,7 @@ def run(ceph_cluster, **kw):
             log.info(f"Mount subvolume {subvolume_name}_3 on NFS Client")
             nfs_servers = ceph_cluster.get_ceph_objects("nfs")
             nfs_server = nfs_servers[0].node.hostname
-            nfs_name = "cephfs-nfs"
+            nfs_name = config.get("nfs_name", "cephfs_systest_nfs")
 
             fs_util.create_nfs(
                 client1,

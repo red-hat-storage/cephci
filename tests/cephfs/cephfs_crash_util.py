@@ -42,7 +42,7 @@ def run(ceph_cluster, **kw):
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
-        client = clients[1]
+        client = clients[0]
         log.info("checking Pre-requisites")
 
         if not clients:

@@ -19,9 +19,9 @@ tests:
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     rhcs-version: 6.1
-                    release: rc
+                    release: released
                     orphan-initial-daemons: true
-                    skip-monitoring-stack: true
+                    skip-monitoring-stack: false
               - config:
                   command: add_hosts
                   service: host

@@ -1,6 +1,10 @@
 import json
+import os
+import re
+import shlex
+import time
+from pathlib import Path
 
-from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
@@ -16,7 +20,18 @@ TLS_TEST_MOUNT_CANDIDATES = [
     "/mnt/plain_tc2",
     "/mnt/tls_tc2",
     "/mnt/tls_tc1_0",
+    "/mnt/plain_tc4_0",
+    "/mnt/tls_tc4_0",
+    "/mnt/tls_stunnel_tc",
+    "/mnt/tls_neg_tc",
 ]
+STUNNEL_DIR = "/etc/stunnel"
+STUNNEL_CA_PATH = f"{STUNNEL_DIR}/tls_ca_cert.pem"
+STUNNEL_CONF_PATH = f"{STUNNEL_DIR}/stunnel.conf"
+STUNNEL_RUN_DIR = "/run/stunnel"
+STUNNEL_PID_PATH = "/var/run/stunnel/stunnel.pid"
+DEFAULT_STUNNEL_ACCEPT_PORT = 49152
+TLS_CLIENT_CA_PATH = "/etc/pki/ca-trust/source/anchors/tls_ca_cert.pem"
 
 
 def _nfs_ls_to_cluster_names(clusters):
@@ -279,20 +294,395 @@ def check_mount_fails(client_node, mount_cmd):
 
     Returns True if the command failed as expected, False if it succeeded.
     """
-    log.info("Attempting intentionally failing mount: %s", mount_cmd)
-    mount_path = mount_cmd.strip().split()[-1]
-    try:
-        client_node.exec_command(sudo=True, cmd=mount_cmd)
+    result = attempt_nfs_mount_expect_failure(client_node, mount_cmd)
+    if result["exit_code"] == 0:
         log.error("Mount succeeded but was expected to fail!")
+        mount_path = mount_cmd.strip().split()[-1]
         client_node.exec_command(
             sudo=True,
             cmd="umount -l {}".format(mount_path),
             check_ec=False,
         )
         return False
-    except CommandFailed:
-        log.info("Mount failed as expected.")
-        return True
+    log.info("Mount failed as expected (exit=%s).", result["exit_code"])
+    return True
+
+
+def build_tls_nfs_mount_cmd(server, export, mount, version, port):
+    """Return a shell mount command for NFSv4 with RPC-with-TLS (xprtsec=tls)."""
+    return (
+        f"mount -t nfs -o vers={version},port={port},xprtsec=tls "
+        f"{server}:{export} {mount}"
+    )
+
+
+def attempt_nfs_mount_expect_failure(client_node, mount_cmd, timeout=120):
+    """
+    Run a mount command without raising on non-zero exit.
+
+    Returns a dict with exit_code, stdout, stderr, and mount_cmd.
+    """
+    timeout = int(os.environ.get("NFS_MOUNT_TIMEOUT", timeout))
+    log.info(
+        "Attempting mount (failure expected, timeout=%ds): %s",
+        timeout,
+        mount_cmd,
+    )
+    start_time = time.time()
+    out, err, exit_code, _duration = client_node.exec_command(
+        sudo=True,
+        cmd=mount_cmd,
+        check_ec=False,
+        verbose=True,
+        timeout=timeout,
+    )
+    elapsed = time.time() - start_time
+    result = {
+        "exit_code": exit_code,
+        "stdout": (out or "").strip(),
+        "stderr": (err or "").strip(),
+        "mount_cmd": mount_cmd,
+    }
+    log.info(
+        "Mount attempt finished in %.2fs (timeout=%ds): exit=%s stderr=%r",
+        elapsed,
+        timeout,
+        exit_code,
+        result["stderr"][:500],
+    )
+    return result
+
+
+def capture_tlshd_status(client_node):
+    """Return full ``systemctl status tlshd`` output (stdout + stderr)."""
+    out, err = client_node.exec_command(
+        sudo=True,
+        cmd="systemctl status tlshd --no-pager -l",
+        check_ec=False,
+        timeout=60,
+    )
+    combined = "\n".join(part for part in (out, err) if part).strip()
+    log.info("tlshd status on %s:\n%s", client_node.hostname, combined)
+    return combined
+
+
+def mount_path_is_active(client_node, mount_path):
+    """Return True if ``mount_path`` appears in the remote ``mount`` output."""
+    out, _ = client_node.exec_command(sudo=True, cmd="mount", check_ec=False)
+    return mount_path.rstrip("/") in str(out or "")
+
+
+def assert_mount_failed(mount_result, context, client_node=None, mount_path=None):
+    """Raise if a mount attempt did not fail as expected."""
+    mount_active = False
+    if client_node is not None and mount_path is not None:
+        mount_active = mount_path_is_active(client_node, mount_path)
+    if mount_result.get("exit_code") == 0 and mount_active:
+        raise OperationFailedError(
+            f"{context}: mount succeeded but was expected to fail "
+            f"(cmd={mount_result.get('mount_cmd')!r})"
+        )
+    if mount_result.get("exit_code") == 0 and not mount_active:
+        log.info(
+            "%s: mount exit=0 but %s is not active; treating as expected failure",
+            context,
+            mount_path,
+        )
+
+
+def assert_tlshd_handshake_failure(tlshd_status, context):
+    """Raise if recent tlshd journal output does not show a TLS handshake failure."""
+    status = str(tlshd_status or "")
+    status_lower = status.lower()
+    if "handshake" in status_lower and "failed" in status_lower:
+        return
+    if "eacces" in status_lower:
+        return
+    if "certificate verify failed" in status_lower:
+        return
+    if "unable to get local issuer" in status_lower:
+        return
+    raise OperationFailedError(
+        f"{context}: tlshd status did not report a TLS handshake failure "
+        f"(expected 'Handshake ... failed' or EACCES in journal)"
+    )
+
+
+def generate_mismatched_tls_trust_cert(nfs_node):
+    """
+    Return a valid PEM for tlshd trust store that does not match the NFS server cert.
+
+    Subtle PEM corruption is not reliable here: when cephqe CA is unavailable the client
+    trust anchor is the server's self-signed cert and tlshd may still complete the
+    handshake. A wholly different valid certificate forces verification failure.
+    """
+    mismatched_subject = {
+        "common_name": f"invalid-trust.{nfs_node.hostname}",
+        "ip_address": "127.0.0.1",
+    }
+    _, cert, ca_cert = generate_self_signed_certificate(mismatched_subject)
+    return ca_cert or cert
+
+
+def generate_tls_cert_bundle(nfs_node):
+    """
+    Generate TLS key/cert/CA PEM strings for an NFS Ganesha node.
+
+    Returns (cert_key, cert, ca_cert) where ca_cert falls back to cert when cephqe CA
+    is unavailable.
+    """
+    log.info("Generating self-signed certificate for %s", nfs_node.hostname)
+    subject = {
+        "common_name": nfs_node.hostname,
+        "ip_address": nfs_node.ip_address,
+    }
+    cert_key, cert, ca_cert = generate_self_signed_certificate(subject)
+    if not ca_cert:
+        ca_cert = cert
+        log.warning(
+            "No cephqe CA available (offline DNS/network to root-ca-location); "
+            "using self-signed server cert PEM as ssl_ca_cert for NFS orch apply."
+        )
+    return cert_key, cert, ca_cert
+
+
+def corrupt_pem_material(pem_text):
+    """
+    Return a copy of ``pem_text`` with a few characters altered in the first base64 body
+    line so TLS certificate validation fails.
+    """
+    if not pem_text or "BEGIN" not in pem_text:
+        return pem_text
+    lines = pem_text.strip().splitlines()
+    for idx, line in enumerate(lines):
+        if line.startswith("-----") or not line.strip():
+            continue
+        if len(line) > 20:
+            mid = len(line) // 2
+            lines[idx] = line[:mid] + "XXX" + line[mid + 3 :]
+            break
+    return "\n".join(lines) + "\n"
+
+
+def write_client_tls_ca_cert(client_node, ca_cert):
+    """Overwrite the tlshd trust anchor PEM and restart tlshd."""
+    cert_dir = "/etc/pki/ca-trust/source/anchors"
+    client_node.exec_command(sudo=True, cmd=f"mkdir -p {cert_dir}")
+    try:
+        cert_file = client_node.remote_file(
+            sudo=True, file_name=TLS_CLIENT_CA_PATH, file_mode="w"
+        )
+        cert_file.write(ca_cert)
+        cert_file.flush()
+    except AttributeError:
+        cert_file = client_node.remote_file(
+            sudo=True, file_name=TLS_CLIENT_CA_PATH, file_mode="wb"
+        )
+        cert_file.write(ca_cert.encode("utf-8"))
+        cert_file.flush()
+    client_node.exec_command(
+        sudo=True, cmd=f"restorecon -Rv {cert_dir}", check_ec=False
+    )
+    client_node.exec_command(sudo=True, cmd="systemctl restart tlshd")
+
+
+def _write_remote_pem(client_node, file_path, pem_text):
+    """Write PEM material to ``file_path`` on the remote client."""
+    try:
+        remote = client_node.remote_file(sudo=True, file_name=file_path, file_mode="w")
+        remote.write(pem_text)
+        remote.flush()
+    except AttributeError:
+        remote = client_node.remote_file(sudo=True, file_name=file_path, file_mode="wb")
+        remote.write(pem_text.encode("utf-8"))
+        remote.flush()
+
+
+def build_stunnel_nfs_mount_cmd(export_path, mount_path, version, accept_port):
+    """Return mount command for NFS through local stunnel (no xprtsec/tlshd)."""
+    return (
+        f"mount -vv -t nfs -o rw,vers={version},port={accept_port} "
+        f"127.0.0.1:{export_path} {mount_path}"
+    )
+
+
+def _build_stunnel_conf(
+    server_host,
+    server_port,
+    accept_host,
+    accept_port,
+    ssl_version="TLSv1.3",
+    ciphers="ALL",
+    verify_level=2,
+):
+    """Return stunnel client configuration for NFS-over-TLS via local proxy."""
+    return (
+        f"pid = {STUNNEL_PID_PATH}\n"
+        f"CAfile = {STUNNEL_CA_PATH}\n"
+        "socket = r:TCP_NODELAY=1\n"
+        "foreground = no\n"
+        "debug = 7\n"
+        "output = /var/log/stunnel.log\n"
+        "renegotiation = no\n"
+        "\n"
+        "[nfs4]\n"
+        "client = yes\n"
+        f"accept = {accept_host}:{accept_port}\n"
+        f"connect = {server_host}:{server_port}\n"
+        f"sslVersion = {ssl_version}\n"
+        f"ciphers = {ciphers}\n"
+        f"verify = {verify_level}\n"
+    )
+
+
+def setup_stunnel_runtime_dirs(client_node):
+    """Create stunnel pid/log runtime directories on the client."""
+    log.info("[stunnel] Creating runtime directories on %s", client_node.hostname)
+    client_node.exec_command(sudo=True, cmd=f"mkdir -p {STUNNEL_DIR}", check_ec=False)
+    client_node.exec_command(
+        sudo=True, cmd=f"mkdir -p {STUNNEL_RUN_DIR}", check_ec=False
+    )
+    client_node.exec_command(
+        sudo=True, cmd=f"mkdir -p $(dirname {STUNNEL_PID_PATH})", check_ec=False
+    )
+    client_node.exec_command(
+        sudo=True,
+        cmd=f"chown root:root {STUNNEL_RUN_DIR}",
+        check_ec=False,
+    )
+    client_node.exec_command(
+        sudo=True,
+        cmd=f"chmod 755 {STUNNEL_RUN_DIR}",
+        check_ec=False,
+    )
+
+
+def setup_stunnel_client(
+    client_node,
+    ca_cert,
+    server_host,
+    server_port=2049,
+    accept_host="127.0.0.1",
+    accept_port=DEFAULT_STUNNEL_ACCEPT_PORT,
+    ssl_version="TLSv1.3",
+    ciphers="ALL",
+    verify_level=2,
+):
+    """
+    Install stunnel, deploy CA + stunnel.conf, and start the NFS TLS client proxy.
+
+    NFS mounts use ``127.0.0.1:<accept_port>`` (plain NFS locally); stunnel wraps
+    traffic to ``server_host:server_port`` with TLS.
+    """
+    log.info(
+        "[stunnel] Installing stunnel on %s (proxy %s:%s -> %s:%s)",
+        client_node.hostname,
+        accept_host,
+        accept_port,
+        server_host,
+        server_port,
+    )
+    ensure_package_installed(client_node, "stunnel")
+    setup_stunnel_runtime_dirs(client_node)
+
+    log.info("[stunnel] Writing CA to %s", STUNNEL_CA_PATH)
+    _write_remote_pem(client_node, STUNNEL_CA_PATH, ca_cert.rstrip("\n") + "\n")
+    client_node.exec_command(
+        sudo=True, cmd=f"restorecon -Rv {STUNNEL_DIR}", check_ec=False
+    )
+
+    conf_body = _build_stunnel_conf(
+        server_host=server_host,
+        server_port=server_port,
+        accept_host=accept_host,
+        accept_port=accept_port,
+        ssl_version=ssl_version,
+        ciphers=ciphers,
+        verify_level=verify_level,
+    )
+    log.info("[stunnel] Writing %s", STUNNEL_CONF_PATH)
+    _write_remote_pem(client_node, STUNNEL_CONF_PATH, conf_body)
+
+    stop_stunnel_client(client_node)
+    log.info("[stunnel] Enabling and starting stunnel service")
+    client_node.exec_command(sudo=True, cmd="systemctl enable stunnel", check_ec=False)
+    client_node.exec_command(sudo=True, cmd="systemctl restart stunnel", check_ec=False)
+    time.sleep(2)
+    verify_stunnel_listening(client_node, accept_host, accept_port)
+    log.info("[stunnel] Client proxy ready on %s:%s", accept_host, accept_port)
+
+
+def verify_stunnel_listening(client_node, accept_host="127.0.0.1", accept_port=49152):
+    """Raise if stunnel is not listening on the local accept port."""
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"ss -ltn | grep -F '{accept_host}:{accept_port}'",
+        check_ec=False,
+        timeout=30,
+    )
+    if not out or str(accept_port) not in str(out):
+        status_out, _ = client_node.exec_command(
+            sudo=True,
+            cmd="systemctl status stunnel --no-pager -l",
+            check_ec=False,
+        )
+        log_out, _ = client_node.exec_command(
+            sudo=True,
+            cmd="tail -50 /var/log/stunnel.log 2>/dev/null || true",
+            check_ec=False,
+        )
+        raise OperationFailedError(
+            f"stunnel not listening on {accept_host}:{accept_port}. "
+            f"systemctl status:\n{status_out}\nstunnel.log:\n{log_out}"
+        )
+    log.info(
+        "[stunnel] Verified listener on %s:%s — %s",
+        accept_host,
+        accept_port,
+        str(out).strip(),
+    )
+
+
+def stop_stunnel_client(client_node):
+    """Stop stunnel on the client if running."""
+    log.info("[stunnel] Stopping stunnel on %s", client_node.hostname)
+    client_node.exec_command(
+        sudo=True, cmd="systemctl stop stunnel", check_ec=False, timeout=60
+    )
+    client_node.exec_command(
+        sudo=True, cmd="pkill -x stunnel", check_ec=False, timeout=30
+    )
+
+
+def mount_export_via_stunnel(
+    client_node, export_path, mount_path, version, accept_port
+):
+    """Mount an NFS export through the local stunnel proxy."""
+    client_node.create_dirs(dir_path=mount_path, sudo=True)
+    mount_cmd = build_stunnel_nfs_mount_cmd(
+        export_path, mount_path, version, accept_port
+    )
+    log.info("[stunnel] Mount command: %s", mount_cmd)
+    out, err, exit_code, _duration = client_node.exec_command(
+        sudo=True,
+        cmd=mount_cmd,
+        check_ec=False,
+        verbose=True,
+        timeout=120,
+    )
+    if exit_code != 0:
+        raise OperationFailedError(
+            f"Stunnel NFS mount failed (exit={exit_code}): {err or out}"
+        )
+    if not mount_path_is_active(client_node, mount_path):
+        raise OperationFailedError(
+            f"Stunnel mount command succeeded but {mount_path} not in mount table"
+        )
+    log.info(
+        "[stunnel] Mount succeeded on %s at %s",
+        client_node.hostname,
+        mount_path,
+    )
 
 
 def full_tls_stack_cleanup(
@@ -432,46 +822,543 @@ def probe_tls_handshake_with_openssl(
         return False, str(ex)
 
 
-def setup_tls_nfs_cluster(
+def _quote_shell_path(path):
+    """Return ``path`` safely escaped for use in remote shell commands."""
+    if not path or not isinstance(path, (str, Path)):
+        raise OperationFailedError(f"Invalid path type: {type(path)}")
+    path_str = str(path).strip()
+    if not path_str:
+        raise OperationFailedError("Empty path provided")
+    if "\x00" in path_str:
+        raise OperationFailedError("Path contains null bytes")
+    return shlex.quote(path_str)
+
+
+def _validate_max_packets(max_packets):
+    if not isinstance(max_packets, int) or max_packets < 0:
+        raise OperationFailedError(
+            f"max_packets must be a non-negative integer, got {max_packets!r}"
+        )
+
+
+def _wait_for_pcap_closed(client_node, pcap_path, max_wait=5):
+    """Wait until no tcpdump process holds ``pcap_path`` open."""
+    quoted_pcap = _quote_shell_path(pcap_path)
+    for attempt in range(max_wait):
+        out, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"lsof {quoted_pcap} 2>/dev/null",
+            check_ec=False,
+        )
+        if not out or "tcpdump" not in str(out):
+            log.info("pcap file %s closed after %d seconds", pcap_path, attempt)
+            return
+        log.debug(
+            "Waiting for pcap file to close (attempt %d/%d): %s",
+            attempt + 1,
+            max_wait,
+            str(out)[:200],
+        )
+        time.sleep(1)
+
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"lsof {quoted_pcap} 2>/dev/null",
+        check_ec=False,
+    )
+    raise OperationFailedError(
+        f"pcap file {pcap_path} still open after {max_wait}s. "
+        f"Holding processes: {str(out)[:500]}"
+    )
+
+
+def normalize_fio_buffer_pattern(pattern):
+    """
+    Return a fio-compatible ``--buffer_pattern`` value.
+
+    fio 3.x requires a hex literal (e.g. ``0xCEFACEFE``); plain ASCII strings
+    fail with "failed parsing buffer_pattern".
+    """
+    raw = str(pattern).strip()
+    if raw.lower().startswith("0x"):
+        hex_body = raw[2:]
+    else:
+        hex_body = raw
+    if not hex_body or len(hex_body) % 2:
+        raise OperationFailedError(
+            f"fio buffer_pattern must be even-length hex (e.g. 0xCEFACEFE), got {pattern!r}"
+        )
+    try:
+        int(hex_body, 16)
+    except ValueError as err:
+        raise OperationFailedError(
+            f"Invalid fio buffer_pattern hex {pattern!r}: {err}"
+        ) from err
+    return f"0x{hex_body.lower()}"
+
+
+def fio_pattern_to_pcap_hex_substring(pattern):
+    """Map fio ``--buffer_pattern`` bytes to a spaced hex substring for tcpdump -xx."""
+    normalized = normalize_fio_buffer_pattern(pattern)
+    byte_pairs = [normalized[i : i + 2] for i in range(2, len(normalized), 2)]
+    return " ".join(byte_pairs)
+
+
+def fio_pattern_to_binary_grep_literal(pattern):
+    """Return a bash ``$'\\x..\\x..'` literal for ``grep -a -F`` on a pcap file."""
+    normalized = normalize_fio_buffer_pattern(pattern)
+    byte_pairs = [normalized[i : i + 2] for i in range(2, len(normalized), 2)]
+    return "".join(f"\\x{b}" for b in byte_pairs)
+
+
+def _pcap_count_tls_records(client_node, pcap_path, tls_regex, max_packets, timeout):
+    """Count TLS record headers in the first ``max_packets`` of a pcap via on-node grep."""
+    _validate_max_packets(max_packets)
+    if not isinstance(timeout, (int, float)) or timeout <= 0:
+        raise OperationFailedError(f"timeout must be positive, got {timeout}")
+
+    quoted_pcap = _quote_shell_path(pcap_path)
+    cmd = (
+        f"timeout {int(timeout)} tcpdump -r {quoted_pcap} -xx -n "
+        f"-c {max_packets} 2>/dev/null"
+    )
+    try:
+        out, _ = client_node.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+            timeout=min(int(timeout) + 10, 600),
+        )
+        if not out:
+            log.warning("tcpdump produced no output for %s", pcap_path)
+            return 0
+
+        pattern = re.compile(tls_regex)
+        count = sum(1 for line in str(out).splitlines() if pattern.search(line))
+        log.debug("Found %d TLS record matches in %s", count, pcap_path)
+        return count
+    except Exception as err:
+        log.error("Failed to count TLS records in %s: %s", pcap_path, err)
+        return 0
+
+
+def _pcap_count_binary_byte_pattern(client_node, pcap_path, bash_literal, timeout):
+    """Count occurrences of a raw byte pattern anywhere in a pcap via ``grep -a -o``."""
+    quoted_pcap = _quote_shell_path(pcap_path)
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=(
+            f"timeout {timeout} grep -a -o $'{bash_literal}' {quoted_pcap} "
+            f"2>/dev/null | wc -l"
+        ),
+        check_ec=False,
+        timeout=timeout + 5,
+    )
+    try:
+        return int(str(out).strip() or "0")
+    except ValueError:
+        return 0
+
+
+def ensure_package_installed(client_node, package_name, manager="yum"):
+    """Install ``package_name`` when ``rpm -q`` reports it is missing."""
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"rpm -q {package_name}",
+        check_ec=False,
+    )
+    if out and "is not installed" not in out.lower():
+        log.info("%s already installed on %s", package_name, client_node.hostname)
+        return
+    log.info("Installing %s on %s", package_name, client_node.hostname)
+    Package(client_node, manager=manager).install(package_name)
+
+
+def start_tcpdump_capture(client_node, server_host, port, pcap_path, snaplen=512):
+    """
+    Start ``tcpdump`` in the background on ``client_node`` for NFS TLS traffic.
+
+    Returns the background shell pid printed by ``nohup ... & echo $!``.
+    """
+    pid = None
+    quoted_pcap = _quote_shell_path(pcap_path)
+    try:
+        ensure_package_installed(client_node, "tcpdump")
+        client_node.exec_command(
+            sudo=True, cmd="mkdir -p /tmp/tls_pcap", check_ec=False
+        )
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"pkill -f 'tcpdump.*{quoted_pcap}'",
+            check_ec=False,
+        )
+        time.sleep(1)
+        bpf = f"host {server_host} and tcp port {port}"
+        log_name = pcap_path.rsplit("/", 1)[-1]
+        cmd = (
+            f"nohup tcpdump -i any -s {snaplen} -w {quoted_pcap} '{bpf}' "
+            f">/tmp/tcpdump_{log_name}.log 2>&1 & echo $!"
+        )
+        out, _ = client_node.exec_command(sudo=True, cmd=cmd, timeout=30)
+        pid = (out or "").strip().splitlines()[-1].strip()
+        if not pid or not pid.isdigit():
+            raise OperationFailedError(f"Failed to start tcpdump: invalid pid {pid!r}")
+        time.sleep(2)
+        out, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"ps -p {pid} -o comm=",
+            check_ec=False,
+        )
+        if not out or "tcpdump" not in str(out):
+            raise OperationFailedError(f"tcpdump process {pid} not running after start")
+        log.info(
+            "tcpdump capture started on %s (pid=%s, bpf=%r, pcap=%s, snaplen=%s)",
+            client_node.hostname,
+            pid,
+            bpf,
+            pcap_path,
+            snaplen,
+        )
+        return pid
+    except Exception:
+        if pid and pid.isdigit():
+            stop_tcpdump_capture(client_node, pcap_path, pid=pid)
+        else:
+            client_node.exec_command(
+                sudo=True,
+                cmd=f"pkill -f 'tcpdump.*{quoted_pcap}'",
+                check_ec=False,
+            )
+        raise
+
+
+def stop_tcpdump_capture(client_node, pcap_path, pid=None):
+    """Stop a background ``tcpdump`` and wait briefly for the pcap to flush."""
+    if not pid:
+        log.warning("No pid provided to stop_tcpdump_capture")
+        return
+
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"ps -p {pid} -o comm=",
+        check_ec=False,
+    )
+    if not out or "tcpdump" not in str(out):
+        log.info("tcpdump pid=%s already stopped", pid)
+        _wait_for_pcap_closed(client_node, pcap_path)
+        return
+
+    try:
+        log.info("Stopping tcpdump pid=%s", pid)
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"kill -TERM {pid}",
+            check_ec=False,
+        )
+        for i in range(5):
+            time.sleep(1)
+            out, _ = client_node.exec_command(
+                sudo=True,
+                cmd=f"ps -p {pid} -o comm=",
+                check_ec=False,
+            )
+            if not out or "tcpdump" not in str(out):
+                log.info("tcpdump stopped gracefully after %ds", i + 1)
+                break
+        else:
+            log.warning("tcpdump %s did not stop with TERM, using KILL", pid)
+            client_node.exec_command(
+                sudo=True,
+                cmd=f"kill -KILL {pid}",
+                check_ec=False,
+            )
+            time.sleep(1)
+    finally:
+        _wait_for_pcap_closed(client_node, pcap_path)
+
+    quoted_pcap = _quote_shell_path(pcap_path)
+    out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"test -s {quoted_pcap} && echo exists || echo missing",
+        check_ec=False,
+    )
+    if "missing" in str(out or ""):
+        log.warning("pcap file %s is missing or empty after capture", pcap_path)
+
+
+def analyze_pcap_traffic(
+    client_node,
+    pcap_path,
+    cleartext_marker,
+    min_total_packets=10,
+    min_tls_app_records=5,
+    max_packets_to_analyze=10000,
+    pcap_analyze_timeout=300,
+):
+    """
+    Analyze a pcap for TLS record headers and an optional fio cleartext marker.
+
+    Returns a dict with packet_count, tls/binary TLS hit counts, cleartext_marker_hits,
+    cleartext_marker_found, and tls_record_signal.
+    """
+    quoted_pcap = _quote_shell_path(pcap_path)
+    _wait_for_pcap_closed(client_node, pcap_path)
+    size_out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=f"test -s {quoted_pcap} && wc -c < {quoted_pcap} || echo missing",
+        check_ec=False,
+        timeout=min(int(pcap_analyze_timeout) + 5, 600),
+    )
+    size_str = str(size_out).strip()
+    if size_str == "missing" or not size_str:
+        raise OperationFailedError(f"Capture file missing or empty: {pcap_path}")
+    try:
+        pcap_bytes = int(size_str)
+    except ValueError as err:
+        raise OperationFailedError(
+            f"Could not parse pcap size from: {size_str[:100]}"
+        ) from err
+    log.info("pcap %s size=%s bytes", pcap_path, pcap_bytes)
+
+    pkt_out, _ = client_node.exec_command(
+        sudo=True,
+        cmd=(
+            f"timeout {pcap_analyze_timeout} tcpdump -r {quoted_pcap} -n "
+            f"2>/dev/null | wc -l"
+        ),
+        check_ec=False,
+        timeout=min(int(pcap_analyze_timeout) + 5, 600),
+    )
+    packet_count = int(str(pkt_out).strip().splitlines()[-1].strip() or "0")
+    if packet_count < min_total_packets:
+        raise OperationFailedError(
+            f"Expected at least {min_total_packets} packets in {pcap_path}, "
+            f"got {packet_count}"
+        )
+
+    tls_handshake_hits = _pcap_count_tls_records(
+        client_node,
+        pcap_path,
+        r" 16 03 0[34] ",
+        max_packets_to_analyze,
+        pcap_analyze_timeout,
+    )
+    tls_app_data_hits = _pcap_count_tls_records(
+        client_node,
+        pcap_path,
+        r" 17 03 0[34] ",
+        max_packets_to_analyze,
+        pcap_analyze_timeout,
+    )
+    binary_tls_handshake_hits = _pcap_count_binary_byte_pattern(
+        client_node, pcap_path, r"\x16\x03", pcap_analyze_timeout
+    )
+    binary_tls_app_hits = _pcap_count_binary_byte_pattern(
+        client_node, pcap_path, r"\x17\x03", pcap_analyze_timeout
+    )
+
+    cleartext_marker_hits = 0
+    marker_hex_substring = ""
+    if cleartext_marker:
+        marker_hex_substring = fio_pattern_to_pcap_hex_substring(cleartext_marker)
+        grep_literal = fio_pattern_to_binary_grep_literal(cleartext_marker)
+        leak_out, _ = client_node.exec_command(
+            sudo=True,
+            cmd=(
+                f"timeout {pcap_analyze_timeout} grep -a -F $'{grep_literal}' "
+                f"{quoted_pcap} 2>/dev/null | wc -l"
+            ),
+            check_ec=False,
+            timeout=pcap_analyze_timeout + 5,
+        )
+        cleartext_marker_hits = int(str(leak_out).strip() or "0")
+
+    cleartext_marker_found = cleartext_marker_hits > 0
+    has_tls_record_signal = (
+        tls_handshake_hits >= 1
+        or tls_app_data_hits >= min_tls_app_records
+        or binary_tls_handshake_hits >= 1
+        or binary_tls_app_hits >= min_tls_app_records
+    )
+
+    log.info(
+        "pcap analysis for %s: packets=%s analyzed_packets<=%s "
+        "handshake_tls_records=%s app_data_tls_records=%s "
+        "binary_handshake_hits=%s binary_app_hits=%s "
+        "cleartext_marker_hex=%r cleartext_marker_hits=%s "
+        "cleartext_marker_found=%s tls_record_signal=%s",
+        pcap_path,
+        packet_count,
+        max_packets_to_analyze,
+        tls_handshake_hits,
+        tls_app_data_hits,
+        binary_tls_handshake_hits,
+        binary_tls_app_hits,
+        marker_hex_substring,
+        cleartext_marker_hits,
+        cleartext_marker_found,
+        has_tls_record_signal,
+    )
+
+    return {
+        "pcap_bytes": pcap_bytes,
+        "packet_count": packet_count,
+        "tls_handshake_hits": tls_handshake_hits,
+        "tls_app_data_hits": tls_app_data_hits,
+        "binary_tls_handshake_hits": binary_tls_handshake_hits,
+        "binary_tls_app_hits": binary_tls_app_hits,
+        "cleartext_marker_hits": cleartext_marker_hits,
+        "cleartext_marker_found": cleartext_marker_found,
+        "tls_record_signal": has_tls_record_signal,
+    }
+
+
+def verify_cleartext_traffic_in_pcap(
+    client_node,
+    pcap_path,
+    cleartext_marker,
+    min_total_packets=10,
+    min_cleartext_marker_hits=1,
+    max_packets_to_analyze=10000,
+    pcap_analyze_timeout=300,
+):
+    """
+    Verify a plain (non-TLS) NFS capture exposes the fio buffer pattern on the wire.
+
+    Used as a control baseline before the TLS capture phase: sustained fio I/O with
+    ``--buffer_pattern`` must leave that byte sequence visible in the pcap when NFS is
+    not encrypted.
+    """
+    analysis = analyze_pcap_traffic(
+        client_node,
+        pcap_path,
+        cleartext_marker,
+        min_total_packets=min_total_packets,
+        max_packets_to_analyze=max_packets_to_analyze,
+        pcap_analyze_timeout=pcap_analyze_timeout,
+    )
+    if analysis["cleartext_marker_hits"] < min_cleartext_marker_hits:
+        raise OperationFailedError(
+            f"Plain NFS control capture did not show fio cleartext marker "
+            f"{cleartext_marker!r} on the wire (hits={analysis['cleartext_marker_hits']}, "
+            f"expected>={min_cleartext_marker_hits}); cannot confirm unencrypted baseline."
+        )
+    if analysis["tls_record_signal"]:
+        log.warning(
+            "TLS record headers present in plain NFS capture (unexpected); "
+            "cleartext marker was still observed."
+        )
+    log.info(
+        "Plain NFS control confirmed: fio pattern visible in cleartext "
+        "(marker_hits=%s, packets=%s)",
+        analysis["cleartext_marker_hits"],
+        analysis["packet_count"],
+    )
+    return analysis
+
+
+def verify_tls_encrypted_traffic_in_pcap(
+    client_node,
+    pcap_path,
+    cleartext_marker,
+    min_total_packets=10,
+    min_tls_app_records=5,
+    max_packets_to_analyze=10000,
+    pcap_analyze_timeout=300,
+    max_cleartext_marker_hits=50,
+    plain_cleartext_marker_hits=None,
+    max_cleartext_leak_ratio=0.0001,
+):
+    """
+    Verify a pcap captured during NFS-over-TLS I/O shows encrypted wire traffic.
+
+    Primary pass criterion: the fio ``--buffer_pattern`` must not appear at the
+    same rate as the plain-NFS control capture. A small number of grep hits can
+    occur by chance in large pcaps (encrypted ciphertext may contain the byte
+    sequence), so when ``plain_cleartext_marker_hits`` is provided the allowed
+    TLS hit count scales with that baseline.
+
+    TLS record headers (``\\x16\\x03`` handshake, ``\\x17\\x03`` application data) are
+    counted for positive signal. With kernel TLS (kTLS), post-handshake traffic may not
+    expose TLS record framing on the wire, so missing headers does not fail the test
+    when cleartext leakage is below threshold and enough packets were captured.
+    """
+    analysis = analyze_pcap_traffic(
+        client_node,
+        pcap_path,
+        cleartext_marker,
+        min_total_packets=min_total_packets,
+        min_tls_app_records=min_tls_app_records,
+        max_packets_to_analyze=max_packets_to_analyze,
+        pcap_analyze_timeout=pcap_analyze_timeout,
+    )
+
+    tls_hits = analysis["cleartext_marker_hits"]
+    allowed_hits = max_cleartext_marker_hits
+    if plain_cleartext_marker_hits is not None and plain_cleartext_marker_hits > 0:
+        ratio_cap = int(plain_cleartext_marker_hits * max_cleartext_leak_ratio)
+        allowed_hits = max(allowed_hits, ratio_cap)
+
+    cleartext_leak = tls_hits > allowed_hits
+    analysis["cleartext_marker_found"] = cleartext_leak
+    analysis["allowed_cleartext_marker_hits"] = allowed_hits
+
+    if cleartext_leak:
+        raise OperationFailedError(
+            f"Cleartext marker {cleartext_marker!r} visible in TLS capture "
+            f"(hits={tls_hits}, allowed<={allowed_hits}, "
+            f"plain_baseline={plain_cleartext_marker_hits}); "
+            "NFS payload was not encrypted on the wire."
+        )
+
+    if tls_hits > 0:
+        log.warning(
+            "TLS capture had %s cleartext marker hit(s) within allowed threshold "
+            "(allowed<=%s, plain_baseline=%s); treating as grep false-positive",
+            tls_hits,
+            allowed_hits,
+            plain_cleartext_marker_hits,
+        )
+
+    if not analysis["tls_record_signal"]:
+        log.warning(
+            "No TLS record headers in capture (kTLS may omit TLS framing on wire); "
+            "encryption verified via low fio cleartext marker hits (%s) during %s packets",
+            tls_hits,
+            analysis["packet_count"],
+        )
+
+    return analysis
+
+
+def setup_plain_nfs_cluster(installer_node, nfs_node, nfs_name):
+    """Deploy a non-TLS NFS-Ganesha cluster (no ssl / xprtsec on the service)."""
+    nfs_spec = {
+        "service_type": "nfs",
+        "service_id": nfs_name,
+        "placement": {"hosts": [nfs_node.hostname]},
+        "spec": {},
+    }
+    log.info("Deploying plain (non-TLS) NFS cluster %s via spec file", nfs_name)
+    if not create_nfs_via_file_and_verify(installer_node, [nfs_spec], timeout=300):
+        raise OperationFailedError(f"Failed to create plain NFS cluster {nfs_name}")
+    log.info("Successfully deployed plain NFS cluster %s", nfs_name)
+
+
+def deploy_tls_nfs_cluster_with_certs(
     installer_node,
     nfs_node,
     nfs_name,
+    cert_key,
+    cert,
+    ca_cert,
     tls_min_version="TLSv1.3",
     tls_ciphers="ALL",
     tls_ktls=True,
     tls_debug=True,
+    orch_wait_timeout=300,
 ):
-    """
-    Creates an NFS-Ganesha cluster with TLS enabled by generating a self-signed
-    certificate and applying the custom config via Ceph orchestrator spec.
-
-    Args:
-        installer: The installer node.
-        nfs_node: The NFS node where the service will be placed.
-        nfs_name: Name of the NFS cluster.
-        tls_min_version: Minimum TLS version.
-        tls_ciphers: TLS ciphers string.
-        tls_ktls: Boolean flag for ktls.
-        tls_debug: Boolean flag for tls debug.
-    """
-    log.info(f"Generating self-signed certificate for {nfs_node.hostname}")
-    subject = {
-        "common_name": nfs_node.hostname,
-        "ip_address": nfs_node.ip_address,
-    }
-    cert_key, cert, ca_cert = generate_self_signed_certificate(subject)
-
-    # Note: `generate_self_signed_certificate` returns cephqe-signed cert + CA PEM when
-    # `get_cephqe_ca()` can download from root-ca-location; otherwise ca_cert is None.
-    # Orchestrator rejects nfs specs with ssl:true but no ssl_ca_cert (EINVAL: CA required).
-    if not ca_cert:
-        ca_cert = cert
-        log.warning(
-            "No cephqe CA available (offline DNS/network to root-ca-location); "
-            "using self-signed server cert PEM as ssl_ca_cert for NFS orch apply."
-        )
-
-    # Construct the TLS cluster spec
+    """Apply or update an NFS-Ganesha cluster with inline TLS certificate material."""
     nfs_spec = {
         "service_type": "nfs",
         "service_id": nfs_name,
@@ -488,10 +1375,47 @@ def setup_tls_nfs_cluster(
             "tls_ciphers": tls_ciphers,
         },
     }
-
-    log.info(f"Deploying TLS-enabled NFS cluster {nfs_name} via spec file")
-    if not create_nfs_via_file_and_verify(installer_node, [nfs_spec], timeout=300):
+    log.info("Deploying TLS-enabled NFS cluster %s via spec file", nfs_name)
+    if not create_nfs_via_file_and_verify(
+        installer_node, [nfs_spec], timeout=orch_wait_timeout
+    ):
         raise OperationFailedError(f"Failed to create TLS NFS cluster {nfs_name}")
+    log.info("Successfully deployed TLS NFS cluster %s", nfs_name)
+    return ca_cert
 
-    log.info(f"Successfully deployed TLS NFS cluster {nfs_name}")
-    return ca_cert or cert
+
+def setup_tls_nfs_cluster(
+    installer_node,
+    nfs_node,
+    nfs_name,
+    tls_min_version="TLSv1.3",
+    tls_ciphers="ALL",
+    tls_ktls=True,
+    tls_debug=False,
+):
+    """
+    Creates an NFS-Ganesha cluster with TLS enabled by generating a self-signed
+    certificate and applying the custom config via Ceph orchestrator spec.
+
+    Args:
+        installer: The installer node.
+        nfs_node: The NFS node where the service will be placed.
+        nfs_name: Name of the NFS cluster.
+        tls_min_version: Minimum TLS version.
+        tls_ciphers: TLS ciphers string.
+        tls_ktls: Boolean flag for ktls.
+        tls_debug: Boolean flag for tls debug.
+    """
+    cert_key, cert, ca_cert = generate_tls_cert_bundle(nfs_node)
+    return deploy_tls_nfs_cluster_with_certs(
+        installer_node=installer_node,
+        nfs_node=nfs_node,
+        nfs_name=nfs_name,
+        cert_key=cert_key,
+        cert=cert,
+        ca_cert=ca_cert,
+        tls_min_version=tls_min_version,
+        tls_ciphers=tls_ciphers,
+        tls_ktls=tls_ktls,
+        tls_debug=tls_debug,
+    )

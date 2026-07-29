@@ -96,9 +96,6 @@ def run(**kw):
     config["git-url"] = config.get(
         "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
     )
-    test_data = kw.get("test_data")
-    custom_config = test_data.get("custom-config", {})
-
     set_env = config.get("set-env", False)
     extra_pkgs = config.get("extra-pkgs")
     git_clone_configs_repo = config.get("git_clone_configs_repo", False)
@@ -206,10 +203,12 @@ def run(**kw):
     if git_clone_configs_repo:
         for i in range(0, len(primary_rgw_nodes)):
             utils.clone_configs_repo(primary_rgw_nodes[i].node, repo_name="rgw_configs")
+        utils.clone_configs_repo(primary_client_node, repo_name="rgw_configs")
         for i in range(0, len(secondary_rgw_nodes)):
             utils.clone_configs_repo(
                 secondary_rgw_nodes[i].node, repo_name="rgw_configs"
             )
+        utils.clone_configs_repo(secondary_client_node, repo_name="rgw_configs")
         if archive_cluster_exists:
             utils.clone_configs_repo(archive_rgw_node, repo_name="rgw_configs")
             utils.clone_configs_repo(archive_client_node, repo_name="rgw_configs")
@@ -260,7 +259,7 @@ def run(**kw):
 
     setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
     if setup_gklm_prerequisites:
-        setup_gklm_prereq(primary_cluster, cloud_type, custom_config)
+        setup_gklm_prereq(primary_cluster, cloud_type)
         rgw_status = check_service_exists(
             primary_cluster.get_nodes(role="installer")[0],
             service_type="rgw",
@@ -269,7 +268,7 @@ def run(**kw):
         )
         if not rgw_status:
             raise Exception("rgw service restart failed")
-        setup_gklm_prereq(secondary_cluster, cloud_type, custom_config)
+        setup_gklm_prereq(secondary_cluster, cloud_type)
         rgw_status = check_service_exists(
             secondary_cluster.get_nodes(role="installer")[0],
             service_type="rgw",

@@ -137,7 +137,15 @@ def run(ceph_cluster, **kw):
             fuse_mount_dir,
             extra_params=f" -r {subvol_path} --client_fs {vol_name}",
         )
-
+        # set subvol metrics sliding window to 60sec
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph config get mds subv_metrics_window_interval",
+            check_ec=False,
+        )
+        subv_metrics_window_interval_def = out.strip()
+        cmd = "ceph config set mds subv_metrics_window_interval 60"
+        client.exec_command(sudo=True, cmd=cmd, check_ec=False)
         # Apply quota 3G on mount
         log.info("Setting quota on %s: 3G bytes", fuse_mount_dir)
         fs_util.set_quota_attrs(client, "1000", QUOTA_3G, fuse_mount_dir)
@@ -187,23 +195,33 @@ def run(ceph_cluster, **kw):
         log.info("Step 2: Remove quota on mount (set_quota_attrs 0, 0)")
         fs_util.set_quota_attrs(client, "0", "0", fuse_mount_dir)
         time.sleep(2)
-        result = _get_quota_and_used_from_metrics(
-            helper, client, default_fs, subvol_path, ranks
-        )
-        if result is None:
-            log.error("Step 2: No subvolume metrics with quota_bytes/used_bytes found")
-            return 1
-        quota_bytes, used_bytes = result
-        # Unlimited quota is typically reported as 0 in Ceph
-        log.info("Step 2: quota_bytes after unlimited = %s", quota_bytes)
+        retry_cnt = 0
+        while retry_cnt < 10:
+
+            result = _get_quota_and_used_from_metrics(
+                helper, client, default_fs, subvol_path, ranks
+            )
+            if result is None:
+                log.error(
+                    "Step 2: No subvolume metrics with quota_bytes/used_bytes found"
+                )
+                return 1
+            quota_bytes, used_bytes = result
+            # Unlimited quota is typically reported as 0 in Ceph
+            log.info("Step 2: quota_bytes after unlimited = %s", quota_bytes)
+            if quota_bytes != 0:
+                retry_cnt += 1
+                time.sleep(2)
+                continue
+            else:
+                break
         if quota_bytes != 0:
-            log.warning("Step 2: Expected 0 for unlimited; got %s", quota_bytes)
+            log.error("Step 2: Expected 0 for unlimited; got %s", quota_bytes)
+            return 1
         subvol_info = fs_util.get_subvolume_info(
             client, vol_name=vol_name, subvol_name=subvol_name
         )
         expected_used_bytes = subvol_info.get("bytes_used", 0)
-        if expected_used_bytes is None:
-            return 1
         if used_bytes != expected_used_bytes:
             log.error(
                 "Step 2: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
@@ -214,36 +232,54 @@ def run(ceph_cluster, **kw):
         log.info("Step 2 Passed: used_bytes = %s", used_bytes)
 
         # Step 3: Add 2G more data (total 4G), then apply quota 5G via set_quota_attrs
-        log.info("Step 3: Add 2G more data and set quota to 5G on mount")
-        if _fill_data(client, fuse_mount_dir, DATA_2G, "data_2g_2.bin") != 0:
-            return 1
+        log.info("Step 3: Set quota to 5G on mount, add 2G more data")
+
         log.info("Setting quota on %s: 5G bytes", fuse_mount_dir)
         fs_util.set_quota_attrs(client, "1000", QUOTA_5G, fuse_mount_dir)
+        if _fill_data(client, fuse_mount_dir, DATA_2G, "data_2g_2.bin") != 0:
+            return 1
         time.sleep(2)
 
         # Step 4: Rerun metrics fetch and verify quota_bytes = 5G and used_bytes vs du
         log.info(
             "Step 4: Verify quota_bytes = 5G and used_bytes vs expected_used_bytes in subvolume metrics"
         )
-        result = _get_quota_and_used_from_metrics(
-            helper, client, default_fs, subvol_path, ranks
-        )
-        if result is None:
-            log.error("Step 4: No subvolume metrics with quota_bytes/used_bytes found")
-            return 1
-        quota_bytes, used_bytes = result
+        retry_cnt = 0
+        while retry_cnt < 10:
+            subvol_info = fs_util.get_subvolume_info(
+                client, vol_name=vol_name, subvol_name=subvol_name
+            )
+            expected_used_bytes = subvol_info.get("bytes_used", 0)
+            result = _get_quota_and_used_from_metrics(
+                helper, client, default_fs, subvol_path, ranks
+            )
+            if result is None:
+                log.error(
+                    "Step 4: No subvolume metrics with quota_bytes/used_bytes found"
+                )
+                return 1
+            quota_bytes, used_bytes = result
+            log.info(
+                "Step 4: quota_bytes = %s (5G), used_bytes = %s",
+                quota_bytes,
+                used_bytes,
+            )
+            if quota_bytes != QUOTA_5G:
+                retry_cnt += 1
+                time.sleep(2)
+                continue
+            elif used_bytes != expected_used_bytes:
+                retry_cnt += 1
+                time.sleep(2)
+                continue
+            else:
+                break
         if quota_bytes != QUOTA_5G:
             log.error(
                 "Step 4: quota_bytes mismatch: expected %s (5G), got %s",
                 QUOTA_5G,
                 quota_bytes,
             )
-            return 1
-        subvol_info = fs_util.get_subvolume_info(
-            client, vol_name=vol_name, subvol_name=subvol_name
-        )
-        expected_used_bytes = subvol_info.get("bytes_used", 0)
-        if expected_used_bytes is None:
             return 1
         if used_bytes != expected_used_bytes:
             log.error(
@@ -267,6 +303,9 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        if subv_metrics_window_interval_def:
+            cmd = f"ceph config set mds subv_metrics_window_interval {subv_metrics_window_interval_def}"
+            client.exec_command(sudo=True, cmd=cmd, check_ec=False)
         try:
             client.exec_command(
                 sudo=True, cmd=f"umount -l {fuse_mount_dir}", check_ec=False

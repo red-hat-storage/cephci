@@ -3,57 +3,44 @@ from threading import Thread
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
 from cli.exceptions import ConfigError, OperationFailedError
+from cli.utilities.utils import perform_lookups
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def create_copy_files(mount_point, num_files, client1, client2):
+def create_copy_files(mount_point, num_files, client1, client2, sudo=False):
     for i in range(1, num_files + 1):
         try:
             client1.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"dd if=/dev/urandom of={mount_point}/file{i} bs=1 count=1",
             )
             client2.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"cp {mount_point}/file{i} {mount_point}/copyfile{i}",
             )
-        except Exception:
-            raise OperationFailedError(f"failed to perform operation on file{i}")
+        except Exception as e:
+            log.error(f"Failed to create/copy file{i}: {e}")
+            raise OperationFailedError(f"failed to perform operation on file{i}: {e}")
 
 
-def create_copy_dirs(mount_point, num_dirs, client1, client2):
+def create_copy_dirs(mount_point, num_dirs, client1, client2, sudo=False):
     for i in range(1, num_dirs + 1):
         try:
             client1.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"mkdir {mount_point}/dir{i}",
             )
             client2.exec_command(
-                sudo=True,
+                sudo=sudo,
                 cmd=f"cp -r {mount_point}/dir{i} {mount_point}/copydir{i}",
             )
-        except Exception:
+        except Exception as e:
+            log.error(f"Failed to create/copy directory dir{i}: {e}")
             raise OperationFailedError(
-                f"failed to perform operation on directory dir{i}"
+                f"failed to perform operation on directory dir{i}: {e}"
             )
-
-
-def perform_lookups(client, mount_point, num_files, num_dirs):
-    for _ in range(1, num_files + num_dirs):
-        try:
-            client.exec_command(
-                sudo=True,
-                cmd=f"ls -laRt {mount_point}/",
-            )
-        except FileNotFoundError as e:
-            error_message = str(e)
-            if "No such file or directory" not in error_message:
-                raise OperationFailedError("failed to perform lookups")
-            log.warning(f"Ignoring error: {error_message}")
-        except Exception:
-            raise OperationFailedError("failed to perform lookups")
 
 
 def run(ceph_cluster, **kw):
@@ -70,6 +57,7 @@ def run(ceph_cluster, **kw):
     num_files = config.get("num_files")
     num_dirs = config.get("num_dirs")
     no_clients = int(config.get("clients", "3"))
+    sudo = config.get("sudo", False)
     nfs_name = "cephfs-nfs"
     nfs_mount = "/mnt/nfs"
     nfs_export = "/export"
@@ -104,25 +92,30 @@ def run(ceph_cluster, **kw):
         operations = [
             Thread(
                 target=create_copy_files,
-                args=(nfs_mount, num_files, client1, client2),
+                args=(nfs_mount, num_files, client1, client2, sudo),
             ),
             Thread(
                 target=create_copy_dirs,
-                args=(nfs_mount, num_dirs, client1, client2),
+                args=(nfs_mount, num_dirs, client1, client2, sudo),
             ),
             Thread(
                 target=perform_lookups,
-                args=(clients[2], nfs_mount, num_files, num_dirs),
+                args=(clients[2], nfs_mount, num_files + num_dirs),
+                kwargs={"sudo": sudo, "timeout": 60},
             ),
         ]
 
-        # start opertaion on each client
+        # start operation on each client
         for operation in operations:
             operation.start()
 
-        # Wait for all operation to finish
-        for operation in operations:
-            operation.join()
+        # Wait for all operation to finish with timeout
+        for idx, operation in enumerate(operations):
+            operation.join(timeout=300)
+            if operation.is_alive():
+                op_names = ["create_copy_files", "create_copy_dirs", "perform_lookups"]
+                log.error(f"Thread {idx} ({op_names[idx]}) did not complete in 300s")
+                raise OperationFailedError(f"Thread {idx} hung")
 
         log.info("Successfully completed the copy tests for files and dirs")
         return 0
@@ -132,4 +125,4 @@ def run(ceph_cluster, **kw):
         cleanup_cluster(
             clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]
         )
-        log.info("Cleaning up successfull")
+        log.info("Cleaning up successful")

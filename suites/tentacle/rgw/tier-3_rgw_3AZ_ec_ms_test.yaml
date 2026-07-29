@@ -1,4 +1,4 @@
-# Use cluster-conf file: conf/tentacle/rados/3AZ-cluster-rhos-1.yaml
+# Use cluster-conf file: conf/tentacle/rgw/3AZ-ec-ms.yaml
 # 3 AZ cluster deployment tests
 # can be part of regression/weekly
 tests:
@@ -21,7 +21,7 @@ tests:
               verbose: true
             args:
               mon-ip: node1
-              platform: rhel-9
+              # platform: rhel-9
               ssh-user: cephuser
               apply-spec:
                 - service_type: host

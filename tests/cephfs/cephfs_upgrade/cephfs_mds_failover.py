@@ -21,7 +21,6 @@ def run(ceph_cluster, **kw):
     3. Fail active mds with interval for 2 min each
     4. Perform this till upgrade in progress
     5. Check if there are any crash occurred
-
     """
     try:
         fs_util = FsUtils(ceph_cluster)
@@ -36,7 +35,7 @@ def run(ceph_cluster, **kw):
         fs_name = "cephfs"
         log.info("Wait for Upgrade to start")
         time.sleep(120)
-        retry_exec_command = retry(CommandFailed, tries=3, delay=30)(
+        retry_exec_command = retry(CommandFailed, tries=10, delay=30, backoff=1)(
             client1.exec_command
         )
         # while True:
@@ -106,7 +105,9 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=
         print("Timeout: Two active MDS not found within the specified time.")
     ```
     """
-    retry_exec_command = retry(CommandFailed, tries=3, delay=30)(client1.exec_command)
+    retry_exec_command = retry(CommandFailed, tries=10, delay=30, backoff=1)(
+        client1.exec_command
+    )
     start_time = time.time()
     while time.time() - start_time < max_wait_time:
         out, rc = retry_exec_command(

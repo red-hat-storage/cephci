@@ -132,6 +132,7 @@ tests:
   - test:
       name: test bucket logging with Standard mode, PartitionedPrefix, rgw_admin_flush
       desc: test bucket logging with Standard mode, PartitionedPrefix, rgw_admin_flush
+      comments: Known issue IBMCEPH-15744 on 9.1 targeted to 9.2
       polarion-id: CEPH-83623532
       module: sanity_rgw.py
       config:
@@ -140,6 +141,7 @@ tests:
   - test:
       name: test bucket logging with Standard mode, multipart_objects, SimplePrefix, rest_api_flush
       desc: test bucket logging with Standard mode, multipart_objects, SimplePrefix, rest_api_flush
+      comments: Known issue IBMCEPH-15744 on 9.1 targeted to 9.2
       polarion-id: CEPH-83623532
       module: sanity_rgw.py
       config:

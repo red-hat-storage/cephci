@@ -20,7 +20,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.utils import get_cluster_timestamp
-from ceph.utils import get_node_by_id, remove_repos
+from ceph.utils import get_node_by_id, mgr_accept_license, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
@@ -160,14 +160,6 @@ def run(ceph_cluster, **kw):
             os_ver = rhbuild.split("-")[-1]
             _rpm_version = f"2:{_ver}.el{os_ver}cp"
 
-            # IBM Storage Ceph 9.1 and greater would require license acceptance
-            # There is '--automatically-accept-license' option
-            if product == "ibm" and LooseVersion(_rhcs_version) >= LooseVersion("9.1"):
-                license_cmd = (
-                    f"ceph orch accept-license --image {config['container_image']}"
-                )
-                out, _ = cephadm_obj.shell(args=[license_cmd], check_status=False)
-                log.debug(out)
         elif _custom_image and _custom_repo:
             _registry, _image_name = _custom_image.split(":")[0].split("/", 1)
             _image_tag = _custom_image.split(":")[-1]
@@ -230,17 +222,6 @@ def run(ceph_cluster, **kw):
             if hostnames:
                 config["args"]["hosts"] = ",".join(hostnames)
                 log.info(f"Converted node IDs to hostnames: {hostnames}")
-
-        # IBM Storage Ceph 9.1 and greater would require license acceptance
-        # There is '--automatically-accept-license' option
-        if product == "ibm" and LooseVersion(
-            str(config.get("release"))
-        ) >= LooseVersion("9.1"):
-            license_cmd = (
-                f"ceph orch accept-license --image {config['container_image']}"
-            )
-            out, _ = cephadm_obj.shell(args=[license_cmd], check_status=False)
-            log.debug(out)
 
         # Start Upgrade
         cluster_obj.start_upgrade(config)
@@ -370,6 +351,13 @@ def run(ceph_cluster, **kw):
             "Completed upgrade on the cluster successfully."
             "Proceeding to do further checks on the cluster post upgrade"
         )
+
+        # IBM Storage Ceph 9.1 and greater would require license acceptance
+        if product == "ibm" and LooseVersion(
+            str(config.get("release"))
+        ) >= LooseVersion("9.1"):
+            log.info("Accept license for image: %s", config["container_image"])
+            mgr_accept_license(node=cephadm_obj, img=config["container_image"])
 
         log.info("\n\nCluster status post upgrade: \n")
         log_dump = (

@@ -632,6 +632,50 @@ tests:
         lock_wait_seconds: 15
 
   - test:
+      name: NFSv4 delegation WRITE grant new vs existing file
+      module: nfs_verify_delegation_write_grant_scenarios.py
+      desc: >-
+        Capture WRITE delegation on new-file create (logged) and require WRITE
+        delegation when reopening the same file for write.
+      polarion-id: CEPH-83632380
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        delegation_exit_wait_seconds: 120
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+
+  - test:
+      name: NFSv4 delegation WRITE peer access recall and grant
+      module: nfs_verify_delegation_write_peer_access.py
+      desc: >-
+        Peer write recalls holder WRITE delegation; after holder returns
+        delegation, peer can obtain WRITE delegation on the same file.
+      polarion-id: CEPH-83632380
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        clients: 2
+        delegation_exit_wait_seconds: 120
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+        delegation_return_wait_seconds: 15
+
+  - test:
+      name: NFSv4 delegation client unmount scenario
+      module: nfs_verify_delegation_client_lifecycle_scenarios.py
+      desc: Delegation is returned (DELEGRETURN) when client unmounts with active delegation.
+      polarion-id: CCEPH-83632378
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        delegation_hold_ready_seconds: 8
+        delegation_log_settle_seconds: 90
+
+  - test:
       name: NFSv4 delegation stress and scale scenarios
       module: nfs_verify_delegation_stress_scenarios.py
       desc: >-
@@ -649,3 +693,4 @@ tests:
         strict_log_validation: false
         delegation_exit_wait_seconds: 120
         delegation_log_settle_seconds: 90
+

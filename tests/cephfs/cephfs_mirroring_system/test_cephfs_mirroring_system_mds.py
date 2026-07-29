@@ -442,6 +442,9 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        collect_background_io_logs(source_clients[0], full_subvolume_path)
+        if env and "source_clients" in env and "full_subvolume_path" in env:
+            collect_background_io_logs(
+                env["source_clients"][0], env["full_subvolume_path"]
+            )
         if config and config.get("cleanup", True) and env:
             cleanup_mirroring_test_environment(env)

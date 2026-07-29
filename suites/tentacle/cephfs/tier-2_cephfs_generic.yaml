@@ -165,3 +165,9 @@ tests:
       polarion-id: CEPH-83573429
       desc: Fail mds daemon by it rank
       abort-on-fail: false
+  - test:
+      name: Validate all extended attributes that are supported in filesystem
+      module: cephfs_generic.validate_xattr_set_get.py
+      polarion-id: CEPH-83593150
+      desc: Validate all extended attributes of FS
+      abort-on-fail: false

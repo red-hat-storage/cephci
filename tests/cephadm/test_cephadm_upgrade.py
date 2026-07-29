@@ -3,9 +3,12 @@ Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 
 """
 
+from looseversion import LooseVersion
+
+from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
-from ceph.utils import is_legacy_container_present, remove_repos
+from ceph.utils import is_legacy_container_present, mgr_accept_license, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
 
@@ -42,7 +45,9 @@ def run(ceph_cluster, **kwargs) -> int:
     log.info("Upgrade Ceph cluster...")
 
     config = kwargs["config"]
+    cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     config["overrides"] = kwargs.get("test_data", {}).get("custom_config_dict")
+    product: str = config.get("args", {}).get("--product", config["product"])
     verify_image = bool(config.get("verify_cluster_health", False))
 
     ctm: CephTestManifest = config["manifest"]
@@ -130,6 +135,13 @@ def run(ceph_cluster, **kwargs) -> int:
 
         # Monitor upgrade status, till completion
         orch.monitor_upgrade_status()
+
+        # IBM Storage Ceph 9.1 and greater would require license acceptance
+        if product == "ibm" and LooseVersion(
+            str(config.get("release"))
+        ) >= LooseVersion("9.1"):
+            log.info("Accept license for image: %s", config["container_image"])
+            mgr_accept_license(node=cephadm_obj, img=config["container_image"])
 
         if verify_image:
             # BZ: 2077843

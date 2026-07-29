@@ -623,6 +623,7 @@ def run(args):
     ibm_build = False
     # disable coredump collection by default
     collect_coredump = False
+    crimson = False
 
     # Custom or override configurations
     kernel_repo = args.get("--kernel-repo")
@@ -646,6 +647,9 @@ def run(args):
 
             product = "ibm"
 
+    if "crimson" in custom_config_dict.keys():
+        crimson = bool(custom_config_dict["crimson"])
+
     # Setting to released by default is not right as there is case wherein it
     # would be unavailable. Hence switching accordingly to released or nightly.
     if build == "released":
@@ -657,7 +661,9 @@ def run(args):
             build = "nightly"
 
     # Now handle the manifest. At this point we are allowing failures
-    ctm: CephTestManifest = CephTestManifest(product, release, build, platform)
+    ctm: CephTestManifest = CephTestManifest(
+        product, release, build, platform, crimson=crimson
+    )
 
     base_url = args.get("--rhs-ceph-repo")
     docker_registry = args.get("--docker-registry")
@@ -699,8 +705,17 @@ def run(args):
     enable_eus = args.get("--enable-eus")
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms")
     skip_sos_report = args.get("--skip-sos-report")
+
+    # Pre define the variables for coredump and logs collection.
+    # By default we don't collect any logs.
+    collect_coredump = False
+    collect_ceph_logs = False
+
     if "collect-coredump" in custom_config_dict.keys():
         collect_coredump = bool(custom_config_dict["collect-coredump"])
+
+    if "collect-ceph-logs" in custom_config_dict.keys():
+        collect_ceph_logs = bool(custom_config_dict["collect-ceph-logs"])
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
@@ -1288,10 +1303,18 @@ def run(args):
                 installer.password or "cephuser",
                 run_dir,
             )
-            # This can be Removed as sos report will have this details as well
-            get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
 
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
+
+    if jenkins_rc or collect_ceph_logs:
+        log.info(
+            "\n\nCopying Ceph cluster logs due to failures in testcase or user instructed"
+        )
+        for cluster in ceph_cluster_dict.keys():
+            # method to collect logs from ceph nodes
+            get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
+
+        log.info(f"Generated cluster log location : {url_base}/ceph_logs\n")
 
     return jenkins_rc
 

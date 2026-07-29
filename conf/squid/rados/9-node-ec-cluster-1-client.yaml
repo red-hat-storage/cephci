@@ -25,6 +25,7 @@ globals:
           - mgr
           - mds
           - rgw
+          - smb
         no-of-volumes: 3
         disk-size: 15
 
@@ -35,6 +36,7 @@ globals:
           - mgr
           - mds
           - rgw
+          - smb
         no-of-volumes: 3
         disk-size: 15
 
@@ -51,6 +53,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - nfs
         no-of-volumes: 3
         disk-size: 15
 
@@ -59,6 +62,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - nfs
         no-of-volumes: 3
         disk-size: 15
 
@@ -71,6 +75,7 @@ globals:
           - osd
           - node-exporter
           - crash
+          - nfs
         no-of-volumes: 3
         disk-size: 15
 
@@ -81,6 +86,7 @@ globals:
           - rgw
           - osd
           - crash
+          - smb
         no-of-volumes: 3
         disk-size: 15
 

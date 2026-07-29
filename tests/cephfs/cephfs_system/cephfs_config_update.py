@@ -29,6 +29,7 @@ def run(ceph_cluster, **kw):
 
     """
     try:
+        global log_base_dir
         sys_lib = CephFSSystemUtils(ceph_cluster)
         config = kw.get("config")
         config_name = config.get("config_name", "all")
@@ -36,12 +37,14 @@ def run(ceph_cluster, **kw):
         update_interval = config.get(
             "conf_update_interval", 1
         )  # hrs,set to '0' if NO iteration required
-        run_time = config.get("run_time_hrs", 4)
+        run_time = config.get("run_time_hrs", 8)
         chk_clus = config.get(
             "check_cluster", 1
         )  # Required for system testing only,0 for other tests
 
         client = ceph_cluster.get_ceph_objects("client")[0]
+        run_config = kw.get("run_config")
+        log_base_dir = run_config.get("log_dir")
         mds_config = {
             "mds_cache_memory_limit": {
                 "default": "4G",
@@ -149,8 +152,7 @@ def mds_config_test(
 ):
     # Log configuration
     log_name = "mds_config_test"
-    log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-    log_path = f"{log_base_dir}/config_subtests"
+    log_path = f"{log_base_dir}/mds_config_subtests"
     try:
         os.mkdir(log_path)
     except BaseException as ex:

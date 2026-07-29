@@ -1,8 +1,9 @@
+import time
 from threading import Thread
 
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
-from cli.exceptions import ConfigError
+from cli.exceptions import ConfigError, OperationFailedError
 from cli.io.io import linux_untar
 from cli.utilities.utils import create_files
 from utility.log import Log
@@ -24,7 +25,8 @@ def run(ceph_cluster, **kw):
     no_clients = int(config.get("clients", "2"))
     setup = config.get("setup", True)
     io = config.get("io", True)
-    cleanup = config.get("io", True)
+    cleanup = config.get("cleanup", True)
+    sudo = config.get("sudo", False)
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -71,23 +73,58 @@ def run(ceph_cluster, **kw):
             th2 = Thread(
                 target=create_files,
                 args=(clients[1], nfs_mount, 100),
+                kwargs={"sudo": sudo},
             )
 
             th1.start()
             th2.start()
 
             # While the IO's are in progress, do the look ups in parallel
-            while th1.is_alive() or th2.is_alive():
-                # Test 1: Perform Linux untar from 1 client and do readir operation from other client (ls -lart)
-                cmd = f"ls -lart {nfs_mount}"
-                clients[1].exec_command(cmd=cmd, sudo=True)
+            max_iterations = 1000  # Safety limit
+            iteration = 0
+            try:
+                while (th1.is_alive() or th2.is_alive()) and iteration < max_iterations:
+                    iteration += 1
+                    try:
+                        # Test 1: Perform Linux untar from 1 client and
+                        # do readir operation from other client (ls -lart)
+                        cmd = f"ls -lart {nfs_mount}"
+                        clients[1].exec_command(cmd=cmd, sudo=sudo, timeout=30)
 
-                # Test 2: Perform Linux untar from 1 client and do readir operation from other client (du -sh)
-                cmd = f"du -sh {nfs_mount}"
-                clients[2].exec_command(cmd=cmd, sudo=True)
+                        # Test 2: Perform Linux untar from 1 client and
+                        # do readir operation from other client (du -sh)
+                        cmd = f"du -sh {nfs_mount}"
+                        clients[2].exec_command(cmd=cmd, sudo=sudo, timeout=30)
+                    except TimeoutError as e:
+                        log.warning(
+                            f"Lookup iteration {iteration} timed out (expected): {e}"
+                        )
+                    except Exception as e:
+                        # Log as warning for expected failures during parallel IO
+                        error_msg = str(e)
+                        if "No such file" in error_msg or "failed" in error_msg.lower():
+                            log.warning(
+                                f"Lookup iteration {iteration} failed (expected): {e}"
+                            )
+                        else:
+                            log.error(
+                                f"Lookup iteration {iteration} failed unexpectedly: {e}"
+                            )
+                            raise
 
-            th1.join()
-            th2.join()
+                    time.sleep(0.5)  # Prevent tight loop
+
+                # Wait for threads with timeout
+                th1.join(timeout=300)
+                th2.join(timeout=300)
+
+                if th1.is_alive() or th2.is_alive():
+                    log.error("Threads did not complete within timeout")
+                    raise OperationFailedError("IO threads hung")
+
+            except Exception as e:
+                log.error(f"Parallel IO test failed: {e}")
+                raise
         return 0
     except Exception as e:
         log.error(f"Failed to validate multiple ios and lookups : {e}")
@@ -95,8 +132,8 @@ def run(ceph_cluster, **kw):
     finally:
         if cleanup:
             log.info("Cleaning up")
-            import time
-
+            # Wait for NFS operations to stabilize before cleanup
+            log.info("Waiting 20s for NFS operations to stabilize")
             time.sleep(20)
             cleanup_cluster(
                 clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]

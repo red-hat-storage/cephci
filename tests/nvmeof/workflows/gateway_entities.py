@@ -67,14 +67,14 @@ def validate_subsystems(nvme_service, subsystem_config):
         )
 
 
-def configure_subsystems(nvme_service, ceph_cluster=None):
+def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None):
     """
     Configure subsystems, hosts, and namespaces for this gateway group.
     This is done once per group, not per gateway.
     Args:
         nvme_service: NvmeService instance
-        exec_parallel: Whether to execute subsystem configuration in parallel
-        (default: False, sequential execution)
+        ceph_cluster: Ceph cluster object
+        subsystem_config: Optional subsystem list; defaults to nvme_service.config
     """
 
     # Configure subsystem
@@ -113,6 +113,8 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
                 {"initiators": create_dhchap_key(sub_cfg, nvme_service.ceph_cluster)}
             )
             sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
+        elif sub_cfg.get("dhchap-key"):
+            sub_args["dhchap-key"] = sub_cfg["dhchap-key"]
 
         # Add Subsystem
         release = nvme_service.ceph_cluster.rhcs_version
@@ -140,7 +142,8 @@ def configure_subsystems(nvme_service, ceph_cluster=None):
 
         gateway.subsystem.add(**{"args": args})
 
-    subsystem_config = nvme_service.config.get("subsystems", [])
+    if subsystem_config is None:
+        subsystem_config = nvme_service.config.get("subsystems", [])
     for sub_cfg in subsystem_config:
         with parallel() as p:
             p.spawn(configure_subsystem, nvme_service, sub_cfg)
@@ -357,6 +360,12 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
 
                 if bdev_cfg.get("pool"):
                     namespace_args.update({"rbd-pool": bdev_cfg["pool"]})
+
+                rados_namespace = bdev_cfg.get(
+                    "rados_namespace", sub_cfg.get("rados_namespace")
+                )
+                if rados_namespace:
+                    namespace_args.update({"rados-namespace": rados_namespace})
 
                 # consider adding option to create pool and image if it doesn't exist
                 # and also ns_create_image is false
@@ -617,8 +626,12 @@ def fetch_namespaces(gateway, failed_ana_grp_ids=[], get_list=False):
         if failed_ana_grp_ids:
             for ns in nspaces:
                 if ns["load_balancing_group"] in failed_ana_grp_ids:
-                    # <subsystem>|<nsid>|<pool_name>|<image>
-                    ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
+                    # <subsystem>|<nsid>|<pool_name>|<image> or <subsystem>|<nsid>|<pool_name>|<rados_namespace>/<image>
+                    # Handle both {pool}/{image} and {pool}/{rados_namespace}/{image} formats
+                    image_path = ns["rbd_image_name"]
+                    if ns.get("rados_namespace_name"):
+                        image_path = f"{ns['rados_namespace_name']}/{image_path}"
+                    ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{image_path}"
                     if get_list:
                         namespaces.append({"list": ns, "info": f"{sub_name}|{ns_info}"})
                     else:

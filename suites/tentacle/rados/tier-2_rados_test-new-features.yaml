@@ -543,19 +543,6 @@ tests:
 # scenario 14 - compression mode tests with rbd, rgw and cephfs
 
   - test:
-      name: Bluestore compression v1 - setup phase rbd, rgw and cephfs
-      module: test_bluestore_comp_enhancements.py
-      desc: Positive workflows for bluestore data compression enhancements
-      polarion-id: CEPH-83620071
-      abort-on-fail: true
-      config:
-        include_erasure_pools: true
-        cleanup_objects: true
-        cleanup_pools: false
-        scenarios_to_run:
-          - setup
-
-  - test:
       name: Bluestore compression v1 - compression mode tests with rbd, rgw and cephfs
       module: test_bluestore_comp_enhancements.py
       desc: Positive workflows for bluestore data compression enhancements
@@ -563,8 +550,6 @@ tests:
       abort-on-fail: true
       config:
         include_erasure_pools: true
-        cleanup_objects: true
-        cleanup_pools: false
         scenarios_to_run:
           - scenario-14
 
@@ -576,8 +561,6 @@ tests:
       abort-on-fail: true
       config:
         include_erasure_pools: true
-        cleanup_objects: true
-        cleanup_pools: false
         scenarios_to_run:
           - scenario-12
 
@@ -589,8 +572,27 @@ tests:
       abort-on-fail: true
       config:
         include_erasure_pools: true
-        cleanup_objects: true
-        cleanup_pools: true
         scenarios_to_run:
           - scenario-13
 
+  - test:
+      name: Bluestore compression v1 - compression required ratio tests
+      module: test_bluestore_comp_enhancements.py
+      desc: Bluestore compression v1 - compression required ratio tests
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-15
+
+  - test:
+      name: Bluestore compression v1 - OSD recovery tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-16

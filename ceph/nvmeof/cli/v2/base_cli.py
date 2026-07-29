@@ -11,6 +11,7 @@ KEY_MAP = {
     "subsystem": "nqn",
     "host": "host_nqn",
     "host-nqn": "host_nqn",
+    "dhchap-ctrl-secret": "dhchap-controller-key",
     "rbd-pool": "rbd_pool",
     "rbd-image": "rbd_image_name",
     "rbd-create-image": "create-image",

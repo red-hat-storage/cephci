@@ -37,6 +37,26 @@ class Qos(Cli):
             )
         return self._execute_qos_cmd("enable", operation, nfs_name, export, params)
 
+    def enable_per_client(
+        self,
+        nfs_name: str,
+        export: str,
+        operation: str,
+        max_client_combined_bw: str = None,
+        max_client_write_bw: str = None,
+        max_client_read_bw: str = None,
+        max_client_iops: int = None,
+    ) -> str:
+        if operation == "ops_control":
+            if max_client_iops is None:
+                raise ValueError("max_client_iops is required for export ops_control")
+            params = [str(max_client_iops)]
+        else:
+            params = self._build_client_params(
+                max_client_combined_bw, max_client_write_bw, max_client_read_bw
+            )
+        return self._execute_qos_cmd("enable", operation, nfs_name, export, params)
+
     def enable_per_share_per_client(
         self,
         nfs_name: str,

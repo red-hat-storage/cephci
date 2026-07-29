@@ -272,14 +272,11 @@ def run(ceph_cluster, **kw):
                     "check_ec": False,
                 }
                 try:
-                    if (
-                        rados_obj.bench_write(
-                            pool_name=pool_name, **osdfull_config, verify_stats=False
-                        )
-                        is False
-                    ):
-                        err_msg = f"Error running rados bench using osdfull_config: {osdfull_config}"
-                        raise Exception(err_msg)
+                    rados_obj.bench_write(
+                        pool_name=pool_name, **osdfull_config, verify_stats=False
+                    )
+                    log.error("RADOS bench execution should have failed")
+                    raise
                 except (SocketTimeoutException, TimeoutException):
                     log.warning(
                         "rados bench socket Timeout because OSD(s) are full - Expected"

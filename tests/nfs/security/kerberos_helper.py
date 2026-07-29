@@ -1,5 +1,9 @@
 """MIT Kerberos KDC setup for NFS-Ganesha tests (host KDC on clients[1])."""
 
+import os
+import re
+import secrets
+import shlex
 import time
 
 from cli.utilities.packages import Package
@@ -10,19 +14,72 @@ log = Log(__name__)
 DEFAULT_REALM = "CEPH.TEST"
 DEFAULT_DOMAIN = "ceph.test"
 DEFAULT_KDC_HOSTNAME = "kdc.ceph.test"
-DEFAULT_MASTER_PASSWORD = "cephci-kdc-master"
 DEFAULT_TEST_USER = "nfsuser"
-DEFAULT_TEST_PASSWORD = "password123"
+
+# User/client auth uses keytabs (like SSH keys), not passwords.
+# KDC database master key still needs a secret at first create only.
+
+
+def get_default_master_password():
+    return os.environ.get("CEPHCI_KDC_MASTER_PASSWORD") or secrets.token_urlsafe(32)
+
+
+def validate_kerberos_realm(realm):
+    """Validate Kerberos realm format (uppercase alphanumeric / dots / dashes)."""
+    if not realm or not isinstance(realm, str):
+        raise ValueError("Realm must be a non-empty string")
+    realm = realm.strip().upper()
+    if not re.match(r"^[A-Z][A-Z0-9.-]*$", realm):
+        raise ValueError("Invalid realm format: {!r}".format(realm))
+    return realm
+
+
+def validate_kerberos_domain(domain):
+    """Validate DNS-style Kerberos domain (lowercase)."""
+    if not domain or not isinstance(domain, str):
+        raise ValueError("Domain must be a non-empty string")
+    domain = domain.strip().lower()
+    if not re.match(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", domain):
+        raise ValueError("Invalid domain format: {!r}".format(domain))
+    return domain
+
+
+def validate_kerberos_hostname(hostname):
+    """Validate a hostname / FQDN used for SPNs and krb5.conf."""
+    if not hostname or not isinstance(hostname, str):
+        raise ValueError("Hostname must be a non-empty string")
+    hostname = hostname.strip().lower()
+    if not re.match(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", hostname):
+        raise ValueError("Invalid hostname format: {!r}".format(hostname))
+    return hostname
+
+
+def _kadmin_safe_token(value, name="value"):
+    """Restrict tokens embedded in ``kadmin.local -q`` queries."""
+    if not value or not isinstance(value, str):
+        raise ValueError("{} must be a non-empty string".format(name))
+    if re.search(r"[\'\"\\$;`|&<>()\n\r\t ]", value):
+        raise ValueError("Invalid characters in {}: {!r}".format(name, value))
+    return value
 
 
 def _remote_test(node, path, flag="f"):
     """Return True if ``test -<flag> path`` succeeds on ``node``."""
     out, _ = node.exec_command(
         sudo=True,
-        cmd="test -{} {} && echo yes".format(flag, path),
+        cmd="test -{} {} && echo yes".format(flag, shlex.quote(path)),
         check_ec=False,
     )
     return "yes" in (out or "")
+
+
+def _enforce_keytab_permissions(node, keytab_path):
+    """Enforce keytab mode 0600 and root ownership."""
+    path = shlex.quote(keytab_path)
+    node.exec_command(
+        sudo=True,
+        cmd="chmod 600 {} && chown root:root {}".format(path, path),
+    )
 
 
 class MITKDCSetup:
@@ -34,17 +91,17 @@ class MITKDCSetup:
         realm=DEFAULT_REALM,
         domain=DEFAULT_DOMAIN,
         kdc_hostname=DEFAULT_KDC_HOSTNAME,
-        master_password=DEFAULT_MASTER_PASSWORD,
+        master_password=None,
         test_user=DEFAULT_TEST_USER,
-        test_password=DEFAULT_TEST_PASSWORD,
     ):
         self.node = node
-        self.realm = realm.upper()
-        self.domain = domain.lower()
-        self.kdc_hostname = kdc_hostname
-        self.master_password = master_password
-        self.test_user = test_user
-        self.test_password = test_password
+        self.realm = validate_kerberos_realm(realm)
+        self.domain = validate_kerberos_domain(domain)
+        self.kdc_hostname = validate_kerberos_hostname(kdc_hostname)
+        self.master_password = _kadmin_safe_token(
+            master_password or get_default_master_password(), "master_password"
+        )
+        self.test_user = _kadmin_safe_token(test_user, "test_user")
         self._bootstrapped = False
 
     @property
@@ -53,37 +110,55 @@ class MITKDCSetup:
 
     def setup_kdc(self):
         """Install and start MIT KDC on the host."""
-        self._setup_kdc_host()
-        self._open_kdc_firewall()
-        self._log_kdc_listeners()
-        self._bootstrapped = True
-        log.info(
-            "MIT KDC ready on %s (%s), realm %s",
-            self.node.hostname,
-            self.node.ip_address,
-            self.realm,
-        )
+        if self._bootstrapped:
+            log.info("KDC already bootstrapped on %s", self.node.hostname)
+            return
+        try:
+            self._setup_kdc_host()
+            self._open_kdc_firewall()
+            self._log_kdc_listeners()
+            self._bootstrapped = True
+            log.info(
+                "MIT KDC ready on %s (%s), realm %s",
+                self.node.hostname,
+                self.node.ip_address,
+                self.realm,
+            )
+        except Exception as exc:
+            log.error("KDC setup failed, attempting cleanup: %s", exc)
+            try:
+                self.cleanup_kdc()
+            except Exception as cleanup_exc:
+                log.warning("Cleanup also failed: %s", cleanup_exc)
+            raise
 
-    def add_user_principal(self, username=None, password=None):
-        user = username or self.test_user
-        pw = password or self.test_password
-        principal = "{}@{}".format(user, self.realm)
+    def add_user_principal(self, username=None):
+        """
+        Ensure a user principal with a random key (keytab auth, no password).
+
+        Analogous to SSH key auth: clients authenticate with a keytab, not a
+        password typed into ``kinit``.
+        """
+        user = _kadmin_safe_token(username or self.test_user, "username")
+        principal = _kadmin_safe_token("{}@{}".format(user, self.realm), "principal")
         self._kadmin_local(
-            'addprinc -pw "{}" {}'.format(pw, principal),
+            "addprinc -randkey {}".format(principal),
             check_ec=False,
         )
-        log.info("Ensured user principal %s", principal)
+        log.info("Ensured user principal %s (keytab auth)", principal)
         return principal
 
     def add_nfs_service_principal(self, nfs_fqdn):
-        spn = "nfs/{}@{}".format(nfs_fqdn, self.realm)
+        fqdn = validate_kerberos_hostname(nfs_fqdn)
+        spn = _kadmin_safe_token("nfs/{}@{}".format(fqdn, self.realm), "spn")
         self._kadmin_local("addprinc -randkey {}".format(spn), check_ec=False)
         log.info("Ensured NFS service principal %s", spn)
         return spn
 
     def add_host_service_principal(self, host_fqdn):
         """Host principal so RHEL starts ``rpc-gssd`` (requires ``/etc/krb5.keytab``)."""
-        spn = "host/{}@{}".format(host_fqdn, self.realm)
+        fqdn = validate_kerberos_hostname(host_fqdn)
+        spn = _kadmin_safe_token("host/{}@{}".format(fqdn, self.realm), "spn")
         self._kadmin_local("addprinc -randkey {}".format(spn), check_ec=False)
         log.info("Ensured host principal %s", spn)
         return spn
@@ -91,6 +166,20 @@ class MITKDCSetup:
     def export_keytab_for_principal(
         self, principal, remote_path="/tmp/cephci-nfs.keytab"
     ):
+        principal = _kadmin_safe_token(principal, "principal")
+        if not (
+            remote_path.startswith("/tmp/cephci-")
+            and remote_path.endswith(".keytab")
+            and ".." not in remote_path
+        ):
+            raise ValueError(
+                "Refusing keytab path outside /tmp/cephci-*.keytab: {!r}".format(
+                    remote_path
+                )
+            )
+        self.node.exec_command(
+            sudo=True, cmd="rm -f {}".format(shlex.quote(remote_path)), check_ec=False
+        )
         self._kadmin_local(
             "ktadd -k {} {}".format(remote_path, principal),
             check_ec=False,
@@ -101,6 +190,7 @@ class MITKDCSetup:
                     remote_path, principal
                 )
             )
+        _enforce_keytab_permissions(self.node, remote_path)
         return remote_path
 
     def fetch_keytab_bytes(self, remote_path="/tmp/cephci-nfs.keytab"):
@@ -120,6 +210,7 @@ class MITKDCSetup:
             sudo=True, cmd="systemctl stop kadmin krb5kdc", check_ec=False
         )
         self._close_kdc_firewall()
+        self._bootstrapped = False
 
     def _remove_stale_podman_kdc(self):
         """Remove leftover podman KDC containers from prior test runs."""
@@ -203,19 +294,31 @@ class MITKDCSetup:
 
         marker = "/var/kerberos/krb5kdc/.cephci_bootstrapped"
         if not _remote_test(self.node, marker):
-            self.node.exec_command(
-                sudo=True,
-                cmd=("bash -c 'echo -e \"{pw}\\n{pw}\" | kdb5_util create -s'").format(
-                    pw=self.master_password
-                ),
+            # Avoid embedding the master password in a shell string.
+            pw_file = "/tmp/cephci-kdc-master.pw"
+            self._write_remote_file(
+                pw_file,
+                "{}\n{}\n".format(self.master_password, self.master_password),
+                mode="600",
             )
-            self.node.exec_command(sudo=True, cmd="touch {}".format(marker))
+            try:
+                self.node.exec_command(
+                    sudo=True,
+                    cmd="kdb5_util create -s < {}".format(shlex.quote(pw_file)),
+                )
+                self.node.exec_command(sudo=True, cmd="touch {}".format(marker))
+            finally:
+                self.node.exec_command(
+                    sudo=True,
+                    cmd="rm -f {}".format(shlex.quote(pw_file)),
+                    check_ec=False,
+                )
 
         self._remove_stale_podman_kdc()
         self._start_host_kdc_services()
 
     def _kadmin_local(self, subcmd, check_ec=True):
-        cmd = 'kadmin.local -q "{}"'.format(subcmd.replace('"', '\\"'))
+        cmd = "kadmin.local -q {}".format(shlex.quote(subcmd))
         return self.node.exec_command(sudo=True, cmd=cmd, check_ec=check_ec)
 
     def _write_remote_file(self, path, content, mode=None):
@@ -223,7 +326,10 @@ class MITKDCSetup:
         handle.write(content)
         handle.flush()
         if mode:
-            self.node.exec_command(sudo=True, cmd="chmod {} {}".format(mode, path))
+            self.node.exec_command(
+                sudo=True,
+                cmd="chmod {} {}".format(mode, shlex.quote(path)),
+            )
 
     def _open_kdc_firewall(self):
         """Open Kerberos ports on the KDC host (runtime + permanent)."""

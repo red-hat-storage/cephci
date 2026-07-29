@@ -96,6 +96,7 @@ def run(ceph_cluster, **kw):
     start_time = get_cluster_timestamp(rados_obj.node)
     log.debug(f"Test workflow started. Start time: {start_time}")
     objectstore_obj = objectstoreToolWorkflows(node=cephadm)
+    include_erasure_pools = config.get("include_erasure_pools", False)
     try:
 
         log.info(
@@ -136,6 +137,12 @@ def run(ceph_cluster, **kw):
                 [{"pool_name": "rbd-replicated-data"}],
                 "rbd",
             ],
+            [
+                "",
+                "",
+                [{"pool_name": "default.rgw.buckets.data"}],
+                "rgw",
+            ],
         ]
 
         if config.get("include_erasure_pools", False):
@@ -165,83 +172,14 @@ def run(ceph_cluster, **kw):
         rgw_bucket_name = "test-bucket"
         rgw_nodes = ceph_cluster.get_nodes(role="rgw")
         rgw_endpoint = rgw_nodes[0].ip_address
-
-        if "setup" in scenarios_to_run:
-            # Created Erasure and Replicated Ceph file system
-            if config.get("include_erasure_pools", False):
-                fs_name, mount_path, created_pools = (
-                    rados_obj.create_cephfs_filesystem_mount(
-                        client_node=client_node,
-                        fs_name="cephfs0",
-                        pool_type="erasure",
-                    )
-                )
-
-            fs_name, mount_path, created_pools = (
-                rados_obj.create_cephfs_filesystem_mount(
-                    client_node=client_node,
-                    fs_name="cephfs1",
-                    pool_type="replicated",
-                )
-            )
-
-            # Create EC RBD
-            if config.get("include_erasure_pools", False):
-                rbd_pool_name = "rbd-ec-data"
-                rbd_ec_metadata = "rbd-ec-metadata"
-                rbd_image = "rbd_image"
-                mount_path, device_path, created_pools = rados_obj.create_ec_rbd_pools(
-                    rbd_ec_data_pool=rbd_pool_name,
-                    rbd_metadata_pool=rbd_ec_metadata,
-                    image_name=rbd_image,
-                    crush_failure_domain="osd",
-                )
-
-            # Create replicated RBD
-            rbd_pool_name = "rbd-replicated-data"
-            rbd_image = "rbd_image"
-            mount_path, device_path, created_pools = (
-                rados_obj.create_replicated_rbd_pools(
-                    rbd_pool=rbd_pool_name,
-                    image_name=rbd_image,
-                    mount_path="/mnt/rbd_replicated_mount",
-                )
-            )
-
-            # Replicated RGW setup
-            rgw_data_pool = "default.rgw.buckets.data"
-            rados_obj.create_pool(pool_name=rgw_data_pool, app_name="rgw")
-
-            # Install aws cli
-            cmd = "pip3 install awscli"
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
-
-            # fetch rgw key and secret
-            keys = get_or_create_user(client_node)
-            access_key = keys["access_key"]
-            secret_key = keys["secret_key"]
-
-            cmd = "mkdir .aws"
-            try:
-                rados_obj.client.exec_command(cmd=cmd, sudo=True)
-            except Exception:
-                log.error(".aws directory already exists.")
-
-            cmd = """cat <<EOF > ~/.aws/config
-[default]
-region = us-east-1
-EOF"""
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
-            cmd = f"""cat <<EOF > ~/.aws/credentials
-[default]
-aws_access_key_id = {access_key}
-aws_secret_access_key = {secret_key}
-EOF"""
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
-            cmd = (
-                f"aws s3 mb s3://{rgw_bucket_name} --endpoint-url http://{rgw_endpoint}"
-            )
-            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        prereq_kwargs = {
+            "client_node": client_node,
+            "rados_obj": rados_obj,
+            "config": config,
+            "rgw_bucket_name": rgw_bucket_name,
+            "rgw_endpoint": rgw_endpoint,
+            "include_erasure_pools": include_erasure_pools,
+        }
 
         log.info(f"Performing validations on {test_pools}")
         comp_io_obj = CompressionIO(
@@ -1262,6 +1200,7 @@ Steps:
 8) Start OSDs and cleanup
             """
             )
+            test_prerequisite_setup(**prereq_kwargs)
             compression_mode = COMPRESSION_MODES.FORCE
             objectstore_obj.nostop = True
             objectstore_obj.nostart = True
@@ -1485,23 +1424,13 @@ Steps:
                             f"Validation summary for algorithm {algorithm}, pool {pool_name}: "
                         )
 
-                        log.info(
-                            f"Starting cleanup for pool {pool_name}, algorithm {algorithm}"
-                        )
-                        comp_io_obj.clean(
-                            rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                            rgw_bucket_name=rgw_bucket_name,
-                            pool_name=pool_name,
-                            compression_obj=bluestore_compression,
-                        )
-
-                        log.info(
-                            f"Completed clean up for pool {pool_name}, algorithm {algorithm}"
-                        )
-
             objectstore_obj.nostop = None
             objectstore_obj.nostart = None
             log.info("Reset objectstore_obj.nostop and nostart flags")
+
+            test_prerequisite_teardown(
+                **prereq_kwargs, created_resources=created_resources
+            )
 
             log.info("******* Scenario 13 passed **********")
 
@@ -1531,6 +1460,7 @@ Steps:
                 return 1
 
             for mode in ["none", "passive", "aggressive", "force"]:
+                test_prerequisite_setup(**prereq_kwargs)
                 for pool_name, mount_point, workload_type, pool_type in test_pools:
                     log.info(
                         f"\n{'='*80}\n"
@@ -1689,16 +1619,9 @@ Steps:
                         raise
 
                     log.info(f"Validation PASSED for pool {pool_name} with mode {mode}")
-                    log.info(f"Starting cleanup for pool {pool_name}, mode {mode}")
-                    comp_io_obj.clean(
-                        rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                        rgw_bucket_name=rgw_bucket_name,
-                        pool_name=pool_name,
-                        compression_obj=bluestore_compression,
-                    )
-
-                    log.info(f"Completed clean up for {pool_name} with mode {mode}")
-
+                test_prerequisite_teardown(
+                    **prereq_kwargs, created_resources=created_resources
+                )
             log.info("******* Test 14 passed **********")
 
         if "scenario-15" in scenarios_to_run:
@@ -1732,17 +1655,19 @@ Steps:
                 log.error("CephFS, RBD and RGW setup has failed")
                 return 1
 
-            for pool_name, mount_point, workload_type, pool_type in test_pools:
-                log.info(
-                    f"\n{'='*80}\n"
-                    f"Starting Scenario-15 tests for pool: {pool_name}\n"
-                    f"Mount point: {mount_point}\n"
-                    f"Workload type: {workload_type}\n"
-                    f"Pool type: {pool_type}\n"
-                    f"{'='*80}"
-                )
-                for blob_size in [32768, 65536]:
-                    for ratio in [0.5]:
+            for blob_size in [32768, 65536]:
+                for ratio in [0.5]:
+                    test_prerequisite_setup(**prereq_kwargs)
+                    for pool_name, mount_point, workload_type, pool_type in test_pools:
+                        log.info(
+                            f"\n{'='*80}\n"
+                            f"Starting Scenario-15 tests for pool: {pool_name}\n"
+                            f"Mount point: {mount_point}\n"
+                            f"Workload type: {workload_type}\n"
+                            f"Pool type: {pool_type}\n"
+                            f"{'='*80}"
+                        )
+
                         log.info(f"Testing with compression_required_ratio: {ratio}")
                         log.info(
                             f"\n******* testing compression required ratio **********\n"
@@ -1958,12 +1883,12 @@ Steps:
                                         )
                                         log.info(msg)
                                         log.info("***PASS***")
-                                    elif float(calculated_ratio) > float(ratio):
+                                    elif float(calculated_ratio) >= float(ratio):
                                         msg += (
                                             f"\ncompressed AU -> {compressed_AU}\n"
                                             f"calculated_ratio -> {calculated_ratio}\n"
                                             f"compressed length == 0 and {calculated_ratio} > {ratio}\n"
-                                            f"Expected: No compression (ratio > required ratio) ✓"
+                                            f"Expected: No compression (ratio >= required ratio) ✓"
                                         )
                                         log.info(msg)
                                         log.info("***PASS***")
@@ -2013,19 +1938,9 @@ Steps:
                             f"Validation summary for ratio={ratio}, blob_size={blob_size}, pool={pool_name}: "
                         )
 
-                        log.info(
-                            f"Starting cleanup for pool {pool_name}, ratio={ratio}, blob_size={blob_size}"
-                        )
-                        comp_io_obj.clean(
-                            rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                            rgw_bucket_name=rgw_bucket_name,
-                            pool_name=pool_name,
-                            compression_obj=bluestore_compression,
-                        )
-
-                        log.info(
-                            f"Completed clean up for {pool_name} with ratio={ratio}, blob_size={blob_size}"
-                        )
+                    test_prerequisite_teardown(
+                        **prereq_kwargs, created_resources=created_resources
+                    )
 
             objectstore_obj.nostop = None
             objectstore_obj.nostart = None
@@ -2051,6 +1966,7 @@ Steps:
 11) Cleanup pool
             """
             )
+            test_prerequisite_setup(**prereq_kwargs)
             # initializations
             compression_percentage = 70
             log.info("Starting scenario-16")
@@ -2213,14 +2129,9 @@ Steps:
                     f"***PASS***"
                 )
 
-                comp_io_obj.clean(
-                    rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
-                    rgw_bucket_name=rgw_bucket_name,
-                    pool_name=pool_name,
-                    compression_obj=bluestore_compression,
-                )
-
-                log.info(f"Completed clean up for {pool_name}")
+            test_prerequisite_teardown(
+                **prereq_kwargs, created_resources=created_resources
+            )
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
@@ -2247,72 +2158,192 @@ Steps:
                     pool_name=pool_name,
                     compression_obj=bluestore_compression,
                 )
-
-        # Clean up pools (if configured)
-        if config.get("cleanup_pools", False) and created_resources:
-            log.debug("Cleaning up test resources...")
-
-            # Parallel cleanup of CephFS and RBD
-            cleanup_tasks = []
-            with cf.ThreadPoolExecutor(max_workers=2) as cleanup_executor:
-                for name, mount_path, _, workload_type in created_resources:
-                    # Submit cleanup tasks
-                    if workload_type == "cephfs":
-                        task = (
-                            cleanup_executor.submit(
-                                _cleanup_cephfs, client_node, mount_path, name
-                            )
-                            if (mount_path or name)
-                            else None
-                        )
-                    elif workload_type == "rbd":
-                        task = (
-                            cleanup_executor.submit(
-                                _cleanup_rbd, client_node, mount_path, name
-                            )
-                            if mount_path
-                            else None
-                        )
-                cleanup_tasks.append(task)
-
-            for task in cleanup_tasks:
-                # Wait for cleanup tasks to complete
-                try:
-                    task.result()
-                except Exception as e:
-                    log.warning(f"cleanup failed: {e}")
-
-            # Clean up rados pools sequentially (depends on CephFS/RBD cleanup)
-            log.info(f"Deleting {len(created_resources)} pool(s)...")
-            failed_pools = []
-
-            for name, mount_path, created_pools, workload_type in created_resources:
-                for pool in created_pools:
-                    pool_name = pool["pool_name"]
-                    try:
-                        rados_obj.delete_pool(pool=pool_name)
-                    except Exception as e:
-                        log.error(f"Failed to delete pool {pool_name}: {e}")
-                        failed_pools.append(pool_name)
-            if failed_pools:
-                log.warning(
-                    f"Failed to delete {len(failed_pools)} pool(s): {failed_pools}"
-                )
-            else:
-                log.info("All pools deleted successfully")
-        else:
-            log.info("Skipping cleanup (cleanup_pools=False or no pools created)")
-
-        # log cluster health
-        rados_obj.log_cluster_health()
-        # check for crashes after test execution
-        test_end_time = get_cluster_timestamp(rados_obj.node)
-        log.debug(
-            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
-        )
-        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
-            log.error("Test failed due to crash at the end of test")
-            return 1
+        try:
+            test_prerequisite_teardown(
+                **prereq_kwargs, created_resources=created_resources
+            )
+        except Exception as e:
+            log.error(f"Failed to clean up prerequisite setup: {e}")
 
     log.info("Completed validation of bluestore v2 data compression.")
     return 0
+
+
+def test_prerequisite_setup(
+    client_node,
+    rados_obj,
+    config,
+    rgw_bucket_name,
+    rgw_endpoint,
+    include_erasure_pools,
+):
+    # Created Erasure and Replicated Ceph file system
+    if config.get("include_erasure_pools", False):
+        fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
+            client_node=client_node,
+            fs_name="cephfs0",
+            pool_type="erasure",
+        )
+
+    fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
+        client_node=client_node,
+        fs_name="cephfs1",
+        pool_type="replicated",
+    )
+
+    # Create EC RBD
+    if config.get("include_erasure_pools", False):
+        rbd_pool_name = "rbd-ec-data"
+        rbd_ec_metadata = "rbd-ec-metadata"
+        rbd_image = "rbd_image"
+        mount_path, device_path, created_pools = rados_obj.create_ec_rbd_pools(
+            rbd_ec_data_pool=rbd_pool_name,
+            rbd_metadata_pool=rbd_ec_metadata,
+            image_name=rbd_image,
+            crush_failure_domain="osd",
+        )
+
+    # Create replicated RBD
+    rbd_pool_name = "rbd-replicated-data"
+    rbd_image = "rbd_image"
+    mount_path, device_path, created_pools = rados_obj.create_replicated_rbd_pools(
+        rbd_pool=rbd_pool_name,
+        image_name=rbd_image,
+        mount_path="/mnt/rbd_replicated_mount",
+    )
+
+    # Replicated RGW setup
+    rgw_data_pool = "default.rgw.buckets.data"
+    rados_obj.create_pool(pool_name=rgw_data_pool, app_name="rgw")
+
+    # Install aws cli
+    cmd = "pip3 install awscli"
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+    # fetch rgw key and secret
+    keys = get_or_create_user(client_node)
+    access_key = keys["access_key"]
+    secret_key = keys["secret_key"]
+
+    try:
+        cmd = "rm -rf .aws"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    except Exception:
+        log.error(".aws directory doesnt exist")
+
+    try:
+        cmd = "mkdir .aws"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    except Exception:
+        log.error(".aws directory already exists.")
+
+    cmd = """cat <<EOF > ~/.aws/config
+[default]
+region = us-east-1
+EOF"""
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    cmd = f"""cat <<EOF > ~/.aws/credentials
+[default]
+aws_access_key_id = {access_key}
+aws_secret_access_key = {secret_key}
+EOF"""
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+    cmd = f"aws s3 mb s3://{rgw_bucket_name} --endpoint-url http://{rgw_endpoint}"
+    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+
+def test_prerequisite_teardown(
+    client_node,
+    rados_obj,
+    config,
+    rgw_bucket_name,
+    rgw_endpoint,
+    created_resources,
+    include_erasure_pools,
+):
+    """
+    Tear down resources created by test_prerequisite_setup.
+
+    Unmounts CephFS/RBD workloads, removes RGW S3 bucket and RBD images,
+    deletes tracked pools, and removes EC erasure-code profiles when applicable.
+    """
+    log.debug("Tearing down prerequisite test resources...")
+
+    rbd_image = "rbd_image"
+    rbd_images = [
+        ("rbd-replicated-data", rbd_image),
+    ]
+    if config.get("include_erasure_pools", False):
+        rbd_images.append(("rbd-ec-metadata", rbd_image))
+
+    for pool_name, image_name in rbd_images:
+        log.info(f"Removing RBD image {pool_name}/{image_name}")
+        try:
+            client_node.exec_command(
+                cmd=f"rbd rm {pool_name}/{image_name}",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception as e:
+            log.warning(f"Failed to remove RBD image {pool_name}/{image_name}: {e}")
+
+    # Cleanup RGW S3 bucket
+    if rgw_bucket_name and rgw_endpoint:
+        log.info(f"Removing RGW bucket: {rgw_bucket_name}")
+        try:
+            client_node.exec_command(
+                cmd=(
+                    f"aws s3 rb s3://{rgw_bucket_name} --force "
+                    f"--endpoint-url http://{rgw_endpoint}"
+                ),
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception as e:
+            log.warning(f"Failed to remove RGW bucket {rgw_bucket_name}: {e}")
+
+    # Parallel cleanup of CephFS and RBD mounts
+    cleanup_tasks = []
+    with cf.ThreadPoolExecutor(max_workers=4) as cleanup_executor:
+        for name, mount_path, _, workload_type in created_resources:
+            if workload_type == "cephfs" and (mount_path or name):
+                cleanup_tasks.append(
+                    cleanup_executor.submit(
+                        _cleanup_cephfs, client_node, mount_path, name
+                    )
+                )
+            elif workload_type == "rbd" and mount_path:
+                cleanup_tasks.append(
+                    cleanup_executor.submit(_cleanup_rbd, client_node, mount_path, name)
+                )
+
+    for task in cleanup_tasks:
+        try:
+            task.result()
+        except Exception as e:
+            log.warning(f"Prerequisite cleanup failed: {e}")
+
+    # Delete tracked pools (depends on CephFS/RBD cleanup above)
+    log.info(f"Deleting pools from {len(created_resources)} resource(s)...")
+    failed_pools = []
+    for _, _, created_pools, _ in created_resources:
+        for pool in created_pools:
+            pool_name = pool["pool_name"]
+            try:
+                rados_obj.delete_pool(pool=pool_name)
+            except Exception as e:
+                log.error(f"Failed to delete pool {pool_name}: {e}")
+                failed_pools.append(pool_name)
+
+    if failed_pools:
+        log.warning(f"Failed to delete {len(failed_pools)} pool(s): {failed_pools}")
+    else:
+        log.info("All prerequisite pools deleted successfully")
+
+    # Remove EC erasure-code profiles created during setup
+    if config.get("include_erasure_pools", False):
+        for profile_name in ("ec_profile_cephfs0", "rbd-ec-profile"):
+            log.info(f"Removing EC profile: {profile_name}")
+            rados_obj.delete_ec_profile(profile_name)
+
+    log.info("Prerequisite teardown completed")

@@ -37,6 +37,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
     ha=False,
     vip=None,
     nfs_server=None,
+    chown_cephuser=False,
     **kwargs,
 ):
     """
@@ -153,6 +154,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
                             port=_port,
                             nfs_server=_cluster_nfs_server,
                             export_name=export_name,
+                            chown_cephuser=chown_cephuser,
                             **kwargs,
                         ):
                             log.info(f"Mount failed, {mount_name}")
@@ -206,6 +208,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
                     port=port,
                     nfs_server=_nfs_server,
                     export_name=export_name,
+                    chown_cephuser=chown_cephuser,
                     **kwargs,
                 ):
                     log.info(f"Mount failed, {mount_name}")
@@ -223,6 +226,7 @@ def perform_io_operations_in_loop(
     file_count,
     dd_command_size_in_M,
     multicluster=False,
+    sudo=True,
 ):
     """
     Perform IO operations on mounted NFS exports for single or multiple clusters.
@@ -253,6 +257,7 @@ def perform_io_operations_in_loop(
                                 client,
                                 mount,
                                 f"{file_name}_{i}",
+                                sudo,
                             )
                         )
             for future in futures:
@@ -273,6 +278,7 @@ def perform_io_operations_in_loop(
                                 mount,
                                 f"{file_name}_{i}",
                                 dd_command_size_in_M,
+                                sudo,
                             )
                         )
             for future in futures:
@@ -293,6 +299,7 @@ def perform_io_operations_in_loop(
                                 mount,
                                 f"{file_name}_{i}",
                                 dd_command_size_in_M,
+                                sudo,
                             )
                         )
             for future in futures:
@@ -313,6 +320,7 @@ def perform_io_operations_in_loop(
                                 mount,
                                 f"{file_name}_{i}",
                                 f"{renamed_file_name}_{i}",
+                                sudo,
                             )
                         )
             for future in futures:
@@ -332,6 +340,7 @@ def perform_io_operations_in_loop(
                                 client,
                                 mount,
                                 f"{renamed_file_name}_{i}",
+                                sudo,
                             )
                         )
             for future in futures:
@@ -425,6 +434,8 @@ def run(ceph_cluster, **kw):
     export_num = config.get("exports_number", 1)
     ha = bool(config.get("ha", False))
     vip = config.get("vip", None)
+    sudo = config.get("sudo", False)
+    chown_cephuser = config.get("chown_cephuser", not sudo)
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -460,6 +471,7 @@ def run(ceph_cluster, **kw):
                 ha=ha,
                 nfs_server=nfs_hostname,
                 vip=vip,
+                chown_cephuser=chown_cephuser,
             )
 
             # 4. perform Create, read, rename, copy, read/write using DD command and deletion
@@ -468,6 +480,7 @@ def run(ceph_cluster, **kw):
                 clients,
                 file_count,
                 dd_command_size_in_M,
+                sudo=sudo,
             )
 
             # 5. unmount + delete exports

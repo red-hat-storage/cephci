@@ -23,6 +23,8 @@ log = Log(__name__)
 
 DEFAULT_NFS_KRB_CLUSTER = "cephfs-nfs-krb"
 KRB_KEYTAB_PATH = "/etc/krb5.keytab"
+# Separate from host/nfs machine keytab — used for user ``kinit -kt`` (key auth).
+USER_KEYTAB_PATH = "/etc/cephci-krb-user.keytab"
 KRB5_CONF_PATH = "/etc/krb5.conf"
 CLIENT_KEYTAB_STASH = "/tmp/cephci-krb5.keytab.stash"
 
@@ -163,9 +165,8 @@ def ensure_nfs_krb_client_services(node, require_rpc_gssd=True, timeout=90):
 def install_client_host_keytab(kdc_setup, client_node, host_fqdn):
     """Install a host/ SPN keytab so ``rpc-gssd`` can start on NFS clients."""
     spn = kdc_setup.add_host_service_principal(host_fqdn)
-    remote_kt = "/tmp/cephci-host-{}.keytab".format(
-        client_node.hostname.replace(".", "-")
-    )
+    safe_hostname = re.sub(r"[^a-zA-Z0-9._-]", "_", client_node.hostname)
+    remote_kt = "/tmp/cephci-host-{}.keytab".format(safe_hostname.replace(".", "-"))
     kdc_setup.export_keytab_for_principal(spn, remote_path=remote_kt)
     keytab_bytes = kdc_setup.fetch_keytab_bytes(remote_path=remote_kt)
     install_nfs_keytab(client_node, keytab_bytes)
@@ -175,6 +176,30 @@ def install_client_host_keytab(kdc_setup, client_node, host_fqdn):
         spn,
         client_node.hostname,
     )
+
+
+def install_user_keytab(kdc_setup, nodes, path=USER_KEYTAB_PATH):
+    """
+    Export the test user principal keytab and install it on ``nodes``.
+
+    Clients authenticate with ``kinit -kt`` (keytab), not a password — same
+    idea as SSH key auth.
+    """
+    principal = kdc_setup.test_principal
+    remote_kt = "/tmp/cephci-user-{}.keytab".format(
+        re.sub(r"[^a-zA-Z0-9._-]", "_", kdc_setup.test_user)
+    )
+    kdc_setup.export_keytab_for_principal(principal, remote_path=remote_kt)
+    keytab_bytes = kdc_setup.fetch_keytab_bytes(remote_path=remote_kt)
+    for node in nodes:
+        install_nfs_keytab(node, keytab_bytes, path=path)
+        log.info(
+            "Installed user keytab for %s on %s at %s",
+            principal,
+            node.hostname,
+            path,
+        )
+    return path
 
 
 def write_krb5_conf(nodes, realm, domain, kdc_hostname, kdc_ip=None):
@@ -280,21 +305,22 @@ def verify_kdc_kinit_from_node(node, kdc_setup, timeout=60, interval=5):
     """
     Confirm the KDC answers krb5 AS-REQ from ``node`` (UDP/TCP 88).
 
-    Uses password kinit for the test user — same path NFS nodes need.
+    Uses keytab-based ``kinit -kt`` for the test user (no password).
     """
     principal = kdc_setup.test_principal
-    pw = kdc_setup.test_password.replace('"', '\\"')
     last_err = ""
     for w in WaitUntil(timeout=timeout, interval=interval):
         node.exec_command(sudo=True, cmd="kdestroy -A", check_ec=False)
         _, err = node.exec_command(
             sudo=True,
-            cmd="bash -c 'echo \"{}\" | kinit {}'".format(pw, principal),
+            cmd="kinit -kt {} {}".format(
+                shlex.quote(USER_KEYTAB_PATH), shlex.quote(principal)
+            ),
             check_ec=False,
         )
         if node.exit_status == 0:
             log.info(
-                "KDC reachable from %s via kinit %s (~%ss)",
+                "KDC reachable from %s via kinit -kt %s (~%ss)",
                 node.hostname,
                 principal,
                 w._attempt * w.interval,
@@ -322,31 +348,41 @@ def install_nfs_keytab(nfs_node, keytab_bytes, path=KRB_KEYTAB_PATH):
     handle.write(keytab_bytes)
     handle.flush()
     handle.close()
-    nfs_node.exec_command(sudo=True, cmd="chmod 600 {}".format(path))
-    nfs_node.exec_command(sudo=True, cmd="chown root:root {}".format(path))
+    path_q = shlex.quote(path)
+    nfs_node.exec_command(
+        sudo=True,
+        cmd="chmod 600 {} && chown root:root {}".format(path_q, path_q),
+    )
     log.info("Installed NFS keytab on %s at %s", nfs_node.hostname, path)
 
 
-def kinit_user(client_node, principal, password):
+def kinit_user(client_node, principal, keytab_path=USER_KEYTAB_PATH):
+    """
+    Obtain a user TGT via keytab (``kinit -kt``).
+
+    No password is used — keytab auth is the Kerberos equivalent of SSH keys.
+    """
     client_node.exec_command(sudo=True, cmd="kdestroy -A", check_ec=False)
     client_node.exec_command(
         sudo=True,
-        cmd="bash -c 'echo \"{}\" | kinit {}'".format(
-            password.replace('"', '\\"'),
-            principal,
-        ),
+        cmd="kinit -kt {} {}".format(shlex.quote(keytab_path), shlex.quote(principal)),
     )
     out, _ = client_node.exec_command(sudo=True, cmd="klist")
     if principal not in (out or ""):
         raise OperationFailedError(
-            "kinit did not produce a ticket for {} on {}".format(
+            "kinit -kt did not produce a ticket for {} on {}".format(
                 principal, client_node.hostname
             )
         )
     client_node.exec_command(
         sudo=True, cmd="systemctl restart rpc-gssd", check_ec=False
     )
-    log.info("kinit succeeded for %s on %s", principal, client_node.hostname)
+    log.info(
+        "kinit -kt succeeded for %s on %s (keytab=%s)",
+        principal,
+        client_node.hostname,
+        keytab_path,
+    )
 
 
 def kinit_service_keytab(
@@ -1377,6 +1413,8 @@ def provision_kerberos_environment(
     merge_hosts_entries(all_nodes, hostmap)
 
     kdc_setup.add_user_principal()
+    # User keytab on clients + NFS nodes for ``kinit -kt`` (no passwords).
+    install_user_keytab(kdc_setup, list(client_nodes) + list(nfs_nodes))
 
     for client_node in client_nodes:
         client_fqdn = node_fqdn(client_node, domain)

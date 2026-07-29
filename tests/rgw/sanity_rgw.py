@@ -56,6 +56,7 @@ import os
 
 import yaml
 
+from ceph.ceph_admin.helper import check_service_exists
 from utility import utils
 from utility.log import Log
 from utility.utils import (
@@ -64,6 +65,7 @@ from utility.utils import (
     get_cephci_config,
     install_start_kafka,
     setup_cluster_access,
+    setup_gklm_prereq,
 )
 
 log = Log(__name__)
@@ -95,6 +97,7 @@ def run(ceph_cluster, **kw):
     log.info("Running RGW test version: %s", config.get("test-version", "v2"))
 
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
+    rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
     client_ceph_object = ceph_cluster.get_ceph_object("client")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
@@ -156,7 +159,8 @@ def run(ceph_cluster, **kw):
         exec_from.exec_command(cmd=f"sudo mkdir {test_folder}")
         utils.clone_the_repo(config, exec_from, test_folder_path)
     if git_clone_configs_repo:
-        utils.clone_configs_repo(rgw_node, repo_name="rgw_configs")
+        for rgw_ceph_object in rgw_nodes:
+            utils.clone_configs_repo(rgw_ceph_object.node, repo_name="rgw_configs")
         utils.clone_configs_repo(client_node, repo_name="rgw_configs")
 
     install_common = config.get("install_common", True)
@@ -178,6 +182,18 @@ def run(ceph_cluster, **kw):
         install_start_kafka(rgw_node, cloud_type)
     if configure_kafka_broker_security:
         configure_kafka_security(rgw_node, cloud_type)
+
+    setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
+    if setup_gklm_prerequisites:
+        setup_gklm_prereq(ceph_cluster, cloud_type)
+        rgw_status = check_service_exists(
+            ceph_cluster.get_nodes(role="installer")[0],
+            service_type="rgw",
+            interval=10,
+            timeout=180,
+        )
+        if not rgw_status:
+            raise Exception("rgw service restart failed")
 
     if install_keystone_ldap:
         config_keystone_ldap(rgw_node, cloud_type)

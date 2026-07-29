@@ -3,6 +3,7 @@ NVMe Service, Gateway Group, and Gateway classes for NVMeoF workflows.
 """
 
 import json
+import time
 
 from looseversion import LooseVersion
 
@@ -111,7 +112,7 @@ class NVMeService:
         if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
             spec["spec"].pop("pool")
 
-        # Add encryption if specified
+        # Add encryption if specified (TLS pre-shared key generated on installer)
         if self.inband_auth_mode:
             spec["encryption"] = True
 
@@ -245,6 +246,17 @@ class NVMeService:
                     self.service_name = service_name
                     self.service_id = service_id
                     break
+
+    def redeploy(self, wait_sec=30):
+        """Redeploy the NVMe-oF orchestrator service after spec apply."""
+        if not self.service_name:
+            raise RuntimeError("NVMe-oF service name not set; deploy the service first")
+        orch = Orch(self.ceph_cluster, **{})
+        cmd = f"ceph orch redeploy {self.service_name}"
+        LOG.info("Redeploying NVMe-oF service: %s", cmd)
+        orch.shell(args=[cmd])
+        if wait_sec:
+            time.sleep(wait_sec)
 
     def init_gateways(self):
         """

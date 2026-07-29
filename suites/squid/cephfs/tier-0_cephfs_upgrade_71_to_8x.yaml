@@ -25,11 +25,11 @@ tests:
           - config:
               args:
                 rhcs-version: 7.1
-                release: rc
+                release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
-                skip-monitoring-stack: true
+                skip-monitoring-stack: false
               base_cmd_args:
                 verbose: true
               command: bootstrap

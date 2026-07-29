@@ -29,14 +29,8 @@ def generate_osd_list(ceph_cluster: Ceph):
         None
     """
     installer = ceph_cluster.get_ceph_object("installer")
-    ceph_osds = ceph_cluster.get_ceph_objects("osd")
-    osd_nodes = set()
-    for osd in ceph_osds:
-        osd_nodes.add(osd.node.vmshortname)
-    osd_node_list = list(osd_nodes)
-    log.info(osd_node_list)
-    out, rc = installer.exec_command(
-        cmd=f"sudo cephadm shell -- ceph orch device ls --hostname= {' '.join(osd_node_list)} --format json"
+    out, _ = installer.exec_command(
+        cmd="sudo cephadm shell -- ceph orch device ls --format json"
     )
     grouped_data, desired_size, min_disk_count = get_osd_size_count(json.loads(out))
     with parallel() as p:

@@ -12,6 +12,7 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -311,16 +312,19 @@ def run(ceph_cluster, **kw):
             fs_util.deamon_op(active_mds_node, rf"mds\.{fs_name}\.", "restart")
             log.info("Restarted active MDS daemon on host %s", active_host)
 
+            @retry(RuntimeError, tries=6, delay=10)
+            def _wait_for_active_mds():
+                active_mds = FsUtils.get_active_mdss(client, fs_name=fs_name)
+                if not active_mds:
+                    raise RuntimeError("No active MDS found after restart operation")
+                return 0
+
+            _wait_for_active_mds()
+
         def _restart_active_mgr_daemon():
-            out, _ = client.exec_command(sudo=True, cmd="ceph mgr dump -f json")
-            mgr_dump = json.loads(out)
-            active_name = mgr_dump.get("active_name")
-            if not active_name:
-                raise RuntimeError("Active MGR daemon not found")
-            client.exec_command(
-                sudo=True, cmd=f"ceph orch daemon restart mgr.{active_name}"
-            )
-            log.info("Restarted active MGR daemon: mgr.%s", active_name)
+            client.exec_command(sudo=True, cmd="ceph orch restart mgr")
+            log.info("Restarted active MGR daemon: mgr")
+            time.sleep(10)
 
         def _reboot_active_mds_node():
             active_mds = FsUtils.get_active_mdss(client, fs_name=fs_name)
@@ -378,9 +382,15 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph orch apply mds {fs_name} --placement='{len(fs_hosts)} {full_placement}'",
             )
+
             if _wait_for_mds_daemon_count(
                 client, fs_name, expected_count=len(fs_hosts)
             ):
+                out, _ = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph fs status {fs_name}",
+                )
+                log.info("FS status: %s", out)
                 raise RuntimeError("MDS count did not converge after add operation")
 
             log.info("Completed MDS service remove/add for fs %s", fs_name)
@@ -393,8 +403,11 @@ def run(ceph_cluster, **kw):
         ]
         for stage, op in disruptive_ops:
             _check_io_health(f"{stage} pre-check")
-            op()
+            log.info("Checking cluster health before disruptive op: %s", stage)
             if common_utils.wait_for_healthy_ceph(client, wait_time=300):
+                raise RuntimeError(f"{stage}: cluster did not become healthy in time")
+            op()
+            if common_utils.wait_for_healthy_ceph(client, wait_time=1200):
                 raise RuntimeError(f"{stage}: cluster did not become healthy in time")
             _validate_metrics(
                 stage=stage,

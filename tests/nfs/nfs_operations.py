@@ -17,6 +17,7 @@ from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import FuseMount, Mount, MountFailedError, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
+from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
 
@@ -24,6 +25,44 @@ log = Log(__name__)
 
 ceph_cluster_obj = None
 setup_start_time = None
+GANESHA_SUBVOL_GROUP = "ganeshagroup"
+
+
+def ensure_ganeshagroup(
+    client, fs_name="cephfs", group=GANESHA_SUBVOL_GROUP, ceph_cluster=None
+):
+    """
+    Create the NFS Ganesha subvolume group before any subvolume create/export.
+
+    Idempotent: no-op when the group already exists.
+
+    Returns:
+        bool: True if group exists or was created successfully
+    """
+    cluster = ceph_cluster or ceph_cluster_obj
+    if not cluster:
+        raise OperationFailedError(
+            "ceph_cluster is required; pass ceph_cluster or call after "
+            "setup_nfs_cluster / setup_custom_nfs_cluster_multi_export_client"
+        )
+    fs_util = FsUtils(cluster)
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph fs subvolumegroup ls {fs_name} --format json",
+    )
+    raw = out if isinstance(out, str) else (out[0] if out else "[]")
+    groups = json.loads(raw)
+    names = [g["name"] for g in groups if isinstance(g, dict)]
+
+    if group in names:
+        log.info("Subvolume group %s already exists on %s", group, fs_name)
+        return True
+
+    fs_util.create_subvolumegroup(
+        client, vol_name=fs_name, group_name=group, validate=True
+    )
+    log.info("Subvolume group %s created on filesystem %s", group, fs_name)
+    return True
 
 
 class _LiteralPemDumper(yaml.SafeDumper):
@@ -61,6 +100,8 @@ def setup_nfs_cluster(
     single_export=False,
     enable_rdma=False,
     rdma_port=None,
+    enable_virtual_server=False,
+    skip_mount=False,
 ):
     """Set up an NFS-Ganesha cluster with exports and client mounts.
 
@@ -96,6 +137,9 @@ def setup_nfs_cluster(
             ``--rdma_port`` on cluster create and used as the mount
             port when *enable_rdma* is True.  Falls back to *port*
             if not specified.
+        enable_virtual_server (bool): Pass ``--enable-virtual-server`` on
+            ``ceph nfs cluster create``.
+        skip_mount (bool): Create exports only; skip client mounts.
     """
     # Get ceph cluter object and setup start time
     global ceph_cluster_obj
@@ -154,9 +198,12 @@ def setup_nfs_cluster(
         nfs_nodes_obj=nfs_nodes,
         enable_rdma=enable_rdma,
         rdma_port=rdma_port,
+        enable_virtual_server=enable_virtual_server,
         **create_kwargs,
     )
     sleep(3)
+
+    ensure_ganeshagroup(clients[0], fs_name=fs_name, ceph_cluster=ceph_cluster)
 
     # Step 3: Perform Export on clients
     export_list = []
@@ -184,6 +231,10 @@ def setup_nfs_cluster(
             )
         export_list.append(export_name)
         sleep(1)
+
+    if skip_mount:
+        Enable_nfs_coredump(nfs_nodes)
+        return export_list
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
@@ -308,6 +359,8 @@ def setup_nfs_cluster(
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
 
+    return export_list
+
 
 def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
     """
@@ -360,7 +413,7 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
-    check_nfs_daemons_removed(clients[0])
+    check_nfs_daemons_removed(clients[0], nfs_name)
 
     # Delete the subvolume
     for i in range(len(clients)):
@@ -394,6 +447,8 @@ def setup_custom_nfs_cluster_multi_export_client(
     export_num=None,
     ceph_cluster=None,
     active_standby=None,
+    enable_virtual_server=False,
+    skip_mount=False,
     **kwargs,
 ):
     # Get ceph cluter object and setup start time
@@ -430,9 +485,12 @@ def setup_custom_nfs_cluster_multi_export_client(
         vip=vip,
         active_standby=active_standby,
         nfs_nodes_obj=nfs_nodes,
+        enable_virtual_server=enable_virtual_server,
         **create_kwargs,
     )
     sleep(3)
+
+    ensure_ganeshagroup(clients[0], fs_name=fs_name, ceph_cluster=ceph_cluster)
 
     # Step 3: Perform Export on clients
     client_export_mount_dict = exports_mounts_perclient(
@@ -463,6 +521,8 @@ def setup_custom_nfs_cluster_multi_export_client(
                     f"Export {export_name} not found in the list of exports {all_exports}"
                 )
             sleep(1)
+            if skip_mount:
+                continue
             # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)
             # Step 4: Perform nfs mount
@@ -490,7 +550,12 @@ def setup_custom_nfs_cluster_multi_export_client(
                 )
                 log.info("Transferred ownership of %s to cephuser" % mount_name)
                 sleep(1)
-        log.info("Mount succeeded on all clients")
+        if not skip_mount:
+            log.info("Mount succeeded on all clients")
+
+    if skip_mount:
+        Enable_nfs_coredump(nfs_nodes)
+        return client_export_mount_dict
 
     try:
         cmd_used = None
@@ -522,6 +587,8 @@ def setup_custom_nfs_cluster_multi_export_client(
 
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
+
+    return client_export_mount_dict
 
 
 def exports_mounts_perclient(clients, nfs_export, nfs_mount, export_num) -> dict:
@@ -637,7 +704,7 @@ def cleanup_custom_nfs_cluster_multi_export_client(
 
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
-    check_nfs_daemons_removed(clients[0])
+    check_nfs_daemons_removed(clients[0], nfs_name)
 
     # Delete the subvolume
     for i in range(len(clients)):
@@ -924,12 +991,50 @@ def removeattr(client, file_path, attribute_name):
     return out
 
 
-def check_nfs_daemons_removed(client):
+def _assert_no_stale_nfs_deps(client, nfs_name, prefix_cephadm=False):
+    names = [nfs_name] if isinstance(nfs_name, str) else list(nfs_name)
+    prefixes = tuple(f"nfs.{n}." for n in names)
+    prefix = "cephadm shell -- " if prefix_cephadm else ""
+    out, _ = client.exec_command(
+        sudo=True, cmd=f"{prefix}ceph config-key ls -f json", check_ec=False
+    )
+    keys = [
+        k
+        for k in json.loads(out or "[]")
+        if k.startswith("mgr/cephadm/host.") and ".devices." not in k
+    ]
+    stale = {}
+    for key in keys:
+        out, _ = client.exec_command(
+            sudo=True, cmd=f"{prefix}ceph config-key get '{key}'", check_ec=False
+        )
+        if not out:
+            continue
+        cache = json.loads(out)
+        host = key.split("mgr/cephadm/host.", 1)[1].split(";")[0]
+        bad = [
+            d
+            for d in cache.get("daemon_config_deps", {})
+            if d.startswith(prefixes) and d not in cache.get("daemons", {})
+        ]
+        if bad:
+            stale[host] = bad
+    if stale:
+        raise OperationFailedError(f"Stale daemon_config_deps for {names}: {stale}")
+    log.info("No stale daemon_config_deps for NFS cluster(s) %s", names)
+
+
+def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
+    """Check NFS daemons are removed; verify deleted cluster deps are cleared.
+
+    Use prefix_cephadm=True when running on installer (no host ceph binary).
     """
-    Check if NFS daemons are removed.
-    Wait until there are no NFS daemons listed by 'ceph orch ls'.
-    """
-    check_nfs_daemons_removed_retry(client)
+    if not prefix_cephadm:
+        check_nfs_daemons_removed_retry(client)
+    if nfs_name:
+        ceph_version = get_ceph_version(client, prefix_cephadm=prefix_cephadm)
+        if ceph_version and LooseVersion(ceph_version) >= LooseVersion("20.2.2-75"):
+            _assert_no_stale_nfs_deps(client, nfs_name, prefix_cephadm=prefix_cephadm)
 
 
 @retry(OperationFailedError, tries=30, delay=10, backoff=1)
@@ -1013,6 +1118,7 @@ def create_nfs_via_file_and_verify(
     nfs_nodes=None,
     cluster_nodes=None,
     service_id=None,
+    **kwargs,
 ):
     """
     Create a temporary YAML file with NFS Ganesha configuration.
@@ -1026,6 +1132,8 @@ def create_nfs_via_file_and_verify(
             ``_resolve_nfs_nodes_for_service_ids`` to find Ganesha daemon nodes.
         service_id (str, optional): Passed to ``verify_nfs_ganesha_service`` so
             only the newly applied NFS cluster must be healthy.
+        **kwargs: Optional ``timings`` dict and ``timings_key`` str to record when
+            ``ceph orch apply`` completes.
     Returns:
         bool: True if apply and verification succeeded, else False.
     """
@@ -1061,6 +1169,18 @@ def create_nfs_via_file_and_verify(
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
             input=remote_spec, check_ec=True, pos_args=pos_args
         )
+        timings = kwargs.get("timings")
+        timings_key = kwargs.get("timings_key")
+        if timings is not None and timings_key:
+            from datetime import datetime
+
+            triggered_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timings[timings_key] = triggered_at
+            log.info(
+                "Orchestrator apply recorded at %s (key=%s)",
+                triggered_at,
+                timings_key,
+            )
         verify_nfs_ganesha_service(
             node=installer_node, timeout=timeout, service_id=service_id
         )
@@ -1135,6 +1255,8 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
                 + "=" * 30,
                 w._attempt * w.interval,
             )
+            # Installer has no host ceph binary; use cephadm shell for host-cache check
+            check_nfs_daemons_removed(installer_node, clusters, prefix_cephadm=True)
             return True
         else:
             log.error(
@@ -1228,8 +1350,39 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
     log.info("Firewall rules reloaded successfully")
 
 
+def chown_mount_for_cephuser(client, mount_name):
+    """Transfer mount point ownership to cephuser for non-root client IO."""
+    # Verify cephuser exists
+    try:
+        client.exec_command(sudo=True, cmd="id cephuser")
+    except CommandFailed:
+        log.error("cephuser does not exist on client")
+        raise OperationFailedError("cephuser not found - cannot transfer ownership")
+
+    # Perform chown with verification
+    try:
+        client.exec_command(sudo=True, cmd=f"chown cephuser:cephuser {mount_name}")
+        # Verify ownership changed
+        out, _ = client.exec_command(sudo=True, cmd=f"stat -c '%U:%G' {mount_name}")
+        if "cephuser:cephuser" not in out:
+            raise OperationFailedError(f"Ownership verification failed: {out}")
+        log.info("Transferred ownership of %s to cephuser", mount_name)
+    except CommandFailed as e:
+        log.error(f"Failed to chown {mount_name}: {e}")
+        raise OperationFailedError(f"chown operation failed: {e}")
+
+
 @retry((OperationFailedError, MountFailedError), tries=3, delay=5, backoff=2)
-def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kwargs):
+def mount_retry(
+    client,
+    mount_name,
+    version,
+    port,
+    nfs_server,
+    export_name,
+    **kwargs,
+):
+    chown_cephuser = kwargs.pop("chown_cephuser", False)
     Mount(client).nfs(
         mount=mount_name,
         version=version,
@@ -1238,6 +1391,8 @@ def mount_retry(client, mount_name, version, port, nfs_server, export_name, **kw
         export=export_name,
         **kwargs,
     )
+    if chown_cephuser:
+        chown_mount_for_cephuser(client, mount_name)
     return True
 
 
@@ -1542,7 +1697,7 @@ def dynamic_cleanup_common_names(
 
     # Step 5: Wait for all NFS daemons to be removed
     log.info("Waiting for all NFS daemons to be removed from the cluster...")
-    check_nfs_daemons_removed(client)
+    check_nfs_daemons_removed(client, clusters)
     for nfs_node in nfs_nodes:
         if check_coredump_generated(nfs_node, coredump_path, setup_start_time):
             log.error(f"Coredump found on {nfs_node.hostname} after test execution.")

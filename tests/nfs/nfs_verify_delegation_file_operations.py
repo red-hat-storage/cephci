@@ -17,6 +17,7 @@ from nfs_delegation_operations import (
     mount_delegation_export,
     read_ganesha_delegation_tailf_capture,
     restore_delegation_ganesha_templates,
+    skip_delegation_tests_unless_supported,
     start_ganesha_delegation_tailf_follow,
     stop_ganesha_delegation_tailf_follow,
     teardown_delegation_exports,
@@ -244,6 +245,8 @@ def _run_scenario_io(
 
 def run(ceph_cluster, **kw):
     config = kw.get("config", {})
+    if skip_delegation_tests_unless_supported(config):
+        return 0
     clients = ceph_cluster.get_nodes("client")
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     installers = ceph_cluster.get_nodes("installer")

@@ -8,6 +8,7 @@ import traceback
 from json import loads
 from pathlib import Path
 from time import mktime, sleep
+from typing import Tuple
 
 import requests
 import yaml
@@ -15,6 +16,7 @@ from htmllistparse import fetch_listing
 from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
+from packaging.version import Version
 
 from cli.utilities.configure import add_centos_epel_repo
 from compute.baremetal import CephBaremetalNode
@@ -2027,13 +2029,18 @@ def enable_coredump(node):
         log.info("Out: %s \n Err: %s" % (out, err))
 
 
-def get_daemon_versions(node, daemon_type: str, daemon_id: str = None):
+def get_daemon_versions(
+    node, daemon_type: str, daemon_id: str = None
+) -> Tuple[str, str]:
     """
     Method to get a ceph daemon's versions.
+    This function requires a CephAdmin node object
+    instead of a generic ceph node object.
+    Use node.shell() method instead of exec_command().
     Note that in case multiple versions of input daemon type exist, \
     this method returns version of the first entry.
     Args:
-        node: ceph node object having cephadm package
+        node: cephAdmin node object having cephadm package
         daemon_type: The type of ceph daemon e.g. mgr, mon, osd, etc
         daemon_id: name or id of ceph daemon e.g. 0, ceph-name-dc0dxh-node2
     Returns:
@@ -2043,13 +2050,16 @@ def get_daemon_versions(node, daemon_type: str, daemon_id: str = None):
     if daemon_id:
         out = get_daemon_metadata(node, daemon_type, daemon_id)
     else:
-        out, _ = node.exec_command(sudo=True, cmd="cephadm shell ceph versions -f json")
+        out, _ = node.shell(args=["ceph versions -f json"])
     try:
         ceph_versions = json.loads(out)
     except json.JSONDecodeError as e:
         log.exception(e)
         raise
 
+    if daemon_id and ceph_versions.get("ceph_version"):
+        daemon_ver_text = ceph_versions["ceph_version"]
+        return extract_ceph_version(daemon_ver_text), extract_version(daemon_ver_text)
     if ceph_versions.get(daemon_type):
         daemon_ver_text = next(iter(ceph_versions[daemon_type]))
         return extract_ceph_version(daemon_ver_text), extract_version(daemon_ver_text)
@@ -2073,13 +2083,13 @@ def get_daemon_metadata(node, daemon_type: str, daemon_id: str = None):
         None if metadata is not found
     """
     log.debug("Passed daemon type : %s, Daemon ID : %s", daemon_type, daemon_id)
-    base_cmd = f"cephadm shell ceph {daemon_type} metadata "
+    base_cmd = f"ceph {daemon_type} metadata "
     if daemon_id is not None:
         base_cmd += daemon_id
 
     for _ in range(3):
         try:
-            out, _ = node.exec_command(cmd=base_cmd, sudo=True)
+            out, _ = node.shell(args=[base_cmd])
             break
         except Exception as e:
             debug_msg = f"Passed daemon type : {daemon_type}, Daemon ID : {daemon_id}, Error : {e}"
@@ -2097,3 +2107,33 @@ def get_daemon_metadata(node, daemon_type: str, daemon_id: str = None):
             daemon_id,
         )
     return out
+
+
+def mgr_accept_license(node, img):
+    """
+    Method to accept IBM ceph license
+    Args:
+        node: cephadm(CephAdmin) node object
+        img: ibm ceph image for which license is to be accepted
+    Returns: None
+    """
+    mgr_version_common, mgr_version_downstream = get_daemon_versions(
+        node=node, daemon_type="mgr"
+    )
+    log.debug("MGR common version: %s", mgr_version_common)
+    log.debug("MGR downstream version: %s", mgr_version_downstream)
+    common_ver_check = mgr_version_common and Version(mgr_version_common) >= Version(
+        "20.2.1"
+    )
+    downstream_ver_check = mgr_version_downstream and Version(
+        mgr_version_downstream
+    ) >= Version("9.9.1.0")
+    if common_ver_check or downstream_ver_check:
+        license_cmd = f"ceph orch accept-license --image {img}"
+        try:
+            out, _ = node.shell(args=[license_cmd])
+            log.debug(out)
+            log.info("Successfully accepted license for image: %s", img)
+        except Exception as e:
+            log.error("Failed to accept license for image %s: %s", img, e)
+            raise

@@ -200,11 +200,13 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: true
         compression: true
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        inconsistent_object_fail: false
         enable_fast_ec_config_params: false
         # Workload controls (all default to true)
         enable_fio_cephfs: true
@@ -238,11 +240,13 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: true
         compression: false
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        inconsistent_object_fail: false
         enable_fast_ec_config_params: false
         # Workload controls
         enable_fio_cephfs: true
@@ -274,6 +278,7 @@ tests:
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_scrub_thrashing: true
         compression: false
         cleanup_pools: true
         enable_debug_logs: true
@@ -281,6 +286,7 @@ tests:
         inject_errors: true
         num_osds_to_inject: 3
         num_writes_to_inject: 1000
+        inconsistent_object_fail: false
         enable_fast_ec_config_params: false
         # Workload controls
         enable_fio_cephfs: true
@@ -312,11 +318,13 @@ tests:
         aggressive: false
         enable_crush_thrashing: false
         enable_pg_thrashing: false
+        enable_scrub_thrashing: true
         enable_rgw_thrashing: false
         compression: false
         cleanup_pools: true
         enable_debug_logs: false
         inject_errors: false
+        inconsistent_object_fail: false
         enable_fast_ec_config_params: false
         # Minimal workload
         enable_fio_cephfs: true

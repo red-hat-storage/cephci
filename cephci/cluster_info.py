@@ -21,6 +21,7 @@ from utility.log import Log
 log = Log(__name__)
 
 CEPH_VAR_LOG_DIR = "/var/log/ceph"
+_CEPH_VAR_LOG_DIR = "var/log/ceph"
 CEPH_COREDUMP_DIR = "/var/lib/systemd/coredump/"
 
 doc = """
@@ -170,7 +171,10 @@ def get_ceph_var_logs(cluster, log_dir):
     os.makedirs(download_dir, exist_ok=True)
     for node in cluster.get_nodes():
         tar_file = f"{node.hostname}-cephlog.tar"
-        node.exec_command(cmd=f"tar -cvzf {tar_file} {CEPH_VAR_LOG_DIR}", sudo=True)
+        node.exec_command(
+            cmd=f"tar -C / --warning=no-file-changed -cvzf {tar_file} {_CEPH_VAR_LOG_DIR}",
+            sudo=True,
+        )
 
         node.download_file(
             src=tar_file,
