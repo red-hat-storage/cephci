@@ -1,0 +1,30 @@
+# ODF / Rook-like Ceph defaults for standalone CephCI clusters.
+# Bootstrap --config when --custom-config apply-odf-defaults=true.
+#
+# Capacity ratios use mon_osd_*_ratio so they seed the OSDMap at cluster creation.
+# rbd_default_map_options matches ODF prefer-crc for krbd.
+# Msgr2-only monmap (v2:IP:3300 only) is applied post-deploy via
+# `ceph mon set-addrs`. Also set ms_bind_msgr1=false at bootstrap (OSD/MDS/etc.).
+# Note: mons often still bind v1 from monmap until set-addrs runs (tracker #70457).
+# SSD device class stays post-OSD (apply-odf-topology).
+
+global:
+  mon_osd_full_ratio: "0.85"
+  mon_osd_backfillfull_ratio: "0.80"
+  mon_osd_nearfull_ratio: "0.75"
+  mon_max_pg_per_osd: 1000
+  mon_target_pg_per_osd: 200
+  mon_pg_warn_max_object_skew: 0
+  mon_data_avail_warn: 15
+  bdev_flock_retry: 20
+  bluestore_prefer_deferred_size_hdd: 0
+  bluestore_slow_ops_warn_lifetime: 0
+  # ODF-like: disable msgr1 bind; monmap v2-only via post-deploy set-addrs
+  ms_bind_msgr1: "false"
+  rbd_default_map_options: "ms_mode=prefer-crc"
+
+osd:
+  osd_memory_target_cgroup_limit_ratio: "0.8"
+
+mds:
+  mds_cache_memory_limit: 3221225472

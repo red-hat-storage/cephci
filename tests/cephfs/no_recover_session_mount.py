@@ -7,6 +7,11 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.odf_defaults import (
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+    kernel_ms_mode_opt,
+)
 
 log = Log(__name__)
 
@@ -49,6 +54,9 @@ def run(ceph_cluster, **kw):
         client2 = clients[1]
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
+        use_msgr2 = is_msgr1_disabled(client1)
+        mount_mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+        ms_opt = kernel_ms_mode_opt(use_msgr2)
         log.info("Collect client IDs if already exists")
         mount_dir = "/mnt/" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
@@ -71,7 +79,8 @@ def run(ceph_cluster, **kw):
         commands = [
             f"ceph fs subvolume create {fs_name} sub1",
             f"mkdir {mount_dir}",
-            f"mount -t ceph {mon_node_ip}:/ {mount_dir} -o name=admin,recover_session=no,fs={fs_name}",
+            f"mount -t ceph {mount_mons}:/ {mount_dir} "
+            f"-o name=admin,recover_session=no,fs={fs_name}{ms_opt}",
             f"ls {mount_dir}",
         ]
         output = None
@@ -139,7 +148,14 @@ def run(ceph_cluster, **kw):
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
         client2.exec_command(sudo=True, cmd=f"mkdir {mount_dir_2}")
-        command = f"mount -t ceph {mon_node_ip}:/ {mount_dir_2} -o name=admin"
+        cleanup_mons = format_mons_for_kernel_mount(
+            mon_node_ip, is_msgr1_disabled(client2)
+        )
+        cleanup_ms = kernel_ms_mode_opt(is_msgr1_disabled(client2))
+        command = (
+            f"mount -t ceph {cleanup_mons}:/ {mount_dir_2} "
+            f"-o name=admin{cleanup_ms}"
+        )
         client2.exec_command(sudo=True, cmd=command)
         client2.exec_command(sudo=True, cmd=f"rm -rf {mount_dir_2}/*")
         client2.exec_command(sudo=True, cmd=f"umount -f {mount_dir_2}")
