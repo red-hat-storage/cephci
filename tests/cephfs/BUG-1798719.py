@@ -4,6 +4,11 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utils import FsUtils
 from utility.log import Log
+from utility.odf_defaults import (
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+    kernel_ms_mode_opt,
+)
 
 log = Log(__name__)
 
@@ -46,16 +51,18 @@ def run(ceph_cluster, **kw):
             )
             key_file.write(secret_key)
             key_file.flush()
+            use_msgr2 = is_msgr1_disabled(client)
+            mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+            ms_opt = kernel_ms_mode_opt(use_msgr2)
             op, rc = client.exec_command(
-                cmd="sudo mount -t ceph %s,%s,%s:/ "
-                "%s -o name=%s,secretfile=/etc/ceph/%s.secret"
+                cmd="sudo mount -t ceph %s:/ "
+                "%s -o name=%s,secretfile=/etc/ceph/%s.secret%s"
                 % (
-                    mon_node_ip[0],
-                    mon_node_ip[1],
-                    mon_node_ip[2],
+                    mons,
                     mounting_dir,
                     user_name,
                     user_name,
+                    ms_opt,
                 )
             )
             out, rc = client.exec_command(cmd="mount")
