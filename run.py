@@ -1340,37 +1340,59 @@ def collect_recipe(ceph_cluster):
     Returns:
         None
     """
-    version_datails = {}
+    version_details = {}
     installer_node = ceph_cluster.get_ceph_objects("installer")
     client_node = ceph_cluster.get_ceph_objects("client")
-    out, rc = installer_node[0].exec_command(
-        sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
-    )
 
-    output = out.rstrip()
-    if output:
-        log.info(f"Podman Version {output}")
-        version_datails["PODMAN"] = output
+    if installer_node:
+        # podman version
+        out, _ = installer_node[0].exec_command(
+            sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
+        )
 
-    out, _ = installer_node[0].exec_command(
-        sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
-    )
-    output = out.rstrip()
-    if output:
-        log.info(f"Docker Version {output}")
-        version_datails["DOCKER"] = output
+        output = out.rstrip()
+        if output:
+            log.info(f"Podman Version {output}")
+            version_details["PODMAN"] = output
 
+        # docker version
+        out, _ = installer_node[0].exec_command(
+            sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            log.info(f"Docker Version {output}")
+            version_details["DOCKER"] = output
+
+        # cephadm version
+        out, _ = installer_node[0].exec_command(
+            sudo=True, cmd="cephadm version", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            log.info(f"cephadm Version: {output}")
     if client_node:
+        # client rpm version
         out, _ = client_node[0].exec_command(
             sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
         )
         output = out.rstrip()
-        log.info(f"ceph Version {output}")
-        version_datails["CEPH"] = output
+        if output:
+            log.info(f"ceph client rpm Version: {output}")
 
-    version_detail = open("version_info.json", "w+")
-    json.dump(version_datails, version_detail)
-    version_detail.close()
+        # ceph cluster version
+        out, _ = client_node[0].exec_command(
+            sudo=True, cmd="ceph version", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            match = re.search(r"ceph version (\S+)", output)
+            short_version = match.group(1) if match else output
+            log.info(f"Ceph cluster Version: {output}")
+            version_details["CEPH"] = short_version
+
+    with open("version_info.json", "w") as version_detail:
+        json.dump(version_details, version_detail)
 
 
 if __name__ == "__main__":
