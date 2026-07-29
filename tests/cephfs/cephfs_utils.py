@@ -6,6 +6,11 @@ import time
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
+from utility.odf_defaults import (
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+    kernel_ms_mode_opt,
+)
 
 log = Log(__name__)
 
@@ -431,18 +436,20 @@ class FsUtils(object):
                     )
                     key_file.write(secret_key.rstrip("\n"))
                     key_file.flush()
+                    use_msgr2 = is_msgr1_disabled(client)
+                    mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+                    ms_opt = kernel_ms_mode_opt(use_msgr2)
                     client.exec_command(
                         sudo=True,
-                        cmd="mount -t ceph %s,%s,%s:/%s "
-                        "%s -o name=%s,secretfile=/etc/ceph/%s.secret"
+                        cmd="mount -t ceph %s:/%s "
+                        "%s -o name=%s,secretfile=/etc/ceph/%s.secret%s"
                         % (
-                            mon_node_ip[0],
-                            mon_node_ip[1],
-                            mon_node_ip[2],
+                            mons,
                             sub_dir,
                             mounting_dir,
                             new_client_hostname,
                             new_client_hostname,
+                            ms_opt,
                         ),
                     )
                     out, rc = client.exec_command(cmd="mount")

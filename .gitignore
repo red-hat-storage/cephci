@@ -18,6 +18,8 @@ result.props
 # ignore Logs
 *.log
 
+*venv*/
+
 # ignore cephci execution residues
 osd_scenarios_*node*
 version_info.json

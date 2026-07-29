@@ -16,9 +16,15 @@ from ceph.utils import (
 )
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
+from utility.odf_defaults import (
+    APPLY_ODF_DEFAULTS_KEY,
+    apply_odf_defaults_to_bootstrap_config,
+    apply_v2_only_mon_addrs,
+    overrides_enabled,
+)
 from utility.utils import get_cephci_config
 
-from ..ceph import ResourceNotFoundError
+from ..ceph import CommandFailed, ResourceNotFoundError
 from .common import config_dict_to_string
 from .helper import GenerateServiceSpec, create_ceph_config_file, validate_spec_services
 from .typing_ import CephAdmProtocol
@@ -428,6 +434,12 @@ class BootstrapMixin:
                 node=self.installer, cluster=self.cluster, specs=specs
             ).create_spec_file()
 
+        # Opt-in ODF/Rook-like defaults via --custom-config apply-odf-defaults=true
+        # Merges into args.config before INI render so mon_osd_*_ratio seeds OSDMap.
+        apply_odf_defaults_to_bootstrap_config(
+            args, overrides=self.config.get("overrides")
+        )
+
         # Bootstrap with ceph config options like ceph.conf file
         conf = args.get("config")
         if conf:
@@ -551,5 +563,18 @@ class BootstrapMixin:
             validate_spec_services(
                 self.installer, specs=specs, rhcs_version=self.cluster.rhcs_version
             )
+
+        # ODF-style v2-only monmap (requires live mon after bootstrap)
+        overrides = (self.config or {}).get("overrides") or {}
+        if overrides_enabled(overrides, APPLY_ODF_DEFAULTS_KEY):
+            logger.info(
+                "Applying v2-only mon addrs after bootstrap "
+                "(--custom-config apply-odf-defaults=true)"
+            )
+            failures = apply_v2_only_mon_addrs(self.shell)
+            if failures:
+                raise CommandFailed(
+                    "v2-only mon set-addrs failed: " + "; ".join(failures)
+                )
 
         return out, err
