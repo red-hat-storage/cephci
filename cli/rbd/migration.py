@@ -58,6 +58,8 @@ class Migration(Cli):
             Supported keys:
                 source_spec_path : json formatted string for streamed imports
                 dest_spec: Target image spec TARGET_POOL_NAME/TARGET_IMAGE_NAME
+                cluster_name: name of the destination cluster (optional; omit
+                    for import-only migrations driven entirely by the source spec)
 
         """
         log.info("Starting prepare Live migration of image to external ceph cluster")
@@ -66,6 +68,8 @@ class Migration(Cli):
         cluster_name = kw.get("cluster_name", None)
         cmd = (
             f"{self.base_cmd} prepare --import-only --source-spec-path {source_spec_path} "
-            f"{dest_spec} --cluster {cluster_name}"
+            f"{dest_spec}"
         )
+        if cluster_name is not None:
+            cmd += f" --cluster {cluster_name}"
         return self.execute_as_sudo(cmd=cmd, long_running=True)
