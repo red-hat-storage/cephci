@@ -181,7 +181,7 @@ def run(ceph_cluster, **kw):
     if install_start_kafka_broker:
         install_start_kafka(rgw_node, cloud_type)
     if configure_kafka_broker_security:
-        configure_kafka_security(rgw_node, cloud_type)
+        configure_kafka_security(rgw_node, cloud_type, ceph_cluster=ceph_cluster)
 
     setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
     if setup_gklm_prerequisites:
