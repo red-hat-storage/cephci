@@ -153,6 +153,18 @@ Options:
   --skip-version-compare            Skip verification that ceph versions change post
                                     upgrade
   -c --custom-config <name>=<value> Add a custom config key/value to ceph_conf_overrides
+                                    Cephadm ODF/Rook-like profile (opt-in via -c)
+                                    apply-odf-defaults=true merges
+                                    conf/tentacle/rook/odf_rook_defaults.yaml into
+                                    bootstrap --config (OSDMap ratios, ms_bind_msgr1=false,
+                                    RBD ms_mode); v2-only mon set-addrs runs at end of
+                                    bootstrap.py, after test_cephadm deploy, and in
+                                    tests/cephadm/test_mon.py after mon apply.
+                                    apply-odf-topology=true injects msgr2 bootstrap keys
+                                    if defaults unset; after deploy applies
+                                    zone CRUSH, crush rules, container limits,
+                                    SSD device-class.
+                                    verify-odf-defaults=true checks config/osd/mon dump.
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
   --xunit-results                   Create xUnit result file for test suite run
                                     [default: false]
