@@ -1,0 +1,65 @@
+# Suite: NFS Ganesha conditional logging (Configuration & Management + Dynamic)
+
+tests:
+  - test:
+      name: configure client
+      desc: Configure client for NFS tests
+      module: test_client.py
+      abort-on-fail: true
+
+  - test:
+      name: TC-CL-CONFIG-01 Static ANY policy
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Part A: no Conditional logging — elevated FSAL:F_DBG / EXPORT|NFS:M_DBG
+        must be absent after IO from two clients. Part B: Match_Policy=ANY with
+        Conditional FSAL=FULL_DEBUG / NFS_V4=MID_DEBUG for client1+export —
+        matching client must produce elevated markers; non-matching must not.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_01
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-02 MATCH_ALL advanced clients
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Part A: baseline without Conditional — no FSAL:F_DBG / EXPORT|NFS:M_DBG.
+        Part B: Match_Policy=ALL with Conditional for client1+export1 —
+        elevate only when both match; client-only, export-only, and neither
+        mismatch cases must stay at global INFO/EVENT.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_02
+        enable_netgroup_tests: false
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-03 malformed config handling
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Graceful malformed Conditional Logging (INVALID_POLICY, INVALID_COMPONENT,
+        SUPER_DEBUG, trailing commas, Match_Policy without Conditional); service stays
+        up, expected WARN tokens, light I/O succeeds.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        min_clients: 1
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_03
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
