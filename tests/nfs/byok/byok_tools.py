@@ -26,6 +26,10 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
 )
 from utility.gklm_client.gklm_client import build_gklm_client
 
+# After NFS apply/SIGHUP, GKLM needs wall-clock time to parse/register KMIP
+# client certs before export/mount against those keys succeeds.
+_GKLM_CERT_SETTLE_SEC = 60
+
 
 def remove_gklm_kmip_client_and_legacy_certs(
     gklm_rest_client,
@@ -279,6 +283,11 @@ def create_nfs_instance_for_byok(
         nfs_nodes=[nfs_node],
     )
     log.info("NFS Ganesha BYOK service creation successful")
+    log.info(
+        "Waiting %ss for GKLM to parse certificates after BYOK NFS cluster create/update",
+        _GKLM_CERT_SETTLE_SEC,
+    )
+    time.sleep(_GKLM_CERT_SETTLE_SEC)
 
 
 def setup_gklm_infrastructure(nfs_nodes, gklm_ip, gklm_hostname):
@@ -729,6 +738,11 @@ def create_multiple_nfs_instance_for_byok(
                 f"Successfully created {replication_number} BYOK-enabled "
                 f"NFS Ganesha instance(s) using base service_id '{spec.get('service_id')}'"
             )
+            log.info(
+                "Waiting %ss for GKLM to parse certificates after multi BYOK NFS create",
+                _GKLM_CERT_SETTLE_SEC,
+            )
+            time.sleep(_GKLM_CERT_SETTLE_SEC)
             return result
         log.error(" Failed to create BYOK-enabled NFS Ganesha instances.")
         return 1

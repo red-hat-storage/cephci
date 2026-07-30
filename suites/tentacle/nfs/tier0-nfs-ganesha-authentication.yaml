@@ -1,0 +1,339 @@
+#===============================================================================================
+# NFS-Ganesha Kerberos (MIT KDC on clients[1], host KDC by default)
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+#
+# Full Kerberos suite (no HA): infra, mount/IO, flavors, enforcement,
+# multi-client, wrong SPN, multi-sectype.
+#
+# Run after cluster bootstrap (e.g. tier0-nfs-ganesha.yaml deploy) or include the same
+# bootstrap tests before these cases in your pipeline job.
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      name: NFS LDAP User Mapping Test
+      desc: Verify NFS-Ganesha correctly resolves LDAP users and maps UID/GID
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575001
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_mapping
+
+  - test:
+      name: NFS LDAP Group Permissions Test
+      desc: Validate enforcement of file permissions using LDAP group membership
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575002
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_group_permissions
+
+  - test:
+      name: NFS LDAP User Attribute Change Test
+      desc: Validate NFS behavior when LDAP user attributes change or users are removed
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575003
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_user_change
+
+  - test:
+      name: NFS LDAP Outage Test
+      desc: Validate NFS behavior during LDAP server outage
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575004
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_ldap_outage
+
+  - test:
+      name: NFS LDAP Performance Test
+      desc: Validate LDAP identity resolution performance under concurrent NFS load
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83575005
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        test_case: verify_performance
+
+  - test:
+      name: NFS LDAP NFSv3 Access Test
+      desc: Verify LDAP user mapping works correctly over NFSv3
+      module: security.test_nfs_ldap_mapping.py
+      polarion-id: CEPH-83632304
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        test_case: verify_mapping
+
+  - test:
+      name: MIT Kerberos KDC bootstrap and ticket validation
+      desc: >
+        Stand up MIT KDC on client[1], distribute krb5.conf and NFS keytabs,
+        kinit test user and NFS service principals.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: true
+      polarion-id: CEPH-83632435
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        operation: krb_infra_bootstrap
+        cleanup_kdc: false
+
+  - test:
+      name: NFS krb5 mount with MIT Kerberos and basic IO
+      desc: >
+        Deploy NFS with krb5 keytab mounts, export --sectype krb5, mount sec=krb5, IO.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: false
+      polarion-id: CEPH-83632436
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        nfs_cluster_name: cephfs-nfs-krb
+        krb_export_path: /export_krb_0
+        krb_export_base: /export_krb
+        krb_client_mount: /mnt/nfs_krb
+        operation: krb_deploy_mount_verify
+        nfs_sec: krb5
+        export_sectype:
+          - krb5
+        strict_krb_log_check: false
+        cleanup_kdc: false
+
+  - test:
+      name: NFS Kerberos sec flavors krb5i and krb5p IO
+      desc: >
+        Deploy krb NFS cluster; per-flavor export (--sectype), mount sec=krb5i/krb5p, IO.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: false
+      polarion-id: CEPH-83632437
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        nfs_cluster_name: cephfs-nfs-krb-flavors
+        krb_export_base: /export_krb_flavor
+        krb_client_mount_base: /mnt/nfs_krb_flavor
+        operation: krb_sec_flavors
+        sec_flavors:
+          - krb5i
+          - krb5p
+        strict_krb_log_check: false
+        cleanup_kdc: false
+
+  - test:
+      name: NFS Kerberos export enforcement sys vs krb5
+      desc: >
+        Mixed export accepts krb mount; krb-only export rejects AUTH_SYS mount.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: false
+      polarion-id: CEPH-83632438
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        nfs_cluster_name: cephfs-nfs-krb-enforce
+        krb_export_base: /export_krb_enforce
+        operation: krb_export_enforcement
+        nfs_sec: krb5
+        strict_krb_log_check: false
+        cleanup_kdc: false
+
+  - test:
+      name: NFS Kerberos multi-client concurrent mount
+      desc: >
+        Two clients kinit nfsuser and mount the same krb5 export with basic IO.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: false
+      polarion-id: CEPH-83632439
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        clients: 2
+        nfs_cluster_name: cephfs-nfs-krb-multi
+        krb_export_path: /export_krb_multi
+        krb_export_base: /export_krb_multi
+        krb_client_mounts:
+          - /mnt/nfs_krb_c0
+          - /mnt/nfs_krb_c1
+        operation: krb_multi_client
+        nfs_sec: krb5
+        strict_krb_log_check: false
+        cleanup_kdc: false
+
+  - test:
+      name: NFS Kerberos wrong SPN hostname negative mount
+      desc: >
+        Client resolves bogus FQDN to NFS IP; mount fails without matching nfs/ SPN.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: false
+      polarion-id: CEPH-83632440
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        nfs_cluster_name: cephfs-nfs-krb-spn
+        krb_export_path: /export_krb_spn
+        krb_export_base: /export_krb_spn
+        operation: krb_spn_mismatch
+        nfs_sec: krb5
+        strict_krb_log_check: false
+        cleanup_kdc: false
+
+  - test:
+      name: NFS Kerberos multi-sectype single export
+      desc: >
+        One export with krb5/krb5i/krb5p; verify export JSON and mount each flavor.
+      module: security.test_kerberos_feature.py
+      abort-on-fail: false
+      polarion-id: CEPH-83632441
+      config:
+        nfs_version: "4.2"
+        kerberos_realm: CEPH.TEST
+        kerberos_domain: ceph.test
+        kdc_hostname: kdc.ceph.test
+        nfs_cluster_name: cephfs-nfs-krb-msectype
+        krb_export_path: /export_krb_multi_sec
+        krb_export_base: /export_krb_multi_sec
+        krb_client_mount_base: /mnt/nfs_krb_msec
+        operation: krb_multi_sectype
+        export_sectypes:
+          - krb5
+          - krb5i
+          - krb5p
+        strict_krb_log_check: false
+        cleanup_kdc: false

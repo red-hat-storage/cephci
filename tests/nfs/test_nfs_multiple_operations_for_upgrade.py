@@ -29,7 +29,7 @@ def lookup_in_directory(client, mount, sudo=True):
 def create_file(client, nfs_mount, file_name, sudo=True):
     """Create a file in the NFS mount point"""
     try:
-        if file_name not in client.get_dir_list(nfs_mount):
+        if file_name not in client.get_dir_list(nfs_mount, sudo=True):
             cmd = f"touch {nfs_mount}/{file_name}"
             client.exec_command(cmd=cmd, sudo=sudo)
             log.info("File - {0} created successfully".format(file_name))
@@ -52,7 +52,7 @@ def delete_file(client, nfs_mount, file_name, sudo=True):
 def rename_file(client, nfs_mount, old_name, new_name, sudo=True):
     """Rename a file in the NFS mount point"""
     try:
-        if new_name not in client.get_dir_list(nfs_mount):
+        if new_name not in client.get_dir_list(nfs_mount, sudo=True):
             cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
             client.exec_command(cmd=cmd, sudo=sudo)
             log.info("File renamed successfully")
