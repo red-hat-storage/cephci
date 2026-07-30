@@ -8,6 +8,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
     CephfsMirroringUtils,
+    compare_and_validate_sync_durations,
     parse_sync_duration_to_seconds,
     wait_for_sync_idle,
 )
@@ -598,12 +599,13 @@ def run(ceph_cluster, **kw):
 
                 _append_csv_row(csv_file, result_entry)
 
-            log.info(
-                "Waiting for all mirrored paths to reach idle after "
-                "thread_count=%d syncs",
-                thread_count,
-            )
+            idle_ok = True
             try:
+                log.info(
+                    "Waiting for all mirrored paths to reach idle after "
+                    "thread_count=%d syncs",
+                    thread_count,
+                )
                 wait_for_sync_idle(
                     source_fs,
                     fsid,
@@ -612,48 +614,54 @@ def run(ceph_cluster, **kw):
                     peer_uuid,
                     mirroring_paths,
                 )
-            except Exception as e:
+            except CommandFailed as e:
+                idle_ok = False
                 log.error(
-                    "Not all paths reached idle after syncs for "
-                    "thread_count=%d: %s",
+                    "Not all paths reached idle after syncs for " "thread_count=%d: %s",
                     thread_count,
                     e,
                 )
-                return 1
-
-            # ---- 7. Cleanup this iteration (snapshots + data only) ----
-            log.info("Cleaning up iteration for thread_count=%d", thread_count)
-            for mtype in MOUNT_TYPES:
-                fs_util_ceph1.remove_snapshot(
-                    client=source_clients[0],
-                    vol_name=source_fs,
-                    subvol_name=created_subvols[mtype],
-                    snap_name=iter_snapshots[mtype],
-                    validate=True,
-                    group_name=subvol_group,
-                    force=True,
-                )
-
-            for mtype in MOUNT_TYPES:
-                try:
-                    log.info("Deleting generated files under %s", io_dir_paths[mtype])
-                    source_clients[0].exec_command(
-                        sudo=True,
-                        cmd=f"rm -rf {io_dir_paths[mtype]}",
-                        long_running=True,
-                        timeout=600,
+            finally:
+                # ---- 7. Cleanup this iteration (snapshots + data only) ----
+                # Always clean even if idle wait fails to avoid suite leaks.
+                log.info("Cleaning up iteration for thread_count=%d", thread_count)
+                for mtype in MOUNT_TYPES:
+                    fs_util_ceph1.remove_snapshot(
+                        client=source_clients[0],
+                        vol_name=source_fs,
+                        subvol_name=created_subvols[mtype],
+                        snap_name=iter_snapshots[mtype],
+                        validate=True,
+                        group_name=subvol_group,
+                        force=True,
                     )
-                except Exception as e:
-                    log.warning("Failed to delete data in %s: %s", mtype, e)
-                    if mtype == "nfs":
-                        log.info("NFS data deletion failed, remounting NFS")
-                        _remount_nfs(
-                            source_clients[0],
-                            mount_dirs["nfs"],
-                            nfs_server,
-                            nfs_export_name,
-                            fs_util_ceph1,
+
+                for mtype in MOUNT_TYPES:
+                    try:
+                        log.info(
+                            "Deleting generated files under %s",
+                            io_dir_paths[mtype],
                         )
+                        source_clients[0].exec_command(
+                            sudo=True,
+                            cmd=f"rm -rf {io_dir_paths[mtype]}",
+                            long_running=True,
+                            timeout=600,
+                        )
+                    except Exception as e:
+                        log.warning("Failed to delete data in %s: %s", mtype, e)
+                        if mtype == "nfs":
+                            log.info("NFS data deletion failed, remounting NFS")
+                            _remount_nfs(
+                                source_clients[0],
+                                mount_dirs["nfs"],
+                                nfs_server,
+                                nfs_export_name,
+                                fs_util_ceph1,
+                            )
+
+            if not idle_ok:
+                return 1
 
         # ---- Final summary ----
         log.info("=" * 70)
@@ -680,7 +688,7 @@ def run(ceph_cluster, **kw):
             )
         log.info("CSV results written to %s", csv_file)
 
-        if not _compare_and_validate_sync_durations(results):
+        if not compare_and_validate_sync_durations(results):
             return 1
 
         return 0
@@ -793,119 +801,6 @@ def run(ceph_cluster, **kw):
 def _fmt(val, suffix=""):
     """Format a float value for summary display, returning 'None' for missing values."""
     return f"{val:.1f}{suffix}" if val is not None else "None"
-
-
-def _compare_and_validate_sync_durations(results):
-    """
-    Log a sync-duration comparison table and improvement vs 1-thread.
-
-    Multi-thread sync must be equal or faster than the 1-thread baseline
-    for the same mount type. Returns False if any multi-thread run is slower.
-    """
-    durations = {}
-    thread_counts = sorted({r["thread_count"] for r in results})
-    mount_types = []
-    for r in results:
-        mtype = r["mount_type"]
-        if mtype not in durations:
-            durations[mtype] = {}
-            mount_types.append(mtype)
-        durations[mtype][r["thread_count"]] = r.get("sync_duration_sec")
-
-    log.info("=" * 70)
-    log.info("SYNC DURATION COMPARISON TABLE (seconds)")
-    log.info("=" * 70)
-    header = f"{'Mount':<10}" + "".join(f"{('t=' + str(t)):>14}" for t in thread_counts)
-    log.info(header)
-    log.info("-" * len(header))
-    for mtype in mount_types:
-        row = f"{mtype:<10}"
-        for t in thread_counts:
-            dur = durations[mtype].get(t)
-            row += f"{_fmt(dur):>14}"
-        log.info(row)
-
-    log.info("=" * 70)
-    log.info("SYNC DURATION IMPROVEMENT VS 1-THREAD")
-    log.info("Rule: multi-thread must be equal or faster than 1-thread")
-    log.info("=" * 70)
-
-    failed = False
-    for mtype in mount_types:
-        single = durations[mtype].get(1)
-        if single is None or single <= 0:
-            log.warning(
-                "No valid 1-thread baseline for mount=%s; skipping validation", mtype
-            )
-            continue
-
-        log.info("Mount=%s | 1-thread baseline: %.1fs", mtype, single)
-        prev_t = 1
-        prev_dur = single
-        for t in thread_counts:
-            if t == 1:
-                continue
-            multi = durations[mtype].get(t)
-            if multi is None:
-                log.error(
-                    "Missing sync duration for mount=%s threads=%d", mtype, t
-                )
-                failed = True
-                continue
-
-            saved_sec = single - multi
-            improve_pct = (saved_sec / single) * 100.0
-            vs_prev_sec = prev_dur - multi
-            vs_prev_pct = (vs_prev_sec / prev_dur) * 100.0 if prev_dur > 0 else 0.0
-
-            if multi > single:
-                log.error(
-                    "FAIL: mount=%s threads=%d duration=%.1fs is SLOWER than "
-                    "1-thread %.1fs (delta %+0.1fs / %+0.1f%%)",
-                    mtype,
-                    t,
-                    multi,
-                    single,
-                    multi - single,
-                    -improve_pct,
-                )
-                failed = True
-            elif multi == single:
-                log.info(
-                    "OK: mount=%s threads=%d duration=%.1fs EQUAL to 1-thread "
-                    "(no change)",
-                    mtype,
-                    t,
-                    multi,
-                )
-            else:
-                log.info(
-                    "OK: mount=%s threads=%d duration=%.1fs | improved by "
-                    "%.1fs (%.1f%%) vs 1-thread | vs t=%d: %+0.1fs (%+.1f%%)",
-                    mtype,
-                    t,
-                    multi,
-                    saved_sec,
-                    improve_pct,
-                    prev_t,
-                    vs_prev_sec,
-                    vs_prev_pct,
-                )
-            prev_t = t
-            prev_dur = multi
-
-    if failed:
-        log.error(
-            "Single vs multi-thread validation FAILED: "
-            "multi-thread sync duration must be equal or faster than 1-thread"
-        )
-        return False
-
-    log.info(
-        "Single vs multi-thread validation PASSED: "
-        "all multi-thread sync durations are equal or faster than 1-thread"
-    )
-    return True
 
 
 def _is_nfs_mount_alive(client, mount_dir):

@@ -245,6 +245,5 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_snapshot_sync_perf_mixed_files.py
       name: CephFS Mirror snapshot sync performance - mixed files
       polarion-id: "CEPH-83574101"
-      comments: IBMCEPH-13885
-
+      comments: IBMCEPH-13886
 

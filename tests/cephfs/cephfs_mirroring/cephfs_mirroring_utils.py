@@ -30,6 +30,7 @@ def parse_sync_duration_to_seconds(raw_duration):
     Accepts numeric values and human-readable strings such as ``49s``,
     ``1m 16``, ``1m 16s``, ``1h 2m 3s``, or plain ``76.5``.
     Returns None when the value is missing or unparseable.
+    Zero is a valid duration and is preserved.
     """
     if raw_duration is None:
         return None
@@ -40,23 +41,151 @@ def parse_sync_duration_to_seconds(raw_duration):
     if not text:
         return None
 
-    try:
-        return float(text.rstrip("s").strip())
-    except ValueError:
-        pass
+    # Plain seconds: "49", "49s", "76.5", "76.5s"
+    plain = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*s?", text)
+    if plain:
+        return float(plain.group(1))
+
+    # Compound durations with at least one h/m unit, e.g. "1h 2m 3s", "1m 16".
+    compound = re.fullmatch(
+        r"(?:([0-9]+(?:\.[0-9]+)?)\s*h)?"
+        r"(?:\s*([0-9]+(?:\.[0-9]+)?)\s*m)?"
+        r"(?:\s*([0-9]+(?:\.[0-9]+)?)\s*s?)?",
+        text,
+    )
+    if not compound:
+        return None
+    hours, minutes, seconds = compound.groups()
+    if hours is None and minutes is None:
+        return None
 
     total = 0.0
-    matched = False
-    for value, unit in re.findall(r"([0-9]*\.?[0-9]+)\s*([hms]?)", text):
-        matched = True
-        val = float(value)
-        if unit == "h":
-            total += val * 3600
-        elif unit == "m":
-            total += val * 60
-        else:
-            total += val
-    return total if matched else None
+    if hours is not None:
+        total += float(hours) * 3600
+    if minutes is not None:
+        total += float(minutes) * 60
+    if seconds is not None:
+        total += float(seconds)
+    return total
+
+
+def compare_and_validate_sync_durations(results):
+    """
+    Log a sync-duration comparison table and improvement vs 1-thread.
+
+    Multi-thread sync must be equal or faster than the 1-thread baseline
+    for the same mount type. Returns False if any multi-thread run is slower.
+
+    When the 1-thread baseline is missing or <= 0 (daemon may report 0s for
+    very short syncs), validation for that mount is skipped with a warning.
+    """
+
+    def _fmt(val, suffix=""):
+        return f"{val:.1f}{suffix}" if val is not None else "None"
+
+    durations = {}
+    thread_counts = sorted({r["thread_count"] for r in results})
+    mount_types = []
+    for r in results:
+        mtype = r["mount_type"]
+        if mtype not in durations:
+            durations[mtype] = {}
+            mount_types.append(mtype)
+        durations[mtype][r["thread_count"]] = r.get("sync_duration_sec")
+
+    log.info("=" * 70)
+    log.info("SYNC DURATION COMPARISON TABLE (seconds)")
+    log.info("=" * 70)
+    header = f"{'Mount':<10}" + "".join(f"{('t=' + str(t)):>14}" for t in thread_counts)
+    log.info(header)
+    log.info("-" * len(header))
+    for mtype in mount_types:
+        row = f"{mtype:<10}"
+        for t in thread_counts:
+            dur = durations[mtype].get(t)
+            row += f"{_fmt(dur):>14}"
+        log.info(row)
+
+    log.info("=" * 70)
+    log.info("SYNC DURATION IMPROVEMENT VS 1-THREAD")
+    log.info("Rule: multi-thread must be equal or faster than 1-thread")
+    log.info("=" * 70)
+
+    failed = False
+    for mtype in mount_types:
+        single = durations[mtype].get(1)
+        if single is None or single <= 0:
+            log.warning(
+                "No valid 1-thread baseline for mount=%s; skipping validation",
+                mtype,
+            )
+            continue
+
+        log.info("Mount=%s | 1-thread baseline: %.1fs", mtype, single)
+        prev_t = 1
+        prev_dur = single
+        for t in thread_counts:
+            if t == 1:
+                continue
+            multi = durations[mtype].get(t)
+            if multi is None:
+                log.error("Missing sync duration for mount=%s threads=%d", mtype, t)
+                failed = True
+                continue
+
+            saved_sec = single - multi
+            improve_pct = (saved_sec / single) * 100.0
+            vs_prev_sec = prev_dur - multi
+            vs_prev_pct = (vs_prev_sec / prev_dur) * 100.0 if prev_dur > 0 else 0.0
+
+            if multi > single:
+                log.error(
+                    "FAIL: mount=%s threads=%d duration=%.1fs is SLOWER than "
+                    "1-thread %.1fs (delta %+0.1fs / %+0.1f%%)",
+                    mtype,
+                    t,
+                    multi,
+                    single,
+                    multi - single,
+                    -improve_pct,
+                )
+                failed = True
+            elif multi == single:
+                log.info(
+                    "OK: mount=%s threads=%d duration=%.1fs EQUAL to 1-thread "
+                    "(no change)",
+                    mtype,
+                    t,
+                    multi,
+                )
+            else:
+                log.info(
+                    "OK: mount=%s threads=%d duration=%.1fs | improved by "
+                    "%.1fs (%.1f%%) vs 1-thread | vs t=%d: %+0.1fs (%+.1f%%)",
+                    mtype,
+                    t,
+                    multi,
+                    saved_sec,
+                    improve_pct,
+                    prev_t,
+                    vs_prev_sec,
+                    vs_prev_pct,
+                )
+            prev_t = t
+            prev_dur = multi
+
+    if failed:
+        log.error(
+            "Single vs multi-thread validation FAILED: "
+            "multi-thread sync duration must be equal or faster than 1-thread"
+        )
+        return False
+
+    log.info(
+        "Single vs multi-thread validation PASSED: "
+        "all multi-thread sync durations are equal or faster than 1-thread"
+    )
+    return True
 
 
 def _normalize_asok_peer_status(data):
@@ -1019,6 +1148,17 @@ class CephfsMirroringUtils(object):
                 if last_synced_snap.get("name") == snapshot_name:
                     raw_duration = last_synced_snap.get("sync_duration")
                     sync_duration = parse_sync_duration_to_seconds(raw_duration)
+                    if sync_duration is None:
+                        log.error(
+                            "Snapshot %s matched but sync_duration is "
+                            "missing/unparseable (raw=%r)",
+                            snapshot_name,
+                            raw_duration,
+                        )
+                        raise CommandFailed(
+                            "sync_duration missing/unparseable for %s (raw=%r)"
+                            % (snapshot_name, raw_duration)
+                        )
                     log.info(
                         "Snapshot %s synced: duration=%s (raw=%s), bytes=%s, files=%s",
                         snapshot_name,
