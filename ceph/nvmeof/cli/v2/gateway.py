@@ -10,6 +10,12 @@ class Gateway:
     def get_log_level(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "get_log_level", **kwargs)
 
+    def get_stats(self, **kwargs):
+        return self.base.run_nvme_cli(self.name, "get_stats", **kwargs)
+
+    def get_thread_stats(self, **kwargs):
+        return self.base.run_nvme_cli(self.name, "get_thread_stats", **kwargs)
+
     def info(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "info", **kwargs)
 

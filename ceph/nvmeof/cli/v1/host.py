@@ -13,6 +13,18 @@ class Host:
         """Change DHCHAP key for host"""
         return self.base.run_nvme_cli(self.name, "change_key", **kwargs)
 
+    def change_controller_key(self, **kwargs):
+        """Set or change the controller DHCHAP key for a host."""
+        return self.base.run_nvme_cli(self.name, "change_controller_key", **kwargs)
+
+    def del_controller_key(self, **kwargs):
+        """Delete the controller DHCHAP key for a host."""
+        return self.base.run_nvme_cli(self.name, "del_controller_key", **kwargs)
+
+    def del_key(self, **kwargs):
+        """Delete DHCHAP key from host."""
+        return self.base.run_nvme_cli(self.name, "del_key", **kwargs)
+
     def delete(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "del", **kwargs)
 
