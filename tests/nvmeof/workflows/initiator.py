@@ -594,6 +594,31 @@ def get_or_create_initiator(node_id, nqn, cluster):
     return Initiators[key]
 
 
+def purge_cached_initiators(node_ids, cluster=None, disconnect=True):
+    """Drop cached initiators for nodes so a later test starts without leftover DHCHAP.
+
+    Intended for non-auth HA after an inband-auth test in the same process.
+    Does not alter prepare_io_execution behavior.
+
+    Args:
+        node_ids: Node ids to purge (e.g. ``{\"node14\"}``).
+        cluster: Ceph cluster (required when disconnect=True).
+        disconnect: Run ``nvme disconnect-all`` on each node before purge.
+    """
+    node_ids = set(node_ids)
+    if disconnect:
+        if cluster is None:
+            raise ValueError("cluster is required when disconnect=True")
+        for nid in node_ids:
+            try:
+                Initiator(get_node_by_id(cluster, nid)).disconnect_all()
+            except Exception as err:
+                LOG.warning("disconnect_all failed for node=%s: %s", nid, err)
+    for key in [k for k in Initiators if k[0] in node_ids]:
+        LOG.info("Purging cached initiator entry %s", key)
+        del Initiators[key]
+
+
 def prepare_io_execution(
     io_clients,
     gateways=None,

@@ -18,6 +18,7 @@ from tests.nvmeof.workflows.initiator import (
     compare_client_namespace,
     fetch_paths_for_namespaces,
     prepare_io_execution,
+    purge_cached_initiators,
     validate_initiator,
 )
 from tests.nvmeof.workflows.nvme_utils import (
@@ -541,13 +542,30 @@ class HighAvailability:
         initiators = self.config["initiators"]
 
         try:
+            # Non-auth HA only: drop leftover DHCHAP initiator cache from prior
+            # suite tests (e.g. inbandauth). Skip when pre_configured_initiators
+            # is set — that path is used by inband-auth and must keep keys.
+            pre_configured = self.config.get("pre_configured_initiators")
+            if not pre_configured:
+                initiator_nodes = {
+                    init["node"]
+                    for init in initiators
+                    if isinstance(init, dict) and init.get("node")
+                }
+                if initiator_nodes:
+                    LOG.info(
+                        "Purging cached initiators before non-auth HA connect: %s",
+                        sorted(initiator_nodes),
+                    )
+                    purge_cached_initiators(
+                        initiator_nodes, cluster=self.cluster, disconnect=True
+                    )
+
             # Prepare FIO Execution
             LOG.info("Fetching namespaces from all gateways")
             namespaces = fetch_namespaces(self.gateways[0])
 
             LOG.info("Preparing IO execution")
-            # Get pre-configured initiators if available
-            pre_configured = self.config.get("pre_configured_initiators")
             clients = prepare_io_execution(
                 initiators,
                 gateways=self.gateways,
