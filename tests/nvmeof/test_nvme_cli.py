@@ -50,6 +50,11 @@ def _resolve_network_mask(ceph_cluster, network_mask, fallback_node=None):
         raise ValueError(
             f"Node '{network_mask}' has no ip_address; cannot build network-mask CIDR"
         )
+
+    subnet = getattr(node, "subnet", None)
+    if subnet and "/" in str(subnet):
+        return str(ipaddress.ip_network(str(subnet), strict=False))
+
     return str(ipaddress.ip_network(f"{ip}/24", strict=False))
 
 
