@@ -1,6 +1,11 @@
 from threading import Thread
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import (
+    cleanup_cluster,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
+    setup_nfs_cluster,
+)
 
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.utils import perform_lookups
@@ -69,6 +74,7 @@ def run(ceph_cluster, **kw):
         raise ConfigError("The test requires more clients than available")
 
     clients = clients[:no_clients]  # Select only the required number of clients
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
 
     try:
         # Setup nfs cluster
@@ -120,9 +126,18 @@ def run(ceph_cluster, **kw):
         log.info("Successfully completed the copy tests for files and dirs")
         return 0
 
+    except (ConfigError, OperationFailedError) as e:
+        log.error(f"Failed to complete file copy operations: {e}")
+        return 1
+    except Exception as e:
+        log.error(f"Unexpected error during file copy test: {e}")
+        return 1
     finally:
+        crash_detected = log_cluster_health_and_check_crashes(rados_obj, start_time)
         log.info("Cleaning up")
         cleanup_cluster(
             clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]
         )
         log.info("Cleaning up successful")
+        if crash_detected:
+            return 1

@@ -1,7 +1,12 @@
 import time
 from threading import Thread
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import (
+    cleanup_cluster,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
+    setup_nfs_cluster,
+)
 
 from ceph.ceph import CommandFailed
 from cli.exceptions import ConfigError, OperationFailedError
@@ -63,6 +68,7 @@ def run(ceph_cluster, **kw):
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
     file_count = 100
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
     try:
         # Setup nfs cluster
         setup_nfs_cluster(
@@ -105,11 +111,11 @@ def run(ceph_cluster, **kw):
 
         # Perform rm while file creation and lookup is in progress
         max_total_time = 300
-        start_time = time.time()
+        wall_start = time.time()
         iteration = 0
         log.info("Performing rm while file creation and lookup in progress")
         while operations[0].is_alive() or operations[1].is_alive():
-            if time.time() - start_time > max_total_time:
+            if time.time() - wall_start > max_total_time:
                 log.error(f"Operations exceeded {max_total_time}s timeout")
                 raise OperationFailedError("Parallel operations timed out")
 
@@ -139,8 +145,11 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed to validate parallel write, lookup and rm: {e}")
         return 1
     finally:
+        crash_detected = log_cluster_health_and_check_crashes(rados_obj, start_time)
         log.info("Cleaning up")
         cleanup_cluster(
             clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]
         )
         log.info("Cleaning up successful")
+        if crash_detected:
+            return 1

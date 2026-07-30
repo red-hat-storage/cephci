@@ -1,7 +1,12 @@
 import time
 from threading import Thread
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import (
+    cleanup_cluster,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
+    setup_nfs_cluster,
+)
 
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.io.io import linux_untar
@@ -40,6 +45,7 @@ def run(ceph_cluster, **kw):
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
 
     try:
         if setup:
@@ -130,6 +136,7 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed to validate multiple ios and lookups : {e}")
         return 1
     finally:
+        crash_detected = log_cluster_health_and_check_crashes(rados_obj, start_time)
         if cleanup:
             log.info("Cleaning up")
             # Wait for NFS operations to stabilize before cleanup
@@ -139,3 +146,5 @@ def run(ceph_cluster, **kw):
                 clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]
             )
             log.info("Cleaning up successful")
+        if crash_detected:
+            return 1

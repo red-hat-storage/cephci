@@ -1,4 +1,9 @@
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import (
+    cleanup_cluster,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
+    setup_nfs_cluster,
+)
 
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
@@ -32,6 +37,7 @@ def run(ceph_cluster, **kw):
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
 
     try:
         # Setup nfs cluster
@@ -196,6 +202,7 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed to validate read write operations: {e}")
         return 1
     finally:
+        crash_detected = log_cluster_health_and_check_crashes(rados_obj, start_time)
         # Clean up test user if it was created
         if operation in ["verify_permission", "mv_file"]:
             try:
@@ -209,3 +216,5 @@ def run(ceph_cluster, **kw):
 
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")
+        if crash_detected:
+            return 1

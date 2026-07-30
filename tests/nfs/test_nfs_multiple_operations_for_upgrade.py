@@ -1,7 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from cli.exceptions import ConfigError, OperationFailedError
-from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
+from tests.nfs.nfs_operations import (
+    cleanup_cluster,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
+    setup_nfs_cluster,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -176,6 +181,8 @@ def run(ceph_cluster, **kw):
     if ha:
         nfs_server_name = [nfs_node.hostname for nfs_node in nfs_nodes[0:2]]
 
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
+
     try:
         if operation == "before_upgrade":
             # Create NFS Cluster
@@ -341,8 +348,17 @@ def run(ceph_cluster, **kw):
     except Exception as e:
         raise ConfigError(f"test_nfs_multiple_operations_for_upgrade: {e} failed")
     finally:
+        crash_detected = log_cluster_health_and_check_crashes(rados_obj, start_time)
         if operation == "after_upgrade":
             # Cleanup NFS Cluster
             cleanup_cluster(
                 clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
             )
+        elif crash_detected:
+            log.warning(
+                "Crash detected during 'before_upgrade' phase. "
+                "NFS cluster intentionally left alive for after_upgrade step. "
+                "Manual cleanup may be required if the upgrade pipeline is aborted."
+            )
+        if crash_detected:
+            return 1
