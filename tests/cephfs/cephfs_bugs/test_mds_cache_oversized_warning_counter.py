@@ -49,27 +49,25 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(client1, "cephfs")
         if fs_details:
             fs_util.remove_fs(client1, "cephfs")
+        fs_details = fs_util.get_fs_info(client1, "cephfs-ec")
+        if fs_details:
+            fs_util.remove_fs(client1, "cephfs-ec")
         fs_util.create_fs(client1, "cephfs")
         fs_util.wait_for_mds_process(client1, "cephfs")
+        # set max_mds to 1
+        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 1")
+        # stand_replay true
+        client1.exec_command(
+            sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
+        )
+        # standby replay 1 mds
+        client1.exec_command(sudo=True, cmd="ceph fs set cephfs standby_count_wanted 1")
+        fs_util.wait_for_stable_fs(client1, "true")
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         log.info("Check ceph Health before starting the test")
         if cephfs_common_utils.wait_for_healthy_ceph(client1):
             log.error("Cluster health is not OK before starting the test")
             return 1
-        # Generate random string for directory names
-        rand = "".join(
-            random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
-        )
-        # Define mount directories
-        fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}"
-        # Mount CephFS using ceph-fuse and kernel
-        fs_util.fuse_mount(
-            [client1],
-            fuse_mounting_dir_1,
-            extra_params=" --client_fs cephfs",
-        )
-        # set max_mds to 1
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 1")
         # get default mds_cache_memory_limit
         cmd = "ceph config get mds mds_cache_memory_limit"
         mds_cache_memory_limit_def, _ = client1.exec_command(sudo=True, cmd=cmd)
@@ -82,13 +80,19 @@ def run(ceph_cluster, **kw):
         fs_util.config_set_runtime(
             client1, "mds", "mds_health_cache_threshold", 1.000001
         )
-
-        # stand_replay true
-        client1.exec_command(
-            sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
+        # Generate random string for directory names
+        rand = "".join(
+            random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
         )
-        # standby replay 1 mds
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs standby_count_wanted 1")
+        # Define mount directories
+        fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}"
+        # Mount CephFS using ceph-fuse and kernel
+        fs_util.fuse_mount(
+            [client1],
+            fuse_mounting_dir_1,
+            extra_params=" --client_fs cephfs",
+        )
+
         # wait untirl standby mds is created
         client1.exec_command(
             sudo=True,
