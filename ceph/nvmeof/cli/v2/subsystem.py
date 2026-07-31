@@ -44,11 +44,3 @@ class Subsystem:
 
     def list(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "list", **kwargs)
-
-    def add_network(self, **kwargs):
-        """Add a network mask to a subsystem (auto-create listeners in subnet)."""
-        return self.base.run_nvme_cli(self.name, "add_network", **kwargs)
-
-    def del_network(self, **kwargs):
-        """Delete a network mask from a subsystem."""
-        return self.base.run_nvme_cli(self.name, "del_network", **kwargs)
