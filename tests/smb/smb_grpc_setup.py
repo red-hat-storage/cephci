@@ -72,9 +72,9 @@ def generate_self_signed_certificate_for_smb_node(node, client=False):
         ),
     )
     # Read back key and cert
-    key = node.exec_command(sudo=True, cmd="cat grpc_key.key")
-    cert = node.exec_command(sudo=True, cmd="cat grpc_cert.crt")
-    ca = node.exec_command(sudo=True, cmd="cat grpc_ca.ca") if not client else None
+    key = node.exec_command(sudo=True, cmd="cat grpc_key.key")[0]
+    cert = node.exec_command(sudo=True, cmd="cat grpc_cert.crt")[0]
+    ca = node.exec_command(sudo=True, cmd="cat grpc_ca.ca")[0] if not client else None
 
     return key, cert, ca
 
@@ -271,7 +271,7 @@ def run(ceph_cluster, **kw):
 
         # Generate self-signed certificates crt, cacert, key for client node
         generate_self_signed_certificate_for_smb_node(client, client=True)
-        ca = installer_node.exec_command(sudo=True, cmd="cat grpc_ca.ca")
+        ca = installer_node.exec_command(sudo=True, cmd="cat grpc_ca.ca")[0]
 
         # Add the same CA cert of server in the client node for mTLS
         ca_file = client.remote_file(sudo=True, file_name="ca_cert.ca", file_mode="w+")
