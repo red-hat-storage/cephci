@@ -74,7 +74,7 @@ def run(ceph_cluster, **kw):
 
         elif grpc_operation == "service_info":
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Info"
             )
@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
 
         elif grpc_operation == "status_when_no_clients":
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Status"
             )
@@ -103,7 +103,7 @@ def run(ceph_cluster, **kw):
                 cifs_mount_point,
             )
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Status"
             )
@@ -127,7 +127,7 @@ def run(ceph_cluster, **kw):
                 cifs_mount_point,
             )
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ -proto control.proto "
                 f'-d \'{{"ip_address": "{client.ip_address}"}}\' {installer_node.ip_address}:54445 '
                 f"SambaControl/KillClientConnection"
@@ -152,7 +152,7 @@ def run(ceph_cluster, **kw):
                 cifs_mount_point,
             )
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Status"
             )
