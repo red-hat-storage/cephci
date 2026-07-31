@@ -7,7 +7,6 @@ from smb_operations import (
 
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
-from utility.utils import generate_self_signed_certificate
 
 SMB_gRPC_PORT = 54445
 
@@ -27,26 +26,56 @@ def literal_presenter(dumper, data):
 yaml.add_representer(LiteralString, literal_presenter)
 
 
-def generate_self_signed_certificate_for_smb_node(node):
-    """Generate self signed certificates for samba node
+def generate_self_signed_certificate_for_smb_node(node, client=False):
+    """
+    Generate self signed certificates for samba node.
+
     Args:
-        node (obj): samba server node obj
+        node   (obj):  samba server/client node obj
+        client (bool): False by default. If True, only generates key and cert
+                       (CA is handled externally by the caller).
+
+    Returns:
+        key, cert, ca   Tuple as strings (ca is None when client=True)
     """
     subject = {
         "common_name": node.hostname,
         "ip_address": node.ip_address,
     }
-    key, cert, ca = generate_self_signed_certificate(subject=subject)
+    # Step 1: Generate CA private key
+    node.exec_command(sudo=True, cmd="openssl genrsa -out grpc_ca.key 2048")
+    if not client:
+        # Step 2: Generate self-signed CA certificate (server only)
+        node.exec_command(
+            sudo=True,
+            cmd=(
+                "openssl req -x509 -noenc -key grpc_ca.key -days 1826 -out grpc_ca.ca "
+                "-subj '/C=IN/ST=Karnataka/L=Bengaluru/O=Red Hat Inc/OU=Storage/CN=CA'"
+            ),
+        )
+    # Step 3: Generate server key + CSR
+    node.exec_command(
+        sudo=True,
+        cmd=(
+            f"openssl req -new -noenc -out grpc_cert.csr -newkey rsa:2048 "
+            f"-keyout grpc_key.key "
+            f"-subj '/C=IN/ST=Karnataka/L=Bengaluru/O=Red Hat Inc/OU=Storage/CN={subject['common_name']}' "
+            f"-addext 'subjectAltName = DNS:{subject['common_name']},IP:{subject['ip_address']}'"
+        ),
+    )
+    # Step 4: Sign the certificate
+    node.exec_command(
+        sudo=True,
+        cmd=(
+            "openssl x509 -req -in grpc_cert.csr -CA grpc_ca.ca -CAkey grpc_ca.key "
+            "-CAcreateserial -out grpc_cert.crt -days 730 -copy_extensions copy"
+        ),
+    )
+    # Read back key and cert
+    key = node.exec_command(sudo=True, cmd="cat grpc_key.key")
+    cert = node.exec_command(sudo=True, cmd="cat grpc_cert.crt")
+    ca = node.exec_command(sudo=True, cmd="cat grpc_ca.ca") if not client else None
 
-    key_file = node.remote_file(sudo=True, file_name="grpc_key.key", file_mode="w+")
-    key_file.write(key)
-    key_file.flush()
-    cert_file = node.remote_file(sudo=True, file_name="grpc_cert.crt", file_mode="w+")
-    cert_file.write(cert)
-    cert_file.flush()
-    ca_file = node.remote_file(sudo=True, file_name="grpc_ca.ca", file_mode="w+")
-    ca_file.write(ca)
-    ca_file.flush()
     return key, cert, ca
 
 
@@ -241,7 +270,8 @@ def run(ceph_cluster, **kw):
         clone_the_samba_in_kubernetes_repo(client)
 
         # Generate self-signed certificates crt, cacert, key for client node
-        generate_self_signed_certificate_for_smb_node(client)
+        generate_self_signed_certificate_for_smb_node(client, client=True)
+        ca = installer_node.exec_command(sudo=True, cmd="cat grpc_ca.ca")
 
         # Add the same CA cert of server in the client node for mTLS
         ca_file = client.remote_file(sudo=True, file_name="ca_cert.ca", file_mode="w+")
