@@ -44,15 +44,14 @@ def generate_self_signed_certificate_for_smb_node(node, client=False):
     }
     # Step 1: Generate CA private key
     node.exec_command(sudo=True, cmd="openssl genrsa -out grpc_ca.key 2048")
-    if not client:
-        # Step 2: Generate self-signed CA certificate (server only)
-        node.exec_command(
-            sudo=True,
-            cmd=(
-                "openssl req -x509 -noenc -key grpc_ca.key -days 1826 -out grpc_ca.ca "
-                "-subj '/C=IN/ST=Karnataka/L=Bengaluru/O=Red Hat Inc/OU=Storage/CN=CA'"
-            ),
-        )
+    # Step 2: Generate self-signed CA certificate (server only)
+    node.exec_command(
+        sudo=True,
+        cmd=(
+            "openssl req -x509 -noenc -key grpc_ca.key -days 1826 -out grpc_ca.ca "
+            "-subj '/C=IN/ST=Karnataka/L=Bengaluru/O=Red Hat Inc/OU=Storage/CN=CA'"
+        ),
+    )
     # Step 3: Generate server key + CSR
     node.exec_command(
         sudo=True,
