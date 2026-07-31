@@ -43,7 +43,7 @@ def run(ceph_cluster, **kw):
         _node = config.get("node")
         hostname = get_node_by_id(ceph_cluster, _node).hostname
         # get the key name from entity list
-        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
+        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
         _key_name = out[_scope][_entity]["keys"][0]
         # check if user has provided value for cert/key or needs to generate ssl certificate key
         generate_ssl_key = config.get("generate_ssl_cert")
@@ -89,9 +89,12 @@ def run(ceph_cluster, **kw):
         if _scope == "host":
             _node = config.get("node")
             hostname = get_node_by_id(ceph_cluster, _node).hostname
-        # get the key name from entity list
-        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
-        _key_name = out[_scope][_entity]["keys"][0]
+        # use explicit key_name from config if provided, otherwise fall back to
+        # the first key in the entity's binding list
+        _key_name = config.get("key_name")
+        if not _key_name:
+            out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
+            _key_name = out[_scope][_entity]["keys"][0]
         # get the flags if any
         no_exception_when_missing = config.get("no_exception_when_missing", False)
         # retrieve the certificate
@@ -102,7 +105,7 @@ def run(ceph_cluster, **kw):
             service_value=_service_name,
             no_exception_when_missing=no_exception_when_missing,
         )
-        if "BEGIN PRIVATE KEY" not in out:
+        if "BEGIN PRIVATE KEY" not in out and "BEGIN RSA PRIVATE KEY" not in out:
             raise OperationFailedError(f"Failed to get key for {_entity}")
         log.info(f"Successfully retrieved the key for {_entity} using CLI command")
     if action == "remove":
@@ -122,7 +125,7 @@ def run(ceph_cluster, **kw):
             _node = config.get("node")
             hostname = get_node_by_id(ceph_cluster, _node).hostname
         # get the key name from entity list
-        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
+        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
         _key_name = out[_scope][_entity]["keys"][0]
         # remove the certificate
         out = CephAdm(installer).ceph.orch.certmgr.rm_key(
