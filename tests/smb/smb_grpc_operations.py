@@ -69,25 +69,25 @@ def run(ceph_cluster, **kw):
                 "cd sambacc && grpcurl -import-path sambacc/grpc/protobufs/ -proto control.proto "
                 "describe SambaControl"
             )
-            out = installer_node.exec_command(sudo=True, cmd=cmd)
+            out = client.exec_command(sudo=True, cmd=cmd)
             log.info("Describe Samba Control : {}".format(out))
 
         elif grpc_operation == "service_info":
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Info"
             )
-            out = installer_node.exec_command(sudo=True, cmd=cmd)
+            out = client.exec_command(sudo=True, cmd=cmd)
             log.info("Print Samba and container Info Samba Control : {}".format(out))
 
         elif grpc_operation == "status_when_no_clients":
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Status"
             )
-            out = installer_node.exec_command(sudo=True, cmd=cmd)
+            out = client.exec_command(sudo=True, cmd=cmd)
             log.info("grpcurl status : {}".format(out))
 
         elif grpc_operation == "status_with_linux_client":
@@ -103,11 +103,11 @@ def run(ceph_cluster, **kw):
                 cifs_mount_point,
             )
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ "
                 f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Status"
             )
-            out = installer_node.exec_command(sudo=True, cmd=cmd)
+            out = client.exec_command(sudo=True, cmd=cmd)
             log.info("grpcurl status : {}".format(out))
             client.exec_command(
                 sudo=True,
@@ -127,12 +127,36 @@ def run(ceph_cluster, **kw):
                 cifs_mount_point,
             )
             cmd = (
-                f"cd sambacc && grpcurl -cacert /root/grpc_ca.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
                 f"-import-path sambacc/grpc/protobufs/ -proto control.proto "
                 f'-d \'{{"ip_address": "{client.ip_address}"}}\' {installer_node.ip_address}:54445 '
                 f"SambaControl/KillClientConnection"
             )
-            out = installer_node.exec_command(sudo=True, cmd=cmd)
+            out = client.exec_command(sudo=True, cmd=cmd)
+            log.info("grpcurl status : {}".format(out))
+            client.exec_command(
+                sudo=True,
+                cmd=f"umount {cifs_mount_point}",
+            )
+            client.exec_command(sudo=True, cmd=f"rm -rf {cifs_mount_point}")
+        elif grpc_operation == "status_with_windows_client":
+            # Mount smb share with cifs
+            smb_cifs_mount(
+                smb_nodes[0],
+                client,
+                smb_shares[0],
+                smb_user_name,
+                smb_user_password,
+                auth_mode,
+                domain_realm,
+                cifs_mount_point,
+            )
+            cmd = (
+                f"cd sambacc && grpcurl -cacert /root/ca_cert.ca -cert /root/grpc_cert.crt  -key /root/grpc_key.key "
+                f"-import-path sambacc/grpc/protobufs/ "
+                f"-proto control.proto  {installer_node.ip_address}:54445  SambaControl/Status"
+            )
+            out = client.exec_command(sudo=True, cmd=cmd)
             log.info("grpcurl status : {}".format(out))
             client.exec_command(
                 sudo=True,

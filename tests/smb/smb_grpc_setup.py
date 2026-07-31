@@ -1,36 +1,50 @@
-from smb_operations import deploy_smb_service_declarative, smbclient_check_shares
+import yaml
+from smb_operations import (
+    add_port_to_firewalld,
+    deploy_smb_service_declarative,
+    smbclient_check_shares,
+)
 
 from cli.exceptions import ConfigError, OperationFailedError
 from utility.log import Log
 from utility.utils import generate_self_signed_certificate
 
+SMB_gRPC_PORT = 54445
+
 log = Log(__name__)
 
 
-def generate_self_signed_certificate_for_smb_node(installer_node):
+class LiteralString(str):
+    pass
+
+
+def literal_presenter(dumper, data):
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+yaml.add_representer(LiteralString, literal_presenter)
+
+
+def generate_self_signed_certificate_for_smb_node(node):
     """Generate self signed certificates for samba node
     Args:
-        installer_node (obj): samba server node installer node obj
+        node (obj): samba server node obj
     """
     subject = {
-        "common_name": installer_node.hostname,
-        "ip_address": installer_node.ip_address,
+        "common_name": node.hostname,
+        "ip_address": node.ip_address,
     }
     key, cert, ca = generate_self_signed_certificate(subject=subject)
 
-    key_file = installer_node.remote_file(
-        sudo=True, file_name="grpc_key.key", file_mode="w+"
-    )
+    key_file = node.remote_file(sudo=True, file_name="grpc_key.key", file_mode="w+")
     key_file.write(key)
     key_file.flush()
-    cert_file = installer_node.remote_file(
-        sudo=True, file_name="grpc_cert.crt", file_mode="w+"
-    )
+    cert_file = node.remote_file(sudo=True, file_name="grpc_cert.crt", file_mode="w+")
     cert_file.write(cert)
     cert_file.flush()
-    ca_file = installer_node.remote_file(
-        sudo=True, file_name="grpc_ca.ca", file_mode="w+"
-    )
+    ca_file = node.remote_file(sudo=True, file_name="grpc_ca.ca", file_mode="w+")
     ca_file.write(ca)
     ca_file.flush()
     return key, cert, ca
@@ -163,7 +177,7 @@ def run(ceph_cluster, **kw):
     # Get client node
     client = ceph_cluster.get_nodes(role="client")[0]
 
-    # Generate self signed certificates crt, cacrt, key
+    # Generate self signed certificates crt, cacrt, key for server node
     key, cert, ca = generate_self_signed_certificate_for_smb_node(installer_node)
 
     grpc_spec_tld_credential_dict = [
@@ -171,19 +185,19 @@ def run(ceph_cluster, **kw):
             "resource_type": "ceph.smb.tls.credential",
             "tls_credential_id": cert_tls_credential_id,
             "credential_type": "cert",
-            "value": "|\n" + cert.rstrip("\\n"),
+            "value": LiteralString(cert.rstrip("\n")),
         },
         {
             "resource_type": "ceph.smb.tls.credential",
             "tls_credential_id": key_tls_credential_id,
             "credential_type": "cert",
-            "value": "|\n" + key.rstrip("\\n"),
+            "value": LiteralString(key.rstrip("\n")),
         },
         {
             "resource_type": "ceph.smb.tls.credential",
             "tls_credential_id": cacert_tls_credential_id,
             "credential_type": "ca-cert",
-            "value": "|\n" + ca.rstrip("\\n"),
+            "value": LiteralString(ca.rstrip("\n")),
         },
     ]
     smb_spec.extend(grpc_spec_tld_credential_dict)
@@ -214,14 +228,25 @@ def run(ceph_cluster, **kw):
             domain_realm,
         )
 
-        # Install grpcurl
-        install_grpcurl(installer_node)
-
-        # Clone samba in kubernetes repo
-        clone_the_samba_in_kubernetes_repo(installer_node)
-
-        # Check grpc remotectl service
+        # Check grpc remotectl service on server node
         check_remotectl_service(installer_node)
+
+        # Add GRPC port to the firewall allowlist
+        add_port_to_firewalld(installer_node, SMB_gRPC_PORT)
+
+        # Install grpcurl on client node
+        install_grpcurl(client)
+
+        # Clone samba in kubernetes repo in se
+        clone_the_samba_in_kubernetes_repo(client)
+
+        # Generate self-signed certificates crt, cacert, key for client node
+        generate_self_signed_certificate_for_smb_node(client)
+
+        # Add the same CA cert of server in the client node for mTLS
+        ca_file = client.remote_file(sudo=True, file_name="ca_cert.ca", file_mode="w+")
+        ca_file.write(ca)
+        ca_file.flush()
 
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode {auth_mode} : {e}")
