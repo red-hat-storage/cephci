@@ -47,6 +47,12 @@ class Mount(Cli):
                 ``-o``.  Pass ``"rdma"`` for NFS-over-RDMA mounts.
             xprtsec (str): Transport-security option (e.g. ``"tls"``
                 for RPC-with-TLS).
+            mounttimeout (int): NFS mount timeout in seconds (``-o``
+                mounttimeout).  Fails fast when Ganesha is restarting.
+            timeo (int): NFS RPC timeout in deciseconds (``-o timeo``).
+            retrans (int): NFS RPC retransmit count (``-o retrans``).
+            timeout (int): cephci command timeout in seconds (default
+                3600 for long-running mounts).
 
         Raises:
             MountFailedError: If the mount point does not appear in
@@ -66,9 +72,19 @@ class Mount(Cli):
         xprtsec = kwargs.get("xprtsec")
         if xprtsec:
             cmd += f",xprtsec={xprtsec}"
+        for opt in ("mounttimeout", "timeo", "retrans"):
+            if opt in kwargs:
+                cmd += f",{opt}={kwargs[opt]}"
+        extra_mount_options = kwargs.get("extra_mount_options")
+        if extra_mount_options:
+            cmd += f",{extra_mount_options}"
         cmd += f" {server}:{export} {mount}"
 
-        self.execute(sudo=True, long_running=True, cmd=cmd)
+        exec_kw = {"sudo": True, "long_running": True, "cmd": cmd}
+        mount_timeout = kwargs.get("timeout")
+        if mount_timeout is not None:
+            exec_kw["timeout"] = mount_timeout
+        self.execute(**exec_kw)
 
         out = self.execute(sudo=True, cmd="mount")
         if isinstance(out, tuple):

@@ -1391,6 +1391,65 @@ def mount_retry(
     return True
 
 
+def wait_for_nfs_and_mount(
+    client,
+    mount_name,
+    version,
+    port,
+    nfs_server,
+    export_name,
+    installer_node=None,
+    nfs_wait_timeout=300,
+    mount_timeout=120,
+    mount_tries=2,
+    chown_cephuser=False,
+    **kwargs,
+):
+    """
+    Mount NFS after Ganesha is healthy, using fail-fast options.
+
+    Intended for upgrade scenarios where ``cephadm upgrade`` restarts
+    NFS-Ganesha and plain ``mount -t nfs`` can block for many minutes.
+    """
+    mount_kwargs = {
+        "mounttimeout": kwargs.pop("mounttimeout", 60),
+        "timeo": kwargs.pop("timeo", 30),
+        "retrans": kwargs.pop("retrans", 2),
+        "timeout": kwargs.pop("timeout", mount_timeout),
+        **kwargs,
+    }
+    last_err = None
+    for attempt in range(1, mount_tries + 1):
+        if installer_node is not None:
+            verify_nfs_ganesha_service(node=installer_node, timeout=nfs_wait_timeout)
+        try:
+            Mount(client).nfs(
+                mount=mount_name,
+                version=version,
+                port=port,
+                server=nfs_server,
+                export=export_name,
+                **mount_kwargs,
+            )
+            if chown_cephuser:
+                chown_mount_for_cephuser(client, mount_name)
+            return True
+        except (OperationFailedError, MountFailedError) as err:
+            last_err = err
+            log.warning(
+                "NFS mount attempt %s/%s failed for %s:%s on %s: %s",
+                attempt,
+                mount_tries,
+                nfs_server,
+                export_name,
+                mount_name,
+                err,
+            )
+            if attempt < mount_tries:
+                sleep(5 * attempt)
+    raise last_err
+
+
 @retry(OperationFailedError, tries=5, delay=10, backoff=2)
 def mount_cleanup_retry(client, mount_name):
     try:

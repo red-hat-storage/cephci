@@ -6,11 +6,13 @@ from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Unmount
+from tests.nfs.export_mount_kwargs import mount_opts_from_kwargs, pop_upgrade_kwargs
 from tests.nfs.nfs_operations import (
     NfsCleanupFailed,
     _get_client_specific_mount_versions,
     exports_mounts_perclient,
     mount_retry,
+    wait_for_nfs_and_mount,
 )
 from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
     create_file,
@@ -56,8 +58,43 @@ def create_export_and_mount_for_existing_nfs_cluster(
         ha: High availability flag
         vip: Virtual IP for HA
         nfs_server: NFS server address(es)
-        kwargs: Additional arguments for export creation
+        kwargs: Additional arguments for export creation (e.g. enctag, xprtsec).
+            Export-only keys are used by ``nfs export create``; mount-relevant
+            keys in ``MOUNT_OPTS_KEYS`` (see export_mount_kwargs) are forwarded.
     """
+    upgrade_kwargs = pop_upgrade_kwargs(kwargs)
+    installer_node = upgrade_kwargs["installer_node"]
+    during_upgrade = upgrade_kwargs["during_upgrade"]
+    nfs_wait_timeout = upgrade_kwargs["nfs_wait_timeout"]
+    mount_timeout = upgrade_kwargs["mount_timeout"]
+    mount_tries = upgrade_kwargs["mount_tries"]
+
+    def _do_mount(client, mount_name, mount_version, mount_port, server, export_name):
+        mount_opts = mount_opts_from_kwargs(kwargs, chown_cephuser=chown_cephuser)
+        if during_upgrade:
+            return wait_for_nfs_and_mount(
+                client,
+                mount_name,
+                mount_version,
+                mount_port,
+                server,
+                export_name,
+                installer_node=installer_node,
+                nfs_wait_timeout=nfs_wait_timeout,
+                mount_timeout=mount_timeout,
+                mount_tries=mount_tries,
+                **mount_opts,
+            )
+        return mount_retry(
+            client=client,
+            mount_name=mount_name,
+            version=mount_version,
+            port=mount_port,
+            nfs_server=server,
+            export_name=export_name,
+            **mount_opts,
+        )
+
     # Detect multi-cluster mode
     if isinstance(nfs_name, list):
         num_clusters = len(nfs_name)
@@ -147,15 +184,13 @@ def create_export_and_mount_for_existing_nfs_cluster(
                         _cluster_nfs_server = vip.split("/")[0]  # Remove the port
                     for mount_version, _clients in mount_versions.items():
                         _clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
-                        if not mount_retry(
-                            client=_clients[client_num],
-                            mount_name=mount_name,
-                            version=mount_version,
-                            port=_port,
-                            nfs_server=_cluster_nfs_server,
-                            export_name=export_name,
-                            chown_cephuser=chown_cephuser,
-                            **kwargs,
+                        if not _do_mount(
+                            _clients[client_num],
+                            mount_name,
+                            mount_version,
+                            _port,
+                            _cluster_nfs_server,
+                            export_name,
                         ):
                             log.info(f"Mount failed, {mount_name}")
                             raise OperationFailedError(
@@ -198,18 +233,16 @@ def create_export_and_mount_for_existing_nfs_cluster(
             # If list, only mount on first nfs_server for single cluster for backward compatibility
             _nfs_server = nfs_server[0] if isinstance(nfs_server, list) else nfs_server
             if ha:
-                _nfs_server = vip.split("/")
+                _nfs_server = vip.split("/")[0]
             for mount_version, _clients in mount_versions.items():
                 _clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
-                if not mount_retry(
-                    client=_clients[client_num],
-                    mount_name=mount_name,
-                    version=mount_version,
-                    port=port,
-                    nfs_server=_nfs_server,
-                    export_name=export_name,
-                    chown_cephuser=chown_cephuser,
-                    **kwargs,
+                if not _do_mount(
+                    _clients[client_num],
+                    mount_name,
+                    mount_version,
+                    port,
+                    _nfs_server,
+                    export_name,
                 ):
                     log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
@@ -359,7 +392,9 @@ def perform_io_operations_in_loop(
         log.info("Completed all IO operations")
 
 
-def remove_exports_and_unmount(client_export_mount_dict, clients, nfs_name):
+def remove_exports_and_unmount(
+    client_export_mount_dict, clients, nfs_name, cleanup_timeout=600
+):
     """
     Unmounts the NFS exports and removes them from the NFS cluster.
 
@@ -367,7 +402,7 @@ def remove_exports_and_unmount(client_export_mount_dict, clients, nfs_name):
         client_export_mount_dict (dict): Dictionary containing client export and mount information.
         clients (list): List of client nodes.
     """
-    timeout, interval = 600, 10
+    timeout, interval = cleanup_timeout, 10
     for client_num in range(len(clients)):
         for export_num in range(
             len(client_export_mount_dict[clients[client_num]]["export"])
@@ -434,8 +469,11 @@ def run(ceph_cluster, **kw):
     export_num = config.get("exports_number", 1)
     ha = bool(config.get("ha", False))
     vip = config.get("vip", None)
-    sudo = config.get("sudo", False)
-    chown_cephuser = config.get("chown_cephuser", not sudo)
+    sudo = bool(config.get("sudo", True))
+    cleanup_timeout = config.get("cleanup_timeout", 600)
+    nfs_wait_timeout = config.get("nfs_wait_timeout", 300)
+    mount_timeout = config.get("mount_timeout", 120)
+    mount_tries = config.get("mount_tries", 2)
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -443,6 +481,8 @@ def run(ceph_cluster, **kw):
 
     clients = clients[:no_clients]
     client = clients[0]  # Select only the required number of clients
+    installer_nodes = ceph_cluster.get_nodes("installer")
+    installer_node = installer_nodes[0] if installer_nodes else None
 
     # 1. pick the existing NFS cluster
     nfs_cluster_name = Ceph(client).nfs.cluster.ls()[0]
@@ -471,7 +511,11 @@ def run(ceph_cluster, **kw):
                 ha=ha,
                 nfs_server=nfs_hostname,
                 vip=vip,
-                chown_cephuser=chown_cephuser,
+                installer_node=installer_node,
+                during_upgrade=True,
+                nfs_wait_timeout=nfs_wait_timeout,
+                mount_timeout=mount_timeout,
+                mount_tries=mount_tries,
             )
 
             # 4. perform Create, read, rename, copy, read/write using DD command and deletion
@@ -486,7 +530,10 @@ def run(ceph_cluster, **kw):
             # 5. unmount + delete exports
             log.info("Unmounting and deleting exports")
             remove_exports_and_unmount(
-                client_export_mount_dict, clients, nfs_cluster_name
+                client_export_mount_dict,
+                clients,
+                nfs_cluster_name,
+                cleanup_timeout=cleanup_timeout,
             )
         return 0
     except Exception as e:
