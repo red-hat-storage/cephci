@@ -1979,3 +1979,67 @@ def get_ceph_version(client, prefix_cephadm=False):
         raise RuntimeError("Failed to get ceph version from cluster")
     ceph_version_installed = match.group(1)
     return ceph_version_installed
+
+
+def init_cluster_health_check(ceph_cluster, config=None):
+    """
+    Create RadosOrchestrator and capture start timestamp for crash checks.
+
+    Returns:
+        tuple: (rados_obj, start_time) or (None, None) on failure.
+    """
+    try:
+        from ceph.ceph_admin import CephAdmin
+        from ceph.rados.core_workflows import RadosOrchestrator
+        from ceph.rados.utils import get_cluster_timestamp
+
+        # Only pass keys CephAdmin actually needs; NFS suite config must not
+        # be spread into CephAdmin (would poison / shadow attributes).
+        cephadm_config = {
+            k: config[k] for k in ("build", "rhbuild") if config and k in config
+        }
+        cephadm = CephAdmin(cluster=ceph_cluster, **cephadm_config)
+        rados_obj = RadosOrchestrator(node=cephadm)
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Crash-check window started at {start_time}")
+        return rados_obj, start_time
+    except Exception as e:
+        log.warning(f"Failed to initialize cluster health check: {e}")
+        return None, None
+
+
+def log_cluster_health_and_check_crashes(rados_obj, start_time, check_nfs=True):
+    """
+    Log cluster health and check for crashes since start_time.
+
+    Returns:
+        True if a crash was detected, False otherwise.
+    """
+    from ceph.rados.utils import get_cluster_timestamp
+
+    if not rados_obj or not start_time:
+        log.warning("Skipping health/crash check: rados_obj or start_time missing")
+        return False
+
+    # Best-effort health dump — must not skip the crash check on failure.
+    try:
+        rados_obj.log_cluster_health()
+    except Exception as e:
+        log.error(f"log_cluster_health() failed: {e}")
+
+    try:
+        end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Crash-check window completed. Start time: {start_time}, "
+            f"End time: {end_time}"
+        )
+        if rados_obj.check_crash_status(
+            start_time=start_time,
+            end_time=end_time,
+            check_nfs=check_nfs,
+        ):
+            log.error("Crash detected during test window")
+            return True
+    except Exception as e:
+        log.error(f"Crash status check failed: {e}")
+    return False

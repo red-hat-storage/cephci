@@ -11,6 +11,8 @@ from tests.nfs.nfs_operations import (
     NfsCleanupFailed,
     _get_client_specific_mount_versions,
     exports_mounts_perclient,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
     mount_retry,
     wait_for_nfs_and_mount,
 )
@@ -474,6 +476,7 @@ def run(ceph_cluster, **kw):
     nfs_wait_timeout = config.get("nfs_wait_timeout", 300)
     mount_timeout = config.get("mount_timeout", 120)
     mount_tries = config.get("mount_tries", 2)
+    installer_node = ceph_cluster.get_nodes("installer")[0]
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -481,8 +484,7 @@ def run(ceph_cluster, **kw):
 
     clients = clients[:no_clients]
     client = clients[0]  # Select only the required number of clients
-    installer_nodes = ceph_cluster.get_nodes("installer")
-    installer_node = installer_nodes[0] if installer_nodes else None
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
 
     # 1. pick the existing NFS cluster
     nfs_cluster_name = Ceph(client).nfs.cluster.ls()[0]
@@ -538,4 +540,7 @@ def run(ceph_cluster, **kw):
         return 0
     except Exception as e:
         log.error(f"An error occurred during NFS IO operations: {e}")
-        raise OperationFailedError(f"NFS IO operations failed: {e}")
+        return 1
+    finally:
+        if log_cluster_health_and_check_crashes(rados_obj, start_time):
+            return 1
