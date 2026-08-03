@@ -419,6 +419,50 @@ tests:
       name: Validate Host accessibility to NVMe namespaces
       polarion-id: CEPH-83575455
 
+  # IBMCEPH-17197: host del while connected must not abort/restart peer GWs (error 16 OMAP sync)
+  - test:
+      abort-on-fail: false
+      config:
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        delete_namespace_first: true
+        peer_sync_wait_sec: 60
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+        gw_nodes:
+          - node2
+          - node6
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:ibmceph-17197
+            serial: 1
+            bdevs:
+              count: 3
+              size: 5G
+            listener_port: 4420
+            listeners:
+              - node2
+              - node6
+            hosts:
+              - node: node10
+        initiators:
+          - nqn: nqn.2016-06.io.spdk:ibmceph-17197
+            listener_port: 4420
+            node: node10
+      desc: IBMCEPH-17197 host del while connected must not restart peer gateways
+      destroy-cluster: false
+      module: test_nvmeof_host_del_connected_peer_gw.py
+      name: IBMCEPH-17197 host del while connected peer GW stability
+      polarion-id: IBMCEPH-17197
+
   - test:
       abort-on-fail: false
       config:

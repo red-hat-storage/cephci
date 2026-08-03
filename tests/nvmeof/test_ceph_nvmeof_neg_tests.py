@@ -132,10 +132,17 @@ def test_ceph_83575467(ceph_cluster, rbd, nvme_service, pool, config):
         gw_info_bkp = json.loads(gw_info_bkp.strip())["subsystems"]
 
         # restart nvmeof service
-        group = config.get("gw_group", "")
-        service_name = f"nvmeof.{pool}"
-        if group:
-            service_name = f"{service_name}.{group}"
+        # Get the service name and service id
+        ceph = Orch(ceph_cluster, **{})
+        cmd = "ceph orch ls nvmeof --format json"
+        out, _ = ceph.shell(args=[cmd])
+        services = json.loads(out)
+        for service in services:
+            if "nvmeof" in service["service_name"]:
+                service_name = service["service_name"]
+                LOG.info(f"Service name: {service_name}")
+                break
+        LOG.info(f"Restarting the NVMe-oF service: {service_name}")
         restart_cfg = {
             "no_cluster_state": False,
             "config": {
