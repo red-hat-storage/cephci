@@ -240,6 +240,7 @@ tests:
            nfs_export: /export_byok
            nfs_instance_name: nfs_byok
            check_sighup: true
+           comments: bug - IBMCEPH-17211
 
      - test:
          name: Test SNI Default Secure Case

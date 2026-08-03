@@ -10,6 +10,7 @@ from tests.nfs.nfs_operations import (
     _get_client_specific_mount_versions,
     exports_mounts_perclient,
     mount_retry,
+    nfs_log_parser,
 )
 from tests.nfs.security.security_utils import (
     assert_mount_failed,
@@ -1581,32 +1582,37 @@ def run(ceph_cluster, **kw):
     """
     log.info("Starting NFS TLS feature tests (independent mode)")
     config = kw.get("config", {})
-
-    steps = _operations_to_run(config)
-
-    installer = ceph_cluster.get_nodes(role="installer")[0]
-    nfs_nodes = ceph_cluster.get_nodes(role="nfs")
-    clients = ceph_cluster.get_nodes(role="client")
-    no_clients = int(config.get("clients", 1))
-    clients = clients[:no_clients]
-    client_node = clients[0]
-
-    if not nfs_nodes or not clients:
-        raise OperationFailedError("Requires at least one NFS node and one client")
-
-    nfs_node = nfs_nodes[0]
-    nfs_name = config.get("nfs_cluster_name", DEFAULT_NFS_TLS_CLUSTER)
-    plain_nfs_name = tls_config_get(
-        config,
-        "plain_nfs_cluster_name",
-        "tc_04_plain_cluster",
-        default=DEFAULT_NFS_PLAIN_CLUSTER,
-    )
-    fs_name = config.get("fs_name", "cephfs")
-    tcpdump_self_contained = steps == [OP_TLS_IO_TCPDUMP_ENCRYPTION]
-    stunnel_op = OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION in steps
+    plain_nfs_name = nfs_node = client_node = None
+    nfs_name = None
+    fs_name = "cephfs"
+    tcpdump_self_contained = False
+    stunnel_op = False
+    steps = []
 
     try:
+        steps = _operations_to_run(config)
+
+        installer = ceph_cluster.get_nodes(role="installer")[0]
+        nfs_nodes = ceph_cluster.get_nodes(role="nfs")
+        clients = ceph_cluster.get_nodes(role="client")
+        no_clients = int(config.get("clients", 1))
+        clients = clients[:no_clients]
+
+        if not nfs_nodes or not clients:
+            raise OperationFailedError("Requires at least one NFS node and one client")
+
+        client_node = clients[0]
+        nfs_node = nfs_nodes[0]
+        nfs_name = config.get("nfs_cluster_name", DEFAULT_NFS_TLS_CLUSTER)
+        plain_nfs_name = tls_config_get(
+            config,
+            "plain_nfs_cluster_name",
+            "tc_04_plain_cluster",
+            default=DEFAULT_NFS_PLAIN_CLUSTER,
+        )
+        fs_name = config.get("fs_name", "cephfs")
+        tcpdump_self_contained = steps == [OP_TLS_IO_TCPDUMP_ENCRYPTION]
+        stunnel_op = OP_TLS_STUNNEL_IO_TCPDUMP_ENCRYPTION in steps
         if not tcpdump_self_contained:
             ca_cert = setup_tls_nfs_cluster(
                 installer_node=installer,
@@ -1637,12 +1643,44 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Full TLS stack cleanup (umount, exports, cluster, subvolumes)")
-        try:
-            if stunnel_op:
-                stop_stunnel_client(client_node)
-            if tcpdump_self_contained:
-                full_tls_stack_cleanup(client_node, plain_nfs_name, fs_name=fs_name)
-            full_tls_stack_cleanup(client_node, nfs_name, fs_name=fs_name)
-        except Exception as ex:
-            log.error("Cleanup failed: %s", ex)
+        # Collect orch/podman/ganesha logs before teardown so failures are diagnosable.
+        if nfs_node is None or client_node is None:
+            log.warning(
+                "Skipping nfs_log_parser/cleanup; nfs_node/client_node not initialized"
+            )
+        else:
+            clusters_to_parse = []
+            if nfs_name is not None:
+                clusters_to_parse.append(nfs_name)
+            if plain_nfs_name is not None and (
+                tcpdump_self_contained or OP_TLS_IO_TCPDUMP_ENCRYPTION in steps
+            ):
+                clusters_to_parse.append(plain_nfs_name)
+            for cluster_name in clusters_to_parse:
+                try:
+                    log.info(
+                        "Collecting NFS logs via nfs_log_parser for cluster '%s'",
+                        cluster_name,
+                    )
+                    nfs_log_parser(
+                        client=client_node,
+                        nfs_node=nfs_node,
+                        nfs_name=cluster_name,
+                    )
+                except Exception as log_ex:
+                    log.warning(
+                        "nfs_log_parser failed for cluster '%s' (non-fatal): %s",
+                        cluster_name,
+                        log_ex,
+                    )
+
+            log.info("Full TLS stack cleanup (umount, exports, cluster, subvolumes)")
+            try:
+                if stunnel_op:
+                    stop_stunnel_client(client_node)
+                if tcpdump_self_contained and plain_nfs_name is not None:
+                    full_tls_stack_cleanup(client_node, plain_nfs_name, fs_name=fs_name)
+                if nfs_name is not None:
+                    full_tls_stack_cleanup(client_node, nfs_name, fs_name=fs_name)
+            except Exception as ex:
+                log.error("Cleanup failed: %s", ex)

@@ -26,6 +26,50 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
 )
 from utility.gklm_client.gklm_client import build_gklm_client
 
+# GKLM needs wall-clock settle time after NFS apply/SIGHUP before KMIP certs
+# are queryable via REST. Prefer a named wait over an opaque magic sleep.
+_GKLM_CERT_SETTLE_SEC = 30
+
+
+def is_gklm_auth_error(exc) -> bool:
+    """True if the exception indicates an expired/logged-out GKLM REST session."""
+    msg = str(exc)
+    return (
+        "401" in msg
+        or "CTGKM6004E" in msg
+        or "not authenticated" in msg.lower()
+        or "already logged out" in msg.lower()
+    )
+
+
+def ensure_gklm_login(gklm_rest_client):
+    """
+    Re-authenticate the GKLM REST client.
+
+    Call before GKLM API work after long NFS waits, or after detecting a 401 logout.
+    """
+    log.info("Re-authenticating GKLM REST client (login)")
+    gklm_rest_client.login()
+    log.info("GKLM REST client login successful")
+
+
+def gklm_api_call(gklm_rest_client, func, *args, **kwargs):
+    """
+    Invoke a GKLM REST callable; on session logout (401), login once and retry.
+    """
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        if not is_gklm_auth_error(e):
+            raise
+        log.warning(
+            "GKLM session expired during %s; logging in again and retrying: %s",
+            getattr(func, "__name__", repr(func)),
+            e,
+        )
+        ensure_gklm_login(gklm_rest_client)
+        return func(*args, **kwargs)
+
 
 def remove_gklm_kmip_client_and_legacy_certs(
     gklm_rest_client,
@@ -279,6 +323,13 @@ def create_nfs_instance_for_byok(
         nfs_nodes=[nfs_node],
     )
     log.info("NFS Ganesha BYOK service creation successful")
+    # Allow GKLM time to parse/register the KMIP certificates after apply/SIGHUP.
+    # These create helpers do not receive a GKLM client/alias to poll against.
+    log.info(
+        "Waiting %ss for GKLM to parse certificates after BYOK NFS cluster create/update",
+        _GKLM_CERT_SETTLE_SEC,
+    )
+    time.sleep(_GKLM_CERT_SETTLE_SEC)
 
 
 def setup_gklm_infrastructure(nfs_nodes, gklm_ip, gklm_hostname):
@@ -372,12 +423,20 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
         gklm_cert_alias (str): Certificate alias to delete.
     """
     log.info("Starting GKLM resource cleanup.")
+    try:
+        ensure_gklm_login(gklm_rest_client)
+    except Exception as e:
+        log.warning("GKLM re-login before cleanup failed: %s", e)
 
     # Step 1: Delete symmetric keys associated with the client
     log.info("Retrieving symmetric key objects for client '%s'.", gkml_client_name)
     ids = []
     try:
-        objects = gklm_rest_client.objects.list_client_objects(gkml_client_name)
+        objects = gklm_api_call(
+            gklm_rest_client,
+            gklm_rest_client.objects.list_client_objects,
+            gkml_client_name,
+        )
         ids = [obj["uuid"] for obj in objects if obj.get("uuid")]
         log.info("Found %d symmetric key object(s) to delete.", len(ids))
     except Exception as e:
@@ -390,7 +449,9 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
     for key_id in ids:
         try:
             log.debug("Deleting symmetric key object: %s", key_id)
-            gklm_rest_client.objects.delete_object(key_id)
+            gklm_api_call(
+                gklm_rest_client, gklm_rest_client.objects.delete_object, key_id
+            )
         except Exception as e:
             log.warning("Failed to delete symmetric key '%s': %s", key_id, str(e))
     if ids:
@@ -401,7 +462,11 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
     # Step 2: Delete the certificate associated with the client
     log.info("Deleting GKLM certificate alias: '%s'", gklm_cert_alias)
     try:
-        gklm_rest_client.certificates.delete_certificate(gklm_cert_alias)
+        gklm_api_call(
+            gklm_rest_client,
+            gklm_rest_client.certificates.delete_certificate,
+            gklm_cert_alias,
+        )
         log.info("Certificate alias '%s' deleted successfully.", gklm_cert_alias)
     except Exception as e:
         log.warning(
@@ -411,7 +476,9 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
     # Step 3: Delete the GKLM client itself
     log.info("Deleting GKLM client: '%s'", gkml_client_name)
     try:
-        gklm_rest_client.clients.delete_client(gkml_client_name)
+        gklm_api_call(
+            gklm_rest_client, gklm_rest_client.clients.delete_client, gkml_client_name
+        )
         log.info("Client '%s' deleted successfully.", gkml_client_name)
     except Exception as e:
         log.warning("Failed to delete client '%s': %s", gkml_client_name, str(e))
@@ -729,6 +796,13 @@ def create_multiple_nfs_instance_for_byok(
                 f"Successfully created {replication_number} BYOK-enabled "
                 f"NFS Ganesha instance(s) using base service_id '{spec.get('service_id')}'"
             )
+            # Allow GKLM time to parse/register the KMIP certificates after apply.
+            # These create helpers do not receive a GKLM client/alias to poll against.
+            log.info(
+                "Waiting %ss for GKLM to parse certificates after multi BYOK NFS create",
+                _GKLM_CERT_SETTLE_SEC,
+            )
+            time.sleep(_GKLM_CERT_SETTLE_SEC)
             return result
         log.error(" Failed to create BYOK-enabled NFS Ganesha instances.")
         return 1

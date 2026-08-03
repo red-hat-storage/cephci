@@ -9,6 +9,7 @@ import os
 import random
 import re
 import secrets
+import shlex
 import string
 import time
 
@@ -283,6 +284,8 @@ class CephFSCommonUtils(FsUtils):
                     mnt_client.exec_command(
                         sudo=True,
                         cmd=cmd,
+                        check_ec=False,
+                        timeout=90,
                     )
                     if mnt_type == "nfs":
                         nfs_export = mount_details[sv_name][mnt_type]["nfs_export"]
@@ -621,15 +624,76 @@ class CephFSCommonUtils(FsUtils):
         :param mount_path_prefix: Path prefix to be unmounted and removed
         """
         try:
-            client.exec_command(
+            if not mount_path_prefix or not str(mount_path_prefix).startswith("/"):
+                log.error(
+                    "Refusing client_mount_cleanup with unsafe mount_path_prefix=%r",
+                    mount_path_prefix,
+                )
+                return 1
+
+            # Resolve actual mount targets first so we never hang on a shell glob
+            # against a stuck ceph/fuse mount for the full 600s default timeout.
+            out, _ = client.exec_command(
                 sudo=True,
-                cmd=f"umount -l {mount_path_prefix}*/",
+                cmd=(
+                    f"mount | awk '{{print $3}}' | grep '^{mount_path_prefix}' || true"
+                ),
+                check_ec=False,
+                timeout=30,
             )
-            log.info(f"Successfully unmounted on {client.node.hostname}")
+            mount_points = [
+                mp.strip()
+                for mp in (out or "").splitlines()
+                if mp.strip() and mp.strip().startswith(mount_path_prefix)
+            ]
+            if not mount_points:
+                log.info(
+                    "No mounts matching %s* on %s",
+                    mount_path_prefix,
+                    client.node.hostname,
+                )
+            for mp in mount_points:
+                log.info("Lazy-unmounting %s on %s", mp, client.node.hostname)
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"timeout 60 umount -l {shlex.quote(mp)}",
+                    check_ec=False,
+                    timeout=90,
+                )
+            log.info(
+                "Unmount pass complete: attempted %d mount(s) on %s",
+                len(mount_points),
+                client.node.hostname,
+            )
+
+            # Re-query before rm so a silent umount failure cannot hang on FUSE.
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=(
+                    f"mount | awk '{{print $3}}' | grep '^{mount_path_prefix}' || true"
+                ),
+                check_ec=False,
+                timeout=30,
+            )
+            still_mounted = [
+                mp.strip()
+                for mp in (out or "").splitlines()
+                if mp.strip() and mp.strip().startswith(mount_path_prefix)
+            ]
+            if still_mounted:
+                log.warning(
+                    "Skipping rm of %s*: still mounted on %s: %s",
+                    mount_path_prefix,
+                    client.node.hostname,
+                    still_mounted,
+                )
+                return 1
 
             client.exec_command(
                 sudo=True,
-                cmd=f"rm -rf {mount_path_prefix}*/",
+                cmd=f"rm -rf -- {shlex.quote(mount_path_prefix)}*/",
+                check_ec=False,
+                timeout=120,
             )
             log.info(f"Successfully deleted mount path on {client.node.hostname}")
             return 0
@@ -639,6 +703,11 @@ class CephFSCommonUtils(FsUtils):
                 return 1
             elif "not mounted" in str(ex):
                 return 0
+            log.error("Client mount cleanup failed: %s", str(ex))
+            return 1
+        except Exception as ex:
+            log.error("Client mount cleanup failed: %s", str(ex))
+            return 1
 
     def rolling_mds_failover(self, client, fs_name, mds_fail_cnt=3):
         """
