@@ -97,10 +97,10 @@ class NVMeInitiator(Initiator):
         nqns_discovered, _ = self.discover(**_disc_cmd)
         LOG.debug(nqns_discovered)
 
-        # connect-all
+        # connect-all (CLI layer also defaults --persistent)
         connect_all = {}
         if config["nqn"] == "connect-all":
-            connect_all = {"ctrl-loss-tmo": 3600}
+            connect_all = {"ctrl-loss-tmo": 3600, "persistent": True}
             # Add authentication parameters based on auth_mode
             if self.auth_mode == "bidirectional":
                 if not self.host_key or not self.subsys_key:
@@ -124,6 +124,13 @@ class NVMeInitiator(Initiator):
                     )
                 cmd_args.update({"dhchap-secret": self.host_key})
             cmd = {**discovery_port, **cmd_args, **connect_all}
+            # Persist discovery endpoint for nvmf-autoconnect after reboot
+            self.configure_discovery_conf(
+                traddr=cmd_args["traddr"],
+                trsvcid=self.discovery_port,
+                transport="tcp",
+            )
+            self.enable_nvmf_autoconnect()
             self.connect_all(**cmd)
             self.list()
             return
@@ -138,6 +145,15 @@ class NVMeInitiator(Initiator):
             allowed_subsystems = set(subsystems)
         else:
             allowed_subsystems = {subsystem}
+
+        # Still record discovery controller for reboot autoconnect
+        self.configure_discovery_conf(
+            traddr=cmd_args["traddr"],
+            trsvcid=self.discovery_port,
+            transport="tcp",
+        )
+        self.enable_nvmf_autoconnect()
+
         sub_endpoints = []
         discovered_records = json.loads(nqns_discovered)["records"]
 
@@ -195,6 +211,7 @@ class NVMeInitiator(Initiator):
                 "traddr": sub_endpoint["traddr"],
                 "trsvcid": sub_endpoint["trsvcid"],
                 "nqn": sub_endpoint["subnqn"],
+                "persistent": True,
             }
             if self.auth_mode == "bidirectional":
                 if not self.host_key or not self.subsys_key:
@@ -286,6 +303,21 @@ class NVMeInitiator(Initiator):
         # Update io_args if io_type is provided
         if kwargs.get("io_type"):
             io_args.update({"io_type": kwargs.get("io_type")})
+
+        # Forward data-integrity options to run_fio
+        if kwargs.get("verify"):
+            io_args.update({"verify": kwargs.get("verify")})
+        if kwargs.get("verify_fatal") is not None:
+            io_args.update({"verify_fatal": kwargs.get("verify_fatal")})
+        if kwargs.get("bs"):
+            io_args.update({"bs": kwargs.get("bs")})
+        # Customer-workload knobs (DB multi-queue, O_DIRECT, sync cadence)
+        if kwargs.get("num_jobs") is not None:
+            io_args.update({"num_jobs": kwargs.get("num_jobs")})
+        if kwargs.get("fsync") is not None:
+            io_args.update({"fsync": kwargs.get("fsync")})
+        if kwargs.get("direct") is not None:
+            io_args.update({"direct": kwargs.get("direct")})
 
         # Check whether to execute blkdiscard
         # For read only namespaces, blkdiscard is not required

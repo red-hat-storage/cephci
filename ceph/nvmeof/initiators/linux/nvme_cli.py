@@ -15,13 +15,71 @@ class NVMeCLI(Cli):
     """
 
     def configure(self):
-        """Install NVME CLI."""
+        """Install NVMe CLI and enable boot-time fabrics + autoconnect.
+
+        Customer-like initiator reboot reconnect requires:
+          1. ``nvme-fabrics`` loaded at boot (modules-load.d)
+          2. ``/etc/nvme/discovery.conf`` populated (done on connect)
+          3. ``nvmf-autoconnect.service`` enabled
+          4. ``nvme connect-all --persistent`` (see ``connect_all``)
+        """
         configure_cmds = [
             ("yum install -y nvme-cli fio", True),
             ("modprobe nvme-fabrics", True),
+            (
+                "bash -c 'echo nvme-fabrics > /etc/modules-load.d/nvme-fabrics.conf'",
+                True,
+            ),
+            ("mkdir -p /etc/nvme", True),
         ]
         for cmd in configure_cmds:
             self.execute(*cmd)
+        self.enable_nvmf_autoconnect()
+
+    def enable_nvmf_autoconnect(self):
+        """Enable systemd unit that runs connect-all at boot from discovery.conf."""
+        host = getattr(self, "node", None) or getattr(self, "ctx", None)
+        hostname = getattr(host, "hostname", host)
+        try:
+            self.execute(
+                "systemctl enable nvmf-autoconnect.service",
+                True,
+            )
+            LOG.info("Enabled nvmf-autoconnect.service on %s", hostname)
+        except Exception as err:
+            LOG.warning(
+                "Could not enable nvmf-autoconnect.service on %s: %s",
+                hostname,
+                err,
+            )
+
+    def configure_discovery_conf(self, traddr, trsvcid=8009, transport="tcp"):
+        """
+        Persist discovery controller endpoint in /etc/nvme/discovery.conf.
+
+        Used by ``nvmf-autoconnect.service`` (``nvme connect-all --context=autoconnect``)
+        so namespaces reappear after initiator reboot without a manual discover/connect.
+
+        Args:
+            traddr: Discovery / gateway IP
+            trsvcid: Discovery port (default 8009)
+            transport: Fabric transport (default tcp)
+        """
+        if not traddr:
+            raise ValueError("traddr is required for discovery.conf")
+        line = f"--transport={transport} --traddr={traddr} --trsvcid={trsvcid}"
+        self.execute("mkdir -p /etc/nvme", True)
+        # Idempotent append of discovery controller endpoint
+        self.execute(
+            (
+                'bash -c "'
+                f"grep -qxF '{line}' /etc/nvme/discovery.conf 2>/dev/null || "
+                f"echo '{line}' >> /etc/nvme/discovery.conf\""
+            ),
+            True,
+        )
+        LOG.info("Ensured /etc/nvme/discovery.conf contains: %s", line)
+        return line
 
     def gen_dhchap_key(self, **kwargs):
         """Generates the TLS key.
@@ -61,6 +119,7 @@ class NVMeCLI(Cli):
                 trsvcid: Transport port number  # Transport port number
                 nqn: Subsystem NQN Id           # Subsystem NQN
         """
+        kwargs.setdefault("persistent", True)
         return self.execute(
             cmd=f"nvme connect {config_dict_to_string(kwargs)}",
             sudo=True,
@@ -149,7 +208,24 @@ class NVMeCLI(Cli):
         return self.execute(cmd="nvme disconnect-all", sudo=True)
 
     def connect_all(self, **kwargs):
-        """Connects all controllers connected to subsystems."""
+        """Connects all controllers to discovered subsystems.
+
+        Always includes ``--persistent`` so connections are recorded for
+        reconnect after initiator reboot / nvme connect-all -P semantics.
+        Pass ``persistent=False`` to opt out for a specific call.
+
+        When ``traddr`` is provided, also updates ``/etc/nvme/discovery.conf``
+        and ensures ``nvmf-autoconnect.service`` is enabled for boot reconnect.
+        """
+        kwargs.setdefault("persistent", True)
+        traddr = kwargs.get("traddr")
+        if traddr:
+            self.configure_discovery_conf(
+                traddr=traddr,
+                trsvcid=kwargs.get("trsvcid", 8009),
+                transport=kwargs.get("transport", "tcp"),
+            )
+            self.enable_nvmf_autoconnect()
         return self.execute(
             cmd=f"nvme connect-all {config_dict_to_string(kwargs)}", sudo=True
         )

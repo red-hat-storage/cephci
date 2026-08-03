@@ -139,7 +139,8 @@ class NVMeCLI(Cli):
         return self.execute(cmd="nvme disconnect-all", sudo=True)
 
     def connect_all(self, **kwargs):
-        """Connects all controllers connected to subsystems."""
+        """Connects all controllers to discovered subsystems."""
+        kwargs.setdefault("persistent", True)
         return self.execute(
             cmd=f"nvme connect-all {config_dict_to_string(kwargs)}", sudo=True
         )
