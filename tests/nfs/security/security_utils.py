@@ -385,20 +385,40 @@ def assert_mount_failed(mount_result, context, client_node=None, mount_path=None
 
 
 def assert_tlshd_handshake_failure(tlshd_status, context):
-    """Raise if recent tlshd journal output does not show a TLS handshake failure."""
+    """Raise if recent tlshd journal output does not show a TLS handshake failure.
+
+    Accept common ktls-utils / gnutls failure signals. When Ganesha TLS is broken
+    (e.g. corrupted server certs), tlshd often logs handshake timeout or unexpected
+    TLS packets rather than a literal 'Handshake ... failed' line. With a mismatched
+    client trust anchor, tlshd typically logs 'Certificate signer not found' instead.
+    """
     status = str(tlshd_status or "")
     status_lower = status.lower()
-    if "handshake" in status_lower and "failed" in status_lower:
+    if "handshake" in status_lower and (
+        "failed" in status_lower or "timeout" in status_lower
+    ):
         return
     if "eacces" in status_lower:
         return
     if "certificate verify failed" in status_lower:
         return
+    if "certificate signer not found" in status_lower:
+        return
     if "unable to get local issuer" in status_lower:
+        return
+    if "unexpected tls packet" in status_lower:
+        return
+    if "gnutls" in status_lower and (
+        "error" in status_lower
+        or "unexpected" in status_lower
+        or "failed" in status_lower
+        or "(-" in status_lower  # e.g. gnutls: ... (-15)
+    ):
         return
     raise OperationFailedError(
         f"{context}: tlshd status did not report a TLS handshake failure "
-        f"(expected 'Handshake ... failed' or EACCES in journal)"
+        f"(expected handshake failed/timeout, certificate signer not found, "
+        f"gnutls error, or EACCES in journal)"
     )
 
 

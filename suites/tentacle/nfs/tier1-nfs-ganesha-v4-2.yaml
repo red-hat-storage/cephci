@@ -307,6 +307,9 @@ tests:
         number_of_clusters : 2
         timeout : 100
         nfs_instance_number: 6
+        # Cephadm defaults cluster_qos_port to 31311; concurrent instances on the
+        # same nfs hosts collide unless each service gets a unique qos port.
+        enable_cluster_qos_port: true
         spec:
           service_type: nfs
           service_id: nfs
