@@ -1,0 +1,209 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure the Linux SMB client
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy an SMB cluster with the remote-control service
+      desc: Create SMB shares and enable local Unix-socket remote control.
+      module: smb_remote_control_setup.py
+      polarion-id: CEPH-83632924
+      abort-on-fail: true
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - { source_type: resource, ref: ug1 }
+            placement:
+              label: smb
+            remote_control:
+              locally_enabled: true
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - { name: user1, password: passwd }
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+
+  - test:
+      name: Verify the local remote-control configuration
+      desc: Verify remote_control.locally_enabled using ceph smb show.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632925
+      config:
+        smb_cluster_id: smb1
+        operation: verify_configuration
+
+  - test:
+      name: Verify the remotectl sidecar container
+      desc: Verify the remotectl sidecar using podman ps.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632926
+      config:
+        smb_cluster_id: smb1
+        operation: verify_sidecar
+
+  - test:
+      name: List ceph-smb-ctl remote-control commands
+      desc: Verify that the Ceph container provides the expected ceph-smb-ctl commands.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632927
+      config:
+        smb_cluster_id: smb1
+        operation: help
+
+  - test:
+      name: Get SMB server information using the local Unix socket
+      desc: Validate ceph-smb-ctl info against the local SMB service.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632928
+      config:
+        smb_cluster_id: smb1
+        operation: info
+
+  - test:
+      name: Get SMB status using the local Unix socket
+      desc: Validate the JSON status returned by ceph-smb-ctl.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632929
+      config:
+        smb_cluster_id: smb1
+        operation: status
+
+  - test:
+      name: Select an SMB cluster using ceph-smb-ctl
+      desc: Validate explicit local Unix-socket selection with the --cluster option.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632930
+      config:
+        smb_cluster_id: smb1
+        operation: status
+        select_cluster: true
+
+  - test:
+      name: Dump the SMB configuration using the local Unix socket
+      desc: Validate that ceph-smb-ctl can retrieve the Samba configuration.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632931
+      config:
+        smb_cluster_id: smb1
+        operation: config_dump
+        config_format: samba
+
+  - test:
+      name: Get and set an SMB subsystem debug level
+      desc: Change the smbd debug level, verify it, and restore the original value.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632932
+      config:
+        smb_cluster_id: smb1
+        operation: debug_level
+        subsystem: smbd
+        debug_level: 5
+
+  - test:
+      name: Terminate an SMB client connection using ceph-smb-ctl
+      desc: Mount a share and terminate that client connection by IP address.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632933
+      config:
+        smb_cluster_id: smb1
+        operation: kill_client_connection
+        cifs_mount_point: /mnt/ceph-smb-ctl
+
+  - test:
+      name: Close an active SMB share using ceph-smb-ctl
+      desc: Validate close-share while a client is connected to the selected share.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632934
+      config:
+        smb_cluster_id: smb1
+        operation: close_share
+        cifs_mount_point: /mnt/ceph-smb-ctl
+        smb_cluster_cleanup: true
