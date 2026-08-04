@@ -36,6 +36,28 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     installer = ceph_cluster.get_nodes(role="installer")[0]
     action = config.get("action")
+    if action == "bindings_ls":
+        # expected certs and keys for a given entity under the service scope
+        _entity = config.get("entity")
+        expected_certs = config.get("expected_certs", [])
+        expected_keys = config.get("expected_keys", [])
+        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
+        entity_bindings = out.get("service", {}).get(_entity, {})
+        actual_certs = entity_bindings.get("certs", [])
+        actual_keys = entity_bindings.get("keys", [])
+        missing_certs = [c for c in expected_certs if c not in actual_certs]
+        missing_keys = [k for k in expected_keys if k not in actual_keys]
+        if missing_certs:
+            raise OperationFailedError(
+                f"Missing certs in certmgr bindings for '{_entity}': {missing_certs}"
+            )
+        if missing_keys:
+            raise OperationFailedError(
+                f"Missing keys in certmgr bindings for '{_entity}': {missing_keys}"
+            )
+        log.info(
+            f"certmgr bindings ls: all expected certs and keys present for '{_entity}'"
+        )
     if action == "ls":
         # get the certificate name
         _cert_name = config.get("cert")
@@ -62,8 +84,8 @@ def run(ceph_cluster, **kw):
         # get the node where the cert needs to be set
         _node = config.get("node")
         hostname = get_node_by_id(ceph_cluster, _node).hostname
-        # get the cert name from entity list
-        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
+        # get the cert name from bindings list
+        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
         _cert_name = out[_scope][_entity]["certs"][0]
         # check if user has provided value for cert/key or needs to generate ssl certificate
         generate_ssl_cert = config.get("generate_ssl_cert")
@@ -125,9 +147,12 @@ def run(ceph_cluster, **kw):
         if _scope == "host":
             _node = config.get("node")
             hostname = get_node_by_id(ceph_cluster, _node).hostname
-        # get the cert name from entity list
-        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
-        _cert_name = out[_scope][_entity]["certs"][0]
+        # use explicit cert_name from config if provided, otherwise fall back to
+        # the first cert in the entity's binding list
+        _cert_name = config.get("cert_name")
+        if not _cert_name:
+            out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
+            _cert_name = out[_scope][_entity]["certs"][0]
         # get the flags if any
         no_exception_when_missing = config.get("no_exception_when_missing", False)
         # retrieve the certificate
@@ -170,8 +195,8 @@ def run(ceph_cluster, **kw):
         if _scope == "host":
             _node = config.get("node")
             hostname = get_node_by_id(ceph_cluster, _node).hostname
-        # get the cert name from entity list
-        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("entity"))
+        # get the cert name from bindings list
+        out = yaml.safe_load(CephAdm(installer).ceph.orch.certmgr.ls("bindings"))
         _cert_name = out[_scope][_entity]["certs"][0]
         # remove the certificate
         out = CephAdm(installer).ceph.orch.certmgr.rm_cert(

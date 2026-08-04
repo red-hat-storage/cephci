@@ -18,13 +18,14 @@ class CertMgr(Cli):
         expression=None,
     ):
         """
-        List hosts
+        List certmgr items
         Args:
             value (str): item to be listed
                 Supported values:
                     cert (str): list all available certificates managed by the orchestrator
                     key (str): list all private keys associated with managed certificates
                     entity (str): list all entities associated with certificates
+                    bindings (str): list all cert/key bindings per service/host entity
             show-details (bool): whether to show detailed information
             include-cephadm-signed (bool): whether to inlcude certificates signed by cephadm
             filter-by (bool): this argument provides advanced certificates filtering.
