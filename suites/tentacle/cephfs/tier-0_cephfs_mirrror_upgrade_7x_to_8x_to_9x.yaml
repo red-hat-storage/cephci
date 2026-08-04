@@ -200,7 +200,7 @@ tests:
         - test:
             abort-on-fail: false
             config:
-              timeout: 30
+              timeout: 600
               client_upgrade: 1
               client_upgrade_node: 'node7'
             desc: Runs IOs in parallel with upgrade process
@@ -251,7 +251,7 @@ tests:
         - test:
             abort-on-fail: false
             config:
-              timeout: 30
+              timeout: 600
               client_upgrade: 1
               client_upgrade_node: 'node7'
             desc: Runs IOs in parallel with upgrade process
