@@ -82,6 +82,7 @@ tests:
           - resource_type: ceph.smb.cluster
             cluster_id: smb1
             auth_mode: user
+            clustering: always
             user_group_settings:
               - { source_type: resource, ref: ug1 }
             placement:
@@ -139,6 +140,15 @@ tests:
         operation: help
 
   - test:
+      name: Exercise ceph-smb-ctl global options
+      desc: Validate quiet, verbose, and custom gRPC header options locally.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632935
+      config:
+        smb_cluster_id: smb1
+        operation: global_options
+
+  - test:
       name: Get SMB server information using the local Unix socket
       desc: Validate ceph-smb-ctl info against the local SMB service.
       module: smb_ceph_smb_ctl_operations.py
@@ -157,6 +167,15 @@ tests:
         operation: status
 
   - test:
+      name: Get CTDB status using the local Unix socket
+      desc: Validate CTDB status for the clustered SMB deployment.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632936
+      config:
+        smb_cluster_id: smb1
+        operation: ctdb_status
+
+  - test:
       name: Select an SMB cluster using ceph-smb-ctl
       desc: Validate explicit local Unix-socket selection with the --cluster option.
       module: smb_ceph_smb_ctl_operations.py
@@ -167,6 +186,28 @@ tests:
         select_cluster: true
 
   - test:
+      name: Select an SMB cluster using its service name
+      desc: Validate the smb.cluster selector form over the local Unix socket.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632937
+      config:
+        smb_cluster_id: smb1
+        operation: status
+        select_cluster: true
+        cluster_selector: service_name
+
+  - test:
+      name: Select an SMB cluster using its FSID and service name
+      desc: Validate the FSID/smb.cluster selector form over the local Unix socket.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632938
+      config:
+        smb_cluster_id: smb1
+        operation: status
+        select_cluster: true
+        cluster_selector: fsid_service_name
+
+  - test:
       name: Dump the SMB configuration using the local Unix socket
       desc: Validate that ceph-smb-ctl can retrieve the Samba configuration.
       module: smb_ceph_smb_ctl_operations.py
@@ -174,17 +215,69 @@ tests:
       config:
         smb_cluster_id: smb1
         operation: config_dump
-        config_format: samba
+        config_source: samba
+
+  - test:
+      name: Get the SMB configuration SHA256 digest
+      desc: Validate SHA256 output for the Samba configuration source.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632939
+      config:
+        smb_cluster_id: smb1
+        operation: config_dump
+        config_source: samba
+        sha256: true
+
+  - test:
+      name: List configured SMB shares using the local Unix socket
+      desc: Verify ceph-smb-ctl reports every share configured on the SMB server.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632940
+      config:
+        smb_cluster_id: smb1
+        operation: config_shares_list
+        config_source: samba
+
+  - test:
+      name: Get the SMB configuration summary using the local Unix socket
+      desc: Verify ceph-smb-ctl returns a stable digest for unchanged configuration.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632941
+      config:
+        smb_cluster_id: smb1
+        operation: config_summary
+        config_source: samba
+
+  - test:
+      name: Get the SMB configuration summary SHA256 digest
+      desc: Verify a stable SHA256 digest for unchanged Samba configuration.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632942
+      config:
+        smb_cluster_id: smb1
+        operation: config_summary
+        config_source: samba
+        sha256: true
+
+  - test:
+      name: Use a case-insensitive SMB configuration source
+      desc: Verify that an uppercase SAMBA source is accepted.
+      module: smb_ceph_smb_ctl_operations.py
+      polarion-id: CEPH-83632943
+      config:
+        smb_cluster_id: smb1
+        operation: config_summary
+        config_source: SAMBA
 
   - test:
       name: Get and set an SMB subsystem debug level
-      desc: Change the smbd debug level, verify it, and restore the original value.
+      desc: Change the smb debug level, verify it, and restore the original value.
       module: smb_ceph_smb_ctl_operations.py
       polarion-id: CEPH-83632932
       config:
         smb_cluster_id: smb1
         operation: debug_level
-        subsystem: smbd
+        subsystem: smb
         debug_level: 5
 
   - test:
