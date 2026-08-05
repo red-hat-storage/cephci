@@ -306,7 +306,8 @@ def op_tls_deploy_mount_verify(client_node, nfs_node, config, nfs_name):
         config,
         "tls_log_substrings",
         "tc_01_log_expect",
-        default=["AUTH_TLS", "TLS"],
+        # Successful kTLS mount: Ganesha logs connection established, not AUTH_TLS.
+        default=["TLS connection established", "[TLS]"],
     )
 
     client_export_mount_dict = create_export_and_mount_for_existing_nfs_cluster(
@@ -467,7 +468,7 @@ def op_tls_logs_openssl_probe(installer_node, client_node, nfs_node, config, nfs
         "tls_log_substrings",
         "tc_03_log_expect",
         "tc_01_log_expect",
-        default=["AUTH_TLS", "TLS"],
+        default=["TLS connection established", "[TLS]"],
     )
     verify_tls_strings_in_nfs_logs(client_node, nfs_node, nfs_name, expect_logs)
 

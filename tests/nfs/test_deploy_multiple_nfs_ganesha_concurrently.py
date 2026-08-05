@@ -22,7 +22,10 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     original_config = config.get("spec", None)
     timeout = int(config.get("timeout", 300))
-    # cluster_qos_port is Tentacle+ only; enable via suite config when needed
+    # Cephadm reserves cluster_qos_port (default 31311) for every NFS service.
+    # Concurrent instances sharing nfs hosts collide on that default unless each
+    # gets a unique qos port. Enable via suite config on Tentacle+ (field is
+    # Tentacle+ only); Squid suites leave this unset.
     use_cluster_qos = bool(
         config.get("enable_cluster_qos_port")
         or (original_config or {}).get("spec", {}).get("cluster_qos_port") is not None

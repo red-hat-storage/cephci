@@ -484,9 +484,11 @@ tests:
         clients: 1
         nfs_cluster_name: cephfs-nfs-tls
         operation: tls_deploy_mount_verify
+        # Happy-path kTLS mount logs "TLS connection established"; AUTH_TLS is
+        # probe/STARTTLS path only and is not present on a successful mount.
         tls_log_substrings:
-          - AUTH_TLS
-          - TLS
+          - TLS connection established
+          - "[TLS]"
         strict_tls_log_check: true
 
   - test:
