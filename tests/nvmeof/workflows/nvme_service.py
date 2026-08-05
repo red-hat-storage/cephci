@@ -116,6 +116,13 @@ class NVMeService:
         if self.inband_auth_mode:
             spec["encryption"] = True
 
+        # Add support for enable_encryption and encryption_key_path params
+        # Refer https://ibm-ceph.atlassian.net/browse/IBMCEPH-16168
+        if self.config.get("enable_encryption", False):
+            spec["enable_encryption"] = True
+        if self.config.get("encryption_key_path", False):
+            spec["encryption_key_path"] = True
+
         # Add group if specified
         if self.group:
             spec["spec"]["group"] = self.group
