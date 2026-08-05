@@ -1,0 +1,374 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_migration_key_import_9_2.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/tentacle/rbd/5-node-2-clusters.yaml
+#    No of Clusters : 2
+#    Each cluster configuration
+#    5-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MGR, 3 OSD, 1 Client
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client (also NVMe-oF Gateway / Client-B on destination)
+#     Node3 - OSD, MON, MGR
+#     Node4 - OSD, MON
+#     Node5 - OSD, rbd-mirror
+#
+# Objective:
+#    RBD native key import with mon_host 9.2 feature validation.
+#    All Polarion cases are implemented in one module
+#    (test_rbd_native_import_mon_host_inline_key.py) and selected via
+#    config.operation — same pattern as tier-2_non_default_namespace_mirroring.yaml:
+#    - CEPH-83632846: native import with mon_host and inline CephX key
+#    - CEPH-83632847: native import with mon_host and config:// credential reference
+#    - CEPH-83632851: source-backed reads from NVMe-oF gateway Client-B without
+#      local source ceph.conf/keyring (persisted migration metadata)
+#    - CEPH-83632848: sparse native import preserves used size and zero holes
+#    - CEPH-83632849: native import of LUKS/LUKS2 encrypted images with mon_host
+#    - CEPH-83632850: negative validation of mon_host/key native source-spec
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisites
+      desc: >
+        Setup phase to deploy the required pre-requisites
+        for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: Two ceph cluster deployment for RBD native import 9.2 testing
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy two ceph cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the client node for both the clusters
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+
+  - test:
+      name: Test native import with mon_host and key
+      desc: Verify RBD native import-only migration using mon_host and inline Ceph key
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632846
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632846
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: src_image
+              target_image: target_image
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+              source_pattern_size: 1G
+              source_pattern_a_offset: "0"
+              source_pattern_b_offset: 6G
+              target_write_offset: 2G
+              target_write_size: 256M
+              active_io_offset: 4G
+              active_io_size: 1G
+              active_io_rate: 64M
+            ec_pool_config:
+              src_pool: ec_src_pool
+              dst_pool: ec_dst_pool
+              src_image: ec_src_image
+              target_image: ec_target_image
+              src_snap: ec_snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+              source_pattern_size: 1G
+              source_pattern_a_offset: "0"
+              source_pattern_b_offset: 6G
+              target_write_offset: 2G
+              target_write_size: 256M
+              active_io_offset: 4G
+              active_io_size: 1G
+              active_io_rate: 64M
+
+  - test:
+      name: Test native import with mon_host and config-key path
+      desc: >
+        Verify cross-cluster native import-only RBD migration using
+        mon_host and config:// credential reference
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632847
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632847
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: src_image
+              target_image: target_image
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              config_key_path: rbd/native/source_client_key
+              image_size: 10G
+              source_pattern_size: 1G
+              source_pattern_a_offset: "0"
+              source_pattern_b_offset: 6G
+              target_write_offset: 2G
+              target_write_size: 256M
+              active_io_offset: 4G
+              active_io_size: 1G
+              active_io_rate: 64M
+            ec_pool_config:
+              src_pool: ec_src_pool
+              dst_pool: ec_dst_pool
+              src_image: ec_src_image
+              target_image: ec_target_image
+              src_snap: ec_snap1
+              source_client_name: client.rbd-migration
+              config_key_path: rbd/native/source_client_key
+              image_size: 10G
+              source_pattern_size: 1G
+              source_pattern_a_offset: "0"
+              source_pattern_b_offset: 6G
+              target_write_offset: 2G
+              target_write_size: 256M
+              active_io_offset: 4G
+              active_io_size: 1G
+              active_io_rate: 64M
+
+  - test:
+      name: Test native import sparse image preserves used size
+      desc: >
+        Verify sparse native import-only migration keeps used size close to
+        source and zero-fills unwritten holes across prepare/execute/commit.
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632848
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632848
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: sparse_img
+              target_image: sparse_target
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+              max_used_ratio: 0.5
+              max_inflation_ratio: 1.5
+            ec_pool_config:
+              src_pool: ec_src_pool
+              dst_pool: ec_dst_pool
+              src_image: ec_sparse_img
+              target_image: ec_sparse_target
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+              max_used_ratio: 0.5
+              max_inflation_ratio: 1.5
+
+  - test:
+      name: Test native import NVMe-oF gateway Client-B source-backed reads
+      desc: >
+        Verify prepared import-only target reads from destination NVMe-oF
+        gateway Client-B without source conf/keyring, including after restart.
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632851
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632851
+            nvme_config:
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_nodes:
+                - node2
+              gw_group: gw-group1
+              install: true
+              subsystem_nqn: nqn.2016-06.io.spdk:rbd-native-import
+              listener_port: 4420
+              allow_host: "*"
+              serial: "1"
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: src_image
+              target_image: target_image
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+
+  - test:
+      name: Test native import of encrypted RBD image with mon_host
+      desc: >
+        Verify import-only native migration of LUKS/LUKS2 encrypted RBD images
+        using mon_host and inline CephX key
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632849
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632849
+            encryption_type:
+              - luks1
+              - luks2
+            fio:
+              size: 100M
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: encrypted_img
+              target_image: encrypted_target
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 2G
+              target_write_size: 50M
+            ec_pool_config:
+              src_pool: ec_src_pool
+              dst_pool: ec_dst_pool
+              src_image: ec_encrypted_img
+              target_image: ec_encrypted_target
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 2G
+              target_write_size: 50M
+
+  - test:
+      name: Test native import mon_host/key negative validation
+      desc: >
+        Verify migration prepare --import-only fails cleanly for invalid or
+        mutually exclusive mon_host/key native source-spec fields
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632850
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632850
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: src_image
+              target_image: neg_target
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              limited_client_name: client.rbd-migration-limited
+              image_size: 1G
+              source_pattern_size: 64M
+            ec_pool_config:
+              src_pool: ec_src_pool
+              dst_pool: ec_dst_pool
+              src_image: ec_src_image
+              target_image: ec_neg_target
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              limited_client_name: client.rbd-migration-limited
+              image_size: 1G
+              source_pattern_size: 64M
