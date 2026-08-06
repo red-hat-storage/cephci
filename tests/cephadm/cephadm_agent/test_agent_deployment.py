@@ -31,9 +31,7 @@ def run_deployment_test(ceph_cluster, installer):
     hosts = json.loads(hosts_out)
     assert len(hosts) > 0, "No hosts found in the cluster"
 
-    assert ensure_agent_running_on_all(
-        installer, ceph_cluster, timeout=360
-    ), (
+    assert ensure_agent_running_on_all(installer, ceph_cluster, timeout=360), (
         "Agent daemon(s) not running on all hosts after enabling use_agent "
         f"(last orch ps agents={[ (a.get('hostname'), a.get('status_desc')) for a in get_agent_daemons(installer) ]})"
     )
@@ -52,6 +50,7 @@ def run_deployment_test(ceph_cluster, installer):
         agent_hosts == cluster_hosts
     ), f"Agent not on all hosts. Agent hosts: {agent_hosts}, Cluster hosts: {cluster_hosts}"
     log.info("PASS: Agent deployed on all cluster hosts")
+
 
 def run_restart_test(ceph_cluster, installer):
     log.info("=== TEST: Restart - Warning on stop, clear on start ===")

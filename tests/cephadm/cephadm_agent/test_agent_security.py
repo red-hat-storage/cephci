@@ -178,7 +178,9 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
     This version stops the real agent and HTTPS-POSTs payloads itself using the
     agent keyring + root CA from the agent directory.
     """
-    log.info("=== TEST: Corrupt metadata payload with valid keyring (direct /data POST) ===")
+    log.info(
+        "=== TEST: Corrupt metadata payload with valid keyring (direct /data POST) ==="
+    )
 
     agents = get_agent_daemons(installer)
     assert len(agents) > 0
@@ -344,12 +346,12 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
 
         # Auth rejection path
         bad_key_text = _result_text(bad_key)
-        assert bad_key.get("http_status") == 200, (
-            f"Expected HTTP 200 with JSON error body for bad keyring, got {bad_key}"
-        )
-        assert "Bad metadata" in bad_key_text or "keyring" in bad_key_text.lower(), (
-            f"Expected auth rejection in body, got: {bad_key_text}"
-        )
+        assert (
+            bad_key.get("http_status") == 200
+        ), f"Expected HTTP 200 with JSON error body for bad keyring, got {bad_key}"
+        assert (
+            "Bad metadata" in bad_key_text or "keyring" in bad_key_text.lower()
+        ), f"Expected auth rejection in body, got: {bad_key_text}"
         log.info("FINDING: wrong keyring → mgr returns Bad metadata / keyring error")
 
         # Content-corrupt paths with valid keyring
@@ -358,12 +360,14 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
             ("junk_facts_json", junk_facts),
             ("bad_volume", bad_vol),
         ):
-            assert resp.get("http_status") == 200, f"{label}: expected HTTP 200, got {resp}"
+            assert (
+                resp.get("http_status") == 200
+            ), f"{label}: expected HTTP 200, got {resp}"
             text = _result_text(resp)
             log.info(f"{label} mgr result: {text}")
-            assert "wrong keyring" not in text.lower(), (
-                f"{label} unexpectedly failed auth: {text}"
-            )
+            assert (
+                "wrong keyring" not in text.lower()
+            ), f"{label} unexpectedly failed auth: {text}"
 
         # agent_timestamp (used for CEPHADM_AGENT_DOWN) is updated in handle_metadata
         # *before* facts/volume are parsed. Real agent is stopped, so if corrupt
@@ -400,8 +404,9 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
     finally:
         log.info("Cleaning up and restarting real agent")
         target_node.exec_command(
-            sudo=True, cmd="rm -f /tmp/agent_corrupt_post.py "
-            f"{results_path}", check_ec=False
+            sudo=True,
+            cmd="rm -f /tmp/agent_corrupt_post.py " f"{results_path}",
+            check_ec=False,
         )
         target_node.exec_command(
             sudo=True, cmd=f"systemctl start {service_name}", check_ec=False

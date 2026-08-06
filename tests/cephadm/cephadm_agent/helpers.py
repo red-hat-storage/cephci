@@ -218,7 +218,9 @@ def pick_non_active_mgr_agent_host(installer, ceph_cluster):
     return chosen
 
 
-def wait_for_agent_json_target_ip(node, agent_dir, expected_ip, timeout=300, interval=10):
+def wait_for_agent_json_target_ip(
+    node, agent_dir, expected_ip, timeout=300, interval=10
+):
     """Poll agent.json until target_ip matches expected_ip (or timeout)."""
     end = time.time() + timeout
     last = None
