@@ -64,6 +64,7 @@ tests:
         install_packages:
           - ceph-common
           - samba-client
+          - cifs-utils
         copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
@@ -111,51 +112,15 @@ tests:
               subvolume: sv2
               path: /
 
-  # - test:
-  #     name: Deploy colocation samba services with custom IP in standalone
-  #     desc: Deploy colocation samba services with custom IP in standalone
-  #     module: smb_deployment_declarative_method.py
-  #     polarion-id: CEPH-83628748
-  #     comments: Test fails due to bind network unavailable for IBMc
-  #     config:
-  #       file_type: yaml
-  #       file_mount: /tmp
-  #       spec:
-  #         - resource_type: ceph.smb.cluster
-  #           cluster_id: smb1
-  #           auth_mode: user
-  #           user_group_settings:
-  #             - {source_type: resource, ref: ug1}
-  #           custom_ports:
-  #             smb: 1111
-  #             smbmetrics: 2222
-  #             ctdb: 3333
-  #           bind_addrs:
-  #             - network: 10.0.64.0/22
-  #           placement:
-  #             label: smb
-  #         - resource_type: ceph.smb.usersgroups
-  #           users_groups_id: ug1
-  #           values:
-  #             users:
-  #               - {name: user1, password: passwd}
-  #             groups: []
-  #         - resource_type: ceph.smb.share
-  #           cluster_id: smb1
-  #           share_id: share1
-  #           cephfs:
-  #             volume: cephfs
-  #             subvolumegroup: smb
-  #             subvolume: sv1
-  #             path: /
-  #         - resource_type: ceph.smb.share
-  #           cluster_id: smb1
-  #           share_id: share2
-  #           cephfs:
-  #             volume: cephfs
-  #             subvolumegroup: smb
-  #             subvolume: sv2
-  #             path: /
+  - test:
+      name: Deploy colocation samba services with custom IP in standalone
+      desc: Deploy SMB using the network dynamically discovered on the selected node
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628748
+      config:
+        scenario: dynamic_bind_network
+        cluster_count: 1
+        base_port: 1111
 
   - test:
       name: Deploy colocation samba services and restart
@@ -199,3 +164,74 @@ tests:
               subvolumegroup: smb
               subvolume: sv2
               path: /
+
+  - test:
+      name: Incrementally scale colocated SMB clusters
+      desc: Add colocated SMB clusters in stages and validate every cluster after each stage
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628772
+      config:
+        scenario: incremental_scale
+        cluster_count: 10
+        scale_targets: [1, 5, 10]
+        base_port: 4450
+
+  - test:
+      name: Verify custom ports for colocated SMB clusters
+      desc: Validate unique listeners and client access on each configured SMB port
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628763
+      config:
+        scenario: custom_ports
+        cluster_count: 2
+        base_port: 4550
+
+  - test:
+      name: Measure resource usage while scaling colocated SMB clusters
+      desc: Capture SMB container CPU and memory data before and after adding clusters
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628760
+      config:
+        scenario: resource_usage
+        cluster_count: 5
+        base_port: 4650
+
+  - test:
+      name: Reboot a node hosting colocated SMB clusters
+      desc: Verify all colocated SMB services and shares recover after their host reboots
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628758
+      config:
+        scenario: node_reboot
+        cluster_count: 2
+        base_port: 4750
+
+  - test:
+      name: Mount shares from both colocated SMB clusters
+      desc: Mount both clusters on one client and validate independent read and write access
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628755
+      config:
+        scenario: mount_both
+        cluster_count: 2
+        base_port: 4850
+
+  - test:
+      name: Verify independent authentication for colocated SMB clusters
+      desc: Confirm each cluster accepts only its own credentials
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628753
+      config:
+        scenario: independent_auth
+        cluster_count: 2
+        base_port: 4950
+
+  - test:
+      name: Access shares from both colocated SMB clusters simultaneously
+      desc: Run concurrent SMB file operations against both clusters from one client
+      module: smb_colocation_scenarios.py
+      polarion-id: CEPH-83628752
+      config:
+        scenario: simultaneous_io
+        cluster_count: 2
+        base_port: 5050
