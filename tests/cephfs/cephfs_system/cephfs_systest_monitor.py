@@ -29,20 +29,19 @@ def run(ceph_cluster, **kw):
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         fs_scale_utils = CephfsScaleUtils(ceph_cluster)
         config = kw.get("config")
+        run_config = kw.get("run_config")
         clients = ceph_cluster.get_ceph_objects("client")
 
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         mem_limit = config.get("mds_mem_limit", 95)
-        cpu_limit = config.get("mds_cpu_limit", 180)
+        cpu_limit = config.get("mds_cpu_limit", 400)
         disk_limit = config.get("disk_limit", 80)
         client = clients[0]
         update_system_status(clients, "NA")
         mds_names_hostname = []
         for mds in mds_nodes:
             mds_names_hostname.append(mds.node.hostname)
-
-        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-        log_base_dir = config.get("log-dir")
+        log_base_dir = run_config.get("log_dir")
         mds_list = fs_scale_utils.get_daemon_names(clients[0], "mds")
         cmd_list = [
             "ceph mgr module enable stats",
@@ -54,7 +53,7 @@ def run(ceph_cluster, **kw):
         for daemon in mds_list:
             cmd_list.append(f"ceph tell {daemon} perf dump --format json")
         log.info(f"Ceph commands to run at an interval : {cmd_list}")
-        log_dir = f"{log_base_dir}/ceph_monitor_logs"
+        log_dir = f"{log_base_dir}/cephfs_systest_monitor_logs"
 
         try:
             os.mkdir(log_dir)

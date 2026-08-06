@@ -5,8 +5,11 @@ This is cephfs utilsV1 extension to include further common reusable methods for 
 
 import datetime
 import json
+import os
 import random
+import re
 import secrets
+import shlex
 import string
 import time
 
@@ -68,6 +71,22 @@ class CephFSCommonUtils(FsUtils):
                     )
                     log.warning("Cluster health can be OK, current state : %s", out)
                     ceph_healthy = 1
+                elif "node-exporter" in str(out):
+                    log.warning(
+                        "node-exporter is in unknown/error state; redeploying. Health detail: %s",
+                        out,
+                    )
+                    client.exec_command(
+                        sudo=True, cmd="ceph orch redeploy node-exporter"
+                    )
+                    try:
+                        self.validate_services(client, "node-exporter")
+                        log.info("node-exporter service is up after redeploy")
+                    except CommandFailed as ex:
+                        log.error(
+                            "node-exporter did not come up after redeploy: %s", ex
+                        )
+                        time.sleep(5)
                 else:
                     log.info(
                         "Wait for sometime to check if Cluster health can be OK, current state : %s",
@@ -86,6 +105,27 @@ class CephFSCommonUtils(FsUtils):
                 wait_time,
                 out,
             )
+            if "SLOW_OPS" in out:
+                log.warning("SLOW_OPS detected in ceph health: %s", out)
+                daemon_names = re.findall(r"((?:mds|mgr|mon|osd)\.[\w.-]+)", str(out))
+                # Preserve order while removing duplicates
+                unique_daemons = list(dict.fromkeys(daemon_names))
+                if not unique_daemons:
+                    log.warning(
+                        "SLOW_OPS present but no mds/mgr/mon/osd daemon name "
+                        "matched in health detail"
+                    )
+                for daemon_name in unique_daemons:
+                    log.info(
+                        "Collecting ops dump for daemon with slow ops: %s",
+                        daemon_name,
+                    )
+                    ops_out, _ = client.exec_command(
+                        sudo=True,
+                        cmd=f"ceph tell {daemon_name} ops",
+                        check_ec=False,
+                    )
+                    log.info("ceph daemon %s ops output:\n%s", daemon_name, ops_out)
             return 1
         return 0
 
@@ -244,6 +284,8 @@ class CephFSCommonUtils(FsUtils):
                     mnt_client.exec_command(
                         sudo=True,
                         cmd=cmd,
+                        check_ec=False,
+                        timeout=90,
                     )
                     if mnt_type == "nfs":
                         nfs_export = mount_details[sv_name][mnt_type]["nfs_export"]
@@ -582,15 +624,76 @@ class CephFSCommonUtils(FsUtils):
         :param mount_path_prefix: Path prefix to be unmounted and removed
         """
         try:
-            client.exec_command(
+            if not mount_path_prefix or not str(mount_path_prefix).startswith("/"):
+                log.error(
+                    "Refusing client_mount_cleanup with unsafe mount_path_prefix=%r",
+                    mount_path_prefix,
+                )
+                return 1
+
+            # Resolve actual mount targets first so we never hang on a shell glob
+            # against a stuck ceph/fuse mount for the full 600s default timeout.
+            out, _ = client.exec_command(
                 sudo=True,
-                cmd=f"umount -l {mount_path_prefix}*/",
+                cmd=(
+                    f"mount | awk '{{print $3}}' | grep '^{mount_path_prefix}' || true"
+                ),
+                check_ec=False,
+                timeout=30,
             )
-            log.info(f"Successfully unmounted on {client.node.hostname}")
+            mount_points = [
+                mp.strip()
+                for mp in (out or "").splitlines()
+                if mp.strip() and mp.strip().startswith(mount_path_prefix)
+            ]
+            if not mount_points:
+                log.info(
+                    "No mounts matching %s* on %s",
+                    mount_path_prefix,
+                    client.node.hostname,
+                )
+            for mp in mount_points:
+                log.info("Lazy-unmounting %s on %s", mp, client.node.hostname)
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"timeout 60 umount -l {shlex.quote(mp)}",
+                    check_ec=False,
+                    timeout=90,
+                )
+            log.info(
+                "Unmount pass complete: attempted %d mount(s) on %s",
+                len(mount_points),
+                client.node.hostname,
+            )
+
+            # Re-query before rm so a silent umount failure cannot hang on FUSE.
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=(
+                    f"mount | awk '{{print $3}}' | grep '^{mount_path_prefix}' || true"
+                ),
+                check_ec=False,
+                timeout=30,
+            )
+            still_mounted = [
+                mp.strip()
+                for mp in (out or "").splitlines()
+                if mp.strip() and mp.strip().startswith(mount_path_prefix)
+            ]
+            if still_mounted:
+                log.warning(
+                    "Skipping rm of %s*: still mounted on %s: %s",
+                    mount_path_prefix,
+                    client.node.hostname,
+                    still_mounted,
+                )
+                return 1
 
             client.exec_command(
                 sudo=True,
-                cmd=f"rm -rf {mount_path_prefix}*/",
+                cmd=f"rm -rf -- {shlex.quote(mount_path_prefix)}*/",
+                check_ec=False,
+                timeout=120,
             )
             log.info(f"Successfully deleted mount path on {client.node.hostname}")
             return 0
@@ -600,6 +703,11 @@ class CephFSCommonUtils(FsUtils):
                 return 1
             elif "not mounted" in str(ex):
                 return 0
+            log.error("Client mount cleanup failed: %s", str(ex))
+            return 1
+        except Exception as ex:
+            log.error("Client mount cleanup failed: %s", str(ex))
+            return 1
 
     def rolling_mds_failover(self, client, fs_name, mds_fail_cnt=3):
         """
@@ -744,4 +852,125 @@ class CephFSCommonUtils(FsUtils):
         except Exception as ex:
             log.warning("Filesystem volume cleanup skipped or partial: %s", ex)
             return 1
+        return 0
+
+    def nfs_debug_logs(self, client, nfs_name, log_dir, nfs_nodes, dump_output=False):
+        """
+        This method will collect NFS debug logs and copy to log directory
+        Args:
+            client: Client object to execute the command
+            nfs_name: NFS name
+            log_dir: Log directory
+            nfs_nodes: NFS nodes
+        Returns:
+            0 on success, 1 on failure
+        """
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=(f"ceph orch ls --service_name nfs.{nfs_name};ceph health detail"),
+            check_ec=False,
+        )
+        log.info(f"NFS Service Status and Health Detail: {out}")
+        log.info(
+            "Collecting NFS container debug logs from NFS nodes " "after mount failure"
+        )
+        nfs_log_dst = os.path.join(log_dir, "nfs_container_logs")
+        os.makedirs(nfs_log_dst, exist_ok=True)
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=(f"ceph orch ps --service_name nfs.{nfs_name} " "--format json"),
+            check_ec=False,
+        )
+        daemons = json.loads(out) if out and out.strip() else []
+        if not daemons:
+            log.warning(
+                "No NFS daemons found for service nfs.%s while "
+                "collecting container logs",
+                nfs_name,
+            )
+        else:
+            log.info(f"NFS daemons: {daemons}")
+        for daemon in daemons:
+            daemon_name = daemon.get("daemon_name")
+            hostname = daemon.get("hostname")
+            container_id = daemon.get("container_id", "")
+            if not daemon_name or not hostname:
+                continue
+            nfs_node = next(
+                (n for n in nfs_nodes if n.node.hostname == hostname),
+                None,
+            )
+            if not nfs_node:
+                log.warning(
+                    "NFS node object not found for hostname %s",
+                    hostname,
+                )
+                continue
+            # Copy /var/log/messages file from nfs node to log directory
+            remote_messages_log = "/var/log/messages"
+            local_messages_log = os.path.join(nfs_log_dst, "messages.log")
+            nfs_node.download_file(
+                src=remote_messages_log, dst=local_messages_log, sudo=True
+            )
+            log.info(
+                f"Copied /var/log/messages file from {nfs_node.node.hostname} to {local_messages_log}"
+            )
+            remote_log = f"/tmp/{daemon_name}_cephadm.log"
+            nfs_node.exec_command(
+                sudo=True,
+                cmd=f"cephadm logs --name {daemon_name} > {remote_log}",
+                check_ec=False,
+            )
+
+            if dump_output:
+                out, _ = nfs_node.exec_command(
+                    sudo=True,
+                    cmd=f"ls -l {remote_log}",
+                    check_ec=False,
+                )
+                log.info(f"NFS container logs file: {out}")
+                out, _ = nfs_node.exec_command(
+                    sudo=True,
+                    cmd=f"cephadm logs --name {daemon_name}",
+                    check_ec=False,
+                )
+                log.info(f"NFS container cephadm logs: {out}")
+                if container_id:
+                    out_podman, _ = nfs_node.exec_command(
+                        sudo=True,
+                        cmd=f"podman logs {container_id}",
+                        check_ec=False,
+                    )
+                    log.info(f"NFS container podman logs: {out_podman}")
+            local_log = os.path.join(
+                nfs_log_dst, f"{daemon_name}_{hostname}_cephadm.log"
+            )
+            nfs_node.download_file(src=remote_log, dst=local_log, sudo=True)
+            log.info(
+                "Copied NFS cephadm container log for %s to %s",
+                daemon_name,
+                local_log,
+            )
+            if container_id:
+                remote_podman_log = f"/tmp/{daemon_name}_podman.log"
+                nfs_node.exec_command(
+                    sudo=True,
+                    cmd=(f"podman logs {container_id} " f"> {remote_podman_log} 2>&1"),
+                    check_ec=False,
+                )
+                local_podman_log = os.path.join(
+                    nfs_log_dst,
+                    f"{daemon_name}_{hostname}_podman.log",
+                )
+                nfs_node.download_file(
+                    src=remote_podman_log,
+                    dst=local_podman_log,
+                    sudo=True,
+                )
+                log.info(
+                    "Copied NFS podman container log for %s to %s",
+                    daemon_name,
+                    local_podman_log,
+                )
+
         return 0

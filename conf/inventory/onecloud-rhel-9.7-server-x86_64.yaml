@@ -7,8 +7,8 @@ id: rhel
 instance:
   create:
     image_id: 26  # Replace with actual ID from OneCloud portal
-    projectID: 21
-    site: POK
+    projectID: 808 # Project ID for IBM-CEPH-QE in TUC region
+    site: TUC
     groupID: 1
     VLAN: 2231
     resources: medium  # Profiles: small | medium | large

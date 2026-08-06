@@ -1,11 +1,8 @@
 import json
-
-# import os
+import os
 import random
 import secrets
 import string
-
-# import time
 import traceback
 
 from tests.cephfs.cephfs_scale.cephfs_scale_utils import CephfsScaleUtils
@@ -41,16 +38,15 @@ def run(ceph_cluster, **kw):
         snap_util = SnapUtils(ceph_cluster)
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
+        run_config = kw.get("run_config")
         cephfs_config = {}
         build = config.get("build", config.get("rhbuild"))
-        # systest_monitor = config.get("systest_monitor", 1)
+        byok_setup = config.get("byok_setup", 1)
         clients_orig = ceph_cluster.get_ceph_objects("client")
-        clients_tmp = clients_orig[1:11]
-        clients = []
-        for client_tmp in clients_tmp:
-            if "osv-vm-master07" in client_tmp.node.hostname:
-                continue
-            clients.append(client_tmp)
+        clients_cnt = len(clients_orig)
+        # Skipping client.0 as it is used for monitoring and execution
+        clients = clients_orig[1:clients_cnt]
+
         nfs_nodes = ceph_cluster.get_nodes("nfs")
         installer = ceph_cluster.get_nodes(role="installer")[0]
         fs_util_v1.prepare_clients(clients, build)
@@ -58,9 +54,10 @@ def run(ceph_cluster, **kw):
         fs_util_v1.auth_list(clients)
         file = "cephfs_systest_data.json"
         mnt_type_list = ["kernel", "fuse", "nfs"]
-        client1 = clients[0]
+        client1 = clients_orig[0]
         ephemeral_pin = config.get("ephemeral_pin", 1)
-        nfs_name = "cephfs_systest_nfs_byok"
+        mds_cache_limit = config.get("mds_cache_limit_gb", 24)
+        nfs_name = "cephfs_systest_nfs"
         client1.upload_file(
             sudo=True,
             src=f"tests/cephfs/cephfs_system/{file}",
@@ -72,51 +69,59 @@ def run(ceph_cluster, **kw):
             file_mode="r",
         )
         cephfs_config = json.load(f)
-        # BYOK Setup
-        # ------------------- Retrieving GKLM DATA -------------------
-        custom_data = kw.get("test_data", None)
-        rand_str = "".join(secrets.choice(string.digits) for i in range(3))
-        gklm_client_name = f"cephfs_systest_byok_client_{rand_str}"
-        gklm_cert_alias = f"cephfs_systest_byok_client_cert_{rand_str}"
-        #
-        gklm_params = load_gklm_config(custom_data, config, cephci_data)
         nfs_nodes_1 = get_free_nodes_for_nfs(client1, nfs_nodes)
-        # nfs_nodes_1 = nfs_nodes
-        for nfs_node in nfs_nodes_1:
-            log.info(nfs_node.hostname)
-        byok_setup_params = {
-            "gklm_ip": gklm_params["gklm_ip"],
-            "gklm_user": gklm_params["gklm_user"],
-            "gklm_password": gklm_params["gklm_password"],
-            "gklm_node_user": gklm_params["gklm_node_username"],
-            "gklm_node_password": gklm_params["gklm_node_password"],
-            "gklm_hostname": gklm_params["gklm_hostname"],
-            "gklm_client_name": gklm_client_name,
-            "gklm_cert_alias": gklm_cert_alias,
-            "nfs_nodes": nfs_nodes_1,
-            "installer": installer,
-            "nfs_name": nfs_name,
-        }
-        _, enctag, _, _ = nfs_byok_test_setup(byok_setup_params)
-        nfs_node = byok_setup_params["nfs_nodes"][0]
-        nfs_server = nfs_node.hostname
         nfs_node = nfs_nodes_1[0]
         nfs_server = nfs_node.hostname
-        fs_util_v1.create_nfs(
-            client1,
-            nfs_cluster_name=nfs_name,
-            nfs_server_name=nfs_server,
-        )
+        nfs_server = nfs_server.replace("'", "")
+        log.info(f"nfs_server: {nfs_server}")
+        if byok_setup == 1:
+            # BYOK Setup
+            # ------------------- Retrieving GKLM DATA -------------------
+            custom_data = kw.get("test_data", None)
+            rand_str = "".join(secrets.choice(string.digits) for i in range(3))
+            gklm_client_name = f"cephfs_systest_byok_client_{rand_str}"
+            gklm_cert_alias = f"cephfs_systest_byok_client_cert_{rand_str}"
+
+            gklm_params = load_gklm_config(custom_data, config, cephci_data)
+
+            for nfs_node in nfs_nodes_1:
+                log.info(nfs_node.hostname)
+
+            byok_setup_params = {
+                "gklm_ip": gklm_params["gklm_ip"],
+                "gklm_user": gklm_params["gklm_user"],
+                "gklm_password": gklm_params["gklm_password"],
+                "gklm_node_user": gklm_params["gklm_node_username"],
+                "gklm_node_password": gklm_params["gklm_node_password"],
+                "gklm_hostname": gklm_params["gklm_hostname"],
+                "gklm_client_name": gklm_client_name,
+                "gklm_cert_alias": gklm_cert_alias,
+                "nfs_nodes": nfs_nodes_1,
+                "installer": installer,
+                "nfs_name": nfs_name,
+            }
+            _, enctag, _, _ = nfs_byok_test_setup(byok_setup_params)
+        else:
+            fs_util_v1.create_nfs(
+                client1,
+                nfs_cluster_name=nfs_name,
+                nfs_server_name=nfs_server,
+            )
         for i in cephfs_config:
             cephfs_config[i].update(
                 {
-                    "byok": {
-                        "gklm_client_name": gklm_client_name,
-                        "gklm_cert_alias": gklm_cert_alias,
-                    },
                     "nfs": {"nfs_name": nfs_name},
                 }
             )
+            if byok_setup == 1:
+                cephfs_config[i].update(
+                    {
+                        "byok": {
+                            "gklm_client_name": gklm_client_name,
+                            "gklm_cert_alias": gklm_cert_alias,
+                        },
+                    }
+                )
 
         if wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")
@@ -128,7 +133,9 @@ def run(ceph_cluster, **kw):
             log.info("Setup Ephemeral Distributed pinning")
             cmd = "ceph config set mds mds_export_ephemeral_distributed true"
             client1.exec_command(sudo=True, cmd=cmd)
-
+        log.info("Increasing MDS Cache Memory Limit to %s", mds_cache_limit)
+        cmd = f"ceph config set mds mds_cache_memory_limit {mds_cache_limit * 1024 * 1024 * 1024}"
+        client1.exec_command(sudo=True, cmd=cmd)
         log.info("Enable snap-schedule config")
         snap_util.enable_snap_schedule(client1)
         snap_util.allow_minutely_schedule(client1)
@@ -174,16 +181,18 @@ def run(ceph_cluster, **kw):
                             f"Creating subvolume {sv_name} in {j} group in FS volume {i}"
                         )
                         fs_util_v1.create_subvolume(client1, **sv_iter)
-                        if "unique" in type:
-                            # Apply enctag
-                            enc_args = {
-                                "enc_tag": enctag,
-                                "group_name": sv_iter.get("group_name", None),
-                                "fs_name": sv_iter["vol_name"],
-                            }
-                            cephfs_common_utils.enc_tag(
-                                client1, "set", sv_iter["subvol_name"], **enc_args
-                            )
+                        if byok_setup == 1:
+                            if "unique" in type:
+                                enc_args = {
+                                    "enc_tag": enctag,
+                                    "group_name": sv_iter.get("group_name", None),
+                                    "fs_name": sv_iter["vol_name"],
+                                    "add_suffix": False,
+                                }
+                                cephfs_common_utils.enc_tag(
+                                    client1, "set", sv_iter["subvol_name"], **enc_args
+                                )
+
                         cephfs_config[i]["group"][j][type].update({sv_name: {}})
                         mnt_client1 = random.choice(clients)
                         mnt_client2 = random.choice(clients)
@@ -210,9 +219,15 @@ def run(ceph_cluster, **kw):
                         sched_list = ["10m", "1h"]
                         for sched_val in sched_list:
                             snap_test_params.update({"sched": sched_val})
-                            snap_util.create_snap_schedule(snap_test_params)
+                            try:
+                                snap_util.create_snap_schedule(snap_test_params)
+                            except Exception as ex:
+                                log.error(f"Error creating snap schedule: {ex}")
                         snap_test_params.update({"retention": "6m4h"})
-                        snap_util.create_snap_retention(snap_test_params)
+                        try:
+                            snap_util.create_snap_retention(snap_test_params)
+                        except Exception as ex:
+                            log.error(f"Error creating snap retention: {ex}")
                         mount_params = {
                             "fs_util": fs_util_v1,
                             "mnt_path": mnt_path,
@@ -230,8 +245,9 @@ def run(ceph_cluster, **kw):
                                     "nfs_server": nfs_server,
                                 }
                             )
-                            if "unique" in type:
-                                mount_params.update({"kmip_key_id": enctag})
+                            if byok_setup == 1:
+                                if "unique" in type:
+                                    mount_params.update({"kmip_key_id": enctag})
                         log.info(f"Perform {mnt_type} mount of {sv_name}")
                         mount_params.update({"client": mnt_client1})
                         mounting_dir1, _ = fs_util_v1.mount_ceph(mnt_type, mount_params)
@@ -256,7 +272,7 @@ def run(ceph_cluster, **kw):
                             )
 
         log.info(f"CephFS System Test config : {cephfs_config}")
-        for client in clients:
+        for client in clients_orig:
             f = client.remote_file(
                 sudo=True,
                 file_name=f"/home/cephuser/{file}",
@@ -266,19 +282,17 @@ def run(ceph_cluster, **kw):
             f.write("\n")
             f.flush()
 
-        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-        """
-        log_base_dir = config.get("log-dir")
+        log_base_dir = run_config.get("log_dir")
         log_dir = f"{log_base_dir}/cephfs_systest_data"
         file_path = f"{log_dir}/cephfs_systest_config.json"
         os.mkdir(log_dir)
         cmd = f"touch {file_path}"
         os.system(cmd)
+
         src_path = f"/home/cephuser/{file}"
         dst_path = file_path
         client1.download_file(src=src_path, dst=dst_path, sudo=True)
         log.info(f"Downloaded {src_path} to {dst_path}")
-        """
         return 0
     except Exception as e:
         log.error(e)

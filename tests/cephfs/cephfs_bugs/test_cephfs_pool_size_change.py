@@ -38,6 +38,7 @@ def check_clean_pgs(client, timeout=600):
         if active_clean_pgs == total_pgs:
             log.info("All pgs are active+clean")
             return 0
+        time.sleep(10)
     log.error("pgs are not active+clean")
     return 1
 
@@ -88,9 +89,10 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         fs_name = "cephfs-pool-size" if not erasure else "cephfs-pool-size-ec"
         fs_details = fs_util.get_fs_info(clients[0], fs_name)
-        if not fs_details:
-            fs_util.create_fs(clients[0], fs_name)
-            fs_util.wait_for_mds_process(clients[0], fs_name)
+        if fs_details:
+            fs_util.remove_fs(clients[0], fs_name, validate=True, check_ec=False)
+        fs_util.create_fs(clients[0], fs_name)
+        fs_util.wait_for_mds_process(clients[0], fs_name)
         fs_pool_details = fs_util.get_fs_info(clients[0], fs_name)
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
@@ -157,11 +159,11 @@ def run(ceph_cluster, **kw):
             log.error("heartbeat map timeout issue found")
             return 1
         log.info(
-            "Changing cephfs data and metadata pool pg_num and pgp_num to existing size '-1' with client IO running"
+            "Changing cephfs data and metadata pool pg_num and pgp_num to existing size '+2' with client IO running"
         )
         no_of_files = "{1..1000}"
-        data_pool_pg_num = str(int(data_pool_pg_num) - 1)
-        metadata_pool_pg_num = str(int(metadata_pool_pg_num) + 1)
+        data_pool_pg_num = str(int(data_pool_pg_num) + 2)
+        metadata_pool_pg_num = str(int(metadata_pool_pg_num) + 2)
         commands = [
             f'for n in {no_of_files}; do dd if=/dev/urandom of={kernel_mount_dir}/dir3/file$( printf %03d "$n" )'
             f" bs=1M count=10; done",
@@ -181,10 +183,10 @@ def run(ceph_cluster, **kw):
         if rc == 1:
             return 1
         log.info(
-            "Change cephfs data and metadata pool pg_num and pgp_num to existing size '+1' with client IO running"
+            "Change cephfs data and metadata pool pg_num and pgp_num to existing size '-2' with client IO running"
         )
-        data_pool_pg_num = str(int(data_pool_pg_num) + 1)
-        metadata_pool_pg_num = str(int(metadata_pool_pg_num) - 1)
+        data_pool_pg_num = str(int(data_pool_pg_num) - 2)
+        metadata_pool_pg_num = str(int(metadata_pool_pg_num) - 2)
         commands = [
             f'for n in {no_of_files}; do     dd if=/dev/urandom of={kernel_mount_dir}/dir5/file$( printf %03d "$n" )'
             f" bs=1M count=10; done",

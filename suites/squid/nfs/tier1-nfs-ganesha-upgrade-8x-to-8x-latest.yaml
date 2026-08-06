@@ -161,6 +161,7 @@ tests:
       polarion-id: CEPH-83581304
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.2
         clients: 4
         io: false
@@ -173,6 +174,7 @@ tests:
       polarion-id: CEPH-83581304
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.2
         clients: 4
         setup: false
@@ -184,6 +186,7 @@ tests:
       polarion-id: CEPH-83620035
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.2
         clients: 2
         setup: false
@@ -215,6 +218,7 @@ tests:
             polarion-id: CEPH-83620035
             abort-on-fail: false
             config:
+              sudo: false
               nfs_version: 4.2
               clients: 4
               setup: false
@@ -230,6 +234,7 @@ tests:
       polarion-id: CEPH-83620035
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.2
         clients: 2
         setup: false
@@ -244,6 +249,7 @@ tests:
       polarion-id: CEPH-83577591
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.1
         clients: 4
 
@@ -254,6 +260,7 @@ tests:
       polarion-id: CEPH-83575941
       abort-on-fail: false
       config:
+        sudo: true
         nfs_version: 4.1
         clients: 3
         operation: verify_permission
@@ -265,6 +272,7 @@ tests:
       polarion-id: CEPH-83575927
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.1
         clients: 3
         operation: verify_non_existing_file
@@ -276,6 +284,7 @@ tests:
       polarion-id: CEPH-83575994
       abort-on-fail: false
       config:
+        sudo: false
         nfs_version: 4.1
         clients: 3
 
@@ -286,6 +295,7 @@ tests:
       polarion-id: CEPH-83577595
       abort-on-fail: true
       config:
+        sudo: false
         nfs_version: 4.1
         clients: 3
         num_files: 1000

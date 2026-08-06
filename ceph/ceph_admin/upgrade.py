@@ -89,7 +89,7 @@ class UpgradeMixin:
             LOG.debug("Ceph product: %s", config.get("product"))
             LOG.debug("Target version: %s", config.get("release"))
             mgr_version_common, mgr_version_downstream = get_daemon_versions(
-                node=self.installer, daemon_type="mgr"
+                node=self, daemon_type="mgr"
             )
             LOG.debug("MGR common version: %s", mgr_version_common)
             LOG.debug("MGR downstream version: %s", mgr_version_downstream)
@@ -123,7 +123,7 @@ class UpgradeMixin:
         active_mgr = loads(out)["active_name"]
         LOG.debug("Active Mgr for the cluster: %s", active_mgr)
         mgr_version_common, mgr_version_downstream = get_daemon_versions(
-            node=self.installer, daemon_type="mgr", daemon_id=active_mgr
+            node=self, daemon_type="mgr", daemon_id=active_mgr
         )
         LOG.debug("MGR common version: %s", mgr_version_common)
         LOG.debug("MGR downstream version: %s", mgr_version_downstream)

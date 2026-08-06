@@ -1,0 +1,161 @@
+# Holistic E2E: NVMeoF Auto-add listeners (ISCE-2203) + Refresh Network (ISCE-5078)
+#
+# cluster configuration file:
+#   conf/tentacle/nvmeof/ceph_nvmeof_refresh-network-baremetal.yaml
+#
+# Generic dual-IPv4 discovery (no hardcoded iface names like eno8303/virtual):
+#   On each GW, parse `ip a` / `ip -o -4 addr`:
+#     - require >= 2 non-loopback IPv4 interfaces
+#     - primary   = IPv4 hosting the GW (node.ip_address)
+#     - secondary = IPv4 on another iface (common iface name across GWs preferred)
+#   network-masks = minimal CIDR covering those IP sets
+#
+# Flow:
+#   1. Create 4 subsystems with calculated primary network-mask
+#   2. Validate auto listeners on all subsystems + scale-down/up
+#   3. Take secondary iface IPv4s DOWN on all GWs, then add_network(secondary)
+#      → mask present, no secondary listeners yet
+#   4. Bring secondary UP → scoped refresh_network → ADD secondary listeners
+#   5. nvme list-subsys + IO
+#   6. Secondary DOWN → scoped refresh → DELETE secondary listeners
+#   7. list-subsys + IO
+#   8. Secondary UP → scoped refresh → ADD again → list-subsys + IO
+#   9. del_network → scoped refresh → secondary gone
+#  10. Dummy out-of-subnet add_network + refresh → listeners unchanged
+#
+# Optional overrides under refresh_network:
+#   secondary_iface / primary_network_mask / secondary_network_mask /
+#   dummy_network_mask / refresh_subsystem
+
+tests:
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node9
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup clients for NVMeoF tests
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_nodes:
+          - node5
+          - node6
+          - node7
+          - node8
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: group1
+        install: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        cleanup:
+          - initiators
+          - subsystems
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              count: 4
+              size: 1T
+              ns_create_image: true
+            listener_port: 4420
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 2
+            bdevs:
+              count: 4
+              size: 1T
+              ns_create_image: true
+            listener_port: 4420
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            serial: 3
+            bdevs:
+              count: 4
+              size: 1T
+              ns_create_image: true
+            listener_port: 4420
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            serial: 4
+            bdevs:
+              count: 4
+              size: 1T
+              ns_create_image: true
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - node: node9
+            nqn: connect-all
+            listener_port: 4420
+        load_balancing:
+          - scale_down: ["node8"]
+          - scale_up: ["node8"]
+        refresh_network:
+          refresh_subsystem: nqn.2016-06.io.spdk:cnode1
+      desc: >
+        Holistic E2E for NVMeoF auto-add listeners (ISCE-2203) and
+        scoped refresh network (ISCE-5078) with generic dual-IPv4 discovery
+      destroy-cluster: false
+      module: test_ceph_nvmeof_refresh_network.py
+      name: NVMeoF auto-listeners and refresh-network E2E

@@ -20,10 +20,9 @@ tests:
         args:
           rhcs-version: 8.1
           platform: rhel-9
-          release: rc
+          release: released
           mon-ip: node1
           orphan-initial-daemons: true
-          skip-dashboard: true
           ssh-user: cephuser
           # 6 racks × 2 chassis; each chassis has exactly one host (node1–node12)
           # NOTE: node13,14,15 and 16 are not used in test modules.
@@ -229,7 +228,7 @@ tests:
         nodes:                            # client node
           - node17:
               release: 8.1
-              tag: rc
+              tag: released
         install_packages:
           - ceph-common
           - ceph-base
@@ -274,8 +273,8 @@ tests:
           node16: rack=rack8,chassis=chassis16
 
   - test:
-      name: Upgrade mgr,crash,mon to latest 9.1 ceph version
-      desc: Upgrade mgr,crash,mon to latest 9.1 ceph version
+      name: Upgrade mgr,mon to latest 9.x ceph version
+      desc: Upgrade mgr,mon to latest 9.x ceph version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       config:
@@ -284,9 +283,7 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-          daemon_types: mgr,crash,mon
-          rhcs-version: 9.1
-          release: stable
+          daemon_types: mgr,mon
           platform: rhel-9
       abort-on-fail: true
 
@@ -349,6 +346,30 @@ tests:
         scenarios:
           - hosts_invalid_host
           - topological_labels_rack_nonexistent
+
+  - test:
+      name: crush bucket upgrade scenarios
+      desc: Crush bucket upgrade scenarios for rack and chassis
+      module: test_osd_ok_to_upgrade_holistic_tests.py
+      polarion-id: CEPH-83632280
+      config:
+        scenarios:
+          - bucket_type_bucket_name_rack
+          - bucket_type_bucket_name_chassis
+          - bucket_type_bucket_name_host
+
+  - test:
+      name: crush bucket upgrade negative scenarios
+      desc: Negative scenarios for invalid bucket type and bucket name
+      module: test_osd_ok_to_upgrade_holistic_tests.py
+      polarion-id: CEPH-83632280
+      config:
+        scenarios:
+          - negative_bucket_type_bucket_name_rack_without_daemon_types_arg
+          - negative_bucket_type_bucket_name_rack_host_arg
+          - negative_bucket_type_bucket_name_services_arg
+          - negative_bucket_type_bucket_name_topological_labels_arg
+
   - test:
       name: Upgrade all the OSDs in the cluster
       desc: Upgrade all the OSDs in the cluster
@@ -359,13 +380,15 @@ tests:
           - full_cluster_upgrade
 
   - test:
-      name: Upgrade ceph cluster to 9.x
-      desc: Upgrade cluster to latest version and check health warn
+      name: Upgrade cluster to latest 9.x ceph version
+      desc: Upgrade cluster to latest version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       config:
-        verify_warning: true
-        verify_daemons: true
-        verify_older_version_warn: true
-        verify_cluster_usage: true
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
       abort-on-fail: true

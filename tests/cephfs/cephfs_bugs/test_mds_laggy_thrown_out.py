@@ -4,6 +4,7 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -57,7 +58,10 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph fs set {fs_name} allow_standby_replay 1"
         )
         fs_util.wait_for_mds_process(client1, fs_name)
-
+        # wait for active mds to be 2
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
+        if cephfs_common_utils.wait_for_two_active_mds(client1, fs_name):
+            raise CommandFailed("Failed to wait for 2 active mds")
         fuse_mount_dir = "/mnt/fuse_" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
@@ -117,7 +121,7 @@ def run(ceph_cluster, **kw):
             )
         standby_reply_mdss_objs[0].exec_command(
             sudo=True,
-            cmd=f"bash /root/{file} {standby_reply_mdss_objs[0].ip_address} 90",
+            cmd=f"bash /root/{file} {standby_reply_mdss_objs[0].ip_address} 60",
         )
         out, rc = client1.exec_command(
             sudo=True,

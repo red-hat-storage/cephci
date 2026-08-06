@@ -484,9 +484,11 @@ tests:
         clients: 1
         nfs_cluster_name: cephfs-nfs-tls
         operation: tls_deploy_mount_verify
+        # Happy-path kTLS mount logs "TLS connection established"; AUTH_TLS is
+        # probe/STARTTLS path only and is not present on a successful mount.
         tls_log_substrings:
-          - AUTH_TLS
-          - TLS
+          - TLS connection established
+          - "[TLS]"
         strict_tls_log_check: true
 
   - test:
@@ -515,3 +517,58 @@ tests:
         nfs_cluster_name: cephfs-nfs-tls
         operation: tls_logs_openssl_probe
         redeploy_cluster_min_tls12: false
+
+  - test:
+      name: TLS negative invalid certificate scenarios
+      module: security.test_tls_feature.py
+      desc: >
+        Valid TLS mount and IO, then negative tests: corrupted Ganesha server certs
+        (mount must fail; capture mount error and systemctl status tlshd) and
+        corrupted client trust anchor (mount must fail; capture tlshd status).
+      abort-on-fail: false
+      polarion-id: CEPH-83629233
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        operation: tls_negative_invalid_certs
+        negative_cert_scenario: both
+        timeout: 1800
+
+  - test:
+      name: TLS mount fio IO with tcpdump encryption verification
+      module: security.test_tls_feature.py
+      desc: >
+        Phase 1: plain NFS cluster/export, fio write/read, tcpdump- fio buffer
+        pattern must appear in cleartext on the wire. Phase 2: TLS cluster/export,
+        same fio pattern must not appear; TLS wire traffic verified encrypted.
+      abort-on-fail: false
+      polarion-id: CEPH-83629170
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        plain_nfs_cluster_name: cephfs-nfs-plain
+        operation: tls_io_tcpdump_encryption
+        fio_size: 100M
+        fio_bs: 4k
+        fio_runtime: 300
+        timeout: 7200
+
+  - test:
+      name: TLS stunnel client IO with tcpdump encryption verification
+      module: security.test_tls_feature.py
+      desc: >
+        Deploy TLS Ganesha, configure stunnel on client (no kTLS/tlshd), mount via
+        127.0.0.1:49152 proxy, run fio I/O under tcpdump, verify wire traffic is encrypted.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        operation: tls_stunnel_io_tcpdump_encryption
+        stunnel_accept_port: 49152
+        fio_size: 100M
+        fio_bs: 4k
+        fio_runtime: 300
+        timeout: 7200

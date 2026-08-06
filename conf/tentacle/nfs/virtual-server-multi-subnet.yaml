@@ -1,0 +1,90 @@
+# Virtual Server NFS cluster — OpenStack multi-subnet (RHOS-D)
+# Suite: suites/tentacle/nfs/tier-2-nfs-virtual-server-multi-share-export.yaml
+#
+# Each NFS server and client node is attached to two provider networks so exports
+# can be reached via distinct routes (Regional File Mount / Virtual Server).
+#
+# Run with (must match networks available in your OpenStack project):
+#   --custom-config openstack_networks=provider_net_cci_16,provider_net_cci_15
+# openstack_networks overrides the per-node networks: list below for all VMs.
+#
+# Topology:
+#   node1: mon, mgr, osd, mds, nfs (dual-homed)
+#   node2: mon, osd
+#   node3: osd
+#   node4–node6: clients (dual-homed)
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 6
+        disk-size: 15
+      node2:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - osd
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+          - rgw
+          - nfs
+        no-of-volumes: 6
+        disk-size: 15
+      node3:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - mds
+          - nfs
+        no-of-volumes: 6
+        disk-size: 15
+      node4:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - client
+      node5:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - client
+      node6:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - client
+      node7:
+        networks:
+          - provider_net_cci_16
+          - provider_net_cci_15
+        role:
+          - client

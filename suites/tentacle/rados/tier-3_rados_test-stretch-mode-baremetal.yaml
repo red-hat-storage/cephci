@@ -21,7 +21,6 @@ tests:
           registry-json: registry.redhat.io
           mon-ip: node1
           orphan-initial-daemons: true
-          skip-dashboard: true
           ssh-user: cephuser
           apply-spec:
             - service_type: host

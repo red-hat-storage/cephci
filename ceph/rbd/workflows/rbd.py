@@ -820,3 +820,77 @@ def wrapper_for_image_ops(**kw):
                 )
                 return 1
     return 0
+
+
+def run_rbd_fio(client, pool, image, rw, offset, size, pattern, **kw):
+    """Run fio with the rbd ioengine for verified pattern I/O.
+
+    Executes fio using ``--ioengine=rbd`` with verification and a
+    specific byte pattern at the given offset. This is useful for writing
+    known data patterns and verifying them later.
+
+    Args:
+        client: CephNode client where fio runs.
+        pool: RBD pool name.
+        image: RBD image name.
+        rw: fio read/write mode (e.g. ``write``, ``read``).
+        offset: Byte offset in the image (e.g. ``0``, ``4G``).
+        size: Size of the I/O region (e.g. ``1G``, ``256M``).
+        pattern: Byte pattern for verification (e.g. ``0xAA``).
+        kw: Optional overrides:
+            - name (str): fio job name. Default: ``rbd-fio``.
+            - rate (str): I/O rate limit (e.g. ``64M``).
+            - bs (str): Block size. Default: ``4M``.
+            - iodepth (int): I/O depth. Default: ``16``.
+            - timeout (int): Command timeout in seconds. Default: ``3600``.
+            - verify (str): fio verify mode. Default: ``crc32c``.
+              Use ``pattern`` for unwritten sparse holes (raw zeros have no
+              crc32c magic headers).
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    name = kw.get("name", "rbd-fio")
+    bs = kw.get("bs", "4M")
+    iodepth = kw.get("iodepth", 16)
+    rate = kw.get("rate")
+    timeout = kw.get("timeout", 3600)
+    verify = kw.get("verify", "crc32c")
+
+    cmd = (
+        f"fio --name={name} --ioengine=rbd --clientname=admin "
+        f"--pool={pool} --rbdname={image} --rw={rw} --bs={bs} "
+        f"--offset={offset} --size={size} --iodepth={iodepth} "
+        f"--verify={verify} --verify_pattern={pattern} --do_verify=1 "
+        f"--verify_fatal=1 --group_reporting"
+    )
+    if rate:
+        cmd += f" --rate={rate}"
+
+    from ceph.rbd.utils import exec_cmd
+
+    return exec_cmd(node=client, cmd=cmd, long_running=True, timeout=timeout)
+
+
+def get_checksum_rbd_image(client, image_spec, algorithm="sha256"):
+    """Compute a checksum of an RBD image by streaming rbd export to a hash tool.
+
+    This avoids writing the image to disk, making it efficient for
+    large images.
+
+    Args:
+        client: CephNode client to run the command on.
+        image_spec: Image or snap spec (e.g. ``pool/image`` or
+            ``pool/image@snap``).
+        algorithm: Hash algorithm to use. Default: ``sha256``.
+            Supported: ``sha256``, ``md5``.
+
+    Returns:
+        str: Hex digest of the image checksum.
+    """
+    hash_cmd = f"{algorithm}sum" if algorithm != "md5" else "md5sum"
+    cmd = f"rbd export {image_spec} - | {hash_cmd} | awk '{{print $1}}'"
+
+    from ceph.rbd.utils import exec_cmd
+
+    return exec_cmd(node=client, cmd=cmd, output=True, timeout=7200).strip()

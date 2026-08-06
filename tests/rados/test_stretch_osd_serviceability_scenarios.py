@@ -19,6 +19,8 @@ includes:
     - Pool sanity checks should be successful
     - No inactive PGs on the pool
     - Write IO should succeed
+NOTE:- UNEVEN_WEIGHTS_STRETCH_MODE warning is updated to
+STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE in 9.1 https://github.com/ceph/ceph/pull/66580
 """
 
 import datetime
@@ -26,6 +28,8 @@ import json
 import random
 import time
 from collections import namedtuple
+
+from looseversion import LooseVersion
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
@@ -112,6 +116,11 @@ def run(ceph_cluster, **kw):
         ceph_health_status = list(status_report["health"]["checks"].keys())
         log.debug(f"Ceph report: \n\n {status_report} \n\n")
         expected_warn = "UNEVEN_WEIGHTS_STRETCH_MODE"
+        if LooseVersion(str(config.get("release"))) >= LooseVersion("9.1"):
+            # UNEVEN_WEIGHTS_STRETCH_MODE warning is updated to
+            # STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE in 9.1
+            # - https://github.com/ceph/ceph/pull/66580
+            expected_warn = "STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE"
         if expected_warn in ceph_health_status:
             log.info("warning  present on the cluster")
             log.info(f"Warnings generated on the cluster : {ceph_health_status}")
@@ -120,7 +129,9 @@ def run(ceph_cluster, **kw):
         return False
 
     def validate_osd_removal_scenario(
-        dc_1_osds_to_remove: list, dc_2_osds_to_remove: list
+        dc_1_osds_to_remove: list,
+        dc_2_osds_to_remove: list,
+        check_bucket_weight_imbalance_warning=False,
     ):
         """
         Method to perform osd removal scenario in stretch mode.
@@ -199,9 +210,21 @@ def run(ceph_cluster, **kw):
         log.info(
             "Proceeding to perform Check (3) Health warning - UNEVEN_WEIGHTS_STRETCH_MODE post OSD removal"
         )
-        if float(rhbuild.split("-")[0]) >= 7.1 and len(dc_1_osds_to_remove) != len(
-            dc_2_osds_to_remove
-        ):
+        # Extract version float safely (e.g., "9.1-12345" -> 9.1)
+        version_num = float(rhbuild.split("-")[0])
+        osd_counts_unequal = len(dc_1_osds_to_remove) != len(dc_2_osds_to_remove)
+
+        should_check_warning = False
+
+        if osd_counts_unequal:
+            # Covers 7.1, 8.0, 9.0
+            if 7.1 <= version_num < 9.1:
+                should_check_warning = True
+            # Covers 9.1+ (Fixed variable mismatch here)
+            elif version_num >= 9.1 and check_bucket_weight_imbalance_warning:
+                should_check_warning = True
+
+        if should_check_warning:
             endtime = datetime.datetime.now() + datetime.timedelta(seconds=300)
             while endtime > datetime.datetime.now():
                 if check_stretch_health_warning():
@@ -346,14 +369,19 @@ def run(ceph_cluster, **kw):
             f"Successfully wrote {pool_stat['stats']['objects']} on pool {pool_name}"
         )
 
-    def validate_host_removal_scenario(dc_1_hosts_to_remove, dc_2_hosts_to_remove):
+    def validate_host_removal_scenario(
+        dc_1_hosts_to_remove,
+        dc_2_hosts_to_remove,
+        check_bucket_weight_imbalance_warning=False,
+    ):
         """
         1) Drain osd host - ceph orch host drain
         2) Wait until all process are drained
         3) Check osd rm status
         4) Once hosts are drained host is removed
         5) Checks are performed once host is removed from cluster
-            - Health warning - UNEVEN_WEIGHTS_STRETCH_MODE
+            - Health warning - UNEVEN_WEIGHTS_STRETCH_MODE (7.1 <= version < 9.1)
+                              or STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE (version >= 9.1)
             - PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2
             - PGs should reach active+clean state
             - Pool sanity checks should be successful
@@ -361,7 +389,8 @@ def run(ceph_cluster, **kw):
             - Write IO should succeed
         6) Add removed hosts back to the cluster
         7) Checks are performed once removed hosts are added back
-            - Health warning - UNEVEN_WEIGHTS_STRETCH_MODE
+            - Health warning - UNEVEN_WEIGHTS_STRETCH_MODE (7.1 <= version < 9.1)
+                              or STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE (version >= 9.1)
             - PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2
             - PGs should reach active+clean state
             - Pool sanity checks should be successful
@@ -430,10 +459,21 @@ def run(ceph_cluster, **kw):
         log.info(
             "Proceeding to perform Check (6) Health warning - UNEVEN_WEIGHTS_STRETCH_MODE post OSD Host removal"
         )
-        # Checking if the expected health warning about the different site weights is displayed post removal of OSD host
-        if float(rhbuild.split("-")[0]) >= 7.1 and len(dc_1_hosts_to_remove) != len(
-            dc_1_hosts_to_remove
-        ):
+        # Extract version float safely (e.g., "9.1-12345" -> 9.1)
+        version_num = float(rhbuild.split("-")[0])
+        host_counts_unequal = len(dc_1_hosts_to_remove) != len(dc_2_hosts_to_remove)
+
+        should_check_warning = False
+
+        if host_counts_unequal:
+            # Covers 7.1, 8.0, 9.0
+            if 7.1 <= version_num < 9.1:
+                should_check_warning = True
+            # Covers 9.1+
+            elif version_num >= 9.1 and check_bucket_weight_imbalance_warning:
+                should_check_warning = True
+
+        if should_check_warning:
             endtime = datetime.datetime.now() + datetime.timedelta(seconds=300)
             while endtime > datetime.datetime.now():
                 if check_stretch_health_warning():
@@ -762,8 +802,12 @@ def run(ceph_cluster, **kw):
             # Waiting for recovery to post OSD host removal
             method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
 
-            # Checking if the expected health warning about the different site weights are seen.
-            if float(rhbuild.split("-")[0]) >= 7.1:
+            # In 9.1, we will not see the warning generated here as The two dividing buckets
+            #  must have weights within a fractional difference when
+            # stretch mode is enabled. This is determined by the configuration option
+            # mon_stretch_max_bucket_weight_delta  (default: 0.1)
+            version = float(rhbuild.split("-")[0])
+            if 7.1 <= version < 9.1:
                 endtime = datetime.datetime.now() + datetime.timedelta(seconds=300)
                 while endtime > datetime.datetime.now():
                     if check_stretch_health_warning():
@@ -1042,7 +1086,11 @@ def run(ceph_cluster, **kw):
 
             log.info(f"{dc_1_name} osds to remove are {dc_1_osds_to_remove}")
             log.info(f"{dc_2_name} osds to remove are {dc_2_osds_to_remove}")
-            validate_osd_removal_scenario(dc_1_osds_to_remove, dc_2_osds_to_remove)
+            validate_osd_removal_scenario(
+                dc_1_osds_to_remove,
+                dc_2_osds_to_remove,
+                check_bucket_weight_imbalance_warning=True,
+            )
 
         if "scenario-5" in scenarios_to_run:
             log.info(
@@ -1083,7 +1131,11 @@ def run(ceph_cluster, **kw):
 
             log.info(f"{dc_1_name} osds to remove are {dc_1_osds_to_remove}")
             log.info(f"{dc_2_name} osds to remove are {dc_2_osds_to_remove}")
-            validate_osd_removal_scenario(dc_1_osds_to_remove, dc_2_osds_to_remove)
+            validate_osd_removal_scenario(
+                dc_1_osds_to_remove,
+                dc_2_osds_to_remove,
+                check_bucket_weight_imbalance_warning=True,
+            )
 
         if "scenario-7" in scenarios_to_run:
             log.info(
@@ -1091,8 +1143,10 @@ def run(ceph_cluster, **kw):
             )
             dc_1_hosts_to_remove = [random.choice(dc_1_hosts)]
             dc_2_hosts_to_remove = [random.choice(dc_2_hosts)]
-            validate_host_removal_scenario(dc_1_hosts_to_remove, dc_2_hosts_to_remove)
-
+            validate_host_removal_scenario(
+                dc_1_hosts_to_remove,
+                dc_2_hosts_to_remove,
+            )
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)

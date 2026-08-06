@@ -3026,14 +3026,25 @@ os.system('sudo systemctl start  network')
                 "delete",
                 "cleanup",
             ]
-
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"mkdir -p /var/tmp/smallfile_dir_{rand_str}",
+                timeout=10,
+            )
             for op in operations:
                 cmd = (
                     f"python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation {op} --threads 8 --file-size 10240 "
-                    f"--files 10 --top {mounting_dir}"
+                    f"--files 10 --top {mounting_dir} --network-sync-dir /var/tmp/smallfile_dir_{rand_str}"
                 )
                 client.exec_command(sudo=True, cmd=cmd, timeout=600)
+            client.exec_command(
+                sudo=True, cmd=f"rm -rf /var/tmp/smallfile_dir_{rand_str}"
+            )
 
         def file_extract():
             client.exec_command(
@@ -3152,14 +3163,22 @@ os.system('sudo systemctl start  network')
                 "delete",
                 "cleanup",
             ]
-
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"mkdir -p /var/tmp/smallfile_dir_{rand_str}",
+                timeout=10,
+            )
             for op in ops:
                 log.debug("Running smallfile operation: {}".format(op))
                 cmd = (
                     f"python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation {op} --threads {io_params['threads']} "
                     f"--file-size {io_params['file-size']} --files {io_params['files']} "
-                    f"--top {io_path}"
+                    f"--top {io_path} --network-sync-dir /var/tmp/smallfile_dir_{rand_str}"
                 )
 
                 out, _ = client.exec_command(
@@ -3171,6 +3190,9 @@ os.system('sudo systemctl start  network')
                     )
                 )
                 time.sleep(3)
+            client.exec_command(
+                sudo=True, cmd=f"rm -rf /var/tmp/smallfile_dir_{rand_str}"
+            )
 
         def file_extract():
             log.info("IO tool scheduled : FILE_EXTRACT")

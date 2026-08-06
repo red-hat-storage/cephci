@@ -8,7 +8,9 @@ from tests.nfs.byok.byok_tools import (
     create_multiple_nfs_instance_for_byok,
     create_nfs_instance_for_byok,
     ensure_fresh_gklm_kmip_client,
+    ensure_gklm_login,
     get_enctag,
+    gklm_api_call,
     load_gklm_config,
     perform_io_operations_and_validate_fuse,
     setup_gklm_infrastructure,
@@ -75,22 +77,38 @@ def validate_sighup(
         log.error("Ganesha PID not found")
         return 1
 
+    # Long NFS waits can expire the GKLM REST session; refresh before cert ops.
+    ensure_gklm_login(gklm_rest_client)
+
     log.info("Generating new certificate and key from GKLM")
-    rsa_key_2, cert_2, _ = gklm_rest_client.certificates.get_certificates(
+    rsa_key_2, cert_2, _ = gklm_api_call(
+        gklm_rest_client,
+        gklm_rest_client.certificates.get_certificates,
         subject={
             "common_name": nfs_node.hostname,
             "ip_address": nfs_node.ip_address,
-        }
+        },
     )
 
     log.info("Deleting old certificate from GKLM and assigning new one")
-    gklm_rest_client.certificates.delete_certificate(gklm_cert_alias_old)
-    log.info(f"Successfully deleted GKLM client {gklm_cert_alias_old}")
-    gklm_rest_client.clients.assign_users_to_generic_kmip_client(
-        gkml_client_name, [gklm_user]
+    gklm_api_call(
+        gklm_rest_client,
+        gklm_rest_client.certificates.delete_certificate,
+        gklm_cert_alias_old,
     )
-    assign_cert_data = gklm_rest_client.clients.assign_client_certificate(
-        client_name=gkml_client_name, cert_pem=cert_2, alias=gklm_cert_alias_new
+    log.info(f"Successfully deleted GKLM client {gklm_cert_alias_old}")
+    gklm_api_call(
+        gklm_rest_client,
+        gklm_rest_client.clients.assign_users_to_generic_kmip_client,
+        gkml_client_name,
+        [gklm_user],
+    )
+    assign_cert_data = gklm_api_call(
+        gklm_rest_client,
+        gklm_rest_client.clients.assign_client_certificate,
+        client_name=gkml_client_name,
+        cert_pem=cert_2,
+        alias=gklm_cert_alias_new,
     )
 
     log.info(f"Successfully assigned new certificate {assign_cert_data}")
@@ -176,6 +194,11 @@ def run(ceph_cluster, **kw):
     config = kw.get("config", {})
     custom_data = kw.get("test_data", {})
     cephci_data = get_cephci_config()
+
+    cloud_type = str(config.get("cloud-type", "")).lower()
+    if cloud_type == "aws":
+        log.info("Skipping BYOK single/multi restart test: not supported on AWS")
+        return 0
 
     # Cluster nodes and setup
     nfs_nodes = ceph_cluster.get_nodes("nfs")
@@ -474,17 +497,37 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
         if config.get("check_sighup", False):
-            all_certs = []
-            for x in gklm_rest_client.certificates.list_system_certificates():
-                a = x.get("alias") or x.get("Alias")
-                if a:
-                    all_certs.append(a)
-            for x in gklm_rest_client.certificates.list_certificates():
-                a = x.get("alias") or x.get("Alias")
-                if a:
-                    all_certs.append(a)
-            if "certsighup" in all_certs:
-                gklm_cert_alias = "certsighup"
+            try:
+                ensure_gklm_login(gklm_rest_client)
+                all_certs = []
+                sys_certs = (
+                    gklm_api_call(
+                        gklm_rest_client,
+                        gklm_rest_client.certificates.list_system_certificates,
+                    )
+                    or []
+                )
+                for x in sys_certs:
+                    a = x.get("alias") or x.get("Alias")
+                    if a:
+                        all_certs.append(a)
+                certs = (
+                    gklm_api_call(
+                        gklm_rest_client,
+                        gklm_rest_client.certificates.list_certificates,
+                    )
+                    or []
+                )
+                for x in certs:
+                    a = x.get("alias") or x.get("Alias")
+                    if a:
+                        all_certs.append(a)
+                if "certsighup" in all_certs:
+                    gklm_cert_alias = "certsighup"
+            except Exception as e:
+                log.warning(
+                    "Could not refresh GKLM cert alias list during cleanup: %s", e
+                )
 
         # Cleanup single cluster or multi cluster accordingly
         if nfs_replication_number == 1 and client_export_mount_dict is not None:

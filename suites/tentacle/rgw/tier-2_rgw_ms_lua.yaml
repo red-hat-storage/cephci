@@ -439,3 +439,27 @@ tests:
             script-name: ../aws/test_lua_script_prerequest.py
             config-file-name: ../../aws/configs/test_aws_lua_object_lock_governance.yaml
             verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua script prerequest test with block object lock request
+      desc: Test Lua block_request.lua blocks create-bucket without object lock (COMPLIANCE)
+      polarion-id: CEPH-83632419
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_script_prerequest.py
+            config-file-name: ../../aws/configs/test_aws_lua_block_object_lock_request.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua script prerequest test with block object lock request governance
+      desc: Test Lua block_request.lua blocks create-bucket without object lock (GOVERNANCE)
+      polarion-id: CEPH-83632419
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_script_prerequest.py
+            config-file-name: ../../aws/configs/test_aws_lua_block_object_lock_request_governance.yaml
+            verify-io-on-site: ["ceph-sec"]

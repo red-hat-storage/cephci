@@ -210,6 +210,8 @@ tests:
               - "ceph config set client.rgw.rgw.default rgw_zonegroup shared"
               - "ceph config set client.rgw.rgw.default rgw_zone secondary"
               - "ceph orch restart rgw.rgw.default"
+              - "sleep 120"
+              - "radosgw-admin sync status"
       desc: Single site to multisite conversion on default configuration
       module: exec.py
       name: setup multisite

@@ -667,16 +667,16 @@ def validate_io(orch, namespaces, negative=False):
 
     def io_value(ns):
         sub_ns, pool, image = ns.rsplit("|", 2)
+        # Handle both {pool}/{image} and {pool}/{namespace}/{image} formats
+        rbd_path = f"{pool}/{image}"
         count = 3
         samples = []
         for _ in range(count):
-            out, _ = orch.shell(
-                args=[f"rbd --format json du {pool}/{image}"], timeout=600
-            )
+            out, _ = orch.shell(args=[f"rbd --format json du {rbd_path}"], timeout=600)
             out = json.loads(out)["images"][0]
             samples.append(out)
             time.sleep(6)
-        return sub_ns, f"{pool}/{image}", samples
+        return sub_ns, rbd_path, samples
 
     def validate_incremetal_io(write_samples):
         for i in range(len(write_samples) - 1):
@@ -725,21 +725,457 @@ def fetch_lb_groups(gateways, nodes):
     return lb_group_ids
 
 
-def get_network_mask(gateways):
-    ips = []
+def get_minimal_network_mask(ips):
+    """
+    Derive the tightest IPv4 network mask that covers all given IPs.
 
-    for gateway in gateways:
-        gw_ip = getattr(gateway.node, "ip_address", None)
-        if gw_ip:
-            ips.append(ipaddress.ip_address(gw_ip))
+    Uses XOR of min/max addresses to find the minimal prefix length.
+    """
     if not ips:
         return None
 
-    ip_ints = [int(ip) for ip in ips]
+    addrs = [ipaddress.ip_address(ip) for ip in ips]
+    ip_ints = [int(ip) for ip in addrs]
     min_ip = min(ip_ints)
     max_ip = max(ip_ints)
-    diff = min_ip ^ max_ip  # XOR min & max → find differing bits → derive prefix length
-    prefix_len = 32 - diff.bit_length()  # Build subnet from first IP + prefix length
+    diff = min_ip ^ max_ip  # XOR min & max → differing bits → prefix length
+    prefix_len = 32 - diff.bit_length()
 
-    network = ipaddress.ip_network(f"{ips[0]}/{prefix_len}", strict=False)
+    network = ipaddress.ip_network(f"{addrs[0]}/{prefix_len}", strict=False)
     return str(network)
+
+
+def get_network_mask(gateways):
+    """Derive minimal network-mask from gateway primary IPs."""
+    ips = []
+    for gateway in gateways:
+        gw_ip = getattr(gateway.node, "ip_address", None)
+        if gw_ip:
+            ips.append(gw_ip)
+    return get_minimal_network_mask(ips)
+
+
+def list_listeners(gateway, nqn):
+    """Return listener dicts for a subsystem."""
+    args = {"base_cmd_args": {"format": "json"}, "args": {"subsystem": nqn}}
+    out, _ = gateway.listener.list(**args)
+    if not out:
+        return []
+    data = json.loads(out)
+    return data.get("listeners", [])
+
+
+def get_listener_traddrs(gateway, nqn):
+    """Return sorted listener traddrs for a subsystem."""
+    return sorted(
+        {
+            listener.get("traddr")
+            for listener in list_listeners(gateway, nqn)
+            if listener.get("traddr")
+        }
+    )
+
+
+def get_subsystem_network_masks(gateway, nqn):
+    """Return network_mask list configured on a subsystem."""
+    args = {"base_cmd_args": {"format": "json"}, "args": {"subsystem": nqn}}
+    out, _ = gateway.subsystem.list(**args)
+    if not out:
+        return []
+    data = json.loads(out)
+    for subsystem in data.get("subsystems", []):
+        if subsystem.get("nqn") == nqn:
+            masks = subsystem.get("network_mask") or []
+            if isinstance(masks, str):
+                return [masks] if masks else []
+            return list(masks)
+    raise ValueError(f"Subsystem {nqn} not found while fetching network masks")
+
+
+def get_ipv4_on_interface(node, iface):
+    """Return the first IPv4 address configured on iface, or None."""
+    out, _ = node.exec_command(
+        cmd=f"ip -o -4 addr show dev {iface} | awk '{{print $4}}'",
+        sudo=True,
+        check_ec=False,
+    )
+    line = (out or "").strip().splitlines()
+    if not line:
+        return None
+    return line[0].split("/")[0]
+
+
+def list_iface_ipv4_cidrs(node, iface):
+    """Return IPv4 CIDRs currently configured on ``iface`` (e.g. ['10.64.94.1/27'])."""
+    out, _ = node.exec_command(
+        cmd=f"ip -o -4 addr show dev {iface} | awk '{{print $4}}'",
+        sudo=True,
+        check_ec=False,
+    )
+    return [line.strip() for line in (out or "").strip().splitlines() if line.strip()]
+
+
+def _nmcli_available(node):
+    out, _ = node.exec_command(cmd="command -v nmcli", check_ec=False)
+    return bool((out or "").strip())
+
+
+def interface_exists(node, iface):
+    """Return True if network device ``iface`` is present (even if DOWN)."""
+    out, err = node.exec_command(
+        cmd=f"ip link show dev {iface}",
+        sudo=True,
+        check_ec=False,
+    )
+    text = f"{out or ''}{err or ''}".lower()
+    if "does not exist" in text or "cannot find device" in text:
+        return False
+    # ip link show prints the iface name on success
+    return iface in (out or "")
+
+
+def _ensure_interface_present(node, iface):
+    """
+    Ensure ``iface`` exists. Never use ``nmcli device disconnect`` — that can
+    delete VLAN/virtual devices (e.g. virtual@eno12399np0).
+
+    If the device is missing, try bringing an NM connection profile back up.
+    """
+    if interface_exists(node, iface):
+        return
+
+    LOG.warning(
+        f"[{node.hostname}] iface {iface} is missing; attempting NM connection restore"
+    )
+    if _nmcli_available(node):
+        # Prefer connection profile named like the iface, then any profile bound to it
+        for cmd in (
+            f"nmcli connection up id {iface}",
+            f"nmcli connection up {iface}",
+            f"nmcli -g NAME,DEVICE connection show | awk -F: -v d={iface} '$2==d{{print $1; exit}}' "
+            f"| xargs -r nmcli connection up id",
+        ):
+            node.exec_command(cmd=cmd, sudo=True, check_ec=False)
+            if interface_exists(node, iface):
+                LOG.info(f"[{node.hostname}] restored iface {iface} via nmcli")
+                return
+
+    raise RuntimeError(
+        f"[{node.hostname}] secondary iface {iface} no longer exists. "
+        f"Do not use nmcli device disconnect / ip link delete on VLAN/virtual "
+        f"NICs — recreate the iface (e.g. nmcli connection up <profile> or "
+        f"re-add the VLAN on the parent), then re-run the test."
+    )
+
+
+def take_interface_ipv4s_down(node, iface, saved_cidrs=None):
+    """
+    Remove IPv4 addresses from ``iface`` only — keep the device itself.
+
+    Intentionally avoids ``nmcli device disconnect`` and ``ip link set down``,
+    which can destroy VLAN/virtual interfaces (lab: virtual@parent disappears).
+    """
+    if not interface_exists(node, iface):
+        raise RuntimeError(
+            f"[{node.hostname}] cannot remove IPv4s: iface {iface} does not exist"
+        )
+
+    cidrs = (
+        list(saved_cidrs)
+        if saved_cidrs is not None
+        else list_iface_ipv4_cidrs(node, iface)
+    )
+    LOG.info(
+        f"[{node.hostname}] removing IPv4s from {iface} (keep device; cidrs={cidrs})"
+    )
+    for cidr in cidrs:
+        node.exec_command(
+            cmd=f"ip addr del {cidr} dev {iface}",
+            sudo=True,
+            check_ec=False,
+        )
+    # Safety: clear any remaining IPv4s without deleting the link
+    node.exec_command(cmd=f"ip -4 addr flush dev {iface}", sudo=True, check_ec=False)
+
+    if not interface_exists(node, iface):
+        raise RuntimeError(
+            f"[{node.hostname}] iface {iface} disappeared after IPv4 removal — "
+            f"unexpected; check lab networking"
+        )
+
+    remaining = list_iface_ipv4_cidrs(node, iface)
+    if remaining:
+        raise RuntimeError(
+            f"[{node.hostname}] expected no IPv4 on {iface} after addr del; still {remaining}"
+        )
+    return cidrs
+
+
+def bring_interface_ipv4s_up(node, iface, cidrs, timeout=60):
+    """
+    Re-apply saved IPv4 CIDRs on ``iface`` (device must already exist or be
+    restorable via NM connection profile).
+    """
+    if not cidrs:
+        raise ValueError(f"[{node.hostname}] no CIDRs to restore on {iface}")
+
+    LOG.info(f"[{node.hostname}] restoring IPv4s on {iface} (cidrs={cidrs})")
+    _ensure_interface_present(node, iface)
+    node.exec_command(cmd=f"ip link set {iface} up", sudo=True, check_ec=False)
+
+    present = set(list_iface_ipv4_cidrs(node, iface))
+    for cidr in cidrs:
+        if cidr not in present:
+            node.exec_command(
+                cmd=f"ip addr add {cidr} dev {iface}",
+                sudo=True,
+                check_ec=False,
+            )
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        present_ips = {c.split("/")[0] for c in list_iface_ipv4_cidrs(node, iface)}
+        expected_ips = {c.split("/")[0] for c in cidrs}
+        if expected_ips.issubset(present_ips):
+            LOG.info(f"[{node.hostname}] {iface} IPv4s restored: {sorted(present_ips)}")
+            return
+        time.sleep(2)
+
+    raise RuntimeError(
+        f"[{node.hostname}] timed out waiting for {iface} IPv4s {cidrs}; "
+        f"have {list_iface_ipv4_cidrs(node, iface)}; "
+        f"iface_exists={interface_exists(node, iface)}"
+    )
+
+
+def secondary_iface_state_on_gateways(gateways, networks, state):
+    """
+    Apply secondary IPv4 remove/restore across all gateways.
+
+    ``networks`` is the dict from ``discover_gateway_network_roles``.
+    For ``state='down'``, stores saved CIDRs on each per_gateway entry under
+    ``secondary_cidrs``. For ``state='up'``, restores from that.
+    """
+    if state not in ("up", "down"):
+        raise ValueError(f"state must be 'up' or 'down', got {state}")
+
+    for gw in gateways:
+        host = gw.node.hostname
+        info = networks["per_gateway"][host]
+        secondary = info.get("secondary") or {}
+        iface = secondary.get("iface")
+        if not iface:
+            raise RuntimeError(f"[{host}] no secondary iface in discovered roles")
+
+        if state == "down":
+            cidrs = take_interface_ipv4s_down(
+                gw.node, iface, saved_cidrs=info.get("secondary_cidrs")
+            )
+            info["secondary_cidrs"] = cidrs
+        else:
+            cidrs = info.get("secondary_cidrs")
+            if not cidrs:
+                # Fall back to discovered secondary CIDR
+                cidr = secondary.get("cidr")
+                cidrs = [cidr] if cidr else []
+            bring_interface_ipv4s_up(gw.node, iface, cidrs)
+
+
+def list_node_ipv4_addrs(node):
+    """
+    Discover non-loopback IPv4 addresses on a node via ``ip -o -4 addr``.
+
+    Returns:
+        list[dict]: [{"iface": "eno8303", "ip": "10.64.0.192", "prefix": "23"}, ...]
+    """
+    out, _ = node.exec_command(
+        cmd="ip -o -4 addr show | awk '{print $2,$4}'",
+        sudo=True,
+    )
+    addrs = []
+    seen = set()
+    for line in (out or "").strip().splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        iface, cidr = parts[0], parts[1]
+        iface = iface.split("@")[0]
+        if iface == "lo" or iface.startswith("lo:"):
+            continue
+        ip = cidr.split("/")[0]
+        prefix = cidr.split("/")[1] if "/" in cidr else None
+        key = (iface, ip)
+        if key in seen:
+            continue
+        seen.add(key)
+        addrs.append({"iface": iface, "ip": ip, "prefix": prefix, "cidr": cidr})
+    return addrs
+
+
+def classify_gateway_ipv4s(node, primary_ip=None):
+    """
+    Split node IPv4s into GW-primary vs secondary.
+
+    Primary = interface hosting ``primary_ip`` (defaults to node.ip_address).
+    Secondary = another IPv4-bearing interface (minimum requirement: 2 IPv4 ifaces).
+
+    Returns:
+        dict with keys primary, secondaries (list), all
+    """
+    primary_ip = primary_ip or getattr(node, "ip_address", None)
+    addrs = list_node_ipv4_addrs(node)
+    ifaces_with_ip = {}
+    for entry in addrs:
+        ifaces_with_ip.setdefault(entry["iface"], []).append(entry)
+
+    if len(ifaces_with_ip) < 2:
+        raise RuntimeError(
+            f"{node.hostname} needs at least 2 IPv4 interfaces for refresh-network "
+            f"E2E; found {sorted(ifaces_with_ip.keys()) or 'none'}"
+        )
+
+    primary = None
+    for entry in addrs:
+        if primary_ip and entry["ip"] == primary_ip:
+            primary = entry
+            break
+    if not primary:
+        # Fall back to first iface if primary_ip not found on any iface
+        first_iface = sorted(ifaces_with_ip.keys())[0]
+        primary = ifaces_with_ip[first_iface][0]
+        LOG.warning(
+            f"[{node.hostname}] primary IP {primary_ip} not found in ip a; "
+            f"using {primary['iface']}/{primary['ip']}"
+        )
+
+    secondaries = [
+        entry
+        for entry in addrs
+        if entry["iface"] != primary["iface"] and entry["ip"] != primary["ip"]
+    ]
+    if not secondaries:
+        raise RuntimeError(
+            f"{node.hostname}: no secondary IPv4 found besides primary "
+            f"{primary['iface']}/{primary['ip']}"
+        )
+
+    return {"primary": primary, "secondaries": secondaries, "all": addrs}
+
+
+def discover_gateway_network_roles(gateways, secondary_iface=None):
+    """
+    Discover primary/secondary IPv4 roles across gateway nodes.
+
+    - Primary IPs: each GW's hosted address (node.ip_address / matching iface)
+    - Secondary IPs: IPv4s on a non-primary iface
+      Prefer a common secondary iface name present on all GWs; otherwise use
+      the first secondary IPv4 on each GW. Optional ``secondary_iface`` forces
+      the iface name.
+
+    Returns:
+        dict:
+          primary_ips, secondary_ips, primary_mask, secondary_mask,
+          per_gateway (hostname -> {primary, secondary})
+    """
+    per_gateway = {}
+    secondary_iface_candidates = None
+
+    for gw in gateways:
+        classified = classify_gateway_ipv4s(gw.node)
+        per_gateway[gw.node.hostname] = {
+            "primary": classified["primary"],
+            "secondaries": classified["secondaries"],
+        }
+        names = {s["iface"] for s in classified["secondaries"]}
+        secondary_iface_candidates = (
+            names
+            if secondary_iface_candidates is None
+            else secondary_iface_candidates & names
+        )
+        LOG.info(
+            f"[{gw.node.hostname}] ip a IPv4 roles: primary="
+            f"{classified['primary']['iface']}/{classified['primary']['ip']}, "
+            f"secondaries="
+            f"{[(s['iface'], s['ip']) for s in classified['secondaries']]}"
+        )
+
+    if secondary_iface:
+        chosen_secondary_iface = secondary_iface
+    elif secondary_iface_candidates:
+        chosen_secondary_iface = sorted(secondary_iface_candidates)[0]
+    else:
+        chosen_secondary_iface = None
+
+    primary_ips = []
+    secondary_ips = []
+    secondary_map = {}
+
+    for gw in gateways:
+        host = gw.node.hostname
+        info = per_gateway[host]
+        primary_ips.append(info["primary"]["ip"])
+
+        secondary = None
+        if chosen_secondary_iface:
+            for entry in info["secondaries"]:
+                if entry["iface"] == chosen_secondary_iface:
+                    secondary = entry
+                    break
+            if not secondary:
+                raise RuntimeError(
+                    f"{host}: configured/chosen secondary iface "
+                    f"'{chosen_secondary_iface}' has no IPv4"
+                )
+        else:
+            secondary = info["secondaries"][0]
+
+        secondary_map[host] = secondary
+        secondary_ips.append(secondary["ip"])
+        per_gateway[host]["secondary"] = secondary
+
+    primary_mask = get_minimal_network_mask(primary_ips)
+    secondary_mask = get_minimal_network_mask(secondary_ips)
+
+    LOG.info(
+        f"Discovered GW networks: primary_mask={primary_mask} "
+        f"from {sorted(set(primary_ips))}; secondary_mask={secondary_mask} "
+        f"from {sorted(set(secondary_ips))} "
+        f"(secondary_iface={chosen_secondary_iface or 'per-node first secondary'})"
+    )
+
+    return {
+        "primary_ips": sorted(set(primary_ips)),
+        "secondary_ips": sorted(set(secondary_ips)),
+        "primary_mask": primary_mask,
+        "secondary_mask": secondary_mask,
+        "secondary_iface": chosen_secondary_iface,
+        "per_gateway": per_gateway,
+    }
+
+
+def refresh_gateway_network(gateway, nqn):
+    """
+    Run gateway refresh_network for a subsystem and return parsed JSON status.
+
+    Command: ceph nvmeof gateway refresh_network --subsystem <nqn>
+    """
+    args = {
+        "base_cmd_args": {"format": "json"},
+        "args": {"subsystem": nqn},
+    }
+    out, err = gateway.gateway.refresh_network(**args)
+    LOG.info(
+        f"[{gateway.node.hostname}] refresh_network for {nqn}: out={out}, err={err}"
+    )
+    if not out:
+        return {"status": 0, "added": [], "removed": [], "raw": out}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        # Plain-text success path
+        return {
+            "status": 0 if "Successful" in (out or "") else 1,
+            "added": [],
+            "removed": [],
+            "raw": out,
+        }

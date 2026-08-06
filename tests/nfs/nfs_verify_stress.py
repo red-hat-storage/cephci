@@ -2,7 +2,12 @@ import json
 from threading import Thread
 from time import sleep
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import (
+    cleanup_cluster,
+    init_cluster_health_check,
+    log_cluster_health_and_check_crashes,
+    setup_nfs_cluster,
+)
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError
@@ -43,6 +48,7 @@ def run(ceph_cluster, **kw):
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
     nfs_server_name = [nfs_node.hostname for nfs_node in servers]
+    rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
 
     try:
         # Setup nfs cluster
@@ -107,8 +113,9 @@ def run(ceph_cluster, **kw):
 
     except Exception as e:
         log.error(f"Failed to setup nfs cluster {e}")
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
     finally:
+        crash_detected = log_cluster_health_and_check_crashes(rados_obj, start_time)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=servers)
-        pass
+        if crash_detected:
+            return 1

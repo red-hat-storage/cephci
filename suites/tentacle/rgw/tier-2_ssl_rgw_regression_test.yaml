@@ -118,6 +118,17 @@ tests:
 
   # STS tests
 
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert
+      polarion-id: CEPH-10362
   - test:
       name: STS Tests to perform assume role on principle user and perform IOs
       desc: Perform assume role on principle user and perform IOs
@@ -278,6 +289,16 @@ tests:
         timeout: 6000
 
   - test:
+      name: Control functionality for RGW lifecycle
+      desc: Control functionality for RGW lifecycle with rgw_enable_lc_threads
+      polarion-id: CEPH-83575046
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_rgw_enable_lc_threads.yaml
+
+  - test:
       name: Bucket setlifeycle with invalid date in LC conf
       desc: Setlifeycle to bucket with invalid date format in Lifecycle configuration
       polarion-id: CEPH-11186
@@ -296,13 +317,3 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_enable_object_exp.yaml
-
-  - test:
-      name: Control functionality for RGW lifecycle
-      desc: Control functionality for RGW lifecycle with rgw_enable_lc_threads
-      polarion-id: CEPH-83575046
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_rgw_enable_lc_threads.yaml

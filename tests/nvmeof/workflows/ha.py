@@ -16,7 +16,9 @@ from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.gateway_entities import fetch_namespaces
 from tests.nvmeof.workflows.initiator import (
     compare_client_namespace,
+    fetch_paths_for_namespaces,
     prepare_io_execution,
+    purge_cached_initiators,
     validate_initiator,
 )
 from tests.nvmeof.workflows.nvme_utils import (
@@ -540,13 +542,30 @@ class HighAvailability:
         initiators = self.config["initiators"]
 
         try:
+            # Non-auth HA only: drop leftover DHCHAP initiator cache from prior
+            # suite tests (e.g. inbandauth). Skip when pre_configured_initiators
+            # is set — that path is used by inband-auth and must keep keys.
+            pre_configured = self.config.get("pre_configured_initiators")
+            if not pre_configured:
+                initiator_nodes = {
+                    init["node"]
+                    for init in initiators
+                    if isinstance(init, dict) and init.get("node")
+                }
+                if initiator_nodes:
+                    LOG.info(
+                        "Purging cached initiators before non-auth HA connect: %s",
+                        sorted(initiator_nodes),
+                    )
+                    purge_cached_initiators(
+                        initiator_nodes, cluster=self.cluster, disconnect=True
+                    )
+
             # Prepare FIO Execution
             LOG.info("Fetching namespaces from all gateways")
             namespaces = fetch_namespaces(self.gateways[0])
 
             LOG.info("Preparing IO execution")
-            # Get pre-configured initiators if available
-            pre_configured = self.config.get("pre_configured_initiators")
             clients = prepare_io_execution(
                 initiators,
                 gateways=self.gateways,
@@ -588,6 +607,7 @@ class HighAvailability:
                     fail_gws, _ = catogorize(self.nvme_service, nodes)
                     fail_gw_ana_ids = []
                     namespaces = []
+                    namespaces_for_io = []
                     all_failed_ns = {}
                     for gw in fail_gws:
                         fail_gw_ana_ids.append(gw.ana_group_id)
@@ -599,7 +619,8 @@ class HighAvailability:
                         LOG.info(
                             f"Namespaces for failed gateway {gw.node.ip_address} before failover are {ns_list}"
                         )
-                        namespaces.extend(ns_info)
+                        namespaces.extend(ns_list)
+                        namespaces_for_io.extend(ns_info)
                         all_failed_ns.update({gw.ana_group_id: ns_list})
                         # Validate initiator for the failed gateway
                         LOG.info(
@@ -629,15 +650,25 @@ class HighAvailability:
                         # Start IO Execution
                         LOG.info("Starting IO Execution")
                         for initiator in self.clients:
+                            devices = initiator.fetch_lsblk_nvme_devices_dict()
+                            gw_paths = fetch_paths_for_namespaces(
+                                initiator, namespaces, devices
+                            )
+                            # Extract device paths from the returned structure
+                            paths = [f"/dev/{p['namespace']}" for p in gw_paths]
+                            LOG.info(f"Device paths for FIO: {paths}")
                             io_tasks.append(
                                 executor.submit(
-                                    initiator.start_fio, "100%", iodepth=iodepth
+                                    initiator.start_fio,
+                                    "100%",
+                                    iodepth=iodepth,
+                                    paths=paths,
                                 )
                             )
                         time.sleep(20)  # time sleep for IO to Kick-in
 
                         LOG.info("Validating IO before failover")
-                        validate_io(self.orch, namespaces)
+                        validate_io(self.orch, namespaces_for_io)
 
                         LOG.info("Failover started")
                         for gw in fail_gws:
@@ -654,7 +685,7 @@ class HighAvailability:
                         LOG.info("Failover Completed")
 
                         LOG.info("Validating IO after failover")
-                        validate_io(self.orch, namespaces)
+                        validate_io(self.orch, namespaces_for_io)
 
                         for gw in fail_gws:
                             LOG.info(
@@ -729,7 +760,7 @@ class HighAvailability:
                             time.sleep(20)  # time sleep for IO to Kick-in
 
                             LOG.info("Validating IO before failback")
-                            validate_io(self.orch, namespaces)
+                            validate_io(self.orch, namespaces_for_io)
 
                             LOG.info("Failback started")
                             for gw in fail_gws:
@@ -756,7 +787,7 @@ class HighAvailability:
                             LOG.info("Failback completed")
 
                             LOG.info("Validating IO after failback")
-                            validate_io(self.orch, namespaces)
+                            validate_io(self.orch, namespaces_for_io)
                             # Wait for IO to complete and collect FIO outputs
                             fio_outputs = []
                             if io_tasks:

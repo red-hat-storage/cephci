@@ -56,6 +56,7 @@ import os
 
 import yaml
 
+from ceph.ceph_admin.helper import check_service_exists
 from utility import utils
 from utility.log import Log
 from utility.utils import (
@@ -64,6 +65,7 @@ from utility.utils import (
     get_cephci_config,
     install_start_kafka,
     setup_cluster_access,
+    setup_gklm_prereq,
 )
 
 log = Log(__name__)
@@ -95,6 +97,7 @@ def run(ceph_cluster, **kw):
     log.info("Running RGW test version: %s", config.get("test-version", "v2"))
 
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
+    rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
     client_ceph_object = ceph_cluster.get_ceph_object("client")
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
@@ -124,6 +127,13 @@ def run(ceph_cluster, **kw):
     elif run_on_haproxy:
         exec_from = client_node
         append_param = ""
+    elif config.get("use-ingress"):
+        installer = ceph_cluster.get_ceph_object("installer")
+        vip_out, _ = installer.exec_command(cmd="cat /tmp/ingress_vip")
+        ingress_vip = vip_out.strip()
+        log.info(f"Using ingress VIP: {ingress_vip}")
+        exec_from = client_node
+        append_param = " --rgw-node " + ingress_vip
     else:
         exec_from = client_node
         append_param = " --rgw-node " + str(rgw_node.ip_address)
@@ -156,7 +166,8 @@ def run(ceph_cluster, **kw):
         exec_from.exec_command(cmd=f"sudo mkdir {test_folder}")
         utils.clone_the_repo(config, exec_from, test_folder_path)
     if git_clone_configs_repo:
-        utils.clone_configs_repo(rgw_node, repo_name="rgw_configs")
+        for rgw_ceph_object in rgw_nodes:
+            utils.clone_configs_repo(rgw_ceph_object.node, repo_name="rgw_configs")
         utils.clone_configs_repo(client_node, repo_name="rgw_configs")
 
     install_common = config.get("install_common", True)
@@ -178,6 +189,18 @@ def run(ceph_cluster, **kw):
         install_start_kafka(rgw_node, cloud_type)
     if configure_kafka_broker_security:
         configure_kafka_security(rgw_node, cloud_type)
+
+    setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
+    if setup_gklm_prerequisites:
+        setup_gklm_prereq(ceph_cluster, cloud_type)
+        rgw_status = check_service_exists(
+            ceph_cluster.get_nodes(role="installer")[0],
+            service_type="rgw",
+            interval=10,
+            timeout=180,
+        )
+        if not rgw_status:
+            raise Exception("rgw service restart failed")
 
     if install_keystone_ldap:
         config_keystone_ldap(rgw_node, cloud_type)
@@ -208,6 +231,20 @@ def run(ceph_cluster, **kw):
         f_name = f"/home/cephuser/{test_folder}" + config_dir + config_file_name
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
+
+    if config.get("use-ingress"):
+        installer = ceph_cluster.get_ceph_object("installer")
+        vip_out, _ = installer.exec_command(cmd="cat /tmp/ingress_vip")
+        ingress_ip = vip_out.strip()
+        ingress_port = config.get("ingress-port", 443)
+        cfg_path = f"/home/cephuser/{test_folder}" + config_dir + config_file_name
+        out, _ = exec_from.exec_command(cmd=f"cat {cfg_path}")
+        cfg_data = yaml.safe_load(out)
+        cfg_data["config"]["endpoint_ip"] = ingress_ip
+        cfg_data["config"]["endpoint_port"] = ingress_port
+        remote_fp = exec_from.remote_file(file_name=cfg_path, file_mode="w", sudo=True)
+        remote_fp.write(yaml.dump(cfg_data, default_flow_style=False))
+        log.info(f"Injected ingress endpoint: {ingress_ip}:{ingress_port}")
 
     # Build env vars for test execution; inject IBM_CLOUD_API_KEY from env or cephci.yaml
     env_vars = list(config.get("env-vars", []))

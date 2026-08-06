@@ -25,7 +25,7 @@ tests:
           - config:
               args:
                 rhcs-version: 6.1
-                release: rc
+                release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
@@ -136,7 +136,6 @@ tests:
         - test:
             abort-on-fail: false
             config:
-              timeout: 30
               client_upgrade: 1
               client_upgrade_node: "node8"
             desc: Runs IOs in parallel with upgrade process

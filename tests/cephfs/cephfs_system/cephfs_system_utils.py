@@ -131,6 +131,7 @@ class CephFSSystemUtils(object):
             "mgr": self.mgrs,
             "mon": self.mons,
             "osd": self.osds,
+            "nfs": self.nfss,
         }
         log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
 

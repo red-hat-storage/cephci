@@ -190,7 +190,7 @@ def run(ceph_cluster, **kw):
         loc_absent = False
         mons = rados_obj.run_ceph_command(mon_dump_cmd)
         for mon in mons["mons"]:
-            if mon["crush_location"] == "{}":
+            if mon["crush_location"] == "{}" or mon["crush_location"] == []:
                 log.debug(f"Mon location attributes not present on mon : {mon}")
                 loc_absent = True
 
@@ -218,7 +218,10 @@ def run(ceph_cluster, **kw):
                 tiebreaker_mon = [
                     entry["name"]
                     for entry in mons["mons"]
-                    if entry.get("crush_location") == "{}"
+                    if (
+                        entry.get("crush_location") == "{}"
+                        or entry.get("crush_location") == []
+                    )
                 ][0]
                 # Setting up CRUSH location on the final tiebreaker mon
                 tiebreaker_cmd = f"ceph mon set_location {tiebreaker_mon} datacenter={tiebreaker_mon_site_name}"

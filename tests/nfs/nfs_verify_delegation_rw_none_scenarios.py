@@ -10,6 +10,7 @@ from nfs_delegation_operations import (
     parse_nfs4_open_delegation_types,
     read_ganesha_delegation_tailf_capture,
     restore_delegation_ganesha_templates,
+    skip_delegation_tests_unless_supported,
     start_ganesha_delegation_tailf_follow,
     stop_ganesha_delegation_tailf_follow,
     teardown_delegation_exports,
@@ -66,6 +67,8 @@ def _run_delegation_export_client_io(client, testfile, delegation_mode):
 def run(ceph_cluster, **kw):
     """Three exports (ro/rw/none) with cluster Delegations=true; validate Ganesha delegation logs."""
     config = kw.get("config", {})
+    if skip_delegation_tests_unless_supported(config):
+        return 0
     clients = ceph_cluster.get_nodes("client")
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     installers = ceph_cluster.get_nodes("installer")

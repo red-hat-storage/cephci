@@ -38,9 +38,17 @@ class Namespace:
         """Get IO Stats for namespace."""
         return self.base.run_nvme_cli(self.name, "get_io_stats", **kwargs)
 
+    def get(self, **kwargs):
+        """Get namespace details."""
+        return self.base.run_nvme_cli(self.name, "get", **kwargs)
+
     def list(self, **kwargs):
         """Lists namespaces under subsystem."""
         return self.base.run_nvme_cli(self.name, "list", **kwargs)
+
+    def list_hosts(self, **kwargs):
+        """List hosts allowed for a namespace."""
+        return self.base.run_nvme_cli(self.name, "list_hosts", **kwargs)
 
     def resize(self, **kwargs):
         """Resize namespace under subsystem."""

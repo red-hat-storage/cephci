@@ -594,7 +594,7 @@ def run(ceph_cluster, **kw):
         start_time = get_cluster_timestamp(rados_obj.node)
         log.debug(f"Test workflow started. Start time: {start_time}")
         try:
-            version_info = get_daemon_versions(rados_obj)
+            version_info = _get_daemon_versions(rados_obj)
             log.info("Daemon version distribution:")
             for daemon_type, versions in version_info.items():
                 log.info("  %s: %s", daemon_type, versions)
@@ -3115,7 +3115,7 @@ def write_and_verify_objects(
         raise
 
 
-def get_daemon_versions(rados_obj):
+def _get_daemon_versions(rados_obj):
     """
     Fetch and parse daemon versions from the cluster using 'ceph versions'
 
@@ -3207,7 +3207,7 @@ def get_expected_osd_release(version_info):
     - 9.x (20.x) -> tentacle
 
     Args:
-        version_info: Dictionary from get_daemon_versions()
+        version_info: Dictionary from _get_daemon_versions()
 
     Returns:
         String with expected release name (e.g., 'reef', 'squid', 'tentacle')
@@ -3253,7 +3253,7 @@ def identify_upgrade_case(version_info):
     2. Case 5 only runs if NO MDS are upgraded (tests backward compatibility with older MDS)
 
     Args:
-        version_info: Dictionary from get_daemon_versions()
+        version_info: Dictionary from _get_daemon_versions()
 
     Returns:
         String indicating the upgrade case, or None if not in a recognized state

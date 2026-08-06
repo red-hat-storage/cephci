@@ -36,19 +36,21 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-        global common_util, nested_dir
+        global common_util, nested_dir, clients_orig
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         fs_util = FsUtilsV1(ceph_cluster)
         common_util = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
+        run_config = kw.get("run_config")
         cephfs_config = {}
         run_time = config.get("run_time_hrs", 8)
         nested_dir = config.get("nested_dir", True)
         sv_cnt = config.get("sv_cnt", 100)
         clone_cnt = config.get("clone_cnt", 10)
-        clients = ceph_cluster.get_ceph_objects("client")
+        clients_orig = ceph_cluster.get_ceph_objects("client")
+        clients = clients_orig[1:11]
         file = "cephfs_systest_data.json"
-        client1 = clients[0]
+        client1 = clients_orig[0]
         f = client1.remote_file(
             sudo=True,
             file_name=f"/home/cephuser/{file}",
@@ -69,8 +71,7 @@ def run(ceph_cluster, **kw):
         proc_status_list = []
         write_procs = []
         io_test_fail = 0
-        # log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-        log_base_dir = config.get("log-dir")
+        log_base_dir = run_config.get("log_dir")
         log_path = f"{log_base_dir}/sv_clone_subtests"
         try:
             os.mkdir(log_path)
@@ -78,7 +79,7 @@ def run(ceph_cluster, **kw):
             log.info(ex)
             if "File exists" not in str(ex):
                 return 1
-
+        clone_cnt = max(10, int(clone_cnt))
         set_verify_clone_config(client1, clone_cnt)
         for io_test in test_list:
             log.info(f"Running {io_test} : {io_tests[io_test]}")
@@ -197,9 +198,13 @@ def sv_test_workflow_1(
             "subvol_name": sv_name,
             "group_name": group_name,
         }
-        fs_util.create_subvolume(client, **subvolume, validate=False)
-        log1.info(f"Created {sv_name} on {group_name}")
-        sv_rm_list.append(sv_name)
+        try:
+            fs_util.create_subvolume(client, **subvolume, validate=False)
+            log1.info(f"Created {sv_name} on {group_name}")
+            sv_rm_list.append(sv_name)
+        except Exception as e:
+            if "already exists" not in str(e):
+                log1.error(f"Error creating {sv_name}: {e}")
         k += 1
 
     end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
@@ -217,28 +222,40 @@ def sv_test_workflow_1(
                         "subvol_name": sv_name,
                         "group_name": group_name,
                     }
-                    p.spawn(
-                        fs_util.remove_subvolume, client, **subvolume, validate=True
-                    )
-                    log1.info(f"started {sv_name} remove")
+                    try:
+                        p.spawn(
+                            fs_util.remove_subvolume, client, **subvolume, validate=True
+                        )
+                        log1.info(f"started {sv_name} remove")
+                    except Exception as e:
+                        if "does not exist" not in str(e):
+                            log1.error(f"Error removing {sv_name}: {e}")
                     rand_str = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
                         for _ in list(range(3))
                     )
-                    sv_name = f"systest_sv_{rand_str}"
+                    sv_name_1 = f"systest_sv_{rand_str}"
                     subvolume1 = {
                         "vol_name": fs_name,
-                        "subvol_name": sv_name,
+                        "subvol_name": sv_name_1,
                         "group_name": group_name,
                     }
-                    p.spawn(
-                        fs_util.create_subvolume, client, **subvolume1, validate=False
-                    )
-                    log1.info(f"started {sv_name} create")
-                    sv_rm_list.append(sv_name)
+                    try:
+                        p.spawn(
+                            fs_util.create_subvolume,
+                            client,
+                            **subvolume1,
+                            validate=False,
+                        )
+                        log1.info(f"started {sv_name_1} create")
+                        sv_rm_list.append(sv_name_1)
+                    except Exception as e:
+                        if "already exists" not in str(e):
+                            log1.error(f"Error creating {sv_name_1}: {e}")
+
             i += 100
         time.sleep(30)
-        cluster_healthy = is_cluster_healthy(client)
+        cluster_healthy = is_cluster_healthy(clients_orig[0])
         log1.info(f"cluster_health {cluster_healthy}")
 
     log1.info("sv_test_workflow_1 completed")
@@ -273,12 +290,12 @@ def clone_test_workflow_2(
         fs_util.create_snapshot(client, **snapshot, validate=False)
         log1.info(f"Snapshot {snap_name} created on {sv_name}")
         sv_info[sv_name].update({"snap_name": snap_name})
-    k = 0
+    k = 1
     clone_rm_list = []
-    while k <= int(clone_cnt):
+    while k <= (int(clone_cnt) - 1):
         with parallel() as p:
             for sv_info in sv_info_list:
-                if k <= int(clone_cnt):
+                if k <= (int(clone_cnt) - 1):
                     for i in sv_info:
                         sv_name = i
                     snap_name = sv_info[sv_name]["snap_name"]
@@ -307,6 +324,37 @@ def clone_test_workflow_2(
                     log1.info(f"Started {clone_name} on {sv_name}")
                     k += 1
                     clone_rm_list.append(clone_obj)
+
+    def wait_for_clone(client, fs_util, fs_name, clone_name, group_name=None):
+        max_wait_time = 1800
+        start_time = time.time()
+        while time.time() - start_time < max_wait_time:
+            out, _ = fs_util.get_clone_status(
+                client, fs_name, clone_name, group_name=group_name
+            )
+            status_json = json.loads(out)
+            state = status_json.get("status", {}).get("state", "")
+            if state == "complete":
+                return 0
+            elif state == "failed":
+                return 1
+            time.sleep(1)
+        if state == "in-progress":
+            log1.info(f"Clone {clone_name} is in progress, waiting for it to complete")
+            return 1
+        return 0
+
+    with parallel() as p:
+        for clone_obj in clone_rm_list:
+            p.spawn(
+                wait_for_clone,
+                client,
+                fs_util,
+                fs_name,
+                clone_obj["clone_name"],
+                group_name=clone_obj.get("group_name", None),
+            )
+            log1.info(f"Waiting for {clone_obj['clone_name']} to complete")
     if nested_dir:
         mount_params = {
             "client": client,
@@ -326,7 +374,11 @@ def clone_test_workflow_2(
             sv_path = common_util.subvolume_get_path(client, fs_name, **sv_args)
             mount_params.update({"mnt_path": sv_path})
             mnt_path, _ = fs_util.mount_ceph("fuse", mount_params)
-            fs_system_utils.add_nested_dirs(client, mnt_path)
+            try:
+                fs_system_utils.add_nested_dirs(client, mnt_path)
+            except Exception as e:
+                log.error(f"Error adding nested dirs: {e}")
+                continue
             client.exec_command(sudo=True, cmd=f"umount -l {mnt_path}", check_ec=False)
 
     end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
@@ -334,7 +386,7 @@ def clone_test_workflow_2(
     while datetime.datetime.now() < end_time and cluster_healthy:
         rm_cmd_list = []
         clone_cmd_list = []
-        for i in range(0, clone_cnt):
+        for i in range(0, int(clone_cnt) - 1):
             clone_obj = clone_rm_list.pop(0)
             sv_name = clone_obj["sv_name"]
             clone_rm = {
@@ -372,9 +424,20 @@ def clone_test_workflow_2(
                 p.spawn(fs_util.create_clone, client, **clone_create, validate=False)
                 log1.info(f"Creating {clone_create['subvol_name']}")
         time.sleep(30)
+        with parallel() as p:
+            for clone_obj in clone_rm_list:
+                p.spawn(
+                    wait_for_clone,
+                    client,
+                    fs_util,
+                    fs_name,
+                    clone_obj["clone_name"],
+                    group_name=clone_obj.get("group_name", None),
+                )
+                log1.info(f"Waiting for {clone_obj['clone_name']} to complete")
         log1.info(f"clone_test_workflow_1 iteration {iter_cnt} complete")
         iter_cnt += 1
-        cluster_healthy = is_cluster_healthy(client)
+        cluster_healthy = is_cluster_healthy(clients_orig[0])
 
     log1.info("clone_test_workflow_2 completed")
     return 0

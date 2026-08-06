@@ -7,12 +7,15 @@ includes:
 2. Try changing the CRUSH rule to a non default rule. Should Fail.
 3. Try addition of a new DC in stretch mode. Health warning generated.
 4. Try making the Datacenter weights uneven. Health warning generated
-
+NOTE:- UNEVEN_WEIGHTS_STRETCH_MODE warning is updated to
+STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE in 9.1 https://github.com/ceph/ceph/pull/66580
 """
 
 import random
 import time
 from collections import namedtuple
+
+from looseversion import LooseVersion
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -168,6 +171,11 @@ def run(ceph_cluster, **kw):
             f"Chose host : {bucket_name} from {dc_2_name} to move to trigger weight imbalance"
         )
         warning = "UNEVEN_WEIGHTS_STRETCH_MODE"
+        if LooseVersion(str(config.get("release"))) >= LooseVersion("9.1"):
+            # UNEVEN_WEIGHTS_STRETCH_MODE warning is updated to
+            # STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE in 9.1
+            # - https://github.com/ceph/ceph/pull/66580
+            warning = "STRETCH_MODE_BUCKET_WEIGHT_IMBALANCE"
         cmd1 = f"ceph osd crush move {bucket_name} {stretch_bucket}={dc_1_name}"
         rados_obj.run_ceph_command(cmd=cmd1)
         log.info(

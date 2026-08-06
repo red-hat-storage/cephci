@@ -1,3 +1,4 @@
+import json
 import re
 import time
 from importlib import import_module
@@ -196,3 +197,164 @@ def operation(obj, test, **kw):
     rc = method(**kw)
     if (type(rc) is bool and rc is False) or (type(rc) is int and rc == 1):
         raise Exception(f"method {test} failed")
+
+
+def validate_cluster_health_and_daemons(client, cluster_label, allow_warn=True):
+    """Validate that a Ceph cluster is usable and core daemons are running.
+
+    Checks:
+    1. ``ceph health`` is ``HEALTH_OK``, or ``HEALTH_WARN`` when *allow_warn*
+       is True. ``HEALTH_ERR`` always fails.
+    2. ``ceph -s`` status is captured in the logs for triage.
+    3. All ``mon``, ``mgr``, and ``osd`` daemons are in running state.
+
+    Args:
+        client: CephNode client to run commands on.
+        cluster_label: Human-readable label (e.g. ``source``, ``destination``)
+            used in log messages.
+        allow_warn: When True (default), ``HEALTH_WARN`` does not fail the
+            check; status is still logged via ``ceph -s``.
+
+    Returns:
+        0 if cluster health is acceptable with all daemons running.
+        1 if any check fails.
+    """
+    try:
+        # Always capture cluster status for logs (OK or WARN)
+        status, _ = client.exec_command(cmd="ceph -s", sudo=True, check_ec=False)
+        log.info(f"{cluster_label} cluster ceph -s output:\n{status}")
+
+        health, _ = client.exec_command(cmd="ceph health", sudo=True)
+        health = health.strip()
+        # ``ceph health`` may append detail text, e.g.
+        # ``HEALTH_WARN 1 failed cephadm daemon(s)``
+        health_status = health.split(None, 1)[0] if health else ""
+
+        if health_status == "HEALTH_ERR" or (
+            health_status == "HEALTH_WARN" and not allow_warn
+        ):
+            log.error(f"{cluster_label} cluster is not healthy: {health}")
+            client.exec_command(cmd="ceph health detail", sudo=True, check_ec=False)
+            return 1
+
+        if health_status not in ("HEALTH_OK", "HEALTH_WARN"):
+            log.error(
+                f"{cluster_label} cluster returned unexpected health status: {health}"
+            )
+            client.exec_command(cmd="ceph health detail", sudo=True, check_ec=False)
+            return 1
+
+        if health_status == "HEALTH_WARN":
+            log.info(
+                f"{cluster_label} cluster health is HEALTH_WARN; continuing test "
+                f"(ceph -s captured above): {health}"
+            )
+            client.exec_command(cmd="ceph health detail", sudo=True, check_ec=False)
+        else:
+            log.info(f"{cluster_label} cluster health: {health}")
+
+        for daemon_type in ("mon", "mgr", "osd"):
+            out, _ = client.exec_command(
+                cmd=f"ceph orch ps --daemon-type {daemon_type} --format json",
+                sudo=True,
+            )
+            daemons = json.loads(out)
+            if not daemons:
+                log.error(f"{cluster_label} cluster has no {daemon_type} daemons")
+                return 1
+
+            failed = [
+                d
+                for d in daemons
+                if d.get("status_desc") != "running" and d.get("status") != 1
+            ]
+            if failed:
+                log.error(
+                    f"{cluster_label} cluster has non-running {daemon_type} "
+                    f"daemons: {failed}"
+                )
+                return 1
+
+            log.info(
+                f"{cluster_label} cluster: {len(daemons)} {daemon_type} "
+                f"daemon(s) running"
+            )
+
+    except Exception as err:
+        log.error(
+            f"Failed to validate {cluster_label} cluster health and daemons: {err}"
+        )
+        return 1
+
+    return 0
+
+
+def get_ceph_major_version(config):
+    """Extract the major Ceph version number from the rhbuild config key.
+
+    Useful for code paths that branch on the major release (e.g. >= 3 for
+    EC pool init, >= 9 for native import features).
+
+    Args:
+        config (dict): Test configuration dict containing an optional
+            ``rhbuild`` key (e.g. ``"9.2"`` or ``"8.0"``).
+
+    Returns:
+        int: Major Ceph version integer. Defaults to 9 when rhbuild is absent.
+    """
+    rhbuild = str(config.get("rhbuild", "9"))
+    match = re.search(r"\d+", rhbuild)
+    return int(match.group(0)) if match else 9
+
+
+def validate_min_ceph_version(config, min_major, min_minor, *clients):
+    """Validate that all supplied cluster clients meet a minimum Ceph version.
+
+    Logs the live ``ceph -v`` output for every client and then checks the
+    ``rhbuild`` config key against the requested minimum.  When ``rhbuild``
+    is absent the check is skipped (returns 0) so CI can still run against
+    dev builds where the build string is unavailable.
+
+    Args:
+        config (dict): Test configuration dict containing an optional
+            ``rhbuild`` key (e.g. ``"9.2"``).
+        min_major (int): Minimum required major version (e.g. 9).
+        min_minor (int): Minimum required minor version (e.g. 2).
+        *clients: One or more ``(label, CephNode)`` tuples, e.g.
+            ``("source", src_client), ("destination", dst_client)``.
+
+    Returns:
+        int: 0 if the version requirement is met or rhbuild is unavailable,
+             1 if the deployed version is below the minimum.
+
+    Example::
+
+        rc = validate_min_ceph_version(
+            config, 9, 2,
+            ("source", source_client),
+            ("destination", destination_client),
+        )
+        if rc:
+            return 1
+    """
+    from ceph.rbd.utils import exec_cmd
+
+    for label, client in clients:
+        ceph_ver = exec_cmd(node=client, cmd="ceph -v", output=True)
+        log.info(f"{label} cluster ceph version: {ceph_ver}")
+
+    rhbuild = str(config.get("rhbuild", ""))
+    match = re.search(r"(\d+)(?:\.(\d+))?", rhbuild)
+    if not match:
+        log.info("rhbuild is unavailable; skipping minimum version check")
+        return 0
+
+    major = int(match.group(1))
+    minor = int(match.group(2) or 0)
+    if (major, minor) < (min_major, min_minor):
+        log.error(
+            f"This test requires Ceph/RHCS {min_major}.{min_minor} or later, "
+            f"found rhbuild={rhbuild}"
+        )
+        return 1
+    return 0

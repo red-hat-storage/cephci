@@ -25,7 +25,7 @@ tests:
           - config:
               args:
                 rhcs-version: 5.3
-                release: rc
+                release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
@@ -136,7 +136,6 @@ tests:
         - test:
             abort-on-fail: false
             config:
-              timeout: 30
             desc: Runs IOs in parallel with upgrade process
             module: cephfs_upgrade.cephfs_io.py
             name: "creation of Prerequisites for Upgrade"

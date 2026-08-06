@@ -4,11 +4,6 @@ Shared NFSv4 delegation test infrastructure.
 Cluster/export template (config-key), cephadm shell helpers, Ganesha container log I/O.
 Scenario-specific validation and multi-client recall logic live in the test modules.
 
-Recommended suite order (tier1-nfs-ganesha-v4-2.yaml):
-  1. nfs_verify_cluster_level_delegations (optional cluster/export toggles)
-  2. nfs_verify_delegation_rw_none_scenarios (may auto-create NFS cluster)
-  3. nfs_verify_delegation_revoke_recall / nfs_verify_delegation_conflict_scenarios
-     (require ``nfs_name`` cluster unless ``auto_create_nfs_cluster: true``)
 """
 
 from __future__ import annotations
@@ -19,6 +14,7 @@ import re
 import time
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     List,
@@ -29,6 +25,7 @@ from typing import (
     Tuple,
 )
 
+from looseversion import LooseVersion
 from nfs_operations import setup_nfs_cluster, verify_nfs_ganesha_service
 
 from cli.exceptions import ConfigError, OperationFailedError
@@ -82,6 +79,7 @@ RE_DELEGATION_RECALLING = re.compile(r"Recalling", re.I)
 RE_DELEGATION_RECALLED = re.compile(r"successfully recalled", re.I)
 RE_DELEGATION_REVOKING = re.compile(r"Revoking", re.I)
 RE_DELEGATION_DELEGRETURN = re.compile(r"DELEGRETURN|OP_DELEGRETURN", re.I)
+RE_NFS4_CLOSE_HANDLER = re.compile(r"CLOSE handler", re.I)
 RE_DELEGATION_ATTEMPT_GRANT = re.compile(r"Attempting to grant delegation", re.I)
 RE_DELEGATION_TYPE_NOT_SUPPORTED = re.compile(r"Delegation type not supported", re.I)
 RE_DELEGATION_TYPE_VALUE = re.compile(r"delegation_type\s+(\d+)", re.I)
@@ -98,6 +96,52 @@ GANESHA_DELEGATION_TAILF_GREP_E = (
 GANESHA_DELEGATION_TAILF_CAPTURE = _delegation_tmp_path("tailf.log")
 GANESHA_DELEGATION_TAILF_PID = _delegation_tmp_path("tailf.pid")
 
+DELEGATION_MIN_UPSTREAM_BUILD = "20.2.1"
+DELEGATION_MIN_RHCS_BUILD = "9.1"
+
+
+def delegation_supported_for_rhbuild(rhbuild: Optional[str]) -> bool:
+    """
+    Return True when *rhbuild* (--rhbuild / config rhbuild) is RHCS 9.1+.
+
+    ``run.py`` sets ``config['rhbuild']`` to ``{rhbuild}-{platform}`` (e.g.
+    ``9.1-rhel-9``). Values with major version >= 10 are treated as upstream Ceph
+    and compared against ``DELEGATION_MIN_UPSTREAM_BUILD``.
+    """
+    if not rhbuild:
+        return False
+    token = str(rhbuild).split("-")[0]
+    if not token:
+        return False
+    major_str = token.split(".")[0]
+    if not major_str.isdigit():
+        return False
+    major = int(major_str)
+    lv = LooseVersion(token)
+    if major < 10:
+        return lv >= LooseVersion(DELEGATION_MIN_RHCS_BUILD)
+    return lv >= LooseVersion(DELEGATION_MIN_UPSTREAM_BUILD)
+
+
+def skip_delegation_tests_unless_supported(config: Optional[ConfigDict] = None) -> bool:
+    """
+    Return True when NFSv4 delegation tests should be skipped.
+
+    Uses only ``config['rhbuild']`` (from cephci ``--rhbuild``). Callers should
+    ``return 0`` immediately when this is True.
+    """
+    config = config or {}
+    rhbuild = config.get("rhbuild")
+    if delegation_supported_for_rhbuild(rhbuild):
+        return False
+    log.info(
+        "Skipping NFSv4 delegation test: requires --rhbuild >= %s (rhbuild=%s)",
+        DELEGATION_MIN_RHCS_BUILD,
+        rhbuild,
+    )
+    return True
+
+
 # Delegation test timing (seconds). Ganesha NFSv4 delegations are lease-driven; many
 # clusters use a ~90s lease. These values add margin for async grant/recall and for
 # FULL_DEBUG lines to reach the in-container tail -f | grep capture.
@@ -112,10 +156,6 @@ DELEGATION_HOLD_READY_SECONDS_DEFAULT = 8
 DELEGATION_RETURN_WAIT_SECONDS_DEFAULT = 15
 # After scenario IO: wait for recall/grant lines in the filtered ganesha.log capture.
 DELEGATION_LOG_SETTLE_SECONDS_DEFAULT = 90
-# clamp_delegation_log_settle_seconds() bounds when callers use that helper.
-DELEGATION_LOG_SETTLE_SECONDS_CLAMP_LO = 75
-DELEGATION_LOG_SETTLE_SECONDS_CLAMP_HI = 90
-DELEGATION_LOG_SETTLE_FALLBACK_DEFAULT = 82
 # Poll attempts when waiting for a seeded file to appear on an NFS mount.
 DELEGATION_PATH_WAIT_RETRIES_DEFAULT = 40
 
@@ -357,6 +397,53 @@ def validate_delegation_grant_capture(scenario_name, hits, hold_mode="write"):
         )
 
 
+def log_delegation_open_types(scenario_name, hits) -> List[int]:
+    """Log delegation_type values from nfs4_op_open END lines; return parsed types."""
+    types = parse_nfs4_open_delegation_types("\n".join(hits or []))
+    log.info(
+        "Scenario %s: nfs4_op_open delegation_type values %r",
+        scenario_name,
+        types,
+    )
+    return types
+
+
+def capture_delegation_ganesha_log_phase(
+    nfs_node: CephNode,
+    container_id: str,
+    settle_seconds: int,
+    phase_action: Callable[[], None],
+) -> List[str]:
+    """Truncate ganesha.log, run *phase_action*, capture delegation lines for one phase."""
+    truncate_ganesha_container_log(nfs_node, container_id)
+    start_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    phase_action()
+    time.sleep(int(settle_seconds))
+    stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    return read_ganesha_delegation_tailf_capture(nfs_node, container_id)
+
+
+def hold_new_file_write_open(client: CephNode, path: str, seconds: int) -> None:
+    """Create *path* with mode ``w`` and keep it OPEN in the background."""
+    safe = q_delegation_shell(path)
+    pidfile = _delegation_hold_pidfile(client)
+    client.exec_command(
+        sudo=True,
+        cmd=(
+            "nohup python3 -c "
+            "\"f=open('%s','w'); f.write('new-file\\\\n'); import time; time.sleep(%s)\" "
+            ">/dev/null 2>&1 & echo $! >> %s" % (safe, int(seconds), pidfile)
+        ),
+        check_ec=False,
+    )
+    log.info(
+        "Holding new-file write OPEN on %s for %ss from %s",
+        path,
+        int(seconds),
+        getattr(client, "hostname", client),
+    )
+
+
 def validate_delegation_open_close_cycles_capture(
     scenario_name, hits, open_close_cycles, hold_mode="write"
 ):
@@ -388,6 +475,29 @@ def validate_delegation_lock_capture(scenario_name, hits, hold_mode="write"):
 def validate_delegation_setattr_capture(scenario_name, hits, hold_mode="write"):
     """Delegation grant during setattr/truncate metadata operations."""
     validate_delegation_grant_capture(scenario_name, hits, hold_mode)
+
+
+def validate_delegation_close_and_return_capture(
+    scenario_name: str, hits: Iterable[str], *, require_close: bool = False
+) -> None:
+    """Assert *hits* contain DELEGRETURN after client close/unmount/shutdown."""
+    hit_list = list(hits or [])
+    if not hit_list:
+        raise OperationFailedError("Scenario %s: empty tail -f capture" % scenario_name)
+    text = "\n".join(hit_list)
+    if not RE_DELEGATION_DELEGRETURN.search(text):
+        raise OperationFailedError(
+            "Scenario %s: missing DELEGRETURN/OP_DELEGRETURN in capture" % scenario_name
+        )
+    if require_close and not RE_NFS4_CLOSE_HANDLER.search(text):
+        raise OperationFailedError(
+            "Scenario %s: missing CLOSE handler before DELEGRETURN" % scenario_name
+        )
+    log.info(
+        "Scenario %s: delegation return observed (DELEGRETURN%s)",
+        scenario_name,
+        ", CLOSE handler" if RE_NFS4_CLOSE_HANDLER.search(text) else "",
+    )
 
 
 def validate_delegation_revoke_ganesha_capture(
@@ -668,18 +778,24 @@ def unmount_delegation_export(
         client.exec_command(sudo=True, cmd="rm -rf %s" % mount_point, check_ec=False)
 
 
+def lazy_unmount_delegation_export(client: CephNode, mount_point: str) -> None:
+    """Lazy-unmount an NFS export while local opens may still be active."""
+    client.exec_command(sudo=True, cmd="umount -l %s" % mount_point, check_ec=False)
+    log.info(
+        "Lazy-unmounted %s on %s",
+        mount_point,
+        getattr(client, "hostname", client),
+    )
+
+
 def _delegation_hold_pidfile(client: CephNode) -> str:
     host = str(getattr(client, "hostname", "client")).replace("/", "_")
     return _delegation_tmp_path("hold_%s.pids" % host)
 
 
-def _q_delegation_hold_path(path: str) -> str:
-    return q_delegation_shell(path)
-
-
 def hold_delegation_open(client: CephNode, path: str, mode: str, seconds: int) -> None:
     """Keep a file OPEN in the background; record its PID for kill_delegation_holds()."""
-    safe = _q_delegation_hold_path(path)
+    safe = q_delegation_shell(path)
     pidfile = _delegation_hold_pidfile(client)
     client.exec_command(
         sudo=True,
@@ -993,11 +1109,54 @@ def _expect_delegation(conf, label, expected):
         )
 
 
-def verify_container_delegation(nfs_nodes, daemons, nfs_name, delegation):
-    by_short = {(d.get("hostname") or "").split(".")[0]: d for d in daemons}
-    for node in nfs_nodes:
+def _nfs_node_for_daemon(
+    nfs_nodes: Sequence[CephNode], daemon: Mapping[str, Any]
+) -> Optional[CephNode]:
+    """Return the CephNode matching an orch ps NFS daemon entry."""
+    daemon_short = (daemon.get("hostname") or "").split(".")[0]
+    if not daemon_short:
+        return None
+    by_short = {node.hostname.split(".")[0]: node for node in nfs_nodes}
+    node = by_short.get(daemon_short)
+    if node:
+        return node
+    for short, candidate in by_short.items():
+        if short == daemon_short or short in daemon_short or daemon_short in short:
+            return candidate
+    return None
+
+
+def _nfs_nodes_with_daemons(
+    nfs_nodes: Sequence[CephNode], daemons: Sequence[Mapping[str, Any]]
+) -> List[CephNode]:
+    """Return nfs nodes that host at least one orch ps daemon (deduplicated)."""
+    matched: List[CephNode] = []
+    seen = set()
+    for daemon in daemons:
+        node = _nfs_node_for_daemon(nfs_nodes, daemon)
+        if not node:
+            continue
         short = node.hostname.split(".")[0]
-        daemon = by_short.get(short, {})
+        if short in seen:
+            continue
+        seen.add(short)
+        matched.append(node)
+    return matched
+
+
+def verify_container_delegation(nfs_nodes, daemons, nfs_name, delegation):
+    if not daemons:
+        raise OperationFailedError(
+            "No nfs daemons in orch ps for nfs.%s container verify" % nfs_name
+        )
+    active_nodes = _nfs_nodes_with_daemons(nfs_nodes, daemons)
+    for daemon in daemons:
+        node = _nfs_node_for_daemon(nfs_nodes, daemon)
+        if not node:
+            raise OperationFailedError(
+                "No nfs node in test inventory for orch daemon %s (nfs.%s)"
+                % (daemon.get("hostname"), nfs_name)
+            )
         cid = daemon.get("container_id")
         if not cid:
             status = daemon.get("status_desc", "missing")
@@ -1016,10 +1175,27 @@ def verify_container_delegation(nfs_nodes, daemons, nfs_name, delegation):
             node.hostname,
             cid,
         )
+    inventory_only = [
+        node.hostname
+        for node in nfs_nodes
+        if node.hostname.split(".")[0]
+        not in {n.hostname.split(".")[0] for n in active_nodes}
+    ]
+    if inventory_only:
+        log.info(
+            "Skipping container delegation verify on nfs nodes without orch daemons: %s",
+            ", ".join(inventory_only),
+        )
 
 
-def verify_host_conf_delegation(nfs_nodes, nfs_name, delegation):
-    for node in nfs_nodes:
+def verify_host_conf_delegation(nfs_nodes, daemons, nfs_name, delegation):
+    nodes = _nfs_nodes_with_daemons(nfs_nodes, daemons)
+    if not nodes:
+        raise OperationFailedError(
+            "No nfs nodes matched orch ps daemons for nfs.%s host conf verify"
+            % nfs_name
+        )
+    for node in nodes:
         fsids = node.get_dir_list("/var/lib/ceph", sudo=True)
         if not fsids:
             raise OperationFailedError(
@@ -1044,6 +1220,54 @@ def verify_host_conf_delegation(nfs_nodes, nfs_name, delegation):
                 "Unable to read ganesha.conf for %s on %s" % (nfs_name, node.hostname)
             )
         _expect_delegation(conf, "host ganesha.conf on %s" % node.hostname, delegation)
+
+
+def verify_cluster_delegation_on_nfs_nodes(
+    cephadm,
+    nfs_nodes,
+    nfs_clusters,
+    delegation: str,
+    timeout_seconds: int = 120,
+    poll_interval: int = 5,
+) -> None:
+    """
+    Poll ``ceph orch ps`` and verify Delegations in container and host ganesha.conf.
+
+    After redeploy, per-daemon container ids can lag behind aggregate service-ready
+    checks; retry until every NFS node is inspectable or *timeout_seconds* elapses.
+    """
+    deadline = time.time() + int(timeout_seconds)
+    last_error = None
+    while time.time() < deadline:
+        try:
+            for cluster_name in nfs_clusters:
+                raw = cephadm.orch.ps(
+                    service_name="nfs.%s" % cluster_name, format="json"
+                )
+                daemons = json.loads(raw) if raw else []
+                if not daemons:
+                    raise OperationFailedError(
+                        "No nfs daemons found in orch ps for nfs.%s" % cluster_name
+                    )
+                verify_container_delegation(
+                    nfs_nodes, daemons, cluster_name, delegation
+                )
+                verify_host_conf_delegation(
+                    nfs_nodes, daemons, cluster_name, delegation
+                )
+            return
+        except OperationFailedError as err:
+            last_error = err
+            log.info(
+                "Cluster delegation verify not ready, retrying in %ss: %s",
+                poll_interval,
+                err,
+            )
+            time.sleep(int(poll_interval))
+    raise last_error or OperationFailedError(
+        "Timed out after %ss verifying cluster delegation on nfs nodes"
+        % timeout_seconds
+    )
 
 
 def _expect_export_delegation(cmd_host, nfs_name, export_name, expected):
@@ -1334,22 +1558,6 @@ def read_ganesha_delegation_tailf_capture(
     if not raw:
         return []
     return [ln for ln in raw.splitlines() if ln.strip()]
-
-
-def clamp_delegation_log_settle_seconds(
-    config: Mapping[str, Any],
-    default=DELEGATION_LOG_SETTLE_FALLBACK_DEFAULT,
-    lo=DELEGATION_LOG_SETTLE_SECONDS_CLAMP_LO,
-    hi=DELEGATION_LOG_SETTLE_SECONDS_CLAMP_HI,
-):
-    """
-    Return delegation_log_settle_seconds from *config*, clamped to [lo, hi].
-
-    Fallback default (82) is the midpoint of the clamp range when the suite omits
-    an explicit value; tier1 YAML usually sets 90 (~one NFSv4 lease) for capture.
-    """
-    settle = int(config.get("delegation_log_settle_seconds", default))
-    return max(lo, min(hi, settle))
 
 
 def create_delegation_exports(

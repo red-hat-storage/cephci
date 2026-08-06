@@ -19,7 +19,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 8.1
-                release: rc
+                release: released
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
@@ -85,6 +85,17 @@ tests:
       name: Configure client
       polarion-id: CEPH-83573758
 
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert
+      polarion-id: CEPH-10362
   - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
       desc: test etag verification
@@ -129,6 +140,17 @@ tests:
               service: upgrade
               base_cmd_args:
                 verbose: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes post upgrade
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert post upgrade
+      polarion-id: CEPH-10362
 
 # Post Upgrade tests
 

@@ -6,9 +6,9 @@ version_id: 10.1
 id: rhel
 instance:
   create:
-    image_id: 22
-    projectID: 21
-    site: POK
+    image_id: 451
+    projectID: 808 # Project ID for IBM-CEPH-QE in TUC region
+    site: TUC
     groupID: 1
     VLAN: 2231
     resources: medium

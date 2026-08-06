@@ -295,17 +295,37 @@ tests:
       polarion-id: CEPH-83576112
 
   - test:
-      abort-on-fail: false
+      abort-on-fail: true
       config:
         gw_node: node6
         rbd_pool: rbd
         nvme_metadata_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
+        install: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:negative
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - nqn: nqn.2016-06.io.spdk:negative
+            listener_port: 4420
+            node: node10
         operation: CEPH-83575812
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
       desc: Test remove RBD image used as NVMe namespace
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
@@ -318,12 +338,32 @@ tests:
         gw_node: node6
         rbd_pool: rbd
         nvme_metadata_pool: rbd
+        gw_group: gw_group2
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        install: true
         operation: CEPH-83575467
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83575467
+            serial: 1
+            bdevs:
+              count: 1
+              size: 5G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - nqn: nqn.2016-06.io.spdk:ceph-83575467
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
       desc: Perform restart and validate the gateway entities
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
@@ -335,13 +375,35 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
         nvme_metadata_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
         operation: CEPH-83575813
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83575813
+            serial: 1
+            bdevs:
+              - count: 1
+                size: 1G
+              - count: 1
+                size: 2G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - nqn: nqn.2016-06.io.spdk:ceph-83575813
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
       desc: Perform RBD operations shrink and expand on images.
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
@@ -349,17 +411,38 @@ tests:
       polarion-id: CEPH-83575813
 
   - test:
-      abort-on-fail: false
+      abort-on-fail: true
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
         nvme_metadata_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
         operation: CEPH-83575455
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83575455
+            serial: 1
+            bdevs:
+              count: 1
+              size: 5G
+            listener_port: 4420
+            hosts:
+              node: node10
+        initiators: # Configure Initiators with all pre-req
+          - nqn: nqn.2016-06.io.spdk:ceph-83575455
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
       desc: Validate Host accessibility via nvme-cli commands.
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py

@@ -255,3 +255,150 @@ tests:
         port: "2049"
         enable_rdma: true
         rdma_port: "20049"
+
+  # --- RDMA Basic Workflow Scenarios (one per test entry) ---
+
+  - test:
+      name: NFS RDMA - Basic NFSv4.2
+      module: test_nfs_rdma_basic.py
+      desc: Single daemon RDMA mount with NFSv4.2, integrity verify through unmount/remount
+      abort-on-fail: false
+      config:
+        scenario: basic_rdma_v42
+        servers: 1
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - NFSv4.1
+      module: test_nfs_rdma_basic.py
+      desc: Single daemon RDMA mount with NFSv4.1, integrity verify through unmount/remount
+      abort-on-fail: false
+      config:
+        scenario: rdma_v41
+        servers: 1
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - NFSv4.0
+      module: test_nfs_rdma_basic.py
+      desc: Single daemon RDMA mount with NFSv4.0, integrity verify through unmount/remount
+      abort-on-fail: false
+      config:
+        scenario: rdma_v40
+        servers: 1
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - NFSv3
+      module: test_nfs_rdma_basic.py
+      desc: Single daemon RDMA mount with NFSv3 (--enable-nfsv3), integrity verify
+      abort-on-fail: false
+      config:
+        scenario: rdma_v3
+        servers: 1
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Multi-version (v4.2 + v3)
+      module: test_nfs_rdma_basic.py
+      desc: Two clients with different NFS versions (4.2 and 3) both over RDMA
+      abort-on-fail: false
+      config:
+        scenario: multi_version_rdma
+        servers: 1
+        clients: 2
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Active-Active no VIP
+      module: test_nfs_rdma_basic.py
+      desc: Two NFS daemons active-active, round-robin RDMA mounts from two clients
+      abort-on-fail: false
+      config:
+        scenario: active_active_no_vip
+        servers: 2
+        clients: 2
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - HA with VIP
+      module: test_nfs_rdma_basic.py
+      desc: HA cluster with ingress/VIP, RDMA mount via floating VIP
+      abort-on-fail: false
+      config:
+        scenario: ha_with_vip
+        servers: 2
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"
+        vip: "10.64.66.99/24"
+
+  - test:
+      name: NFS RDMA - Enable RDMA on existing TCP cluster
+      module: test_nfs_rdma_basic.py
+      desc: Create TCP cluster, enable RDMA via orch apply, update old export, verify RDMA
+      abort-on-fail: false
+      config:
+        scenario: enable_rdma_on_existing
+        servers: 1
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Custom RDMA and TCP ports
+      module: test_nfs_rdma_basic.py
+      desc: RDMA with non-default ports (TCP 2050, RDMA 12345), verify end-to-end
+      abort-on-fail: false
+      config:
+        scenario: custom_rdma_port
+        servers: 1
+        clients: 1
+        port: "2050"
+        rdma_port: "12345"
+
+  - test:
+      name: NFS RDMA - Multi-client parallel IO
+      module: test_nfs_rdma_basic.py
+      desc: Two clients writing 64MB in parallel over RDMA, integrity verify
+      abort-on-fail: false
+      config:
+        scenario: multi_client_parallel_io
+        servers: 1
+        clients: 2
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - TCP and RDMA coexist (two clients)
+      module: test_nfs_rdma_basic.py
+      desc: Same cluster serves one client via RDMA and another via TCP simultaneously
+      abort-on-fail: false
+      config:
+        scenario: tcp_and_rdma_coexist
+        servers: 1
+        clients: 2
+        port: "2049"
+        rdma_port: "20049"
+
+  - test:
+      name: NFS RDMA - Single client dual proto (RDMA + TCP)
+      module: test_nfs_rdma_basic.py
+      desc: Same client mounts two exports on same cluster -- one RDMA, one TCP
+      abort-on-fail: false
+      config:
+        scenario: single_client_dual_proto
+        servers: 1
+        clients: 1
+        port: "2049"
+        rdma_port: "20049"

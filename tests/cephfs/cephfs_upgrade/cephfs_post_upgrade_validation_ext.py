@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import threading
 import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
@@ -427,12 +428,311 @@ def subvolume_metrics_quota_used_test():
     return 0
 
 
+def _ensure_stress_ng_installed(client) -> int:
+    """Install stress-ng if missing. Return 0 on success, 1 on failure."""
+    out, rc = client.exec_command(sudo=True, cmd="stress-ng", check_ec=False)
+    if rc == 0 and out.strip():
+        log.info("stress-ng is already installed")
+        return 0
+    log.info("stress-ng not found, installing...")
+    try:
+        client.exec_command(sudo=True, cmd="yum install -y stress-ng", timeout=300)
+        log.info("stress-ng installed successfully")
+        return 0
+    except Exception as e:
+        log.error("Failed to install stress-ng: %s", e)
+        return 1
+
+
+def _run_mds_observability_basic_test(
+    helper: MDSMetricsHelper,
+    client,
+    vol_name: str,
+    fuse_mount_dir: str,
+    duration_sec: int = 60,
+    interval_sec: int = 10,
+) -> int:
+    """
+    Run MDS observability basic test: stress-ng IO and collect mds_rank_perf metrics.
+    When validate_metrics is True, verify cpu_usage and open_requests fields exist.
+    """
+    if _ensure_stress_ng_installed(client) != 0:
+        return 1
+
+    mds_metrics_snapshots: List[Dict[str, Any]] = []
+    collection_lock = threading.Lock()
+    stop_collection = threading.Event()
+    stress_ng_pid: Optional[str] = None
+
+    def collect_mds_metrics_loop():
+        start = time.time()
+        next_t = start
+        end = start + duration_sec
+        while not stop_collection.is_set():
+            now = time.time()
+            if now >= next_t:
+                try:
+                    metrics = helper.collect_mds_metrics(
+                        client=client,
+                        fs_name=vol_name,
+                        role="active",
+                        ranks=None,
+                    )
+                    with collection_lock:
+                        mds_metrics_snapshots.append(
+                            {"t": int(now), "metrics": metrics}
+                        )
+                    log.info("[t=%s] Collected MDS metrics: %s", int(now), metrics)
+                except Exception as e:
+                    log.error("Failed to collect MDS metrics at t=%s: %s", int(now), e)
+                next_t += interval_sec
+            if now >= end:
+                break
+            time.sleep(1)
+
+    log.info("Starting stress-ng IO on %s", fuse_mount_dir)
+    stress_cmd = (
+        f"stress-ng --iomix 4 --open 4 --timeout {duration_sec}s "
+        f"--metrics-brief --temp-path {fuse_mount_dir} > /tmp/stress_ng.log 2>&1 & echo $!"
+    )
+    out, _ = client.exec_command(sudo=True, cmd=stress_cmd)
+    stress_ng_pid = out.strip()
+    log.info("Started stress-ng (pid=%s)", stress_ng_pid)
+    time.sleep(5)
+
+    metrics_thread = threading.Thread(target=collect_mds_metrics_loop)
+    metrics_thread.start()
+    time.sleep(duration_sec + 5)
+    stop_collection.set()
+    metrics_thread.join(timeout=10)
+
+    try:
+        client.exec_command(
+            sudo=True,
+            cmd=f"kill -9 {stress_ng_pid} 2>/dev/null",
+            check_ec=False,
+        )
+        log.info("Stopped stress-ng (pid=%s)", stress_ng_pid)
+    except Exception:
+        pass
+
+    if not mds_metrics_snapshots:
+        log.error("No MDS metrics snapshots collected for fs %s", vol_name)
+        return 1
+
+    log.info("=== Validating MDS rank performance metrics for fs %s ===", vol_name)
+    for snap in mds_metrics_snapshots:
+        t = snap["t"]
+        metrics = snap["metrics"]
+        if not metrics:
+            log.error("No metrics collected for [t=%s]", t)
+            return 1
+        log.info("Metrics from counter dump - [t=%s] metrics: %s", t, metrics)
+        for mds_name, items in metrics.items():
+            if not isinstance(items, list):
+                continue
+            item = items[0]
+            labels = item.get("labels", {})
+            counters = item.get("counters", {})
+            rank = labels.get("rank")
+            if rank is None:
+                log.error("mds_name:%s rank is None", mds_name)
+                return 1
+            if "cpu_usage" not in counters or "open_requests" not in counters:
+                log.error(
+                    "mds_name:%s rank:%s - Missing required field: "
+                    "cpu_usage or open_requests, check %s",
+                    mds_name,
+                    rank,
+                    counters,
+                )
+                return 1
+            log.info(
+                "[t=%s] %s rank=%s cpu_usage=%s open_requests=%s",
+                t,
+                mds_name,
+                rank,
+                counters.get("cpu_usage"),
+                counters.get("open_requests"),
+            )
+    log.info("=== MDS rank performance metrics validated successfully ===")
+    return 0
+
+
+def _get_fuse_mount_from_config(
+    config: Dict[str, Any], vol_name: str, clients: List
+) -> Optional[Dict[str, Any]]:
+    """Return first fuse-mounted subvolume entry from pre_upgrade_config."""
+    vol_name = list(config["CephFS"].keys())[0]
+    for svg in config["CephFS"][vol_name]:
+        if not isinstance(config["CephFS"][vol_name][svg], dict):
+            continue
+        for sv in config["CephFS"][vol_name][svg]:
+            sv_data = config["CephFS"][vol_name][svg].get(sv)
+            if not isinstance(sv_data, dict):
+                continue
+            mnt_pt = sv_data.get("mnt_pt")
+            mnt_client_name = sv_data.get("mnt_client")
+            if not mnt_pt or not mnt_client_name or "fuse" not in mnt_pt:
+                continue
+            mnt_client = next(
+                (c for c in clients if c.node.hostname == mnt_client_name), None
+            )
+            if mnt_client:
+                return {
+                    "vol_name": vol_name,
+                    "svg": svg,
+                    "sv": sv,
+                    "mnt_pt": mnt_pt,
+                    "mnt_client": mnt_client,
+                }
+    return None
+
+
+def mds_observability_test():
+    """
+    Post-upgrade MDS observability validation.
+
+    1. On existing CephFS volume from pre-upgrade config: run MDS observability
+       basic test on a fuse-mounted subvolume. Skip top comparison and validation.
+    2. Create a new FS volume, run MDS observability basic test with CPU
+       validation skipped, then remove the new FS volume.
+
+    Uses test_reqs: config, clients, fs_util, helper, ceph_cluster, vol_name (optional).
+    """
+    config = test_reqs["config"]
+    clients = test_reqs["clients"]
+    fs_util = test_reqs["fs_util"]
+    helper = test_reqs["helper"]
+    vol_name = list(config["CephFS"].keys())[0]
+    client = clients[0]
+
+    # Step 1: existing volume — collect metrics only, no validation
+    fuse_entry = _get_fuse_mount_from_config(config, vol_name, clients)
+    if not fuse_entry:
+        log.warning(
+            "No fuse-mounted subvolumes in pre_upgrade_config for vol %s; "
+            "skipping existing-volume MDS observability test",
+            vol_name,
+        )
+    else:
+        log.info(
+            "Step 1: MDS observability on existing volume %s mount %s",
+            vol_name,
+            fuse_entry["mnt_pt"],
+        )
+        if (
+            _run_mds_observability_basic_test(
+                helper,
+                fuse_entry["mnt_client"],
+                fuse_entry["vol_name"],
+                fuse_entry["mnt_pt"],
+            )
+            != 0
+        ):
+            log.error("Step 1: MDS observability on existing volume failed")
+            return 1
+        log.info("Step 1: MDS observability on existing volume succeeded")
+
+    # Step 2: new FS volume — validate metric fields, skip CPU comparison
+    new_fs_name = "cephfs_mds_obs_upgrade"
+    mounting_dir = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+    )
+    fuse_mount_dir = f"/mnt/cephfs_fuse{mounting_dir}/"
+    subvol_name = "subvolume_mds_obs"
+    fs_created = False
+    subvol_created = False
+    test_status = 0
+
+    try:
+        log.info("Step 2: Creating new FS volume %s", new_fs_name)
+        fs_util.create_fs(client, new_fs_name)
+        fs_created = True
+
+        log.info("Setting max_mds to 2 for filesystem %s", new_fs_name)
+        client.exec_command(sudo=True, cmd=f"ceph fs set {new_fs_name} max_mds 2")
+        time.sleep(5)
+
+        fs_util.create_subvolume(
+            client,
+            vol_name=new_fs_name,
+            subvol_name=subvol_name,
+            size="5368709120",
+        )
+        subvol_created = True
+
+        subvol_path = common_util.subvolume_get_path(
+            client,
+            new_fs_name,
+            subvolume_name=subvol_name,
+        )
+        log.info("Subvolume path is %s", subvol_path)
+
+        fs_util.fuse_mount(
+            [client],
+            fuse_mount_dir,
+            extra_params=f" -r {subvol_path} --client_fs {new_fs_name}",
+        )
+
+        client.exec_command(
+            sudo=True,
+            cmd="ceph config set mds mds_export_ephemeral_distributed true",
+        )
+        client.exec_command(
+            sudo=True,
+            cmd=f"setfattr -n ceph.dir.pin.distributed -v 1 {fuse_mount_dir}",
+        )
+
+        if (
+            _run_mds_observability_basic_test(
+                helper, client, new_fs_name, fuse_mount_dir
+            )
+            != 0
+        ):
+            log.error("Step 2: MDS observability on new FS volume failed")
+            test_status = 1
+        else:
+            log.info("Step 2: MDS observability on new FS volume succeeded")
+
+    finally:
+        client.exec_command(
+            sudo=True,
+            cmd="ceph config set mds mds_export_ephemeral_distributed false",
+        )
+        try:
+            client.exec_command(
+                sudo=True, cmd=f"umount -l {fuse_mount_dir}", check_ec=False
+            )
+            client.exec_command(
+                sudo=True, cmd=f"rm -rf {fuse_mount_dir}", check_ec=False
+            )
+        except Exception as e:
+            log.error("Unmount/cleanup fuse mount failed: %s", e)
+        if subvol_created:
+            try:
+                fs_util.remove_subvolume(
+                    client, vol_name=new_fs_name, subvol_name=subvol_name
+                )
+            except Exception as e:
+                log.error("Subvolume cleanup failed: %s", e)
+        if fs_created:
+            try:
+                fs_util.remove_fs(client, vol_name=new_fs_name)
+                log.info("Removed new FS volume %s", new_fs_name)
+            except Exception as e:
+                log.error("Filesystem cleanup failed: %s", e)
+                test_status = 1
+    return test_status
+
+
 def run(ceph_cluster, **kw):
     """
     Test Details:
     1. Toggle Snapshot Visibility :
         CEPH-83621389 : Verify CLI option default behavior and option modify on existing subvolume, new subvolume
     2. Validate 9.1 subvolume metrics quota_bytes and used_bytes post-upgrade.
+    3. MDS observability post-upgrade validation on existing and new FS volumes.
 
     """
     try:
@@ -486,6 +786,16 @@ def run(ceph_cluster, **kw):
             log.info("Post upgrade Subvolume metrics validation succeeded \n")
         else:
             log.info("Skipping Test 2 : requires Ceph version >= 9.1 (build=%s)", build)
+
+        log.info(f"\n\n {space_str}Test3 : Post-upgrade MDS Observability Validation\n")
+        if build and LooseVersion(build) >= LooseVersion("9.1"):
+            test_status = mds_observability_test()
+            if test_status == 1:
+                log.error("Test 3 : Post upgrade MDS observability validation failed")
+                return 1
+            log.info("Post upgrade MDS observability validation succeeded \n")
+        else:
+            log.info("Skipping Test 3 : requires Ceph version >= 9.1 (build=%s)", build)
 
         return 0
 

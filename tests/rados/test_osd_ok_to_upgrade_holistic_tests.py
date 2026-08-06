@@ -4,26 +4,35 @@ import time
 from collections import defaultdict
 from typing import List, Optional, Tuple
 
+from looseversion import LooseVersion
+
 from ceph.ceph_admin import CephAdmin
+from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.utils import get_node_by_id
+from cli.utilities.operations import wait_for_osd_daemon_state
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.rados_test_util import wait_for_device_rados
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
+from tests.rados.rados_test_util import get_device_path
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 
 POLL_INTERVAL = 30
 WAIT_TIMEOUT = 600
 UPGRADE_TIMEOUT = 3600
+CLEAN_PG_TIMEOUT = 12000
+MGR_DEBUG_LEVEL = "20/20"
 
 
 def run(ceph_cluster, **kw):
     """
     OSD upgrade scenarios: downgrade all OSDs to older image, then run selective
-    'ceph orch upgrade start' (by --hosts or --topological-labels), wait, and
-    validate that only the expected OSDs are upgraded.
+    'ceph orch upgrade start' and validate that only the expected OSDs are upgraded.
 
     Test scenarios (config.scenarios):
     - hosts_HOST1: Upgrade with --hosts HOST1; only OSDs on that host upgraded.
@@ -44,7 +53,17 @@ def run(ceph_cluster, **kw):
       override with config invalid_upgrade_host). Expects upgrade start to fail.
     - topological_labels_rack_nonexistent: Negative: --topological-labels rack=does_not_exist
       (override rack value with config nonexistent_rack_label). Expects upgrade start to fail.
-
+    - bucket_type_bucket_name_rack: Upgrade with --crush-bucket-type rack --crush-bucket-name rack1; only rack1 OSDs.
+    - bucket_type_bucket_name_chassis: Upgrade with --crush-bucket-type chassis --crush-bucket-name chassis1;
+      only chassis1 OSDs.
+    - bucket_type_bucket_name_host: Upgrade with --crush-bucket-type host --crush-bucket-name HOST1;
+      only that host's OSDs.
+    - negative_bucket_type_bucket_name_rack_without_daemon_types_arg: Negative: bucket parameters without
+      --daemon-types osd. Expects upgrade start to fail.
+    - negative_bucket_type_bucket_name_rack_host_arg: Negative: bucket parameters combined with --hosts.
+      Expects upgrade start to fail.
+    - negative_bucket_type_bucket_name_services_arg: Negative: bucket parameters combined with --services.
+      Expects upgrade start to fail.
     Optional mid-upgrade checks (config):
     - test_stop_start: When progress reaches at least half of daemons (from orch upgrade
       status JSON "progress"), run ceph orch upgrade stop then re-run the same upgrade start
@@ -53,6 +72,7 @@ def run(ceph_cluster, **kw):
       ceph orch upgrade resume.
     """
     config = kw["config"]
+    log.info(f"config: {config}")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     scenarios = config.get("scenarios", [])
@@ -66,10 +86,9 @@ def run(ceph_cluster, **kw):
     mon_config_method = MonConfigMethods(rados_obj=rados_obj)
     host_without_osd = config.get("host_without_osd", "node15")
     re_pool_name = "re_pool"
+    cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     # ceph version check
-    rhbuild = config.get("rhbuild")
-    version = rhbuild.split("-")[0]
-    if float(version) < 9.1:
+    if LooseVersion(str(config.get("release"))) < LooseVersion("9.1"):
         log.error(
             "This test module is a 9.1 feature. Skipping test in ceph versions less than 9.1."
         )
@@ -81,6 +100,10 @@ def run(ceph_cluster, **kw):
     # as mgr,mon,crash are already upgraded to latest version 9.1
     new_image = get_daemon_container_images(rados_obj, daemon="mgr")[0]
 
+    license_cmd = f"ceph orch accept-license --image {new_image}"
+    out, _ = cephadm_obj.shell(args=[license_cmd])
+    log.debug(out)
+
     if not scenarios:
         log.error("config.scenarios cannot be empty")
         return 1
@@ -90,9 +113,6 @@ def run(ceph_cluster, **kw):
         active_mgr = mgr_config_method.get_active_mgr()
         active_mgr_node = ceph_cluster.get_node_by_hostname(active_mgr.split(".")[0])
         fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
-        assert mon_config_method.set_config(
-            section="mgr", name="debug_mgr", value="20/20"
-        )
 
         host1 = osd_hostnames[0]
 
@@ -114,28 +134,10 @@ def run(ceph_cluster, **kw):
             log.info("Scenario: %s", scenario)
             log.info("==============================================================")
 
-            active_mgr_host_obj = rados_obj.get_host_object(active_mgr.split(".")[0])
-            rados_obj.rotate_logs([active_mgr_host_obj])
-
-            # Remove the container_image which would be added to osds.
-            # as a part of ceph orch upgrade --topological-labels command
-            log.info("=================Removing container_image===================")
-            out = rados_obj.run_ceph_command(cmd="ceph config dump")
-            for cfg_entry in out:
-                if cfg_entry["name"] == "container_image":
-                    if cfg_entry["section"] == "osd":
-                        continue
-                    mon_obj.remove_config(
-                        section=cfg_entry["section"], name="container_image"
-                    )
-
-            # 2) Downgrade all OSDs to deployed version
-            log.info("===========Downgrading OSDs to deployed version===============")
-            mon_obj.set_config(section="osd", name="container_image", value=old_image)
-            rados_obj.client.exec_command(
-                cmd="ceph orch redeploy osd.osds",
+            # Downgrade OSDs on the newer image back to deployed version
+            _downgrade_osds_to_old_image(
+                rados_obj, mon_obj, old_image, new_image, ceph_cluster, service_obj
             )
-            time.sleep(20)
 
             # Wait for all OSDs to be in a single ceph image and the old ceph image
             _wait_osds_single_version(
@@ -149,7 +151,7 @@ def run(ceph_cluster, **kw):
                 cmd="ceph orch ps | grep osd", pretty_print=True
             )
 
-            # 3) Build upgrade cmd and expected OSDs for this scenario
+            # Build upgrade cmd and expected OSDs for this scenario
             log.info(
                 "========Building upgrade cmd and expected OSDs for this scenario========"
             )
@@ -160,13 +162,14 @@ def run(ceph_cluster, **kw):
             host_osds_for_limit = None  # --hosts --limit
             services_arg = None  # --services
             daemon_types_arg = None  # --daemon-types
-            bucket_type = None  # --bucket-type
-            bucket_name = None  # --bucket-name
+            bucket_type = None  # --crush-bucket-type
+            bucket_name = None  # --crush-bucket-name
             expected_osds = []
+            topological_labels_arg = None  # --topological-labels
 
             if scenario == "host_without_osd":
-                host_wihtout_osd_obj = get_node_by_id(ceph_cluster, host_without_osd)
-                hosts_arg = [host_wihtout_osd_obj.hostname]
+                host_without_osd_obj = get_node_by_id(ceph_cluster, host_without_osd)
+                hosts_arg = [host_without_osd_obj.hostname]
                 expected_osds = []
                 daemon_types_arg = "osd"
             elif scenario == "hosts_HOST1":
@@ -299,25 +302,100 @@ def run(ceph_cluster, **kw):
             elif scenario == "bucket_type_bucket_name_rack":
                 bucket_type = "rack"
                 bucket_name = "rack1"
-                expected_osds = rados_obj.collect_osd_daemon_ids("rack1")
                 daemon_types_arg = "osd"
+                expected_osds = rados_obj.collect_osd_daemon_ids("rack1")
             elif scenario == "bucket_type_bucket_name_chassis":
                 bucket_type = "chassis"
                 bucket_name = "chassis1"
-                expected_osds = rados_obj.collect_osd_daemon_ids("chassis1")
                 daemon_types_arg = "osd"
-            elif scenario == "bucket_type_bucket_name_rack_host_arg":
+                expected_osds = rados_obj.collect_osd_daemon_ids("chassis1")
+            elif scenario == "bucket_type_bucket_name_host":
+                bucket_type = "host"
+                bucket_name = host1
+                daemon_types_arg = "osd"
+                expected_osds = rados_obj.collect_osd_daemon_ids(host1)
+            elif (
+                scenario
+                == "negative_bucket_type_bucket_name_rack_without_daemon_types_arg"
+            ):
                 bucket_type = "rack"
                 bucket_name = "rack1"
-                daemon_types_arg = "osd"
-                hosts_arg = [host1]
-                expected_osds = rados_obj.collect_osd_daemon_ids(host1)
-            elif scenario == "bucket_type_bucket_name_chassis_host_arg":
-                bucket_type = "chassis"
-                bucket_name = "chassis1"
-                daemon_types_arg = "osd"
-                hosts_arg = [host1]
-                expected_osds = rados_obj.collect_osd_daemon_ids(host1)
+                cmd = f"ceph orch upgrade start --image {new_image} "
+                cmd += f"--crush-bucket-type {bucket_type} --crush-bucket-name {bucket_name}"
+                # Bucket parameters for OSD upgrade require --daemon-types to be "osd"
+                # exit status of command is not 1. echo $? will return 0.
+                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                log.info(f"Output: {out}")
+
+                if (
+                    'Bucket parameters for OSD upgrade require --daemon-types to be "osd"'
+                    in out
+                ):
+                    log.info(f"Expected failure: {out}")
+                    continue
+                log.error("Unexpected exception raised")
+                log.error(f"Output: {out}")
+                return 1
+            elif scenario == "negative_bucket_type_bucket_name_rack_host_arg":
+                bucket_type = "rack"
+                bucket_name = "rack1"
+                hosts_arg = host1
+                cmd = f"ceph orch upgrade start --image {new_image} "
+                cmd += f"--crush-bucket-type {bucket_type} --crush-bucket-name {bucket_name} --hosts {hosts_arg}"
+                # --hosts cannot be combined with --crush_bucket_type or --crush_bucket_name
+                # exit status of command is not 1. echo $? will return 0.
+                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                log.info(f"Output: {out}")
+
+                if (
+                    "--hosts cannot be combined with --crush_bucket_type or --crush_bucket_name"
+                    in out
+                ):
+                    log.info(f"Expected failure: {out}")
+                    continue
+                log.error("Unexpected exception raised")
+                log.error(f"Output: {out}")
+                return 1
+            elif scenario == "negative_bucket_type_bucket_name_services_arg":
+                bucket_type = "rack"
+                bucket_name = "rack1"
+                services_arg = "mgr"
+                cmd = f"ceph orch upgrade start --image {new_image} --crush-bucket-type {bucket_type} "
+                cmd += f"--crush-bucket-name {bucket_name} --services {services_arg}"
+                # --services cannot be combined with --crush_bucket_type or --crush_bucket_name
+                # exit status of command is not 1. echo $? will return 0.
+                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                log.info(f"Output: {out}")
+
+                if (
+                    "--services cannot be combined with --crush_bucket_type or --crush_bucket_name"
+                    in out
+                ):
+                    log.info(f"Expected failure: {out}")
+                    continue
+                log.error("Unexpected exception raised")
+                log.error(f"Output: {out}")
+                return 1
+            elif scenario == "negative_bucket_type_bucket_name_topological_labels_arg":
+                bucket_type = "rack"
+                bucket_name = "rack1"
+                topological_labels_arg = "rack=rack1"
+                cmd = f"ceph orch upgrade start --image {new_image} --crush-bucket-type {bucket_type} "
+                cmd += f"--crush-bucket-name {bucket_name} --topological-labels {topological_labels_arg}"
+                # --topological_labels cannot be combined with --crush_bucket_type or --crush_bucket_name
+                # exit status of command is not 1. echo $? will return 0.
+                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                log.info(f"Output: {out}")
+
+                if (
+                    "--topological_labels cannot be combined with --crush_bucket_type or --crush_bucket_name"
+                    in out
+                ):
+                    log.info(f"Expected failure: {out}")
+                    continue
+                log.error("Unexpected exception raised")
+                log.error(f"Output: {out}")
+                return 1
             else:
                 log.error(f"Invalid scenario: {scenario}")
                 return 1
@@ -326,6 +404,13 @@ def run(ceph_cluster, **kw):
             log.info(
                 "=================================Running upgrade==========================="
             )
+
+            active_mgr_host_obj = rados_obj.get_host_object(active_mgr.split(".")[0])
+            rados_obj.rotate_logs([active_mgr_host_obj])
+            assert mon_config_method.set_config(
+                section="mgr", name="debug_mgr", value=MGR_DEBUG_LEVEL
+            )
+
             cmd = f"ceph orch upgrade start --image {new_image}"
             if daemon_types_arg:
                 cmd += f" --daemon-types {daemon_types_arg}"
@@ -338,8 +423,11 @@ def run(ceph_cluster, **kw):
             if services_arg:
                 cmd += f" --services {services_arg}"
             if bucket_type and bucket_name:
-                cmd += f" --bucket-type {bucket_type} --bucket-name {bucket_name}"
-            rados_obj.client.exec_command(cmd=cmd)
+                cmd += f" --crush-bucket-type {bucket_type} --crush-bucket-name {bucket_name}"
+            out, err = rados_obj.client.exec_command(
+                cmd=cmd, pretty_print=True, check_ec=True
+            )
+            log.info(f"Out: {out}, \nError: {err}")
 
             # 5) Wait and validate
             log.info(
@@ -352,6 +440,11 @@ def run(ceph_cluster, **kw):
                 test_stop_start=test_stop_start,
                 test_pause_resume=test_pause_resume,
             )
+
+            assert mon_config_method.remove_config(
+                section="mgr", name="debug_mgr", verify_rm=False
+            )
+
             log.info("=================OSD version after upgrade===================")
             rados_obj.client.exec_command(
                 cmd="ceph orch ps | grep osd", pretty_print=True
@@ -365,51 +458,58 @@ def run(ceph_cluster, **kw):
                 validate_upgraded_osds(rados_obj, expected_osds, new_image)
 
             # 6) Validate log lines
+            log.info(
+                "=================ok-to-stop log lines after upgrade==================="
+            )
+            lines = active_mgr_node.exec_command(
+                sudo=True,
+                cmd=f"grep 'osd ok-to-stop' /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
+                check_ec=False,
+            )
+            ok_to_stop_lines = lines[0].split("\n")[:-1]
+
+            log.info("---start of ok-to-stop log lines---")
+            for line in ok_to_stop_lines:
+                log.info(line)
+            log.info("---end of ok-to-stop log lines---")
+
+            log.info(
+                "ok-to-stop command will be used for all workflows which does not include"
+                " –-bucket_type=<chassis/rack> --bucket_name=<rackOne>"
+            )
+
+            # 7) Validate ok-to-upgrade log lines
+            log.info(
+                "=================ok-to-upgrade log lines after upgrade==================="
+            )
+            lines = active_mgr_node.exec_command(
+                sudo=True,
+                cmd=f"grep 'osd ok-to-upgrade' /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
+                check_ec=False,
+            )
+            ok_to_upgrade_lines = lines[0].split("\n")[:-1]
+
+            log.info("---start of ok-to-upgrade log lines---")
+            for line in ok_to_upgrade_lines:
+                log.info(line)
+            log.info("---end of ok-to-upgrade log lines---")
+
+            log.info(
+                "ok-to-upgrade is used only for scenarios that include "
+                "--bucket_type=<chassis/rack> --bucket_name=<rackOne>"
+            )
+
             if bucket_type is None and bucket_name is None:
-                log.info(
-                    "=================ok-to-stop log lines after upgrade==================="
-                )
-                lines = active_mgr_node.exec_command(
-                    sudo=True,
-                    cmd=f"grep ok-to-stop /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
-                )
-                ok_to_stop_lines = lines[0].split("\n")[:-1]
-
-                log.info("---start of ok-to-stop log lines---")
-                for line in ok_to_stop_lines:
-                    log.info(line)
-                log.info("---end of ok-to-stop log lines---")
-
                 assert (
                     len(ok_to_stop_lines) > 0
                 ), "ERROR: ok-to-stop command is not used"
-
-                log.info(
-                    "ok-to-stop command will be used for all workflows which does not include"
-                    " –-bucket_type=<chassis/rack> --bucket_name=<rackOne>"
-                )
+                assert (
+                    len(ok_to_upgrade_lines) == 0
+                ), "ERROR: ok-to-upgrade command is used"
             else:
-
-                # 7) Validate ok-to-upgrade log lines
-                log.info(
-                    "=================ok-to-upgrade log lines after upgrade==================="
-                )
-                lines = active_mgr_node.exec_command(
-                    sudo=True,
-                    cmd=f"grep ok-to-upgrade /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
-                )
-                ok_to_upgrade_lines = lines[0].split("\n")[:-1]
-
-                log.info("---start of ok-to-upgrade log lines---")
-                for line in ok_to_upgrade_lines:
-                    log.info(line)
-                log.info("---end of ok-to-upgrade log lines---")
-
-                log.info(
-                    "ok-to-upgrade is used only for scenarios that include "
-                    "--bucket_type=<chassis/rack> --bucket_name=<rackOne>"
-                )
-
+                assert (
+                    len(ok_to_stop_lines) == 0
+                ), "ERROR: ok-to-stop command is being used"
                 assert (
                     len(ok_to_upgrade_lines) > 0
                 ), "ERROR: ok-to-upgrade command is not used"
@@ -428,27 +528,22 @@ def run(ceph_cluster, **kw):
         # Delete pools created for IO during upgrade
         rados_obj.delete_pool(pool=re_pool_name)
         log.info("Deleted pool: %s", re_pool_name)
+        mon_config_method.remove_config(
+            section="mgr", name="debug_mgr", verify_rm=False
+        )
 
         # Resetting the OSD state as to before the test.
         log.info(
-            "================= FINALLY BLOCK: Removing container_image==================="
-        )
-        out = rados_obj.run_ceph_command(cmd="ceph config dump")
-        for cfg_entry in out:
-            if cfg_entry["name"] == "container_image":
-                if cfg_entry["section"] == "osd":
-                    continue
-                mon_obj.remove_config(
-                    section=cfg_entry["section"], name="container_image"
-                )
-        log.info(
             "===========FINALLY BLOCK: Downgrading OSDs to deployed version==============="
         )
-        mon_obj.set_config(section="osd", name="container_image", value=old_image)
-        rados_obj.client.exec_command(
-            cmd="ceph orch redeploy osd.osds",
-        )
-        time.sleep(20)
+
+        try:
+            _downgrade_osds_to_old_image(
+                rados_obj, mon_obj, old_image, new_image, ceph_cluster, service_obj
+            )
+        except ValueError as e:
+            log.error(f"Downgrade failed: {e}")
+
         _wait_osds_single_version(rados_obj, downgrade_timeout, old_image, service_obj)
 
     return 0
@@ -575,7 +670,7 @@ def _wait_upgrade_done(
     while time.time() < deadline:
         try:
             status = rados_obj.run_ceph_command(
-                cmd="ceph orch upgrade status", client_exec=True
+                cmd="ceph orch upgrade status", client_exec=True, print_output=True
             )
         except json.decoder.JSONDecodeError:
             log.debug("Upgrade completed (upgrade status not JSON)")
@@ -617,6 +712,106 @@ def _wait_upgrade_done(
         time.sleep(POLL_INTERVAL)
 
     raise TimeoutError("Upgrade did not complete in %ss" % timeout)
+
+
+def _downgrade_osds_to_old_image(
+    rados_obj: RadosOrchestrator,
+    mon_obj: MonConfigMethods,
+    old_image: str,
+    new_image: str,
+    ceph_cluster,
+    service_obj,
+):
+    """
+    Downgrade OSDs running new_image to old_image using per-OSD config and restart.
+
+    Raises:
+        ValueError: If ceph osd metadata returns non-list data
+    """
+
+    mon_obj.set_config(
+        section="osd",
+        name="container_image",
+        value=old_image,
+        no_delay=True,
+    )
+
+    log.info("=================Removing container_image===================")
+    out = rados_obj.run_ceph_command(cmd="ceph config dump")
+    for cfg_entry in out:
+        if cfg_entry["name"] == "container_image":
+            if cfg_entry["section"] == "osd":
+                log.info(f"Skipping container_image for {cfg_entry}")
+                continue
+            elif "osd" in cfg_entry["section"]:
+                log.info(f"Removing container_image from {cfg_entry}")
+                mon_obj.remove_config(
+                    section=cfg_entry["section"],
+                    name="container_image",
+                    verify_rm=False,
+                )
+
+    log.info("===========Downgrading OSDs to deployed version===============")
+    metadata = rados_obj.run_ceph_command(cmd="ceph osd metadata")
+
+    if not isinstance(metadata, list):
+        log.error(f"Unexpected metadata type: {type(metadata).__name__}")
+        raise ValueError(
+            f"ceph osd metadata returned unexpected type: {type(metadata).__name__}, expected list"
+        )
+
+    services_list = rados_obj.list_orch_services(service_type="osd")
+    for service in services_list:
+        rados_obj.set_unmanaged_flag(service_type="osd", service_name=service)
+    osds_to_downgrade = []
+    for osd_meta in metadata:
+        osd_id = osd_meta.get("id")
+        container_image = osd_meta.get("container_image", "")
+
+        if container_image.strip() != new_image.strip():
+            continue
+
+        osds_to_downgrade.append(osd_id)
+        log.info(
+            "OSD %s is on newer image %s; will set container_image to %s",
+            osd_id,
+            container_image,
+            old_image,
+        )
+
+    if not osds_to_downgrade:
+        log.info("No OSDs on newer image %s; skip downgrade", new_image)
+        return
+
+    client = ceph_cluster.get_nodes(role="client")[0]
+    removed_osd_dev_paths = {}
+    removed_osd_hosts = {}
+
+    for osd_id in osds_to_downgrade:
+        test_host: object = rados_obj.fetch_host_node(
+            daemon_type="osd", daemon_id=osd_id
+        )
+        removed_osd_dev_paths[osd_id] = get_device_path(test_host, osd_id)
+        removed_osd_hosts[osd_id] = test_host
+        utils.osd_remove(ceph_cluster=ceph_cluster, osd_id=osd_id, zap=True, force=True)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=CLEAN_PG_TIMEOUT
+        )
+        method_should_succeed(wait_for_device_rados, test_host, osd_id, action="remove")
+
+    for osd_id in osds_to_downgrade:
+        test_host = removed_osd_hosts[osd_id]
+        utils.add_osd(
+            ceph_cluster, test_host.hostname, removed_osd_dev_paths[osd_id], osd_id
+        )
+
+    for osd_id in osds_to_downgrade:
+        wait_for_osd_daemon_state(client, osd_id, "up")
+
+    rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
+    assert service_obj.add_osds_to_managed_service(
+        osds=osds_to_downgrade, spec="osds", remove_empty_service_spec=True
+    )
 
 
 def get_daemon_container_images(rados_obj: RadosOrchestrator, daemon: str) -> List[str]:

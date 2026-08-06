@@ -1,0 +1,229 @@
+# Ceph NVMe-oF XCOPY/CNC RHEL functional tests (P0)
+# Cross-NS copy verify, large-scale integrity, dual-GW ANA (RHEL)
+# cluster configuration file: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
+# inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
+---
+tests:
+
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                allow-overwrite: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node6
+        copy_admin_keyring: true
+        install_packages:
+          - ceph-common
+      desc: Setup RHEL NVMe-oF initiator client
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+
+  # RHEL Cross-Namespace Copy with Data Verification
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        operation: cross_ns_copy_verify
+        enable_cnc_logging: true
+        cnc_config:
+          host_behav_support_cnc: true
+          chunk_nlb: 512
+          max_inflight: 8
+          rate_limit_bytes: 400000000
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              - count: 2
+                size: 10G
+                ns_create_image: true
+            listeners:
+              - node4
+              - node5
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node6
+      desc: >
+        RHEL CNC same-NS, multi-range, cross-NS and large chunked
+        copies with data verification
+      destroy-cluster: false
+      module: test_nvmeof_xcopy_cnc_rhel.py
+      name: RHEL cross-namespace CNC copy with verification
+
+  # Large-Scale Data Integrity over Ceph NVMe-oF Namespaces
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        operation: full_volume_integrity
+        io_size: 5G
+        fio_bs: 1M
+        fio_iodepth: 32
+        stress_loop: true
+        stress_count: 50
+        cnc_config:
+          host_behav_support_cnc: true
+          chunk_nlb: 512
+          max_inflight: 8
+          rate_limit_bytes: 400000000
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              - count: 2
+                size: 20G
+                ns_create_image: true
+            listeners:
+              - node4
+              - node5
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node6
+      desc: >
+        fio crc32c fill, CNC copy entire region, fio verify on destination
+      destroy-cluster: false
+      module: test_nvmeof_xcopy_cnc_rhel.py
+      name: large-scale CNC data integrity
+
+  # Dual-Gateway ANA with CNC (RHEL)
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        operation: ana_cnc
+        failover_mid_copy: true
+        large_blocks: 50000
+        cnc_config:
+          host_behav_support_cnc: true
+          chunk_nlb: 512
+          max_inflight: 8
+          rate_limit_bytes: 400000000
+        fault-injection-methods:
+          - tool: systemctl
+            nodes:
+              - node5
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              - count: 2
+                size: 10G
+                ns_create_image: true
+            listeners:
+              - node4
+              - node5
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node6
+      desc: >
+        RHEL CNC via Active ANA path and mid-copy gateway failover
+        without silent data corruption
+      destroy-cluster: false
+      module: test_nvmeof_xcopy_cnc_rhel.py
+      name: dual-gateway ANA CNC normal and failover

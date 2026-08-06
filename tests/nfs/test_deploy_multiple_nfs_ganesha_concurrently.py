@@ -22,6 +22,15 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     original_config = config.get("spec", None)
     timeout = int(config.get("timeout", 300))
+    # Cephadm reserves cluster_qos_port (default 31311) for every NFS service.
+    # Concurrent instances sharing nfs hosts collide on that default unless each
+    # gets a unique qos port. Enable via suite config on Tentacle+ (field is
+    # Tentacle+ only); Squid suites leave this unset.
+    use_cluster_qos = bool(
+        config.get("enable_cluster_qos_port")
+        or (original_config or {}).get("spec", {}).get("cluster_qos_port") is not None
+    )
+    ports_per_instance = 3 if use_cluster_qos else 2
     # Allow some time for the cluster to stabilize
 
     # If the setup doesn't have required number of clients, exit.
@@ -50,9 +59,8 @@ def run(ceph_cluster, **kw):
         return free_ports
 
     try:
-        # Find 12 free ports (6 services * 2 ports each)
         all_nfs_nodes = ceph_cluster.get_nodes("nfs")
-        needed_ports = nfs_instance_number * 3
+        needed_ports = nfs_instance_number * ports_per_instance
         free_ports = get_free_ports(all_nfs_nodes, needed_ports, 52000)
 
         if len(free_ports) < needed_ports:
@@ -60,9 +68,9 @@ def run(ceph_cluster, **kw):
 
         new_objects = []
         for i in range(nfs_instance_number):
-            nfs_port = free_ports[i * 2]
-            mon_port = free_ports[i * 2 + 1]
-            cQoS_port = free_ports[i * 2 + 2]
+            base = i * ports_per_instance
+            nfs_port = free_ports[base]
+            mon_port = free_ports[base + 1]
 
             new_object = {
                 "service_type": original_config["service_type"],
@@ -71,9 +79,10 @@ def run(ceph_cluster, **kw):
                 "spec": {
                     "port": nfs_port,
                     "monitoring_port": mon_port,
-                    "cluster_qos_port": cQoS_port,
                 },
             }
+            if use_cluster_qos:
+                new_object["spec"]["cluster_qos_port"] = free_ports[base + 2]
             new_objects.append(new_object)
         log.info(
             f"New NFS Ganesha objects to be created with dynamic ports: {new_objects}"

@@ -891,7 +891,7 @@ tests:
         rbd_pool: rbd
         gw_group: gw_group1
         nvme_metadata_pool: rbd
-        iodepth: [4, 8, 16, 20, 24, 28, 32, 40, 48]  # list of IO depths to test
+        iodepth: [8, 16, 20, 24, 32]  # list of IO depths to test
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:

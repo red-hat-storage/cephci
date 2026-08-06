@@ -1,0 +1,16 @@
+---
+# RedHat Enterprise Linux 10.2 - LARGE profile (8 vCPUs / 32GB / 100GB + 6x30GB)
+# Same image as onecloud-rhel-10.2-server-x86_64-medium.yaml, different profile
+# OneCloud ignores userData; bootstrap is done via subprocess SSH in ceph.py
+version_id: 10.2
+id: rhel
+instance:
+  create:
+    image_id: 536  # Replace with actual ID from OneCloud portal
+    projectID: 808 # Project ID for IBM-CEPH-QE in TUC region
+    site: TUC
+    groupID: 1
+    VLAN: 2231
+    resources: large
+    arch: x86_64
+    os: RHEL
