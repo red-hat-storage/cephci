@@ -12,6 +12,7 @@ from .orch.orch import Orch
 from .osd.osd import Osd
 from .restful.restful import RestFul
 from .rgw.rgw import Rgw
+from .secret.secret import Secret
 from .smb.smb import Smb
 
 
@@ -33,6 +34,7 @@ class Ceph(Cli):
         self.nfs = Nfs(nodes, self.base_cmd)
         self.fs = Fs(nodes, self.base_cmd)
         self.osd = Osd(nodes, self.base_cmd)
+        self.secret = Secret(nodes, self.base_cmd)
         self.smb = Smb(nodes, self.base_cmd)
         self.restful = RestFul(nodes, self.base_cmd)
 
