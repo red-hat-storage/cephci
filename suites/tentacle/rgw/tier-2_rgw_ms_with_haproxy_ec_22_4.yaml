@@ -219,7 +219,6 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node4}:5000 --access-key a123 --secret s123 --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node4}:5000 --access-key a123 --secret s123"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node3}:80,http://{node_ip:node4}:80 --access-key a123 --secret s123"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.shared.sec rgw_realm india"
