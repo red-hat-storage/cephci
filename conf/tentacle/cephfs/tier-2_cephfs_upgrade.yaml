@@ -15,6 +15,7 @@ globals:
         role:
           - mon
           - mds
+          - mgr
       node4:
         role:
           - osd

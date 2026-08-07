@@ -58,6 +58,14 @@ tests:
       module: test_ansible.py
       name: "ceph ansible install containerized rhcs 4.x from cdn"
       polarion-id: CEPH-83573588
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
   -
     test:
       abort-on-fail: false

@@ -151,6 +151,14 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
   - test:
       abort-on-fail: false
       desc: "Setup Crash configuration"
