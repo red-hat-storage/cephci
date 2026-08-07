@@ -35,11 +35,77 @@ class OMAPValidationFailure(Exception):
     pass
 
 
-def get_nvme_service_name(pool, group=None):
-    svc_name = f"nvmeof.{pool}"
+def get_nvme_service_id(pool, group=None):
+    """Build orch ``service_id`` for an nvmeof apply_spec.
+
+    Default metadata pool ``.nvmeof`` must keep its leading dot. Ceph names
+    the service ``nvmeof.<service_id>``, so pool ``.nvmeof`` + group
+    ``group1`` yields service_id ``.nvmeof.group1`` and full name
+    ``nvmeof..nvmeof.group1`` (current product naming after the cephadm
+    revert). Do not strip the leading dot.
+
+    For redeploy/delete/lookups, prefer resolving the live service_id from
+    ``ceph orch ls nvmeof --export`` instead of reconstructing from pool.
+    """
     if group:
-        svc_name = f"{svc_name}.{group}"
-    return svc_name
+        return f"{pool}.{group}"
+    return str(pool)
+
+
+def get_nvme_service_name(pool, group=None):
+    return f"nvmeof.{get_nvme_service_id(pool, group)}"
+
+
+def fetch_nvme_service_from_orch(ceph_cluster, group=None):
+    """Return ``(service_name, service_id)`` from ``ceph orch ls nvmeof --export``.
+
+    Prefer this over constructing names from pool/group. When *group* is set,
+    match the export entry whose ``service_id`` or ``spec.group`` contains it.
+    """
+    orch = Orch(ceph_cluster, **{})
+    out, _ = orch.shell(
+        args=["ceph orch ls nvmeof --export --format json"]
+    )
+    if not out or "No services reported" in out:
+        raise RuntimeError("No nvmeof services reported by ceph orch ls --export")
+
+    services = json.loads(out)
+    if isinstance(services, dict):
+        services = [services]
+
+    matched = None
+    for service in services:
+        if service.get("service_type") != "nvmeof":
+            continue
+        service_id = service.get("service_id", "")
+        spec_group = (service.get("spec") or {}).get("group")
+        if group:
+            if group == spec_group or (
+                isinstance(service_id, str) and group in service_id
+            ):
+                matched = service
+                break
+        else:
+            matched = service
+            break
+
+    if not matched:
+        raise RuntimeError(
+            "No nvmeof orch export entry found"
+            + (f" for group '{group}'" if group else "")
+        )
+
+    service_id = matched.get("service_id")
+    if not service_id:
+        raise RuntimeError("nvmeof orch export entry missing service_id")
+
+    # orch export carries service_id; full name is always service_type.service_id
+    service_name = matched.get("service_name") or f"nvmeof.{service_id}"
+    LOG.info(
+        "Resolved nvmeof service from orch export: "
+        f"service_name={service_name}, service_id={service_id}"
+    )
+    return service_name, service_id
 
 
 def setup_firewalld(nodes) -> None:
@@ -177,7 +243,7 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
                 "specs": [
                     {
                         "service_type": "nvmeof",
-                        "service_id": rbd_pool,
+                        "service_id": get_nvme_service_id(rbd_pool),
                         "mtls": config.get("mtls", False),
                         "placement": {"nodes": [i.hostname for i in gw_nodes]},
                         "spec": {
@@ -196,7 +262,9 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
             raise NVMeDeployArgumentError("Gateway group not provided..")
 
         if is_spec_or_mtls:
-            cfg["config"]["specs"][0]["service_id"] = f"{rbd_pool}.{gw_group}"
+            cfg["config"]["specs"][0]["service_id"] = get_nvme_service_id(
+                rbd_pool, gw_group
+            )
             cfg["config"]["specs"][0]["spec"]["group"] = gw_group
         else:
             cfg["config"]["pos_args"].append(gw_group)
@@ -243,8 +311,7 @@ def delete_nvme_service(ceph_cluster, config):
 
     for gwgroup_config in gw_groups:
         gw_group = gwgroup_config["gw_group"]
-        service_name = f"nvmeof.{config['rbd_pool']}"
-        service_name = f"{service_name}.{gw_group}" if gw_group else service_name
+        service_name = get_nvme_service_name(config["rbd_pool"], gw_group or None)
         cfg = {
             "no_cluster_state": False,
             "config": {
