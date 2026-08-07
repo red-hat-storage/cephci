@@ -1,6 +1,6 @@
 #===============================================================================================
 # Cluster Configuration:
-#    conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml
+#    conf/tentacle/cephfs/tier-2_cephfs_upgrade.yaml
 #
 # Test Steps:
 #   (1) Bootstrap cluster using latest released ceph 5.x with below options,
@@ -116,6 +116,14 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
   - test:
       abort-on-fail: false
       desc: Creates all the fs related components before upgrade

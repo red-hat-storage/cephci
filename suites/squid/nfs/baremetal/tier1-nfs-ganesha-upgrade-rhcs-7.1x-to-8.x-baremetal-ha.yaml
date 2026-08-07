@@ -108,6 +108,13 @@ tests:
       abort-on-fail: true
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: nfs multiple operations - pre_upgrade
       module: test_nfs_multiple_operations_for_upgrade.py
       desc: nfs multiple operations before upgrade create, delete, write, read, rename

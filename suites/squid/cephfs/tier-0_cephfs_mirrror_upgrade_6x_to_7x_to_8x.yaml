@@ -153,6 +153,13 @@ tests:
       name: configure client
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       abort-on-fail: false
       desc: "Pre-upgrade validate snapdiff perf on 10MB X 100 Files"
       clusters:
