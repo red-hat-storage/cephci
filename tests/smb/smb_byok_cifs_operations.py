@@ -159,6 +159,10 @@ def run(ceph_cluster, **kw):
             ls = get_smb_shares(installer_node, smb_cluster_id)
             if smb_shares[0] in ls:
                 raise OperationFailedError("Encrypted shares not deleted")
+        elif byok_operation == "byok_cluster_cleanup":
+            smb_cleanup(
+                installer_node, smb_shares, smb_cluster_id, group_name="smb-byok-grp"
+            )
 
     except Exception as e:
         log.error(f"Failed to perform byok operations {byok_operation} : {e}")
