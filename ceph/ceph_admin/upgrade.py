@@ -115,7 +115,7 @@ class UpgradeMixin:
         cmd = ["ceph", "orch", "upgrade", "status"]
 
         # these additional checks are in place because the fix is currently
-        # available in only 9.1, once back-ported to all relevant versions,
+        # available in 8.1z8 and 9.1, once back-ported to all relevant versions,
         # retry mechanism can be removed completely
         # determine mgr version to decide retry logic
         # check if active mgr daemon has upgraded to 9.1 or above
@@ -128,9 +128,11 @@ class UpgradeMixin:
         LOG.debug("MGR common version: %s", mgr_version_common)
         LOG.debug("MGR downstream version: %s", mgr_version_downstream)
 
-        common_ver_check = mgr_version_common and Version(
+        common_ver_check = (
             mgr_version_common
-        ) >= Version("20.2.1")
+            and Version(mgr_version_common) >= Version("20.2.1")
+            or Version(mgr_version_common) == Version("19.2.1")
+        )
         downstream_ver_check = mgr_version_downstream and Version(
             mgr_version_downstream
         ) >= Version("9.9.1.0")
