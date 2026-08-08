@@ -615,21 +615,33 @@ def set_config_param(node):
 
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
     try:
+        from utility.odf_defaults import (
+            format_mons_for_kernel_mount,
+            is_msgr1_disabled,
+            kernel_ms_mode_opt,
+        )
+
         for client in kernel_clients:
             out, err = client.exec_command(
                 cmd="sudo ceph auth get-key client.%s" % (client.hostname)
             )
             secret_key = out.rstrip("\n")
             mon_node_ip = mon_node_ip.replace(" ", "")
+            use_msgr2 = is_msgr1_disabled(client)
+            mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+            ms_opt = kernel_ms_mode_opt(use_msgr2)
             client.exec_command(
-                cmd="sudo mount -t ceph %s:6789:/ %s -o name=%s,secret=%s"
-                % (mon_node_ip, mounting_dir, client.hostname, secret_key)
+                cmd="sudo mount -t ceph %s:/ %s -o name=%s,secret=%s%s"
+                % (mons, mounting_dir, client.hostname, secret_key, ms_opt)
             )
             out, err = client.exec_command(cmd="mount")
             mount_output = out.split()
 
             log.info("Checking if kernel mount is is passed of failed:")
-            if "%s:6789:/" % (mon_node_ip) in mount_output:
+            # Device may be bare IP:port or IP:3300 after msgr2 adjust
+            if any(mounting_dir.rstrip("/") == m for m in mount_output) or any(
+                mons in m for m in mount_output
+            ):
                 log.info("kernel mount passed")
             else:
                 log.error("kernel mount failed")
