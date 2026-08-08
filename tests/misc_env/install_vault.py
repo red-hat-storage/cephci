@@ -40,6 +40,8 @@ import json
 import time
 from typing import Dict, Tuple
 
+import requests
+
 from ceph.ceph import Ceph, CephNode
 from cli.vault.vault import Vault
 from utility.log import Log
@@ -90,6 +92,11 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
     """
     Deploy containerized Vault infrastructure.
 
+    In multisite setups, the Vault server is deployed only on the first
+    cluster (primary).  Subsequent clusters (secondary, archive) reuse
+    the primary's Vault server — their vault-agents point to it over
+    the network so that all sites share the same transit encryption keys.
+
     Args:
         ceph_cluster: The cluster participating in the test
         config: Configuration passed to the test
@@ -107,11 +114,25 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
         LOG.info("CONTAINERIZED VAULT DEPLOYMENT")
         LOG.info("=" * 70)
 
+        test_data = kwargs.get("test_data", {})
         vault_config = config.get("vault", {})
 
-        LOG.info("Deploying Vault server container on client node...")
-        vault_url, credentials = _deploy_vault_server(ceph_cluster, vault_config)
-        LOG.info(f"Vault server deployed at {vault_url}")
+        existing_vault = test_data.get("vault")
+        if existing_vault:
+            vault_url = existing_vault["vault_url"]
+            credentials = existing_vault["credentials"]
+            LOG.info(
+                f"Reusing primary Vault server at {vault_url} "
+                "(skipping server deployment for this cluster)"
+            )
+        else:
+            LOG.info("Deploying Vault server container on client node...")
+            vault_url, credentials = _deploy_vault_server(ceph_cluster, vault_config)
+            LOG.info(f"Vault server deployed at {vault_url}")
+            test_data["vault"] = {
+                "vault_url": vault_url,
+                "credentials": credentials,
+            }
 
         LOG.info("Deploying Vault agents on RGW nodes...")
         _deploy_vault_agents(ceph_cluster, vault_url, credentials)
@@ -126,7 +147,6 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
         LOG.info("=" * 70)
         LOG.info(f"Vault Server: {vault_url}")
         LOG.info(f"Transit Key: {credentials.get('key_name', 'testKey01')}")
-        LOG.info("Credentials: /vault/credentials.json on client node")
         LOG.info("=" * 70)
 
         return 0
@@ -162,11 +182,61 @@ def _deploy_vault_server(cluster: Ceph, config: Dict) -> Tuple[str, Dict]:
     )
 
     LOG.info("Waiting for Vault to be ready...")
-    time.sleep(10)
+    _wait_for_vault(vault, node)
 
     credentials = _initialize_vault(vault, config)
 
+    LOG.info("Enabling auto-unseal for Vault server...")
+    vault.server.enable_auto_unseal(
+        **{
+            "unseal-keys": credentials["unseal_keys"],
+            "threshold": 3,
+            "vault-url": vault_url,
+            "container-name": config.get("container-name", "vault-server"),
+        }
+    )
+    LOG.info("Auto-unseal enabled")
+
     return vault_url, credentials
+
+
+def _wait_for_vault(vault: Vault, node: CephNode, timeout: int = 120) -> None:
+    """Wait for Vault container to be running and API to be reachable."""
+    out, _ = node.exec_command(
+        sudo=True, cmd="systemctl is-active vault-server", check_ec=False
+    )
+    if "active" not in out.strip():
+        LOG.error(f"vault-server systemd unit is not active: {out.strip()}")
+        out, _ = node.exec_command(
+            sudo=True,
+            cmd="journalctl -u vault-server --no-pager -n 30",
+            check_ec=False,
+        )
+        LOG.error(f"vault-server journal:\n{out}")
+        raise RuntimeError("vault-server systemd unit failed to start")
+
+    deadline = time.time() + timeout
+    last_err = None
+    while time.time() < deadline:
+        try:
+            resp = requests.get(
+                f"{vault.vault_url}/v1/sys/health",
+                timeout=5,
+            )
+            LOG.info(f"Vault is reachable (HTTP {resp.status_code})")
+            return
+        except Exception as e:
+            last_err = e
+            LOG.debug(f"Vault not ready yet: {e}")
+            time.sleep(5)
+
+    out, _ = node.exec_command(
+        sudo=True, cmd="podman ps -a --filter name=vault-server", check_ec=False
+    )
+    LOG.error(f"Container status: {out}")
+    raise RuntimeError(
+        f"Vault not reachable at {vault.vault_url} after {timeout}s: {last_err}"
+    )
 
 
 def _initialize_vault(vault: Vault, config: Dict) -> Dict:
