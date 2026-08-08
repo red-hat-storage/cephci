@@ -551,6 +551,47 @@ tests:
         cleanup_pool: true
         fail_on_crash: false
 
+  # ===========================================================================
+  # OSD SIGKILL Thrashing Tests
+  # ===========================================================================
+  - test:
+      name: OSD SIGKILL thrashing with concurrent IO
+      desc: Kill OSD processes with SIGKILL (kill -9)
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1800
+        aggressive: true
+        enable_osd_sigkill_thrashing: true
+        enable_osd_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        compression: true
+        cleanup_pools: true
+        enable_debug_logs: true
+        inject_errors: false
+        inconsistent_object_fail: true
+        # Workload controls
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_nfs_thrashing: false
+        enable_cephfs_subvolume_thrashing: false
+
 # RDMA thrash test, to to run on specific hardware
 #  - test:
 #      name: Fast EC OSD thrashing with compression
