@@ -77,7 +77,7 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     scenarios = config.get("scenarios", [])
     upgrade_timeout = config.get("upgrade_timeout", 3600)
-    downgrade_timeout = config.get("downgrade_timeout", 600)
+    downgrade_timeout = config.get("downgrade_timeout", 3600)
     test_stop_start = config.get("test_stop_start", False)
     test_pause_resume = config.get("test_pause_resume", False)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
@@ -110,8 +110,6 @@ def run(ceph_cluster, **kw):
 
     try:
         osd_hostnames: List[str] = rados_obj.get_osd_hosts()
-        active_mgr = mgr_config_method.get_active_mgr()
-        active_mgr_node = ceph_cluster.get_node_by_hostname(active_mgr.split(".")[0])
         fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
 
         host1 = osd_hostnames[0]
@@ -232,34 +230,36 @@ def run(ceph_cluster, **kw):
             elif scenario == "combo_chassis1_chassis2_rack1":
                 # Negative scenario , failure expected
                 labels_arg = "chassis=chassis1,chassis=chassis2,rack=rack1"
+                cmd = f"ceph orch upgrade start --image {new_image} --daemon-types osd"
+                cmd += " --topological-labels " + labels_arg
+                out = ""
                 try:
-                    cmd = f"ceph orch upgrade start --image {new_image} --daemon-types osd"
-                    if labels_arg:
-                        cmd += " --topological-labels " + labels_arg
-                    rados_obj.client.exec_command(cmd=cmd)
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
                 except Exception as e:
-                    log.info(f"Exception raised : {str(e)}")
-                    if "Found duplicate key chassis" in str(e):
-                        log.info(f"Expected failure: {str(e)}")
-                        continue
+                    out = str(e)
+                log.info(f"Output: {out}")
 
-                log.error("Unexpected exception raised")
+                if "Found duplicate key chassis" in out:
+                    log.info(f"Expected failure: {out}")
+                    continue
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "combo_chassis3_rack1_no_match":
                 # Negative scenario , failure expected
                 labels_arg = "chassis=chassis3,rack=rack1"
                 cmd = f"ceph orch upgrade start --image {new_image} --daemon-types osd"
                 cmd += " --topological-labels " + labels_arg
-
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if "did not match any hosts" in out:
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "hosts_invalid_host":
                 bad_host = "invalidhost"
@@ -267,16 +267,17 @@ def run(ceph_cluster, **kw):
                     f"ceph orch upgrade start --image {new_image} "
                     f"--daemon-types osd --hosts {bad_host}"
                 )
-                rados_obj.client.exec_command(cmd=cmd)
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if "did not match any hosts" in out:
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "topological_labels_rack_nonexistent":
                 rack_val = "doesnotexist"
@@ -285,16 +286,17 @@ def run(ceph_cluster, **kw):
                     f"ceph orch upgrade start --image {new_image} "
                     f"--daemon-types osd --topological-labels {labels_neg}"
                 )
-                rados_obj.client.exec_command(cmd=cmd)
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if "did not match any hosts" in out:
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "full_cluster_upgrade":
                 expected_osds = rados_obj.collect_osd_daemon_ids("default")
@@ -322,9 +324,11 @@ def run(ceph_cluster, **kw):
                 bucket_name = "rack1"
                 cmd = f"ceph orch upgrade start --image {new_image} "
                 cmd += f"--crush-bucket-type {bucket_type} --crush-bucket-name {bucket_name}"
-                # Bucket parameters for OSD upgrade require --daemon-types to be "osd"
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if (
@@ -333,8 +337,7 @@ def run(ceph_cluster, **kw):
                 ):
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "negative_bucket_type_bucket_name_rack_host_arg":
                 bucket_type = "rack"
@@ -342,9 +345,11 @@ def run(ceph_cluster, **kw):
                 hosts_arg = host1
                 cmd = f"ceph orch upgrade start --image {new_image} "
                 cmd += f"--crush-bucket-type {bucket_type} --crush-bucket-name {bucket_name} --hosts {hosts_arg}"
-                # --hosts cannot be combined with --crush_bucket_type or --crush_bucket_name
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if (
@@ -353,8 +358,7 @@ def run(ceph_cluster, **kw):
                 ):
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "negative_bucket_type_bucket_name_services_arg":
                 bucket_type = "rack"
@@ -362,9 +366,11 @@ def run(ceph_cluster, **kw):
                 services_arg = "mgr"
                 cmd = f"ceph orch upgrade start --image {new_image} --crush-bucket-type {bucket_type} "
                 cmd += f"--crush-bucket-name {bucket_name} --services {services_arg}"
-                # --services cannot be combined with --crush_bucket_type or --crush_bucket_name
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if (
@@ -373,8 +379,7 @@ def run(ceph_cluster, **kw):
                 ):
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             elif scenario == "negative_bucket_type_bucket_name_topological_labels_arg":
                 bucket_type = "rack"
@@ -382,9 +387,11 @@ def run(ceph_cluster, **kw):
                 topological_labels_arg = "rack=rack1"
                 cmd = f"ceph orch upgrade start --image {new_image} --crush-bucket-type {bucket_type} "
                 cmd += f"--crush-bucket-name {bucket_name} --topological-labels {topological_labels_arg}"
-                # --topological_labels cannot be combined with --crush_bucket_type or --crush_bucket_name
-                # exit status of command is not 1. echo $? will return 0.
-                out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                out = ""
+                try:
+                    out = list(rados_obj.client.exec_command(cmd=cmd))[1]
+                except Exception as e:
+                    out = str(e)
                 log.info(f"Output: {out}")
 
                 if (
@@ -393,8 +400,7 @@ def run(ceph_cluster, **kw):
                 ):
                     log.info(f"Expected failure: {out}")
                     continue
-                log.error("Unexpected exception raised")
-                log.error(f"Output: {out}")
+                log.error(f"Unexpected output: {out}")
                 return 1
             else:
                 log.error(f"Invalid scenario: {scenario}")
@@ -405,8 +411,8 @@ def run(ceph_cluster, **kw):
                 "=================================Running upgrade==========================="
             )
 
-            active_mgr_host_obj = rados_obj.get_host_object(active_mgr.split(".")[0])
-            rados_obj.rotate_logs([active_mgr_host_obj])
+            rados_obj.rotate_logs(ceph_cluster.get_nodes(role="mgr"))
+
             assert mon_config_method.set_config(
                 section="mgr", name="debug_mgr", value=MGR_DEBUG_LEVEL
             )
@@ -424,6 +430,12 @@ def run(ceph_cluster, **kw):
                 cmd += f" --services {services_arg}"
             if bucket_type and bucket_name:
                 cmd += f" --crush-bucket-type {bucket_type} --crush-bucket-name {bucket_name}"
+            cmd += " --automatically-accept-license"
+
+            active_mgr_before_upgrade = mgr_config_method.get_active_mgr()
+            active_mgr_hostname_before_upgrade = active_mgr_before_upgrade.split(".")[0]
+            log.info("Active mgr before upgrade %s", active_mgr_hostname_before_upgrade)
+
             out, err = rados_obj.client.exec_command(
                 cmd=cmd, pretty_print=True, check_ec=True
             )
@@ -457,43 +469,92 @@ def run(ceph_cluster, **kw):
             else:
                 validate_upgraded_osds(rados_obj, expected_osds, new_image)
 
-            # 6) Validate log lines
+            # 6) Validate ok-to-stop and ok-to-upgrade log lines across all MGR hosts
             log.info(
-                "=================ok-to-stop log lines after upgrade==================="
+                "=======Checking ok-to-stop & ok-to-upgrade log lines on all MGR hosts======="
             )
-            lines = active_mgr_node.exec_command(
-                sudo=True,
-                cmd=f"grep 'osd ok-to-stop' /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
-                check_ec=False,
+            mgr_nodes = ceph_cluster.get_nodes(role="mgr")
+            ok_to_stop_host_count = 0
+            ok_to_upgrade_host_count = 0
+
+            for mgr_node in mgr_nodes:
+                mgr_hostname = mgr_node.hostname
+                log.info(f"--- Checking MGR logs on host: {mgr_hostname} ---")
+
+                # Grep ok-to-stop lines from all mgr log files on this host
+                stop_lines_out = mgr_node.exec_command(
+                    sudo=True,
+                    cmd=f"grep -h 'osd ok-to-stop' /var/log/ceph/{fsid}/ceph-mgr.*.log",
+                    check_ec=False,
+                )
+                ok_to_stop_lines = [
+                    ln for ln in stop_lines_out[0].split("\n") if ln.strip()
+                ]
+
+                log.info(f"---start of ok-to-stop log lines on {mgr_hostname}---")
+                for line in ok_to_stop_lines:
+                    log.info(line)
+                log.info(f"---end of ok-to-stop log lines on {mgr_hostname}---")
+
+                if ok_to_stop_lines:
+                    ok_to_stop_host_count += 1
+                    log.info(
+                        f"ok-to-stop lines found on {mgr_hostname} "
+                        f"(count: {len(ok_to_stop_lines)})"
+                    )
+                    log.info(
+                        f"\nMgr having ok-to-stop log lines: {mgr_hostname}"
+                        f"\nActive mgr before upgrade: {active_mgr_hostname_before_upgrade}"
+                    )
+                    if active_mgr_hostname_before_upgrade != mgr_hostname:
+                        log.warn(
+                            "Mgr having ok-to-stop log lines != Active mgr before upgrade"
+                        )
+                        _ = rados_obj.run_ceph_command(
+                            cmd="ceph mgr stat", client_exec=True, print_output=True
+                        )
+
+                # Grep ok-to-upgrade lines from all mgr log files on this host
+                upgrade_lines_out = mgr_node.exec_command(
+                    sudo=True,
+                    cmd=f"grep -h 'osd ok-to-upgrade' /var/log/ceph/{fsid}/ceph-mgr.*.log",
+                    check_ec=False,
+                )
+                ok_to_upgrade_lines = [
+                    ln for ln in upgrade_lines_out[0].split("\n") if ln.strip()
+                ]
+
+                log.info(f"---start of ok-to-upgrade log lines on {mgr_hostname}---")
+                for line in ok_to_upgrade_lines:
+                    log.info(line)
+                log.info(f"---end of ok-to-upgrade log lines on {mgr_hostname}---")
+
+                if ok_to_upgrade_lines:
+                    ok_to_upgrade_host_count += 1
+                    log.info(
+                        f"ok-to-upgrade lines found on {mgr_hostname} "
+                        f"(count: {len(ok_to_upgrade_lines)})"
+                    )
+                    log.info(
+                        f"\nMgr having ok-to-stop log lines: {mgr_hostname}"
+                        f"\nActive mgr before upgrade: {active_mgr_hostname_before_upgrade}"
+                    )
+                    if active_mgr_hostname_before_upgrade != mgr_hostname:
+                        log.warn(
+                            "Mgr having ok-to-upgrade log lines != Active mgr before upgrade"
+                        )
+                        _ = rados_obj.run_ceph_command(
+                            cmd="ceph mgr stat", client_exec=True, print_output=True
+                        )
+
+            log.info(
+                f"Summary: ok-to-stop found on {ok_to_stop_host_count} host(s), "
+                f"ok-to-upgrade found on {ok_to_upgrade_host_count} host(s)"
             )
-            ok_to_stop_lines = lines[0].split("\n")[:-1]
-
-            log.info("---start of ok-to-stop log lines---")
-            for line in ok_to_stop_lines:
-                log.info(line)
-            log.info("---end of ok-to-stop log lines---")
-
             log.info(
                 "ok-to-stop command will be used for all workflows which does not include"
-                " –-bucket_type=<chassis/rack> --bucket_name=<rackOne>"
+                " --bucket_type=<chassis/rack> --bucket_name=<rackOne>"
             )
-
-            # 7) Validate ok-to-upgrade log lines
-            log.info(
-                "=================ok-to-upgrade log lines after upgrade==================="
-            )
-            lines = active_mgr_node.exec_command(
-                sudo=True,
-                cmd=f"grep 'osd ok-to-upgrade' /var/log/ceph/{fsid}/ceph-mgr.{active_mgr}.log",
-                check_ec=False,
-            )
-            ok_to_upgrade_lines = lines[0].split("\n")[:-1]
-
-            log.info("---start of ok-to-upgrade log lines---")
-            for line in ok_to_upgrade_lines:
-                log.info(line)
-            log.info("---end of ok-to-upgrade log lines---")
-
             log.info(
                 "ok-to-upgrade is used only for scenarios that include "
                 "--bucket_type=<chassis/rack> --bucket_name=<rackOne>"
@@ -501,18 +562,18 @@ def run(ceph_cluster, **kw):
 
             if bucket_type is None and bucket_name is None:
                 assert (
-                    len(ok_to_stop_lines) > 0
-                ), "ERROR: ok-to-stop command is not used"
+                    ok_to_stop_host_count > 0
+                ), "ERROR: ok-to-stop command not found on any MGR host"
                 assert (
-                    len(ok_to_upgrade_lines) == 0
-                ), "ERROR: ok-to-upgrade command is used"
+                    ok_to_upgrade_host_count == 0
+                ), "ERROR: ok-to-upgrade command found on MGR host(s) when not expected"
             else:
                 assert (
-                    len(ok_to_stop_lines) == 0
-                ), "ERROR: ok-to-stop command is being used"
+                    ok_to_stop_host_count == 0
+                ), "ERROR: ok-to-stop command found on MGR host(s) when not expected"
                 assert (
-                    len(ok_to_upgrade_lines) > 0
-                ), "ERROR: ok-to-upgrade command is not used"
+                    ok_to_upgrade_host_count > 0
+                ), "ERROR: ok-to-upgrade command not found on any MGR host"
 
             log.info("==============================================================")
             log.info("Scenario %s passed", scenario)
@@ -752,12 +813,31 @@ def _downgrade_osds_to_old_image(
                 )
 
     log.info("===========Downgrading OSDs to deployed version===============")
-    metadata = rados_obj.run_ceph_command(cmd="ceph osd metadata")
+    metadata = None
+    for attempt in range(1, 6):
+        try:
+            metadata = rados_obj.run_ceph_command(cmd="ceph osd metadata")
+            if isinstance(metadata, list):
+                break
+            log.warning(
+                f"Attempt {attempt}/5: ceph osd metadata returned "
+                f"{type(metadata).__name__} instead of list. Retrying in 20s..."
+            )
+        except Exception as err:
+            log.warning(
+                f"Attempt {attempt}/5: ceph osd metadata failed with: {err}. "
+                f"Retrying in 20s..."
+            )
+        metadata = None
+        time.sleep(20)
 
     if not isinstance(metadata, list):
-        log.error(f"Unexpected metadata type: {type(metadata).__name__}")
+        log.error(
+            f"Unexpected metadata type after 5 retries: {type(metadata).__name__ if metadata is not None else 'None'}"
+        )
         raise ValueError(
-            f"ceph osd metadata returned unexpected type: {type(metadata).__name__}, expected list"
+            f"ceph osd metadata failed after 5 retries. Last result type: "
+            f"{type(metadata).__name__ if metadata is not None else 'None'}, expected list"
         )
 
     services_list = rados_obj.list_orch_services(service_type="osd")
