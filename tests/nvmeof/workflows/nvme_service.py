@@ -2,7 +2,6 @@
 NVMe Service, Gateway Group, and Gateway classes for NVMeoF workflows.
 """
 
-import json
 import time
 
 from looseversion import LooseVersion
@@ -14,6 +13,8 @@ from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL, DEFAULT
 from tests.nvmeof.workflows.nvme_gateway import create_gateway
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_enable_nvmeof_module,
+    fetch_nvme_service_from_orch,
+    get_nvme_service_id,
     nvme_gw_cli_version_adapter,
     setup_firewalld,
 )
@@ -79,6 +80,8 @@ class NVMeService:
         """Delete the NVMe gateway service."""
         ceph_cluster = self.ceph_cluster
 
+        # Prefer live orch identity over a constructed/stale cached name
+        self.refresh_service_identity()
         service_name = self.service_name
         cfg = {
             "no_cluster_state": False,
@@ -99,7 +102,7 @@ class NVMeService:
         release = self.ceph_cluster.rhcs_version
         spec = {
             "service_type": "nvmeof",
-            "service_id": self.nvme_metadata_pool,
+            "service_id": get_nvme_service_id(self.nvme_metadata_pool),
             "mtls": self.mtls,
             "placement": self._get_placement_config(self.config, self.gw_nodes),
             "spec": {
@@ -147,9 +150,9 @@ class NVMeService:
                     raise ValueError("Gateway group not provided for RHCS 8+")
 
                 if self.is_spec_or_mtls:
-                    cfg["config"]["specs"][0][
-                        "service_id"
-                    ] = f"{self.nvme_metadata_pool}.{self.group}"
+                    cfg["config"]["specs"][0]["service_id"] = get_nvme_service_id(
+                        self.nvme_metadata_pool, self.group
+                    )
                     cfg["config"]["specs"][0]["spec"]["group"] = self.group
                 else:
                     if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
@@ -223,41 +226,22 @@ class NVMeService:
         if deploy_config:
             test_nvmeof.run(self.ceph_cluster, **deploy_config)
 
-        # Once the service is deployed, get the service name and service id and store it
-        ceph = Orch(self.ceph_cluster, **{})
-        cmd = "ceph orch ls nvmeof --format json"
-        out, _ = ceph.shell(args=[cmd])
-        services = json.loads(out)
-        self.service_name = None
-        self.service_id = None
-        for service in services:
-            # If we have multiple services in single cluster then we need to filter the service by group
-            # so that we will get the correct service name and service id for the group.
-            # when we take services[0]["service_name"] only first service name will be returned
-            # so we need to filter the service by group.
-            if "nvmeof" in service["service_name"]:
-                if self.group:
-                    if self.group in service["service_name"]:
-                        service_name = service["service_name"]
-                        service_id = service["service_id"]
-                        LOG.info(
-                            f"Service name: {service_name}, Service id: {service_id}"
-                        )
-                        self.service_name = service_name
-                        self.service_id = service_id
-                        break
-                else:
-                    service_name = service["service_name"]
-                    service_id = service["service_id"]
-                    LOG.info(f"Service name: {service_name}, Service id: {service_id}")
-                    self.service_name = service_name
-                    self.service_id = service_id
-                    break
+        # Once the service is deployed, resolve live service_name/id from orch export
+        self.refresh_service_identity()
+
+    def refresh_service_identity(self):
+        """Set ``service_name`` / ``service_id`` from ``ceph orch ls --export``."""
+        self.service_name, self.service_id = fetch_nvme_service_from_orch(
+            self.ceph_cluster, group=self.group
+        )
 
     def redeploy(self, wait_sec=30):
-        """Redeploy the NVMe-oF orchestrator service after spec apply."""
-        if not self.service_name:
-            raise RuntimeError("NVMe-oF service name not set; deploy the service first")
+        """Redeploy the NVMe-oF orchestrator service after spec apply.
+
+        Always re-fetch the live service name from orch export before redeploy
+        instead of trusting a constructed or stale cached name.
+        """
+        self.refresh_service_identity()
         orch = Orch(self.ceph_cluster, **{})
         cmd = f"ceph orch redeploy {self.service_name}"
         LOG.info("Redeploying NVMe-oF service: %s", cmd)
