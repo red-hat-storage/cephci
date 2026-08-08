@@ -283,7 +283,7 @@ class BootstrapMixin:
         elif build_type == "released" and base_url == manifest_obj.repository:
             custom_image = False
             self.cluster.use_cdn = True
-            self.set_cdn_tool_repo(manifest_obj)
+            self.set_cdn_tool_repo(ctm=manifest_obj)
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:

@@ -19,8 +19,8 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 9.0
-                release: stable
-                registry-url: registry.redhat.io
+                release: z2
+                # registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
