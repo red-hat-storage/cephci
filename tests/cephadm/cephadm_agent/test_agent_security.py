@@ -1,6 +1,8 @@
 """Agent security, keyring runtime deletion, and corrupt metadata payload tests."""
 
+import base64
 import json
+import textwrap
 import time
 
 from cephadm_agent.helpers import (
@@ -158,8 +160,27 @@ def run_keyring_runtime_deletion_test(ceph_cluster, installer):
     log.info("PASS: Keyring runtime deletion test completed")
 
 
+def _agent_last_refresh(installer, hostname):
+    """Return last_refresh string for hostname from orch ps, or None."""
+    out, _ = shell(installer, "ceph orch ps --daemon-type agent -f json")
+    for a in json.loads(out):
+        if a.get("hostname") == hostname:
+            return a.get("last_refresh")
+    return None
+
+
 def run_corrupt_metadata_payload_test(ceph_cluster, installer):
-    log.info("=== TEST: Corrupt metadata payload with valid keyring ===")
+    """
+    Directly POST crafted /data payloads to the mgr agent endpoint.
+
+    The previous version only wrote unused /tmp files and restarted the agent,
+    which re-collected *real* metadata — so nothing corrupt was ever posted.
+    This version stops the real agent and HTTPS-POSTs payloads itself using the
+    agent keyring + root CA from the agent directory.
+    """
+    log.info(
+        "=== TEST: Corrupt metadata payload with valid keyring (direct /data POST) ==="
+    )
 
     agents = get_agent_daemons(installer)
     assert len(agents) > 0
@@ -170,104 +191,234 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
     fsid = get_fsid(installer)
     agent_dir = f"/var/lib/ceph/{fsid}/agent.{hostname}"
     service_name = agent_service_name(fsid, hostname)
+    results_path = "/tmp/agent_corrupt_post_results.json"
 
-    log.info("Recording last_refresh before corruption")
-    pre_out, _ = shell(installer, "ceph orch ps --daemon-type agent -f json")
-    pre_agents = json.loads(pre_out)
-    pre_refresh = None
-    for a in pre_agents:
-        if a["hostname"] == hostname:
-            pre_refresh = a.get("last_refresh")
-            break
-    log.info(f"Pre-corruption last_refresh: {pre_refresh}")
+    pre_refresh = _agent_last_refresh(installer, hostname)
+    log.info(f"Pre-test last_refresh: {pre_refresh}")
 
-    log.info("Backing up agent data files")
-    target_node.exec_command(
-        sudo=True,
-        cmd=f"cp {agent_dir}/agent.json {agent_dir}/agent.json.bak",
+    # Stop real agent so only our crafted POSTs update mgr agent timestamps.
+    log.info(f"Stopping real agent on {hostname} to avoid racing good metadata posts")
+    target_node.exec_command(sudo=True, cmd=f"systemctl stop {service_name}")
+    time.sleep(2)
+
+    # Python runs on the agent host (same place the real agent posts from).
+    # Posts crafted cases and writes JSON results for the test to assert on.
+    post_script = textwrap.dedent(
+        f"""\
+        import json, ssl, time
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError, URLError
+
+        agent_dir = {agent_dir!r}
+        results_path = {results_path!r}
+
+        with open(agent_dir + "/agent.json") as f:
+            cfg = json.load(f)
+        with open(agent_dir + "/keyring") as f:
+            keyring = f.read()
+
+        host = cfg["host"]
+        target_ip = cfg["target_ip"]
+        target_port = str(cfg["target_port"])
+        listener_port = str(cfg.get("listener_port", "4721"))
+        ca_path = agent_dir + "/root_cert.pem"
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.load_verify_locations(ca_path)
+
+        def post(payload):
+            data = json.dumps(payload).encode("utf-8")
+            url = "https://%s:%s/data" % (target_ip, target_port)
+            req = Request(url, data=data, headers={{"Content-Type": "application/json"}})
+            try:
+                with urlopen(req, context=ctx, timeout=15) as resp:
+                    body = resp.read().decode()
+                    return {{"http_status": resp.status, "body": body, "url": url}}
+            except HTTPError as e:
+                return {{"http_status": e.code, "body": str(e.reason), "url": url}}
+            except URLError as e:
+                return {{"http_status": -1, "body": str(e.reason), "url": url}}
+            except Exception as e:
+                return {{"http_status": -1, "body": str(e), "url": url}}
+
+        base = {{
+            "host": host,
+            "ls": [],
+            "networks": {{}},
+            "facts": "",
+            "volume": "",
+            "ack": "1",
+            "keyring": keyring,
+            "port": listener_port,
+        }}
+
+        cases = {{}}
+
+        # Case 1: wrong keyring — auth must fail; mgr must not refresh timestamp.
+        bad_auth = dict(base)
+        bad_auth["keyring"] = (
+            "[client.agent.%s]\\n\\tkey = AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\\n" % host
+        )
+        bad_auth["facts"] = json.dumps({{"arch": "x86_64", "corrupt_test": "bad_auth"}})
+        cases["bad_keyring"] = {{
+            "request_note": "valid shape, wrong keyring",
+            "response": post(bad_auth),
+        }}
+        time.sleep(1)
+
+        # Case 2: valid keyring + non-JSON facts.
+        # Mgr updates agent_timestamp BEFORE parsing facts, then returns failure.
+        bad_facts = dict(base)
+        bad_facts["facts"] = "CORRUPTED_GARBAGE_NOT_JSON"
+        bad_facts["volume"] = ""
+        cases["bad_facts_not_json"] = {{
+            "request_note": "valid keyring, facts is not JSON",
+            "response": post(bad_facts),
+        }}
+        time.sleep(1)
+
+        # Case 3: valid keyring + parseable nonsense facts JSON.
+        junk_facts = dict(base)
+        junk_facts["facts"] = json.dumps({{"invalid": "not_real_host_facts", "corrupt": True}})
+        junk_facts["volume"] = ""
+        cases["junk_facts_json"] = {{
+            "request_note": "valid keyring, facts JSON is nonsense object",
+            "response": post(junk_facts),
+        }}
+        time.sleep(1)
+
+        # Case 4: valid keyring + corrupt volume inventory JSON.
+        bad_vol = dict(base)
+        bad_vol["facts"] = json.dumps({{"arch": "x86_64", "corrupt_test": "volume_case"}})
+        bad_vol["volume"] = "CORRUPTED_VOLUME_NOT_DEVICES_JSON"
+        cases["bad_volume"] = {{
+            "request_note": "valid keyring, volume is not Devices JSON",
+            "response": post(bad_vol),
+        }}
+
+        out = {{
+            "host": host,
+            "target": "%s:%s" % (target_ip, target_port),
+            "cases": cases,
+        }}
+        with open(results_path, "w") as f:
+            json.dump(out, f, indent=2)
+        print(json.dumps(out))
+        """
     )
 
     try:
-        log.info("Corrupting metadata source: writing garbage to host facts cache")
+        log.info("POSTing crafted corrupt payloads to mgr /data endpoint")
+        b64 = base64.b64encode(post_script.encode()).decode()
         target_node.exec_command(
             sudo=True,
-            cmd=f"find /var/lib/ceph/{fsid}/agent.{hostname}/ -name '*.json' "
-            f"-not -name 'agent.json' -not -name 'keyring' "
-            f"-exec sh -c 'echo CORRUPTED_GARBAGE > {{}}' \\;",
-            check_ec=False,
+            cmd=(
+                f"echo {b64} | base64 -d > /tmp/agent_corrupt_post.py && "
+                "python3 /tmp/agent_corrupt_post.py"
+            ),
         )
+        raw, _ = target_node.exec_command(sudo=True, cmd=f"cat {results_path}")
+        post_results = json.loads(raw)
+        log.info(f"POST target: {post_results.get('target')}")
+        for name, case in post_results.get("cases", {}).items():
+            resp = case.get("response", {})
+            log.info(
+                f"CASE {name}: http={resp.get('http_status')} "
+                f"body={str(resp.get('body'))[:300]}"
+            )
 
-        target_node.exec_command(
-            sudo=True,
-            cmd="mkdir -p /tmp/agent_corrupt_test && "
-            'echo \'{"invalid": "not_real_host_facts", "corrupt": true}\' '
-            "> /tmp/agent_corrupt_test/facts",
-        )
+        bad_key = post_results["cases"]["bad_keyring"]["response"]
+        bad_facts = post_results["cases"]["bad_facts_not_json"]["response"]
+        junk_facts = post_results["cases"]["junk_facts_json"]["response"]
+        bad_vol = post_results["cases"]["bad_volume"]["response"]
 
-        log.info("Restarting agent to force fresh data collection with corrupt sources")
-        target_node.exec_command(sudo=True, cmd=f"systemctl restart {service_name}")
-        time.sleep(10)
+        def _result_text(resp):
+            body = resp.get("body", "")
+            if isinstance(body, str):
+                try:
+                    parsed = json.loads(body)
+                    return str(parsed.get("result", body))
+                except Exception:
+                    return body
+            return str(body)
 
-        status_out, _ = target_node.exec_command(
-            sudo=True, cmd=f"systemctl is-active {service_name}", check_ec=False
-        )
-        log.info(f"Agent status after restart: {status_out.strip()}")
+        # Auth rejection path
+        bad_key_text = _result_text(bad_key)
+        assert (
+            bad_key.get("http_status") == 200
+        ), f"Expected HTTP 200 with JSON error body for bad keyring, got {bad_key}"
+        assert (
+            "Bad metadata" in bad_key_text or "keyring" in bad_key_text.lower()
+        ), f"Expected auth rejection in body, got: {bad_key_text}"
+        log.info("FINDING: wrong keyring → mgr returns Bad metadata / keyring error")
 
+        # Content-corrupt paths with valid keyring
+        for label, resp in (
+            ("bad_facts_not_json", bad_facts),
+            ("junk_facts_json", junk_facts),
+            ("bad_volume", bad_vol),
+        ):
+            assert (
+                resp.get("http_status") == 200
+            ), f"{label}: expected HTTP 200, got {resp}"
+            text = _result_text(resp)
+            log.info(f"{label} mgr result: {text}")
+            assert (
+                "wrong keyring" not in text.lower()
+            ), f"{label} unexpectedly failed auth: {text}"
+
+        # agent_timestamp (used for CEPHADM_AGENT_DOWN) is updated in handle_metadata
+        # *before* facts/volume are parsed. Real agent is stopped, so if corrupt
+        # valid-keyring POSTs refreshed that timestamp, AGENT_DOWN should stay clear
+        # for a full down-detection window.
+        down_wait = DEFAULT_AGENT_DOWN_TIMEOUT + 40
         log.info(
-            f"Waiting {DEFAULT_AGENT_DOWN_TIMEOUT + 60}s to see if AGENT_DOWN is raised..."
+            f"Waiting {down_wait}s with real agent stopped to see if corrupt "
+            "valid-keyring POSTs kept agent_timestamp fresh (no CEPHADM_AGENT_DOWN)"
         )
         agent_down = wait_for_health_warning(
-            installer, AGENT_HEALTH_WARNING, timeout=DEFAULT_AGENT_DOWN_TIMEOUT + 60
+            installer, AGENT_HEALTH_WARNING, timeout=down_wait
+        )
+        log.info(f"CEPHADM_AGENT_DOWN raised: {agent_down}")
+        log.info(
+            f"orch ps last_refresh unchanged check (ls-based, not agent_timestamp): "
+            f"before={pre_refresh} now={_agent_last_refresh(installer, hostname)}"
         )
 
-        post_out, _ = shell(installer, "ceph orch ps --daemon-type agent -f json")
-        post_agents = json.loads(post_out)
-        post_refresh = None
-        post_status = None
-        for a in post_agents:
-            if a["hostname"] == hostname:
-                post_refresh = a.get("last_refresh")
-                post_status = a.get("status_desc")
-                break
-
-        log.info(f"Post-corruption last_refresh: {post_refresh}")
-        log.info(f"Post-corruption status: {post_status}")
-        log.info(f"CEPHADM_AGENT_DOWN raised: {agent_down}")
-
-        if not agent_down and post_status == "running":
+        if not agent_down:
             log.info(
-                "FINDING: MGR still updates last_refresh when receiving corrupt "
-                "metadata with valid keyring. Agent appears healthy despite sending "
-                "garbage data. This confirms the MGR only validates authentication, "
-                "not payload integrity — no AGENT_DOWN is raised."
+                "FINDING: With a *valid* keyring, crafted corrupt facts/volume POSTs "
+                "to /data keep CEPHADM_AGENT_DOWN from firing while the real agent is "
+                "stopped. Mgr validates auth and updates agent_timestamp before parsing "
+                "payload content — corrupt content is not treated as agent-down."
             )
-        elif agent_down:
+        else:
             log.info(
-                "FINDING: MGR detected corrupt payload and raised CEPHADM_AGENT_DOWN. "
-                "MGR validates payload content beyond just keyring auth."
+                "FINDING: CEPHADM_AGENT_DOWN still raised — corrupt content POSTs did "
+                "not keep agent_timestamp fresh (stricter behavior or POST did not "
+                "reach handle_metadata successfully)."
             )
 
     finally:
-        log.info("Restoring agent data files")
+        log.info("Cleaning up and restarting real agent")
         target_node.exec_command(
             sudo=True,
-            cmd=f"cp {agent_dir}/agent.json.bak {agent_dir}/agent.json",
+            cmd="rm -f /tmp/agent_corrupt_post.py " f"{results_path}",
             check_ec=False,
         )
         target_node.exec_command(
-            sudo=True,
-            cmd=f"rm -f {agent_dir}/agent.json.bak",
-            check_ec=False,
+            sudo=True, cmd=f"systemctl start {service_name}", check_ec=False
         )
-        target_node.exec_command(
-            sudo=True, cmd="rm -rf /tmp/agent_corrupt_test", check_ec=False
-        )
-        target_node.exec_command(sudo=True, cmd=f"systemctl restart {service_name}")
 
     assert wait_for_agent_running(
         installer, hostname, timeout=120
-    ), f"Agent on {hostname} not running after restoring data"
-    log.info("PASS: Corrupt metadata payload test completed")
+    ), f"Agent on {hostname} not running after test cleanup"
+    assert wait_for_health_warning(
+        installer, AGENT_HEALTH_WARNING, timeout=180, expect_present=False
+    ), "CEPHADM_AGENT_DOWN did not clear after agent restart"
+    log.info("PASS: Direct corrupt metadata /data POST test completed")
 
 
 def run_log_security_test(ceph_cluster, installer):

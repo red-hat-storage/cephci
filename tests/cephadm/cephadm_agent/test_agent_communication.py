@@ -8,10 +8,12 @@ from cephadm_agent.helpers import (
     DEFAULT_AGENT_DOWN_TIMEOUT,
     DEFAULT_AGENT_REFRESH,
     agent_service_name,
+    get_active_mgr_ip,
     get_agent_daemons,
     get_fsid,
     get_node_for_host,
     get_orch_ps,
+    iptables_cmd,
     log,
     setup_run,
     shell,
@@ -34,15 +36,12 @@ def run_communication_test(ceph_cluster, installer):
     fsid = get_fsid(installer)
     service_name = agent_service_name(fsid, hostname)
 
-    mgr_ip_out, _ = shell(installer, "ceph mgr dump -f json")
-    mgr_dump = json.loads(mgr_ip_out)
-    active_addr = mgr_dump.get("active_addr", "")
-    mgr_ip = active_addr.split(":")[0].strip("/").strip()
+    mgr_ip = get_active_mgr_ip(installer)
 
     log.info(f"Blocking traffic from {hostname} to mgr at {mgr_ip}")
-    target_node.exec_command(
-        sudo=True,
-        cmd=f"iptables -A OUTPUT -d {mgr_ip} -p tcp --dport 7150:7300 -j DROP",
+    iptables_cmd(
+        target_node,
+        f"-A OUTPUT -d {mgr_ip} -p tcp --dport 7150:7300 -j DROP",
     )
 
     try:
@@ -53,9 +52,9 @@ def run_communication_test(ceph_cluster, installer):
         log.info("CEPHADM_AGENT_DOWN detected after blocking traffic")
     finally:
         log.info(f"Unblocking traffic from {hostname} to {mgr_ip}")
-        target_node.exec_command(
-            sudo=True,
-            cmd=f"iptables -D OUTPUT -d {mgr_ip} -p tcp --dport 7150:7300 -j DROP",
+        iptables_cmd(
+            target_node,
+            f"-D OUTPUT -d {mgr_ip} -p tcp --dport 7150:7300 -j DROP",
         )
 
     log.info("Restarting agent to force reconnection after unblock")
@@ -152,11 +151,11 @@ def run_network_partition_test(ceph_cluster, installer):
     mgr_port = config["target_port"]
     log.info(f"MGR endpoint: {mgr_ip}:{mgr_port}")
 
-    # Test REJECT
+    # Test REJECT (iptables or iptables-nft on RHEL 10)
     log.info("Applying iptables REJECT rule...")
-    target_node.exec_command(
-        sudo=True,
-        cmd=f"iptables -A OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j REJECT",
+    iptables_cmd(
+        target_node,
+        f"-A OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j REJECT",
     )
     time.sleep(DEFAULT_AGENT_REFRESH + 5)
 
@@ -169,9 +168,9 @@ def run_network_partition_test(ceph_cluster, installer):
     log.info(f"REJECT behavior: {journal_out.strip()[:200]}")
     assert "NO_ERRORS" not in journal_out, "Agent should detect REJECT errors"
 
-    target_node.exec_command(
-        sudo=True,
-        cmd=f"iptables -D OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j REJECT",
+    iptables_cmd(
+        target_node,
+        f"-D OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j REJECT",
     )
     time.sleep(DEFAULT_AGENT_REFRESH + 5)
 
@@ -188,9 +187,9 @@ def run_network_partition_test(ceph_cluster, installer):
 
     # Test DROP
     log.info("Applying iptables DROP rule...")
-    target_node.exec_command(
-        sudo=True,
-        cmd=f"iptables -A OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j DROP",
+    iptables_cmd(
+        target_node,
+        f"-A OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j DROP",
     )
     time.sleep(35)
 
@@ -202,9 +201,9 @@ def run_network_partition_test(ceph_cluster, installer):
     )
     log.info(f"DROP behavior: {journal_drop.strip()[:200]}")
 
-    target_node.exec_command(
-        sudo=True,
-        cmd=f"iptables -D OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j DROP",
+    iptables_cmd(
+        target_node,
+        f"-D OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j DROP",
     )
     time.sleep(DEFAULT_AGENT_REFRESH + 10)
 

@@ -1,6 +1,7 @@
 """Shared helpers and constants for cephadm agent tests."""
 
 import json
+import re
 import time
 
 from utility.log import Log
@@ -137,3 +138,97 @@ def setup_run(ceph_cluster, kw):
     shell(installer, "ceph config set mgr mgr/cephadm/use_agent true")
     time.sleep(10)
     return config, installer
+
+
+def ensure_packet_filter_cli(node):
+    """
+    Ensure a usable iptables CLI exists (RHEL 10 often has nft only).
+    Prefers iptables-nft; installs package if missing.
+    """
+    check, _ = node.exec_command(
+        sudo=True,
+        cmd="command -v iptables || command -v iptables-nft || true",
+        check_ec=False,
+    )
+    if check.strip():
+        return check.strip().splitlines()[0]
+
+    log.info("iptables not found — installing iptables-nft for agent network tests")
+    node.exec_command(
+        sudo=True,
+        cmd="dnf install -y iptables-nft iptables >/dev/null 2>&1 || "
+        "yum install -y iptables-nft iptables >/dev/null 2>&1 || true",
+        check_ec=False,
+    )
+    check2, _ = node.exec_command(
+        sudo=True,
+        cmd="command -v iptables || command -v iptables-nft || true",
+        check_ec=False,
+    )
+    path = check2.strip().splitlines()[0] if check2.strip() else ""
+    assert path, (
+        "Neither iptables nor iptables-nft is available after install attempt. "
+        "RHEL 10 images need iptables-nft for agent network-partition tests."
+    )
+    return path
+
+
+def iptables_cmd(node, args):
+    """Run iptables with auto-detected binary (iptables or iptables-nft)."""
+    binary = ensure_packet_filter_cli(node)
+    return node.exec_command(sudo=True, cmd=f"{binary} {args}")
+
+
+def get_active_mgr_ip(installer):
+    """Return active mgr IP from `ceph mgr dump`."""
+    out, _ = shell(installer, "ceph mgr dump -f json")
+    dump = json.loads(out)
+    addr = dump.get("active_addr", "")
+    # formats like 10.0.0.1:6800/123 or [v2:10.0.0.1:6800/123]
+    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", addr)
+    return m.group(1) if m else addr.split(":")[0].strip("/").strip()
+
+
+def pick_non_active_mgr_agent_host(installer, ceph_cluster):
+    """
+    Prefer an agent host that is not the current active mgr host and not the
+    installer when possible — avoids failover landing on the stopped-agent host.
+    """
+    agents = get_agent_daemons(installer)
+    assert agents, "No agent daemons found"
+
+    mgr_out, _ = shell(installer, "ceph mgr stat -f json")
+    active_name = json.loads(mgr_out).get("active_name", "")
+    installer_host = get_installer(ceph_cluster).hostname
+
+    def score(hostname):
+        s = 0
+        if hostname and hostname in active_name:
+            s -= 100
+        if hostname == installer_host:
+            s -= 50
+        return s
+
+    ranked = sorted(agents, key=lambda a: score(a.get("hostname", "")), reverse=True)
+    chosen = ranked[0]["hostname"]
+    log.info(
+        f"Selected agent host {chosen} "
+        f"(active_mgr={active_name}, installer={installer_host})"
+    )
+    return chosen
+
+
+def wait_for_agent_json_target_ip(
+    node, agent_dir, expected_ip, timeout=300, interval=10
+):
+    """Poll agent.json until target_ip matches expected_ip (or timeout)."""
+    end = time.time() + timeout
+    last = None
+    while time.time() < end:
+        out, _ = node.exec_command(sudo=True, cmd=f"cat {agent_dir}/agent.json")
+        cfg = json.loads(out)
+        last = cfg.get("target_ip")
+        if last == expected_ip:
+            return True, last
+        time.sleep(interval)
+    return False, last
