@@ -220,6 +220,7 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_snapshot_sync_perf_large_files.py
       name: CephFS Mirror snapshot sync performance - large files
       polarion-id: "CEPH-83574100"
+      comments: IBMCEPH-13886
   - test:
       abort-on-fail: false
       desc: "Snapshot Sync Performance Test - Mixed dataset (100 small + 5x1GiB large across dirs) with varying datasync thread counts on kernel/fuse/NFS"
@@ -244,4 +245,5 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_snapshot_sync_perf_mixed_files.py
       name: CephFS Mirror snapshot sync performance - mixed files
       polarion-id: "CEPH-83574101"
+      comments: IBMCEPH-13886
 
