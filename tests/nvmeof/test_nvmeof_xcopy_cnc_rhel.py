@@ -2,11 +2,13 @@
 RHEL initiator CNC / XCOPY tests for Ceph NVMe-oF.
 
 Config-driven operations:
-  - cross_ns_copy_verify
-  - ana_cnc
-  - full_volume_integrity
-  - perf_cnc_vs_host_rw
-  - cnc_soak
+  - cross_ns_copy_verify   (TC-01)
+  - ana_cnc                (TC-07 RHEL)
+  - full_volume_integrity  (TC-09)
+  - perf_cnc_vs_host_rw    (TC-06)
+  - cnc_soak               (TC-10 RHEL)
+  - spec_cnc_enable_perf   (orch-spec cnc_enable timing A/B)
+  - spec_cnc_params_exercise (orch-spec rate/chunk/parallel)
 """
 
 from ceph.ceph import Ceph
@@ -19,6 +21,9 @@ from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 
 LOG = Log(__name__)
+
+# Ops that re-apply orch nvmeof spec and need the NVMeService handle
+_SPEC_OPS = {"spec_cnc_enable_perf", "spec_cnc_params_exercise"}
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
@@ -51,7 +56,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             f"Supported: {list(OPERATIONS)}"
         )
 
-    rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+    rbd_pools = initial_rbd_config(**kwargs)
+    if not rbd_pools or not rbd_pools.get("rbd_reppool"):
+        raise Exception(
+            "RBD pool setup failed (initial_rbd_config returned "
+            f"{rbd_pools}). Check earlier 'Pool creation failed' logs — "
+            "usually `ceph osd pool create` failed due to capacity/PG limits "
+            "or CLI access from the client node."
+        )
+    rbd_obj = rbd_pools["rbd_reppool"]
     custom_config = kwargs.get("test_data", {}).get("custom-config")
     check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
@@ -82,7 +95,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         initiator = clients[0]
         LOG.info(f"Running CNC operation '{operation}' on {initiator.node.hostname}")
-        OPERATIONS[operation](initiator, nvme_service.gateways, config)
+        op_kwargs = {}
+        if operation in _SPEC_OPS:
+            op_kwargs["nvme_service"] = nvme_service
+        OPERATIONS[operation](
+            initiator, nvme_service.gateways, config, **op_kwargs
+        )
         return 0
     except Exception as err:
         LOG.error(err)

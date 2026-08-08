@@ -142,6 +142,45 @@ def apply_cnc_config(gateways, cnc_config=None, enable_logging=True):
         gw.cnc_set_config(**cfg)
 
 
+def skip_cnc_rpc_config(config=None):
+    """True when CNC settings come from orch service spec, not SPDK RPC."""
+    config = config or {}
+    if config.get("skip_cnc_rpc_config") or config.get("cnc_from_spec"):
+        return True
+    if config.get("nvmeof_spec") or config.get("cnc_spec"):
+        return True
+    return False
+
+
+def maybe_apply_cnc_config(gateways, config=None, cnc_config=None, enable_logging=None):
+    """Apply CNC via RPC unless suite opts into orch-spec-sourced config.
+
+    When skipping RPC, still optionally enable CNC debug logging so chunk
+    activity can be soft-checked in container logs.
+    """
+    config = config or {}
+    if enable_logging is None:
+        enable_logging = config.get("enable_cnc_logging", True)
+    if skip_cnc_rpc_config(config):
+        LOG.info(
+            "Skipping nvmf_cnc_set_config; using CNC parameters from orch nvmeof_spec"
+        )
+        if enable_logging:
+            for gw in gateways:
+                try:
+                    gw.cnc_enable_logging()
+                except Exception as err:
+                    LOG.warning(
+                        f"CNC logging enable failed on {gw.node.hostname}: {err}"
+                    )
+        return
+    apply_cnc_config(
+        gateways,
+        cnc_config=cnc_config if cnc_config is not None else config.get("cnc_config"),
+        enable_logging=enable_logging,
+    )
+
+
 def write_verified_pattern(
     node,
     device,
@@ -957,10 +996,324 @@ def _parse_size(size_str):
     return int(value * units[unit])
 
 
+def measure_cnc_throughput(bytes_copied, elapsed):
+    """Return MiB/s for a timed CNC transfer."""
+    if elapsed <= 0:
+        return 0.0
+    return (bytes_copied / (1024 * 1024)) / elapsed
+
+
+def run_concurrent_cnc_copies(
+    initiator,
+    dest_device,
+    src_nsid,
+    ranges,
+    mcl=None,
+    max_workers=4,
+):
+    """Run non-overlapping format-2 copies concurrently.
+
+    Args:
+        ranges: list of (src_slba, dst_slba, blocks)
+    """
+    errors = []
+    per_elapsed = {}
+
+    def _one(idx, src_slba, dst_slba, blocks):
+        try:
+            elapsed = copy_within_mcl(
+                initiator,
+                dest_device,
+                src_nsid,
+                src_slba,
+                dst_slba,
+                blocks,
+                mcl,
+            )
+            per_elapsed[idx] = elapsed
+        except Exception as err:
+            errors.append((idx, err))
+
+    wall_start = time.time()
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [
+            pool.submit(_one, idx, src_slba, dst_slba, blocks)
+            for idx, (src_slba, dst_slba, blocks) in enumerate(ranges)
+        ]
+        for fut in futures:
+            fut.result()
+    wall_elapsed = time.time() - wall_start
+    if errors:
+        raise Exception(f"Concurrent CNC failures: {errors}")
+    total_blocks = sum(int(r[2]) for r in ranges)
+    LOG.info(
+        f"Concurrent CNC: {len(ranges)} copies, {total_blocks} total blocks, "
+        f"wall={wall_elapsed:.2f}s"
+    )
+    return {
+        "elapsed": wall_elapsed,
+        "total_blocks": total_blocks,
+        "per_elapsed": per_elapsed,
+        "ranges": ranges,
+    }
+
+
+def _reconnect_initiator(initiator, gateways, config):
+    """Disconnect and reconnect initiator after gateway redeploy."""
+    initiators = config.get("initiators") or []
+    io_client = dict(initiators[0]) if initiators else {"nqn": "connect-all"}
+    io_client.setdefault("nqn", "connect-all")
+    LOG.info(
+        f"Reconnecting initiator on {initiator.node.hostname} "
+        f"after CNC spec re-apply: {io_client}"
+    )
+    try:
+        initiator.disconnect_all()
+    except Exception as err:
+        LOG.warning(f"disconnect_all before reconnect: {err}")
+    time.sleep(5)
+    initiator.connect_targets(gateways[0], io_client)
+    time.sleep(5)
+
+
+def _soft_check_cnc_chunk_logs(gateways):
+    for gw in gateways:
+        try:
+            logs = gw.cnc_get_container_logs(lines=100)
+            if "cnc" in logs.lower() or "chunk" in logs.lower():
+                LOG.info(f"CNC/chunk references found in {gw.node.hostname} logs")
+            else:
+                LOG.warning(
+                    f"No obvious CNC/chunk log lines on {gw.node.hostname} "
+                    "(build may use different log tags)"
+                )
+        except Exception as err:
+            LOG.warning(f"Could not fetch CNC logs: {err}")
+
+
+def run_spec_cnc_enable_perf(initiator, gateways, config=None, nvme_service=None):
+    """CNC enabled via orch spec vs host R/W after cnc_enable=false.
+
+    T1: timed nvme copy with CNC enabled (spec).
+    T2: host read/write baseline after re-applying spec with cnc_enable=false.
+    """
+    config = config or {}
+    if nvme_service is None:
+        raise ValueError("spec_cnc_enable_perf requires nvme_service for orch re-apply")
+
+    devices = get_ns_devices(initiator)
+    caps = assert_copy_capabilities(initiator, devices)
+    maybe_apply_cnc_config(gateways, config)
+
+    src = devices[0]
+    dst = devices[1]
+    src_dev, src_nsid = src["Namespace"], src["NSID"]
+    dst_dev = dst["Namespace"]
+    mcl = caps[src_dev]["mcl"]
+    lba_size = caps[src_dev]["lba_size"]
+    count = int(config.get("copy_count", 500))
+    blocks = int(config.get("copy_blocks", BLOCKS_4MIB))
+    total_bytes = count * blocks * lba_size
+    redeploy_wait = int(config.get("redeploy_wait_sec", 60))
+
+    write_verified_pattern(initiator.node, src_dev, size=total_bytes, verify="crc32c")
+
+    LOG.info("Phase T1: CNC-enabled nvme copy (orch spec cnc_enable=true)")
+    t1 = run_cnc_loop(initiator, dst_dev, src_nsid, count=count, blocks=blocks, mcl=mcl)
+    verify_copied_regions(
+        initiator.node,
+        src_dev,
+        dst_dev,
+        0,
+        0,
+        min(blocks, 1024),
+        lba_size=lba_size,
+    )
+
+    LOG.info("Re-applying orch spec with cnc_enable=false")
+    nvme_service.apply_nvmeof_spec(
+        nvmeof_spec={"cnc_enable": False},
+        redeploy=True,
+        wait_sec=redeploy_wait,
+    )
+    _reconnect_initiator(initiator, gateways, config)
+
+    # Device paths may change after reconnect
+    devices = get_ns_devices(initiator)
+    src = devices[0]
+    dst = devices[1]
+    src_dev, src_nsid = src["Namespace"], src["NSID"]
+    dst_dev = dst["Namespace"]
+    lba_size = get_lba_size(initiator, src_dev)
+
+    # Soft check: format-2 copy may fail when CNC is disabled (TC-016 style)
+    try:
+        nvme_copy_format2(
+            initiator,
+            dst_dev,
+            sdlba=0,
+            slbs=0,
+            blocks=min(blocks, 16),
+            snsids=src_nsid,
+            check_ec=True,
+            mcl=mcl,
+        )
+        LOG.warning(
+            "nvme copy succeeded with cnc_enable=false; "
+            "continuing with host R/W baseline for timing comparison"
+        )
+    except Exception as err:
+        LOG.info(f"nvme copy rejected with cnc_enable=false as expected: {err}")
+
+    LOG.info("Phase T2: host read/write path (CNC disabled)")
+    t2 = host_rw_baseline(
+        initiator.node, src_dev, dst_dev, size_bytes=total_bytes, bs=lba_size
+    )
+    verify_copied_regions(
+        initiator.node,
+        src_dev,
+        dst_dev,
+        0,
+        0,
+        min(blocks, 1024),
+        lba_size=lba_size,
+    )
+
+    speedup = t2 / t1 if t1 > 0 else 0
+    LOG.info(
+        f"Spec CNC enable perf: T1(cnc_enable)={t1:.2f}s "
+        f"T2(host_rw_cnc_disabled)={t2:.2f}s speedup={speedup:.2f}x "
+        f"size={total_bytes} bytes"
+    )
+    min_speedup = config.get("min_speedup", 1.0)
+    if min_speedup is not None and speedup < float(min_speedup):
+        raise Exception(
+            f"CNC-enabled speedup {speedup:.2f}x below min_speedup={min_speedup}"
+        )
+    return {"t1": t1, "t2": t2, "speedup": speedup}
+
+
+def run_spec_cnc_params_exercise(initiator, gateways, config=None, nvme_service=None):
+    """Exercise orch-spec CNC rate/chunk/parallel without RPC override.
+
+    Verifies rate limiter via concurrent CNC throughput bound, and large
+    chunked copies succeed (soft log check for chunk activity).
+    """
+    config = config or {}
+    devices = get_ns_devices(initiator)
+    caps = assert_copy_capabilities(initiator, devices)
+    maybe_apply_cnc_config(gateways, config, enable_logging=True)
+
+    src = devices[0]
+    dst = devices[1]
+    src_dev, src_nsid = src["Namespace"], src["NSID"]
+    dst_dev = dst["Namespace"]
+    mcl = caps[src_dev]["mcl"]
+    lba_size = caps[src_dev]["lba_size"]
+
+    nvmeof_spec = dict(config.get("nvmeof_spec") or config.get("cnc_spec") or {})
+    rate_limit_bytes = int(
+        nvmeof_spec.get(
+            "cnc_rate_limiter_bytes",
+            config.get("rate_limit_bytes", 100000000),
+        )
+    )
+    concurrent = int(config.get("concurrent_copies", 4))
+    copy_blocks = int(config.get("copy_blocks", 65536))
+    # Cap expected MiB/s slightly above configured rate (bytes/s → MiB/s) with slack
+    rate_mib = rate_limit_bytes / (1024 * 1024)
+    max_limited_MBps = float(config.get("max_limited_MBps", rate_mib * 1.5))
+
+    ranges = [
+        (i * copy_blocks, i * copy_blocks, copy_blocks) for i in range(concurrent)
+    ]
+    prep_blocks = concurrent * copy_blocks
+    prep_bytes = prep_blocks * lba_size
+    LOG.info(
+        f"Spec CNC params: preparing {prep_bytes} bytes for {concurrent} x "
+        f"{copy_blocks}-block concurrent copies; "
+        f"cnc_rate_limiter_bytes={rate_limit_bytes} "
+        f"max_limited_MBps={max_limited_MBps}"
+    )
+    write_verified_pattern(
+        initiator.node, src_dev, size=prep_bytes, verify="crc32c", bs="1M", iodepth=32
+    )
+
+    sample_gateway_resources(gateways)
+    result = run_concurrent_cnc_copies(
+        initiator,
+        dst_dev,
+        src_nsid,
+        ranges,
+        mcl=mcl,
+        max_workers=concurrent,
+    )
+    bytes_copied = result["total_blocks"] * lba_size
+    mib_s = measure_cnc_throughput(bytes_copied, result["elapsed"])
+    for src_slba, dst_slba, blocks in ranges:
+        verify_copied_regions(
+            initiator.node,
+            src_dev,
+            dst_dev,
+            src_slba,
+            dst_slba,
+            min(blocks, 1024),
+            lba_size=lba_size,
+        )
+    sample_gateway_resources(gateways)
+    LOG.info(
+        f"Spec rate-limiter phase: throughput={mib_s:.3f} MiB/s "
+        f"elapsed={result['elapsed']:.2f}s"
+    )
+    if mib_s > max_limited_MBps:
+        raise Exception(
+            f"Throughput {mib_s:.3f} MiB/s exceeds max_limited_MBps={max_limited_MBps} "
+            f"(cnc_rate_limiter_bytes={rate_limit_bytes} from orch spec)"
+        )
+
+    # Large chunked copy to exercise cnc_chunk_blocks / cnc_parallel_chunks
+    large_blocks = min(int(config.get("large_blocks", 50000)), mcl + 1)
+    large_src = int(config.get("large_src_slba", 2000))
+    large_dst = int(config.get("large_dst_slba", 5000))
+    write_verified_pattern(
+        initiator.node,
+        src_dev,
+        size=large_blocks * lba_size,
+        offset=large_src * lba_size,
+    )
+    elapsed = copy_within_mcl(
+        initiator,
+        dst_dev,
+        src_nsid,
+        large_src,
+        large_dst,
+        large_blocks,
+        mcl,
+    )
+    verify_copied_regions(
+        initiator.node,
+        src_dev,
+        dst_dev,
+        large_src,
+        large_dst,
+        large_blocks,
+        lba_size=lba_size,
+    )
+    _soft_check_cnc_chunk_logs(gateways)
+    LOG.info(
+        f"Spec CNC chunk/parallel large copy verified in {elapsed:.2f}s "
+        f"(cnc_chunk_blocks={nvmeof_spec.get('cnc_chunk_blocks')} "
+        f"cnc_parallel_chunks={nvmeof_spec.get('cnc_parallel_chunks')})"
+    )
+    return {"rate_mib_s": mib_s, "large_copy_elapsed": elapsed}
+
+
 OPERATIONS = {
     "cross_ns_copy_verify": run_cross_ns_copy_verify,
     "full_volume_integrity": run_full_volume_integrity,
     "perf_cnc_vs_host_rw": run_perf_cnc_vs_host_rw,
     "ana_cnc": run_ana_cnc,
     "cnc_soak": run_cnc_soak,
+    "spec_cnc_enable_perf": run_spec_cnc_enable_perf,
+    "spec_cnc_params_exercise": run_spec_cnc_params_exercise,
 }
