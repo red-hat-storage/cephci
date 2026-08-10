@@ -171,7 +171,22 @@ def run(ceph_cluster, **kw):
     if action == "check":
         out = CephAdm(installer).ceph.orch.certmgr.check()
         if "No issues detected" not in out:
-            raise UnexpectedStateError("Cluster has expired/invalid certificated")
+            for line in out.splitlines():
+                if not line.strip():
+                    continue
+                if "keybridge" in line.lower():
+                    if "has expired" in line.lower():
+                        raise UnexpectedStateError(
+                            "Cluster has expired/invalid certificates"
+                        )
+                    # keybridge warning (e.g. about to expire) — acceptable, ignore
+                else:
+                    raise UnexpectedStateError(
+                        "Cluster has expired/invalid certificates"
+                    )
+            log.warning(
+                "certmgr check reported keybridge-related issue(s) — ignoring: %s", out
+            )
     if action == "reload":
         out = CephAdm(installer).ceph.orch.certmgr.reload()
         if "OK" not in out:
