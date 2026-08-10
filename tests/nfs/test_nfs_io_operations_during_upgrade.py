@@ -82,6 +82,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
                 server,
                 export_name,
                 installer_node=installer_node,
+                nfs_name=nfs_name,
                 nfs_wait_timeout=nfs_wait_timeout,
                 mount_timeout=mount_timeout,
                 mount_tries=mount_tries,
@@ -500,6 +501,7 @@ def run(ceph_cluster, **kw):
 
             # 2. create multiple exports
             # 3. mount to clients
+            # Non-root IO (sudo: false) needs mount ownership for cephuser.
             client_export_mount_dict = create_export_and_mount_for_existing_nfs_cluster(
                 clients,
                 f"/export/nfs_{nfs_cluster_name}",
@@ -513,6 +515,7 @@ def run(ceph_cluster, **kw):
                 ha=ha,
                 nfs_server=nfs_hostname,
                 vip=vip,
+                chown_cephuser=not sudo,
                 installer_node=installer_node,
                 during_upgrade=True,
                 nfs_wait_timeout=nfs_wait_timeout,
