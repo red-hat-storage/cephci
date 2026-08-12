@@ -233,6 +233,10 @@ tests:
               dd_command_size_in_M: 10
               exports_number: 4
               loop_count: 4
+              io_health_monitor: true
+              stall_threshold_s: 5
+              stall_recovery_timeout_s: 100
+              probe_interval_s: 1
       abort-on-fail: true
 
   - test:
