@@ -1174,9 +1174,7 @@ class CephfsMirroringUtils(object):
                         "snaps_synced": path_status.get("snaps_synced"),
                     }
 
-        # Expected while still syncing; @retry will re-poll. Keep at info to avoid
-        # flooding .err with false failures during normal sync wait.
-        log.info(
+        log.debug(
             "%s not synced yet (still syncing or pending). peer_status=%s",
             snapshot_name,
             data,
@@ -2631,6 +2629,17 @@ class CephfsMirroringUtils(object):
         log.info("FSID '%s' validated for %s", remote_fsid, fs_name)
 
 
+def _ensure_ceph_common(asok_file):
+    """One-shot helper: install ceph-common on every mirror-daemon node."""
+    for _node, asok in asok_file.items():
+        try:
+            asok[0].exec_command(
+                sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+            )
+        except Exception as e:
+            log.warning("dnf install ceph-common failed (non-fatal): %s", e)
+
+
 @retry(CommandFailed, tries=10, delay=30, backoff=1)
 def wait_for_sync_idle(fs_name, fsid, asok_file, filesystem_id, peer_uuid, paths):
     """
@@ -2647,14 +2656,12 @@ def wait_for_sync_idle(fs_name, fsid, asok_file, filesystem_id, peer_uuid, paths
 
     Raises:
         CommandFailed: If any path is not in 'idle' state (triggers retry).
+        RuntimeError: If asok_file is empty.
     """
-    for node, asok in asok_file.items():
-        try:
-            asok[0].exec_command(
-                sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
-            )
-        except Exception as e:
-            log.warning("dnf install ceph-common failed (non-fatal): %s", e)
+    if not asok_file:
+        raise RuntimeError("asok_file dict is empty; no mirror daemon to query")
+
+    node, asok = next(iter(asok_file.items()))
     asok_basename = asok[1].rsplit("/", 1)[-1]
     asok_dir = f"/var/run/ceph/{fsid}"
     cmd = (

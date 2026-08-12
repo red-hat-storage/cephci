@@ -200,8 +200,7 @@ def run(ceph_cluster, **kw):
         est_total_mb = num_files * file_size_mb
 
         log.info(
-            "Test parameters: thread_counts=%s, num_files=%d, "
-            "file_size=%dMB, est_total=%dMB per subvolume",
+            "Test parameters: thread_counts=%s, num_files=%d, file_size=%dMB, est_total=%dMB per subvolume",
             thread_counts,
             num_files,
             file_size_mb,
@@ -444,8 +443,7 @@ def run(ceph_cluster, **kw):
 
                 if not result_snap:
                     log.error(
-                        "Snapshot %s (%s) did not sync within timeout "
-                        "for thread_count=%d",
+                        "Snapshot %s (%s) did not sync within timeout for thread_count=%d",
                         snap_name,
                         mtype,
                         thread_count,
@@ -456,16 +454,14 @@ def run(ceph_cluster, **kw):
                 daemon_sync_duration = parse_sync_duration_to_seconds(raw_duration)
                 if daemon_sync_duration is None:
                     log.error(
-                        "Snapshot %s (%s) reported synced but sync_duration is "
-                        "missing/unparseable (raw=%r)",
+                        "Snapshot %s (%s) reported synced but sync_duration is missing/unparseable (raw=%r)",
                         snap_name,
                         mtype,
                         raw_duration,
                     )
                     return 1
                 log.info(
-                    "Snapshot %s synced: daemon_duration=%.1fs, "
-                    "wall_clock=%.1fs, snaps_synced=%s",
+                    "Snapshot %s synced: daemon_duration=%.1fs, wall_clock=%.1fs, snaps_synced=%s",
                     snap_name,
                     daemon_sync_duration,
                     wall_clock_sec,
@@ -534,8 +530,7 @@ def run(ceph_cluster, **kw):
                 mbs_str = f"{mb_per_sec:.1f}" if mb_per_sec is not None else "None"
                 spd_str = f"{speedup:.1f}x" if speedup is not None else "None"
                 log.info(
-                    "RESULT | threads=%d | mount=%s | duration=%s | "
-                    "%s files/sec | %s MB/sec | %s speedup",
+                    "RESULT | threads=%d | mount=%s | duration=%s | %s files/sec | %s MB/sec | %s speedup",
                     thread_count,
                     mtype,
                     dur_str,
@@ -549,8 +544,7 @@ def run(ceph_cluster, **kw):
             idle_ok = True
             try:
                 log.info(
-                    "Waiting for all mirrored paths to reach idle after "
-                    "thread_count=%d syncs",
+                    "Waiting for all mirrored paths to reach idle after thread_count=%d syncs",
                     thread_count,
                 )
                 wait_for_sync_idle(
@@ -573,15 +567,20 @@ def run(ceph_cluster, **kw):
                 # Always clean even if idle wait fails to avoid suite leaks.
                 log.info("Cleaning up iteration for thread_count=%d", thread_count)
                 for mtype in MOUNT_TYPES:
-                    fs_util_ceph1.remove_snapshot(
-                        client=source_clients[0],
-                        vol_name=source_fs,
-                        subvol_name=created_subvols[mtype],
-                        snap_name=iter_snapshots[mtype],
-                        validate=True,
-                        group_name=subvol_group,
-                        force=True,
-                    )
+                    try:
+                        fs_util_ceph1.remove_snapshot(
+                            client=source_clients[0],
+                            vol_name=source_fs,
+                            subvol_name=created_subvols[mtype],
+                            snap_name=iter_snapshots[mtype],
+                            validate=True,
+                            group_name=subvol_group,
+                            force=True,
+                        )
+                    except Exception as snap_err:
+                        log.warning(
+                            "Failed to remove snapshot for %s: %s", mtype, snap_err
+                        )
 
                 for mtype in MOUNT_TYPES:
                     try:
@@ -651,10 +650,7 @@ def run(ceph_cluster, **kw):
             try:
                 source_clients[0].exec_command(
                     sudo=True,
-                    cmd=(
-                        "ceph config rm client.cephfs-mirror "
-                        "cephfs_mirror_max_datasync_threads"
-                    ),
+                    cmd="ceph config rm client.cephfs-mirror cephfs_mirror_max_datasync_threads",
                 )
             except Exception as e:
                 log.warning("Failed to reset thread config: %s", e)
