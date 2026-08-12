@@ -50,7 +50,13 @@ class NVMeService:
             gw_nodes = [gw_nodes]
 
         self.gw_nodes = get_nodes_by_ids(self.ceph_cluster, gw_nodes)
-        self.is_spec_or_mtls = self.mtls or self.config.get("spec_deployment", False)
+        # nvmeof_spec / cnc_spec require orch apply_spec so custom keys reach the service YAML
+        self.is_spec_or_mtls = (
+            self.mtls
+            or self.config.get("spec_deployment", False)
+            or bool(self.config.get("nvmeof_spec"))
+            or bool(self.config.get("cnc_spec"))
+        )
         if self.inband_auth_mode:
             self.is_spec_or_mtls = True
 
@@ -141,6 +147,7 @@ class NVMeService:
             }
             # Handle version-specific logic
             if release <= "7.1":
+                self._merge_nvmeof_spec_keys(cfg["config"]["specs"][0]["spec"])
                 return cfg
             elif release >= "8":
                 if not self.group:
@@ -164,6 +171,7 @@ class NVMeService:
                         "rebalance_period_sec"
                     ] = rebalance_sec
 
+                self._merge_nvmeof_spec_keys(cfg["config"]["specs"][0]["spec"])
                 return cfg
         else:
             pos_args = [self.nvme_metadata_pool]
@@ -190,6 +198,55 @@ class NVMeService:
                 cfg["config"].pop("pos_args")
 
         return cfg
+
+    def _merge_nvmeof_spec_keys(self, spec_dict):
+        """Merge suite ``nvmeof_spec`` / ``cnc_spec`` into the orch service spec.
+
+        Product keys such as ``cnc_enable``, ``cnc_rate_limiter_bytes``,
+        ``cnc_chunk_blocks``, and ``cnc_parallel_chunks`` are passed through
+        unchanged so Jinja renders them into the cephadm YAML.
+        """
+        extras = {}
+        for key in ("nvmeof_spec", "cnc_spec"):
+            value = self.config.get(key)
+            if isinstance(value, dict):
+                extras.update(value)
+        if extras:
+            LOG.info(f"Merging custom nvmeof orch spec keys: {extras}")
+            spec_dict.update(extras)
+
+    def apply_nvmeof_spec(self, nvmeof_spec=None, redeploy=True, wait_sec=60):
+        """Apply (or re-apply) the NVMe-oF orch service spec.
+
+        Args:
+            nvmeof_spec: Optional dict merged into config nvmeof_spec before apply
+            redeploy: Whether to ``ceph orch redeploy`` after apply
+            wait_sec: Sleep after redeploy for daemons to come up
+        """
+        if nvmeof_spec:
+            merged = dict(self.config.get("nvmeof_spec") or {})
+            merged.update(nvmeof_spec)
+            self.config["nvmeof_spec"] = merged
+        self.is_spec_or_mtls = True
+        deploy_config = self._create_spec_deployment_config()
+        if not deploy_config:
+            raise RuntimeError("Failed to build nvmeof apply_spec config")
+        LOG.info(f"Applying nvmeof orch spec: {deploy_config}")
+        test_nvmeof.run(self.ceph_cluster, **deploy_config)
+        # Refresh service_name / service_id after apply
+        ceph = Orch(self.ceph_cluster, **{})
+        out, _ = ceph.shell(args=["ceph orch ls nvmeof --format json"])
+        services = json.loads(out)
+        for service in services:
+            if "nvmeof" not in service["service_name"]:
+                continue
+            if self.group and self.group not in service["service_name"]:
+                continue
+            self.service_name = service["service_name"]
+            self.service_id = service["service_id"]
+            break
+        if redeploy:
+            self.redeploy(wait_sec=wait_sec)
 
     def _get_placement_config(self, config, gw_nodes):
         """Get placement configuration based on config options."""
