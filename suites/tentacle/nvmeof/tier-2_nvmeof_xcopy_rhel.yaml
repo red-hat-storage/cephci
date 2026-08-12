@@ -1,5 +1,12 @@
 # Ceph NVMe-oF XCOPY/CNC RHEL functional tests (P0)
-# Cross-NS copy verify, large-scale integrity, dual-GW ANA (RHEL)
+# Each CNC operation runs twice for result comparison:
+#   - ana_affinity=same      (pick 2 NS from one ANA / lb_group)
+#   - ana_affinity=different (pick NS across ANA / lb_groups)
+# Namespace layout is always 2 NS on node4 + 2 NS on node5 so auto-LB
+# cannot leave fewer than 2 NS on a single ANA group. rebalance_period_sec=0
+# keeps the lb_group pins stable.
+# After CNC copies, tests assert nvmeof podman logs contain XCOPY/CNC markers
+# (XCOPY: ISSUE READ / WRITE OK / COMPLETE SUCCESS) from SPDK ctrlr_cnc.c.
 # cluster configuration file: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
 # inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
 ---
@@ -67,7 +74,7 @@ tests:
       module: test_client.py
       name: configure Ceph client for NVMe tests
 
-  # RHEL Cross-Namespace Copy with Data Verification
+  # --- cross_ns_copy_verify: same ANA ---
   - test:
       abort-on-fail: true
       config:
@@ -78,12 +85,17 @@ tests:
         nvme_metadata_pool: rbd
         gw_group: gw_group1
         install: true
+        spec_deployment: true
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         operation: cross_ns_copy_verify
+        rebalance_period: true
+        rebalance_period_sec: 0
+        ana_affinity: same
         enable_cnc_logging: true
+        verify_xcopy_logs: true
         cnc_config:
           host_behav_support_cnc: true
           chunk_nlb: 512
@@ -102,6 +114,11 @@ tests:
               - count: 2
                 size: 10G
                 ns_create_image: true
+                lb_group: node4
+              - count: 2
+                size: 10G
+                ns_create_image: true
+                lb_group: node5
             listeners:
               - node4
               - node5
@@ -112,13 +129,13 @@ tests:
             listener_port: 4420
             node: node6
       desc: >
-        RHEL CNC same-NS, multi-range, cross-NS and large chunked
-        copies with data verification
+        RHEL CNC same-NS/cross-NS/chunked copies with verification;
+        src/dst chosen from the same ANA group (2 NS per GW)
       destroy-cluster: false
       module: test_nvmeof_xcopy_cnc_rhel.py
-      name: RHEL cross-namespace CNC copy with verification
+      name: RHEL CNC cross-NS verify (same ANA)
 
-  # Large-Scale Data Integrity over Ceph NVMe-oF Namespaces
+  # --- cross_ns_copy_verify: different ANA ---
   - test:
       abort-on-fail: true
       config:
@@ -129,11 +146,77 @@ tests:
         nvme_metadata_pool: rbd
         gw_group: gw_group1
         install: true
+        spec_deployment: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        operation: cross_ns_copy_verify
+        rebalance_period: true
+        rebalance_period_sec: 0
+        ana_affinity: different
+        enable_cnc_logging: true
+        verify_xcopy_logs: true
+        cnc_config:
+          host_behav_support_cnc: true
+          chunk_nlb: 512
+          max_inflight: 8
+          rate_limit_bytes: 400000000
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              - count: 2
+                size: 10G
+                ns_create_image: true
+                lb_group: node4
+              - count: 2
+                size: 10G
+                ns_create_image: true
+                lb_group: node5
+            listeners:
+              - node4
+              - node5
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node6
+      desc: >
+        RHEL CNC same-NS/cross-NS/chunked copies with verification;
+        src/dst chosen across different ANA groups (2 NS per GW)
+      destroy-cluster: false
+      module: test_nvmeof_xcopy_cnc_rhel.py
+      name: RHEL CNC cross-NS verify (different ANA)
+
+  # --- full_volume_integrity: same ANA ---
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        spec_deployment: true
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         operation: full_volume_integrity
+        rebalance_period: true
+        rebalance_period_sec: 0
+        verify_xcopy_logs: true
+        ana_affinity: same
         io_size: 5G
         fio_bs: 1M
         fio_iodepth: 32
@@ -157,6 +240,11 @@ tests:
               - count: 2
                 size: 20G
                 ns_create_image: true
+                lb_group: node4
+              - count: 2
+                size: 20G
+                ns_create_image: true
+                lb_group: node5
             listeners:
               - node4
               - node5
@@ -167,12 +255,13 @@ tests:
             listener_port: 4420
             node: node6
       desc: >
-        fio crc32c fill, CNC copy entire region, fio verify on destination
+        fio crc32c fill, CNC full-region copy, fio verify;
+        src/dst chosen from the same ANA group (2 NS per GW)
       destroy-cluster: false
       module: test_nvmeof_xcopy_cnc_rhel.py
-      name: large-scale CNC data integrity
+      name: large-scale CNC data integrity (same ANA)
 
-  # Dual-Gateway ANA with CNC (RHEL)
+  # --- full_volume_integrity: different ANA ---
   - test:
       abort-on-fail: true
       config:
@@ -183,11 +272,81 @@ tests:
         nvme_metadata_pool: rbd
         gw_group: gw_group1
         install: true
+        spec_deployment: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        operation: full_volume_integrity
+        rebalance_period: true
+        rebalance_period_sec: 0
+        verify_xcopy_logs: true
+        ana_affinity: different
+        io_size: 5G
+        fio_bs: 1M
+        fio_iodepth: 32
+        stress_loop: true
+        stress_count: 50
+        cnc_config:
+          host_behav_support_cnc: true
+          chunk_nlb: 512
+          max_inflight: 8
+          rate_limit_bytes: 400000000
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              - count: 2
+                size: 20G
+                ns_create_image: true
+                lb_group: node4
+              - count: 2
+                size: 20G
+                ns_create_image: true
+                lb_group: node5
+            listeners:
+              - node4
+              - node5
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node6
+      desc: >
+        fio crc32c fill, CNC full-region copy, fio verify;
+        src/dst chosen across different ANA groups (2 NS per GW)
+      destroy-cluster: false
+      module: test_nvmeof_xcopy_cnc_rhel.py
+      name: large-scale CNC data integrity (different ANA)
+
+  # --- ana_cnc: same ANA ---
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        spec_deployment: true
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         operation: ana_cnc
+        rebalance_period: true
+        rebalance_period_sec: 0
+        verify_xcopy_logs: true
+        ana_affinity: same
         failover_mid_copy: true
         large_blocks: 50000
         cnc_config:
@@ -212,6 +371,11 @@ tests:
               - count: 2
                 size: 10G
                 ns_create_image: true
+                lb_group: node4
+              - count: 2
+                size: 10G
+                ns_create_image: true
+                lb_group: node5
             listeners:
               - node4
               - node5
@@ -222,8 +386,74 @@ tests:
             listener_port: 4420
             node: node6
       desc: >
-        RHEL CNC via Active ANA path and mid-copy gateway failover
-        without silent data corruption
+        RHEL CNC via Active ANA path and mid-copy failover;
+        src/dst chosen from the same ANA group (2 NS per GW)
       destroy-cluster: false
       module: test_nvmeof_xcopy_cnc_rhel.py
-      name: dual-gateway ANA CNC normal and failover
+      name: dual-gateway ANA CNC (same ANA)
+
+  # --- ana_cnc: different ANA ---
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        install: true
+        spec_deployment: true
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        operation: ana_cnc
+        rebalance_period: true
+        rebalance_period_sec: 0
+        verify_xcopy_logs: true
+        ana_affinity: different
+        failover_mid_copy: true
+        large_blocks: 50000
+        cnc_config:
+          host_behav_support_cnc: true
+          chunk_nlb: 512
+          max_inflight: 8
+          rate_limit_bytes: 400000000
+        fault-injection-methods:
+          - tool: systemctl
+            nodes:
+              - node5
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              - count: 2
+                size: 10G
+                ns_create_image: true
+                lb_group: node4
+              - count: 2
+                size: 10G
+                ns_create_image: true
+                lb_group: node5
+            listeners:
+              - node4
+              - node5
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node6
+      desc: >
+        RHEL CNC via Active ANA path and mid-copy failover;
+        src/dst chosen across different ANA groups (2 NS per GW)
+      destroy-cluster: false
+      module: test_nvmeof_xcopy_cnc_rhel.py
+      name: dual-gateway ANA CNC (different ANA)

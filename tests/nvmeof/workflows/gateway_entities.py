@@ -406,7 +406,6 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                         ns_args = deepcopy(namespace_args)
                         rbd_image = f"{name}-image{num}"
                         ns_args["rbd-image"] = rbd_image
-                        ns_args = {"args": ns_args}
                         if lb_groups:
                             if isinstance(lb_groups, dict):
                                 if bdev_cfg.get("lb_group"):
@@ -416,11 +415,23 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                                             bdev_cfg["lb_group"],
                                         ).hostname
                                     ]
-                                    ns_args.update({"load-balancing-group": lbgid})
-                            elif opt_args.get("lb_groups") == "sequential":
-                                lbgid = num
+                                    ns_args["load-balancing-group"] = lbgid
+                                    LOG.info(
+                                        f"NS {rbd_image}: load-balancing-group={lbgid} "
+                                        f"(lb_group={bdev_cfg['lb_group']})"
+                                    )
+                            elif (
+                                lb_groups == "sequential"
+                                or opt_args.get("lb_groups") == "sequential"
+                            ):
+                                # Sequential ANA groups are 1-based (GW ANA ids)
+                                ns_args["load-balancing-group"] = num + 1
+                                LOG.info(
+                                    f"NS {rbd_image}: load-balancing-group={num + 1} "
+                                    "(sequential)"
+                                )
                         expected_namespaces.append(rbd_image)
-                        p.spawn(gateway.namespace.add, **ns_args)
+                        p.spawn(gateway.namespace.add, **{"args": ns_args})
             validate_namespaces(gateway, expected_namespaces, nqn)
 
 
@@ -524,6 +535,18 @@ def configure_listeners(gateways, config: dict, listeners=None):
                 validate_listeners(gateway, expected_listeners, nqn)
 
 
+def _subsystems_request_lb_group(config):
+    """True when any bdev requests an explicit lb_group (ANA group)."""
+    for sub_cfg in config.get("subsystems", []) or []:
+        bdevs = sub_cfg.get("bdevs") or []
+        if isinstance(bdevs, dict):
+            bdevs = [bdevs]
+        for bdev in bdevs:
+            if bdev.get("lb_group"):
+                return True
+    return False
+
+
 def configure_gw_entities(nvme_service, rbd_obj=None, cluster=None):
     """
     Configure gateway entities for the NVMe service.
@@ -546,8 +569,23 @@ def configure_gw_entities(nvme_service, rbd_obj=None, cluster=None):
         configure_hosts(
             nvme_service.gateways[0], nvme_service.config, ceph_cluster=cluster
         )
+        opt_args = {}
+        if cluster and _subsystems_request_lb_group(nvme_service.config):
+            # Import locally to avoid circular imports at module load
+            from tests.nvmeof.workflows.nvme_utils import fetch_lb_groups
+
+            listeners = list(nvme_service.config.get("gw_nodes") or [])
+            for cfg in subsystem_config:
+                listeners.extend(cfg.get("listeners") or [])
+            listeners = list(dict.fromkeys(listeners))
+            lb_groups = fetch_lb_groups(nvme_service.gateways, listeners)
+            LOG.info(f"Applying namespace lb_groups from suite: {lb_groups}")
+            opt_args = {"ceph_cluster": cluster, "lb_groups": lb_groups}
         configure_namespaces(
-            nvme_service.gateways[0], nvme_service.config, rbd_obj=rbd_obj
+            nvme_service.gateways[0],
+            nvme_service.config,
+            opt_args=opt_args,
+            rbd_obj=rbd_obj,
         )
 
 

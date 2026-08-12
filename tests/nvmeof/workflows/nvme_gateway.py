@@ -1,10 +1,29 @@
+import re
 from json import loads
 from typing import Any
 
 from ceph.nvmeof.cli.v1 import NVMeGWCLI
 from ceph.nvmeof.cli.v2 import NVMeGWCLIV2
 from cli.utilities.utils import exec_command_on_container, get_running_containers
+from utility.log import Log
 from utility.systemctl import SystemCtl
+
+LOG = Log(__name__)
+
+_CNC_CONF_LINE_RE = re.compile(r"^\s*(cnc_\w+)\s*[=:]\s*(.*?)(?:\s*#.*)?$")
+
+
+def parse_cnc_conf_text(text):
+    """Extract ``cnc_*`` keys from ceph-nvmeof.conf-style text."""
+    conf = {}
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = _CNC_CONF_LINE_RE.match(line)
+        if match:
+            conf[match.group(1)] = match.group(2).strip().strip('"').strip("'")
+    return conf
 
 
 class NVMeGatewayBase:
@@ -138,8 +157,13 @@ class NVMeGatewayBase:
             parts.append(f"--chunk-nlb {params['chunk_nlb']}")
         return self._rpc(" ".join(parts))
 
-    def cnc_enable_logging(self, level="DEBUG"):
-        """Enable nvmf_cnc debug logging on the gateway.
+    def cnc_enable_logging(self, level="INFO"):
+        """Enable nvmf_cnc logging on the gateway for podman log visibility.
+
+        Sends SPDK RPCs in order::
+
+            log_set_flag nvmf_cnc
+            log_set_level INFO
 
         SPDK rpc.py takes positional args: ``log_set_flag <flag>`` and
         ``log_set_level <level>`` (not ``-i``).
@@ -147,14 +171,111 @@ class NVMeGatewayBase:
         self._rpc("log_set_flag nvmf_cnc")
         return self._rpc(f"log_set_level {level}")
 
-    def cnc_get_container_logs(self, lines=200):
-        """Fetch recent gateway container logs for CNC diagnostics."""
+    def cnc_get_container_logs(self, lines=2000, since=None):
+        """Fetch recent gateway container logs for CNC/XCOPY diagnostics.
+
+        ``podman logs`` emits container output on **stderr** (stdout is empty).
+        Callers must merge both streams or the XCOPY check always sees blank
+        logs.
+
+        Args:
+            lines: ``podman logs --tail`` line count.
+            since: Optional ``podman logs --since`` value (e.g. ``30m``,
+                RFC3339 timestamp) to scope logs to the CNC window.
+        """
         ctr = self.get_nvme_container()
-        out, _ = self.node.exec_command(
-            cmd=f"podman logs --tail {lines} {ctr}",
-            sudo=True,
+        # Redirect stderr→stdout so cephci exec_command (which returns stdout)
+        # captures the container journal. Keep a large default tail; busy GW
+        # logs can push XCOPY lines out of a short window quickly.
+        cmd = f"podman logs --tail {int(lines)}"
+        if since:
+            cmd += f" --since {since}"
+        cmd += f" {ctr} 2>&1"
+        out, err = self.node.exec_command(cmd=cmd, sudo=True)
+        # Prefer merged stdout; fall back to stderr if redirection was stripped
+        text = out or ""
+        if err and not text.strip():
+            text = err
+        elif err:
+            text = f"{text}\n{err}"
+        return text
+
+    def cnc_get_spdk_file_logs(self, lines=2000):
+        """Tail recent SPDK / gateway log files inside the nvmeof container.
+
+        CNC XCOPY lines from ``ctrlr_cnc.c`` often land in file logs rather
+        than podman stdout when ``spdk_log_file_dir`` or gateway log files are
+        enabled.
+        """
+        container = self.get_nvme_container()
+        tail = int(lines)
+        cmd = (
+            "for d in /var/log/ceph /var/log; do "
+            '[ -d "$d" ] && find "$d" -maxdepth 3 -type f '
+            "( -name '*.log' -o -name 'nvmf_tgt*' ) 2>/dev/null; "
+            "done | sort -u | while read -r f; do "
+            f'echo "=== $f ==="; tail -n {tail} "$f" 2>/dev/null; '
+            "done"
         )
-        return out
+        out, _ = exec_command_on_container(
+            self.node, container, cmd, sudo=True, check_ec=False
+        )
+        return out or ""
+
+    def cnc_get_conf(self, conf_paths=None):
+        """Read CNC keys from the gateway ``ceph-nvmeof.conf``.
+
+        Cephadm renders orch-spec CNC settings into the ``[spdk]`` section::
+
+            cnc_enable = ...
+            cnc_rate_limiter_bytes = ...
+            cnc_chunk_blocks = ...
+            cnc_parallel_chunks = ...
+
+        Merges all readable container paths (first path alone may be an empty
+        stub). Falls back to host ``/var/lib/ceph/*/.../ceph-nvmeof.conf`` and
+        a container ``grep`` when no ``cnc_*`` keys are found.
+
+        Returns:
+            dict of present ``cnc_*`` keys with string values.
+        """
+        paths = conf_paths or (
+            "/etc/ceph/ceph-nvmeof.conf",
+            "/src/ceph-nvmeof.conf",
+        )
+        merged = {}
+        container = self.get_nvme_container()
+        for path in paths:
+            cmd = f"[ -r '{path}' ] && cat '{path}'"
+            out, _ = exec_command_on_container(
+                self.node, container, cmd, sudo=True, check_ec=False
+            )
+            if out and out.strip():
+                merged.update(parse_cnc_conf_text(out))
+
+        if not merged:
+            grep_paths = " ".join(paths)
+            cmd = f"grep -hE '^[[:space:]]*cnc_' {grep_paths} 2>/dev/null || true"
+            out, _ = exec_command_on_container(
+                self.node, container, cmd, sudo=True, check_ec=False
+            )
+            if out and out.strip():
+                merged.update(parse_cnc_conf_text(out))
+
+        if not merged:
+            host_cmd = (
+                "find /var/lib/ceph -name ceph-nvmeof.conf 2>/dev/null | "
+                "while read -r f; do "
+                '[ -s "$f" ] && cat "$f" && exit 0; '
+                "done; exit 1"
+            )
+            out, _ = self.node.exec_command(cmd=host_cmd, sudo=True, check_ec=False)
+            if out and out.strip():
+                merged.update(parse_cnc_conf_text(out))
+
+        if not merged:
+            LOG.warning(f"No cnc_* keys found in gateway conf on {self.node.hostname}")
+        return merged
 
 
 class NVMeGatewayV1(NVMeGatewayBase, NVMeGWCLI):
