@@ -3,6 +3,7 @@ import random
 import string
 import time
 import traceback
+from datetime import datetime
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
@@ -10,6 +11,23 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def _parse_metrics_ts(value):
+    """Convert metrics_updated_at to epoch float.
+
+    Handles both numeric (legacy) and ISO 8601 string formats.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value:
+        try:
+            ts = value.replace("+0000", "+00:00")
+            dt = datetime.fromisoformat(ts)
+            return dt.timestamp()
+        except (ValueError, TypeError):
+            pass
+    return 0.0
 
 
 def run(ceph_cluster, **kw):
@@ -707,7 +725,7 @@ def run(ceph_cluster, **kw):
         for p, pdata in status_before_stop.get("metrics", {}).items():
             peers = list(pdata.get("peer", {}).values())
             if peers:
-                ts_before[p] = peers[0].get("metrics_updated_at", 0)
+                ts_before[p] = _parse_metrics_ts(peers[0].get("metrics_updated_at", 0))
         log.info(f"metrics_updated_at before stop: {ts_before}")
 
         log.info("Stop cephfs-mirror daemon")
@@ -725,7 +743,9 @@ def run(ceph_cluster, **kw):
         for p, pdata in status_during_stop.get("metrics", {}).items():
             peers = list(pdata.get("peer", {}).values())
             if peers:
-                ts_during_stop[p] = peers[0].get("metrics_updated_at", 0)
+                ts_during_stop[p] = _parse_metrics_ts(
+                    peers[0].get("metrics_updated_at", 0)
+                )
         log.info(f"metrics_updated_at during stop: {ts_during_stop}")
 
         now_during_stop = time.time()
@@ -774,7 +794,7 @@ def run(ceph_cluster, **kw):
         for p, pdata in status_after_restart.get("metrics", {}).items():
             peers = list(pdata.get("peer", {}).values())
             if peers:
-                ts_after[p] = peers[0].get("metrics_updated_at", 0)
+                ts_after[p] = _parse_metrics_ts(peers[0].get("metrics_updated_at", 0))
         log.info(f"metrics_updated_at after restart: {ts_after}")
 
         now_after_restart = time.time()

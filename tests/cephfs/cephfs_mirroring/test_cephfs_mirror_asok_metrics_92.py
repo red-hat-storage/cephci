@@ -21,7 +21,9 @@ EXPECTED_MAX_DELTA_FILES = 26
 PEER_COUNTER_KEY = "cephfs_mirror_peers"
 
 
-def _get_peer_counters(fs_mirroring_utils, cephfs_mirror_node, fsid, asok_files, fs_name):
+def _get_peer_counters(
+    fs_mirroring_utils, cephfs_mirror_node, fsid, asok_files, fs_name
+):
     """Return cephfs_mirror_peers counters for fs_name."""
     data = fs_mirroring_utils.get_cephfs_mirror_counters(
         cephfs_mirror_node, fsid, asok_files
@@ -52,8 +54,15 @@ def _get_directory_counters(
 
 
 def _wait_peer_counter_gt(
-    fs_mirroring_utils, cephfs_mirror_node, fsid, asok_files,
-    fs_name, key, baseline, timeout=300, interval=10,
+    fs_mirroring_utils,
+    cephfs_mirror_node,
+    fsid,
+    asok_files,
+    fs_name,
+    key,
+    baseline,
+    timeout=300,
+    interval=10,
 ):
     """Poll peer counters until key > baseline or timeout."""
     elapsed = 0
@@ -723,7 +732,8 @@ def run(ceph_cluster, **kw):
 
         for node in cephfs_mirror_node:
             node.exec_command(
-                sudo=True, cmd="yum install -y ceph-common --nogpgcheck",
+                sudo=True,
+                cmd="yum install -y ceph-common --nogpgcheck",
                 check_ec=False,
             )
 
@@ -744,8 +754,13 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd="mkdir %s.snap/snap_ctr0" % mount_path1
         )
         fs_mirroring_utils.validate_snapshot_sync_status(
-            cephfs_mirror_node[0], source_fs, "snap_ctr0",
-            fsid, asok_file, filesystem_id, peer_uuid,
+            cephfs_mirror_node[0],
+            source_fs,
+            "snap_ctr0",
+            fsid,
+            asok_file,
+            filesystem_id,
+            peer_uuid,
         )
 
         after_ctr0 = _get_peer_counters(
@@ -758,15 +773,25 @@ def run(ceph_cluster, **kw):
                 "S6: snaps_synced did not increase: %s -> %s"
                 % (baseline["snaps_synced"], after_ctr0["snaps_synced"])
             )
-        if after_ctr0.get("last_synced_start", 0) <= baseline.get("last_synced_start", 0):
+        if after_ctr0.get("last_synced_start", 0) <= baseline.get(
+            "last_synced_start", 0
+        ):
             raise CommandFailed(
                 "S6: last_synced_start did not advance: %s -> %s"
-                % (baseline.get("last_synced_start"), after_ctr0.get("last_synced_start"))
+                % (
+                    baseline.get("last_synced_start"),
+                    after_ctr0.get("last_synced_start"),
+                )
             )
-        if after_ctr0.get("last_synced_end", 0) < after_ctr0.get("last_synced_start", 0):
+        if after_ctr0.get("last_synced_end", 0) < after_ctr0.get(
+            "last_synced_start", 0
+        ):
             raise CommandFailed(
                 "S6: last_synced_end < last_synced_start: %s < %s"
-                % (after_ctr0.get("last_synced_end"), after_ctr0.get("last_synced_start"))
+                % (
+                    after_ctr0.get("last_synced_end"),
+                    after_ctr0.get("last_synced_start"),
+                )
             )
         if after_ctr0.get("last_synced_duration", 0) <= 0:
             log.warning(
@@ -776,14 +801,19 @@ def run(ceph_cluster, **kw):
         log.info("S6: Peer counter timing fields validated")
 
         dir_ctr0 = _get_directory_counters(
-            fs_mirroring_utils, cephfs_mirror_node, fsid, asok_file,
-            subvol_path1, peer_uuid,
+            fs_mirroring_utils,
+            cephfs_mirror_node,
+            fsid,
+            asok_file,
+            subvol_path1,
+            peer_uuid,
         )
         if dir_ctr0 is not None:
             if dir_ctr0.get("snaps_synced") != after_ctr0["snaps_synced"]:
                 log.warning(
                     "S6: directory snaps_synced (%s) != peer snaps_synced (%s)",
-                    dir_ctr0.get("snaps_synced"), after_ctr0["snaps_synced"],
+                    dir_ctr0.get("snaps_synced"),
+                    after_ctr0["snaps_synced"],
                 )
             else:
                 log.info(
@@ -813,8 +843,13 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd="mkdir %s.snap/snap_ctr1" % mount_path1
         )
         fs_mirroring_utils.validate_snapshot_sync_status(
-            cephfs_mirror_node[0], source_fs, "snap_ctr1",
-            fsid, asok_file, filesystem_id, peer_uuid,
+            cephfs_mirror_node[0],
+            source_fs,
+            "snap_ctr1",
+            fsid,
+            asok_file,
+            filesystem_id,
+            peer_uuid,
         )
 
         after_ctr1 = _get_peer_counters(
@@ -824,29 +859,43 @@ def run(ceph_cluster, **kw):
 
         log.info("Delete snap_ctr0")
         source_clients[0].exec_command(
-            sudo=True, cmd="rmdir %s.snap/snap_ctr0" % mount_path1,
+            sudo=True,
+            cmd="rmdir %s.snap/snap_ctr0" % mount_path1,
         )
 
         after_delete = _wait_peer_counter_gt(
-            fs_mirroring_utils, cephfs_mirror_node, fsid, asok_file,
-            source_fs, "snaps_deleted", after_ctr1.get("snaps_deleted", 0),
+            fs_mirroring_utils,
+            cephfs_mirror_node,
+            fsid,
+            asok_file,
+            source_fs,
+            "snaps_deleted",
+            after_ctr1.get("snaps_deleted", 0),
         )
         log.info("S7 peer counters after delete: %s", after_delete)
 
         dir_after_delete = _get_directory_counters(
-            fs_mirroring_utils, cephfs_mirror_node, fsid, asok_file,
-            subvol_path1, peer_uuid,
+            fs_mirroring_utils,
+            cephfs_mirror_node,
+            fsid,
+            asok_file,
+            subvol_path1,
+            peer_uuid,
         )
         if dir_ctr0 is not None and dir_after_delete is not None:
-            if dir_after_delete.get("snaps_deleted", 0) <= dir_ctr0.get("snaps_deleted", 0):
+            if dir_after_delete.get("snaps_deleted", 0) <= dir_ctr0.get(
+                "snaps_deleted", 0
+            ):
                 log.warning(
                     "S7: directory snaps_deleted did not increase: %s -> %s",
-                    dir_ctr0.get("snaps_deleted"), dir_after_delete.get("snaps_deleted"),
+                    dir_ctr0.get("snaps_deleted"),
+                    dir_after_delete.get("snaps_deleted"),
                 )
             else:
                 log.info(
                     "S7: directory snaps_deleted increased: %s -> %s",
-                    dir_ctr0.get("snaps_deleted"), dir_after_delete.get("snaps_deleted"),
+                    dir_ctr0.get("snaps_deleted"),
+                    dir_after_delete.get("snaps_deleted"),
                 )
 
         log.info("S7 PASSED: snaps_deleted counter validated")
@@ -865,17 +914,28 @@ def run(ceph_cluster, **kw):
         )
 
         after_rename = _wait_peer_counter_gt(
-            fs_mirroring_utils, cephfs_mirror_node, fsid, asok_file,
-            source_fs, "snaps_renamed", after_delete.get("snaps_renamed", 0),
+            fs_mirroring_utils,
+            cephfs_mirror_node,
+            fsid,
+            asok_file,
+            source_fs,
+            "snaps_renamed",
+            after_delete.get("snaps_renamed", 0),
         )
         log.info("S8 peer counters after rename: %s", after_rename)
 
         dir_after_rename = _get_directory_counters(
-            fs_mirroring_utils, cephfs_mirror_node, fsid, asok_file,
-            subvol_path1, peer_uuid,
+            fs_mirroring_utils,
+            cephfs_mirror_node,
+            fsid,
+            asok_file,
+            subvol_path1,
+            peer_uuid,
         )
         if dir_after_delete is not None and dir_after_rename is not None:
-            if dir_after_rename.get("snaps_renamed", 0) <= dir_after_delete.get("snaps_renamed", 0):
+            if dir_after_rename.get("snaps_renamed", 0) <= dir_after_delete.get(
+                "snaps_renamed", 0
+            ):
                 log.warning(
                     "S8: directory snaps_renamed did not increase: %s -> %s",
                     dir_after_delete.get("snaps_renamed"),
