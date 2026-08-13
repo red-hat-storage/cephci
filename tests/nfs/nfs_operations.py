@@ -18,6 +18,7 @@ from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import FuseMount, Mount, MountFailedError, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.nfs.export_mount_kwargs import normalize_mount_kwargs
 from utility.log import Log
 from utility.retry import retry
 
@@ -1378,17 +1379,38 @@ def mount_retry(
     **kwargs,
 ):
     chown_cephuser = kwargs.pop("chown_cephuser", False)
+    nfs_mount(
+        client,
+        mount_name,
+        version,
+        port,
+        nfs_server,
+        export_name,
+        **kwargs,
+    )
+    if chown_cephuser:
+        chown_mount_for_cephuser(client, mount_name)
+    return True
+
+
+def nfs_mount(client, mount_name, version, port, nfs_server, export_name, **kwargs):
+    """Mount NFS without passing unsupported ``-o mounttimeout`` on RHEL."""
     Mount(client).nfs(
         mount=mount_name,
         version=version,
         port=port,
         server=nfs_server,
         export=export_name,
-        **kwargs,
+        **normalize_mount_kwargs(kwargs),
     )
-    if chown_cephuser:
-        chown_mount_for_cephuser(client, mount_name)
-    return True
+
+
+def _cleanup_stale_nfs_mount(client, mount_name):
+    """Best-effort unmount when a probe mount failed partway."""
+    try:
+        Unmount(client).unmount(mount_name)
+    except Exception as exc:
+        log.debug("Ignoring unmount cleanup for %s: %s", mount_name, exc)
 
 
 def wait_for_nfs_and_mount(
@@ -1399,6 +1421,7 @@ def wait_for_nfs_and_mount(
     nfs_server,
     export_name,
     installer_node=None,
+    nfs_name=None,
     nfs_wait_timeout=300,
     mount_timeout=120,
     mount_tries=2,
@@ -1410,25 +1433,46 @@ def wait_for_nfs_and_mount(
 
     Intended for upgrade scenarios where ``cephadm upgrade`` restarts
     NFS-Ganesha and plain ``mount -t nfs`` can block for many minutes.
+
+    Fail-fast is enforced via the cephci command ``timeout`` (default
+    ``mount_timeout``), not via NFS ``-o mounttimeout`` which mount.nfs
+    rejects on RHEL.
+
+    Polls ``ceph orch ps`` for running NFS daemons, the NFS TCP port, and
+    export mountability before each mount attempt until ``nfs_wait_timeout``.
     """
-    mount_kwargs = {
-        "mounttimeout": kwargs.pop("mounttimeout", 60),
-        "timeo": kwargs.pop("timeo", 30),
-        "retrans": kwargs.pop("retrans", 2),
-        "timeout": kwargs.pop("timeout", mount_timeout),
-        **kwargs,
-    }
+    mount_kwargs = normalize_mount_kwargs(
+        {
+            "timeo": kwargs.pop("timeo", 30),
+            "retrans": kwargs.pop("retrans", 2),
+            "timeout": kwargs.pop("timeout", min(mount_timeout, 60)),
+            **kwargs,
+        }
+    )
     last_err = None
-    for attempt in range(1, mount_tries + 1):
+    per_check_timeout = min(60, nfs_wait_timeout)
+
+    for w in WaitUntil(timeout=nfs_wait_timeout, interval=5):
         if installer_node is not None:
-            verify_nfs_ganesha_service(node=installer_node, timeout=nfs_wait_timeout)
+            wait_for_nfs_ganesha_daemons(
+                installer_node,
+                timeout=per_check_timeout,
+                nfs_name=nfs_name,
+            )
+        wait_for_nfs_endpoint_ready(
+            client,
+            nfs_server,
+            port,
+            timeout=per_check_timeout,
+        )
         try:
-            Mount(client).nfs(
-                mount=mount_name,
-                version=version,
-                port=port,
-                server=nfs_server,
-                export=export_name,
+            nfs_mount(
+                client,
+                mount_name,
+                version,
+                port,
+                nfs_server,
+                export_name,
                 **mount_kwargs,
             )
             if chown_cephuser:
@@ -1436,18 +1480,23 @@ def wait_for_nfs_and_mount(
             return True
         except (OperationFailedError, MountFailedError) as err:
             last_err = err
+            _cleanup_stale_nfs_mount(client, mount_name)
             log.warning(
-                "NFS mount attempt %s/%s failed for %s:%s on %s: %s",
-                attempt,
-                mount_tries,
+                "NFS mount not ready for %s:%s on %s (attempt %s, ~%ss): %s",
                 nfs_server,
                 export_name,
                 mount_name,
+                w._attempt,
+                w._attempt * w.interval,
                 err,
             )
-            if attempt < mount_tries:
-                sleep(5 * attempt)
-    raise last_err
+
+    if last_err is not None:
+        raise last_err
+    raise OperationFailedError(
+        "Timed out after %ss waiting to mount %s:%s on %s"
+        % (nfs_wait_timeout, nfs_server, export_name, mount_name)
+    )
 
 
 @retry(OperationFailedError, tries=5, delay=10, backoff=2)
@@ -1484,45 +1533,113 @@ def fuse_mount_retry(client, mount, **kwargs):
     return True
 
 
-def verify_nfs_ganesha_service(node, timeout):
-    """
-    Verify the status of NFS Ganesha service.
-    Args:
-        node: Installer Node.
-    Returns:
-        bool: True if the service is in the expected state, False otherwise.
-    """
-    interval = 5
+def _nfs_daemon_not_ready(daemon):
+    return str(
+        daemon.get("status_desc", "")
+    ).strip().lower() != "running" or not daemon.get("container_id")
 
+
+def wait_for_nfs_ganesha_daemons(node, timeout=300, interval=5, nfs_name=None):
+    """
+    Poll ``ceph orch ps`` until every NFS daemon is running with a container.
+
+    Aggregate ``orch ls`` counts can report success while daemons are still
+    starting; per-daemon ``orch ps`` avoids mounting too early after upgrade.
+    """
+    cephadm = CephAdm(node)
     for w in WaitUntil(timeout=timeout, interval=interval):
-        result = json.loads(
-            CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
-        )
-        if all(x["status"]["running"] == x["status"]["size"] for x in result):
+        ps_kw = {"format": "json", "daemon_type": "nfs"}
+        if nfs_name:
+            ps_kw["service_name"] = f"nfs.{nfs_name}"
+        raw = cephadm.ceph.orch.ps(**ps_kw)
+        daemons = json.loads(raw) if raw else []
+        if not daemons:
+            log.info(
+                "Waiting for NFS daemons: none reported yet (~%ss elapsed)",
+                w._attempt * w.interval,
+            )
+            continue
+
+        pending = [d for d in daemons if _nfs_daemon_not_ready(d)]
+        if not pending:
             log.info(
                 "\n"
                 + "=" * 30
                 + "\n"
-                + "NFS Ganesha service is up and running. Time taken : -- %s seconds \n"
+                + "NFS Ganesha daemons are running. Time taken: %s seconds\n"
                 + "=" * 30,
                 w._attempt * w.interval,
             )
-            log.info("sleep(20)  # Allow some time for the service to stabilize")
-            sleep(20)  # Allow some time for the service to stabilize
-
             return True
-        else:
+
+        for daemon in pending:
             log.info(
-                "\n \n NFS Ganesha service is not running as expected, retrying...... "
-                "Time remaining : -- %s seconds \n",
-                timeout - (w._attempt * w.interval),
+                "Waiting for NFS daemon %s on %s: status=%s container_id=%s",
+                daemon.get("daemon_name"),
+                daemon.get("hostname"),
+                daemon.get("status_desc"),
+                daemon.get("container_id") or "none",
             )
-            log.debug("Current status: %s", result)
-    log.error("\n NFS Ganesha service is not running as expected.")
-    if w.expired:
-        raise OperationFailedError(
-            "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
+        log.info(
+            "NFS Ganesha not ready yet; %ss remaining",
+            timeout - (w._attempt * w.interval),
         )
+
+    raise OperationFailedError(
+        "Timed out after %ss waiting for NFS daemons to reach running state" % timeout
+    )
+
+
+def wait_for_nfs_endpoint_ready(node, server, port, timeout=300, interval=5):
+    """
+    Poll until the NFS server TCP port accepts connections from ``node``.
+
+    Used after orchestrator reports daemons running so mounts are not attempted
+    while Ganesha is still restarting or in NFSv4 grace.
+    """
+    server_ip = str(server).split("/")[0]
+    port = int(port)
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        for cmd in (
+            f"nc -z -w 3 {server_ip} {port} 2>/dev/null",
+            f"timeout 3 bash -c 'cat < /dev/null > /dev/tcp/{server_ip}/{port}'",
+        ):
+            node.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            if int(getattr(node, "exit_status", 1)) == 0:
+                log.info(
+                    "NFS endpoint %s:%s reachable from %s after ~%ss",
+                    server_ip,
+                    port,
+                    node.hostname,
+                    w._attempt * w.interval,
+                )
+                return True
+        log.info(
+            "NFS endpoint %s:%s not reachable from %s yet; %ss remaining",
+            server_ip,
+            port,
+            node.hostname,
+            timeout - (w._attempt * w.interval),
+        )
+
+    raise OperationFailedError(
+        "Timed out after %ss waiting for NFS endpoint %s:%s on %s"
+        % (timeout, server_ip, port, node.hostname)
+    )
+
+
+def verify_nfs_ganesha_service(node, timeout, nfs_name=None):
+    """
+    Verify the status of NFS Ganesha service.
+    Args:
+        node: Installer Node.
+        timeout: Max seconds to wait for NFS daemons to report running.
+        nfs_name: Optional NFS cluster name to scope the daemon poll.
+    Returns:
+        bool: True if the service is in the expected state, False otherwise.
+    """
+    wait_for_nfs_ganesha_daemons(node, timeout=timeout, nfs_name=nfs_name)
+    return True
 
 
 def create_multiple_nfs_instance_via_spec_file(
