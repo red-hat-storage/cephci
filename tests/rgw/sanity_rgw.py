@@ -53,6 +53,7 @@ Below configs are needed in order to run the tests
 """
 
 import os
+import tempfile
 
 import yaml
 
@@ -72,6 +73,116 @@ log = Log(__name__)
 
 CEPHCI_SECRETS_DIR = "/home/cephuser/.cephci/secrets"
 IBM_CLOUD_API_KEY_FILENAME = "ibm_cloud_api_key"
+PYTEST_JUNIT_REMOTE_PATH = "/tmp/cephci_pytest_results.xml"
+
+
+def _parse_pytest_results(exec_from, remote_xml_path):
+    """Fetch and parse JUnit XML from the remote node.
+
+    Returns a list of dicts with keys: name, status, duration, error.
+    Returns None if the XML cannot be fetched or parsed.
+    """
+    from junitparser import JUnitXml
+
+    try:
+        remote_fp = exec_from.remote_file(
+            file_name=remote_xml_path, file_mode="r", sudo=True
+        )
+        xml_content = remote_fp.read()
+        remote_fp.close()
+    except Exception:
+        log.warning(f"Could not fetch pytest results from {remote_xml_path}")
+        return None
+
+    local_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".xml", delete=False
+        ) as tmp:
+            tmp.write(
+                xml_content if isinstance(xml_content, str) else xml_content.decode()
+            )
+            local_path = tmp.name
+
+        xml = JUnitXml.fromfile(local_path)
+    except Exception:
+        log.warning("Failed to parse pytest JUnit XML")
+        return None
+    finally:
+        if local_path:
+            os.unlink(local_path)
+
+    results = []
+    for suite in xml:
+        for case in suite:
+            entry = {
+                "name": case.name,
+                "classname": case.classname or "",
+                "duration": case.time or 0.0,
+            }
+            if case.is_skipped:
+                entry["status"] = "Skipped"
+                entry["error"] = ""
+            elif case.result and len(case.result) > 0:
+                entry["status"] = "Failed"
+                failure = case.result[0]
+                entry["error"] = getattr(failure, "message", "") or ""
+            else:
+                entry["status"] = "Pass"
+                entry["error"] = ""
+            results.append(entry)
+    return results
+
+
+def _format_pytest_summary(results):
+    """Build a human-readable summary from parsed pytest results."""
+    passed = sum(1 for r in results if r["status"] == "Pass")
+    failed = sum(1 for r in results if r["status"] == "Failed")
+    skipped = sum(1 for r in results if r["status"] == "Skipped")
+    total = len(results)
+    total_time = sum(r["duration"] for r in results)
+
+    mins, secs = divmod(total_time, 60)
+    bar = "=" * 60
+    lines = [
+        bar,
+        f"  PYTEST RESULTS: {passed} passed, {failed} failed, "
+        f"{skipped} skipped / {total} total  [{int(mins)}m {secs:.0f}s]",
+        bar,
+    ]
+
+    failures = [r for r in results if r["status"] == "Failed"]
+    if failures:
+        lines.append("")
+        lines.append(f"  FAILURES ({len(failures)}):")
+        lines.append(f"  {'-' * 56}")
+        for r in failures:
+            err_msg = r["error"].split("\n")[0] if r["error"] else ""
+            if len(err_msg) > 120:
+                err_msg = err_msg[:117] + "..."
+            lines.append(f"  FAIL  {r['name']:<45s} {r['duration']:>6.1f}s")
+            if err_msg:
+                lines.append(f"        {err_msg}")
+
+    skips = [r for r in results if r["status"] == "Skipped"]
+    if skips:
+        lines.append("")
+        lines.append(f"  SKIPPED ({len(skips)}):")
+        lines.append(f"  {'-' * 56}")
+        for r in skips:
+            lines.append(f"  SKIP  {r['name']}")
+
+    passes = [r for r in results if r["status"] == "Pass"]
+    if passes:
+        lines.append("")
+        lines.append(f"  PASSED ({len(passes)}):")
+        lines.append(f"  {'-' * 56}")
+        for r in passes:
+            lines.append(f"  PASS  {r['name']:<45s} {r['duration']:>6.1f}s")
+
+    lines.append(bar)
+    return "\n".join(lines)
+
 
 DIR = {
     "v1": {
@@ -246,8 +357,21 @@ def run(ceph_cluster, **kw):
         remote_fp.write(yaml.dump(cfg_data, default_flow_style=False))
         log.info(f"Injected ingress endpoint: {ingress_ip}:{ingress_port}")
 
-    # Build env vars for test execution; inject IBM_CLOUD_API_KEY from env or cephci.yaml
+    # Build env vars for test execution
     env_vars = list(config.get("env-vars", []))
+
+    # When pytest-results is enabled, tell the pytest runner to produce JUnit XML
+    pytest_results_enabled = config.get("pytest-results", False)
+    if pytest_results_enabled:
+        exec_from.exec_command(
+            cmd=f"{pip_cmd} install pytest pytest-html", check_ec=False
+        )
+        env_vars.append(f"DEDUP_PYTEST_JUNIT={PYTEST_JUNIT_REMOTE_PATH}")
+        exec_from.exec_command(
+            cmd=f"rm -f {PYTEST_JUNIT_REMOTE_PATH}", check_ec=False
+        )
+
+    # Inject IBM_CLOUD_API_KEY from env or cephci.yaml
     ibm_cloud_api_key_required = config.get("ibm_cloud_api_key_required", False)
     ibm_cloud_api_key = os.environ.get("IBM_CLOUD_API_KEY")
     if not ibm_cloud_api_key:
@@ -341,5 +465,18 @@ def run(ceph_cluster, **kw):
             log.info(f"verify io status code is : {verify_status}")
             if verify_status != 0:
                 raise Exception(f"verify io failed for {io_config}")
+
+    # Parse pytest JUnit XML for per-test reporting
+    if pytest_results_enabled:
+        parsed = _parse_pytest_results(exec_from, PYTEST_JUNIT_REMOTE_PATH)
+        if parsed:
+            summary = _format_pytest_summary(parsed)
+            log.info(f"Pytest per-test results:\n{summary}")
+            config["artifacts"] = summary
+        else:
+            log.warning(
+                "pytest-results enabled but no JUnit XML found; "
+                "reporting suite-level result only"
+            )
 
     return test_status
