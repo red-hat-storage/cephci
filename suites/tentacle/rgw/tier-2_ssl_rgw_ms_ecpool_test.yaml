@@ -86,7 +86,7 @@ tests:
                         generate_cert: true
                         ssl: true
                       placement:
-                        count-per-host: 2
+                        count_per_host: 2
                         nodes:
                           - node6
               - config:
@@ -102,7 +102,7 @@ tests:
                         generate_cert: true
                         ssl: true
                       placement:
-                        count-per-host: 2
+                        count_per_host: 2
                         nodes:
                             - node7
         ceph-sec:
@@ -169,7 +169,7 @@ tests:
                         generate_cert: true
                         ssl: true
                       placement:
-                        count-per-host: 2
+                        count_per_host: 2
                         nodes:
                           - node6
               - config:
@@ -185,7 +185,7 @@ tests:
                         generate_cert: true
                         ssl: true
                       placement:
-                        count-per-host: 2
+                        count_per_host: 2
                         nodes:
                             - node7
       desc: RHCS cluster deployment using cephadm.
@@ -286,11 +286,13 @@ tests:
             roles:
               - rgw
               - client
+              - installer
         ceph-sec:
           config:
             roles:
               - rgw
               - client
+              - installer
       desc: Copy cephadm root CA cert to rgw and client nodes
       module: copy_cephadm_root_ca_cert.py
       name: copy cephadm root ca cert
@@ -304,13 +306,15 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7}:443,https://{node_ip:node7}:8443 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node7}:443,https://{node_ip:node7}:8443 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node7} --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node7} --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.pri.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.pri.sync rgw_verify_ssl False"
               - "ceph orch restart {service_name:shared.pri.io}"
               - "ceph orch restart {service_name:shared.pri.sync}"
               - "sleep 120"
@@ -318,10 +322,14 @@ tests:
           config:
             cephadm: true
             commands:
-              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7}:443,https://{node_ip:ceph-pri#node7}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7}:443,https://{node_ip:node7}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "radosgw-admin --rgw_verify_ssl=false realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin --rgw_verify_ssl=false period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin --rgw_verify_ssl=false period update --rgw-realm india --commit"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec.sync rgw_verify_ssl False"
               - "ceph orch restart {service_name:shared.sec.io}"
               - "ceph orch restart {service_name:shared.sec.sync}"
               - "sleep 120"
