@@ -6,7 +6,12 @@ import time
 import traceback
 
 from ceph.ceph import CommandFailed
-from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
+from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
+    CephfsMirroringUtils,
+    compare_and_validate_sync_durations,
+    parse_sync_duration_to_seconds,
+    wait_for_sync_idle,
+)
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
@@ -78,6 +83,8 @@ def run(ceph_cluster, **kw):
 
     Returns:
         0 on success, 1 on failure.
+        Also fails if any multi-thread sync duration is slower than the
+        1-thread baseline for the same mount type.
     """
 
     source_clients = None
@@ -419,8 +426,7 @@ def run(ceph_cluster, **kw):
 
             # ---- 3. Generate mixed dataset sequentially per mount type ----
             log.info(
-                "Generating mixed dataset (%d small + %d large files) "
-                "sequentially on kernel/fuse/nfs",
+                "Generating mixed dataset (%d small + %d large files) sequentially on kernel/fuse/nfs",
                 num_small_files,
                 num_large_files,
             )
@@ -490,8 +496,7 @@ def run(ceph_cluster, **kw):
 
                 if not result_snap:
                     log.error(
-                        "Snapshot %s (%s) did not sync within timeout "
-                        "for thread_count=%d",
+                        "Snapshot %s (%s) did not sync within timeout for thread_count=%d",
                         snap_name,
                         mtype,
                         thread_count,
@@ -499,19 +504,19 @@ def run(ceph_cluster, **kw):
                     return 1
 
                 raw_duration = result_snap.get("sync_duration")
-                if raw_duration is not None:
-                    daemon_sync_duration = float(raw_duration)
-                else:
-                    daemon_sync_duration = None
+                daemon_sync_duration = parse_sync_duration_to_seconds(raw_duration)
+                if daemon_sync_duration is None:
+                    log.error(
+                        "Snapshot %s (%s) reported synced but sync_duration is missing/unparseable (raw=%r)",
+                        snap_name,
+                        mtype,
+                        raw_duration,
+                    )
+                    return 1
                 log.info(
-                    "Snapshot %s synced: daemon_duration=%s, "
-                    "wall_clock=%.1fs, snaps_synced=%s",
+                    "Snapshot %s synced: daemon_duration=%.1fs, wall_clock=%.1fs, snaps_synced=%s",
                     snap_name,
-                    (
-                        f"{daemon_sync_duration:.1f}s"
-                        if daemon_sync_duration is not None
-                        else "None"
-                    ),
+                    daemon_sync_duration,
                     wall_clock_sec,
                     result_snap["snaps_synced"],
                 )
@@ -578,8 +583,7 @@ def run(ceph_cluster, **kw):
                 mbs_str = f"{mb_per_sec:.1f}" if mb_per_sec is not None else "None"
                 spd_str = f"{speedup:.1f}x" if speedup is not None else "None"
                 log.info(
-                    "RESULT | threads=%d | mount=%s | duration=%s | "
-                    "%s files/sec | %s MB/sec | %s speedup",
+                    "RESULT | threads=%d | mount=%s | duration=%s | %s files/sec | %s MB/sec | %s speedup",
                     thread_count,
                     mtype,
                     dur_str,
@@ -590,39 +594,73 @@ def run(ceph_cluster, **kw):
 
                 _append_csv_row(csv_file, result_entry)
 
-            # ---- 7. Cleanup this iteration (snapshots + data only) ----
-            log.info("Cleaning up iteration for thread_count=%d", thread_count)
-            for mtype in MOUNT_TYPES:
-                fs_util_ceph1.remove_snapshot(
-                    client=source_clients[0],
-                    vol_name=source_fs,
-                    subvol_name=created_subvols[mtype],
-                    snap_name=iter_snapshots[mtype],
-                    validate=True,
-                    group_name=subvol_group,
-                    force=True,
+            idle_ok = True
+            try:
+                log.info(
+                    "Waiting for all mirrored paths to reach idle after thread_count=%d syncs",
+                    thread_count,
                 )
-
-            for mtype in MOUNT_TYPES:
-                try:
-                    log.info("Deleting generated files under %s", io_dir_paths[mtype])
-                    source_clients[0].exec_command(
-                        sudo=True,
-                        cmd=f"rm -rf {io_dir_paths[mtype]}",
-                        long_running=True,
-                        timeout=600,
-                    )
-                except Exception as e:
-                    log.warning("Failed to delete data in %s: %s", mtype, e)
-                    if mtype == "nfs":
-                        log.info("NFS data deletion failed, remounting NFS")
-                        _remount_nfs(
-                            source_clients[0],
-                            mount_dirs["nfs"],
-                            nfs_server,
-                            nfs_export_name,
-                            fs_util_ceph1,
+                wait_for_sync_idle(
+                    source_fs,
+                    fsid,
+                    asok_file,
+                    filesystem_id,
+                    peer_uuid,
+                    mirroring_paths,
+                )
+            except CommandFailed as e:
+                idle_ok = False
+                log.error(
+                    "Not all paths reached idle after syncs for " "thread_count=%d: %s",
+                    thread_count,
+                    e,
+                )
+            finally:
+                # ---- 7. Cleanup this iteration (snapshots + data only) ----
+                # Always clean even if idle wait fails to avoid suite leaks.
+                log.info("Cleaning up iteration for thread_count=%d", thread_count)
+                for mtype in MOUNT_TYPES:
+                    try:
+                        fs_util_ceph1.remove_snapshot(
+                            client=source_clients[0],
+                            vol_name=source_fs,
+                            subvol_name=created_subvols[mtype],
+                            snap_name=iter_snapshots[mtype],
+                            validate=True,
+                            group_name=subvol_group,
+                            force=True,
                         )
+                    except Exception as snap_err:
+                        log.warning(
+                            "Failed to remove snapshot for %s: %s", mtype, snap_err
+                        )
+
+                for mtype in MOUNT_TYPES:
+                    try:
+                        log.info(
+                            "Deleting generated files under %s",
+                            io_dir_paths[mtype],
+                        )
+                        source_clients[0].exec_command(
+                            sudo=True,
+                            cmd=f"rm -rf {io_dir_paths[mtype]}",
+                            long_running=True,
+                            timeout=600,
+                        )
+                    except Exception as e:
+                        log.warning("Failed to delete data in %s: %s", mtype, e)
+                        if mtype == "nfs":
+                            log.info("NFS data deletion failed, remounting NFS")
+                            _remount_nfs(
+                                source_clients[0],
+                                mount_dirs["nfs"],
+                                nfs_server,
+                                nfs_export_name,
+                                fs_util_ceph1,
+                            )
+
+            if not idle_ok:
+                return 1
 
         # ---- Final summary ----
         log.info("=" * 70)
@@ -649,6 +687,9 @@ def run(ceph_cluster, **kw):
             )
         log.info("CSV results written to %s", csv_file)
 
+        if not compare_and_validate_sync_durations(results):
+            return 1
+
         return 0
 
     except Exception as e:
@@ -662,10 +703,7 @@ def run(ceph_cluster, **kw):
             try:
                 source_clients[0].exec_command(
                     sudo=True,
-                    cmd=(
-                        "ceph config rm client.cephfs-mirror "
-                        "cephfs_mirror_max_datasync_threads"
-                    ),
+                    cmd="ceph config rm client.cephfs-mirror cephfs_mirror_max_datasync_threads",
                 )
             except Exception as e:
                 log.warning("Failed to reset thread config: %s", e)
