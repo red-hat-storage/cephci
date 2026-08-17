@@ -23,6 +23,9 @@ def run(ceph_cluster, **kw):
     5. Check if there are any crash occurred
     """
     try:
+        config = kw.get("config", {})
+        min_active_mds = config.get("min_active_mds", 2)
+        mds_recovery_timeout = config.get("mds_recovery_timeout", 900)
         fs_util = FsUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
@@ -54,9 +57,14 @@ def run(ceph_cluster, **kw):
                 )
                 log.info(out)
 
-                if not wait_for_two_active_mds(client1, fs_name):
+                if not wait_for_active_mds(
+                    client1,
+                    fs_name,
+                    min_active=min_active_mds,
+                    max_wait_time=mds_recovery_timeout,
+                ):
                     raise CommandError(
-                        "2 Active MDS did not start after failing one MDS"
+                        f"{min_active_mds} active MDS did not recover after failing one MDS"
                     )
                 time.sleep(120)
                 out, rc = retry_exec_command(
@@ -84,26 +92,21 @@ def run(ceph_cluster, **kw):
         pass
 
 
-def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=20):
+def wait_for_active_mds(
+    client1, fs_name, min_active=2, max_wait_time=900, retry_interval=20
+):
     """
-    Wait until two active MDS (Metadata Servers) are found or the maximum wait time is reached.
+    Wait until the required number of active MDS ranks are found.
 
     Args:
-        data (str): JSON data containing MDS information.
-        max_wait_time (int): Maximum wait time in seconds (default: 180 seconds).
-        retry_interval (int): Interval between retry attempts in seconds (default: 5 seconds).
+        client1: Ceph client node used to run commands.
+        fs_name (str): Filesystem name.
+        min_active (int): Minimum active MDS count required to continue.
+        max_wait_time (int): Maximum wait time in seconds.
+        retry_interval (int): Interval between retry attempts in seconds.
 
     Returns:
-        bool: True if two active MDS are found within the specified time, False if not.
-
-    Example usage:
-    ```
-    data = '...'  # JSON data
-    if wait_for_two_active_mds(data):
-        print("Two active MDS found.")
-    else:
-        print("Timeout: Two active MDS not found within the specified time.")
-    ```
+        bool: True if the required active MDS count is met within the wait time.
     """
     retry_exec_command = retry(CommandFailed, tries=10, delay=30, backoff=1)(
         client1.exec_command
@@ -118,11 +121,26 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=
         active_mds = [
             mds
             for mds in parsed_data.get("mdsmap", [])
-            if mds.get("rank", -1) in [0, 1] and mds.get("state") == "active"
+            if mds.get("state") == "active"
         ]
-        if len(active_mds) == 2:
-            return True  # Two active MDS found
-        else:
-            time.sleep(retry_interval)  # Retry after the specified interval
+        if len(active_mds) >= min_active:
+            log.info(
+                "Found %s active MDS rank(s); required minimum is %s",
+                len(active_mds),
+                min_active,
+            )
+            return True
+        time.sleep(retry_interval)
 
     return False
+
+
+def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=20):
+    """Backward-compatible wrapper for callers expecting two active MDS."""
+    return wait_for_active_mds(
+        client1,
+        fs_name,
+        min_active=2,
+        max_wait_time=max_wait_time,
+        retry_interval=retry_interval,
+    )

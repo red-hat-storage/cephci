@@ -148,6 +148,8 @@ tests:
   - test:
       name: Upgrade along with IOs
       module: test_parallel.py
+      config:
+        max_time: 10800
       parallel:
         - test:
             abort-on-fail: false
@@ -168,6 +170,7 @@ tests:
               service: upgrade
               base_cmd_args:
                 verbose: true
+              upgrade_timeout: 10800
               benchmark:
                 type: rados # future-use
                 pool_per_client: true
@@ -181,6 +184,9 @@ tests:
             module: cephfs_upgrade.cephfs_mds_failover.py
             name: "Fail MDS while Upgrade is in Progress"
             polarion-id: CEPH-83575628
+            config:
+              min_active_mds: 2
+              mds_recovery_timeout: 1200
       desc: Running upgrade, mds Failure and i/o's parallelly
       abort-on-fail: true
   - test:

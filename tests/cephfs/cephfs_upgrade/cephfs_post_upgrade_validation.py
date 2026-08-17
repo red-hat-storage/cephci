@@ -519,12 +519,10 @@ def clone_test(clone_req_params):
         "Using existing mountpoint,verify clones are accessible, perform readwrite IO."
     )
     for sv in clone_data:
-        mnt_pt = clone_data[sv]["mnt_pt"]
+        mnt_pt = clone_data[sv]["mnt_pt"].rstrip("/")
         mnt_client_name = clone_data[sv]["mnt_client"]
         mnt_client = [i for i in clients if i.node.hostname == mnt_client_name][0]
-        cmd = f"ls {mnt_pt}/*"
-        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
-        file_path = out.strip()
+        file_path = f"{mnt_pt}/dd_test_file"
         cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
         out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
         dir_path = f"{mnt_pt}/smallfile_clone_dir"
