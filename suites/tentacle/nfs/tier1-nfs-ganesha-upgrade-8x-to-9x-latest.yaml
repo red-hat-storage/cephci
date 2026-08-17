@@ -232,6 +232,7 @@ tests:
               dd_command_size_in_M: 10
               exports_number: 4
               loop_count: 4
+              nfs_wait_timeout: 600
       abort-on-fail: true
 
   - test:
