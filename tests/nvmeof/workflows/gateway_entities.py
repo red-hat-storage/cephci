@@ -366,6 +366,10 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                 if bdev_cfg.get("pool"):
                     namespace_args.update({"rbd-pool": bdev_cfg["pool"]})
 
+                data_pool = bdev_cfg.get("data_pool") or bdev_cfg.get("rbd-data-pool")
+                if data_pool:
+                    namespace_args.update({"rbd-data-pool": data_pool})
+
                 rados_namespace = bdev_cfg.get(
                     "rados_namespace", sub_cfg.get("rados_namespace")
                 )
@@ -388,12 +392,21 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                                 pool = bdev_cfg.get(
                                     "pool", config.get("rbd_pool", "rbd")
                                 )
-                                p.spawn(
-                                    rbd_obj.initial_rbd_config,
-                                    pool=pool,
-                                    image=f"{name}-image{num}",
-                                    size=bdev_cfg.get("size", "1G"),
-                                )
+                                image = f"{name}-image{num}"
+                                size = bdev_cfg.get("size", "1G")
+                                if data_pool:
+                                    cmd = (
+                                        f"rbd create {pool}/{image} --size {size} "
+                                        f"--data-pool {data_pool}"
+                                    )
+                                    p.spawn(rbd_obj.exec_cmd, cmd=cmd)
+                                else:
+                                    p.spawn(
+                                        rbd_obj.initial_rbd_config,
+                                        pool=pool,
+                                        image=image,
+                                        size=size,
+                                    )
                             else:
                                 raise ValueError(
                                     "RBD object not provided for pre-creating RBD image"
