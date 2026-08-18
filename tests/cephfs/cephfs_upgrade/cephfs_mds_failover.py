@@ -11,18 +11,25 @@ from utility.retry import retry
 
 log = Log(__name__)
 
+UPGRADE_IDLE_MSG = "There are no upgrades in progress currently."
+
 
 def run(ceph_cluster, **kw):
     """
     CEPH-83575628 - Perform active mds failures while upgrading
     Steps Performed:
-    1. Check if upgrade in progress
+    1. Poll until upgrade is in progress
     2. get active mds
-    3. Fail active mds with interval for 2 min each
-    4. Perform this till upgrade in progress
+    3. Fail active mds and poll until recovery before the next failure
+    4. Perform this till upgrade completes
     5. Check if there are any crash occurred
     """
     try:
+        config = kw.get("config", {})
+        min_active_mds = config.get("min_active_mds", 2)
+        mds_recovery_timeout = config.get("mds_recovery_timeout", 900)
+        upgrade_start_timeout = config.get("upgrade_start_timeout", 900)
+        poll_interval = config.get("poll_interval", 20)
         fs_util = FsUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
@@ -33,32 +40,53 @@ def run(ceph_cluster, **kw):
             return 1
         client1 = clients[0]
         fs_name = "cephfs"
-        log.info("Wait for Upgrade to start")
-        time.sleep(120)
+        log.info("Polling until upgrade starts")
+        if not wait_for_upgrade_start(
+            client1,
+            max_wait_time=upgrade_start_timeout,
+            retry_interval=poll_interval,
+        ):
+            raise CommandError(
+                f"Upgrade did not start within {upgrade_start_timeout} seconds"
+            )
         retry_exec_command = retry(CommandFailed, tries=10, delay=30, backoff=1)(
             client1.exec_command
         )
-        # while True:
         start_time = time.time()
         while time.time() - start_time < 1800:
-            cmd = "ceph orch upgrade status"
-            out, rc = client1.exec_command(cmd=cmd, sudo=True)
-            exp_msg = "There are no upgrades in progress currently."
-            if exp_msg in out:
+            out, rc = client1.exec_command(cmd="ceph orch upgrade status", sudo=True)
+            if UPGRADE_IDLE_MSG in out:
                 log.info("Upgrade Complete...")
                 break
             mds_ls = fs_util.get_active_mdss(client1, fs_name=fs_name)
+            upgrade_done = False
             for mds in mds_ls:
+                out, rc = client1.exec_command(
+                    cmd="ceph orch upgrade status", sudo=True
+                )
+                if UPGRADE_IDLE_MSG in out:
+                    log.info("Upgrade Complete...")
+                    upgrade_done = True
+                    break
+                if not is_upgrade_in_progress(out):
+                    log.info("Upgrade not in progress; stopping MDS failover")
+                    upgrade_done = True
+                    break
                 out, rc = retry_exec_command(
                     cmd=f"ceph mds fail {mds}", client_exec=True
                 )
                 log.info(out)
 
-                if not wait_for_two_active_mds(client1, fs_name):
+                if not wait_for_active_mds(
+                    client1,
+                    fs_name,
+                    min_active=min_active_mds,
+                    max_wait_time=mds_recovery_timeout,
+                    retry_interval=poll_interval,
+                ):
                     raise CommandError(
-                        "2 Active MDS did not start after failing one MDS"
+                        f"{min_active_mds} active MDS did not recover after failing one MDS"
                     )
-                time.sleep(120)
                 out, rc = retry_exec_command(
                     cmd=f"ceph fs status {fs_name}", client_exec=True
                 )
@@ -69,6 +97,8 @@ def run(ceph_cluster, **kw):
                 if ceph_status["health"]["status"] == "HEALTH_ERR":
                     log.error("Ceph Health is NOT OK")
                     return 1
+            if upgrade_done:
+                break
 
         out, rc = retry_exec_command(sudo=True, cmd="ceph crash ls")
         if out:
@@ -84,26 +114,45 @@ def run(ceph_cluster, **kw):
         pass
 
 
-def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=20):
-    """
-    Wait until two active MDS (Metadata Servers) are found or the maximum wait time is reached.
+def is_upgrade_in_progress(upgrade_status_out):
+    """Return True when cephadm reports an upgrade is running."""
+    return UPGRADE_IDLE_MSG not in upgrade_status_out
 
-    Args:
-        data (str): JSON data containing MDS information.
-        max_wait_time (int): Maximum wait time in seconds (default: 180 seconds).
-        retry_interval (int): Interval between retry attempts in seconds (default: 5 seconds).
+
+def wait_for_upgrade_start(client1, max_wait_time=900, retry_interval=20):
+    """
+    Poll until cephadm upgrade is in progress.
 
     Returns:
-        bool: True if two active MDS are found within the specified time, False if not.
+        bool: True if upgrade started within max_wait_time.
+    """
+    start_time = time.time()
+    while time.time() - start_time < max_wait_time:
+        out, rc = client1.exec_command(cmd="ceph orch upgrade status", sudo=True)
+        if is_upgrade_in_progress(out):
+            log.info("Upgrade is in progress")
+            return True
+        log.info("Upgrade not started yet; polling again in %s seconds", retry_interval)
+        time.sleep(retry_interval)
 
-    Example usage:
-    ```
-    data = '...'  # JSON data
-    if wait_for_two_active_mds(data):
-        print("Two active MDS found.")
-    else:
-        print("Timeout: Two active MDS not found within the specified time.")
-    ```
+    return False
+
+
+def wait_for_active_mds(
+    client1, fs_name, min_active=2, max_wait_time=900, retry_interval=20
+):
+    """
+    Poll until the required number of active MDS ranks are found.
+
+    Args:
+        client1: Ceph client node used to run commands.
+        fs_name (str): Filesystem name.
+        min_active (int): Minimum active MDS count required to continue.
+        max_wait_time (int): Maximum wait time in seconds.
+        retry_interval (int): Interval between retry attempts in seconds.
+
+    Returns:
+        bool: True if the required active MDS count is met within the wait time.
     """
     retry_exec_command = retry(CommandFailed, tries=10, delay=30, backoff=1)(
         client1.exec_command
@@ -116,13 +165,26 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=
         log.info(out)
         parsed_data = json.loads(out)
         active_mds = [
-            mds
-            for mds in parsed_data.get("mdsmap", [])
-            if mds.get("rank", -1) in [0, 1] and mds.get("state") == "active"
+            mds for mds in parsed_data.get("mdsmap", []) if mds.get("state") == "active"
         ]
-        if len(active_mds) == 2:
-            return True  # Two active MDS found
-        else:
-            time.sleep(retry_interval)  # Retry after the specified interval
+        if len(active_mds) >= min_active:
+            log.info(
+                "Found %s active MDS rank(s); required minimum is %s",
+                len(active_mds),
+                min_active,
+            )
+            return True
+        time.sleep(retry_interval)
 
     return False
+
+
+def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=20):
+    """Backward-compatible wrapper for callers expecting two active MDS."""
+    return wait_for_active_mds(
+        client1,
+        fs_name,
+        min_active=2,
+        max_wait_time=max_wait_time,
+        retry_interval=retry_interval,
+    )
