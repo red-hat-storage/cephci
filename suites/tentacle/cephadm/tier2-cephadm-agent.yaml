@@ -105,9 +105,25 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
 
+  # Conf has mgr on node1+node2; bootstrap mgr lands on installer without mgr label.
+  # Label installer so placement count:2 can keep bootstrap mgr + add standby on node2.
+  - test:
+      name: Label installer for mgr
+      desc: Add mgr label to installer so orch can place 2 mgrs (matches conf)
+      module: test_host.py
+      config:
+        service: host
+        command: label_add
+        args:
+          node: node1
+          labels:
+            - mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
   - test:
       name: Deploy core services
-      desc: Deploy Mon, Mgr, OSD, crash services
+      desc: Deploy Mon, Mgr (2), OSD, crash services
       module: test_orch.py
       config:
         command: apply_spec
@@ -119,6 +135,7 @@ tests:
           - service_type: mgr
             placement:
               label: mgr
+              count: 2
           - service_type: osd
             service_id: all-available-devices
             placement:
@@ -334,11 +351,12 @@ tests:
 
   - test:
       name: Agent Corrupt Metadata Payload Test
-      desc: Corrupt data files with valid keyring to check if MGR detects bad payload
+      desc: Directly POST corrupt facts/volume to mgr /data with valid agent keyring
       module: cephadm_agent.test_agent_security.py
       config:
         tests: corrupt_metadata_payload
-      # TC-SEC (additional): Corrupt payload handling
+      # TC-SEC-005: Corrupt Metadata Payload with Valid Keyring
+      # (direct HTTPS POST to /data; not unused /tmp files)
 
   - test:
       name: Agent Log Security Test

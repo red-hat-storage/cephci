@@ -8,6 +8,7 @@ from cephadm_agent.helpers import (
     DEFAULT_AGENT_DOWN_TIMEOUT,
     DEFAULT_AGENT_REFRESH,
     agent_service_name,
+    ensure_agent_running_on_all,
     get_agent_daemons,
     get_fsid,
     get_node_for_host,
@@ -23,21 +24,27 @@ def run_deployment_test(ceph_cluster, installer):
     log.info("=== TEST: Deployment - Agent auto-deployed on host add ===")
 
     shell(installer, "ceph config set mgr mgr/cephadm/use_agent true")
-    time.sleep(5)
+    # Agents can sit in status_desc=starting for a while after first enable
+    time.sleep(15)
 
     hosts_out, _ = shell(installer, "ceph orch host ls -f json")
     hosts = json.loads(hosts_out)
     assert len(hosts) > 0, "No hosts found in the cluster"
 
+    assert ensure_agent_running_on_all(installer, ceph_cluster, timeout=360), (
+        "Agent daemon(s) not running on all hosts after enabling use_agent "
+        f"(last orch ps agents={[ (a.get('hostname'), a.get('status_desc')) for a in get_agent_daemons(installer) ]})"
+    )
+
     for host_info in hosts:
         hostname = host_info["hostname"]
         assert wait_for_agent_running(
-            installer, hostname, timeout=180
+            installer, hostname, timeout=60
         ), f"Agent daemon not running on host {hostname} after enabling use_agent"
         log.info(f"Agent daemon confirmed running on {hostname}")
 
     agents = get_agent_daemons(installer)
-    agent_hosts = {a["hostname"] for a in agents}
+    agent_hosts = {a["hostname"] for a in agents if a.get("status_desc") == "running"}
     cluster_hosts = {h["hostname"] for h in hosts}
     assert (
         agent_hosts == cluster_hosts

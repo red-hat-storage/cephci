@@ -9,13 +9,16 @@ from cephadm_agent.helpers import (
     DEFAULT_AGENT_DOWN_TIMEOUT,
     DEFAULT_AGENT_REFRESH,
     agent_service_name,
+    get_active_mgr_ip,
     get_agent_daemons,
     get_fsid,
     get_node_for_host,
     get_orch_ps,
     log,
+    pick_non_active_mgr_agent_host,
     setup_run,
     shell,
+    wait_for_agent_json_target_ip,
     wait_for_agent_running,
     wait_for_health_warning,
 )
@@ -441,11 +444,20 @@ def run_silent_listener_failure_test(ceph_cluster, installer):
 
 
 def run_failover_resilience_test(ceph_cluster, installer):
-    log.info("=== DEFECT TEST: MGR failover resilience gap ===")
+    """
+    Verify agent.json target_ip is rewritten while the agent is stopped during
+    mgr failover (SSH reconfig / required_files path).
+
+    Harness notes (aligned with manual verification on same build):
+    - Pick a host that is not the current active mgr (and prefer non-installer)
+    - Keep agent STOPPED until target_ip updates (do not restart early)
+    - Wait past agent-down window so SSH reconfig can land
+    """
+    log.info("=== TEST: MGR failover resilience (stopped agent gets target_ip) ===")
 
     agents = get_agent_daemons(installer)
     assert len(agents) >= 2
-    hostname = agents[0]["hostname"]
+    hostname = pick_non_active_mgr_agent_host(installer, ceph_cluster)
     target_node = get_node_for_host(ceph_cluster, hostname)
     assert target_node is not None
 
@@ -457,7 +469,8 @@ def run_failover_resilience_test(ceph_cluster, installer):
 
     mgr_out, _ = shell(installer, "ceph mgr stat -f json")
     pre_mgr = json.loads(mgr_out)["active_name"]
-    log.info(f"Pre-failover active MGR: {pre_mgr}")
+    pre_mgr_ip = get_active_mgr_ip(installer)
+    log.info(f"Pre-failover active MGR: {pre_mgr} ({pre_mgr_ip})")
 
     config_out, _ = target_node.exec_command(
         sudo=True, cmd=f"cat {agent_dir}/agent.json"
@@ -466,7 +479,7 @@ def run_failover_resilience_test(ceph_cluster, installer):
     pre_target_ip = pre_config["target_ip"]
     log.info(f"Pre-failover target_ip in agent.json: {pre_target_ip}")
 
-    log.info("Stopping agent on target host...")
+    log.info("Stopping agent on target host (keep stopped through failover)...")
     target_node.exec_command(sudo=True, cmd=f"systemctl stop {service_name}")
     time.sleep(5)
 
@@ -476,35 +489,37 @@ def run_failover_resilience_test(ceph_cluster, installer):
 
     mgr_out2, _ = shell(installer, "ceph mgr stat -f json")
     post_mgr = json.loads(mgr_out2)["active_name"]
-    log.info(f"Post-failover active MGR: {post_mgr}")
+    post_mgr_ip = get_active_mgr_ip(installer)
+    log.info(f"Post-failover active MGR: {post_mgr} ({post_mgr_ip})")
+    assert pre_mgr != post_mgr, "MGR did not fail over to a different daemon"
 
-    log.info("Starting agent back up...")
+    # Leave agent stopped; wait for SSH reconfig to rewrite agent.json
+    wait_timeout = DEFAULT_AGENT_DOWN_TIMEOUT + 180
+    log.info(
+        f"Waiting up to {wait_timeout}s for agent.json target_ip → {post_mgr_ip} "
+        f"while agent remains stopped"
+    )
+    updated, last_ip = wait_for_agent_json_target_ip(
+        target_node, agent_dir, post_mgr_ip, timeout=wait_timeout, interval=15
+    )
+
+    status_out, _ = target_node.exec_command(
+        sudo=True, cmd=f"systemctl is-active {service_name} || true", check_ec=False
+    )
+    log.info(f"Agent unit state while waiting: {status_out.strip()}")
+
+    assert updated, (
+        f"BUG UNFIXED / harness miss: agent.json target_ip still {last_ip!r} "
+        f"(expected {post_mgr_ip}) after failover {pre_mgr} → {post_mgr}. "
+        f"Pre-failover target_ip was {pre_target_ip}. Agent was kept stopped so "
+        f"SSH reconfig could rewrite required_files."
+    )
+    log.info(f"agent.json updated to target_ip={post_mgr_ip} while agent stopped")
+
+    log.info("Starting agent after config rewrite...")
     target_node.exec_command(sudo=True, cmd=f"systemctl start {service_name}")
-    time.sleep(DEFAULT_AGENT_REFRESH * 2)
 
-    config_out2, _ = target_node.exec_command(
-        sudo=True, cmd=f"cat {agent_dir}/agent.json"
-    )
-    post_config = json.loads(config_out2)
-    post_target_ip = post_config["target_ip"]
-    log.info(f"Post-failover target_ip in agent.json: {post_target_ip}")
-
-    journal_out, _ = target_node.exec_command(
-        sudo=True,
-        cmd=f"journalctl -u {service_name} --no-pager -n 10 2>/dev/null | "
-        f"grep -i 'response\\|error\\|refused' | tail -3 || echo 'NO_MATCH'",
-        check_ec=False,
-    )
-    log.info(f"Agent journal after restart: {journal_out.strip()[:200]}")
-
-    assert not (pre_target_ip == post_target_ip and pre_mgr != post_mgr), (
-        f"BUG UNFIXED: Agent still points to old MGR IP ({pre_target_ip}) after "
-        f"failover from {pre_mgr} to {post_mgr}. Agent was stopped during failover "
-        f"and missed the config push. It should have a fallback discovery mechanism "
-        f"to find the new active MGR."
-    )
-
-    if not wait_for_agent_running(installer, hostname, timeout=120):
+    if not wait_for_agent_running(installer, hostname, timeout=180):
         log.error(
             "Agent did not reconnect — redeploying to recover for suite continuity"
         )
@@ -514,7 +529,7 @@ def run_failover_resilience_test(ceph_cluster, installer):
     wait_for_health_warning(
         installer, AGENT_HEALTH_WARNING, timeout=180, expect_present=False
     )
-    log.info("PASS: Failover resilience test completed — agent discovers new MGR")
+    log.info("PASS: Failover resilience — stopped agent received new MGR target_ip")
 
 
 TEST_REGISTRY = {
