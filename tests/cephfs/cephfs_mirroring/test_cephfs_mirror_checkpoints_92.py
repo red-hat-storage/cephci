@@ -638,6 +638,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean up the system")
         try:
+            if not locals().get("mount_path"):
+                raise Exception("Skip cleanup: setup did not complete")
             log.info("Cleanup: Deactivate and remove snap schedule")
             snap_util.deactivate_snap_schedule(
                 source_clients[0],

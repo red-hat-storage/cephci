@@ -967,6 +967,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean up the system")
         try:
+            if not locals().get("kernel_mounting_dir"):
+                raise Exception("Skip cleanup: setup did not complete")
             log.info("Cleanup: Reset config overrides")
             source_clients[0].exec_command(
                 sudo=True,

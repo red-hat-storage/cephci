@@ -646,6 +646,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean up the system")
         try:
+            if not locals().get("kernel_mounting_dir"):
+                raise Exception("Skip cleanup: setup did not complete")
             log.info("Cleanup: Reset config overrides")
             for key in [
                 "client.cephfs-mirror cephfs_mirror_tick_interval",

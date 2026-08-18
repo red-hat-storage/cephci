@@ -270,6 +270,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean up the system")
         try:
+            if not locals().get("mount_path"):
+                raise Exception("Skip cleanup: setup did not complete")
             log.info("Delete the snapshots")
             for snap in ["snap_baseline", "snap_conflict_r8"]:
                 source_clients[0].exec_command(

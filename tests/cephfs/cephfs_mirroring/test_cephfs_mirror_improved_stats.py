@@ -734,6 +734,8 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean up the system")
         try:
+            if not (locals().get("mounting_dir") and locals().get("subvolume_paths")):
+                raise Exception("Skip cleanup: setup did not complete")
             log.info("Reset config overrides")
             source_clients[0].exec_command(
                 sudo=True,

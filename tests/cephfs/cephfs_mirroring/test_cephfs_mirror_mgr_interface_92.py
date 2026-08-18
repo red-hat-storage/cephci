@@ -684,10 +684,9 @@ def run(ceph_cluster, **kw):
         else:
             log.info(f"Path {temp_dir_key} removed from MGR metrics")
 
-        log.info("OMAP keys after path removal")
         out_after, _ = source_clients[0].exec_command(
             sudo=True,
-            cmd=f"rados -p {metadata_pool} listomapkeys cephfs_mirror",
+            cmd="rados -p %s listomapkeys %s" % (metadata_pool, omap_obj_name),
             check_ec=False,
         )
         omap_after = set(out_after.strip().splitlines()) if out_after.strip() else set()
