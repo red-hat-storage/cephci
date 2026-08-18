@@ -200,6 +200,16 @@ tests:
         config-file-name: test_swift_bulk_upload.yaml
 
   - test:
+      name: Test RGW CORS multi-rule OPTIONS preflight
+      desc: Test RGW CORS multi-rule OPTIONS preflight
+      polarion-id: CEPH-83632921
+      comments: known issue JIRA IBMCEPH-17318 targeted to 9.2
+      module: sanity_rgw.py
+      config:
+        script-name:  ../aws/test_cors_options_preflight.py
+        config-file-name: ../../aws/configs/test_aws_cors_options_multi_rule_preflight.yaml
+
+  - test:
       name: test deletion of default realm clears realm id in default info
       desc: test deletion of default realm clears realm id in default info
       polarion-id: CEPH-83623614
