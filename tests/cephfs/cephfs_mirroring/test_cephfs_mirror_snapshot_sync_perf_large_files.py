@@ -5,6 +5,8 @@ import string
 import time
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
     CephfsMirroringUtils,
@@ -109,6 +111,10 @@ def run(ceph_cluster, **kw):
         )
 
         build = config.get("build", config.get("rhbuild"))
+        if LooseVersion(build) < LooseVersion("9.1"):
+            log.info("Skipping test: requires Ceph version >= 9.1 (build=%s)", build)
+            return 0
+
         source_clients = ceph_cluster_dict.get("ceph1").get_ceph_objects("client")
         target_clients = ceph_cluster_dict.get("ceph2").get_ceph_objects("client")
         cephfs_mirror_node = ceph_cluster_dict.get("ceph1").get_ceph_objects(
