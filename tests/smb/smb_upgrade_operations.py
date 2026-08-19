@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+from time import sleep
+
 from smb_operations import (
     check_ctdb_health,
     check_rados_clustermeta,
@@ -146,6 +149,44 @@ def deploy_smb(
         raise SmbUpgradeError(f"Fail to deploy smb services, Error {e}")
 
 
+def monitor_upgrade_with_smb_recovery(installer, orch, smb_cluster_id, timeout=3600):
+    interval = 7
+    end_time = datetime.now() + timedelta(seconds=timeout)
+
+    while datetime.now() < end_time:
+        sleep(interval)
+
+        status = orch.upgrade_status()
+        log.info("Upgrade Status: %s", status)
+
+        if not status.get("in_progress"):
+            log.info("Upgrade Complete...")
+            return
+
+        message = status.get("message", "")
+
+        if (
+            status.get("is_paused")
+            and "UPGRADE_REDEPLOY_DAEMON" in message
+            and "smb" in message
+        ):
+            log.warning("SMB redeploy failure detected during upgrade")
+
+            log.info("Redeploying smb service")
+            cmd = f"ceph orch redeploy smb.{smb_cluster_id}"
+            installer.exec_command(sudo=True, cmd=cmd)
+
+            sleep(10)
+
+            log.info("Resuming upgrade")
+            cmd = "ceph orch upgrade resume"
+            installer.exec_command(sudo=True, cmd=cmd)
+
+            log.info("Recovery completed. Continuing upgrade monitoring...")
+
+    raise SmbUpgradeError("Upgrade did not complete within timeout")
+
+
 def upgrade(
     installer,
     orch,
@@ -154,6 +195,7 @@ def upgrade(
     samba_image,
     samba_metrics_image,
     ceph_image,
+    smb_spec,
 ):
     """Upgrade ceph cluster
     Args:
@@ -164,6 +206,11 @@ def upgrade(
         check_cluster_health (Bool): Cluster health check flag
     """
     try:
+        # Get smb service value from spec file
+        for spec in smb_spec:
+            if spec["resource_type"] == "ceph.smb.cluster":
+                smb_cluster_id = spec["cluster_id"]
+
         # Check cluster health before upgrade
         if check_cluster_health:
             health = wait_for_cluster_health(installer, "HEALTH_WARN", 300, 30)
@@ -193,7 +240,7 @@ def upgrade(
         installer.exec_command(sudo=True, cmd=cmd)
 
         # Monitor upgrade status, till completion
-        orch.monitor_upgrade_status()
+        monitor_upgrade_with_smb_recovery(installer, orch, smb_cluster_id)
 
         # Unset osd flags
         for flag in osd_flags:
@@ -332,6 +379,7 @@ def run(ceph_cluster, **kw):
                 samba_image,
                 samba_metrics_image,
                 ceph_image,
+                smb_spec,
             )
         elif operation == "cleanup_smb":
             # cleanup smb services
