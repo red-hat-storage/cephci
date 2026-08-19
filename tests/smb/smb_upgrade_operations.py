@@ -173,13 +173,13 @@ def monitor_upgrade_with_smb_recovery(installer, orch, smb_cluster_id, timeout=3
             log.warning("SMB redeploy failure detected during upgrade")
 
             log.info("Redeploying smb service")
-            cmd = f"ceph orch redeploy smb.{smb_cluster_id}"
+            cmd = f"cephadm shell -- ceph orch redeploy smb.{smb_cluster_id}"
             installer.exec_command(sudo=True, cmd=cmd)
 
             sleep(10)
 
             log.info("Resuming upgrade")
-            cmd = "ceph orch upgrade resume"
+            cmd = "cephadm shell -- ceph orch upgrade resume"
             installer.exec_command(sudo=True, cmd=cmd)
 
             log.info("Recovery completed. Continuing upgrade monitoring...")
