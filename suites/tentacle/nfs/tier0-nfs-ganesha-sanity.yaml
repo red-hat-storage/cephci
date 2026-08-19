@@ -182,3 +182,12 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: NFS cross-cluster export consistency
+      module: nfs_cross_cluster_export_consistency.py
+      desc: Same CephFS subvolume exported on two NFS clusters; validate listing consistency (IBMCEPH-11665)
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 2
