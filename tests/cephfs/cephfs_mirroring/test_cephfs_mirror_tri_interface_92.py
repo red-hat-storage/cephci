@@ -4,6 +4,8 @@ import string
 import time
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -98,8 +100,15 @@ def run(ceph_cluster, **kw):
      3. Tri-interface snap lifecycle counters
      4. Tri-interface with multiple directories
 
-    Returns 0 on success, 1 on failure.
+    Returns 0 on success, 1 on failure, -1 if skipped.
     """
+    config = kw.get("config") or {}
+    rhbuild = str(config.get("rhbuild") or config.get("build") or "0")
+    rhcs = rhbuild.split("-")[0]
+    if LooseVersion(rhcs) < LooseVersion("9.2"):
+        log.info("Skipping test: requires Ceph version >= 9.2 (rhbuild=%s)", rhbuild)
+        return -1
+
     try:
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
