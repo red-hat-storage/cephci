@@ -35,10 +35,12 @@ globals:
         role:
           - osd
           - rgw
+          - smb
 
       node5:
         role:
           - rgw
+          - smb
 
       node6:
         role:
