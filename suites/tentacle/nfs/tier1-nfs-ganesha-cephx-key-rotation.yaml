@@ -5,17 +5,12 @@
 # Conf: conf/tentacle/nfs/1admin-3node-1client.yaml
 #
 # What this suite tests:
-#   Scenario A — Manual ceph auth rotate path (regression baseline for IBMCEPH-16471):
-#     Rotate all NFS CephX keys individually via ceph auth rotate, redeploy
-#     the NFS service, and ASSERT that Ganesha logs CONTAIN Permission denied /
-#     fsal_export is NULL errors — this documents the broken manual path.
-#     Recover via ceph nfs export apply, then verify mount and IO.
-#
-#   Scenario B — ceph nfs cluster rotate-key (9.1z2 fix verification):
-#     Run the one-shot rotate-key command, assert the JSON response contains
-#     rotated=all, service_redeployed=true, updated_exports=all, and verify
-#     that the client can mount and read data WITHOUT any manual steps.
-#     Also tests rotating only the export CephFS key specifically.
+#   ceph nfs cluster rotate-key (9.1z2 fix verification):
+#     Run the one-shot rotate-key command while the client stays mounted.
+#     Assert JSON (rotated, service_redeployed=true, updated_exports),
+#     that CephX key values change, Ganesha logs stay clean, and IO on
+#     the existing mount still works without unmount/remount or
+#     ceph nfs export apply.
 #
 #===============================================================================================
 tests:
@@ -80,35 +75,16 @@ tests:
       name: configure client
 
   - test:
-      name: NFS CephX key rotation — Scenario A (manual rotate path)
+      name: NFS CephX key rotation (ceph nfs cluster rotate-key)
       module: test_nfs_cephx_key_rotation.py
       desc: >
-        Rotate all NFS CephX keys individually via ceph auth rotate
-        (cluster key, per-daemon RGW keys, export CephFS key), redeploy
-        the NFS service, and assert Ganesha logs contain Permission denied /
-        fsal_export is NULL errors (documenting the broken manual path).
-        Recover via ceph nfs export apply and verify mount and IO.
-        Regression baseline for IBMCEPH-16399.
+        Verify IBMCEPH-16471 / 9.1z2: run ceph nfs cluster rotate-key while
+        the NFS export stays mounted. Assert keys change, JSON shows
+        service_redeployed=true and updated_exports, Ganesha logs stay
+        clean, and the same mount can still read/write without remount
+        or ceph nfs export apply.
       polarion-id:
       abort-on-fail: false
       config:
         nfs_version: "4.1"
         clients: 1
-        operation: manual_rotate_key
-
-  - test:
-      name: NFS CephX key rotation — Scenario B (ceph nfs cluster rotate-key)
-      module: test_nfs_cephx_key_rotation.py
-      desc: >
-        Verify the 9.1z2 fix: run ceph nfs cluster rotate-key and assert
-        the JSON response shows all keys rotated, service_redeployed=true,
-        and all exports in updated_exports. Verify client can mount and
-        read data without any manual export apply steps. Also tests
-        rotating only the export CephFS key specifically.
-        Fix verification for IBMCEPH-16471.
-      polarion-id:
-      abort-on-fail: false
-      config:
-        nfs_version: "4.1"
-        clients: 1
-        operation: cluster_rotate_key
