@@ -1,0 +1,114 @@
+#===============================================================================================
+#---    Test Suite for NFS-Ganesha CephX Key Rotation   ---
+#---    IBMCEPH-16471 / IBMCEPH-16399                    ---
+#----------------------------------------------------------
+# Conf: conf/tentacle/nfs/1admin-3node-1client.yaml
+#
+# What this suite tests:
+#   Scenario A — Manual ceph auth rotate path (regression baseline for IBMCEPH-16471):
+#     Rotate all NFS CephX keys individually via ceph auth rotate, redeploy
+#     the NFS service, and ASSERT that Ganesha logs CONTAIN Permission denied /
+#     fsal_export is NULL errors — this documents the broken manual path.
+#     Recover via ceph nfs export apply, then verify mount and IO.
+#
+#   Scenario B — ceph nfs cluster rotate-key (9.1z2 fix verification):
+#     Run the one-shot rotate-key command, assert the JSON response contains
+#     rotated=all, service_redeployed=true, updated_exports=all, and verify
+#     that the client can mount and read data WITHOUT any manual steps.
+#     Also tests rotating only the export CephFS key specifically.
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      desc: Bootstrap and deploy services.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - nfs-utils
+        copy_admin_keyring: true
+      desc: Configure the NFS client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: NFS CephX key rotation — Scenario A (manual rotate path)
+      module: test_nfs_cephx_key_rotation.py
+      desc: >
+        Rotate all NFS CephX keys individually via ceph auth rotate
+        (cluster key, per-daemon RGW keys, export CephFS key), redeploy
+        the NFS service, and assert Ganesha logs contain Permission denied /
+        fsal_export is NULL errors (documenting the broken manual path).
+        Recover via ceph nfs export apply and verify mount and IO.
+        Regression baseline for IBMCEPH-16399.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: "4.1"
+        clients: 1
+        operation: manual_rotate_key
+
+  - test:
+      name: NFS CephX key rotation — Scenario B (ceph nfs cluster rotate-key)
+      module: test_nfs_cephx_key_rotation.py
+      desc: >
+        Verify the 9.1z2 fix: run ceph nfs cluster rotate-key and assert
+        the JSON response shows all keys rotated, service_redeployed=true,
+        and all exports in updated_exports. Verify client can mount and
+        read data without any manual export apply steps. Also tests
+        rotating only the export CephFS key specifically.
+        Fix verification for IBMCEPH-16471.
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: "4.1"
+        clients: 1
+        operation: cluster_rotate_key

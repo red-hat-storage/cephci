@@ -167,6 +167,40 @@ class Cluster(Cli):
         except json.JSONDecodeError:
             raise ValueError("Failed to parse JSON output")
 
+    def rotate_key(self, cluster_id, entity=None, key_type=None):
+        """
+        Rotate CephX keys for an NFS cluster using the 9.1z2+ command.
+
+        Rotates all keys for the cluster (daemon + export) and automatically
+        redeploys the NFS service and re-applies all exports. If entity is
+        provided, only that specific key is rotated.
+
+        Args:
+            cluster_id (str): NFS cluster name (e.g. cephfs-nfs)
+            entity (str): optional specific entity to rotate
+                          (e.g. client.nfs.cephfs-nfs.cephfs.5d839b2a)
+            key_type (str): optional key type (e.g. aes256k)
+
+        Returns:
+            dict: parsed JSON response containing rotated keys,
+                  service_redeployed flag, and updated_exports list
+        """
+        cmd = f"{self.base_cmd} rotate-key {cluster_id}"
+        if entity:
+            cmd += f" {entity}"
+        if key_type:
+            cmd += f" --key-type {key_type}"
+        cmd += " --format json"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            raw = out[0].strip() or out[1].strip()
+        else:
+            raw = out
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            raise ValueError(f"Failed to parse rotate-key JSON output: {raw}")
+
     def validate_rpcbind_running(self, nfs_node):
         """
         Check if the rpcbind service is running on RHEL 10.1 OS
