@@ -482,6 +482,22 @@ class NfsStateLifecycleWorkflows:
             self.install_grpcurl()
         except Exception as e:
             log.warning("grpcurl install failed (gRPC checks will be skipped): %s", e)
+
+        try:
+            from test_nfs_grpc import GRPC_CERT_DIR_CLIENT, copy_nfs_grpc_certs
+
+            try:
+                self._grpc_cert_dir = copy_nfs_grpc_certs(
+                    self.installer, self.clients[0], nfs_name
+                )
+            except Exception as e:
+                self._grpc_cert_dir = GRPC_CERT_DIR_CLIENT
+                log.warning(
+                    "NFS gRPC mTLS cert copy failed (gRPC queries may fail): %s", e
+                )
+        except Exception as e:
+            self._grpc_cert_dir = None
+            log.warning("Unable to import NFS gRPC cert helpers: %s", e)
         log.info("All cluster configs applied for %s", nfs_name)
 
     # ------------------------------------------------------------------
@@ -505,28 +521,34 @@ class NfsStateLifecycleWorkflows:
     def get_client_ids(self):
         """Query active NFS client IDs via gRPC GetClientIds.
 
-        Delegates to ``test_nfs_grpc.get_client_ids()``.
+        Delegates to ``test_nfs_grpc.get_client_ids()`` using mTLS certs.
 
         Returns:
             tuple: (success: bool, client_ids: list of str).
             Returns (False, []) if grpcurl is not installed or gRPC fails.
         """
-        from test_nfs_grpc import get_client_ids
+        from test_nfs_grpc import GRPC_CERT_DIR_CLIENT, get_client_ids
 
-        return get_client_ids(self.clients[0], self.get_nfs_server_ip())
+        cert_dir = getattr(self, "_grpc_cert_dir", GRPC_CERT_DIR_CLIENT)
+        return get_client_ids(
+            self.clients[0], self.get_nfs_server_ip(), cert_dir=cert_dir
+        )
 
     def get_session_ids(self):
         """Query active NFS session IDs via gRPC GetSessionIds.
 
-        Delegates to ``test_nfs_grpc.get_session_ids()``.
+        Delegates to ``test_nfs_grpc.get_session_ids()`` using mTLS certs.
 
         Returns:
             tuple: (success: bool, session_ids: list of str).
             Returns (False, []) if grpcurl is not installed or gRPC fails.
         """
-        from test_nfs_grpc import get_session_ids
+        from test_nfs_grpc import GRPC_CERT_DIR_CLIENT, get_session_ids
 
-        return get_session_ids(self.clients[0], self.get_nfs_server_ip())
+        cert_dir = getattr(self, "_grpc_cert_dir", GRPC_CERT_DIR_CLIENT)
+        return get_session_ids(
+            self.clients[0], self.get_nfs_server_ip(), cert_dir=cert_dir
+        )
 
     # ------------------------------------------------------------------
     #  State Tracking via Log Parsing
