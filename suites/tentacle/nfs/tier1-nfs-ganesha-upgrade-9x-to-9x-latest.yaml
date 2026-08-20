@@ -176,6 +176,19 @@ tests:
         cleanup: false
 
   - test:
+      name: Nfs Ganesha metrics validation - pre_upgrade
+      module: test_nfs_ganesha_metrics_upgrade_validation.py
+      desc: Enable Enable_Metrics in ganesha.conf and validate monitoring port before upgrade
+      polarion-id: CEPH-83620035
+      abort-on-fail: true
+      config:
+        operation: before_upgrade
+        nfs_name: cephfs-nfs
+        monitoring_port: 9587
+        configure_metrics: true
+        ensure_monitoring_port: true
+
+  - test:
       name: Nfs Verify multiple io and lookups
       module: nfs_verify_multiple_parallel_io_and_lookups.py
       desc: Perform look ups while multiple parallel io are in progress
@@ -249,6 +262,19 @@ tests:
         file_count: 50
         dd_command_size_in_M: 10
         operation: after_upgrade
+
+  - test:
+      name: Nfs Ganesha metrics validation - post_upgrade
+      module: test_nfs_ganesha_metrics_upgrade_validation.py
+      desc: Verify Enable_Metrics in ganesha.conf and monitoring port after upgrade
+      polarion-id: CEPH-83620035
+      abort-on-fail: true
+      config:
+        operation: after_upgrade
+        nfs_name: cephfs-nfs
+        monitoring_port: 9587
+        configure_metrics: false
+        ensure_monitoring_port: false
 
   - test:
       name: Nfs Verify rm write lookups in parellel from multi clients
