@@ -423,7 +423,11 @@ def _scenario_a_manual_rotate(
     log.info("All keys confirmed rotated (values differ from baseline).")
 
     Unmount(client).unmount(mount_point)
-    log.info("=== Scenario A PASSED ===")
+    log.info(
+        "TEST PASSED - Scenario A: manual ceph auth rotate reproduced the "
+        "IBMCEPH-16471 bug (Ganesha Permission denied / fsal_export is NULL); "
+        "export apply recovered the share and IO succeeded"
+    )
 
 
 # ── scenario B ───────────────────────────────────────────────────────────────
@@ -530,7 +534,11 @@ def _scenario_b_rotate_key_command(
     log.info("Export-only rotation sub-test PASSED.")
 
     Unmount(client).unmount(mount_point)
-    log.info("=== Scenario B PASSED ===")
+    log.info(
+        "TEST PASSED - Scenario B: ceph nfs cluster rotate-key rotated keys "
+        "and updated exports with no Ganesha errors; mount and IO succeeded "
+        "without a manual export apply"
+    )
 
 
 def _assert_rotate_key_response(result, nfs_name, exports):
@@ -607,6 +615,14 @@ def run(ceph_cluster, **kw):
     mount_point = config.get("nfs_mount", NFS_MOUNT)
     nfs_version = config.get("nfs_version", NFS_VERSION)
     scenario = config.get("operation", "all").lower()
+    valid_ops = {"manual_rotate_key", "cluster_rotate_key", "all"}
+    if scenario not in valid_ops:
+        log.error(
+            "Invalid operation %r; expected one of %s",
+            scenario,
+            sorted(valid_ops),
+        )
+        return 1
     no_clients = int(config.get("clients", 1))
 
     installer = ceph_cluster.get_nodes("installer")[0]
@@ -673,6 +689,10 @@ def run(ceph_cluster, **kw):
                 nfs_version,
             )
 
+        log.info(
+            "TEST PASSED - NFS CephX key rotation completed (operation=%s)",
+            scenario,
+        )
         return 0
 
     except Exception as exc:
