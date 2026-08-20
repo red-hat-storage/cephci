@@ -58,6 +58,7 @@ import json
 import traceback
 from time import sleep
 
+from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
@@ -93,14 +94,14 @@ GANESHA_ERROR_PATTERNS = [
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _get_nfs_entities(installer, nfs_name, retries=10, delay=6):
+def _get_nfs_entities(installer, nfs_name, timeout=60, interval=6):
     """Return all CephX entities belonging to the NFS cluster as a list.
 
-    Polls up to retries*delay seconds to allow the NFS daemon time to
-    register its CephX keys after cluster creation.
+    Polls until timeout to allow the NFS daemon time to register its
+    CephX keys after cluster creation.
     """
     prefix = f"client.nfs.{nfs_name}"
-    for attempt in range(1, retries + 1):
+    for w in WaitUntil(timeout=timeout, interval=interval):
         raw = CephAdm(installer).ceph.auth.list()
         entities = []
         for line in raw.splitlines():
@@ -111,17 +112,14 @@ def _get_nfs_entities(installer, nfs_name, retries=10, delay=6):
             log.info("CephX entities for %s: %s", nfs_name, entities)
             return entities
         log.info(
-            "No CephX entities found yet for %r (attempt %d/%d), " "waiting %ds ...",
+            "No CephX entities found yet for %r, waiting %ds ...",
             nfs_name,
-            attempt,
-            retries,
-            delay,
+            interval,
         )
-        sleep(delay)
-    raise OperationFailedError(
-        f"No CephX entities found for NFS cluster {nfs_name!r} "
-        f"after {retries * delay}s"
-    )
+    if w.expired:
+        raise OperationFailedError(
+            f"No CephX entities found for NFS cluster {nfs_name!r} " f"after {timeout}s"
+        )
 
 
 def _get_key_value(installer, entity):
@@ -255,18 +253,33 @@ def _check_ganesha_logs(client, nfs_name, nfs_node, patterns, expect_present=Tru
     nfs_node.exec_command(
         sudo=True, cmd=f"cephadm logs --name {daemon_name} > /tmp/nfs_ganesha_log"
     )
+    # Fail loudly if capture produced nothing — do not treat that as "pattern absent"
+    nfs_node.exec_command(sudo=True, cmd="test -s /tmp/nfs_ganesha_log", check_ec=False)
+    if nfs_node.exit_status != 0:
+        raise OperationFailedError(
+            f"Ganesha log file empty or missing on {nfs_node.hostname} "
+            f"after 'cephadm logs --name {daemon_name}'"
+        )
 
     found = {}
     for pattern in patterns:
-        try:
-            nfs_node.exec_command(
-                sudo=True,
-                cmd=f'grep "{pattern}" /tmp/nfs_ganesha_log',
+        # check_ec=False: grep exit 1 means "not found", which is a valid result.
+        # exec_command returns (stdout, stderr); the exit code is on node.exit_status.
+        nfs_node.exec_command(
+            sudo=True,
+            cmd=f'grep "{pattern}" /tmp/nfs_ganesha_log',
+            check_ec=False,
+        )
+        rc = nfs_node.exit_status
+        if rc not in (0, 1):
+            raise OperationFailedError(
+                f"grep failed unexpectedly (rc={rc}) while checking Ganesha logs "
+                f"for {pattern!r} on {daemon_name}"
             )
-            found[pattern] = True
+        found[pattern] = rc == 0
+        if found[pattern]:
             log.info("  [FOUND] pattern %r in %s logs", pattern, daemon_name)
-        except Exception:
-            found[pattern] = False
+        else:
             log.info("  [absent] pattern %r not in %s logs", pattern, daemon_name)
 
     if expect_present:
@@ -293,7 +306,14 @@ def _check_ganesha_logs(client, nfs_name, nfs_node, patterns, expect_present=Tru
 
 
 def _scenario_a_manual_rotate(
-    installer, nfs_nodes, clients, nfs_name, export, nfs_server_ip, mount_point
+    installer,
+    nfs_nodes,
+    clients,
+    nfs_name,
+    export,
+    nfs_server_ip,
+    mount_point,
+    nfs_version,
 ):
     """
     Scenario A — Manual ceph auth rotate path, documents the bug.
@@ -311,7 +331,7 @@ def _scenario_a_manual_rotate(
 
     # Step 1 — baseline mount + write + unmount
     log.info("Step 1: baseline mount, write test file, unmount")
-    _mount_and_verify(client, nfs_server_ip, export, mount_point)
+    _mount_and_verify(client, nfs_server_ip, export, mount_point, version=nfs_version)
     _write_test_file(client, mount_point, filename="pre_rotate_file")
     Unmount(client).unmount(mount_point)
 
@@ -373,7 +393,7 @@ def _scenario_a_manual_rotate(
 
     # Step 8 — remount must succeed after recovery
     log.info("Step 8: remounting export after recovery ...")
-    _mount_and_verify(client, nfs_server_ip, export, mount_point)
+    _mount_and_verify(client, nfs_server_ip, export, mount_point, version=nfs_version)
 
     # Step 9 — baseline file must still be there (no data loss)
     log.info("Step 9: verifying baseline file is intact ...")
@@ -410,7 +430,14 @@ def _scenario_a_manual_rotate(
 
 
 def _scenario_b_rotate_key_command(
-    installer, nfs_nodes, clients, nfs_name, export, nfs_server_ip, mount_point
+    installer,
+    nfs_nodes,
+    clients,
+    nfs_name,
+    export,
+    nfs_server_ip,
+    mount_point,
+    nfs_version,
 ):
     """
     Scenario B — Verify the 9.1z2 fix: ceph nfs cluster rotate-key.
@@ -424,7 +451,7 @@ def _scenario_b_rotate_key_command(
 
     # Step 1 — baseline mount + write + unmount
     log.info("Step 1: baseline mount, write test file, unmount")
-    _mount_and_verify(client, nfs_server_ip, export, mount_point)
+    _mount_and_verify(client, nfs_server_ip, export, mount_point, version=nfs_version)
     _write_test_file(client, mount_point, filename="pre_rotate_file")
     Unmount(client).unmount(mount_point)
 
@@ -465,7 +492,7 @@ def _scenario_b_rotate_key_command(
     # Step 7 — remount: must succeed WITHOUT any manual export apply
     # This is the fix assertion: the new command handles everything.
     log.info("Step 7: remounting export — no manual export apply should be needed ...")
-    _mount_and_verify(client, nfs_server_ip, export, mount_point)
+    _mount_and_verify(client, nfs_server_ip, export, mount_point, version=nfs_version)
 
     # Step 8 — baseline file must still be there (no data loss)
     log.info("Step 8: verifying baseline file is intact ...")
@@ -578,6 +605,7 @@ def run(ceph_cluster, **kw):
     nfs_name = config.get("nfs_name", NFS_NAME)
     fs_name = config.get("fs_name", FS_NAME)
     mount_point = config.get("nfs_mount", NFS_MOUNT)
+    nfs_version = config.get("nfs_version", NFS_VERSION)
     scenario = config.get("operation", "all").lower()
     no_clients = int(config.get("clients", 1))
 
@@ -609,7 +637,7 @@ def run(ceph_cluster, **kw):
             clients,
             nfs_server_hostnames,
             NFS_PORT,
-            NFS_VERSION,
+            nfs_version,
             nfs_name,
             mount_point,
             fs_name,
@@ -629,6 +657,7 @@ def run(ceph_cluster, **kw):
                 export,
                 nfs_server_ip,
                 mount_point,
+                nfs_version,
             )
 
         # ── cluster_rotate_key ─────────────────────────────────────────────
@@ -641,6 +670,7 @@ def run(ceph_cluster, **kw):
                 export,
                 nfs_server_ip,
                 mount_point,
+                nfs_version,
             )
 
         return 0
