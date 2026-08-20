@@ -92,6 +92,7 @@ GANESHA_ERROR_PATTERNS = [
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_nfs_entities(installer, nfs_name, retries=10, delay=6):
     """Return all CephX entities belonging to the NFS cluster as a list.
 
@@ -110,8 +111,11 @@ def _get_nfs_entities(installer, nfs_name, retries=10, delay=6):
             log.info("CephX entities for %s: %s", nfs_name, entities)
             return entities
         log.info(
-            "No CephX entities found yet for %r (attempt %d/%d), "
-            "waiting %ds ...", nfs_name, attempt, retries, delay
+            "No CephX entities found yet for %r (attempt %d/%d), " "waiting %ds ...",
+            nfs_name,
+            attempt,
+            retries,
+            delay,
         )
         sleep(delay)
     raise OperationFailedError(
@@ -146,17 +150,16 @@ def _assert_exports_listed(installer, nfs_name, expected):
     log.info("All expected exports listed: %s", all_exports)
 
 
-def _mount_and_verify(client, nfs_server_ip, export, mount_point,
-                      version=NFS_VERSION, port=NFS_PORT):
+def _mount_and_verify(
+    client, nfs_server_ip, export, mount_point, version=NFS_VERSION, port=NFS_PORT
+):
     """
     Mount an NFS export and verify the mount point is accessible.
     Uses mount_retry() from nfs_operations; raises on failure.
     """
     client.exec_command(sudo=True, cmd=f"mkdir -p {mount_point}")
     # Unmount first in case there is a stale handle from a previous redeploy
-    client.exec_command(
-        sudo=True, cmd=f"umount -f {mount_point}", check_ec=False
-    )
+    client.exec_command(sudo=True, cmd=f"umount -f {mount_point}", check_ec=False)
     sleep(3)
     mount_retry(client, mount_point, version, port, nfs_server_ip, export)
     out, _ = client.exec_command(sudo=True, cmd=f"ls {mount_point}")
@@ -174,9 +177,7 @@ def _write_test_file(client, mount_point, filename="cephx_testfile"):
 
 def _verify_test_file(client, mount_point, filename="cephx_testfile"):
     """Verify the test file is still present and readable."""
-    out, _ = client.exec_command(
-        sudo=True, cmd=f"ls -lh {mount_point}/{filename}"
-    )
+    out, _ = client.exec_command(sudo=True, cmd=f"ls -lh {mount_point}/{filename}")
     if filename not in out:
         raise OperationFailedError(
             f"Test file {filename} not found on {mount_point} after key rotation"
@@ -192,9 +193,7 @@ def _get_active_nfs_node(client, nfs_name, nfs_nodes):
     Falls back to nfs_nodes[0] if no match is found.
     """
     try:
-        out, _ = client.exec_command(
-            sudo=True, cmd=f"ceph orch ps | grep {nfs_name}"
-        )
+        out, _ = client.exec_command(sudo=True, cmd=f"ceph orch ps | grep {nfs_name}")
         # Each line: <daemon_name> <host> <status> ...
         # e.g. nfs.cephfs-nfs.0.0.node2.abc123  node2  running ...
         for line in out.splitlines():
@@ -235,9 +234,7 @@ def _check_ganesha_logs(client, nfs_name, nfs_node, patterns, expect_present=Tru
     """
     # Get the daemon name that is running on nfs_node from ceph orch ps.
     # ceph orch ps output: <daemon_name> <host> <status> ...
-    out, _ = client.exec_command(
-        sudo=True, cmd=f"ceph orch ps | grep {nfs_name}"
-    )
+    out, _ = client.exec_command(sudo=True, cmd=f"ceph orch ps | grep {nfs_name}")
     daemon_name = None
     for line in out.splitlines():
         parts = line.split()
@@ -249,7 +246,8 @@ def _check_ganesha_logs(client, nfs_name, nfs_node, patterns, expect_present=Tru
         daemon_name = out.split()[0]
         log.warning(
             "Could not match daemon to %s by hostname; using %s",
-            nfs_node.hostname, daemon_name,
+            nfs_node.hostname,
+            daemon_name,
         )
     log.info("Checking logs for daemon %s on %s", daemon_name, nfs_node.hostname)
 
@@ -292,6 +290,7 @@ def _check_ganesha_logs(client, nfs_name, nfs_node, patterns, expect_present=Tru
 
 
 # ── scenario A ───────────────────────────────────────────────────────────────
+
 
 def _scenario_a_manual_rotate(
     installer, nfs_nodes, clients, nfs_name, export, nfs_server_ip, mount_point
@@ -346,7 +345,9 @@ def _scenario_a_manual_rotate(
     )
     active_nfs_node = _get_active_nfs_node(client, nfs_name, nfs_nodes)
     _check_ganesha_logs(
-        client, nfs_name, active_nfs_node,
+        client,
+        nfs_name,
+        active_nfs_node,
         patterns=GANESHA_ERROR_PATTERNS,
         expect_present=True,
     )
@@ -394,8 +395,10 @@ def _scenario_a_manual_rotate(
         log.info(
             "  confirmed  %-55s  before=[%s...%s] after=[%s...%s]",
             entity,
-            baseline_keys[entity][:4], baseline_keys[entity][-4:],
-            new_key[:4], new_key[-4:],
+            baseline_keys[entity][:4],
+            baseline_keys[entity][-4:],
+            new_key[:4],
+            new_key[-4:],
         )
     log.info("All keys confirmed rotated (values differ from baseline).")
 
@@ -405,8 +408,10 @@ def _scenario_a_manual_rotate(
 
 # ── scenario B ───────────────────────────────────────────────────────────────
 
-def _scenario_b_rotate_key_command(installer, nfs_nodes, clients, nfs_name, export,
-                                   nfs_server_ip, mount_point):
+
+def _scenario_b_rotate_key_command(
+    installer, nfs_nodes, clients, nfs_name, export, nfs_server_ip, mount_point
+):
     """
     Scenario B — Verify the 9.1z2 fix: ceph nfs cluster rotate-key.
 
@@ -424,8 +429,11 @@ def _scenario_b_rotate_key_command(installer, nfs_nodes, clients, nfs_name, expo
     Unmount(client).unmount(mount_point)
 
     # Step 2 — one-shot rotate
-    log.info("Step 2: running ceph nfs cluster rotate-key %s --key-type %s",
-             nfs_name, KEY_TYPE)
+    log.info(
+        "Step 2: running ceph nfs cluster rotate-key %s --key-type %s",
+        nfs_name,
+        KEY_TYPE,
+    )
     result = CephAdm(installer).ceph.nfs.cluster.rotate_key(nfs_name, key_type=KEY_TYPE)
     log.info("rotate-key response: %s", json.dumps(result, indent=2))
 
@@ -443,7 +451,9 @@ def _scenario_b_rotate_key_command(installer, nfs_nodes, clients, nfs_name, expo
     log.info("Step 5: asserting Ganesha logs are clean after rotate-key ...")
     active_nfs_node = _get_active_nfs_node(client, nfs_name, nfs_nodes)
     _check_ganesha_logs(
-        client, nfs_name, active_nfs_node,
+        client,
+        nfs_name,
+        active_nfs_node,
         patterns=GANESHA_ERROR_PATTERNS,
         expect_present=False,
     )
@@ -547,6 +557,7 @@ def _find_export_entity(installer, nfs_name):
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+
 def run(ceph_cluster, **kw):
     """
     Test NFS CephX key rotation — IBMCEPH-16471.
@@ -611,15 +622,25 @@ def run(ceph_cluster, **kw):
         # ── manual_rotate_key ──────────────────────────────────────────────
         if scenario in ("manual_rotate_key", "all"):
             _scenario_a_manual_rotate(
-                installer, nfs_nodes, clients, nfs_name, export,
-                nfs_server_ip, mount_point
+                installer,
+                nfs_nodes,
+                clients,
+                nfs_name,
+                export,
+                nfs_server_ip,
+                mount_point,
             )
 
         # ── cluster_rotate_key ─────────────────────────────────────────────
         if scenario in ("cluster_rotate_key", "all"):
             _scenario_b_rotate_key_command(
-                installer, nfs_nodes, clients, nfs_name, export,
-                nfs_server_ip, mount_point
+                installer,
+                nfs_nodes,
+                clients,
+                nfs_name,
+                export,
+                nfs_server_ip,
+                mount_point,
             )
 
         return 0
