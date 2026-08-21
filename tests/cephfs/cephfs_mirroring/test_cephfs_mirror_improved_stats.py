@@ -46,10 +46,17 @@ def run(ceph_cluster, **kw):
     R16: Snapdiff and blockdiff verification (asok + MGR)
 
     Returns:
-        0 if successful, 1 if any errors found.
+        0 if successful, 1 if any errors found, -1 if skipped.
     """
+    config = kw.get("config") or {}
+    if CephfsMirroringUtils.skip_if_rhcs_below(config):
+        log.info(
+            "Skipping test: requires Ceph version >= 9.2 (rhbuild=%s)",
+            config.get("rhbuild"),
+        )
+        return -1
+
     try:
-        config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         test_data = kw.get("test_data")
         fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
