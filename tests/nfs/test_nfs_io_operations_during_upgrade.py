@@ -1,5 +1,5 @@
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from time import sleep
 
 from ceph.waiter import WaitUntil
@@ -26,6 +26,21 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def _wait_futures_with_health_check(futures, io_monitor=None, poll_timeout_s=2.0):
+    """Wait for futures while polling the I/O health monitor for critical failures."""
+    pending = set(futures)
+    while pending:
+        if io_monitor is not None:
+            io_monitor.raise_if_unhealthy()
+        done, pending = wait(
+            pending,
+            timeout=poll_timeout_s,
+            return_when=FIRST_COMPLETED,
+        )
+        for future in done:
+            future.result()
 
 
 def create_export_and_mount_for_existing_nfs_cluster(
@@ -263,6 +278,7 @@ def perform_io_operations_in_loop(
     dd_command_size_in_M,
     multicluster=False,
     sudo=True,
+    io_monitor=None,
 ):
     """
     Perform IO operations on mounted NFS exports for single or multiple clusters.
@@ -274,6 +290,7 @@ def perform_io_operations_in_loop(
         file_count (int): Number of files to create for each operation
         dd_command_size_in_M (int): Size in MB for dd command operations
         multicluster (bool): Whether this is a multi-cluster operation
+        io_monitor: Optional NFS I/O health monitor; fails the test on stale mounts
     """
     file_name = "created_during_upgrade_file"
     renamed_file_name = "re_renamed_during_upgrade_file"
@@ -296,8 +313,7 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            for future in futures:
-                future.result()
+            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
         log.info("File creation completed")
 
         # Write to files using dd
@@ -317,8 +333,7 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            for future in futures:
-                future.result()
+            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
         log.info("Write operations completed")
 
         # Read from files using dd
@@ -338,8 +353,7 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            for future in futures:
-                future.result()
+            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
         log.info("Read operations completed")
 
         # Rename files
@@ -359,8 +373,7 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            for future in futures:
-                future.result()
+            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
         log.info("Rename operations completed")
 
         # Delete files
@@ -379,8 +392,7 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            for future in futures:
-                future.result()
+            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
         log.info("Delete operations completed")
 
     if multicluster:
@@ -478,6 +490,8 @@ def run(ceph_cluster, **kw):
     mount_timeout = config.get("mount_timeout", 120)
     mount_tries = config.get("mount_tries", 2)
     installer_node = ceph_cluster.get_nodes("installer")[0]
+    io_monitor = None
+    result = 0
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -492,6 +506,25 @@ def run(ceph_cluster, **kw):
     nfs_hostname = Ceph(client).nfs.cluster.info(nfs_cluster_name)[nfs_cluster_name][
         "backend"
     ][0]["hostname"]
+    nfs_export_base = f"/export/nfs_{nfs_cluster_name}"
+    nfs_mount_base = f"/mnt/nfs_{nfs_cluster_name}"
+
+    # Opt-in only: ``io_health_monitor: true`` in suite YAML (default off).
+    from tests.nfs.nfs_io_health_monitor import (
+        NfsIoHealthSlaBreached,
+        NfsIoStaleMountError,
+        NfsIoStallFailedError,
+        create_paused_upgrade_io_monitor,
+    )
+
+    io_monitor = create_paused_upgrade_io_monitor(
+        config,
+        clients,
+        sudo=sudo,
+        run_config=kw.get("run_config"),
+    )
+    heartbeat_finalize_reason = "upgrade_io_complete"
+
     try:
         for l in range(loop_count):
             log.info(
@@ -504,8 +537,8 @@ def run(ceph_cluster, **kw):
             # Non-root IO (sudo: false) needs mount ownership for cephuser.
             client_export_mount_dict = create_export_and_mount_for_existing_nfs_cluster(
                 clients,
-                f"/export/nfs_{nfs_cluster_name}",
-                f"/mnt/nfs_{nfs_cluster_name}",
+                nfs_export_base,
+                nfs_mount_base,
                 export_num,
                 fs_name="cephfs",
                 nfs_name=nfs_cluster_name,
@@ -523,6 +556,24 @@ def run(ceph_cluster, **kw):
                 mount_tries=mount_tries,
             )
 
+            if io_monitor is not None:
+                from tests.nfs.nfs_io_health_monitor import (
+                    refresh_cluster_mount_targets,
+                )
+
+                mount_count = refresh_cluster_mount_targets(
+                    io_monitor,
+                    clients,
+                    sudo=sudo,
+                    client_export_mount_dict=client_export_mount_dict,
+                )
+                log.info(
+                    "NFS I/O health monitor probing %d mount(s) in cluster",
+                    mount_count,
+                )
+                io_monitor.ensure_heartbeats_initialized()
+                io_monitor.resume()
+
             # 4. perform Create, read, rename, copy, read/write using DD command and deletion
             perform_io_operations_in_loop(
                 client_export_mount_dict,
@@ -530,7 +581,11 @@ def run(ceph_cluster, **kw):
                 file_count,
                 dd_command_size_in_M,
                 sudo=sudo,
+                io_monitor=io_monitor,
             )
+
+            if io_monitor is not None:
+                io_monitor.pause()
 
             # 5. unmount + delete exports
             log.info("Unmounting and deleting exports")
@@ -540,10 +595,42 @@ def run(ceph_cluster, **kw):
                 nfs_cluster_name,
                 cleanup_timeout=cleanup_timeout,
             )
-        return 0
+
+    except NfsIoStaleMountError as e:
+        log.error("Stale NFS mount detected — marking test failed: %s", e)
+        heartbeat_finalize_reason = "upgrade_io_stale_mount"
+        result = 1
+    except (NfsIoStallFailedError, NfsIoHealthSlaBreached) as e:
+        log.error("NFS I/O health SLA breached — marking test failed: %s", e)
+        heartbeat_finalize_reason = "upgrade_io_health_failure"
+        result = 1
     except Exception as e:
         log.error(f"An error occurred during NFS IO operations: {e}")
-        return 1
+        heartbeat_finalize_reason = "upgrade_io_error"
+        if (
+            io_monitor is not None
+            and io_monitor.is_running
+            and not io_monitor.is_paused
+        ):
+            log.error(
+                "NFS upgrade IO failed while heartbeat monitor was active; "
+                "capturing heartbeat status before exit"
+            )
+        result = 1
     finally:
+        from tests.nfs.nfs_io_health_monitor import finalize_upgrade_io_monitor
+
+        if io_monitor is not None:
+            try:
+                finalize_upgrade_io_monitor(
+                    io_monitor,
+                    reason=heartbeat_finalize_reason,
+                )
+            except (NfsIoStaleMountError, NfsIoStallFailedError, NfsIoHealthSlaBreached) as err:
+                log.error("NFS I/O health monitor reported failure: %s", err)
+                result = 1
+            except Exception as err:
+                log.warning("Failed to finalize NFS I/O health monitor: %s", err)
         if log_cluster_health_and_check_crashes(rados_obj, start_time):
-            return 1
+            result = 1
+    return result
