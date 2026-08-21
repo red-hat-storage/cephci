@@ -8,6 +8,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
@@ -33,6 +35,9 @@ CURL_TIMEOUT_OPTS = "--connect-timeout %s --max-time %s" % (
     CURL_CONNECT_TIMEOUT,
     CURL_MAX_TIME,
 )
+# Scalable Prometheus stats require RHCS 9.2+ / Ceph 20.2.2+ (Ganesha 9.7 FSAL).
+PROMETHEUS_STATS_MIN_UPSTREAM_BUILD = "20.2.2"
+PROMETHEUS_STATS_MIN_RHCS_BUILD = "9.2"
 CONF_KEY = "mgr/cephadm/services/nfs/ganesha.conf"
 DEFAULT_TEMPLATE_PATH = (
     "/usr/share/ceph/mgr/cephadm/templates/services/nfs/ganesha.conf.j2"
@@ -67,6 +72,122 @@ PROMETHEUS_CORE_PARAM_ALIASES = {
     key: _prometheus_param_aliases(key, canonical)
     for key, canonical in PROMETHEUS_GANESHA_PARAM_NAMES.items()
 }
+
+
+def _numeric_version_token(value):
+    """Extract Ceph/RHCS version digits only; ignore platform suffixes.
+
+    ``run.py`` appends the OS platform to rhbuild (e.g. ``20.2.2-rhel-9`` or
+    ``20.2.2-rhel-10``). Prometheus stats are gated on the Ceph version alone
+    (``20.2.2``), not on RHEL 9 vs RHEL 10.
+
+    Examples:
+      ``20.2.2-rhel-10``      -> ``20.2.2``
+      ``20.2.2-rhel-9``       -> ``20.2.2``
+      ``9.2-rhel-9``          -> ``9.2``
+      ``20.2.2-104.el10cp``   -> ``20.2.2``
+      ``main-rhel-9``         -> None (named release)
+    """
+    if not value:
+        return None
+    match = re.match(r"(\d+\.\d+(?:\.\d+)?)", str(value).strip())
+    return match.group(1) if match else None
+
+
+def _version_meets_prometheus_stats_min(version_token):
+    """Compare a numeric Ceph/RHCS version token against Prometheus stats minima."""
+    major = int(version_token.split(".")[0])
+    lv = LooseVersion(version_token)
+    if major < 10:
+        return lv >= LooseVersion(PROMETHEUS_STATS_MIN_RHCS_BUILD)
+    return lv >= LooseVersion(PROMETHEUS_STATS_MIN_UPSTREAM_BUILD)
+
+
+def prometheus_stats_supported_for_rhbuild(rhbuild, installed_version=None):
+    """
+    Return True when the Ceph/RHCS *version* supports Prometheus stats.
+
+    Only the numeric version is considered (e.g. ``20.2.2`` or ``9.2``).
+    Platform suffixes from ``run.py`` (``-rhel-9``, ``-rhel-10``, …) are
+    ignored — supported on both RHEL 9 and RHEL 10 when the Ceph version
+    meets the minimum.
+
+    Numeric RHCS builds (major < 10) require >= 9.2.
+    Numeric upstream/Ceph builds (major >= 10) require >= 20.2.2.
+
+    Named ``--release`` values (``main``, ``tentacle``, ``quincy``, …) are not
+    version numbers; *installed_version* from the cluster is used when present.
+    If the name cannot be resolved to a version, return True so the suite is not
+    silently skipped on current upstream distinct names.
+    """
+    token = _numeric_version_token(rhbuild)
+    if token:
+        return _version_meets_prometheus_stats_min(token)
+
+    installed_token = _numeric_version_token(installed_version)
+    if installed_token:
+        return _version_meets_prometheus_stats_min(installed_token)
+
+    if rhbuild:
+        # Named upstream release without a resolvable installed version.
+        log.info(
+            "rhbuild=%s is a named release and installed Ceph version is "
+            "unavailable; allowing NFS Prometheus stats suite to run",
+            rhbuild,
+        )
+        return True
+    return False
+
+
+def _installed_ceph_version_for_gate(ceph_cluster):
+    """Best-effort installed Ceph version string from the cluster, or None."""
+    if ceph_cluster is None:
+        return None
+    try:
+        from utility.utils import get_ceph_version_from_cluster
+
+        nodes = ceph_cluster.get_nodes(role="client") or ceph_cluster.get_nodes(
+            role="installer"
+        )
+        if not nodes:
+            return None
+        return get_ceph_version_from_cluster(nodes[0])
+    except Exception as exc:
+        log.warning("Unable to resolve installed Ceph version for gate: %s", exc)
+        return None
+
+
+def skip_prometheus_stats_tests_unless_supported(config=None, ceph_cluster=None):
+    """
+    Return True when NFS Prometheus stats tests should be skipped.
+
+    Uses ``config['rhbuild']`` (from cephci ``--rhbuild`` / ``--release``). For
+    named upstream releases, falls back to the installed cluster Ceph version.
+    Callers should ``return 0`` immediately when this is True.
+    """
+    config = config or {}
+    rhbuild = config.get("rhbuild")
+    installed_version = None
+    if not _numeric_version_token(rhbuild):
+        installed_version = _installed_ceph_version_for_gate(ceph_cluster)
+        if not installed_version:
+            # Optional hint from run.py when --upstream-build is numeric-ish.
+            installed_version = config.get("upstream_build")
+    if prometheus_stats_supported_for_rhbuild(
+        rhbuild, installed_version=installed_version
+    ):
+        return False
+    log.info(
+        "Skipping NFS Prometheus stats test: requires Ceph/RHCS version >= %s "
+        "(RHCS) or >= %s (upstream); rhbuild=%s (platform suffix ignored) "
+        "installed=%s",
+        PROMETHEUS_STATS_MIN_RHCS_BUILD,
+        PROMETHEUS_STATS_MIN_UPSTREAM_BUILD,
+        rhbuild,
+        installed_version,
+    )
+    return True
+
 
 # Ganesha 9.7 golden exposition (reference cluster 10.0.66.98:9587).
 # Core counters: rpcs_*, nfs_requests_total, client_requests_total, mdcache_cache_*.
