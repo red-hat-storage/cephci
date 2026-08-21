@@ -1,0 +1,59 @@
+---
+# OCP Virtualization inventory for RHEL 10 (latest).
+# Use with: --cloud ocpvirt --inventory conf/inventory/ocpvirt-rhel-10-latest.yaml
+#
+# Prefer this for RHCS BVTs with --platform rhel-10.
+# Short datasource names resolve via datasources in conf/ocpvirt/<name>.yaml.
+
+version_id: "10"
+id: rhel
+instance:
+  create:
+    image-name: datasource://rhel10
+
+  setup: |
+    #cloud-config
+
+    no_ssh_fingerprints: true
+    ssh_pwauth: true
+    disable_root: false
+    timezone: Etc/UTC
+
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMVphgpz0IIYeZjchEx3WMceAd18tNUBPmsqdRkEiMGF jenkins@ceph-jenkins-n1
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoKGCTzMmNvHFY4THKNpZYFLeEgB7Do8y2JAEy+ZvIZ ceph-qe-sa
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMVphgpz0IIYeZjchEx3WMceAd18tNUBPmsqdRkEiMGF jenkins@ceph-jenkins-n1
+
+    chpasswd:
+      list: |
+        root:passwd
+        cephuser:pass123
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - hostnamectl set-hostname $(hostname -s)
+      - printf '%s\n' 'AuthenticationMethods any' 'PasswordAuthentication yes' 'PermitRootLogin yes' > /etc/ssh/sshd_config.d/00-00-ceph-qe.conf
+      - systemctl restart sshd
+      - growpart /dev/vda 4 || true
+      - pvresize /dev/vda4 || true
+      - lvextend -l +100%FREE /dev/mapper/rootvg-rootlv || true
+      - xfs_growfs / || true
+      - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
+      - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://certs.corp.redhat.com/certs/Current-IT-Root-CAs.pem
+      - update-ca-trust
+      - touch /ceph-qa-ready
+
+    final_message: "Ready for ceph qa testing"

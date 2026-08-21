@@ -134,7 +134,7 @@ class FsUtils(object):
                 )
             if "iozone" not in out:
                 cmd_list = [
-                    "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;",
+                    "cd /home/cephuser;wget https://www.iozone.org/src/current/iozone3_506.tar;",
                     "cd /home/cephuser;tar xvf iozone3_506.tar",
                     "sudo yum install make -y --nogpgcheck",
                     "cd /home/cephuser/iozone3_506/src/current/;make;make linux",
