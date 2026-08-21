@@ -48,9 +48,11 @@ class Export(Cli):
 
         enctag = kwargs.get("enctag", None)
         xprtsec = kwargs.get("xprtsec", None)
-        # NFS-export-only options must not be passed to ``fs subvolume create``; doing so
-        # can break ``subvolume getpath`` (empty path) and yields ``ceph nfs export create
-        # ... --path=`` which makes Ganesha reject mounts (e.g. ENOENT / No such file).
+        sectype = kwargs.get("sectype", None)
+        # NFS-export-only options (``sectype``, ``xprtsec``, etc.) must not be passed
+        # to ``fs subvolume create``; doing so can break ``subvolume getpath`` (empty
+        # path) and yields ``ceph nfs export create ... --path=`` which makes Ganesha
+        # reject mounts (e.g. ENOENT / No such file).
         subvol_kwargs = {k: v for k, v in kwargs.items() if k in ("enctag")}
 
         # Step 2: Create subvolume
@@ -83,6 +85,10 @@ class Export(Cli):
             cmd = f"{cmd} --kmip_key_id={enctag}"
         if xprtsec:
             cmd += f" --xprtsec {xprtsec}"
+        if sectype:
+            flavors = sectype if isinstance(sectype, (list, tuple)) else [sectype]
+            for flavor in flavors:
+                cmd += f" --sectype={flavor}"
         if readonly:
             cmd += " --readonly"
         if squash:
