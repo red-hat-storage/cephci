@@ -1,3 +1,5 @@
+import json
+
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 from utility.log import Log
@@ -133,6 +135,26 @@ class Export(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def info(self, nfs_name, nfs_export):
+        """
+        Get detailed info for a specific NFS export (equivalent to
+        ``ceph nfs export info <cluster> <pseudo-path>``).
+
+        Args:
+            nfs_name (str): NFS cluster name
+            nfs_export (str): export pseudo-path (e.g. /export_0)
+
+        Returns:
+            dict: parsed JSON export configuration
+        """
+        cmd = f"{self.base_cmd} info {nfs_name} {nfs_export} --format json"
+        out = self.execute(sudo=True, cmd=cmd)
+        raw = out[0].strip() if isinstance(out, tuple) else out
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
 
     def ls(self, nfs_name=None, **kwargs):
         """
