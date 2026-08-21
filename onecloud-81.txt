@@ -1,0 +1,35 @@
+/Users/harsh/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2026-07-27 00:52:34,534 - cephci - log:125 - INFO - Test logfile: /tmp/cephci-run-QFX4WX/startup.log
+2026-07-27 00:52:34,859 - cephci - init_suite:306 - INFO - List of test suites provided: 
+['suites/tentacle/rados/tier-2_rados_test_bluestore.yaml']
+2026-07-27 00:52:34,859 - cephci - init_suite:315 - INFO - Provided suite is a file
+2026-07-27 00:52:34,877 - cephci - run:728 - INFO - The CLI for the current run :
+/Library/Developer/CommandLineTools/usr/bin/python3 run.py --release 8.1 --global-conf conf/tentacle/rados/7-node-cluster.yaml --osp-cred /Users/harsh/osp-cred-ceph-systest.yaml --inventory conf/inventory/onecloud-rhel-9.8-server-x86_64-large.yaml --suite suites/tentacle/rados/tier-2_rados_test_bluestore.yaml --log-level info --platform rhel-9 --skip-sos-report --build stable --product ibm --custom-config ibm-build=true --cloud onecloud --store --instances-name rados-81-long
+
+2026-07-27 00:52:34,877 - cephci - run:729 - INFO - RPM Compose source - https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.1-202607230133.ci.0/IBM-CEPH-8.1-202607230133.ci.0-rhel9.repo
+2026-07-27 00:52:34,877 - cephci - run:730 - INFO - Red Hat Ceph Image used - cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:v8.1-21530
+2026-07-27 00:52:36,426 - cephci - run:783 - INFO - Testing Ceph Version: 19.2.1-382
+2026-07-27 00:52:36,426 - cephci - utils:2476 - INFO - Validate global configuration file
+2026-07-27 00:52:36,427 - cephci - utils:2490 - INFO - List of Node IDs : ['node1', 'node2', 'node3', 'node4', 'node5', 'node6', 'node7']
+2026-07-27 00:52:36,427 - cephci - utils:2582 - INFO - Validate global configuration file
+2026-07-27 00:52:36,427 - cephci - onecloud:984 - INFO - Listing OneCloud VMs for cleanup (name contains pattern=rados-81-long)
+2026-07-27 00:52:38,328 - cephci - onecloud:1016 - INFO - No VMs with name containing pattern 'rados-81-long'
+2026-07-27 00:52:38,328 - cephci - onecloud:1019 - INFO - Listing OneCloud clusters for cleanup (pattern=rados-81-long)
+2026-07-27 00:52:39,979 - cephci - onecloud:1035 - INFO - No clusters matching pattern 'rados-81-long'
+2026-07-27 00:52:39,979 - cephci - onecloud:1038 - INFO - Done cleaning up OneCloud nodes with pattern rados-81-long
+2026-07-27 00:52:39,984 - cephci - utils:409 - INFO - Creating OneCloud instances
+2026-07-27 00:52:41,414 - cephci - onecloud:895 - INFO - OneCloud: no VLAN IDs in GET /networks for site TUC, omitting VLAN (API may use Default network)
+2026-07-27 00:52:42,860 - cephci - onecloud:518 - INFO - OneCloud: filtering images by arch x86_64 (8 match)
+2026-07-27 00:52:42,861 - cephci - onecloud:542 - INFO - OneCloud: filtering images by platform rhel-9 (3 match)
+2026-07-27 00:52:42,862 - cephci - onecloud:568 - INFO - OneCloud: using image_id 537 (preferred, available at site TUC)
+2026-07-27 00:52:44,314 - cephci - utils:573 - INFO - Deploying OneCloud cluster with 7 VMs
+2026-07-27 00:52:45,942 - cephci - utils:591 - ERROR - OneCloud deploy failed. Request body: {'name': 'ceph-rados-81-long-QFX4WX', 'virtualMachines': [{'vmname': 'ci-rados-81-long-node1', 'vmnotes': 'CephCI node node1'}, {'vmname': 'ci-rados-81-long-node2', 'vmnotes': 'CephCI node node2'}, {'vmname': 'ci-rados-81-long-node3', 'vmnotes': 'CephCI node node3'}, {'vmname': 'ci-rados-81-long-node4', 'vmnotes': 'CephCI node node4'}, {'vmname': 'ci-rados-81-long-node5', 'vmnotes': 'CephCI node node5'}, {'vmname': 'ci-rados-81-long-node6', 'vmnotes': 'CephCI node node6'}, {'vmname': 'ci-rados-81-long-node7', 'vmnotes': 'CephCI node node7'}], 'imageID': 537, 'resources': 'large', 'projectID': 808, 'site': 'TUC', 'groupID': 1}. Response: {"errors":[{"msg":"Insufficient IP Addreses to complete deployment","path":"virtualMachines"}]}
+2026-07-27 00:52:45,943 - cephci - run:841 - ERROR - OneCloud deploy failed: 400 {"errors":[{"msg":"Insufficient IP Addreses to complete deployment","path":"virtualMachines"}]}. Verify image_id, project_id, site, groupID, VLAN in osp-cred or inventory.
+2026-07-27 00:52:46,017 - cephci - run:1379 - INFO - final rc of test run 1
+
+Note :
+    1. Custom log directory will be disabled if '/ceph/cephci-jenkins' exists.
+    2. If custom log directory not specified, then '/tmp' directory is considered .
+    
+log directory - /tmp/cephci-run-QFX4WX
