@@ -2816,6 +2816,17 @@ def _ensure_ceph_common(asok_file):
             log.warning("dnf install ceph-common failed (non-fatal): %s", e)
 
 
+def _ensure_ceph_common(asok_file):
+    """One-shot helper: install ceph-common on every mirror-daemon node."""
+    for _node, asok in asok_file.items():
+        try:
+            asok[0].exec_command(
+                sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
+            )
+        except Exception as e:
+            log.warning("dnf install ceph-common failed (non-fatal): %s", e)
+
+
 @retry(CommandFailed, tries=10, delay=30, backoff=1)
 def wait_for_sync_idle(fs_name, fsid, asok_file, filesystem_id, peer_uuid, paths):
     """
