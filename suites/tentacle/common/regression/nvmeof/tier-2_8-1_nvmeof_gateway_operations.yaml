@@ -21,6 +21,26 @@ tests:
               args:
                 - rbd create -s 1G image1
           - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd_ec_data 12 12 erasure default
+          - config:
+              command: shell
+              args:
+                - ceph osd pool set rbd_ec_data allow_ec_overwrites true
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd_ec_data
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd_ec_meta 64 64
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd_ec_meta
+          - config:
               command: apply
               service: nvmeof
               args:
@@ -152,6 +172,19 @@ tests:
               command: list             # List access hosts
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+          - config:
+              service: namespace
+              command: add              # EC pool namespace with rbd-data-pool (BZ #76777)
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                rbd-pool: rbd_ec_meta
+                rbd-data-pool: rbd_ec_data
+                rbd-image: ec_ns_image1
+                nsid: 10
+                rbd-create-image: true
+                size: 1G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -309,6 +342,15 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 4
                 i-am-sure: true
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: delete           # EC namespace delete (nsid 10)
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 10
+                force: true
               validate:
                 omap: true
           - config:
