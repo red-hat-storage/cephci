@@ -134,7 +134,7 @@ tests:
         clients: 1
         nfs_version: 4.1
         port: 2049
-        comments: "bug - IBMCEPH-16155"
+        comments: "bug - IBMCEPH-16155 in 9.2"
 
   # =============================================================================
   # Test Scenario 2: Verify gRPC Service Discovery
