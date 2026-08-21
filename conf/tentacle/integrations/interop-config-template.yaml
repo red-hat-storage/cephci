@@ -1,0 +1,67 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - <subnet-details>  # eg:10.0.195.0/24
+      nodes:
+        - hostname: <hostname-1>
+          id: node1
+          ip: <ip-1>
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+          root_password: passwd
+        - hostname: <hostname-2>
+          id: node2
+          ip: <ip-2>
+          role:
+            - mon
+            - mgr
+          root_password: passwd
+        - hostname: <hostname-3>
+          id: node3
+          ip: <ip-3>
+          role:
+            - mon
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/vdb
+            - /dev/vdc
+            - /dev/vdd
+            - /dev/vde
+        - hostname: <hostname-4>
+          id: node4
+          ip: <ip-4>
+          role:
+            - osd
+            - mds
+          root_password: passwd
+          volumes:
+            - /dev/vdb
+            - /dev/vdc
+            - /dev/vdd
+            - /dev/vde
+        - hostname: <hostname-5>
+          id: node5
+          ip: <ip-5>
+          role:
+            - mds
+            - rgw
+            - osd
+          root_password: passwd
+          volumes:
+            - /dev/vdb
+            - /dev/vdc
+            - /dev/vdd
+            - /dev/vde
+        - hostname: <hostname-6>
+          id: node6
+          ip: <ip-6>
+          role:
+            - client
+          root_password: passwd
