@@ -36,6 +36,14 @@ from ceph.ceph_admin.rbd_mirror import RbdMirror
 from ceph.ceph_admin.rgw import RGW
 from cli.utilities.utils import create_trusted_ca_key
 from utility.log import Log
+from utility.odf_defaults import (
+    APPLY_ODF_DEFAULTS_KEY,
+    APPLY_ODF_TOPOLOGY_KEY,
+    apply_v2_only_mon_addrs,
+    overrides_enabled,
+    verify_odf_defaults,
+)
+from utility.odf_topology import apply_odf_topology, topology_status_snapshot
 
 LOG = Log(__name__)
 
@@ -160,6 +168,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 return 1
 
         steps = config.get("steps", [])
+        overrides = config.get("overrides") or {}
         for step in steps:
             cfg = step["config"]
             command = cfg.pop("command")
@@ -167,9 +176,22 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 cephadm.shell(**cfg)
                 continue
 
-            obj = SERVICE_MAP[cfg["service"]](cluster=ceph_cluster, **config)
+            service = cfg["service"]
+            obj = SERVICE_MAP[service](cluster=ceph_cluster, **config)
             func = fetch_method(obj, command)
             func(cfg)
+
+            # After mon apply/scale in steps, re-apply v2-only monmap when requested
+            if (
+                service == "mon"
+                and command == "apply"
+                and overrides_enabled(overrides, APPLY_ODF_DEFAULTS_KEY)
+            ):
+                LOG.info(
+                    "Re-applying v2-only mon addrs after mon step "
+                    "(--custom-config apply-odf-defaults=true)"
+                )
+                apply_v2_only_mon_addrs(cephadm.shell)
 
         if config.get("verify_cluster_health"):
             cephadm.cluster.check_health(
@@ -183,6 +205,40 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("verify_log_rotate") and not validate_log_rotate(cephadm):
             LOG.error("Log rotate validation failure")
             return 1
+
+        overrides = config.get("overrides") or {}
+        # Re-apply v2-only mon addrs after full deploy (mons may have been
+        # scaled via add_hosts / orch apply mon after bootstrap).
+        if overrides_enabled(overrides, APPLY_ODF_DEFAULTS_KEY):
+            LOG.info(
+                "Applying v2-only mon addrs after deploy "
+                "(--custom-config apply-odf-defaults=true)"
+            )
+            apply_v2_only_mon_addrs(cephadm.shell)
+
+        # Post-OSD ODF topology / platform settings (zones, limits, etc.)
+        if overrides_enabled(overrides, APPLY_ODF_TOPOLOGY_KEY):
+            LOG.info("Applying ODF topology (--custom-config apply-odf-topology=true)")
+            apply_odf_topology(
+                ceph_cluster,
+                cephadm.shell,
+                installer_node=cephadm.installer,
+                overrides=overrides,
+            )
+            LOG.info(
+                "ODF topology snapshot: %s", topology_status_snapshot(cephadm.shell)
+            )
+
+        # Optional verification when ODF defaults were requested
+        verify_odf = config.get("verify_odf_defaults") or overrides_enabled(
+            overrides, "verify-odf-defaults"
+        )
+        if overrides_enabled(overrides, APPLY_ODF_DEFAULTS_KEY) and verify_odf:
+            mismatches = verify_odf_defaults(cephadm.shell)
+            if mismatches:
+                LOG.error("ODF defaults verification mismatches: %s", mismatches)
+                return 1
+            LOG.info("ODF defaults verified via ceph config dump / osd dump / mon dump")
 
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)

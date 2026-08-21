@@ -18,6 +18,11 @@ from cli.utilities.utils import (
     set_service_state,
 )
 from utility.log import Log
+from utility.odf_defaults import (
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+    kernel_ms_mode_opt,
+)
 
 log = Log(__name__)
 
@@ -1042,11 +1047,14 @@ def samba_kernel_mount(samba_client, mount_point, mon_node_ip, sub_dir):
         f"/etc/ceph/{samba_client.hostname}.secret",
         long_running=True,
     )
+    use_msgr2 = is_msgr1_disabled(samba_client)
+    mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+    ms_opt = kernel_ms_mode_opt(use_msgr2)
     cmd = (
-        f"mount -t ceph {mon_node_ip}:{sub_dir} {mount_point} "
+        f"mount -t ceph {mons}:{sub_dir} {mount_point} "
         f"-o name=admin,"
         f"secretfile=/etc/ceph/{samba_client.hostname}.secret,"
-        f"noshare"
+        f"noshare{ms_opt}"
     )
     cmd_rc = samba_client.exec_command(sudo=True, cmd=cmd, long_running=True)
 
