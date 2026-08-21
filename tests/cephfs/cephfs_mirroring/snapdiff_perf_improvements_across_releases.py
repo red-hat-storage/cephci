@@ -123,7 +123,8 @@ def run(ceph_cluster, **kw):
 
         ganesha_pid = get_ganesha_pid(nfs_server_node)
         if not ganesha_pid:
-            log.error("Failed to get ganesha process PID")
+            log.error("Failed to get ganesha process PID; NFS is not running")
+            return 1
         try:
             mount_paths, subvol_paths, export_binding = (
                 fs_mirroring_utils.mount_subvolumes_snapdiff(

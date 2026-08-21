@@ -2373,6 +2373,18 @@ class CephfsMirroringUtils(object):
                 placement="1 %s" % nfs_server,
             )
             log.info("NFS cluster %s created successfully." % nfs_name)
+            if not fs_util_ceph1.wait_for_nfs_process(
+                source_clients[0],
+                nfs_name,
+                timeout=300,
+                interval=10,
+                desired_state="running",
+            ):
+                log.error(
+                    "NFS cluster %s did not reach running state before continuing"
+                    % nfs_name
+                )
+                return 1
         except CommandFailed as e:
             log.error("Failed to create NFS cluster: %s" % e)
             return 1
