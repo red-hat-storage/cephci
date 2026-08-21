@@ -343,6 +343,7 @@ tests:
       desc: Test bucket granular sync with sync from different bucket
       polarion-id: CEPH-83575140
       module: sanity_rgw_multisite.py
+      comments: Known issue IBMCEPH-17820
       clusters:
         ceph-pri:
           config:
