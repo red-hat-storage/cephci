@@ -212,6 +212,21 @@ tests:
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
 
+  # RGW Dedup Test Suite - 57 pytest tests via ingress
+
+  - test:
+      name: RGW Dedup Full Suite (pytest) via Ingress
+      desc: Run all 59 dedup tests covering sanity, feature, compression,enhancement, restart, concurrent, edge-case, infrastructure scenarios
+      module: sanity_rgw.py
+      polarion-id: CEPH-83632923
+      abort-on-fail: false
+      config:
+        use-ingress: true
+        pytest-results: true
+        test-version: v2
+        script-name: run_dedup_pytest.py
+        config-file-name: test_dedup_all.yaml
+        timeout: 10800
   # --- Non-ingress tests (NFS, run directly on RGW) ---
 
   - test:
