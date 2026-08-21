@@ -155,7 +155,12 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
     # Open up firewall ports if running.
     setup_firewalld(gw_nodes)
 
-    is_spec_or_mtls = config.get("mtls", False) or config.get("spec_deployment", False)
+    is_spec_or_mtls = (
+        config.get("mtls", False)
+        or config.get("spec_deployment", False)
+        or bool(config.get("nvmeof_spec"))
+        or bool(config.get("cnc_spec"))
+    )
     gw_group = config.get("gw_group")
 
     cfg = {
@@ -190,6 +195,8 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
         }
 
     if release <= ("7.1"):
+        if is_spec_or_mtls:
+            _merge_nvmeof_spec_into(cfg["config"]["specs"][0]["spec"], config)
         return cfg
     elif release >= "8":
         if not gw_group:
@@ -205,7 +212,21 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
             cfg["config"]["specs"][0]["spec"]["rebalance_period_sec"] = config.get(
                 "rebalance_period_sec"
             )
+        if is_spec_or_mtls:
+            _merge_nvmeof_spec_into(cfg["config"]["specs"][0]["spec"], config)
         return cfg
+
+
+def _merge_nvmeof_spec_into(spec_dict, config):
+    """Merge suite nvmeof_spec / cnc_spec keys into an orch nvmeof spec dict."""
+    extras = {}
+    for key in ("nvmeof_spec", "cnc_spec"):
+        value = config.get(key)
+        if isinstance(value, dict):
+            extras.update(value)
+    if extras:
+        LOG.info(f"Merging custom nvmeof orch spec keys: {extras}")
+        spec_dict.update(extras)
 
 
 def deploy_nvme_service(ceph_cluster, config):
