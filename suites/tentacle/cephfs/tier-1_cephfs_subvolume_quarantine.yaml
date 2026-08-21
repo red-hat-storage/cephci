@@ -1,0 +1,158 @@
+---
+#===============================================================================================
+# Tier-level: 1
+# Test-Suite: tier-1_cephfs_subvolume_quarantine
+# Conf file : conf/tentacle/cephfs/tier-2_cephfs_7-node-cluster.yaml
+# Feature   : CephFS Subvolume Quarantine (MR !1929 / tracker 73007)
+# Polarion  : CEPH-83632677 (Sanity) | CEPH-83632678 (Functional) | CEPH-83632679 (Negative)
+# Structure : 3 suite blocks — each module runs all scenarios as subtests
+#===============================================================================================
+tests:
+  # ---------------------------------------------------------------------------
+  # Cluster setup
+  # ---------------------------------------------------------------------------
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisites"
+  -
+    test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow with CephFS volume and MDS.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573740
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  label: mds
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+      destroy-cluster: false
+      abort-on-fail: true
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure CephFS client 1 (admin CLI)"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client 1"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure CephFS client 2 (fuse I/O)"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client 2"
+
+  # ---------------------------------------------------------------------------
+  # 1. Sanity (Acceptance) — all scenarios as subtests
+  # ---------------------------------------------------------------------------
+  -
+    test:
+      abort-on-fail: false
+      name: "qtn_sanity"
+      desc: "CephFS subvolume quarantine — Sanity/Acceptance (A1–A3 + lifecycle/isolation/mds/e2e)"
+      module: cephfs_subvol_quarantine.test_subvolume_quarantine_sanity.py
+      polarion-id: CEPH-83632677
+      config:
+        fs_name: cephfs
+
+  # ---------------------------------------------------------------------------
+  # 2. Functional — all scenarios as subtests
+  # ---------------------------------------------------------------------------
+  -
+    test:
+      abort-on-fail: false
+      name: "qtn_functional"
+      desc: "CephFS subvolume quarantine — Functional F-01..F-18"
+      module: cephfs_subvol_quarantine.test_subvolume_quarantine_functional.py
+      polarion-id: CEPH-83632678
+      config:
+        fs_name: cephfs
+
+  # ---------------------------------------------------------------------------
+  # 3. Negative — all scenarios as subtests
+  # ---------------------------------------------------------------------------
+  -
+    test:
+      abort-on-fail: false
+      name: "qtn_negative"
+      desc: "CephFS subvolume quarantine — Negative N-01..N-04"
+      module: cephfs_subvol_quarantine.test_subvolume_quarantine_negative.py
+      polarion-id: CEPH-83632679
+      config:
+        fs_name: cephfs
