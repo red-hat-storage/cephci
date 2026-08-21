@@ -4,6 +4,9 @@ NFS Ganesha gRPC Service Tests
 This module contains tests for verifying NFS Ganesha gRPC service functionality.
 It uses the 'operation' config parameter to determine which test scenario to run.
 
+gRPC is mTLS-secured. Client certs are copied from the Ceph admin (_admin) node:
+  /var/lib/ceph/<fsid>/nfs_grpc-client-certs/nfs.<nfs-cluster-name>/
+
 Supported Operations:
     - verify_port: Verify gRPC Service Port Availability (port 50051)
     - verify_discovery: Verify gRPC Service Discovery (list available methods)
@@ -27,10 +30,13 @@ from utility.log import Log
 
 log = Log(__name__)
 
-# gRPC port for NFS Ganesha
 GRPC_PORT = 50051
+GRPC_CERT_DIR_CLIENT = "/root/nfs_grpc_certs"
+GRPC_CERT_FILES = ("ca.crt", "client.crt", "client.key")
+GRPC_CERT_COPY_RETRIES = 6
+GRPC_CERT_COPY_DELAY_SEC = 5
 
-# Expected gRPC methods/services
+# Full names expected from `grpcurl ... list` (discovery test)
 EXPECTED_GRPC_SERVICES = [
     "nfsService.GetClientId",
     "nfsService.GetNfsGrace",
@@ -39,284 +45,513 @@ EXPECTED_GRPC_SERVICES = [
     "grpc.reflection.v1alpha.ServerReflection",
 ]
 
+# Transport / TLS failures typically land on stderr
+GRPCURL_STDERR_FAILURE_MARKERS = (
+    "failed to dial",
+    "context deadline exceeded",
+    "connection refused",
+    "connection reset",
+    "no such host",
+    "x509",
+    "tls: ",
+    "handshake",
+    "bad certificate",
+    "certificate required",
+    "remote error",
+)
+
+# RPC failures may appear on stdout or stderr
+GRPCURL_RPC_FAILURE_MARKERS = ("rpc error",)
+
 
 def install_grpcurl(node):
-    """
-    Install grpcurl tool on the specified node.
-
-    Args:
-        node: Node object to install grpcurl on
-    """
+    """Install grpcurl on the specified node (no-op if already present)."""
     log.info(f"Installing grpcurl on {node.hostname}")
 
-    # Check if already installed
     out, _ = node.exec_command(cmd="which grpcurl", check_ec=False)
-    if "grpcurl" in out:
+    if "grpcurl" in (out or ""):
         log.info("grpcurl already installed")
         return
 
     wget_cmd = (
         "curl -LO "
-        "https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/grpcurl_1.8.9_linux_x86_64.tar.gz"
+        "https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/"
+        "grpcurl_1.8.9_linux_x86_64.tar.gz"
     )
-    tar_cmd = "tar -xvzf grpcurl_1.8.9_linux_x86_64.tar.gz"
-    chmod_cmd = "chmod +x grpcurl"
-    rename_cmd = "mv grpcurl /usr/local/bin/"
-
     node.exec_command(sudo=True, cmd=wget_cmd)
-    node.exec_command(sudo=True, cmd=f"{tar_cmd} && {chmod_cmd} && {rename_cmd}")
+    node.exec_command(
+        sudo=True,
+        cmd=(
+            "tar -xvzf grpcurl_1.8.9_linux_x86_64.tar.gz && "
+            "chmod +x grpcurl && mv grpcurl /usr/local/bin/"
+        ),
+    )
 
-    # Verify installation
     out, _ = node.exec_command(cmd="grpcurl --version", check_ec=False)
     log.info(f"grpcurl version: {out}")
 
 
-def verify_grpc_port_availability(nfs_node, nfs_ip):
+def get_nfs_grpc_cert_dir(admin_node, nfs_name):
     """
-    Test Scenario 1: Verify gRPC Service Port Availability
+    Resolve NFS gRPC client cert directory on the Ceph admin/installer node.
 
-    Ensure gRPC service (port 50051) is listening along with NFS service (2049).
+    Prefers an fsid that actually contains:
+      /var/lib/ceph/<fsid>/nfs_grpc-client-certs/nfs.<nfs_name>/
+    """
+    fsids = admin_node.get_dir_list("/var/lib/ceph", sudo=True) or []
+    candidates = []
+    for fsid in fsids:
+        path = f"/var/lib/ceph/{fsid}/nfs_grpc-client-certs/nfs.{nfs_name}"
+        out, _ = admin_node.exec_command(
+            sudo=True, cmd=f"test -d {path} && echo ok", check_ec=False
+        )
+        if "ok" in (out or ""):
+            candidates.append(path)
 
-    Args:
-        nfs_node: NFS server node object
-        nfs_ip: IP address of the NFS server
+    if not candidates:
+        raise OperationFailedError(
+            f"NFS gRPC client cert dir not found under /var/lib/ceph/*/nfs_grpc-client-certs/"
+            f"nfs.{nfs_name} on admin node {admin_node.hostname} (fsids={fsids})"
+        )
+    if len(candidates) > 1:
+        log.warning(f"Multiple NFS gRPC cert dirs found, using first: {candidates}")
+    return candidates[0]
+
+
+def copy_nfs_grpc_certs(
+    admin_node, client_node, nfs_name, dest_dir=GRPC_CERT_DIR_CLIENT
+):
+    """
+    Copy NFS gRPC mTLS client certs from the admin/installer node to a client.
+
+    Certs live on the _admin node at:
+      /var/lib/ceph/<fsid>/nfs_grpc-client-certs/nfs.<nfs_name>/
+
+    Retries briefly because certs may appear shortly after NFS deploy.
 
     Returns:
-        bool: True if port is available, False otherwise
+        str: Destination directory path on the client
+    """
+    last_error = None
+    src_dir = None
+
+    for attempt in range(1, GRPC_CERT_COPY_RETRIES + 1):
+        try:
+            src_dir = get_nfs_grpc_cert_dir(admin_node, nfs_name)
+            log.info(
+                f"Copying NFS gRPC certs from admin {admin_node.hostname}:{src_dir} "
+                f"to {client_node.hostname}:{dest_dir} (attempt {attempt})"
+            )
+
+            client_node.exec_command(sudo=True, cmd=f"mkdir -p {dest_dir}")
+
+            for name in GRPC_CERT_FILES:
+                content, err = admin_node.exec_command(
+                    sudo=True, cmd=f"cat {src_dir}/{name}", check_ec=False
+                )
+                if not content or "No such file" in (err or ""):
+                    raise OperationFailedError(
+                        f"Failed to read {src_dir}/{name} on admin "
+                        f"{admin_node.hostname}: {err}"
+                    )
+                # Match SMB gRPC cert copy pattern (write/flush/close)
+                cert_fp = client_node.remote_file(
+                    sudo=True, file_name=f"{dest_dir}/{name}", file_mode="w+"
+                )
+                cert_fp.write(content)
+                cert_fp.flush()
+                cert_fp.close()
+
+            client_node.exec_command(sudo=True, cmd=f"chmod 600 {dest_dir}/client.key")
+            # Quick sanity: files must be non-empty on the client
+            for name in GRPC_CERT_FILES:
+                out, _ = client_node.exec_command(
+                    sudo=True,
+                    cmd=f"test -s {dest_dir}/{name} && echo ok",
+                    check_ec=False,
+                )
+                if "ok" not in (out or ""):
+                    raise OperationFailedError(
+                        f"Cert file missing or empty on client: {dest_dir}/{name}"
+                    )
+
+            log.info(f"NFS gRPC certs ready on {client_node.hostname}:{dest_dir}")
+            return dest_dir
+        except Exception as exc:
+            last_error = exc
+            log.warning(
+                f"NFS gRPC cert copy attempt {attempt}/{GRPC_CERT_COPY_RETRIES} "
+                f"failed: {exc}"
+            )
+            if attempt < GRPC_CERT_COPY_RETRIES:
+                sleep(GRPC_CERT_COPY_DELAY_SEC)
+
+    raise OperationFailedError(
+        f"Unable to copy NFS gRPC certs for nfs.{nfs_name} "
+        f"(last src={src_dir}): {last_error}"
+    )
+
+
+def grpc_auth_flags(cert_dir):
+    """Return grpcurl mTLS flags for the given client cert directory."""
+    return (
+        f"-cacert {cert_dir}/ca.crt "
+        f"-cert {cert_dir}/client.crt "
+        f"-key {cert_dir}/client.key"
+    )
+
+
+def open_grpc_firewall_port(nfs_node):
+    """Open TCP 50051 on the NFS node (permanent + runtime)."""
+    nfs_node.exec_command(
+        sudo=True,
+        cmd=f"firewall-cmd --permanent --add-port={GRPC_PORT}/tcp",
+        check_ec=False,
+    )
+    nfs_node.exec_command(
+        sudo=True,
+        cmd=f"firewall-cmd --add-port={GRPC_PORT}/tcp",
+        check_ec=False,
+    )
+    nfs_node.exec_command(sudo=True, cmd="firewall-cmd --reload", check_ec=False)
+
+
+def check_grpcurl_result(out, err, require_stdout=True):
+    """
+    Validate grpcurl stdout/stderr.
+
+    Only scan stderr for transport/TLS markers so a server response_msg that
+    happens to mention 'certificate' cannot false-fail the call.
+    """
+    out = out or ""
+    err = err or ""
+    err_l = err.lower()
+    out_l = out.lower()
+    combined_l = f"{out_l}\n{err_l}"
+
+    for marker in GRPCURL_STDERR_FAILURE_MARKERS:
+        if marker in err_l:
+            log.error(f"grpcurl transport/TLS failure ({marker!r}): stderr={err!r}")
+            return False, err or out
+
+    for marker in GRPCURL_RPC_FAILURE_MARKERS:
+        if marker in combined_l:
+            log.error(f"grpcurl RPC failure ({marker!r}): out={out!r} err={err!r}")
+            return False, err or out
+
+    if require_stdout and not out.strip():
+        log.error(f"grpcurl returned empty stdout; stderr={err!r}")
+        return False, err or "empty grpcurl response"
+
+    return True, out
+
+
+def _parse_id_list_response(out, snake_key, camel_key):
+    """
+    Parse GetClientIds / GetSessionIds JSON.
+
+    proto3 + grpcurl omit empty repeated fields, so `{}` means an empty list.
+    """
+    try:
+        response = json.loads(out)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON: {exc}") from exc
+
+    if not isinstance(response, dict):
+        raise ValueError(f"expected JSON object, got {type(response).__name__}")
+
+    if camel_key in response:
+        return response[camel_key]
+    if snake_key in response:
+        return response[snake_key]
+    # Empty successful response
+    if response == {}:
+        return []
+    raise ValueError(f"missing {snake_key}/{camel_key} in response: {response}")
+
+
+def verify_grpc_port_availability(nfs_node, nfs_ip):
+    """
+    Verify gRPC port 50051 is listening and not localhost-only.
+
+    Returns:
+        bool: True if port looks reachable for remote clients
     """
     log.info(f"Verifying gRPC port {GRPC_PORT} availability on {nfs_ip}")
 
-    # Check if ganesha.nfsd is listening on port 50051
-    cmd = f"ss -tulnp | grep {GRPC_PORT}"
-    out, _ = nfs_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
+    out, _ = nfs_node.exec_command(
+        sudo=True, cmd=f"ss -tulnp | grep {GRPC_PORT}", check_ec=False
+    )
 
-    if str(GRPC_PORT) in out:
-        log.info(f"gRPC port {GRPC_PORT} is listening: {out}")
+    if str(GRPC_PORT) not in (out or ""):
+        log.error(f"gRPC port {GRPC_PORT} is not listening")
+        return False
 
-        # Verify ganesha.nfsd process is associated
-        if "ganesha" in out.lower() or "nfsd" in out.lower():
-            log.info("ganesha.nfsd process is listening on gRPC port")
+    log.info(f"gRPC port {GRPC_PORT} is listening: {out}")
+
+    listen_lines = [ln for ln in out.splitlines() if str(GRPC_PORT) in ln]
+    if not listen_lines:
+        log.error(f"gRPC port {GRPC_PORT} not found in ss output lines")
+        return False
+
+    def _is_remote_reachable_bind(ln):
+        """True if this ss line indicates a non-localhost listener."""
+        if "0.0.0.0" in ln or "*:" in ln:
             return True
-        else:
-            # Check process separately
-            cmd_ps = "ss -tulnp | grep 50051 | grep -i ganesha"
-            out_ps, _ = nfs_node.exec_command(sudo=True, cmd=cmd_ps, check_ec=False)
-            if out_ps:
-                log.info(f"ganesha.nfsd confirmed on gRPC port: {out_ps}")
-                return True
-
-        # Port is listening but process verification needed
-        log.warning("Port is listening but process name not confirmed in ss output")
+        # IPv6 any-address forms used by ss
+        if "[::]:" in ln and "[::1]" not in ln:
+            return True
+        if re.search(r"(^|[\s]):::\d", ln):
+            return True
+        if "127.0.0.1" in ln or "[::1]" in ln:
+            return False
+        # Specific NIC IP (e.g. 10.x.x.x:50051)
         return True
 
-    log.error(f"gRPC port {GRPC_PORT} is not listening")
-    return False
+    if not any(_is_remote_reachable_bind(ln) for ln in listen_lines):
+        log.error(f"gRPC port {GRPC_PORT} appears bound to localhost only: {out}")
+        return False
+
+    if "ganesha" in out.lower() or "nfsd" in out.lower():
+        log.info("ganesha process is listening on gRPC port")
+    else:
+        log.warning("Port is listening but ganesha process name not confirmed")
+
+    return True
 
 
-def verify_grpc_service_discovery(client_node, nfs_ip):
+def probe_grpc_mtls(client_node, nfs_ip, cert_dir):
     """
-    Test Scenario 2: Verify gRPC Service Discovery
+    Lightweight mTLS connectivity probe: `grpcurl list` must return >=1 service.
 
-    Confirm available gRPC methods using grpcurl.
-
-    Args:
-        client_node: Client node object
-        nfs_ip: IP address of the NFS server
-
-    Returns:
-        tuple: (bool, list) - Success status and list of discovered services
+    Unlike discovery, this does not assert the full expected service set.
     """
-    log.info(f"Discovering gRPC services on {nfs_ip}:{GRPC_PORT}")
-
-    # Use grpcurl to list services
-    cmd = f"grpcurl -plaintext {nfs_ip}:{GRPC_PORT} list"
+    log.info(f"Probing mTLS gRPC connectivity on {nfs_ip}:{GRPC_PORT}")
+    cmd = f"grpcurl {grpc_auth_flags(cert_dir)} {nfs_ip}:{GRPC_PORT} list"
     out, err = client_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
 
-    if err and "error" in err.lower():
-        log.error(f"Failed to discover gRPC services: {err}")
+    ok, detail = check_grpcurl_result(out, err, require_stdout=True)
+    if not ok:
+        return False, detail
+
+    services = [ln.strip() for ln in out.strip().splitlines() if ln.strip()]
+    if not services:
+        return False, "grpcurl list returned no services"
+    return True, services
+
+
+def verify_grpc_service_discovery(client_node, nfs_ip, cert_dir):
+    """Confirm expected gRPC services via mTLS grpcurl list."""
+    log.info(f"Discovering gRPC services on {nfs_ip}:{GRPC_PORT}")
+
+    ok, result = probe_grpc_mtls(client_node, nfs_ip, cert_dir)
+    if not ok:
+        log.error(f"Failed to discover gRPC services: {result}")
         return False, []
 
-    discovered_services = [
-        line.strip() for line in out.strip().split("\n") if line.strip()
-    ]
+    discovered_services = result
     log.info(f"Discovered gRPC services: {discovered_services}")
 
-    # Check for expected services
-    found_services = []
-    for expected in EXPECTED_GRPC_SERVICES:
-        service_name = expected.split(".")[0] if "." in expected else expected
-        if any(service_name in svc for svc in discovered_services):
-            found_services.append(expected)
+    missing = [svc for svc in EXPECTED_GRPC_SERVICES if svc not in discovered_services]
+    if missing:
+        log.error(f"Missing expected gRPC services: {missing}")
+        return False, discovered_services
 
-    log.info(f"Found expected services: {found_services}")
-    return len(found_services) > 0, discovered_services
+    log.info(f"All expected gRPC services found: {EXPECTED_GRPC_SERVICES}")
+    return True, discovered_services
 
 
-def start_grace_period(client_node, nfs_ip, event_id, node_id=1):
+def start_grace_period(client_node, nfs_ip, event_id, cert_dir, node_id=1):
     """
-    Test Scenarios 3-6: Start Grace Period with different Event IDs
-
-    Event IDs:
-        0 - Start Grace Period
-        2 - Release IP from Grace
-        4 - Node Takeover
-        5 - IP Takeover
-
-    Args:
-        client_node: Client node object
-        nfs_ip: IP address of the NFS server
-        event_id: Event ID (0, 2, 4, or 5)
-        node_id: Node ID (default: 1)
+    Invoke StartGraceWithEvent for the given Event ID.
 
     Returns:
-        tuple: (bool, str) - Success status and response/output
+        tuple: (bool, str) success and response/detail
     """
     log.info(f"Starting grace period with Event ID {event_id} on {nfs_ip}")
 
-    # Build the gRPC request
     request_data = f'{{"Event":{event_id},"NodeId":{node_id},"IpAddr":"{nfs_ip}"}}'
-
-    # Use grpcurl to make the call
     cmd = (
-        f"grpcurl -plaintext -d '{request_data}' "
+        f"grpcurl {grpc_auth_flags(cert_dir)} -d '{request_data}' "
         f"{nfs_ip}:{GRPC_PORT} nfsService.StartNfsGrace/StartGraceWithEvent"
     )
 
     out, err = client_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
-
     log.info(f"gRPC response: {out}")
     if err:
         log.warning(f"gRPC stderr: {err}")
 
-    # Check for success based on event type
+    ok, detail = check_grpcurl_result(out, err, require_stdout=True)
+    if not ok:
+        log.error(f"Failed to execute event {event_id}: {detail}")
+        return False, detail
+
+    try:
+        response = json.loads(out)
+    except json.JSONDecodeError:
+        log.error(f"Grace event {event_id} response is not valid JSON: {out!r}")
+        return False, out
+
+    if not isinstance(response, dict):
+        log.error(f"Grace event {event_id} response is not an object: {response!r}")
+        return False, out
+
+    if "graceStarted" not in response and "grace_started" not in response:
+        log.error(f"Grace event {event_id} response missing graceStarted: {response}")
+        return False, out
+
     if event_id == 0:
-        # Expect graceStarted: true
-        if "graceStarted" in out and "true" in out.lower():
-            log.info("Grace period started successfully")
-            return True, out
+        grace_started = response.get("graceStarted", response.get("grace_started"))
+        if grace_started is not True and str(grace_started).lower() != "true":
+            log.error(f"Expected graceStarted=true for event 0, got: {response}")
+            return False, out
+        log.info("Grace period started successfully")
     else:
-        # For other events, check for successful response (no error)
-        if "error" not in out.lower() or "rpc error" not in out.lower():
-            log.info(f"Event {event_id} executed successfully")
-            return True, out
+        log.info(f"Event {event_id} executed successfully: {response}")
 
-    log.error(f"Failed to execute event {event_id}")
-    return False, out
+    return True, out
 
 
-def verify_grace_logs(nfs_node, nfs_name, event_id, client):
+def _resolve_nfs_daemon_name(client, nfs_name):
+    """Return ceph orch daemon name for the NFS service (e.g. nfs.cephfs-nfs....)."""
+    out, err = client.exec_command(
+        sudo=True, cmd=f"ceph orch ps | grep {nfs_name}", check_ec=False
+    )
+    if not out or not out.strip():
+        raise OperationFailedError(
+            f"Could not resolve NFS daemon name for {nfs_name}: {err}"
+        )
+    return out.split()[0]
+
+
+def _fetch_nfs_daemon_log(client, nfs_node, nfs_name):
+    """Fetch current cephadm logs for the NFS daemon as a string."""
+    daemon = _resolve_nfs_daemon_name(client, nfs_name)
+    log_path = "/tmp/nfs_grpc_event.log"
+    nfs_node.exec_command(
+        sudo=True, cmd=f"cephadm logs --name {daemon} > {log_path}", check_ec=False
+    )
+    content, _ = nfs_node.exec_command(sudo=True, cmd=f"cat {log_path}", check_ec=False)
+    return content or ""
+
+
+def verify_grace_logs(nfs_node, nfs_name, event_id, client, log_before=""):
     """
     Verify expected log messages after grace period events.
 
-    Args:
-        nfs_node: NFS server node object
-        nfs_name: NFS cluster name
-        event_id: Event ID that was executed
-
-    Returns:
-        bool: True if expected logs are found
+    If log_before is provided, require that pattern occurrence count increases
+    after the event (avoids matching stale startup lines).
     """
     log.info(f"Verifying logs for Event ID {event_id}")
 
-    # Define expected log patterns based on event ID
+    # Event 2 may log either recovery-event text or the release helper name.
     expected_patterns = {
         0: ["NFS Server Now IN GRACE"],
-        2: ["nfs_release_v4_clients"],
-        4: ["nfs_start_grace :STATE :EVENT :NFS Server recovery event 4 nodeid 1"],
-        5: ["nfs_start_grace :STATE :EVENT :NFS Server recovery event 5 nodeid 1"],
+        2: ["NFS Server recovery event 2", "nfs_release_v4_clients"],
+        4: ["NFS Server recovery event 4"],
+        5: ["NFS Server recovery event 5"],
     }
 
-    patterns = expected_patterns.get(event_id, [])
+    patterns = expected_patterns.get(event_id)
     if not patterns:
-        log.warning(f"No expected patterns defined for Event ID {event_id}")
-        return True
+        log.error(f"No expected patterns defined for Event ID {event_id}")
+        return False
 
-    # Use nfs_log_parser to check logs
-    result = nfs_log_parser(
-        client=client,
-        nfs_node=nfs_node,
-        nfs_name=nfs_name,
-        expect_list=patterns,
+    log_after = _fetch_nfs_daemon_log(client, nfs_node, nfs_name)
+    if not log_after.strip():
+        log.error("NFS daemon log is empty after grace event")
+        return False
+
+    for pattern in patterns:
+        before_count = log_before.count(pattern) if log_before is not None else 0
+        after_count = log_after.count(pattern)
+        if after_count > before_count:
+            log.info(
+                f"Found new log occurrences of {pattern!r} for Event ID {event_id} "
+                f"({before_count} -> {after_count})"
+            )
+            return True
+        log.info(
+            f"Pattern {pattern!r} did not increase ({before_count} -> {after_count})"
+        )
+
+    # Fallback for callers that did not snapshot logs: full-log search via nfs_log_parser
+    if not log_before:
+        for pattern in patterns:
+            result = nfs_log_parser(
+                client=client,
+                nfs_node=nfs_node,
+                nfs_name=nfs_name,
+                expect_list=[pattern],
+            )
+            if result == 0:
+                log.warning(
+                    f"Matched {pattern!r} in full logs without a before-snapshot; "
+                    "this may include pre-existing lines"
+                )
+                return True
+
+    log.error(
+        f"Expected new log patterns not found for Event ID {event_id}: {patterns}"
     )
+    return False
 
-    return result == 0
 
-
-def get_client_ids(client_node, nfs_ip):
-    """
-    Get NFS client IDs via gRPC.
-
-    Args:
-        client_node: Client node object
-        nfs_ip: IP address of the NFS server
-
-    Returns:
-        tuple: (bool, list) - Success status and list of client IDs
-    """
+def get_client_ids(client_node, nfs_ip, cert_dir=GRPC_CERT_DIR_CLIENT):
+    """Get NFS client IDs via mTLS gRPC. Returns (ok, list)."""
     log.info(f"Getting client IDs from {nfs_ip}")
 
-    cmd = f"grpcurl -plaintext {nfs_ip}:{GRPC_PORT} nfsService.GetClientId/GetClientIds"
+    cmd = (
+        f"grpcurl {grpc_auth_flags(cert_dir)} "
+        f"{nfs_ip}:{GRPC_PORT} nfsService.GetClientId/GetClientIds"
+    )
     out, err = client_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
-
     log.info(f"GetClientIds response: {out}")
 
-    if err and "error" in err.lower():
-        log.error(f"Failed to get client IDs: {err}")
+    ok, detail = check_grpcurl_result(out, err, require_stdout=True)
+    if not ok:
+        log.error(f"Failed to get client IDs: {detail}")
         return False, []
 
-    # Parse client IDs from response
-    client_ids = []
     try:
-        # Try to parse as JSON
-        response = json.loads(out) if out.strip() else {}
-        if "clientIds" in response:
-            client_ids = response["clientIds"]
-        elif "client_ids" in response:
-            client_ids = response["client_ids"]
-    except json.JSONDecodeError:
-        # Parse from text output
-        matches = re.findall(r'"?clientId"?\s*:\s*"?(\d+)"?', out, re.IGNORECASE)
-        client_ids = matches
+        client_ids = _parse_id_list_response(out, "client_ids", "clientIds")
+    except ValueError as exc:
+        log.error(f"Could not parse client IDs: {exc}; raw={out!r}")
+        return False, []
+
+    if not isinstance(client_ids, list):
+        log.error(f"client_ids is not a list: {client_ids!r}")
+        return False, []
 
     log.info(f"Found client IDs: {client_ids}")
     return True, client_ids
 
 
-def get_session_ids(client_node, nfs_ip):
-    """
-    Get NFS session IDs via gRPC.
-
-    Args:
-        client_node: Client node object
-        nfs_ip: IP address of the NFS server
-
-    Returns:
-        tuple: (bool, list) - Success status and list of session IDs
-    """
+def get_session_ids(client_node, nfs_ip, cert_dir=GRPC_CERT_DIR_CLIENT):
+    """Get NFS session IDs via mTLS gRPC. Returns (ok, list)."""
     log.info(f"Getting session IDs from {nfs_ip}")
 
     cmd = (
-        f"grpcurl -plaintext {nfs_ip}:{GRPC_PORT} nfsService.GetSessionId/GetSessionIds"
+        f"grpcurl {grpc_auth_flags(cert_dir)} "
+        f"{nfs_ip}:{GRPC_PORT} nfsService.GetSessionId/GetSessionIds"
     )
     out, err = client_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
-
     log.info(f"GetSessionIds response: {out}")
 
-    if err and "error" in err.lower():
-        log.error(f"Failed to get session IDs: {err}")
+    ok, detail = check_grpcurl_result(out, err, require_stdout=True)
+    if not ok:
+        log.error(f"Failed to get session IDs: {detail}")
         return False, []
 
-    # Parse session IDs from response
-    session_ids = []
     try:
-        response = json.loads(out) if out.strip() else {}
-        if "sessionIds" in response:
-            session_ids = response["sessionIds"]
-        elif "session_ids" in response:
-            session_ids = response["session_ids"]
-    except json.JSONDecodeError:
-        matches = re.findall(r'"?sessionId"?\s*:\s*"?(\d+)"?', out, re.IGNORECASE)
-        session_ids = matches
+        session_ids = _parse_id_list_response(out, "session_ids", "sessionIds")
+    except ValueError as exc:
+        log.error(f"Could not parse session IDs: {exc}; raw={out!r}")
+        return False, []
+
+    if not isinstance(session_ids, list):
+        log.error(f"session_ids is not a list: {session_ids!r}")
+        return False, []
 
     log.info(f"Found session IDs: {session_ids}")
     return True, session_ids
@@ -326,16 +561,8 @@ def setup_additional_mounts(clients, nfs_server, nfs_export, nfs_mount, version,
     """
     Mount NFS export on additional clients (clients[1:]).
 
-    Args:
-        clients: List of client node objects
-        nfs_server: NFS server hostname or IP
-        nfs_export: Export path
-        nfs_mount: Base mount point
-        version: NFS version
-        port: NFS port
-
-    Returns:
-        list: List of mount points created
+    Raises:
+        OperationFailedError: If any additional mount fails
     """
     mount_points = []
 
@@ -350,12 +577,9 @@ def setup_additional_mounts(clients, nfs_server, nfs_export, nfs_mount, version,
             server=nfs_server,
             export=nfs_export,
         ):
-            log.error(f"Failed to mount NFS on {client.hostname}")
-            continue
+            raise OperationFailedError(f"Failed to mount NFS on {client.hostname}")
 
         log.info(f"NFS mounted successfully on {client.hostname} at {mount_point}")
-
-        # Create a test file to establish connection
         client.exec_command(sudo=True, cmd=f"touch {mount_point}/testfile_{i}")
         mount_points.append((client, mount_point))
         sleep(2)
@@ -364,13 +588,8 @@ def setup_additional_mounts(clients, nfs_server, nfs_export, nfs_mount, version,
 
 
 def cleanup_additional_mounts(mount_points):
-    """
-    Unmount additional NFS mounts.
-
-    Args:
-        mount_points: List of (client, mount_point) tuples
-    """
-    for client, mount_point in mount_points:
+    """Unmount additional NFS mounts."""
+    for client, mount_point in mount_points or []:
         try:
             client.exec_command(
                 sudo=True, cmd=f"rm -rf {mount_point}/*", check_ec=False
@@ -386,34 +605,15 @@ def run(ceph_cluster, **kw):
     """
     Test NFS Ganesha gRPC Service functionality.
 
-    This function uses the 'operation' config parameter to determine which
-    test scenario to run. Each operation is a separate test case.
-
-    Supported Operations:
-        - verify_port: Verify gRPC port 50051 is listening
-        - verify_discovery: Verify gRPC service discovery
-        - grace_event_0: Start Grace Period (Event ID 0)
-        - grace_event_2: Release IP from Grace (Event ID 2)
-        - grace_event_4: Node Takeover (Event ID 4)
-        - grace_event_5: IP Takeover (Event ID 5)
-        - verify_client_session_ids: Verify Client and Session IDs
-        - verify_id_after_unmount: Verify ID Updates After Unmount
-
-    Args:
-        ceph_cluster: Ceph cluster object
-        **kw: Keyword arguments containing test configuration
-
     Returns:
         int: 0 on success, 1 on failure
     """
     config = kw.get("config", {})
 
-    # Get operation to perform
     operation = config.get("operation")
     if not operation:
         raise ConfigError("'operation' is required in config")
 
-    # Get common configuration
     nfs_name = config.get("nfs_name", "cephfs-nfs")
     nfs_export = config.get("nfs_export", "/export")
     nfs_mount = config.get("nfs_mount", "/mnt/nfs")
@@ -424,16 +624,16 @@ def run(ceph_cluster, **kw):
     num_clients = int(config.get("clients", 1))
     subvolume_group = config.get("subvolume_group", "ganeshagroup")
 
-    # Get nodes
     clients = ceph_cluster.get_nodes(role="client")
     nfs_nodes = ceph_cluster.get_nodes(role="nfs")
+    installer_nodes = ceph_cluster.get_nodes(role="installer")
 
     if not clients:
         raise OperationFailedError("No client nodes available")
-
     if not nfs_nodes:
         raise OperationFailedError("No NFS nodes available")
-
+    if not installer_nodes:
+        raise OperationFailedError("No installer/admin node available for gRPC certs")
     if num_clients > len(clients):
         raise ConfigError(
             f"Test requires {num_clients} clients but only {len(clients)} available"
@@ -442,32 +642,27 @@ def run(ceph_cluster, **kw):
     clients = clients[:num_clients]
     client = clients[0]
     nfs_node = nfs_nodes[0]
+    admin_node = installer_nodes[0]
     nfs_server = nfs_node.hostname
     nfs_ip = nfs_node.ip_address
 
     log.info(f"Running operation: {operation}")
     log.info(f"Using NFS server: {nfs_server} ({nfs_ip})")
+    log.info(f"Using admin node for gRPC certs: {admin_node.hostname}")
     log.info(f"Using {len(clients)} client(s) for testing")
 
-    # Create subvolume group
     Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
 
     additional_mounts = []
+    cert_dir = GRPC_CERT_DIR_CLIENT
 
     try:
-        # Install grpcurl on client(s)
-        for c in clients:
-            install_grpcurl(c)
+        # Only the driver client runs grpcurl today
+        install_grpcurl(client)
+        open_grpc_firewall_port(nfs_node)
 
-        client = clients[0]
-
-        # Allow GRPC Port 50051
-        cmd = f"firewall-cmd --permanent --add-port={GRPC_PORT}/tcp"
-        nfs_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
-
-        # Setup NFS cluster for most operations
         setup_nfs_cluster(
-            clients=[client],  # Primary client only for setup
+            clients=[client],
             nfs_server=nfs_server,
             port=nfs_port,
             version=nfs_version,
@@ -482,12 +677,9 @@ def run(ceph_cluster, **kw):
         )
         log.info("NFS cluster setup complete.")
 
-        # =================================================================
-        # Execute the requested operation
-        # =================================================================
+        cert_dir = copy_nfs_grpc_certs(admin_node, client, nfs_name)
 
         if operation == "verify_port":
-            # Test Scenario 1: Verify gRPC Service Port Availability
             log.info("=" * 60)
             log.info("TEST: Verify gRPC Service Port Availability")
             log.info("=" * 60)
@@ -496,23 +688,31 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     f"gRPC port {GRPC_PORT} is not available on {nfs_ip}"
                 )
-            log.info(f"PASS: gRPC port {GRPC_PORT} is available")
+
+            ok, result = probe_grpc_mtls(client, nfs_ip, cert_dir)
+            if not ok:
+                raise OperationFailedError(
+                    f"gRPC port listening but mTLS probe failed on "
+                    f"{nfs_ip}:{GRPC_PORT}: {result}"
+                )
+            log.info(
+                f"PASS: gRPC port {GRPC_PORT} listening and reachable over mTLS "
+                f"({len(result)} services listed)"
+            )
 
         elif operation == "verify_discovery":
-            # Test Scenario 2: Verify gRPC Service Discovery
             log.info("=" * 60)
             log.info("TEST: Verify gRPC Service Discovery")
             log.info("=" * 60)
 
-            success, services = verify_grpc_service_discovery(client, nfs_ip)
+            success, services = verify_grpc_service_discovery(client, nfs_ip, cert_dir)
             if not success:
                 raise OperationFailedError(
-                    f"Could not discover gRPC services on {nfs_ip}:{GRPC_PORT}"
+                    f"Could not discover required gRPC services on {nfs_ip}:{GRPC_PORT}"
                 )
             log.info(f"PASS: Discovered gRPC services: {services}")
 
         elif operation.startswith("grace_event_"):
-            # Test Scenarios 3-6: Grace Period Events
             event_id = int(operation.split("_")[-1])
             event_names = {
                 0: "Start Grace Period",
@@ -520,31 +720,40 @@ def run(ceph_cluster, **kw):
                 4: "Node Takeover",
                 5: "IP Takeover",
             }
-            event_name = event_names.get(event_id, f"Event {event_id}")
+            if event_id not in event_names:
+                raise ConfigError(f"Unsupported grace event operation: {operation}")
+            event_name = event_names[event_id]
 
             log.info("=" * 60)
             log.info(f"TEST: {event_name} (Event ID {event_id})")
             log.info("=" * 60)
 
-            success, response = start_grace_period(client, nfs_ip, event_id)
-            if not success:
-                log.warning(f"Grace event {event_id} response: {response}")
+            log_before = _fetch_nfs_daemon_log(client, nfs_node, nfs_name)
 
-            # Wait for logs to be written
+            success, response = start_grace_period(
+                client, nfs_ip, event_id, cert_dir=cert_dir
+            )
+            if not success:
+                raise OperationFailedError(
+                    f"Grace event {event_id} gRPC call failed: {response}"
+                )
+
             sleep(5)
 
-            # Verify logs
-            verify_grace_logs(nfs_node, nfs_name, event_id, client)
+            if not verify_grace_logs(
+                nfs_node, nfs_name, event_id, client, log_before=log_before
+            ):
+                raise OperationFailedError(
+                    f"Expected new ganesha log lines not found for grace event {event_id}"
+                )
 
             log.info(f"PASS: {event_name} executed successfully")
 
         elif operation == "verify_client_session_ids":
-            # Test Scenario 7: Verify Client and Session IDs
             log.info("=" * 60)
             log.info("TEST: Verify Client and Session IDs for Multiple Clients")
             log.info("=" * 60)
 
-            # Mount on additional clients
             if len(clients) > 1:
                 additional_mounts = setup_additional_mounts(
                     clients,
@@ -555,33 +764,39 @@ def run(ceph_cluster, **kw):
                     nfs_port,
                 )
 
-            # Wait for connections to establish
             sleep(10)
 
-            # Get client IDs
-            success, client_ids = get_client_ids(client, nfs_ip)
+            success, client_ids = get_client_ids(client, nfs_ip, cert_dir)
             if not success:
-                raise OperationFailedError("Could not get client IDs")
+                raise OperationFailedError("Could not get client IDs via gRPC")
 
-            # Get session IDs
-            success, session_ids = get_session_ids(client, nfs_ip)
+            success, session_ids = get_session_ids(client, nfs_ip, cert_dir)
             if not success:
-                raise OperationFailedError("Could not get session IDs")
+                raise OperationFailedError("Could not get session IDs via gRPC")
 
             log.info(f"Client IDs: {client_ids}")
             log.info(f"Session IDs: {session_ids}")
 
-            # Verify we have unique IDs
-            unique_client_ids = len(set(client_ids))
-            unique_session_ids = len(set(session_ids))
+            unique_client_ids = len({str(x) for x in client_ids})
+            unique_session_ids = len({str(x) for x in session_ids})
 
             log.info(f"Unique Client IDs: {unique_client_ids}")
             log.info(f"Unique Session IDs: {unique_session_ids}")
 
+            if unique_client_ids < num_clients:
+                raise OperationFailedError(
+                    f"Expected at least {num_clients} unique client IDs, "
+                    f"got {unique_client_ids}: {client_ids}"
+                )
+            if unique_session_ids < 1:
+                raise OperationFailedError(
+                    f"Expected at least 1 session ID, got {unique_session_ids}: "
+                    f"{session_ids}"
+                )
+
             log.info("PASS: Client and Session IDs retrieved successfully")
 
         elif operation == "verify_id_after_unmount":
-            # Test Scenario 8: Verify ID Updates After Unmount
             log.info("=" * 60)
             log.info("TEST: Verify ID Updates After Client Unmount")
             log.info("=" * 60)
@@ -589,51 +804,69 @@ def run(ceph_cluster, **kw):
             if len(clients) < 2:
                 raise ConfigError("This test requires at least 2 clients")
 
-            # Mount on additional clients
             additional_mounts = setup_additional_mounts(
                 clients, nfs_server, f"{nfs_export}_0", nfs_mount, nfs_version, nfs_port
             )
 
             sleep(10)
 
-            # Get initial IDs
-            success, initial_client_ids = get_client_ids(client, nfs_ip)
-            success, initial_session_ids = get_session_ids(client, nfs_ip)
+            success, initial_client_ids = get_client_ids(client, nfs_ip, cert_dir)
+            if not success:
+                raise OperationFailedError("Could not get initial client IDs via gRPC")
+            success, initial_session_ids = get_session_ids(client, nfs_ip, cert_dir)
+            if not success:
+                raise OperationFailedError("Could not get initial session IDs via gRPC")
 
             log.info(f"Initial Client IDs: {initial_client_ids}")
             log.info(f"Initial Session IDs: {initial_session_ids}")
 
-            # Unmount from last client
-            if additional_mounts:
-                unmount_client, unmount_point = additional_mounts[-1]
-                log.info(f"Unmounting from {unmount_client.hostname}")
-
-                unmount_client.exec_command(
-                    sudo=True, cmd=f"rm -rf {unmount_point}/*", check_ec=False
-                )
-                Unmount(unmount_client).unmount(unmount_point)
-                unmount_client.exec_command(
-                    sudo=True, cmd=f"rm -rf {unmount_point}", check_ec=False
+            initial_clients = len({str(x) for x in initial_client_ids})
+            initial_sessions = len({str(x) for x in initial_session_ids})
+            if initial_clients < 2:
+                raise OperationFailedError(
+                    f"Expected at least 2 clients before unmount, got {initial_clients}"
                 )
 
-                # Remove from list so cleanup doesn't try again
-                additional_mounts = additional_mounts[:-1]
+            if not additional_mounts:
+                raise OperationFailedError("No additional mounts available to unmount")
 
-            # Wait for session cleanup
+            unmount_client, unmount_point = additional_mounts[-1]
+            log.info(f"Unmounting from {unmount_client.hostname}")
+
+            unmount_client.exec_command(
+                sudo=True, cmd=f"rm -rf {unmount_point}/*", check_ec=False
+            )
+            Unmount(unmount_client).unmount(unmount_point)
+            unmount_client.exec_command(
+                sudo=True, cmd=f"rm -rf {unmount_point}", check_ec=False
+            )
+            additional_mounts = additional_mounts[:-1]
+
             sleep(15)
 
-            # Get updated IDs
-            success, updated_client_ids = get_client_ids(client, nfs_ip)
-            success, updated_session_ids = get_session_ids(client, nfs_ip)
+            success, updated_client_ids = get_client_ids(client, nfs_ip, cert_dir)
+            if not success:
+                raise OperationFailedError("Could not get updated client IDs via gRPC")
+            success, updated_session_ids = get_session_ids(client, nfs_ip, cert_dir)
+            if not success:
+                raise OperationFailedError("Could not get updated session IDs via gRPC")
 
             log.info(f"Updated Client IDs: {updated_client_ids}")
             log.info(f"Updated Session IDs: {updated_session_ids}")
 
-            # Verify client count changed
-            if len(set(updated_client_ids)) <= len(set(initial_client_ids)):
-                log.info("PASS: Client count decreased or stayed same after unmount")
-            else:
-                log.warning("Client count unexpectedly increased")
+            updated_clients = len({str(x) for x in updated_client_ids})
+            updated_sessions = len({str(x) for x in updated_session_ids})
+
+            if not (
+                updated_clients < initial_clients or updated_sessions < initial_sessions
+            ):
+                raise OperationFailedError(
+                    "Expected client or session count to decrease after unmount; "
+                    f"clients {initial_clients}->{updated_clients}, "
+                    f"sessions {initial_sessions}->{updated_sessions}"
+                )
+
+            log.info("PASS: Client/session count decreased after unmount")
 
         else:
             raise ConfigError(f"Unknown operation: {operation}")
@@ -656,13 +889,8 @@ def run(ceph_cluster, **kw):
         log.info("=" * 60)
 
         try:
-            # Cleanup additional mounts
             cleanup_additional_mounts(additional_mounts)
-
-            # Parse NFS logs for debugging
             nfs_log_parser(client=client, nfs_node=nfs_nodes, nfs_name=nfs_name)
-
-            # Cleanup cluster
             cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
             log.info("Cleanup completed")
         except Exception as cleanup_error:
