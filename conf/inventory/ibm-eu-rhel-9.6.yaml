@@ -94,9 +94,10 @@ instance:
         sudo: ALL=(root) NOPASSWD:ALL
         shell: /bin/bash
         ssh-authorized-keys:
-          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOwmsOkNX16LikH7spbmVVOLhGOSsNSlAYSk0ifhLpaO
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoKGCTzMmNvHFY4THKNpZYFLeEgB7Do8y2JAEy+ZvIZ ceph-qe-sa
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
+          - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBNkaK5/dSj7VjggT4oCnc5nbf9AGAk6zduy0AiCWN/l5p9Q0r0e7rn81Pr8AMVpJL26Jr6ElWyJf1jF8rbxqbfTe6VwyRwQoHZETSqk9oDiSrsbZkNih/akwDlLcXVfWDw== ceph-qe-sa-sm@ibm.com
+          - ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKFa+YJXE5pBoRYrLsdTBjoR2ckoIv5Syn1H6I9Jt/iuVWupS3haQCAjuXe3f7f2s8EqauEvZYLro0NQEjWt4rg= psathyan mac laptop
 
     chpasswd:
       expire: false
