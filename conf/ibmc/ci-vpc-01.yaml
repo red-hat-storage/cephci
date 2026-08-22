@@ -10,7 +10,7 @@ networks:
   au-syd-1: ci-sn-01
   au-syd-2: ci-sn-02
   au-syd-3: ci-sn-03
-private_key: ceph-qe-sa-svc
+private_key: ceph-qe-sa-svc-fips
 profile: bx2-2x8
 security_group: "sec-grp-ci-vpc-01"
 service_url: "https://au-syd.iaas.cloud.ibm.com/v1"
