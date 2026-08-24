@@ -76,7 +76,7 @@ tests:
       name: configure client
 
   - test:
-      name: NFS CephX key rotation (ceph nfs cluster rotate-key)
+      name: NFS CephX key rotation ceph nfs cluster rotate key
       module: test_nfs_cephx_key_rotation.py
       desc: >
         Verify IBMCEPH-16471 / 9.1z2: run ceph nfs cluster rotate-key while
