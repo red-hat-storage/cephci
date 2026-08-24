@@ -1,6 +1,7 @@
 #===============================================================================================
 #---    Test Suite for NFS-Ganesha CephX Key Rotation   ---
 #---    IBMCEPH-16471 / IBMCEPH-16399                    ---
+#---    Polarion: CEPH-83632951                          ---
 #----------------------------------------------------------
 # Conf: conf/tentacle/nfs/1admin-3node-1client.yaml
 #
@@ -83,7 +84,7 @@ tests:
         service_redeployed=true and updated_exports, Ganesha logs stay
         clean, and the same mount can still read/write without remount
         or ceph nfs export apply.
-      polarion-id:
+      polarion-id: CEPH-83632951
       abort-on-fail: false
       config:
         nfs_version: "4.1"
