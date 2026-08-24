@@ -168,7 +168,9 @@ class CephFSSystemUtils(object):
     def crash_check(self, client, crash_copy=1, daemon_list=["mds"]):
         """
         Check if Crash dir exists in all daemon hosting nodes, save meta file if crash exists
-        return 1 if crash exists, else 0
+        return 1 if crash exists, else 0.
+
+        A missing crash/coredump directory is treated as no crashes (not a failure).
         """
         daemon_nodes = {
             "mds": self.mdss,
@@ -193,12 +195,23 @@ class CephFSSystemUtils(object):
                         crash_dir = (
                             crash_dir1 if crash_type == "ceph_crash" else crash_dir2
                         )
-                        cmd = f"ls {crash_dir}"
-                        out, _ = node.exec_command(sudo=True, cmd=cmd)
+                        out, err = node.exec_command(
+                            sudo=True, cmd=f"ls {crash_dir}", check_ec=False
+                        )
+                        if node.node.exit_status != 0:
+                            log.info(
+                                f"No crash path at {crash_dir} on "
+                                f"{node.node.hostname}; treating as no crashes. "
+                                f"stderr={err}"
+                            )
+                            continue
                         crash_items = out.split()
                         log.info(crash_items)
                         if crash_type == "ceph_crash":
-                            crash_items.remove("posted")
+                            # "posted" is the staging dir; absent when no crashes yet
+                            crash_items = [
+                                item for item in crash_items if item != "posted"
+                            ]
                         if len(crash_items) > 0:
                             for crash_item in crash_items:
                                 if crash_type == "ceph_crash":
