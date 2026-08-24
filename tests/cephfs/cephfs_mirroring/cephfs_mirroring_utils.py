@@ -235,6 +235,16 @@ class CephfsMirroringUtils(object):
         self.fs_util_ceph2 = FsUtils(target_ceph_cluster)
 
     @staticmethod
+    def skip_if_rhcs_below(config, min_version="9.2"):
+        """Return True when the RHCS rhbuild is older than min_version.
+
+        rhbuild is typically ``9.2-rhel-9``; the numeric prefix is compared.
+        """
+        config = config or {}
+        rhbuild = str(config.get("rhbuild") or config.get("build") or "0")
+        return LooseVersion(rhbuild.split("-")[0]) < LooseVersion(min_version)
+
+    @staticmethod
     def verify_mount_points_responsive(client, mounting_dirs, timeout=30):
         """Verify mount points are not hung by touching a file on each.
 

@@ -100,10 +100,17 @@ def run(ceph_cluster, **kw):
     Note: Scenario for sync failure in test_cephfs_mirror_disruptive_ops.py
     Note: Zero-file directory sync validated in test_cephfs_mirror_improved_stats (R12).
 
-    Returns 0 on success, 1 on failure.
+    Returns 0 on success, 1 on failure, -1 if skipped.
     """
+    config = kw.get("config") or {}
+    if CephfsMirroringUtils.skip_if_rhcs_below(config):
+        log.info(
+            "Skipping test: requires Ceph version >= 9.2 (rhbuild=%s)",
+            config.get("rhbuild"),
+        )
+        return -1
+
     try:
-        config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         test_data = kw.get("test_data")
         fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
