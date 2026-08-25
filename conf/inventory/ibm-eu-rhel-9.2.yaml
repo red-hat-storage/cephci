@@ -129,6 +129,7 @@ instance:
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
           - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBNkaK5/dSj7VjggT4oCnc5nbf9AGAk6zduy0AiCWN/l5p9Q0r0e7rn81Pr8AMVpJL26Jr6ElWyJf1jF8rbxqbfTe6VwyRwQoHZETSqk9oDiSrsbZkNih/akwDlLcXVfWDw== ceph-qe-sa-sm@ibm.com
           - ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKFa+YJXE5pBoRYrLsdTBjoR2ckoIv5Syn1H6I9Jt/iuVWupS3haQCAjuXe3f7f2s8EqauEvZYLro0NQEjWt4rg= psathyan mac laptop
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDiyEczrypnoTNJHmzxegLvNjeU6hIh57KKvp63C3NbWfkIHO9rQES4NFQLR1yKFs9ow2hdzmjiGWYOEKRiMYOwllYjwCzOJnT/EnVMp79HmtXUfuWiVo5JYkZe1KVbIiSYRhrzJMU2eSuyIp6rPCaj+tF862fUZGJS2AFW6z7RJAOPjvJt1evG+Fc3i/Uwmr+dBBgpb/oEEqwIJN/kGJS9kLCfxDrGuqsCoVQ+3DpIUlHy624OzHordpCMYQP6CbSXbaLLNGbBen6ge1yg7UPkQP4UGnTwOcGOC/HAVyJii0bfUCdjPRTgbV95+XM7bt4A3lDB3Sg9MU1w5E4i3L7gEb5xgeWbPTkPPQ3u4hUTfirur/U4vm93CYU0C9Nvv94igr97k+VBWM82nuwCS0I3pk4mJEnhqRIOcYyUXYoKSSPXFZyjpqNoZp4aLE0Pgl0mT3d1GhevsPaGd/elecCdQx6zEkqo65XgtbKXuN+F5jpWcLreatKDhJ/+M85uH/U= ceph-qe-sa-sm@ibm.com
 
     chpasswd:
       expire: false
