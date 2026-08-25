@@ -526,6 +526,8 @@ class CephVMNodeIBM:
 
             key_identity_model = dict({"id": key_id})
             # SSH fingerprint of ceph-qe-sa.pub - ssh-keygen -lf ceph-qe-sa.pub
+            # This key has to be part of SSH Keys for VPC.
+            # FixMe: switch this key to FIPs compliant in the future.
             key_identity_shared = {
                 "fingerprint": "SHA256:SFan4TdEd1xcT4v9So8q4A+B/f2PcXOoPfS2vwPk9/M"
             }
