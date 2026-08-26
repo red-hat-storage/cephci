@@ -6,6 +6,7 @@ from cli.exceptions import ConfigError
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
+    collect_gklm_logs_on_failure,
     create_nfs_instance_for_byok,
     get_enctag,
     load_gklm_config,
@@ -45,6 +46,8 @@ def run(ceph_cluster, **kw):
     Cleanup:
      - Cleanup all resources on success or failure.
     """
+    gklm_params = None
+    test_failed = True
     try:
         global byok_setup_params, nfs_mount, nfs_export, port, clients, fs_name, config, client_export_mount_dict
         global setup_params, cephfs_common_utils
@@ -117,6 +120,7 @@ def run(ceph_cluster, **kw):
             log.error("FAIL:BYOK Test for Incorrect KMIP cert")
             return 1
         log.info("PASS:BYOK Test for Incorrect KMIP cert")
+        test_failed = False
         return 0
 
     except Exception as e:
@@ -125,6 +129,8 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
+        if test_failed:
+            collect_gklm_logs_on_failure(gklm_params)
         if incorrect_enctag_cleanup != 1 or incorrect_cert_cleanup != 1:
             clean_up_gklm(
                 gklm_rest_client=byok_setup_params["gklm_rest_client"],

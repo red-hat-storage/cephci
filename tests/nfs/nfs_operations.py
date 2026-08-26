@@ -3,6 +3,7 @@ import os
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import datetime
 from threading import Thread
 from time import sleep
@@ -27,6 +28,25 @@ log = Log(__name__)
 ceph_cluster_obj = None
 setup_start_time = None
 GANESHA_SUBVOL_GROUP = "ganeshagroup"
+
+
+def _redact_kmip_key_for_log(obj):
+    """Deep-copy NFS spec(s) with kmip_key private key material removed."""
+    redacted = deepcopy(obj)
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "kmip_key":
+                    node[key] = "<redacted>"
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(redacted)
+    return redacted
 
 
 def ensure_ganeshagroup(
@@ -1705,7 +1725,7 @@ def create_multiple_nfs_instance_via_spec_file(
             f"Creating {replication_number} NFS Ganesha instance(s) "
             f"using base spec service_id='{spec['service_id']}'..."
         )
-        log.debug(f"Full generated specs: {new_objects}")
+        log.debug("Full generated specs: %s", _redact_kmip_key_for_log(new_objects))
 
         # Deploy the NFS service(s) via orchestrator
         if not create_nfs_via_file_and_verify(

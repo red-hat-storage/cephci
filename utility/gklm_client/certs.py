@@ -1,15 +1,77 @@
 import os
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 import requests
 import urllib3
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
 
 from utility.gklm_client.auth import GklmAuth
-from utility.utils import generate_self_signed_certificate
+from utility.log import Log
+from utility.utils import generate_self_signed_certificate, get_cephqe_ca
+
+log = Log(__name__)
 
 # Suppress the InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Backdate KMIP client-cert NotBefore so a KMS clock a few minutes behind
+# the issuer does not raise CertificateNotYetValidException.
+KMIP_CLIENT_CERT_NOT_BEFORE_SKEW = timedelta(minutes=5)
+# Extra wait after NotBefore so a KMS that is still slightly behind the
+# issuer does not reject the brand-new cert.
+_KMIP_CERT_VALIDITY_BUFFER_SEC = 5
+
+
+def _backdate_kmip_client_cert(key_pem: str, cert_pem: str) -> str:
+    """Re-sign a KMIP client cert with NotBefore a few minutes in the past."""
+    orig = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
+    key = serialization.load_pem_private_key(key_pem.encode(), password=None)
+    ca_key, _ = get_cephqe_ca()
+    now = datetime.utcnow()
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(orig.subject)
+        .issuer_name(orig.issuer)
+        .public_key(orig.public_key())
+        .serial_number(orig.serial_number)
+        .not_valid_before(now - KMIP_CLIENT_CERT_NOT_BEFORE_SKEW)
+        .not_valid_after(now + timedelta(days=30))
+    )
+    try:
+        san = orig.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        builder = builder.add_extension(san.value, san.critical)
+    except x509.ExtensionNotFound:
+        pass
+    signed = builder.sign(ca_key if ca_key else key, hashes.SHA256(), default_backend())
+    return signed.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+
+
+def wait_until_kmip_client_cert_valid(
+    cert_pem: str, extra_buffer_sec: int = _KMIP_CERT_VALIDITY_BUFFER_SEC
+) -> None:
+    """Sleep until issuer clock is past cert NotBefore plus a small buffer."""
+    cert = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
+    not_before = getattr(cert, "not_valid_before_utc", None)
+    if not_before is None:
+        not_before = cert.not_valid_before
+    if getattr(not_before, "tzinfo", None) is None:
+        not_before = not_before.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    ready_at = not_before + timedelta(seconds=extra_buffer_sec)
+    wait_sec = (ready_at - now).total_seconds()
+    if wait_sec <= 0:
+        return
+    log.info(
+        "Waiting %.1fs until KMIP client cert NotBefore + %ss buffer",
+        wait_sec,
+        extra_buffer_sec,
+    )
+    time.sleep(wait_sec)
 
 
 def _coerce_certificate_list(data: Any) -> List[Dict[str, Any]]:
@@ -116,6 +178,13 @@ class GklmCertificate:
 
     def get_certificates(self, subject: dict, create_files=False) -> tuple:
         key, cert, ca = generate_self_signed_certificate(subject=subject)
+        cert = _backdate_kmip_client_cert(key, cert)
+        log.info(
+            "Issued KMIP client cert for CN=%s with NotBefore skewed back by %s",
+            subject.get("common_name"),
+            KMIP_CLIENT_CERT_NOT_BEFORE_SKEW,
+        )
+        wait_until_kmip_client_cert_valid(cert)
         if create_files:
             with open(f"{subject['common_name']}.key", "w") as f:
                 f.write(key)
@@ -130,7 +199,7 @@ class GklmCertificate:
                 os.path.abspath(f"{subject['common_name']}.ca") if ca else None,
             )
             return abs_path
-        return generate_self_signed_certificate(subject)
+        return key, cert, ca
 
     def list_system_certificates(self) -> List[Dict[str, Any]]:
         """
