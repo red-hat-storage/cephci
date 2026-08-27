@@ -12,6 +12,7 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
+    collect_gklm_logs_on_failure,
     get_enctag,
     load_gklm_config,
     nfs_byok_test_setup,
@@ -83,6 +84,8 @@ def run(ceph_cluster, **kw):
         Remove subvolumes and subvolumegroup
         Remove FS volume if created
     """
+    gklm_params = None
+    test_failed = True
     try:
         global byok_test_params, cephfs_common_utils, fs_util, fs_system_utils, fs_io
         test_data = kw.get("test_data")
@@ -201,6 +204,7 @@ def run(ceph_cluster, **kw):
             result_str = f"Test {test_name} passed"
             log.info(result_str)
 
+        test_failed = False
         return 0
     except Exception as e:
         log.error(e)
@@ -208,6 +212,8 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
+        if test_failed:
+            collect_gklm_logs_on_failure(gklm_params)
         wait_time_secs = 300
         if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
             log.error(

@@ -1,13 +1,18 @@
 import json
+import logging
+import os
+import shlex
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 
 import requests
 import yaml
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
+from cli.connectible.remote import Remote
 from cli.exceptions import ConfigError
 from tests.nfs.nfs_operations import (
     _LiteralPemDumper,
@@ -26,9 +31,151 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
 )
 from utility.gklm_client.gklm_client import build_gklm_client
 
-# GKLM needs wall-clock settle time after NFS apply/SIGHUP before KMIP certs
-# are queryable via REST. Prefer a named wait over an opaque magic sleep.
-_GKLM_CERT_SETTLE_SEC = 30
+# NFS-Ganesha needs wall-clock settle time after orch apply before KMIP/exports.
+# Prefer a named wait over an opaque magic sleep.
+_GKLM_CERT_SETTLE_SEC = 60
+
+# IBM GKLM 5.x default WAS_HOME on Linux (Fix Pack README / Support Matrix).
+# Product logs: <WAS_HOME>/products/sklm/logs/{sklm.log,debug,agent.log}
+# Audit:        <WAS_HOME>/products/sklm/logs/audit/sklm_audit.log
+# Liberty:      <WAS_HOME>/usr/servers/<server>/logs/{messages.log,console.log}
+# https://www.ibm.com/support/pages/ibm-guardium-key-lifecycle-manager-support-matrix
+# https://www.ibm.com/support/pages/ibm-guardium-key-lifecycle-manager-version-500-fix-pack-3-readme
+_GKLM_WAS_HOME_DEFAULT = "/opt/IBM/WebSphere/Liberty"
+_GKLM_LOG_TAIL_LINES = 250
+_GKLM_SECRET_KEYS = ("gklm_password", "gklm_node_password", "password")
+_KMIP_SECRET_SPEC_KEYS = ("kmip_key",)
+
+
+def _redact_secrets_for_log(obj):
+    """Return a deep copy with GKLM passwords and KMIP private keys removed."""
+    redacted = deepcopy(obj)
+    secret_keys = set(_GKLM_SECRET_KEYS + _KMIP_SECRET_SPEC_KEYS)
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                key_l = str(key).lower()
+                if key in secret_keys or "password" in key_l:
+                    node[key] = "<redacted>"
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(redacted)
+    return redacted
+
+
+def _cephci_run_log_dir():
+    """Directory of the current cephci test log file, if a FileHandler exists."""
+    try:
+        for handler in logging.getLogger("cephci").handlers:
+            path = getattr(handler, "baseFilename", None)
+            if path:
+                return os.path.dirname(os.path.abspath(path))
+    except Exception:
+        pass
+    return log.log_dir
+
+
+def collect_gklm_logs_on_failure(gklm_params, tail_lines=_GKLM_LOG_TAIL_LINES):
+    """
+    SSH to the GKLM 5.x host and dump recent product/Liberty logs into cephci logs.
+
+    Call from BYOK ``finally`` only when the test failed. Collection is non-fatal
+    so cleanup still runs. IBM GUI equivalent is Configuration → Audit and Debug
+    → Download log files (Getting Started Guide); this helper reads the same
+    on-disk locations over SSH.
+
+    Args:
+        gklm_params (dict): Output of ``load_gklm_config`` (or equivalent).
+        tail_lines (int): Lines to capture from each log file.
+    """
+    if not gklm_params:
+        log.warning("Skipping GKLM log collection; GKLM params not initialized")
+        return
+
+    host = gklm_params.get("gklm_ip") or gklm_params.get("gklm_hostname")
+    username = gklm_params.get("gklm_node_username") or gklm_params.get(
+        "gklm_node_user"
+    )
+    password = gklm_params.get("gklm_node_password")
+    was_home = gklm_params.get("gklm_was_home") or _GKLM_WAS_HOME_DEFAULT
+    hostname = gklm_params.get("gklm_hostname") or host
+
+    if not host or not username or not password:
+        log.warning(
+            "Skipping GKLM log collection; missing SSH host/user/password in GKLM params"
+        )
+        return
+
+    log.info(
+        "Collecting GKLM 5.x logs from %s (%s) WAS_HOME=%s (last %s lines per file)",
+        host,
+        hostname,
+        was_home,
+        tail_lines,
+    )
+
+    quoted_home = shlex.quote(was_home)
+    remote_cmd = (
+        f"WAS_HOME={quoted_home}; "
+        f"N={int(tail_lines)}; "
+        'echo "=== GKLM log directory listing ==="; '
+        'ls -la "$WAS_HOME/products/sklm/logs" '
+        '"$WAS_HOME/products/sklm/logs/audit" '
+        '"$WAS_HOME/products/sklm/logs/replication" '
+        "$WAS_HOME/usr/servers/*/logs 2>/dev/null || true; "
+        "for f in "
+        '"$WAS_HOME/products/sklm/logs/sklm.log" '
+        '"$WAS_HOME/products/sklm/logs/debug" '
+        '"$WAS_HOME/products/sklm/logs/debug.log" '
+        '"$WAS_HOME/products/sklm/logs/agent.log" '
+        '"$WAS_HOME/products/sklm/logs/audit/sklm_audit.log"; do '
+        '  if [ -f "$f" ]; then '
+        '    echo ""; echo "===== tail -n $N $f ====="; tail -n "$N" "$f"; '
+        "  fi; "
+        "done; "
+        "for f in $WAS_HOME/usr/servers/*/logs/messages.log "
+        "$WAS_HOME/usr/servers/*/logs/console.log; do "
+        '  if [ -f "$f" ]; then '
+        '    echo ""; echo "===== tail -n $N $f ====="; tail -n "$N" "$f"; '
+        "  fi; "
+        "done"
+    )
+
+    remote = None
+    try:
+        remote = Remote(host=host, username=username, password=password)
+        stdout, stderr = remote.run(cmd=remote_cmd, timeout=180)
+        banner = (
+            f"========== GKLM 5.x logs (test failure) "
+            f"host={hostname} ip={host} =========="
+        )
+        log.info("%s\n%s", banner, stdout or "(no GKLM log content returned)")
+        if stderr:
+            log.warning("GKLM log collection stderr: %s", stderr)
+
+        run_dir = _cephci_run_log_dir()
+        if run_dir and stdout:
+            dest_dir = os.path.join(run_dir, "gklm_logs")
+            os.makedirs(dest_dir, exist_ok=True)
+            dest = os.path.join(dest_dir, f"gklm-{hostname}-failure.log")
+            with open(dest, "w", encoding="utf-8", errors="replace") as fh:
+                fh.write(stdout)
+                if not stdout.endswith("\n"):
+                    fh.write("\n")
+            log.info("Wrote GKLM logs to %s", dest)
+    except Exception as ex:
+        log.warning("GKLM log collection failed (non-fatal): %s", ex)
+    finally:
+        if remote is not None:
+            try:
+                remote._client.close()
+            except Exception:
+                pass
 
 
 def is_gklm_auth_error(exc) -> bool:
@@ -314,7 +461,7 @@ def create_nfs_instance_for_byok(
             "kmip_host_list": [kmip_host_list],
         },
     }
-    log.debug(f"NFS service spec: {nfs_cluster_dict}")
+    log.debug("NFS service spec: %s", _redact_secrets_for_log(nfs_cluster_dict))
 
     create_nfs_via_file_and_verify(
         installer_node=installer,
@@ -579,13 +726,18 @@ def load_gklm_config(custom_data, config, cephci_data):
                         "gklm_node_password",
                         "gklm_hostname",
                         "gklm_rest_prefix",
+                        "gklm_was_home",
                     }
                     for k in gklm_yaml_keys:
                         if k in raw and raw[k] not in ("", None):
                             data[k] = raw[k]
             if data:
                 merged.update(data)
-                log.info("Loaded GKLM config from file '%s': %s", yaml_file, data)
+                log.info(
+                    "Loaded GKLM config from file '%s' (keys: %s)",
+                    yaml_file,
+                    sorted(data.keys()),
+                )
             else:
                 log.warning(
                     "GKLM section empty or missing under 'gklm:' in '%s'",
@@ -611,9 +763,13 @@ def load_gklm_config(custom_data, config, cephci_data):
             "gklm_node_password",
             "gklm_hostname",
             "gklm_rest_prefix",
+            "gklm_was_home",
         }:
             merged[key] = val
-            log.info("Overrode GKLM config '%s' via custom-config: %s", key, val)
+            if "password" in key.lower():
+                log.info("Overrode GKLM config '%s' via custom-config", key)
+            else:
+                log.info("Overrode GKLM config '%s' via custom-config: %s", key, val)
         else:
             log.warning("Unknown GKLM config key in custom-config: '%s'", key)
 
@@ -636,7 +792,8 @@ def load_gklm_config(custom_data, config, cephci_data):
     log.info(
         "Final GKLM configuration keys: %s",
         [k for k in required if k in merged]
-        + (["gklm_rest_prefix"] if merged.get("gklm_rest_prefix") else []),
+        + (["gklm_rest_prefix"] if merged.get("gklm_rest_prefix") else [])
+        + (["gklm_was_home"] if merged.get("gklm_was_home") else []),
     )
     return merged
 
@@ -780,7 +937,10 @@ def create_multiple_nfs_instance_for_byok(
         spec["kmip_key"] = (rsa_key.rstrip("\\n"),)
         spec["kmip_ca_cert"] = (ca_cert.rstrip("\\n"),)
         spec["kmip_host_list"] = [kmip_host_list]
-        log.debug(f"Prepared BYOK-enabled NFS Ganesha service spec:\n{spec}")
+        log.debug(
+            "Prepared BYOK-enabled NFS Ganesha service spec:\n%s",
+            _redact_secrets_for_log(spec),
+        )
 
         # Call core spec deployment function
         result = create_multiple_nfs_instance_via_spec_file(

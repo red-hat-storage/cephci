@@ -6,6 +6,7 @@ from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import MountFailedError, Unmount
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
+    collect_gklm_logs_on_failure,
     create_nfs_instance_for_byok,
     get_enctag,
     load_gklm_config,
@@ -122,6 +123,7 @@ def run(ceph_cluster, **kw):
     new_ca_cert_alias = "custom_sni_host"
     client_export_mount_dict = None
     gklm_rest_client = None
+    test_failed = True
 
     try:
         log.info("Step 1: Setting up GKLM infrastructure")
@@ -344,6 +346,7 @@ def run(ceph_cluster, **kw):
             )
             return 1
 
+        test_failed = False
         return 0
 
     except MountFailedError:
@@ -356,6 +359,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Mount failed as expected due to hostname mismatch in GKLM certificate."
             )
+            test_failed = False
             return 0
 
     except Exception as e:
@@ -365,6 +369,8 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
+        if test_failed:
+            collect_gklm_logs_on_failure(gklm_params)
         if operation not in [
             "Mismatch Validation Hostname",
             "No SNI - Validate Other Hostname",

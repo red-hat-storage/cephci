@@ -5,6 +5,7 @@ from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Unmount
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
+    collect_gklm_logs_on_failure,
     create_multiple_nfs_instance_for_byok,
     create_nfs_instance_for_byok,
     ensure_fresh_gklm_kmip_client,
@@ -235,6 +236,7 @@ def run(ceph_cluster, **kw):
     gklm_cert_alias = "cert2"
     client_export_mount_dict = None
     spec = config.get("spec")
+    test_failed = True
 
     try:
         log.info("Step 1: Setting up GKLM infrastructure")
@@ -487,6 +489,7 @@ def run(ceph_cluster, **kw):
                 is_multicluster=True,
             )
 
+        test_failed = False
         return 0
 
     except Exception as e:
@@ -496,6 +499,8 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
+        if test_failed:
+            collect_gklm_logs_on_failure(gklm_params)
         if config.get("check_sighup", False):
             try:
                 ensure_gklm_login(gklm_rest_client)
