@@ -257,6 +257,54 @@ tests:
       polarion-id: CEPH-83575199
 
   - test:
+      name: Test GET without CORS and origin
+      desc: Test GET without CORS and origin
+      polarion-id: CEPH-83632950
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_cors_noconf_get_origin.py
+            config-file-name: ../../aws/configs/test_aws_cors_noconf_get_without_origin.yaml
+            verify-io-on-site: ["ceph-sec", "ceph-arc"]
+
+  - test:
+      name: Test GET without CORS and with origin
+      desc: Test GET without CORS and with origin
+      polarion-id: CEPH-83632950
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_cors_noconf_get_origin.py
+            config-file-name: ../../aws/configs/test_aws_cors_noconf_get_with_origin.yaml
+            verify-io-on-site: ["ceph-sec", "ceph-arc"]
+
+  - test:
+      name: Test GET with CORS and without origin
+      desc: Test GET with CORS and without origin
+      polarion-id: CEPH-83632950
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_cors_noconf_get_origin.py
+            config-file-name: ../../aws/configs/test_aws_cors_set_get_without_origin.yaml
+            verify-io-on-site: ["ceph-sec", "ceph-arc"]
+
+  - test:
+      name: Test GET with CORS and origin
+      desc: Test GET with CORS and origin
+      polarion-id: CEPH-83632950
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_cors_noconf_get_origin.py
+            config-file-name: ../../aws/configs/test_aws_cors_set_get_with_origin.yaml
+            verify-io-on-site: ["ceph-sec", "ceph-arc"]
+
+  - test:
       clusters:
         ceph-pri:
           config:
