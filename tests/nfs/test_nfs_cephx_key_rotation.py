@@ -7,20 +7,21 @@ manual ``ceph auth rotate``, ``ceph orch redeploy``, ``ceph nfs export
 apply``, or unmount/remount.
 
 Steps:
-  1. Setup NFS cluster and mount (version from suite YAML).
-  2. Write a baseline file on the live mount.
-  3. Snapshot CephX keys (logged half-masked).
-  4. Run ``ceph nfs cluster rotate-key <cluster> --key-type aes256k``.
-  5. Assert JSON: rotated non-empty, service_redeployed=true,
-     updated_exports includes the export.
-  6. Wait for NFS daemons to be running again.
-  7. Same mount (no umount/mount): baseline file readable, new file IO.
-  8. Snapshot keys again; log masked before/after; fail if any key is
-     unchanged.
-  9. Assert Ganesha logs do not contain export-init errors.
-  10. Cleanup (unmount is teardown only).
+    1. If ``ceph nfs cluster --help`` has no rotate-key, skip (pre-CephX).
+    2. Setup NFS cluster and mount (version from suite YAML).
+    3. Write a baseline file on the live mount.
+    4. Snapshot CephX keys (logged half-masked).
+    5. Run ``ceph nfs cluster rotate-key <cluster> --key-type aes256k``.
+    6. Assert JSON: rotated non-empty, service_redeployed=true,
+       updated_exports includes the export.
+    7. Wait for NFS daemons to be running again.
+    8. Same mount (no umount/mount): baseline file readable, new file IO.
+    9. Snapshot keys again; log masked before/after; fail if any key is
+       unchanged.
+    10. Assert Ganesha logs do not contain export-init errors.
+    11. Cleanup (unmount is teardown only).
 
-Conf:  conf/tentacle/nfs/1admin-3node-1client.yaml
+Conf:  conf/tentacle/nfs/1admin-7node-3client.yaml
 Suite: suites/tentacle/nfs/tier1-nfs-ganesha-cephx-key-rotation.yaml
 """
 
@@ -58,6 +59,28 @@ GANESHA_ERROR_PATTERNS = [
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
+
+def _rotate_key_available(installer):
+    """Return True if ``ceph nfs cluster rotate-key`` exists on this build.
+
+    Uses ``ceph nfs cluster --help`` (same style as other NFS feature probes).
+    Missing subcommand → pre-CephX build; skip. Help failure → hard error.
+    """
+    out, err = installer.exec_command(
+        sudo=True,
+        cmd="cephadm shell -- ceph nfs cluster --help",
+        check_ec=False,
+    )
+    help_text = "\n".join(part for part in (out, err) if part)
+    if "rotate-key" in help_text:
+        return True
+    if installer.exit_status == 0:
+        return False
+    raise OperationFailedError(
+        "Could not run 'ceph nfs cluster --help' to detect rotate-key "
+        f"(rc={installer.exit_status}): {help_text.strip() or '<empty>'}"
+    )
 
 
 def _mask_key(key):
@@ -415,6 +438,13 @@ def run(ceph_cluster, **kw):
             f"Test requires {no_clients} client(s) but only {len(clients)} available"
         )
     clients = clients[:no_clients]
+
+    if not _rotate_key_available(installer):
+        log.info(
+            "TEST SKIPPED - ceph nfs cluster rotate-key not in "
+            "'ceph nfs cluster --help' (pre-CephX build)"
+        )
+        return 0
 
     # All NFS hostnames so CephX keys register on every NFS daemon.
     nfs_server_hostnames = [n.hostname for n in nfs_nodes]

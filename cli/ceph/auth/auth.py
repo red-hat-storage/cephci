@@ -63,20 +63,3 @@ class Auth(Cli):
 
         out = self.execute(sudo=True, cmd=cmd)
         return out[0].strip() if isinstance(out, tuple) else out
-
-    def rotate(self, entity, key_type=None):
-        """
-        Rotate the CephX key for the given entity.
-
-        Args:
-            entity (str): auth entity to rotate (e.g. client.nfs.cephfs-nfs)
-            key_type (str): optional key type to rotate to (e.g. aes256k)
-
-        Returns:
-            str: CLI output containing the new key block
-        """
-        cmd = f"{self.base_cmd} rotate {entity}"
-        if key_type:
-            cmd += f" --key-type {key_type}"
-        out = self.execute(sudo=True, cmd=cmd)
-        return out[0].strip() if isinstance(out, tuple) else out

@@ -3,7 +3,7 @@
 #---    IBMCEPH-16471 / IBMCEPH-16399                    ---
 #---    Polarion: CEPH-83632951                          ---
 #----------------------------------------------------------
-# Conf: conf/tentacle/nfs/1admin-3node-1client.yaml
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
 #
 # What this suite tests:
 #   ceph nfs cluster rotate-key (9.1z2 fix verification):
