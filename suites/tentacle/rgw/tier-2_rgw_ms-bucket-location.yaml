@@ -442,14 +442,13 @@ tests:
       name: create non-tenanted user
       polarion-id: CEPH-83575199
 
-
   - test:
       clusters:
         ceph-pri:
           config:
             script-name: test_bucket_location_constraint.py
             config-file-name: test_bucket_location_constraint_primary.yaml
-      desc: Bucket creation in primary zonegroup with location constraint
+      desc: Bucket creation and deletion in primary zonegroup with location constraint
       module: sanity_rgw_multisite.py
       name: test bucket location constraint primary zg
       polarion-id: CEPH-83623503
@@ -460,7 +459,7 @@ tests:
           config:
             script-name: test_bucket_location_constraint.py
             config-file-name: test_bucket_location_constraint_tertiary.yaml
-      desc: Bucket creation in tertiary zonegroup with location constraint
+      desc: Bucket creation and deletion in tertiary zonegroup with location constraint
       module: sanity_rgw_multisite.py
       name: test bucket location constraint tertiary zg
       polarion-id: CEPH-83623503
@@ -471,8 +470,19 @@ tests:
           config:
             script-name: test_bucket_location_constraint.py
             config-file-name: test_bucket_location_constraint_default.yaml
-      desc: Bucket creation defaults to endpoint zonegroup without region
+      desc: Bucket creation and deletion defaults to endpoint zonegroup without region
       module: sanity_rgw_multisite.py
       name: test bucket location constraint default zg
+      polarion-id: CEPH-83623503
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_location_constraint.py
+            config-file-name: test_bucket_location_constraint_delete_with_objects.yaml
+      desc: Delete bucket with objects defaults to endpoint zonegroup without region
+      module: sanity_rgw_multisite.py
+      name: test bucket location constraint delete with objects with default zg
       polarion-id: CEPH-83623503
 
