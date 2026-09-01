@@ -1433,6 +1433,34 @@ def _cleanup_stale_nfs_mount(client, mount_name):
         log.debug("Ignoring unmount cleanup for %s: %s", mount_name, exc)
 
 
+def _nfs_export_is_listed(client, nfs_name, export_name):
+    """Return True when ``export_name`` appears in ``ceph nfs export ls``."""
+    try:
+        raw = Ceph(client).nfs.export.ls(nfs_name)
+        if not raw:
+            return False
+        if isinstance(raw, str):
+            try:
+                exports = json.loads(raw)
+            except json.JSONDecodeError:
+                return export_name in raw
+        else:
+            exports = raw
+        if isinstance(exports, list):
+            if export_name in exports:
+                return True
+            return any(export_name in str(entry) for entry in exports)
+        return export_name in str(exports)
+    except Exception as exc:
+        log.debug(
+            "nfs export ls check failed for %s on %s: %s",
+            export_name,
+            nfs_name,
+            exc,
+        )
+        return False
+
+
 def wait_for_nfs_and_mount(
     client,
     mount_name,
@@ -1458,8 +1486,9 @@ def wait_for_nfs_and_mount(
     ``mount_timeout``), not via NFS ``-o mounttimeout`` which mount.nfs
     rejects on RHEL.
 
-    Polls ``ceph orch ps`` for running NFS daemons, the NFS TCP port, and
-    export mountability before each mount attempt until ``nfs_wait_timeout``.
+    Polls ``ceph orch ps`` for running NFS daemons, the NFS TCP port,
+    ``ceph nfs export ls`` (when ``nfs_name`` is set), and export
+    mountability before each mount attempt until ``nfs_wait_timeout``.
     """
     mount_kwargs = normalize_mount_kwargs(
         {
@@ -1485,6 +1514,18 @@ def wait_for_nfs_and_mount(
             port,
             timeout=per_check_timeout,
         )
+        if nfs_name is not None and not _nfs_export_is_listed(
+            client, nfs_name, export_name
+        ):
+            log.warning(
+                "Export %s not yet listed for %s on %s (attempt %s, ~%ss)",
+                export_name,
+                nfs_name,
+                client.hostname,
+                w._attempt,
+                w._attempt * w.interval,
+            )
+            continue
         try:
             nfs_mount(
                 client,
