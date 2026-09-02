@@ -40,9 +40,9 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
-        if len(clients) < 2:
+        if not clients:
             log.info(
-                f"This test requires minimum 2 client nodes.This has only {len(clients)} clients"
+                f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
         fs_util.prepare_clients(clients, build)
