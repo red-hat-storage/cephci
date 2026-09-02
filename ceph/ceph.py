@@ -1564,7 +1564,9 @@ class CephNode(object):
         self.private_ip = kw["private_ip"]
 
         # Explicit IPv4 storage (backward compat: ip_address/subnet treated as IPv4)
-        self.ipv4_address = kw.get("ipv4_address") or kw.get("ip_address")
+        self.ipv4_address = (
+            kw.get("ipv4_address") or kw.get("ip_address") or kw.get("private_ip")
+        )
         self.ipv4_subnet = kw.get("ipv4_subnet") or kw.get("subnet")
         self.ipv6_address = kw.get("ipv6_address")
         self.ipv6_subnet = kw.get("ipv6_subnet")

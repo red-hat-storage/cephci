@@ -1,0 +1,24 @@
+---
+# OCP Virtualization namespace template for RDU3 ceph-sys-test tenant.
+# Use with: --custom-config ocpvirt_namespace=rdu3_ceph_sys_test
+#
+# Auth (token, certificate_authority_data, private_key_path) stays in --osp-cred.
+# Cloud-init stays in --inventory; compute sizing uses ocpvirt_profile (cluster instance type).
+
+server: https://10.5.229.33:6443
+namespace: ceph-sys-test--runtime-int
+storage_class: rh-restricted-nfs
+network: bridge-504
+root_disk_size: 80Gi
+
+# Full datasource URLs for inventory short names (datasource://rhel9, etc.)
+datasources:
+  rhel9: datasource://openshift-virtualization-os-images/rhel9
+  rhel10: datasource://openshift-virtualization-os-images/rhel10
+
+# Optional PVC access modes (default ReadWriteOnce when omitted)
+# access_modes:
+#   - ReadWriteOnce
+
+# Optional guest subnet hint for cephadm public_network auto-detect
+# subnet: 10.5.228.0/24
