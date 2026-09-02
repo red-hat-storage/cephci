@@ -22,7 +22,7 @@ Steps:
     11. Cleanup (unmount is teardown only).
 
 Conf:  conf/tentacle/nfs/1admin-7node-3client.yaml
-Suite: suites/tentacle/nfs/tier1-nfs-ganesha-cephx-key-rotation.yaml
+Suite: suites/tentacle/nfs/tier1-nfs-ganesha.yaml
 """
 
 import json
@@ -42,7 +42,7 @@ from utility.log import Log
 log = Log(__name__)
 
 # ── constants ────────────────────────────────────────────────────────────────
-NFS_NAME = "cephfs-nfs"
+NFS_NAME = "cephfs-nfs-cephx"
 FS_NAME = "cephfs"
 NFS_EXPORT = "/export_0"
 NFS_MOUNT = "/mnt/nfs_cephx"
@@ -413,7 +413,7 @@ def run(ceph_cluster, **kw):
         nfs_version (str): NFS mount version, default "4.1"
         port (str): NFS port, default "2049"
         clients (int): number of client nodes to use, default 1
-        nfs_name (str): NFS cluster name, default "cephfs-nfs"
+        nfs_name (str): NFS cluster name, default "cephfs-nfs-cephx"
         fs_name (str): CephFS filesystem name, default "cephfs"
         nfs_mount (str): client mount point, default "/mnt/nfs_cephx"
 

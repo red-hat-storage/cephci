@@ -134,6 +134,17 @@ tests:
       name: configure client
 
   - test:
+      name: NFS CephX key rotation ceph nfs cluster rotate key
+      module: test_nfs_cephx_key_rotation.py
+      desc: NFS export stays mounted post nfs cluster key rotate
+      polarion-id: CEPH-83632951
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        nfs_name: cephfs-nfs-cephx
+
+  - test:
       name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
       module: nfs_verify_symbolic_links_permissions.py
       desc: Verify symbolic links inherit appropriate permissions and not allow unauthorized access
