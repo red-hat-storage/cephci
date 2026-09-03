@@ -458,6 +458,12 @@ def get_installer(ceph_cluster):
 
 
 def _install_ceph_common_if_needed(node):
+    """Install ceph-common when the node has no ``ceph`` CLI.
+
+    ``exec_command(..., check_ec=False)`` returns ``(stdout, stderr)``, not
+    an exit code. dnf/yum write progress to stderr, so treating the second
+    tuple item as ``rc`` fails a successful install.
+    """
     out, _ = node.exec_command(
         sudo=True,
         cmd="command -v ceph && echo present || echo absent",
@@ -469,12 +475,19 @@ def _install_ceph_common_if_needed(node):
         "dnf install -y ceph-common --nogpgcheck",
         "yum install -y ceph-common --nogpgcheck",
     ):
-        _, rc = node.exec_command(
+        _, err = node.exec_command(
             sudo=True, cmd=install_cmd, check_ec=False, timeout=600
         )
-        if rc == 0:
+        if int(getattr(node, "exit_status", 1)) == 0:
             log.info("Installed ceph-common on %s", node.hostname)
             return
+        log.warning(
+            "ceph-common install via '%s' failed on %s (rc=%s): %s",
+            install_cmd,
+            node.hostname,
+            getattr(node, "exit_status", None),
+            (err or "").strip()[:500],
+        )
     raise OperationFailedError("Failed to install ceph-common on %s" % node.hostname)
 
 
@@ -2708,9 +2721,19 @@ def verify_f02_enable_metrics_reload_vs_restart(ctx):
     )
     ctx.refresh_container_id()
     verify_monitoring_port_listening(ctx.nfs_node, port)
-    if not metrics_scrape_ok(ctx.client, ctx.nfs_ip, port):
+    recovery_timeout = int(ctx.config.get("f02_metrics_recovery_timeout", 120))
+    try:
+        wait_metrics_recovery(
+            ctx.client, ctx.nfs_ip, port, timeout=recovery_timeout
+        )
+    except OperationFailedError as exc:
         raise OperationFailedError(
             "F-02B: metrics not restored after redeploy with enable_metrics=true"
+        ) from exc
+    if not metrics_scrape_ok(ctx.client, ctx.nfs_ip, port):
+        raise OperationFailedError(
+            "F-02B: metrics endpoint up but rpcs_received_total missing after "
+            "enable_metrics=true redeploy"
         )
     log.info("F-02B: enable_metrics=true restored after redeploy")
 
