@@ -82,7 +82,7 @@ tests:
       module: smb_upgrade_operations.py
       polarion-id: CEPH-83622441
       config:
-        deployment_version: 9.0
+        deployment_version: 9.1
         deployment_release: released
         operations:
           - deploy_smb
