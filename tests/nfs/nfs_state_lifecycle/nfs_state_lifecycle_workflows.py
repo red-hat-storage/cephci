@@ -482,6 +482,34 @@ class NfsStateLifecycleWorkflows:
             self.install_grpcurl()
         except Exception as e:
             log.warning("grpcurl install failed (gRPC checks will be skipped): %s", e)
+
+        try:
+            from test_nfs_grpc import (
+                copy_nfs_grpc_certs,
+                grpc_requires_mtls,
+                resolve_ceph_version,
+            )
+
+            ceph_version = resolve_ceph_version(self.clients[0], self.installer)
+            self._grpc_use_mtls = grpc_requires_mtls(ceph_version)
+            log.info(
+                "Ceph version %s -> NFS gRPC mode: %s",
+                ceph_version,
+                "mTLS" if self._grpc_use_mtls else "plaintext",
+            )
+
+            if self._grpc_use_mtls:
+                try:
+                    self._grpc_cert_dir = copy_nfs_grpc_certs(
+                        self.installer, self.clients[0], nfs_name
+                    )
+                except Exception as e:
+                    log.error("NFS gRPC mTLS cert copy failed: %s", e)
+                    raise
+        except Exception as e:
+            self._grpc_cert_dir = None
+            self._grpc_use_mtls = False
+            log.warning("Unable to configure NFS gRPC cert/version helpers: %s", e)
         log.info("All cluster configs applied for %s", nfs_name)
 
     # ------------------------------------------------------------------
@@ -505,28 +533,44 @@ class NfsStateLifecycleWorkflows:
     def get_client_ids(self):
         """Query active NFS client IDs via gRPC GetClientIds.
 
-        Delegates to ``test_nfs_grpc.get_client_ids()``.
+        Delegates to ``test_nfs_grpc.get_client_ids()`` (mTLS or plaintext
+        based on Ceph version).
 
         Returns:
             tuple: (success: bool, client_ids: list of str).
             Returns (False, []) if grpcurl is not installed or gRPC fails.
         """
-        from test_nfs_grpc import get_client_ids
+        from test_nfs_grpc import GRPC_CERT_DIR_CLIENT, get_client_ids
 
-        return get_client_ids(self.clients[0], self.get_nfs_server_ip())
+        cert_dir = getattr(self, "_grpc_cert_dir", GRPC_CERT_DIR_CLIENT)
+        use_mtls = getattr(self, "_grpc_use_mtls", False)
+        return get_client_ids(
+            self.clients[0],
+            self.get_nfs_server_ip(),
+            cert_dir=cert_dir,
+            use_mtls=use_mtls,
+        )
 
     def get_session_ids(self):
         """Query active NFS session IDs via gRPC GetSessionIds.
 
-        Delegates to ``test_nfs_grpc.get_session_ids()``.
+        Delegates to ``test_nfs_grpc.get_session_ids()`` (mTLS or plaintext
+        based on Ceph version).
 
         Returns:
             tuple: (success: bool, session_ids: list of str).
             Returns (False, []) if grpcurl is not installed or gRPC fails.
         """
-        from test_nfs_grpc import get_session_ids
+        from test_nfs_grpc import GRPC_CERT_DIR_CLIENT, get_session_ids
 
-        return get_session_ids(self.clients[0], self.get_nfs_server_ip())
+        cert_dir = getattr(self, "_grpc_cert_dir", GRPC_CERT_DIR_CLIENT)
+        use_mtls = getattr(self, "_grpc_use_mtls", False)
+        return get_session_ids(
+            self.clients[0],
+            self.get_nfs_server_ip(),
+            cert_dir=cert_dir,
+            use_mtls=use_mtls,
+        )
 
     # ------------------------------------------------------------------
     #  State Tracking via Log Parsing
