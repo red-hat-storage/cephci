@@ -19,20 +19,42 @@ def get_cephci_config():
         raise ConfigError("Failed to read ~/.cephci.yaml")
 
 
-def get_registry_details(ibm_build=False):
+def get_registry_details(ibm_build=False, registry=None):
     """Get registry credentials
 
     Args:
         ibm_build (bool): IBM build flag
+        registry (str): Registry URL — used to select the correct credential
+            tier when multiple staging registries are configured
+            (e.g. preprod.icr.io vs cp.stg.icr.io).
     """
-    # TODO (vamahaja): Retrieve credentials based on registry name
-    build_type = "ibm" if ibm_build else "rh"
+    _vendor = "ibm" if ibm_build else "rh"
 
     # Get cephci configs
     config = get_cephci_config()
 
-    # Get registry details
-    creds = config.get(f"{build_type}_registry_credentials")
+    # Detect tier from registry URL: preprod.icr.io -> "preprod", else "stage"
+    _tier = None
+    if ibm_build and registry:
+        if "preprod" in registry:
+            _tier = "preprod"
+        elif "stg" in registry or "stage" in registry:
+            _tier = "stage"
+
+    # Try nested credentials.registry.<vendor>.<tier> path first
+    creds = None
+    if _tier:
+        creds = (
+            config.get("credentials", {})
+            .get("registry", {})
+            .get(_vendor, {})
+            .get(_tier)
+        )
+
+    # Fall back to flat top-level key (legacy config layout)
+    if not creds:
+        creds = config.get(f"{_vendor}_registry_credentials")
+
     if not creds:
         raise ConfigError("Failed to read registry credentials")
 

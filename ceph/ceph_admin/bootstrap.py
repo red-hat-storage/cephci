@@ -32,11 +32,13 @@ __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
 def _detect_registry_tier(registry: str, build_type: str) -> str:
-    """Return credential tier (cdn/stage) from registry host, else from build_type."""
+    """Return credential tier (cdn/stage/preprod) from registry host, else from build_type."""
     if not registry:
         return "cdn" if build_type in ("released", "cdn") else "stage"
     if "registry.redhat.io" in registry or "cp.icr.io" in registry:
         return "cdn"
+    if "preprod" in registry:
+        return "preprod"
     if "stage" in registry or "stg" in registry or "quay" in registry:
         return "stage"
     return "cdn" if build_type in ("released", "cdn") else "stage"
