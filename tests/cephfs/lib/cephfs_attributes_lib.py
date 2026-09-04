@@ -756,3 +756,158 @@ class CephFSAttributeUtilities(object):
         except Exception as e:
             log.error("Failed to fail filesystem '{}': {}".format(fs_name, e))
             return False
+
+    def archive_mds_crashes(self, client):
+        """Archive existing ceph crash records before a disruptive test window."""
+        client.exec_command(sudo=True, cmd="ceph crash archive-all", check_ec=False)
+        log.info("Archived pre-existing ceph crash records")
+
+    def assert_no_mds_crashes(
+        self,
+        client,
+        forbidden_signatures=None,
+        context="",
+    ):
+        """
+        Fail when new MDS crashes appear in ``ceph crash ls-new``.
+
+        Args:
+            client: Client node to run ceph commands.
+            forbidden_signatures (list): Substrings that must not appear in crash
+                metadata (default: IBMCEPH-16942 / #72399 signatures).
+            context (str): Label for log messages.
+
+        Returns:
+            bool: True if no matching crashes, False otherwise.
+        """
+        if forbidden_signatures is None:
+            forbidden_signatures = [
+                "alternate_name",
+                "journal.cc",
+                "auth >= 0",
+                "MDCache.cc",
+                "rejoin_send_rejoins",
+            ]
+
+        try:
+            crashes = self.fs_util.get_crash_ls_new(client)
+        except (json.JSONDecodeError, TypeError) as exc:
+            log.error("Could not parse ceph crash ls-new (%s): %s", context, exc)
+            return False
+
+        if not crashes:
+            log.info("No new ceph crashes (%s)", context or "check")
+            return True
+
+        if isinstance(crashes, dict):
+            items = list(crashes.items())
+        else:
+            items = [(e.get("crash_id") or e.get("id"), e) for e in crashes]
+
+        for crash_id, entry in items:
+            if not crash_id:
+                log.error("Crash entry without id (%s): %r", context, entry)
+                return False
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd="ceph crash info {} -f json".format(crash_id),
+                check_ec=False,
+            )
+            try:
+                info = json.loads(out) if out and out.strip() else {}
+            except json.JSONDecodeError:
+                info = {"raw": out}
+
+            blob = json.dumps(info)
+            for needle in forbidden_signatures:
+                if needle in blob:
+                    log.error(
+                        "Forbidden crash signature '%s' in crash %s (%s): %s",
+                        needle,
+                        crash_id,
+                        context,
+                        blob,
+                    )
+                    return False
+            log.error("Unexpected ceph crash %s (%s): %s", crash_id, context, blob)
+            return False
+
+        return True
+
+    def assert_no_damaged_mds_ranks(self, client, fs_name, context=""):
+        """
+        Return False if any MDS rank for ``fs_name`` is in a damaged state.
+        """
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph fs status {} -f json".format(fs_name),
+            client_exec=True,
+            check_ec=False,
+        )
+        try:
+            status = json.loads(out)
+        except json.JSONDecodeError:
+            log.error("Failed to parse fs status for %s (%s)", fs_name, context)
+            return False
+
+        for mds in status.get("mdsmap", []):
+            state = mds.get("state", "")
+            if "damaged" in state or state == "failed":
+                log.error(
+                    "MDS rank %s in bad state '%s' for %s (%s)",
+                    mds.get("rank"),
+                    state,
+                    fs_name,
+                    context,
+                )
+                return False
+        return True
+
+    def start_casefold_metadata_storm(self, client, mount_path, stop_flag_path):
+        """
+        Start a background rename-heavy metadata workload on a casefold mount.
+
+        Uses mixed-case creates and case-changing renames to populate
+        ``alternate_name`` journal metadata (IBMCEPH-16942 repro amplifier).
+        """
+        client.exec_command(sudo=True, cmd="rm -f {}".format(stop_flag_path))
+        storm_script = (
+            "i=0; "
+            "while [ ! -f {stop} ]; do "
+            "i=$((i+1)); "
+            'd="{mnt}/w$((i%500))"; '
+            'mkdir -p "$d" 2>/dev/null || true; '
+            'f="AaBb_$i"; '
+            'echo x >"$d/$f" 2>/dev/null || true; '
+            'mv "$d/$f" "$d/aabb_$i" 2>/dev/null || true; '
+            "for c in A a B b C c; do "
+            'touch "$d/${{c}}_$i" 2>/dev/null || true; '
+            "done; "
+            "done"
+        ).format(stop=stop_flag_path, mnt=mount_path)
+
+        pid_file = "{}.pid".format(stop_flag_path)
+        log_file = "{}.log".format(stop_flag_path)
+        cmd = ("nohup bash -c {script!r} > {log} 2>&1 & echo $! > {pid}").format(
+            script=storm_script, log=log_file, pid=pid_file
+        )
+        client.exec_command(sudo=True, cmd=cmd)
+        log.info(
+            "Started casefold metadata storm on %s (stop=%s)",
+            mount_path,
+            stop_flag_path,
+        )
+
+    def stop_casefold_metadata_storm(self, client, stop_flag_path):
+        """Stop the background casefold metadata storm."""
+        client.exec_command(sudo=True, cmd="touch {}".format(stop_flag_path))
+        pid_file = "{}.pid".format(stop_flag_path)
+        client.exec_command(
+            sudo=True,
+            cmd=(
+                "if [ -f {pid} ]; then kill $(cat {pid}) 2>/dev/null || true; "
+                "rm -f {pid}; fi"
+            ).format(pid=pid_file),
+            check_ec=False,
+        )
+        log.info("Stopped casefold metadata storm (%s)", stop_flag_path)
