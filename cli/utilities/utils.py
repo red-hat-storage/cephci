@@ -425,24 +425,37 @@ def set_selinux_mode(nodes, enforcing_mode):
 def enable_fips_mode(node):
     """Enable FIPS mode on node
 
+    RHEL 8/9 uses fips-mode-setup; RHEL 10+ uses grubby to set the
+    fips=1 kernel boot parameter since fips-mode-setup is no longer
+    shipped.
+
     Args:
         node (CephNode): Ceph Node Object
     """
-    # Set FIPS commands
-    enable_fips = "fips-mode-setup --enable"
-    finish_fips_setup = "fips-finish-install --complete"
+    rhel_ver = int(os_major_version(node))
 
-    # Enable FIPS mode
-    out, err = node.exec_command(cmd=enable_fips, sudo=True)
-    if "FIPS mode will be enabled." not in out:
-        log.error(f"Failed to setup FIPS mode config. Error -\n{err}")
-        return False
+    if rhel_ver >= 10:
+        # RHEL 10+: enable FIPS via kernel boot parameter
+        grubby_cmd = 'grubby --update-kernel=DEFAULT --args="fips=1"'
+        out, err = node.exec_command(cmd=grubby_cmd, sudo=True)
+        if err:
+            log.error(f"Failed to set FIPS kernel param via grubby. Error -\n{err}")
+            return False
+        log.info("FIPS kernel boot parameter set via grubby (RHEL 10+)")
+    else:
+        # RHEL 8/9: use fips-mode-setup
+        enable_fips = "fips-mode-setup --enable"
+        finish_fips_setup = "fips-finish-install --complete"
 
-    # Finish FIPS mode
-    _, err = node.exec_command(cmd=finish_fips_setup, sudo=True)
-    if err:
-        log.error(f"Failed to setup enable mode. Error -\n{err}")
-        return False
+        out, err = node.exec_command(cmd=enable_fips, sudo=True)
+        if "FIPS mode will be enabled." not in out:
+            log.error(f"Failed to setup FIPS mode config. Error -\n{err}")
+            return False
+
+        _, err = node.exec_command(cmd=finish_fips_setup, sudo=True)
+        if err:
+            log.error(f"Failed to setup enable mode. Error -\n{err}")
+            return False
 
     return True
 
@@ -450,19 +463,29 @@ def enable_fips_mode(node):
 def is_fips_mode_enabled(node):
     """Check for FIPS mode on node
 
+    Uses /proc/sys/crypto/fips_enabled (works across all RHEL versions)
+    as the primary check, with fips-mode-setup --check as fallback for
+    RHEL 8/9.
+
     Args:
         node (CephNode): Ceph Node Object
     """
-    # Check FIPS command
-    check_fips_setup = "fips-mode-setup --check"
+    # Universal check: kernel flag (works on RHEL 8/9/10+)
+    out, _ = node.exec_command(cmd="cat /proc/sys/crypto/fips_enabled", sudo=True)
+    if out.strip() == "1":
+        return True
 
-    # Check for FIPS status
-    out, _ = node.exec_command(cmd=check_fips_setup, sudo=True)
-    if "FIPS mode is enabled" not in out:
-        log.error(f"FIPS mode is disabled on node '{node.hostname}'")
-        return False
+    # Fallback for RHEL 8/9 where the kernel flag may not yet reflect
+    # the state before reboot
+    rhel_ver = int(os_major_version(node))
+    if rhel_ver < 10:
+        check_fips_setup = "fips-mode-setup --check"
+        out, _ = node.exec_command(cmd=check_fips_setup, sudo=True)
+        if "FIPS mode is enabled" in out:
+            return True
 
-    return True
+    log.error(f"FIPS mode is disabled on node '{node.hostname}'")
+    return False
 
 
 def reboot_node(node):
