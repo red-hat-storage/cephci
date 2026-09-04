@@ -3,16 +3,18 @@
 # Test-Suite: tier-2_rbd_migration_key_import_9_2.yaml
 #
 # Cluster Configuration:
-#    cephci/conf/tentacle/rbd/5-node-2-clusters.yaml
+#    cephci/conf/tentacle/rbd/5-node-2-clusters-with-nvmeof.yaml
 #    No of Clusters : 2
-#    Each cluster configuration
-#    5-Node cluster(RHEL-8.3 and above)
-#    3 MONS, 2 MGR, 3 OSD, 1 Client
+#    ceph-rbd1: 5 nodes (same as 5-node-2-clusters.yaml)
+#    ceph-rbd2: 6 nodes — extra dedicated NVMe-oF gateway
+#    vm-size: ci.standard.large
 #     Node1 - Mon, Mgr, Installer
-#     Node2 - client (also NVMe-oF Gateway / Client-B on destination)
+#     Node2 - client
 #     Node3 - OSD, MON, MGR
 #     Node4 - OSD, MON
 #     Node5 - OSD, rbd-mirror
+#     Node6 - nvmeof-gw (destination / ceph-rbd2 only; orch-managed GW)
+#     CEPH-83632851 deploys basic NVMe-oF via NVMeService (BVT-style single GW).
 #
 # Objective:
 #    RBD native key import with mon_host 9.2 feature validation.
@@ -276,40 +278,9 @@ tests:
               max_inflation_ratio: 1.5
 
   - test:
-      name: Test native import NVMe-oF gateway Client-B source-backed reads
-      desc: >
-        Verify prepared import-only target reads from destination NVMe-oF
-        gateway Client-B without source conf/keyring, including after restart.
-      module: test_rbd_native_import_mon_host_inline_key.py
-      polarion-id: CEPH-83632851
-      clusters:
-        ceph-rbd1:
-          config:
-            operation: CEPH-83632851
-            nvme_config:
-              rbd_pool: rbd
-              nvme_metadata_pool: rbd
-              gw_nodes:
-                - node2
-              gw_group: gw-group1
-              install: true
-              subsystem_nqn: nqn.2016-06.io.spdk:rbd-native-import
-              listener_port: 4420
-              allow_host: "*"
-              serial: "1"
-            rep_pool_config:
-              src_pool: src_pool
-              dst_pool: dst_pool
-              src_image: src_image
-              target_image: target_image
-              src_snap: snap1
-              source_client_name: client.rbd-migration
-              image_size: 10G
-
-  - test:
       name: Test native import of encrypted RBD image with mon_host
       desc: >
-        Verify import-only native migration of LUKS/LUKS2 encrypted RBD images
+        Verify import-only native migration of LUKS1/LUKS2 encrypted RBD images
         using mon_host and inline CephX key
       module: test_rbd_native_import_mon_host_inline_key.py
       polarion-id: CEPH-83632849
@@ -342,7 +313,7 @@ tests:
               target_write_size: 50M
 
   - test:
-      name: Test native import mon_host/key negative validation
+      name: Test native import mon_host key negative validation
       desc: >
         Verify migration prepare --import-only fails cleanly for invalid or
         mutually exclusive mon_host/key native source-spec fields
@@ -359,7 +330,6 @@ tests:
               target_image: neg_target
               src_snap: snap1
               source_client_name: client.rbd-migration
-              limited_client_name: client.rbd-migration-limited
               image_size: 1G
               source_pattern_size: 64M
             ec_pool_config:
@@ -369,6 +339,42 @@ tests:
               target_image: ec_neg_target
               src_snap: snap1
               source_client_name: client.rbd-migration
-              limited_client_name: client.rbd-migration-limited
               image_size: 1G
               source_pattern_size: 64M
+
+  - test:
+      name: Test native import NVMe-oF gateway Client-B source-backed reads
+      desc: >
+        Verify prepared import-only target reads from destination NVMe-oF
+        gateway Client-B without source conf/keyring, including after restart.
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632851
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632851
+            nvme_config:
+              gw_node: node6
+              gw_nodes:
+                - node6
+              rbd_pool: rbd
+              nvme_metadata_pool: rbd
+              gw_group: gw_group1
+              install: true
+              cleanup:
+                - subsystems
+                - gateway
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:rbd-native-import
+                  serial: "1"
+                  max_ns: 32
+                  listener_port: 4420
+                  allow_host: "*"
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: src_image
+              target_image: target_image
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G

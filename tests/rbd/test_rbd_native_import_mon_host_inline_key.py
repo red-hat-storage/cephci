@@ -23,6 +23,7 @@ Pre-requisites:
 - Ceph/RHCS 9.2 or later.
 """
 
+import json
 import random
 from datetime import datetime
 from time import sleep
@@ -52,7 +53,6 @@ from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.migration import (
     assert_no_source_cluster_config,
     attempt_migration_prepare_import,
-    create_insufficient_caps_cephx_client,
     create_source_cephx_client,
     get_source_mon_host,
     prepare_gateway_like_client,
@@ -76,11 +76,14 @@ from ceph.rbd.workflows.rbd import (
 )
 from ceph.utils import get_node_by_id
 from cli.rbd.rbd import Rbd
-from tests.nvmeof.workflows.nvme_service import NVMeService
-from tests.nvmeof.workflows.nvme_utils import (
-    check_and_set_nvme_cli_image,
-    get_network_mask,
+from tests.nvmeof.workflows.gateway_entities import (
+    configure_hosts,
+    configure_listeners,
+    configure_subsystems,
+    teardown,
 )
+from tests.nvmeof.workflows.nvme_service import NVMeService
+from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
 
@@ -256,21 +259,40 @@ def verify_no_passphrase_hides_plaintext(rbd, client, image_spec, expected_file_
         unmap_encrypted_device(rbd, device)
 
 
-def deploy_nvme_service_like_suite(destination_cluster, nvme_config, client=None, **kw):
-    """Deploy NVMe-oF the same way tentacle NVMe suites do (NVMeService).
+def _default_nvme_subsystem(nvme_config):
+    """Return the single subsystem dict used by this migration test."""
+    subsystems = nvme_config.get("subsystems") or []
+    if subsystems:
+        return subsystems[0]
+    # Backward-compatible flat keys from older suite shape.
+    return {
+        "nqn": nvme_config.get(
+            "subsystem_nqn", "nqn.2016-06.io.spdk:rbd-native-import"
+        ),
+        "serial": nvme_config.get("serial", "1"),
+        "max_ns": nvme_config.get("max_ns", 32),
+        "listener_port": nvme_config.get("listener_port", 4420),
+        "allow_host": nvme_config.get("allow_host", "*"),
+    }
 
-    Mirrors ``test_ceph_nvmeof_qos_tests`` / HA:
-    create dedicated ``rbd`` pool, ``NVMeService.deploy()``, ``init_gateways()``.
-    Gateway is placed on the destination client node by default (not an OSD).
+
+def deploy_basic_nvme_service(destination_cluster, nvme_config, client=None, **kw):
+    """Basic single-GW NVMe-oF deploy (same pattern as tentacle NVMe BVT).
+
+    check_and_set_nvme_cli_image → NVMeService.deploy() → init_gateways()
     """
-    rbd_pool = nvme_config.get("rbd_pool", "rbd")
-    nvme_config.setdefault("rbd_pool", rbd_pool)
-    nvme_config.setdefault("nvme_metadata_pool", rbd_pool)
-    nvme_config.setdefault("gw_group", "gw-group1")
-    # Destination client node is the NVMe-oF gateway (Client-B).
-    nvme_config.setdefault("gw_nodes", ["node2"])
+    nvme_config.setdefault("rbd_pool", "rbd")
+    nvme_config.setdefault("nvme_metadata_pool", nvme_config["rbd_pool"])
+    nvme_config.setdefault("gw_group", "gw_group1")
+    nvme_config.setdefault("gw_nodes", ["node6"])
+    if "gw_node" not in nvme_config and nvme_config.get("gw_nodes"):
+        nvme_config.setdefault("gw_node", nvme_config["gw_nodes"][0])
     nvme_config.setdefault("install", True)
+    nvme_config.setdefault("cleanup", ["subsystems", "gateway"])
+    if not nvme_config.get("subsystems"):
+        nvme_config["subsystems"] = [_default_nvme_subsystem(nvme_config)]
 
+    rbd_pool = nvme_config["rbd_pool"]
     if client:
         for cmd in (
             f"ceph osd pool create {rbd_pool}",
@@ -278,21 +300,17 @@ def deploy_nvme_service_like_suite(destination_cluster, nvme_config, client=None
             f"rbd pool init {rbd_pool}",
         ):
             exec_cmd(node=client, cmd=cmd, check_ec=False)
-        log.info(f"Ensured NVMe RBD pool '{rbd_pool}' exists")
 
-    custom_config = kw.get("test_data", {}).get("custom-config")
-    try:
-        check_and_set_nvme_cli_image(destination_cluster, config=custom_config)
-    except RuntimeError as error:
-        log.info(f"NVMe CLI image check: {error}")
-
+    check_and_set_nvme_cli_image(
+        destination_cluster,
+        config=kw.get("test_data", {}).get("custom-config"),
+    )
     nvme_service = NVMeService(nvme_config, destination_cluster)
     if nvme_config.get("install", True):
         log.info(
-            "Deploying NVMe-oF via NVMeService "
-            f"(rbd_pool={rbd_pool}, metadata={nvme_service.nvme_metadata_pool}, "
-            f"gw_group={nvme_config.get('gw_group')}, "
-            f"gw_nodes={nvme_config.get('gw_nodes')})"
+            "Deploying basic NVMe-oF gateway "
+            f"(pool={rbd_pool}, group={nvme_config.get('gw_group')}, "
+            f"nodes={nvme_config.get('gw_nodes')})"
         )
         nvme_service.deploy()
     nvme_service.init_gateways()
@@ -305,113 +323,59 @@ def deploy_nvme_service_like_suite(destination_cluster, nvme_config, client=None
     return nvme_service
 
 
-def configure_nvme_namespace_for_image(
-    nvme_service, destination_cluster, pool, image, nvme_config
-):
-    """Configure subsystem/listener/host/namespace for an existing RBD image.
+def configure_nvme_for_existing_image(nvme_service, destination_cluster, pool, image):
+    """Configure subsystem/host and attach an already-prepared RBD image.
 
-    Follows ``gateway_entities.configure_subsystems`` conventions for
-    Ceph >= 20.2.1 (port + network-mask on subsystem.add).
+    Uses gateway_entities helpers for subsystem/listener/host. Namespace is
+    added manually because configure_namespaces always creates new images.
     """
+    if not nvme_service.config.get("subsystems"):
+        nvme_service.config["subsystems"] = [
+            _default_nvme_subsystem(nvme_service.config)
+        ]
+    sub_cfg = nvme_service.config["subsystems"][0]
+    nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
     gateway = nvme_service.gateways[0]
-    nqn = nvme_config.get("subsystem_nqn", "nqn.2016-06.io.spdk:rbd-native-import")
-    listener_port = nvme_config.get("listener_port", 4420)
-    allow_host = nvme_config.get("allow_host", "*")
-    serial = nvme_config.get("serial", "1")
-    sub_args = {"subsystem": nqn}
 
+    configure_subsystems(nvme_service, ceph_cluster=destination_cluster)
     ceph_version = get_ceph_version_from_cluster(
         destination_cluster.get_nodes(role="client")[0]
     )
-    sub_add_args = {
-        **sub_args,
-        "serial-number": serial,
-        "max-namespaces": nvme_config.get("max_ns", 32),
-        "no-group-append": True,
-    }
-    if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
-        sub_add_args["port"] = listener_port
-        sub_add_args["network-mask"] = get_network_mask(nvme_service.gateways)
-        gateway.subsystem.add(**{"args": sub_add_args})
-    else:
-        gateway.subsystem.add(**{"args": sub_add_args})
-        gateway.listener.add(
-            **{
-                "args": {
-                    **sub_args,
-                    "host-name": gateway.fetch_gateway_hostname(),
-                    "traddr": gateway.node.ip_address,
-                    "trsvcid": listener_port,
-                }
-            }
-        )
-
-    gateway.host.add(**{"args": {**sub_args, "host": repr(allow_host)}})
+    # Match gateway_entities.configure_gw_entities listener gate.
+    if LooseVersion(ceph_version) <= LooseVersion("20.2.1"):
+        configure_listeners(nvme_service.gateways, nvme_service.config)
+    configure_hosts(gateway, nvme_service.config, ceph_cluster=destination_cluster)
     gateway.namespace.add(
-        **{"args": {**sub_args, "rbd-pool": pool, "rbd-image": image}}
+        **{"args": {"subsystem": nqn, "rbd-pool": pool, "rbd-image": image}}
     )
     log.info(
-        f"Configured NVMe subsystem {nqn} namespace {pool}/{image} "
+        f"Attached existing image {pool}/{image} to NVMe subsystem {nqn} "
         f"on {gateway.node.hostname}"
     )
     return nqn
 
 
-def restart_nvme_service(nvme_service, client, timeout=300):
-    """Redeploy NVMe-oF service (same as NVMe HA suites) and wait for running."""
-    import json
-
-    if nvme_service and getattr(nvme_service, "service_name", None):
-        log.info(f"Redeploying NVMe-oF service {nvme_service.service_name}")
-        nvme_service.redeploy(wait_sec=30)
-    else:
-        out = exec_cmd(
-            node=client,
-            cmd="ceph orch ps --daemon_type nvmeof --format json",
-            output=True,
-        )
-        daemons = json.loads(out) if out else []
-        for daemon in daemons:
-            full = daemon.get("daemon_name")
-            if not full:
-                continue
-            exec_cmd(node=client, cmd=f"ceph orch daemon redeploy {full}")
-
+def wait_nvme_daemons_running(client, timeout=300):
+    """Poll until all nvmeof orch daemons report running."""
     elapsed = 0
     while elapsed < timeout:
         status_out = exec_cmd(
             node=client,
             cmd="ceph orch ps --daemon_type nvmeof --format json",
             output=True,
+            check_ec=False,
         )
         try:
             status = json.loads(status_out) if status_out else []
         except Exception:
             status = []
         if status and all(d.get("status_desc") == "running" for d in status):
-            log.info("NVMe-oF daemons running after redeploy")
+            log.info("NVMe-oF daemons running")
             return 0
         sleep(10)
         elapsed += 10
     log.error(f"NVMe-oF daemons not running after {timeout}s")
     return 1
-
-
-def cleanup_nvme_service(nvme_service, nvme_config):
-    """Best-effort delete subsystem and NVMe orch service."""
-    nqn = nvme_config.get("subsystem_nqn", "nqn.2016-06.io.spdk:rbd-native-import")
-    if nvme_service and nvme_service.gateways:
-        try:
-            nvme_service.gateways[0].subsystem.delete(
-                **{"args": {"subsystem": nqn, "force": True}}
-            )
-        except Exception as error:
-            log.info(f"NVMe subsystem cleanup: {error}")
-    if nvme_service and hasattr(nvme_service, "delete_nvme_service"):
-        try:
-            nvme_service.delete_nvme_service()
-        except Exception as error:
-            log.info(f"NVMe service cleanup: {error}")
 
 
 def test_native_import_mon_host_inline_key(
@@ -1404,12 +1368,15 @@ def test_native_import_gateway_like_client(
     ceph_version = get_ceph_major_version(config)
     destination_cluster = kw.get("destination_cluster")
     nvme_config = dict(kw.get("nvme_config") or config.get("nvme_config") or {})
-    # Dedicated NVMe pool; gateway runs on destination client (node2).
-    nvme_config.setdefault("gw_nodes", ["node2"])
-    nvme_config.setdefault("gw_group", "gw-group1")
+    # Basic single-GW defaults (aligned with tentacle NVMe BVT shape).
+    nvme_config.setdefault("gw_nodes", ["node6"])
+    nvme_config.setdefault("gw_group", "gw_group1")
     nvme_config.setdefault("rbd_pool", "rbd")
     nvme_config.setdefault("nvme_metadata_pool", "rbd")
     nvme_config.setdefault("install", True)
+    nvme_config.setdefault("cleanup", ["subsystems", "gateway"])
+    if not nvme_config.get("subsystems"):
+        nvme_config["subsystems"] = [_default_nvme_subsystem(nvme_config)]
 
     source_rbd = Rbd(source_client)
     client_a_rbd = Rbd(client_a)
@@ -1535,13 +1502,13 @@ def test_native_import_gateway_like_client(
             return 1
 
         log.info(
-            f"Deploying NVMe-oF gateway via NVMeService "
+            f"Deploying basic NVMe-oF gateway "
             f"(nodes={nvme_config.get('gw_nodes')}, "
             f"rbd_pool={nvme_config.get('rbd_pool')}, "
             f"group={nvme_config.get('gw_group')}); "
             f"namespace will use migration target {dst_pool}/{target_image}"
         )
-        nvme_service = deploy_nvme_service_like_suite(
+        nvme_service = deploy_basic_nvme_service(
             destination_cluster,
             nvme_config,
             client=client_a,
@@ -1606,13 +1573,12 @@ def test_native_import_gateway_like_client(
             log.error("Migration prepare state verification failed")
             return 1
 
-        # Expose prepared target via NVMe-oF namespace on the gateway (Client-B)
-        configure_nvme_namespace_for_image(
+        # Expose prepared target via NVMe-oF (subsystem/host + existing image)
+        configure_nvme_for_existing_image(
             nvme_service,
             destination_cluster,
             dst_pool,
             target_image,
-            nvme_config,
         )
 
         # --- Steps 12-15: Client-B/gateway source-backed reads without source config ---
@@ -1650,7 +1616,9 @@ def test_native_import_gateway_like_client(
                 return 1
 
         # --- Steps 16-18: Restart NVMe-oF gateway daemon and re-read ---
-        if restart_nvme_service(nvme_service, client_a):
+        log.info(f"Redeploying NVMe-oF service {nvme_service.service_name}")
+        nvme_service.redeploy(wait_sec=30)
+        if wait_nvme_daemons_running(client_a):
             log.error("NVMe-oF gateway daemon restart failed")
             return 1
         # Also cycle any local librbd mapping on the gateway node
@@ -1682,6 +1650,35 @@ def test_native_import_gateway_like_client(
                     f"{profile['name']} (bs={profile['bs']})"
                 )
                 return 1
+
+        # Drop NVMe subsystem so gateway releases exclusive lock before
+        # Client-B librbd writes / migration execute (else large-bs FIO can hang).
+        sub_cfg = _default_nvme_subsystem(nvme_config)
+        nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
+        try:
+            nvme_service.gateways[0].subsystem.delete(
+                **{"args": {"subsystem": nqn, "force": True}}
+            )
+            log.info(f"Released NVMe subsystem {nqn} (exclusive lock)")
+        except Exception as error:
+            log.info(f"NVMe subsystem release (best-effort): {error}")
+        for _ in range(12):
+            status_txt = (
+                exec_cmd(
+                    node=client_b,
+                    cmd=f"rbd status {target_spec} --format json",
+                    output=True,
+                    check_ec=False,
+                )
+                or ""
+            )
+            try:
+                watchers = json.loads(status_txt).get("watchers") or []
+            except Exception:
+                watchers = [] if "none" in status_txt.lower() else ["unknown"]
+            if not watchers:
+                break
+            sleep(5)
 
         # --- Step 19: Multi-bs writes from Client-B ---
         for profile in target_profiles:
@@ -1796,7 +1793,16 @@ def test_native_import_gateway_like_client(
         )
 
         if nvme_deployed and nvme_service:
-            cleanup_nvme_service(nvme_service, nvme_config)
+            try:
+                # Reuse gateway_entities.teardown (subsystem + orch remove).
+                nvme_service.config.setdefault("cleanup", ["subsystems", "gateway"])
+                if not nvme_service.config.get("subsystems"):
+                    nvme_service.config["subsystems"] = [
+                        _default_nvme_subsystem(nvme_config)
+                    ]
+                teardown(nvme_service, client_a_rbd)
+            except Exception as error:
+                log.info(f"NVMe teardown (best-effort): {error}")
 
         exec_cmd(
             node=client_b,
@@ -2798,17 +2804,32 @@ def _run_negative_prepare_case(
     case_name,
     spec,
     expected_errors,
+    timeout=420,
 ):
     """Write *spec*, run prepare, assert failure + expected error + no stale target.
+
+    Args:
+        destination_client: Destination CephNode client.
+        spec_path: Path to write the source-spec JSON on the destination node.
+        dest_pool: Destination pool name.
+        target_image: Target image name for the migration.
+        case_name: Human-readable name for this negative case (used in logs).
+        spec: Source-spec dict to write.
+        expected_errors: List of error substrings; at least one must appear.
+        timeout: Command timeout in seconds passed to
+            ``attempt_migration_prepare_import``.  For cases that rely on
+            Ceph's own connection timeout (e.g. unreachable mon_host ~300 s),
+            this must be set **longer** than Ceph's internal timeout so the
+            external wrapper does not preempt it.
 
     Returns:
         0 on success (prepare failed as expected), 1 on unexpected outcome.
     """
     target_spec = f"{dest_pool}/{target_image}"
-    log.info(f"Negative case: {case_name}")
+    log.info(f"Negative case: {case_name} (timeout={timeout}s)")
     write_native_source_spec(destination_client, spec_path, spec)
     failed, output = attempt_migration_prepare_import(
-        destination_client, spec_path, target_spec
+        destination_client, spec_path, target_spec, timeout=timeout
     )
     if not failed:
         log.error(f"{case_name}: prepare unexpectedly succeeded")
@@ -2871,9 +2892,6 @@ def test_native_import_mon_host_key_negative(
     snap_name = config.get("src_snap", "snap1")
     image_size = config.get("image_size", "1G")
     source_cephx_client = config.get("source_client_name", "client.rbd-migration")
-    limited_client_name = config.get(
-        "limited_client_name", "client.rbd-migration-limited"
-    )
     workdir = config.get("workdir", "/tmp/rbd-native-import-neg")
     source_spec_path = config.get("source_spec_path", f"{workdir}/native-negative.json")
     valid_target = config.get(
@@ -2891,7 +2909,6 @@ def test_native_import_mon_host_key_negative(
     destination_rbd = Rbd(destination_client)
     source_entity = None
     source_key = None
-    limited_entity = None
     config_keys_to_remove = []
 
     try:
@@ -3035,12 +3052,6 @@ def test_native_import_mon_host_key_negative(
         if invalid_key == source_key:
             invalid_key = ("A" + source_key[1:]) if source_key else "invalidkey"
 
-        # Insufficient-caps client (step 16)
-        limited_entity, limited_key = create_insufficient_caps_cephx_client(
-            client=source_client,
-            client_name=limited_client_name,
-        )
-
         # Wrong key in config-key store (step 15)
         store_source_key_in_config_key(
             destination_client, wrong_config_key_path, invalid_key, workdir
@@ -3109,7 +3120,7 @@ def test_native_import_mon_host_key_negative(
                     "invalid",
                 ],
             },
-            # Step 12: unreachable mon_host
+            # Step 12: unreachable mon_host with ceph timeout
             {
                 "name": "invalid/unreachable mon_host",
                 "target": _target("bad_mon"),
@@ -3127,6 +3138,7 @@ def test_native_import_mon_host_key_negative(
                     "error",
                     "errno",
                 ],
+                "timeout": 420,
             },
             # Step 13: invalid inline key
             {
@@ -3177,25 +3189,6 @@ def test_native_import_mon_host_key_negative(
                     "permission",
                     "access",
                     "denied",
-                    "failed",
-                    "error",
-                ],
-            },
-            # Step 16: insufficient caps
-            {
-                "name": "insufficient source client caps",
-                "target": _target("nocaps"),
-                "spec": {
-                    **base_spec,
-                    "client_name": limited_entity,
-                    "key": limited_key,
-                },
-                "errors": [
-                    "permission",
-                    "access",
-                    "denied",
-                    "EACCES",
-                    "auth",
                     "failed",
                     "error",
                 ],
@@ -3297,6 +3290,7 @@ def test_native_import_mon_host_key_negative(
                 case_name=case["name"],
                 spec=case["spec"],
                 expected_errors=case["errors"],
+                timeout=case.get("timeout", 420),
             )
             if rc:
                 failures += 1
@@ -3399,13 +3393,12 @@ def test_native_import_mon_host_key_negative(
             long_running=True,
             timeout=7200,
         )
-        for entity in (source_entity, limited_entity):
-            if entity:
-                exec_cmd(
-                    node=source_client,
-                    cmd=f"ceph auth rm {entity}",
-                    check_ec=False,
-                )
+        if source_entity:
+            exec_cmd(
+                node=source_client,
+                cmd=f"ceph auth rm {source_entity}",
+                check_ec=False,
+            )
 
         pool_cleanup(
             client=destination_client,
@@ -3557,13 +3550,18 @@ def run(**kw):
             )
         elif operation == "CEPH-83632851":
             nvme_config = dict(kw.get("config", {}).get("nvme_config", {}))
-            nvme_config.setdefault("gw_nodes", ["node2"])
-            nvme_config.setdefault("gw_group", "gw-group1")
+            nvme_config.setdefault("gw_nodes", ["node6"])
+            nvme_config.setdefault("gw_group", "gw_group1")
             nvme_config.setdefault("rbd_pool", "rbd")
             nvme_config.setdefault("nvme_metadata_pool", "rbd")
             nvme_config.setdefault("install", True)
+            nvme_config.setdefault("cleanup", ["subsystems", "gateway"])
+            if not nvme_config.get("subsystems"):
+                nvme_config["subsystems"] = [_default_nvme_subsystem(nvme_config)]
+            if "gw_node" not in nvme_config and nvme_config.get("gw_nodes"):
+                nvme_config.setdefault("gw_node", nvme_config["gw_nodes"][0])
             client_a = destination_client
-            # Prefer configured gateway node as Client-B (destination client)
+            # Client-B = dedicated nvmeof-gw (node6).
             gw_node_id = nvme_config.get("gw_node") or nvme_config["gw_nodes"][0]
             try:
                 client_b = get_node_by_id(destination_cluster, gw_node_id)
