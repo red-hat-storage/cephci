@@ -1,5 +1,4 @@
 from ceph.iscsi.initiator import ISCSIInitiator
-from ceph.parallel import parallel
 from tests.iscsi.workflows.iscsi_utils import fetch_tcmu_devices, format_iscsiadm_output
 from utility.log import Log
 from utility.utils import run_fio
@@ -45,23 +44,30 @@ class Initiator(ISCSIInitiator):
         self.node.exec_command(cmd="dnf install -y fio", sudo=True)
         targets = fetch_tcmu_devices(self.node)
         results = []
-        io_args = {"size": "100%"}
-        with parallel() as p:
-            for serial, target in targets.items():
-                LOG.info(f"Starting FIO for Disk UUID {serial} and {target}....")
-                _io_args = {}
-                _io_args.update(
-                    {
-                        "test_name": f"test-{target['mapper_path'].replace('/', '_')}",
-                        "device_name": target["mapper_path"],
-                        "client_node": self.node,
-                        "long_running": True,
-                    }
-                )
-                _io_args = {**io_args, **_io_args}
-                p.spawn(run_fio, **_io_args)
-            for op in p:
-                results.append(op)
+        io_args = {
+            "cmd_timeout": 300,
+            "io_type": "randrw",
+            "iodepth": "2",
+            "direct": "1",
+            "run_time": 60,
+        }
+
+        for serial, target in targets.items():
+            LOG.info(f"Starting FIO for Disk UUID {serial} and {target}....")
+            _io_args = {}
+            _io_args.update(
+                {
+                    "test_name": f"test-{target['mapper_path'].replace('/', '_')}",
+                    "device_name": target["mapper_path"],
+                    "client_node": self.node,
+                    "long_running": True,
+                }
+            )
+            _io_args = {**io_args, **_io_args}
+            result = run_fio(**_io_args)
+            results.append(result)
+            LOG.info(f"Completed FIO for {target['mapper_path']}")
+
         LOG.info("Completed all IO executions.....")
         return results
 
