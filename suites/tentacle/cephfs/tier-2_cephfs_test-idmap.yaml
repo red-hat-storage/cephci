@@ -1,0 +1,171 @@
+---
+#=======================================================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_test-idmap.yaml
+# Conf file : conf/tentacle/cephfs/tier-2_cephfs_7-node-cluster.yaml
+# Platform  : rhel-10 (RHEL 10.2)
+# Inventory : conf/inventory/ibm-rhel-10.2-server.yaml
+#
+# Standalone CephFS idmapped mount functional tests (RHSTOR-8028 / ODFRFE-119).
+# Kernel mount only — no ODF, Kubernetes, or CSI dependency.
+#
+# Go/No-Go: TC-S2, TC-S3, TC-S4, TC-S6 must pass.
+#=======================================================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  - test:
+      name: cluster deployment
+      desc: Deploy Tentacle cluster with CephFS for idmap testing.
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  label: mds
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - kernel-modules-extra
+        node: node8
+      desc: "Configure CephFS client 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client 1"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - kernel-modules-extra
+        node: node9
+      desc: "Configure CephFS client 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client 2"
+  - test:
+      name: "TC-S0 idmap preflight"
+      desc: "Environment validation gate for idmapped mount tests"
+      module: cephfs_idmap.test_idmap_preflight.py
+      abort-on-fail: true
+  - test:
+      name: "TC-S1 user namespace baseline"
+      desc: "Confirm user namespace UID/GID mapping on client OS"
+      module: cephfs_idmap.test_idmap_user_ns_baseline.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S2 idmapped mount creation"
+      desc: "Core blocker — CephFS accepts idmapped bind mount"
+      module: cephfs_idmap.test_idmap_mount_creation.py
+      abort-on-fail: true
+  - test:
+      name: "TC-S3 ownership correctness"
+      desc: "UID/GID translation across plain and idmapped views"
+      module: cephfs_idmap.test_idmap_ownership.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S4 security isolation"
+      desc: "Different idmaps cannot bypass chmod 600 restrictions"
+      module: cephfs_idmap.test_idmap_isolation.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S5 plain mount regression"
+      desc: "Non-idmapped CephFS workloads unaffected"
+      module: cephfs_idmap.test_idmap_plain_regression.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S6 multi-client RWX"
+      desc: "Shared files across two clients with idmapped mounts"
+      module: cephfs_idmap.test_idmap_multi_client.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S7 POSIX operations"
+      desc: "chmod, chown, chgrp, directory CRUD on idmapped CephFS"
+      module: cephfs_idmap.test_idmap_posix.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S8 recursive tools"
+      desc: "cp, tar, rsync, rm -rf on idmapped CephFS"
+      module: cephfs_idmap.test_idmap_recursive_tools.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S9 remount recovery"
+      desc: "Idmap behavior survives umount/remount"
+      module: cephfs_idmap.test_idmap_remount.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S10 negative auth"
+      desc: "Bad cephx credentials fail with auth error"
+      module: cephfs_idmap.test_idmap_negative_auth.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S11 negative fs name"
+      desc: "Invalid filesystem name fails clearly"
+      module: cephfs_idmap.test_idmap_negative_fsname.py
+      abort-on-fail: false
+  - test:
+      name: "TC-S13 xfstests idmapped"
+      desc: "Upstream xfstests idmapped group on kernel CephFS"
+      module: cephfs_idmap.test_idmap_xfstests.py
+      abort-on-fail: false
