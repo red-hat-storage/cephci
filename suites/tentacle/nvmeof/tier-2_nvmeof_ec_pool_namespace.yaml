@@ -1,0 +1,282 @@
+# NVMeoF EC pool namespace tests (BZ #76777)
+# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_functional.yaml
+# Inventory: conf/inventory/rhel-10.2-server-x86_64_xlarge.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+          - node11
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway and initiator
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - ceph osd pool application enable rbd rbd
+          - config:
+              command: shell
+              args:
+                - rbd create -s 1G image1
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd_ec_data 12 12 erasure default
+          - config:
+              command: shell
+              args:
+                - ceph osd pool set rbd_ec_data allow_ec_overwrites true
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd_ec_data
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd_ec_meta 64 64
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd_ec_meta
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                    - node5
+                    - node6
+              pos_args:
+                - rbd
+                - gw-group1
+      desc: Deploy NVMeoF gateway with EC pools for namespace tests
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy nvmeof gateway and EC pools
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: false
+        nvme_metadata_pool: rbd
+        gw_group: gw-group1
+        ec_meta_pool: rbd_ec_meta
+        ec_data_pool: rbd_ec_data
+        image_size: 1G
+        setup_ec_pools: false
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:ec-pool-ns
+            listener_port: 4420
+            allow_host: "*"
+        initiators:
+          - subnqn: nqn.2016-06.io.spdk:ec-pool-ns
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - disconnect_all
+      desc: EC pool namespace create-image, IO, and negative tests (BZ #76777)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ec_pool_namespace.py
+      name: NVMeoF EC pool namespace tests
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node6
+        pool: rbd
+        port: 5500
+        gw_group: gw-group1
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                serial-number: 99
+                no-group-append: true
+                max-namespaces: 32
+              validate:
+                omap: true
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                host-name: node6
+                trsvcid: 5010
+                traddr: node6
+                force: true
+              validate:
+                omap: true
+          - config:
+              service: host
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                host: '"*"'
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                rbd-pool: rbd_ec_meta
+                rbd-data-pool: rbd_ec_data
+                rbd-image: ec_cli_image1
+                nsid: 1
+                rbd-create-image: true
+                size: 1G
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: list
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: get
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                nsid: 1
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                nsid: 1
+                force: true
+              validate:
+                omap: true
+          - config:
+              service: subsystem
+              command: delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:ec-pool-cli
+                force: true
+              validate:
+                omap: true
+      desc: CLI workflow for EC pool namespace with rbd-data-pool (BZ #76777)
+      destroy-cluster: false
+      module: test_nvme_cli.py
+      name: EC pool namespace CLI tests
+
+  - test:
+      abort-on-fail: true
+      config:
+         command: remove
+         service: nvmeof
+         args:
+           service_name: nvmeof.rbd.gw-group1
+           verify: true
+      desc: Remove NVMeoF gateway service
+      destroy-cluster: false
+      module: test_orch.py
+      name: Delete nvmeof gateway
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd_ec_meta rbd_ec_meta --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd_ec_data rbd_ec_data --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
+      desc: Delete EC and RBD pools
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: Delete test pools
