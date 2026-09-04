@@ -1,8 +1,10 @@
-"""Copy cephadm root CA cert to RGW and client nodes without sshpass."""
+"""Copy files to RGW and client nodes without sshpass."""
 
+import importlib
 import os
 import re
 
+from ceph.utils import get_node_by_id
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -86,22 +88,73 @@ def copy_peer_cas_to_roles(cluster, ceph_cluster_dict, roles=("rgw", "client")):
                 install_cephadm_root_ca_cert(node, cert, cert_name=cert_name)
 
 
+def copy_file_to_node(src_node, dest_node, src_file, dest_file):
+    """Copy a file between nodes using remote_file."""
+    LOG.info(
+        "Copying %s from %s to %s on %s",
+        src_file,
+        src_node.hostname,
+        dest_file,
+        dest_node.hostname,
+    )
+    src = src_node.remote_file(sudo=True, file_name=src_file, file_mode="r")
+    content = src.read()
+    src.close()
+    dest = dest_node.remote_file(sudo=True, file_name=dest_file, file_mode="w")
+    dest.write(content)
+    dest.flush()
+    dest.close()
+    dest_node.exec_command(sudo=True, cmd=f"chmod 644 {dest_file}")
+
+
+def copy_file_to_cluster(ceph_cluster, ceph_cluster_dict, config):
+    """Copy a file from the current cluster to a peer cluster node."""
+    copy_cfg = config.get("copy_file", config)
+    src_file = copy_cfg["src"]
+    dest_file = copy_cfg["dest"]
+    dest_cluster = ceph_cluster_dict[copy_cfg["dest_cluster"]]
+    role = config.get("role", copy_cfg.get("role", "client"))
+    src_node = ceph_cluster.get_nodes(role=role)[config.get("idx", 0)]
+    if copy_cfg.get("dest_node"):
+        dest_node = get_node_by_id(dest_cluster, copy_cfg["dest_node"])
+    else:
+        dest_nodes = dest_cluster.get_nodes(role=copy_cfg.get("dest_role", "client"))
+        dest_node = dest_nodes[copy_cfg.get("idx", 0)]
+    if dest_node is None:
+        raise ValueError(
+            f"Unable to find dest node {copy_cfg.get('dest_node')} "
+            f"on {copy_cfg['dest_cluster']}"
+        )
+    copy_file_to_node(src_node, dest_node, src_file, dest_file)
+
+
 def run(ceph_cluster, **kwargs):
     """
-    Copy cephadm root CA cert to nodes by role.
-
-    Run after client setup in SSL RGW suites.
+    Copy files to RGW/client nodes without sshpass.
 
     Config keys:
-        roles: list of node roles (default: rgw, client)
+        roles: list of node roles for CA cert copy (default: rgw, client)
+        commands: optional exec.py command list; copy_file runs after commands
+        copy_file: copy a local file to a peer cluster
+            src, dest, dest_cluster, dest_node (optional)
     """
     config = kwargs.get("config", {})
     roles = config.get("roles", ["rgw", "client"])
     ceph_cluster_dict = kwargs.get("ceph_cluster_dict", {})
     try:
+        if config.get("commands"):
+            rc = importlib.import_module("exec").run(ceph_cluster, **kwargs)
+            if rc != 0:
+                return rc
+            if config.get("copy_file"):
+                copy_file_to_cluster(ceph_cluster, ceph_cluster_dict, config)
+            return 0
+        if config.get("copy_file") or (config.get("src") and config.get("dest_cluster")):
+            copy_file_to_cluster(ceph_cluster, ceph_cluster_dict, config)
+            return 0
         copy_cephadm_root_ca_cert_to_roles(ceph_cluster, roles=roles)
         copy_peer_cas_to_roles(ceph_cluster, ceph_cluster_dict, roles=roles)
     except Exception as exc:
-        LOG.error("Failed to copy cephadm root CA cert: %s", exc)
+        LOG.error("Failed to copy file: %s", exc)
         return 1
     return 0
