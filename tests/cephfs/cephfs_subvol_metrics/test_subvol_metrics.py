@@ -8,7 +8,10 @@ from typing import Any, Dict, List, Optional
 from looseversion import LooseVersion
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
-from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
+from tests.cephfs.lib.cephfs_subvol_metric_utils import (
+    MDSMetricsHelper,
+    used_bytes_close,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -222,6 +225,34 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("After snapshot of metrics : %s", after_snapshot)
         if LooseVersion(build) >= LooseVersion("9.1"):
+            subvol_info = fs_util.get_subvolume_info(
+                client, vol_name=default_fs, subvol_name=subvol_name
+            )
+            expected_after = int(subvol_info.get("bytes_used", 0) or 0)
+            found_after = False
+            for mds_name, items in (after_snapshot or {}).items():
+                for it in items:
+                    item_path = it.get("subvolume_path", "")
+                    if not (
+                        item_path.startswith(subvol_path)
+                        or subvol_path.startswith(item_path)
+                    ):
+                        continue
+                    found_after = True
+                    actual_after = it.get("used_bytes")
+                    if not used_bytes_close(actual_after, expected_after, strict=True):
+                        log.error(
+                            "after-run used_bytes never converged: actual=%s "
+                            "expected=%s mds=%s",
+                            actual_after,
+                            expected_after,
+                            mds_name,
+                        )
+                        return 1
+            if not found_after:
+                log.error("After-run snapshot missing used_bytes for %s", subvol_path)
+                return 1
+        if LooseVersion(build) >= LooseVersion("9.1"):
             # Create a lookup dict for expected values by timestamp (with tolerance for matching)
             expected_values_by_t: Dict[int, Dict[str, int]] = {}
             with expected_values_lock:
@@ -299,7 +330,7 @@ def run(ceph_cluster, **kw):
 
                         # Validate used_bytes value matches expected value from subvolume info
                         actual_used_bytes = it.get("used_bytes")
-                        if actual_used_bytes != expected_used_bytes:
+                        if not used_bytes_close(actual_used_bytes, expected_used_bytes):
                             log.error(
                                 "[t=%s] %s %s "
                                 "used_bytes mismatch: expected=%s, "
