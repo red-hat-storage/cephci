@@ -906,23 +906,41 @@ class FsUtils(object):
         :return:
         """
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
-        log.info("Wait for the process to start or stop")
+        log.info(
+            "Wait for NFS process %s to reach state '%s'", process_name, desired_state
+        )
         while end_time > datetime.datetime.now():
             out, rc = client.exec_command(
                 sudo=True,
                 cmd="ceph orch ps --daemon_type=nfs --format json",
                 check_ec=False,
             )
-            nfs_hosts = json.loads(out.read().decode())
-            for nfs in nfs_hosts:
-                log.info(nfs)
-                if process_name in nfs["daemon_id"] and ispresent:
-                    if nfs["status_desc"] == desired_state:
-                        log.info(nfs)
+            try:
+                nfs_hosts = json.loads(out) if out else []
+            except (TypeError, json.JSONDecodeError):
+                log.debug("Unable to parse NFS orch ps output: %s", out)
+                sleep(interval)
+                continue
+            if not isinstance(nfs_hosts, list):
+                nfs_hosts = [nfs_hosts]
+            matching = [
+                nfs for nfs in nfs_hosts if process_name in nfs.get("daemon_id", "")
+            ]
+            if ispresent:
+                for nfs in matching:
+                    log.info(nfs)
+                    if nfs.get("status_desc") == desired_state:
+                        log.info("NFS process %s is %s", process_name, desired_state)
                         return True
-                if process_name not in nfs["daemon_id"] and not ispresent:
-                    return True
+            elif not matching:
+                log.info("NFS process %s is not present", process_name)
+                return True
             sleep(interval)
+        log.error(
+            "Timed out waiting for NFS process %s to reach state '%s'",
+            process_name,
+            desired_state,
+        )
         return False
 
     def wait_for_mds_deamon(

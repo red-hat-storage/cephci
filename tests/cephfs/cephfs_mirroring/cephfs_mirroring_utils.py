@@ -2312,7 +2312,7 @@ class CephfsMirroringUtils(object):
             log.error(
                 "This test requires a minimum of 1 client node on both ceph1 and ceph2."
             )
-            return 1
+            return None
 
         log.info("Preparing Clients...")
         fs_util_ceph1.prepare_clients(source_clients, build)
@@ -2360,7 +2360,7 @@ class CephfsMirroringUtils(object):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         if not nfs_servers:
             log.error("No NFS servers found in the Ceph cluster.")
-            return 1
+            return None
 
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
@@ -2373,9 +2373,21 @@ class CephfsMirroringUtils(object):
                 placement="1 %s" % nfs_server,
             )
             log.info("NFS cluster %s created successfully." % nfs_name)
+            if not fs_util_ceph1.wait_for_nfs_process(
+                source_clients[0],
+                nfs_name,
+                timeout=300,
+                interval=10,
+                desired_state="running",
+            ):
+                log.error(
+                    "NFS cluster %s did not reach running state before continuing"
+                    % nfs_name
+                )
+                return None
         except CommandFailed as e:
             log.error("Failed to create NFS cluster: %s" % e)
-            return 1
+            return None
 
         return {
             "source_clients": source_clients,
