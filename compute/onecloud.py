@@ -201,26 +201,59 @@ def expand_private_key_path(path: Optional[str]) -> str:
     return os.path.expanduser(str(path).strip())
 
 
+def _sanitize_onecloud_name_part(value: str) -> str:
+    inst = re.sub(r"[^A-Za-z0-9-]+", "-", str(value)).strip("-")
+    return re.sub(r"-{2,}", "-", inst)
+
+
 def generate_onecloud_node_name(
-    run_id: str, node_key: str, role: Any, max_length: int = 25
+    run_id: str,
+    node_key: str,
+    role: Any,
+    max_length: int = 25,
+    instances_name: Optional[str] = None,
 ) -> str:
     """
     Return VM name for OneCloud API (max 25 chars, alphanumeric + hyphens only).
+
+    When `instances_name` is provided (CLI `--instances-name`), prefer including
+    it in the VM name while staying within `max_length`:
+
+    1. `ci-{instances_name}-{run_id}-node{N}` if it fits
+    2. `ci-{instances_name}-node{N}` (drop run_id) if that fits
+    3. `ci-{run_id}-node{N}` (current default; instances_name stays on cluster name)
+
+    If `instances_name` is not provided, always use `ci-{run_id}-node{N}`.
 
     Args:
         run_id: Unique run ID (e.g. 20DBDH).
         node_key: Node key (e.g. node1, node2).
         role: RolesContainer with node roles (unused, kept for API compatibility).
         max_length: Max VM name length (OneCloud default 25).
+        instances_name: Optional CLI `--instances-name` value (not login default).
 
     Returns:
-        Name like ci-20DBDH-node1, ci-20DBDH-node2.
+        Name like ci-hk-20DBDH-node1, ci-hk-node1, or ci-20DBDH-node1.
     """
     node_num = "".join(c for c in node_key if c.isdigit()) or "0"
-    name = f"ci-{run_id}-node{node_num}"
-    if len(name) > max_length:
-        name = name[:max_length]
-    return name
+    fallback = f"ci-{run_id}-node{node_num}"
+
+    # Sanitize user prefix: alphanumeric + hyphens only (OneCloud API constraint)
+    inst = ""
+    if instances_name:
+        inst = _sanitize_onecloud_name_part(instances_name)
+
+    if inst:
+        with_both = f"ci-{inst}-{run_id}-node{node_num}"
+        if len(with_both) <= max_length:
+            return with_both
+        without_run_id = f"ci-{inst}-node{node_num}"
+        if len(without_run_id) <= max_length:
+            return without_run_id
+
+    if len(fallback) > max_length:
+        return fallback[:max_length]
+    return fallback
 
 
 def _parse_images_response(data: Any) -> List[Dict]:
@@ -884,6 +917,29 @@ def get_vlan_for_site(
     return chosen
 
 
+def _delete_onecloud_vm(client, vm: Dict, context: str = "") -> bool:
+    """Delete a single OneCloud VM. Returns True if delete succeeded."""
+    vmid = vm.get("vmid") or vm.get("vmID")
+    if vmid is None:
+        return False
+    vm_name = get_vm_name(vm) or "?"
+    suffix = f" ({context})" if context else ""
+    try:
+        del_resp = client.delete(f"/vm/{vmid}")
+        if del_resp.status_code in (200, 204):
+            LOG.info("Deleted VM %s name=%s%s", vmid, vm_name, suffix)
+            return True
+        LOG.warning(
+            "Failed to delete VM %s name=%s: %s",
+            vmid,
+            vm_name,
+            del_resp.status_code,
+        )
+    except Exception as e:
+        LOG.warning("Error deleting VM %s name=%s: %s", vmid, vm_name, e)
+    return False
+
+
 def cleanup_onecloud_ceph_nodes(
     onecloud_cred: Dict,
     pattern: str,
@@ -892,12 +948,13 @@ def cleanup_onecloud_ceph_nodes(
     """
     Clean up OneCloud clusters and VMs matching the given pattern.
 
-    GET /clusters, filter by cluster_name containing pattern, then GET /vm?clusterid=X,
-    DELETE /vm/{id} for each VM, and DELETE /clusters/{id} for the cluster (if supported).
+    Matches:
+      - Clusters whose cluster_name contains pattern (then deletes all VMs in them)
+      - VMs whose name contains pattern (via GET /vm), including orphans
 
     Args:
         onecloud_cred: Credentials with globals["onecloud-credentials"].
-        pattern: Pattern to match cluster name (e.g. run id or prefix).
+        pattern: Pattern to match (typically CLI --instances-name).
         custom_config: Optional list of key=value for platform overrides.
     """
     glbs = onecloud_cred.get("globals") or {}
@@ -925,11 +982,52 @@ def cleanup_onecloud_ceph_nodes(
         )
 
     client = get_onecloud_client(api_key, base_url, verify_ssl=verify_ssl)
+    deleted_vmids = set()
 
+    # --- VM name-based cleanup: list and delete VMs whose name contains pattern ---
+    LOG.info("Listing OneCloud VMs for cleanup (name contains pattern=%s)", pattern)
+    all_vms: List[Dict] = []
+    vm_list_resp = client.get("/vm")
+    if vm_list_resp.status_code == 200:
+        all_vms = parse_vm_list_from_response(vm_list_resp.json())
+    else:
+        LOG.warning(
+            "Failed to list all VMs: %s %s",
+            vm_list_resp.status_code,
+            vm_list_resp.text[:200],
+        )
+
+    name_matching = []
+    for vm in all_vms:
+        vm_name = get_vm_name(vm) or ""
+        match_pattern = _sanitize_onecloud_name_part(pattern)
+        if match_pattern and match_pattern in vm_name:
+            name_matching.append(vm)
+
+    if name_matching:
+        names = [get_vm_name(v) or "?" for v in name_matching]
+        LOG.info(
+            "Found %d VM(s) with name containing '%s': %s",
+            len(name_matching),
+            pattern,
+            names,
+        )
+        for vm in name_matching:
+            vmid = vm.get("vmid") or vm.get("vmID")
+            if _delete_onecloud_vm(client, vm, context=f"name~{pattern}"):
+                if vmid is not None:
+                    deleted_vmids.add(vmid)
+    else:
+        LOG.info("No VMs with name containing pattern '%s'", pattern)
+
+    # --- Cluster-based cleanup ---
     LOG.info("Listing OneCloud clusters for cleanup (pattern=%s)", pattern)
     resp = client.get("/clusters")
     if resp.status_code != 200:
         LOG.warning("Failed to list clusters: %s %s", resp.status_code, resp.text[:200])
+        if deleted_vmids:
+            time.sleep(5)
+        LOG.info("Done cleaning up OneCloud nodes with pattern %s", pattern)
         return
 
     data = resp.json()
@@ -940,6 +1038,9 @@ def cleanup_onecloud_ceph_nodes(
     matching = [c for c in clusters if pattern in c.get("cluster_name", "")]
     if not matching:
         LOG.info("No clusters matching pattern '%s'", pattern)
+        if deleted_vmids:
+            time.sleep(5)
+        LOG.info("Done cleaning up OneCloud nodes with pattern %s", pattern)
         return
 
     LOG.info("Cleaning up %d clusters matching pattern", len(matching))
@@ -958,25 +1059,22 @@ def cleanup_onecloud_ceph_nodes(
             )
             continue
 
-        vm_data = vm_resp.json()
-        vms = vm_data.get("data", []) if isinstance(vm_data, dict) else vm_data
-        if not isinstance(vms, list):
-            vms = []
+        vms = parse_vm_list_from_response(vm_resp.json())
+        cluster_vm_names = [get_vm_name(v) or "?" for v in vms]
+        LOG.info(
+            "Cluster %s has %d VM(s): %s",
+            cluster_name,
+            len(vms),
+            cluster_vm_names,
+        )
 
         for vm in vms:
             vmid = vm.get("vmid") or vm.get("vmID")
-            if vmid is None:
+            if vmid is not None and vmid in deleted_vmids:
                 continue
-            try:
-                del_resp = client.delete(f"/vm/{vmid}")
-                if del_resp.status_code in (200, 204):
-                    LOG.info("Deleted VM %s (cluster %s)", vmid, cluster_name)
-                else:
-                    LOG.warning(
-                        "Failed to delete VM %s: %s", vmid, del_resp.status_code
-                    )
-            except Exception as e:
-                LOG.warning("Error deleting VM %s: %s", vmid, e)
+            if _delete_onecloud_vm(client, vm, context=f"cluster {cluster_name}"):
+                if vmid is not None:
+                    deleted_vmids.add(vmid)
 
         # Verify VMs are gone before proceeding (API may be eventually consistent)
         def _active_vms(vm_list: List[Dict]) -> List[Dict]:
