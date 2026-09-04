@@ -15,13 +15,18 @@ _USED_BYTES_REL_TOL = 0.05
 _USED_BYTES_ABS_TOL = 8 * 1024 * 1024
 
 
-def used_bytes_close(actual, expected):
-    """Return True when MDS used_bytes matches expected within CI slack."""
+def used_bytes_close(actual, expected, strict=False):
+    """Return True when MDS used_bytes matches expected within CI slack.
+
+    When strict is False, a near-zero MDS value vs GiB-scale expected is
+    treated as an unsettled first dump window. After IO completes, call
+    with strict=True so that bypass cannot pass every sample.
+    """
     actual = int(actual or 0)
     expected = int(expected or 0)
     if actual == expected:
         return True
-    if expected > _USED_BYTES_ABS_TOL and actual <= _USED_BYTES_ABS_TOL:
+    if not strict and expected > _USED_BYTES_ABS_TOL and actual <= _USED_BYTES_ABS_TOL:
         log.warning(
             "used_bytes still settling: actual=%s expected=%s", actual, expected
         )
