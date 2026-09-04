@@ -1,0 +1,51 @@
+# 4-node CephFS cluster + 1 client.
+# Compact collocation of conf/tentacle/cephfs/tier-2_cephfs_7-node-cluster.yaml
+#
+# Label mapping (7-node -> 4-node):
+#   node1: _admin, mon, mgr, installer          + osd, mds  (OSD/MDS from old node4)
+#   node2: mon, mgr                             + osd, mds  (OSD/MDS from old node5)
+#   node3: mon, mds                             + osd       (OSD from old node6)
+#   node4: osd, mds, nfs                        (old node7; nfs kept from old node6/7)
+#   Dropped: smb (unused by this suite), extra MDS/OSD-only hosts, clients 2-4
+#   node5: client                               (was node8)
+#
+# Resulting daemon counts vs 7-node:
+#   mon: 3 (same), mgr: 2 (same), osd hosts: 4 (same), mds: 4 (was 5), nfs: 1 (was 2)
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node2:
+        role:
+          - mon
+          - mgr
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mds
+          - nfs
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - client
