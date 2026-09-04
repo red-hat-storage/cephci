@@ -64,6 +64,55 @@ def fetch_from_metadata(rhcephVersion):
     return metadata_content
 
 
+# run.py reads these only through --custom-config key=value, not as top-level flags.
+CUSTOM_CONFIG_OVERRIDE_KEYS = frozenset(
+    {
+        "enable-fips-mode",
+        "enable-firewall",
+        "podman-auth-file",
+    }
+)
+
+# Metadata / Jenkins override keys that are not run.py CLI arguments.
+PIPELINE_INTERNAL_KEYS = frozenset({"cloud_type"})
+
+
+def _custom_config_value(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+    return str(value)
+
+
+def append_run_py_args(execute_cli, suite_args):
+    """Append run.py CLI args, mapping pipeline custom keys to --custom-config."""
+    custom_config_entries = []
+    if "custom-config" in suite_args:
+        entries = suite_args.pop("custom-config")
+        if isinstance(entries, str):
+            entries = [entries]
+        custom_config_entries.extend(entries)
+
+    for key in list(suite_args.keys()):
+        if key in CUSTOM_CONFIG_OVERRIDE_KEYS:
+            custom_config_entries.append(
+                f"{key}={_custom_config_value(suite_args.pop(key))}"
+            )
+
+    for entry in custom_config_entries:
+        execute_cli += f" --custom-config {entry}"
+
+    for key, value in suite_args.items():
+        if key in PIPELINE_INTERNAL_KEYS:
+            continue
+        if isinstance(value, list):
+            for item in value:
+                execute_cli += f" --{key} {item}"
+        else:
+            execute_cli += f" --{key} {value}"
+
+    return execute_cli
+
+
 def is_final_stage_or_tier(stage_or_tier, data):
     """
     Returns whether the current stage specified in tags is the final stage
@@ -141,12 +190,7 @@ def construct_cli(
         test_suite.update(meta_overrides)
         test_suite.update(overrides)
 
-        for k, v in test_suite.items():
-            if isinstance(v, list):
-                for item in v:
-                    execute_cli += f" --{k} {item}"
-            else:
-                execute_cli += f" --{k} {v}"
+        execute_cli = append_run_py_args(execute_cli, test_suite)
 
         test_data.update(
             {
@@ -213,6 +257,8 @@ def fetch_tests(args):
                 "tags": comma separated string containing the tags based on which the stages should be filtered,
                 "overrides": <overrides in json format, all keys accepted by run.py are supported to be overridden
                             if any key similar to --store which does not have a value it can be passed as "store": ""
+                            Pipeline keys enable-fips-mode, enable-firewall, and podman-auth-file are
+                            translated to --custom-config entries for run.py.
             }
 
             Example:
