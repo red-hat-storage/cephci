@@ -13,7 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from looseversion import LooseVersion
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
-from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
+from tests.cephfs.lib.cephfs_subvol_metric_utils import (
+    MDSMetricsHelper,
+    used_bytes_close,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -178,7 +181,7 @@ def run(ceph_cluster, **kw):
         expected_used_bytes = subvol_info.get("bytes_used", 0)
         if expected_used_bytes is None:
             return 1
-        if used_bytes != expected_used_bytes:
+        if not used_bytes_close(used_bytes, expected_used_bytes):
             log.error(
                 "Step 1: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
                 used_bytes,
@@ -222,7 +225,7 @@ def run(ceph_cluster, **kw):
             client, vol_name=vol_name, subvol_name=subvol_name
         )
         expected_used_bytes = subvol_info.get("bytes_used", 0)
-        if used_bytes != expected_used_bytes:
+        if not used_bytes_close(used_bytes, expected_used_bytes):
             log.error(
                 "Step 2: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
                 used_bytes,
@@ -268,7 +271,7 @@ def run(ceph_cluster, **kw):
                 retry_cnt += 1
                 time.sleep(2)
                 continue
-            elif used_bytes != expected_used_bytes:
+            elif not used_bytes_close(used_bytes, expected_used_bytes):
                 retry_cnt += 1
                 time.sleep(2)
                 continue
@@ -281,7 +284,7 @@ def run(ceph_cluster, **kw):
                 quota_bytes,
             )
             return 1
-        if used_bytes != expected_used_bytes:
+        if not used_bytes_close(used_bytes, expected_used_bytes):
             log.error(
                 "Step 4: used_bytes mismatch with expected_used_bytes used_bytes=%s, expected_used_bytes=%s",
                 used_bytes,

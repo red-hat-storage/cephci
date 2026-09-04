@@ -8,7 +8,10 @@ from typing import Any, Dict, List, Optional
 from looseversion import LooseVersion
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
-from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
+from tests.cephfs.lib.cephfs_subvol_metric_utils import (
+    MDSMetricsHelper,
+    used_bytes_close,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -299,7 +302,7 @@ def run(ceph_cluster, **kw):
 
                         # Validate used_bytes value matches expected value from subvolume info
                         actual_used_bytes = it.get("used_bytes")
-                        if actual_used_bytes != expected_used_bytes:
+                        if not used_bytes_close(actual_used_bytes, expected_used_bytes):
                             log.error(
                                 "[t=%s] %s %s "
                                 "used_bytes mismatch: expected=%s, "
