@@ -58,6 +58,18 @@ def _resolve_network_mask(ceph_cluster, network_mask, fallback_node=None):
     return str(ipaddress.ip_network(f"{ip}/24", strict=False))
 
 
+def _execute_nvme_step(func, cfg, expect_failure):
+    """Run a NVMe CLI step; invert success/failure when expect_failure is set."""
+    if expect_failure:
+        try:
+            func(**cfg)
+        except Exception as exc:
+            LOG.info("Expected NVMe CLI failure: %s", exc)
+            return
+        raise AssertionError(f"Expected NVMe CLI step to fail but it succeeded: {cfg}")
+    func(**cfg)
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
     Return the status of the test execution run with the provided keyword arguments.
@@ -146,7 +158,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         )
                         cfg["args"][key] = resolved
             func = fetch_method(_cls, command)
-            func(**cfg)
+            expect_failure = cfg.pop("expect_failure", False)
+            _execute_nvme_step(func, cfg, expect_failure)
 
             # Validate NVMe metadata in OMAP
             if "validate" in cfg:

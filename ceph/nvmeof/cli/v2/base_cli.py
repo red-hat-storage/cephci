@@ -18,6 +18,7 @@ KEY_MAP = {
     "no-group-append": "no-group-append",
     "rbd-pool": "rbd_pool",
     "rbd-image": "rbd_image_name",
+    "rbd-data-pool": "rbd_data_pool",
     "rbd-create-image": "create-image",
     "load-balancing-group": "load_balancing_group",
     "rbd-trash-image-on-delete": "trash-image",
