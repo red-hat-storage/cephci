@@ -364,3 +364,15 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
             monitor-consistency-bucket-stats: true
+
+  - test:
+      name: listing flat unordered versioned buckets on primary
+      desc: unordered listing of versioned bucket with delete markers
+      polarion-id: CEPH-83632954
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_unordered_versionsing.yaml
+            timeout: 5500
