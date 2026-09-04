@@ -8,12 +8,66 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def _port_available_on_node(node, port):
+    """Return True when TCP port is free on node (ss + bind probe).
+
+    Cephadm verifies NFS ports with a bind attempt; ``ss`` alone can miss
+    listeners that appear while parallel orch applies are in flight.
+    """
+    out, _ = node.exec_command(
+        sudo=True,
+        cmd=f"ss -H -tln sport = :{port}",
+        check_ec=False,
+        timeout=30,
+    )
+    if (out or "").strip():
+        log.debug("Port %s in use on %s (ss listener)", port, node.hostname)
+        return False
+    bind_cmd = (
+        'python3 -c "import socket; s=socket.socket();'
+        "s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);"
+        "s.bind(('0.0.0.0', %d)); s.close()\"" % port
+    )
+    node.exec_command(sudo=True, cmd=bind_cmd, check_ec=False, timeout=30)
+    if int(getattr(node, "exit_status", 1)) != 0:
+        log.debug("Port %s bind probe failed on %s", port, node.hostname)
+        return False
+    return True
+
+
+def _find_free_ports(nodes, count, start_port, reserved=None):
+    """Return ``count`` ports free on every NFS host."""
+    reserved = set(reserved or ())
+    free_ports = []
+    port = start_port
+    while len(free_ports) < count and port < 65535:
+        if port in reserved:
+            port += 1
+            continue
+        if all(_port_available_on_node(node, port) for node in nodes):
+            free_ports.append(port)
+            reserved.add(port)
+        port += 1
+    return free_ports
+
+
+def _verify_ports_free_on_all_nodes(nodes, ports):
+    """Raise when any assigned port is busy on any nfs host."""
+    for port in ports:
+        for node in nodes:
+            if not _port_available_on_node(node, port):
+                raise ConfigError(
+                    "Port %s not available on %s before NFS deploy"
+                    % (port, node.hostname)
+                )
+
+
 def run(ceph_cluster, **kw):
-    """Verify create file, create soflink and lookups from nfs clients
+    """Deploy multiple NFS-Ganesha services concurrently and verify cleanup.
+
     Args:
         **kw: Key/value pairs of configuration information to be used in the test.
     """
-
     config = kw.get("config")
     clients = ceph_cluster.get_nodes("client")
     nfs_nodes = ceph_cluster.get_nodes("nfs")
@@ -22,6 +76,7 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     original_config = config.get("spec", None)
     timeout = int(config.get("timeout", 300))
+    port_scan_start = int(config.get("port_scan_start", 52000))
     # Cephadm reserves cluster_qos_port (default 31311) for every NFS service.
     # Concurrent instances sharing nfs hosts collide on that default unless each
     # gets a unique qos port. Enable via suite config on Tentacle+ (field is
@@ -31,40 +86,23 @@ def run(ceph_cluster, **kw):
         or (original_config or {}).get("spec", {}).get("cluster_qos_port") is not None
     )
     ports_per_instance = 3 if use_cluster_qos else 2
-    # Allow some time for the cluster to stabilize
 
-    # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
         raise ConfigError("The test requires more clients than available")
 
-    clients = clients[:no_clients]  # Select only the required number of clients
+    clients = clients[:no_clients]
     clean_up_happened = None
-
-    def get_free_ports(nodes, count, start_port):
-        """Scan for free ports on all nodes."""
-        free_ports = []
-        port = start_port
-        while len(free_ports) < count and port < 65535:
-            is_used = False
-            for node in nodes:
-                # Check if port is in use using ss
-                cmd = f"ss -H -tulpn sport = :{port}"
-                out = node.exec_command(cmd=cmd, sudo=True)
-                if out[0].strip():
-                    is_used = True
-                    break
-            if not is_used:
-                free_ports.append(port)
-            port += 1
-        return free_ports
 
     try:
         all_nfs_nodes = ceph_cluster.get_nodes("nfs")
         needed_ports = nfs_instance_number * ports_per_instance
-        free_ports = get_free_ports(all_nfs_nodes, needed_ports, 52000)
+        free_ports = _find_free_ports(all_nfs_nodes, needed_ports, port_scan_start)
 
         if len(free_ports) < needed_ports:
-            raise ConfigError(f"Could not find {needed_ports} free ports on NFS nodes")
+            raise ConfigError(
+                "Could not find %s free ports on all NFS nodes (found %s)"
+                % (needed_ports, len(free_ports))
+            )
 
         new_objects = []
         for i in range(nfs_instance_number):
@@ -74,7 +112,7 @@ def run(ceph_cluster, **kw):
 
             new_object = {
                 "service_type": original_config["service_type"],
-                "service_id": f"concurrent-nfs-{i}",
+                "service_id": "concurrent-nfs-%s" % i,
                 "placement": {"label": original_config["placement"]["label"]},
                 "spec": {
                     "port": nfs_port,
@@ -85,10 +123,14 @@ def run(ceph_cluster, **kw):
                 new_object["spec"]["cluster_qos_port"] = free_ports[base + 2]
             new_objects.append(new_object)
         log.info(
-            f"New NFS Ganesha objects to be created with dynamic ports: {new_objects}"
+            "New NFS Ganesha objects to be created with dynamic ports: %s",
+            new_objects,
         )
 
-        # Create a nfs instance using the provided configuration
+        # Re-probe immediately before apply; parallel suite tests may have
+        # bound ports between the initial scan and orch apply.
+        _verify_ports_free_on_all_nodes(all_nfs_nodes, free_ports)
+
         if not create_nfs_via_file_and_verify(
             installer, new_objects, timeout, nfs_nodes
         ):
@@ -101,23 +143,26 @@ def run(ceph_cluster, **kw):
             log.info("NFS Ganesha instances deleted successfully")
             clean_up_happened = True
         except Exception as deletion_error:
-            log.error(f"Failed to delete NFS Ganesha instances: {deletion_error}")
+            log.error("Failed to delete NFS Ganesha instances: %s", deletion_error)
             clean_up_happened = False
             return 1
 
+        log.info(
+            "TEST PASSED - deployed %s concurrent NFS clusters (CEPH-83621553)",
+            nfs_instance_number,
+        )
         return 0
     except Exception as e:
-        log.error(f"An error occurred during NFS Ganesha deployment: {e}")
+        log.error("An error occurred during NFS Ganesha deployment: %s", e)
         return 1
     finally:
         log.info("Cleanup in progress...")
-        # Ensure cleanup of any created NFS instances
         if not clean_up_happened:
             log.info("Cleaning up any created NFS Ganesha instances")
             try:
                 delete_nfs_clusters_in_parallel(installer, timeout)
                 log.info("Cleanup completed successfully")
             except Exception as cleanup_error:
-                log.warning(f"Cleanup failed: {cleanup_error}")
+                log.warning("Cleanup failed: %s", cleanup_error)
         else:
             log.info("No additional cleanup needed")
