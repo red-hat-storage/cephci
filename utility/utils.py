@@ -2409,6 +2409,10 @@ def run_fio(**fio_args):
         log.info("No runtime provided.")
     elif run_time:
         cmd_args.update({"runtime": run_time, "time_based": True})
+        # fio requires --size with --time_based so it knows the working set;
+        # without it fio writes indefinitely and never honours --runtime.
+        if not cmd_args.get("size"):
+            cmd_args["size"] = "100%"
 
     if fio_args.get("rwmixread"):
         cmd_args.update({"rwmixread": fio_args["rwmixread"]})
@@ -2431,11 +2435,12 @@ def run_fio(**fio_args):
             "numjobs": fio_args.get("num_jobs", "1"),
             "rw": fio_args.get("io_type", "write"),
             "iodepth": fio_args.get("iodepth", "8"),
-            "fsync": fio_args.get("fsync", "32"),
             "group_reporting": True,
             "bs": fio_args.get("bs", "4k"),
         }
     )
+    if fio_args.get("fsync"):
+        cmd_args["fsync"] = fio_args["fsync"]
 
     output_fmt = fio_args.get("output_format")
     if output_fmt:
