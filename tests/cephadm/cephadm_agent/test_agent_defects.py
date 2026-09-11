@@ -481,7 +481,11 @@ def run_failover_resilience_test(ceph_cluster, installer):
 
     log.info("Stopping agent on target host (keep stopped through failover)...")
     target_node.exec_command(sudo=True, cmd=f"systemctl stop {service_name}")
-    time.sleep(5)
+    # Wait 180s for the MGR to detect the stopped agent and update its internal
+    # state before triggering failover. Without this delay the MGR failover races
+    # with agent stop and the post-failover agent.json target_ip check is unreliable.
+    # Ref: IBMCEPH-16032
+    time.sleep(180)
 
     log.info("Triggering MGR failover while agent is stopped...")
     shell(installer, "ceph mgr fail")
