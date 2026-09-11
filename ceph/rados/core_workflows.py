@@ -7459,6 +7459,7 @@ EOF"""
         rdma_port: Optional[int] = None,
         enable_nfsv3: bool = False,
         nfs_placement_label: Optional[str] = None,
+        enable_pec: bool = False,
     ) -> dict:
         """Create NFS clusters with a dedicated CephFS filesystem and exports.
 
@@ -7502,6 +7503,9 @@ EOF"""
                 whose ``labels`` include this string. If no orch host has
                 the label, fall back to all orch hosts. If unset, use all
                 orch hosts.
+            enable_pec (bool): Create each export on a CephFS subvolume with
+                ``--cmount_path`` (per-export client). Never uses ``--path=/``
+                (IBMCEPH-17356). Caller must version-gate (>= 20.2.2).
 
         Returns:
             dict: NFS configuration with structure::
@@ -7540,6 +7544,7 @@ EOF"""
             f"{exports_per_cluster} exports each"
             f"{', RDMA enabled' if enable_rdma else ''}"
             f"{', NFSv3 enabled on cluster' if enable_nfsv3 else ''}"
+            f"{', PEC (cmount_path)' if enable_pec else ''}"
         )
 
         # Step 1: Create CephFS filesystem for NFS
@@ -7661,27 +7666,85 @@ EOF"""
 
         # Step 3: Create exports for each cluster
         exports = []
+        pec_svg = "pecgroup" if enable_pec else None
+        if enable_pec:
+            log.info("PEC: ensuring subvolume group %s on %s", pec_svg, nfs_fs_name)
+            self.client.exec_command(
+                cmd=(
+                    f"ceph fs subvolumegroup create {nfs_fs_name} {pec_svg} "
+                    "2>/dev/null || true"
+                ),
+                sudo=True,
+                check_ec=False,
+            )
         for cluster in clusters:
             cluster_id = cluster["cluster_id"]
             for j in range(exports_per_cluster):
                 pseudo_path = f"/export/{cluster_id}/path{j + 1}"
 
                 log.info(f"Creating NFS export: {pseudo_path} on cluster {cluster_id}")
-                cmd = (
-                    f"ceph nfs export create cephfs {cluster_id} {pseudo_path} "
-                    f"{nfs_fs_name} --path=/"
-                )
+                export_entry = {
+                    "cluster_id": cluster_id,
+                    "pseudo_path": pseudo_path,
+                    "fs_name": nfs_fs_name,
+                }
+                sv_name = None
                 try:
+                    if enable_pec:
+                        sv_name = f"nfsvol_{cluster_id}_{j + 1}".replace("-", "_")
+                        self.client.exec_command(
+                            cmd=(
+                                f"ceph fs subvolume create {nfs_fs_name} {sv_name} "
+                                f"--group_name {pec_svg} --namespace-isolated"
+                            ),
+                            sudo=True,
+                        )
+                        sv_path, _ = self.client.exec_command(
+                            cmd=(
+                                f"ceph fs subvolume getpath {nfs_fs_name} {sv_name} "
+                                f"--group_name {pec_svg}"
+                            ),
+                            sudo=True,
+                        )
+                        sv_path = (sv_path or "").strip()
+                        if not sv_path:
+                            raise RuntimeError(
+                                f"empty getpath for {sv_name} on {nfs_fs_name}"
+                            )
+                        cmd = (
+                            f"ceph nfs export create cephfs {cluster_id} "
+                            f"{pseudo_path} {nfs_fs_name} "
+                            f"--path={sv_path} --cmount_path={sv_path}"
+                        )
+                        export_entry["sv_name"] = sv_name
+                        export_entry["svg"] = pec_svg
+                        export_entry["sv_path"] = sv_path
+                    else:
+                        cmd = (
+                            f"ceph nfs export create cephfs {cluster_id} "
+                            f"{pseudo_path} {nfs_fs_name} --path=/"
+                        )
                     self.client.exec_command(cmd=cmd, sudo=True)
-                    exports.append(
-                        {
-                            "cluster_id": cluster_id,
-                            "pseudo_path": pseudo_path,
-                            "fs_name": nfs_fs_name,
-                        }
-                    )
+                    exports.append(export_entry)
                 except Exception as e:
                     log.warning(f"Failed to create export {pseudo_path}: {e}")
+                    # PEC: never leave an orphaned subvolume without an export
+                    if enable_pec and sv_name and pec_svg:
+                        try:
+                            self.client.exec_command(
+                                cmd=(
+                                    f"ceph fs subvolume rm {nfs_fs_name} {sv_name} "
+                                    f"--group_name {pec_svg} --force"
+                                ),
+                                sudo=True,
+                                check_ec=False,
+                            )
+                        except Exception as rm_e:
+                            log.warning(
+                                "Failed to cleanup PEC subvolume %s: %s",
+                                sv_name,
+                                rm_e,
+                            )
 
         log.info(f"Created {len(exports)} NFS exports across {len(clusters)} clusters")
 
@@ -7706,6 +7769,8 @@ EOF"""
             "pools": created_pools,
             "enable_rdma": enable_rdma,
             "enable_nfsv3": enable_nfsv3,
+            "enable_pec": enable_pec,
+            "pec_svg": pec_svg,
         }
 
     def cleanup_nfs_clusters(self, nfs_config: dict) -> None:
@@ -7730,6 +7795,21 @@ EOF"""
                 log.debug(f"Deleted NFS export: {pseudo_path}")
             except Exception as e:
                 log.warning(f"Failed to delete export {pseudo_path}: {e}")
+            sv_name = export.get("sv_name")
+            svg = export.get("svg")
+            fs_name = export.get("fs_name")
+            if sv_name and svg and fs_name:
+                try:
+                    self.client.exec_command(
+                        cmd=(
+                            f"ceph fs subvolume rm {fs_name} {sv_name} "
+                            f"--group_name {svg} --force"
+                        ),
+                        sudo=True,
+                        check_ec=False,
+                    )
+                except Exception as e:
+                    log.warning(f"Failed to delete subvolume {sv_name}: {e}")
 
         # Step 2: Delete NFS clusters
         for cluster in nfs_config.get("clusters", []):

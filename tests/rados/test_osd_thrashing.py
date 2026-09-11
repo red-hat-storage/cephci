@@ -214,6 +214,11 @@ CONFIGURATION OPTIONS:
 - nfs_rdma_port: Base RDMA port for ``--rdma_port`` (per-cluster: base + index).
   If unset, ``NFS_RDMA_DEFAULT_BASE_PORT`` (20049) in core_workflows is used.
 - enable_nfsv3: Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
+- enable_nfs_object_cache: Apply NFS client object cache spec after cluster create
+  (default: False). Opt-in like enable_nfs_rdma; skipped if live Ceph < 20.2.2.
+- enable_nfs_pec: Create NFS exports with --cmount_path on a subvolume (default: False).
+  Opt-in; skipped if live Ceph < 20.2.2. Export churn recreates with the same
+  ``sv_path`` / ``--cmount_path`` when PEC is on (never ``--path=/``).
 - nfs_placement_label: Prefer orch hosts with this **ceph orch host label**. If no host
   has the label, fallback uses all orch hosts.
 - enable_nfs_daemon_thrashing: Enable NFS daemon kill/recovery cycles (default: False)
@@ -415,6 +420,8 @@ def run(ceph_cluster, **kw):
         enable_nfs_rdma (bool): Use --enable-rdma on ceph nfs cluster create (default: False)
         nfs_rdma_port (int|None): Optional base --rdma_port; if unset, 20049 + index
         enable_nfsv3 (bool): Pass --enable-nfsv3 to ceph nfs cluster create (default: False)
+        enable_nfs_object_cache (bool): Apply NFS object-cache orch spec (default: False)
+        enable_nfs_pec (bool): Per-export client via --cmount_path (default: False)
         nfs_placement_label (str|None): Prefer orch hosts with this label; if no
             matches, use all orch hosts (default: None).
         enable_nfs_daemon_thrashing (bool): Enable NFS daemon kill/restart cycles (default: False)
@@ -505,6 +512,18 @@ def run(ceph_cluster, **kw):
     nfs_rdma_port_raw = config.get("nfs_rdma_port")
     nfs_rdma_port = int(nfs_rdma_port_raw) if nfs_rdma_port_raw is not None else None
     enable_nfsv3 = config.get("enable_nfsv3", False)
+    enable_nfs_object_cache = config.get("enable_nfs_object_cache", False)
+    enable_nfs_pec = config.get("enable_nfs_pec", False)
+    if enable_nfs_object_cache or enable_nfs_pec:
+        from tests.nfs.nfs_oc_pec import oc_pec_supported
+
+        if not (
+            oc_pec_supported(cephadm.installer, prefix_cephadm=True)
+            or oc_pec_supported(cephadm.installer, prefix_cephadm=False)
+        ):
+            log.info("Live Ceph < 20.2.2; leaving NFS object cache and PEC disabled")
+            enable_nfs_object_cache = False
+            enable_nfs_pec = False
     nfs_placement_label = config.get("nfs_placement_label") or None
     nfs_num_clusters = config.get("nfs_num_clusters", 3)
     nfs_exports_per_cluster = config.get("nfs_exports_per_cluster", 4)
@@ -616,6 +635,8 @@ def run(ceph_cluster, **kw):
         )
         + f"  NFS RDMA (cluster + mounts): {enable_nfs_rdma}{rdma_suffix}\n"
         f"  NFS cluster NFSv3 enabled: {enable_nfsv3}\n"
+        f"  NFS object cache: {enable_nfs_object_cache}\n"
+        f"  NFS PEC (cmount_path): {enable_nfs_pec}\n"
         f"  NFS placement orch label: {nfs_placement_label or '(none)'}\n"
         f"  CephFS subvolume thrashing: {enable_cephfs_subvolume_thrashing}\n"
         f"  Election strategy thrash: {enable_election_strategy_thrash}\n"
@@ -754,6 +775,7 @@ def run(ceph_cluster, **kw):
                     rdma_port=nfs_rdma_port,
                     enable_nfsv3=enable_nfsv3,
                     nfs_placement_label=nfs_placement_label,
+                    enable_pec=enable_nfs_pec,
                 )
 
             smb_future = None
@@ -830,6 +852,15 @@ def run(ceph_cluster, **kw):
                             f"Created NFS setup: {len(nfs_config.get('clusters', []))} clusters, "
                             f"{len(nfs_config.get('exports', []))} exports"
                         )
+                        if enable_nfs_object_cache:
+                            from tests.nfs.nfs_oc_pec import apply_nfs_object_cache
+
+                            for cluster_info in nfs_config.get("clusters", []):
+                                apply_nfs_object_cache(
+                                    cephadm.installer,
+                                    cluster_info["cluster_id"],
+                                    enable=True,
+                                )
 
                         # Per NFS host: always drop host firewall (TCP + RDMA). When the
                         # cluster has v3 enabled, also install/start rpcbind and statd.
