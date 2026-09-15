@@ -50,7 +50,8 @@ Harness (not product):
   * After unpause succeeds: 15s settle for mon/mgr. Do not poll MDS.
   * Paused apply SSH wait is max(120, 2N+60). SSH timeout is logged and
     health is still polled; other apply CommandFailed Fails immediately.
-  * Unique service_id and ports per stall (tentacle cluster_qos_port).
+  * Unique service_id and ports per stall. ``cluster_qos_port`` is
+    optional (tentacle); omit it on squid/8.1 NFS specs.
 """
 
 import json
@@ -267,7 +268,13 @@ def _require_dot_nfs_pool(installer):
         )
 
 
-def _nfs_spec(service_id, hosts, port, monitoring_port, qos_port):
+def _nfs_spec(service_id, hosts, port, monitoring_port, qos_port=None):
+    spec = {
+        "port": int(port),
+        "monitoring_port": int(monitoring_port),
+    }
+    if qos_port is not None:
+        spec["cluster_qos_port"] = int(qos_port)
     return {
         "service_type": "nfs",
         "service_id": service_id,
@@ -275,22 +282,19 @@ def _nfs_spec(service_id, hosts, port, monitoring_port, qos_port):
             "hosts": list(hosts),
             "count": len(hosts),
         },
-        "spec": {
-            "port": int(port),
-            "monitoring_port": int(monitoring_port),
-            "cluster_qos_port": int(qos_port),
-        },
+        "spec": spec,
     }
 
 
 def _ports_from_config(config):
-    for key in ("port", "monitoring_port", "cluster_qos_port"):
+    for key in ("port", "monitoring_port"):
         if config.get(key) is None:
             raise ConfigError(f"config.{key} is required (unique per NFS service)")
+    qos = config.get("cluster_qos_port")
     return (
         int(config["port"]),
         int(config["monitoring_port"]),
-        int(config["cluster_qos_port"]),
+        int(qos) if qos is not None else None,
     )
 
 
