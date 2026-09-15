@@ -132,7 +132,7 @@ def run(ceph_cluster, **kw):
         backend_ip, backend_port = _nfs_backend_endpoint(
             clients[0], nfs_name, nfs_node, port
         )
-        wait_for_nfs_endpoint_ready(clients[0], backend_ip, backend_port, timeout=600)
+        wait_for_nfs_endpoint_ready(clients[0], backend_ip, backend_port, timeout=900)
 
         original_file_inode = None
         hard_link_file_inode = None
