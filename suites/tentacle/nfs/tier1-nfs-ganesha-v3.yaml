@@ -310,9 +310,9 @@ tests:
   # Last block only: test does OSD pause/unpause.
   # Unique service_id/ports vs 2049.
   - test:
-      name: NFS rados command timeout setup default NFS
+      name: NFS rados timeout setup
       module: test_nfs_rados_command_timeout.py
-      desc: Apply one healthy NFS cluster and leave it running (creates pool .nfs)
+      desc: Seed NFS and leave running (creates pool .nfs)
       polarion-id: CEPH-83632973
       abort-on-fail: true
       config:
@@ -323,10 +323,9 @@ tests:
         cluster_qos_port: 63100
 
   - test:
-      name: NFS rados command timeout default 30s
+      name: NFS rados timeout default 30s
       module: test_nfs_rados_command_timeout.py
-      desc: >-
-        get must be 30 (else Fail after measuring 30s health); pause; add new NFS cluster using spec; health 30s
+      desc: get must be 30; pause; new NFS spec; health 30s
       polarion-id: CEPH-83632973
       abort-on-fail: false
       config:
@@ -342,10 +341,9 @@ tests:
         strict_get: true
 
   - test:
-      name: NFS rados command timeout set 60s
+      name: NFS rados timeout set 60s
       module: test_nfs_rados_command_timeout.py
-      desc: >-
-        config set 60; pause; new NFS; health timed out after 60.0 seconds; unpause
+      desc: config set 60; pause; new NFS; health timeout 60s
       polarion-id: CEPH-83632973
       abort-on-fail: false
       config:
@@ -362,10 +360,9 @@ tests:
         strict_get: true
 
   - test:
-      name: NFS rados command timeout floor 5s
+      name: NFS rados timeout floor 5s
       module: test_nfs_rados_command_timeout.py
-      desc: >-
-        config set 5; pause; new NFS; health timed out after 5.0 seconds; unpause
+      desc: config set 5; pause; new NFS; health timeout 5s
       polarion-id: CEPH-83632973
       abort-on-fail: false
       config:
@@ -382,10 +379,9 @@ tests:
         strict_get: true
 
   - test:
-      name: NFS rados command timeout below floor 0s
+      name: NFS rados timeout below 0s
       module: test_nfs_rados_command_timeout.py
-      desc: >-
-        config set 0; get must be 0 or 1 (not leftover 5); health 5.0; unpause
+      desc: set 0; get 0|1 not leftover 5; health 5s; unpause
       polarion-id: CEPH-83632973
       abort-on-fail: false
       config:
@@ -403,9 +399,9 @@ tests:
         strict_get: true
 
   - test:
-      name: NFS rados command timeout teardown
+      name: NFS rados timeout teardown
       module: test_nfs_rados_command_timeout.py
-      desc: Unpause OSDs, config set timeout 30, orch rm seed and stall NFS
+      desc: Unpause OSDs, set timeout 30, orch rm seed and stalls
       polarion-id: CEPH-83632973
       abort-on-fail: false
       config:
