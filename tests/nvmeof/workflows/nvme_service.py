@@ -156,9 +156,8 @@ class NVMeService:
                     raise ValueError("Gateway group not provided for RHCS 8+")
 
                 if self.is_spec_or_mtls:
-                    cfg["config"]["specs"][0][
-                        "service_id"
-                    ] = f"{self.nvme_metadata_pool}.{self.group}"
+                    pool_id = self.nvme_metadata_pool.lstrip(".")
+                    cfg["config"]["specs"][0]["service_id"] = f"{pool_id}.{self.group}"
                     cfg["config"]["specs"][0]["spec"]["group"] = self.group
                 else:
                     if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
@@ -319,24 +318,85 @@ class NVMeService:
         if wait_sec:
             time.sleep(wait_sec)
 
-    def init_gateways(self):
+    def wait_for_gateways_ready(self, timeout=300, interval=10):
+        """Poll each gateway until gateway_initialization_over is True.
+
+        Must be called after init_gateways() so that self.gateways is populated.
+
+        Args:
+            timeout (int): Maximum seconds to wait per gateway (default 300).
+            interval (int): Poll interval in seconds (default 10).
+
+        Raises:
+            RuntimeError: If any gateway does not become ready within timeout.
+        """
+        if not getattr(self, "gateways", None):
+            raise RuntimeError("Gateways not initialised; call init_gateways() first")
+
+        for gw in self.gateways:
+            hostname = gw.node.hostname
+            deadline = time.time() + timeout
+            LOG.info(
+                "Waiting for gateway %s to be ready (timeout=%ds)", hostname, timeout
+            )
+            while time.time() < deadline:
+                try:
+                    out, _ = gw.gateway.info(**{"base_cmd_args": {"format": "json"}})
+                    info = json.loads(out)
+                    if info.get("gateway_initialization_over"):
+                        LOG.info("Gateway %s is ready", hostname)
+                        break
+                except Exception as exc:
+                    LOG.debug("gateway info on %s raised %s — retrying", hostname, exc)
+                time.sleep(interval)
+            else:
+                raise RuntimeError(
+                    f"Gateway {hostname} did not become ready within {timeout}s"
+                )
+
+    def init_gateways(self, timeout=300, interval=10):
         """
         Initialize NVMeGateway objects for each ceph_node in the group.
+
+        Retries create_gateway() until the gateway responds (handles the window
+        where the daemon is still starting after a redeploy).
+
+        Args:
+            timeout (int): Max seconds to wait per node (default 300).
+            interval (int): Retry interval in seconds (default 10).
         """
         self.gateways = []
         port = getattr(self, "port", DEFAULT_PORT)
-
         ceph = Orch(self.ceph_cluster, **{})
+        version = nvme_gw_cli_version_adapter(self.ceph_cluster)
 
         for node in self.gw_nodes:
-            self.gateways.append(
-                create_gateway(
-                    nvme_gw_cli_version_adapter(self.ceph_cluster),
-                    node,
-                    mtls=self.mtls,
-                    shell=getattr(ceph, "shell"),
-                    port=port,
-                    gw_group=self.group,
-                )
-            )
+            deadline = time.time() + timeout
+            LOG.info("Initialising gateway %s (timeout=%ds)", node.hostname, timeout)
+            while True:
+                try:
+                    gw = create_gateway(
+                        version,
+                        node,
+                        mtls=self.mtls,
+                        shell=getattr(ceph, "shell"),
+                        port=port,
+                        gw_group=self.group,
+                    )
+                    self.gateways.append(gw)
+                    LOG.info("Gateway %s initialised", node.hostname)
+                    break
+                except Exception as exc:
+                    if time.time() >= deadline:
+                        raise RuntimeError(
+                            f"Gateway {node.hostname} did not become reachable "
+                            f"within {timeout}s"
+                        ) from exc
+                    LOG.debug(
+                        "Gateway %s not ready yet (%s) — retrying in %ds",
+                        node.hostname,
+                        exc,
+                        interval,
+                    )
+                    time.sleep(interval)
         self._discover_service_name()

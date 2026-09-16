@@ -44,3 +44,12 @@ class Subsystem:
 
     def list(self, **kwargs):
         return self.base.run_nvme_cli(self.name, "list", **kwargs)
+
+    def add_kmip_server_endpoint(self, **kwargs):
+        """Register a KMIP server endpoint on a subsystem.
+
+        Maps to:
+          ceph nvmeof subsystem add_kmip_server_endpoint <nqn>
+              [server_name] [address] [port] [gw_group] [server_address] [traddr]
+        """
+        return self.base.run_nvme_cli(self.name, "add_kmip_server_endpoint", **kwargs)

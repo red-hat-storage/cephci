@@ -1,4 +1,5 @@
 import re
+from distutils.version import LooseVersion
 
 from ceph.ceph_admin.common import config_dict_to_string
 from ceph.nvmeof.cli.v2.common import substitute_keys
@@ -36,6 +37,9 @@ KEY_MAP = {
     "w-megabytes-per-second": "w_mbytes_per_second",
     "level": "log_level",
     "auto-visible": "auto_visible",
+    # BYOK LUKS encryption (9.2+)
+    # The CLI flags use hyphens: --encryption-format, --encryption-algorithm, --key-id
+    # No translation needed — pass through as-is.
 }
 
 
@@ -81,6 +85,7 @@ class BaseCLI:
             pass
 
         cmd_args = kwargs.get("args", {})
+        ceph_version = self.get_ceph_version()
 
         # Gateway group
         if not cmd_args.get("gw_group"):
@@ -93,6 +98,11 @@ class BaseCLI:
                 cmd_args["server_address"] = self.node.ip_address
             else:
                 cmd_args["traddr"] = self.node.ip_address
+
+        # Image size flag: --rbd-image-size (9.2+ / >= 20.2.1); --size (older)
+        if "rbd-image-size" in cmd_args:
+            if LooseVersion(ceph_version) < LooseVersion("20.2.1"):
+                cmd_args["size"] = cmd_args.pop("rbd-image-size")
 
         command = [
             self.BASE_CMD,
