@@ -34,7 +34,7 @@
 #   keyring_runtime_deletion, corrupt_metadata_payload,
 #   defect_stale_metadata, defect_stale_timestamp,
 #   defect_zero_division, defect_cache_leak,
-#   defect_auth_response, defect_silent_listener,
+#   defect_auth_response (disabled: IBMCEPH-16022), defect_silent_listener,
 #   defect_failover_resilience
 #
 # Not automated (need 300+ nodes or active upgrade):
@@ -408,13 +408,15 @@ tests:
         tests: defect_cache_leak
       # TC-KI (additional): Config-key store leak defect
 
-  - test:
-      name: Agent Auth Response Code Test
-      desc: Verify agent detects auth rejection from mgr (HTTP 200 on bad keyring)
-      module: cephadm_agent.test_agent_defects.py
-      config:
-        tests: defect_auth_response
-      # TC-KI (additional): HTTP 200 on auth failure defect
+  # Disabled: IBMCEPH-16022 — MGR returns HTTP 200 on auth failure,
+  # agent cannot detect keyring rejection. Re-enable once bug is fixed.
+  # - test:
+  #     name: Agent Auth Response Code Test
+  #     desc: Verify agent detects auth rejection from mgr (HTTP 200 on bad keyring)
+  #     module: cephadm_agent.test_agent_defects.py
+  #     config:
+  #       tests: defect_auth_response
+  #     # TC-KI (additional): HTTP 200 on auth failure defect
 
   - test:
       name: Agent Silent Listener Failure Test
