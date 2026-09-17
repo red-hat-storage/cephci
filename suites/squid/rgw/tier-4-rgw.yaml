@@ -317,3 +317,12 @@ tests:
       config:
         script-name: test_bucket_name_validation.py
         config-file-name: test_bucket_name_validation.yaml
+
+  - test:
+      name: Test object name validation
+      desc: Test object name validation
+      polarion-id: CEPH-14265
+      module: sanity_rgw.py
+      config:
+        script-name: test_object_name_validation.py
+        config-file-name: test_object_name_validation.yaml
