@@ -1,5 +1,5 @@
 #################################################################################
-# Automation support for upgrade from IBMSC 9.0 to IBMSC 9.x latest in RHEL9
+# Automation support for upgrade from IBMSC 9.1 to IBMSC 9.x latest in RHEL9
 #
 #--------------------------------------------------------------------------------
 # Cluster Configuration: conf/tentacle/upgrades/1admin-3node-1client-upgrade.yaml
@@ -7,8 +7,8 @@
 #
 # Test Steps:
 #--------------------------------------------------------------------------------
-# - Deploy IBMSC 9.0 cluster in RHEL 9
-# - Upgrade cluster from IBMSC 9.0 to IBMSC 9.x latest
+# - Deploy IBMSC 9.1 cluster in RHEL 9
+# - Upgrade cluster from IBMSC 9.1 to IBMSC 9.x latest
 # - Validate cluster status
 # - Run I/O's
 #--------------------------------------------------------------------------------

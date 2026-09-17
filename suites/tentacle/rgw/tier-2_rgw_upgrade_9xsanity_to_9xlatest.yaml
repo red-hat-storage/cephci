@@ -1,4 +1,4 @@
-#Objective: Testing single site upgrade from RHCS 9.0 sanity latest to 9.x latest build
+#Objective: Testing single site upgrade from RHCS 9.1 sanity latest to 9.x latest build
 #platform : RHEL-9
 #conf: conf/tentacle/rgw/tier-0_rgw.yaml
 
@@ -18,9 +18,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 9.0
-                release: stable
-                registry-url: registry.redhat.io
+                rhcs-version: 9.1
+                release: "released"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true

@@ -25,9 +25,8 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 9.0
-                    release: stable
-                    registry-url: registry.redhat.io
+                    rhcs-version: 9.1
+                    release: "released"
                     mon-ip: node1
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
@@ -75,9 +74,8 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 9.0
-                    release: stable
-                    registry-url: registry.redhat.io
+                    rhcs-version: 9.1
+                    release: "released"
                     mon-ip: node1
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
