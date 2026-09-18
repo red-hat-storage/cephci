@@ -7,6 +7,7 @@ from copy import deepcopy
 from ceph.parallel import parallel
 from ceph.rbd.utils import copy_file, exec_cmd, getdict, value
 from ceph.rbd.workflows.namespace import enable_namespace_mirroring
+from ceph.rbd.workflows.snap_clone_operations import snap_list
 from ceph.rbd.workflows.snap_scheduling import add_snapshot_scheduling
 from utility.log import Log
 
@@ -135,10 +136,8 @@ def wait_for_status(rbd, cluster_name, **kw):
                         "state",
                         json.loads(image_status[0]),
                     )
-                    log.info(
-                        f"State of image {kw['imagespec']} : {out}, \
-                        waiting for {kw['state_pattern']}"
-                    )
+                    log.info(f"State of image {kw['imagespec']} : {out}, \
+                        waiting for {kw['state_pattern']}")
                     if kw["state_pattern"] in out:
                         return 0
                 if kw.get("description_pattern"):
@@ -904,3 +903,221 @@ def toggle_rbd_mirror_daemon_status_and_verify(**kw):
                 )
             else:
                 return 1
+
+
+def get_rbd_mirror_daemon_name(client):
+    """Return the first rbd-mirror daemon name from ceph orch ps.
+
+    Args:
+        client: cluster client node object
+
+    Returns:
+        str: daemon name e.g. 'rbd-mirror.ceph-rbd2-node5'
+
+    Raises:
+        Exception: if no rbd-mirror daemon is found
+    """
+    out, err = client.exec_command(
+        cmd="ceph orch ps --daemon-type rbd-mirror --format json", sudo=True
+    )
+    daemons = json.loads(out)
+    if not daemons:
+        raise Exception("No rbd-mirror daemons found via ceph orch ps")
+    daemon_name = daemons[0]["daemon_name"]
+    log.info(f"Found rbd-mirror daemon: {daemon_name}")
+    return daemon_name
+
+
+def stop_rbd_mirror_daemon(client, daemon_name, wait_secs=30):
+    """Stop a specific rbd-mirror daemon via ceph orch daemon stop and verify.
+
+    Unlike toggle_rbd_mirror_daemon_status_and_verify (which stops ALL daemons),
+    this function stops a single named daemon — useful for per-cluster failover tests.
+
+    Args:
+        client: cluster client node object
+        daemon_name: full daemon name string e.g. 'rbd-mirror.hostname'
+        wait_secs: seconds to wait after issuing stop before verifying
+
+    Raises:
+        Exception: if the daemon fails to reach stopped state
+    """
+    log.info(f"Stopping rbd-mirror daemon: {daemon_name}")
+    out, err = client.exec_command(
+        cmd=f"ceph orch daemon stop {daemon_name}", sudo=True
+    )
+    if err and "error" in err.lower():
+        raise Exception(f"Failed to stop daemon {daemon_name}: {err}")
+    time.sleep(wait_secs)
+    daemon_id = daemon_name.split(".", 1)[-1]
+    out, err = client.exec_command(
+        cmd=f"ceph orch ps --daemon-id {daemon_id} --format json", sudo=True
+    )
+    stats = json.loads(out)
+    if stats and "stopped" not in stats[0].get("status_desc", ""):
+        raise Exception(
+            f"Daemon {daemon_name} did not stop. Status: {stats[0].get('status_desc')}"
+        )
+    log.info(f"Daemon {daemon_name} stopped successfully")
+
+
+def start_rbd_mirror_daemon(client, daemon_name, wait_secs=30):
+    """Start a specific rbd-mirror daemon via ceph orch daemon start and verify.
+
+    Unlike toggle_rbd_mirror_daemon_status_and_verify (which starts ALL daemons),
+    this function starts a single named daemon — useful for per-cluster failover tests.
+
+    Args:
+        client: cluster client node object
+        daemon_name: full daemon name string e.g. 'rbd-mirror.hostname'
+        wait_secs: seconds to wait after issuing start before verifying
+
+    Raises:
+        Exception: if the daemon fails to reach running state
+    """
+    log.info(f"Starting rbd-mirror daemon: {daemon_name}")
+    out, err = client.exec_command(
+        cmd=f"ceph orch daemon start {daemon_name}", sudo=True
+    )
+    if err and "error" in err.lower():
+        raise Exception(f"Failed to start daemon {daemon_name}: {err}")
+    time.sleep(wait_secs)
+    daemon_id = daemon_name.split(".", 1)[-1]
+    out, err = client.exec_command(
+        cmd=f"ceph orch ps --daemon-id {daemon_id} --format json", sudo=True
+    )
+    stats = json.loads(out)
+    if stats and "running" not in stats[0].get("status_desc", ""):
+        raise Exception(
+            f"Daemon {daemon_name} did not start. Status: {stats[0].get('status_desc')}"
+        )
+    log.info(f"Daemon {daemon_name} started successfully")
+
+
+def _mirror_snap_namespace(snap):
+    """Return the namespace dict for a mirror snapshot, or None."""
+    namespace = snap.get("namespace")
+    if not isinstance(namespace, dict):
+        return None
+    if namespace.get("type") != "mirror":
+        return None
+    return namespace
+
+
+def is_mirror_primary_snap(snap):
+    """True when snap is a mirror-namespace primary snapshot."""
+    namespace = _mirror_snap_namespace(snap)
+    return namespace is not None and namespace.get("state") == "primary"
+
+
+def is_mirror_non_primary_snap(snap):
+    """True when snap is a mirror-namespace non-primary (copied) snapshot."""
+    namespace = _mirror_snap_namespace(snap)
+    return namespace is not None and namespace.get("state") == "non-primary"
+
+
+def get_mirror_snapshots(rbd, pool, image):
+    """Return only mirror-namespace snapshots from rbd snap ls --all.
+
+    Ceph JSON uses namespace.type == "mirror" with namespace.state set to
+    primary / non-primary / demoted (not MirrorPrimary / MirrorNonPrimary).
+
+    Args:
+        rbd: cli.rbd.rbd.Rbd instance
+        pool: pool name string
+        image: image name string
+
+    Returns:
+        list of snapshot dicts in the mirror namespace
+    """
+    all_snaps = snap_list(rbd=rbd, pool=pool, image=image)
+    if all_snaps is False:
+        log.error(f"Failed to list snapshots for {pool}/{image}")
+        return []
+    return [s for s in (all_snaps or []) if _mirror_snap_namespace(s)]
+
+
+def image_replay_idle(rbd, imagespec):
+    """Return True when mirror image status reports replay_state idle."""
+    status_config = {"image-spec": imagespec, "format": "json"}
+    out, err = rbd.mirror.image.status(**status_config)
+    if err:
+        return False
+    description = json.loads(out).get("description", "")
+    if "replaying" not in description:
+        return False
+    desc_tail = description.split(", ", 1)[-1] if ", " in description else ""
+    try:
+        return json.loads(desc_tail).get("replay_state") == "idle"
+    except (json.JSONDecodeError, TypeError):
+        return False
+
+
+def wait_for_image_idle_replay(
+    rbd, imagespec, cluster_name, timeout=1200, retry_interval=20
+):
+    """Poll until an image in up+replaying state reports replay_state idle."""
+    log.info(f"Waiting for idle replay on {imagespec} in {cluster_name}")
+    deadline = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+    while datetime.datetime.now() < deadline:
+        if image_replay_idle(rbd, imagespec):
+            log.info(f"Idle replay reached for {imagespec} on {cluster_name}")
+            return
+        time.sleep(retry_interval)
+    raise Exception(
+        f"Timed out waiting for idle replay on {imagespec} in {cluster_name}"
+    )
+
+
+def wait_for_snapshot_pruning(rbd, pool, image, timeout=600):
+    """Poll until all obsolete mirror snapshots are pruned on the given cluster.
+
+    Obsolete means:
+      - primary mirror snaps with mirror_peer_uuids == [] (orphaned primary)
+      - any remaining primary or demoted mirror snap on the replaying cluster
+
+    Args:
+        rbd: cli.rbd.rbd.Rbd instance
+        pool: pool name string
+        image: image name string
+        timeout: maximum seconds to wait (default 600)
+
+    Raises:
+        Exception: if timeout is reached before pruning completes
+    """
+    imagespec = f"{pool}/{image}"
+    log.info(f"Waiting for obsolete mirror snapshots to be pruned on {imagespec}")
+    deadline = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+    while datetime.datetime.now() < deadline:
+        mirror_snaps = get_mirror_snapshots(rbd, pool, image)
+        log.debug(
+            f"Current mirror snaps on {imagespec}: {[s['name'] for s in mirror_snaps]}"
+        )
+
+        has_obsolete = any(
+            is_mirror_primary_snap(snap)
+            and snap.get("namespace", {}).get("mirror_peer_uuids", []) == []
+            for snap in mirror_snaps
+        )
+        has_demoted = any(
+            snap.get("namespace", {}).get("type") == "mirror"
+            and snap.get("namespace", {}).get("state") in ("primary", "demoted")
+            for snap in mirror_snaps
+        )
+        has_valid_non_primary = any(
+            is_mirror_non_primary_snap(snap)
+            and snap.get("namespace", {}).get("complete") is True
+            for snap in mirror_snaps
+        )
+
+        if not has_obsolete and not has_demoted and has_valid_non_primary:
+            log.info(
+                f"Snapshot pruning complete on {imagespec}: "
+                f"only valid non-primary copied snap(s) remain."
+            )
+            return
+        time.sleep(30)
+    raise Exception(
+        f"Timeout waiting for obsolete mirror snapshot pruning on {imagespec}. "
+        f"Remaining mirror snaps: {get_mirror_snapshots(rbd, pool, image)}"
+    )

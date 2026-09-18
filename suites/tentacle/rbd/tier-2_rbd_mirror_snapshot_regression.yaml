@@ -229,3 +229,30 @@ tests:
               num_images: 10
               mode: image
               mirrormode: snapshot
+
+  - test:
+      abort-on-fail: True
+      desc: Verify rbd-mirror prunes obsolete mirror snapshots after reverse synchronization.
+        Covers clean failover and force-promote flows; no manual snap removal required.
+      name: Test rbd mirror snapshot pruning
+      module: test_rbd_mirror_snapshot_pruning.py
+      polarion-id: CEPH-83632907
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 10G
+              io_total: 1G
+              mode: image
+              mirrormode: snapshot
+              way: rx-tx
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 10G
+              io_total: 1G
+              mode: image
+              mirrormode: snapshot
+              way: rx-tx
