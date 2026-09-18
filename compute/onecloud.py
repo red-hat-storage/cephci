@@ -38,6 +38,109 @@ OS_HINT_TO_API = {
     "aix": "AIX",
 }
 
+# Extra data disks at POST /clusters (not the image OS disk).
+# Count and size come from cluster conf no-of-volumes / disk-size (same as other
+# compute drivers). Count and size limits are left to the OneCloud API.
+# Windows iSCSI clients are skipped even if conf lists volumes.
+ONECLOUD_SKIP_EXTRA_DISK_ROLES = ("win-iscsi-clients",)
+
+
+def extra_disks_for_onecloud_vm(
+    role: Any, node_dict: Optional[Dict] = None
+) -> List[Dict[str, int]]:
+    """
+    Build virtualMachines[].disks for POST /clusters.
+
+    Images no longer include additional disks. Attach extras from the
+    node's ``no-of-volumes`` and ``disk-size`` in cluster conf. Omit
+    disks when those keys are missing or zero. Windows iSCSI clients
+    are skipped.
+
+    Args:
+        role: RolesContainer or role list/string for the node.
+        node_dict: Cluster conf node entry.
+
+    Returns:
+        List of {"size_gb": N} dicts, or empty to omit the disks field.
+    """
+    if any(role == skip for skip in ONECLOUD_SKIP_EXTRA_DISK_ROLES):
+        return []
+    if not isinstance(node_dict, dict):
+        return []
+    try:
+        count = int(node_dict.get("no-of-volumes") or 0)
+    except (TypeError, ValueError):
+        count = 0
+    if count <= 0:
+        return []
+    size = node_dict.get("disk-size")
+    if size is None:
+        raise NodeError("OneCloud: no-of-volumes is set but disk-size is missing")
+    try:
+        requested = int(size)
+    except (TypeError, ValueError):
+        raise NodeError("OneCloud: disk-size %r is not an integer" % (size,))
+    return [{"size_gb": requested} for _ in range(count)]
+
+
+def extra_disk_sizes_from_onecloud_vm(node: Dict) -> Optional[List[int]]:
+    """
+    Extra data-disk sizes (GB) from GET /vm ``resources.disk``.
+
+    Index 0 is the OS disk. Zero slots (new images: ``[100, 0, 0]``) are
+    not extras. Returns None if ``resources.disk`` is absent.
+    """
+    if not isinstance(node, dict):
+        return None
+    res = node.get("resources")
+    if not isinstance(res, dict) or "disk" not in res:
+        return None
+    disk = res.get("disk")
+    if not isinstance(disk, list):
+        return []
+    extras = []
+    for size in disk[1:]:
+        try:
+            val = int(size)
+        except (TypeError, ValueError):
+            continue
+        if val > 0:
+            extras.append(val)
+    return extras
+
+
+def verify_onecloud_extra_disks(
+    vmname: str,
+    vm_data: Dict,
+    requested_sizes: List[int],
+    client=None,
+) -> Dict:
+    """
+    Ensure extra disks on the deployed VM match POST /clusters.
+
+    After VMs are ready, GET /vm/{vmid} and compare resources.disk extras
+    to the sizes sent on POST. vmid is the id field GET /vm returns.
+
+    Raises:
+        NodeError: extra disks missing or sizes/order do not match.
+    """
+    if client is not None:
+        vmid = vm_data.get("vmid")
+        if vmid is None:
+            raise NodeError(f"OneCloud: VM {vmname} has no vmid; cannot GET /vm/{{id}}")
+        details = vm_get_details(client, int(vmid))
+        vm_data.update(details)
+    actual = extra_disk_sizes_from_onecloud_vm(vm_data)
+    if actual is None:
+        actual = []
+    requested = [int(size) for size in requested_sizes]
+    if actual != requested:
+        raise NodeError(
+            f"OneCloud: VM {vmname} extra disks mismatch: "
+            f"requested {requested}, GET /vm returned {actual}"
+        )
+    return vm_data
+
 
 def parse_vm_list_from_response(vm_data: Any) -> List[Dict]:
     """
@@ -1482,14 +1585,18 @@ class CephVMNodeOneCloud:
 
     @property
     def no_of_volumes(self) -> int:
-        """Return the number of volumes attached to the VM."""
-        res = self.node.get("resources") or {}
-        disk = res.get("disk") or []
-        return len(disk) if isinstance(disk, list) else 0
+        """Return the number of extra data disks on the VM (not the OS disk)."""
+        extras = extra_disk_sizes_from_onecloud_vm(self.node)
+        return len(extras) if extras else 0
 
     @property
     def volumes(self) -> List:
-        """Return the list of storage volumes (OneCloud does not expose volume details)."""
+        """
+        Linux device names (e.g. /dev/sdb) are not in the OneCloud API.
+
+        GET /vm resources.disk is a list of sizes in GB, not paths. Extra-disk
+        count comes from no_of_volumes; this property stays empty.
+        """
         return []
 
     @property
