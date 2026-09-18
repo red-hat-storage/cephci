@@ -10,6 +10,7 @@
 # - Deploy Ceph 9.0(GA) cluster in RHEL 9
 # - Deploy Ceph 9.0 client
 # - Upgrade cluster along with NFS-Ganesha IOs parllel
+# - Pre/post: auth_allowed_ciphers (aes256k presence) must be unchanged
 ################################################################################################
 tests:
   - test:
@@ -189,6 +190,16 @@ tests:
         ensure_monitoring_port: true
 
   - test:
+      name: CephX auth_allowed_ciphers snapshot - pre_upgrade
+      module: test_nfs_cephx_allowed_ciphers.py
+      desc: Snapshot mon dump auth_allowed_ciphers / aes256k presence before upgrade
+      polarion-id: CEPH-83633001
+      abort-on-fail: true
+      config:
+        operation: before_upgrade
+        cipher: aes256k
+
+  - test:
       name: Nfs Verify multiple io and lookups
       module: nfs_verify_multiple_parallel_io_and_lookups.py
       desc: Perform look ups while multiple parallel io are in progress
@@ -251,6 +262,16 @@ tests:
               stall_recovery_timeout_s: 100
               probe_interval_s: 1
       abort-on-fail: true
+
+  - test:
+      name: CephX auth_allowed_ciphers verify - post_upgrade
+      module: test_nfs_cephx_allowed_ciphers.py
+      desc: aes256k presence and auth_allowed_ciphers set must match pre-upgrade snapshot
+      polarion-id: CEPH-83633001
+      abort-on-fail: false
+      config:
+        operation: after_upgrade
+        cipher: aes256k
 
   - test:
       name: Nfs Ganesha metrics validation - post_upgrade
