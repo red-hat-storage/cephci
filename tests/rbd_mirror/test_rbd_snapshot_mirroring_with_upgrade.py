@@ -2,6 +2,7 @@ import time
 
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config, random_string
+from ceph.rbd.workflows.cephx_rotation import post_upgrade_rbd_cephx_workflow
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.execute import execute
 from ceph.rbd.workflows.rbd_mirror import check_image_mirror_status
@@ -236,8 +237,11 @@ def run(**kw):
     5. Verify mirroring works across mixed-version clusters
     6. Run IOs on primary after upgrade
     7. Upgrade secondary cluster (cluster 2) - mirrored pools remain intact
-    8. Verify mirroring works after both clusters are upgraded
-    9. Run final IOs and verify data integrity
+    8. Verify mirroring immediately after upgrade before CephCI CephX migration (scenario 1)
+    9. Continue IO and mirror verification before any CephX rotation
+    10. Perform RBD-specific CephX rotation when required (customer scenario 2)
+    11. Verify mirroring after CephX migration
+    12. Run final IOs and verify data integrity
     """
     pool_types = ["rep_pool_config", "ec_pool_config"]
     log.info(
@@ -386,22 +390,94 @@ def run(**kw):
             f"Secondary cluster {cluster_secondary.name} upgraded " f"successfully"
         )
 
-        # ---- Step 8: Verify mirroring after both clusters upgraded ----
-        log.info("Step 8: Verifying mirroring works after both clusters upgraded")
+        # ---- Step 8: Customer scenario 1 - mirroring works before CephCI CephX migration ----
+        log.info(
+            "Step 8: Verifying mirroring immediately after upgrade before "
+            "CephCI performs any RBD-specific CephX rotation"
+        )
         rc = verify_mirror_states(
             pool_types,
             rbd_primary,
             rbd_secondary,
-            "post-both-clusters-upgraded",
+            "post-both-clusters-upgraded-pre-cephx",
+            **kw,
+        )
+        if rc:
+            return 1
+        log.info(
+            "Customer scenario 1 validated: RBD mirroring continues to work "
+            "after upgrade without requiring immediate CephCI-managed CephX migration"
+        )
+
+        # ---- Step 9: Continue IO before optional CephX migration ----
+        log.info(
+            "Step 9: Continue IO and mirror verification before RBD CephX rotation"
+        )
+        kw["ceph_cluster"] = cluster_primary
+        for pool_type in pool_types:
+            rc = run_io_verify_snap_schedule(
+                pool_type=pool_type,
+                rbd=rbd_primary,
+                client=client_primary,
+                skip_mkfs=True,
+                mount_path=(
+                    f"{mount_paths_primary[pool_type]}/file_post_upgrade_pre_cephx"
+                ),
+                **kw,
+            )
+            if rc:
+                log.error(
+                    f"Post-upgrade pre-CephX IOs failed for pool type {pool_type}"
+                )
+                return 1
+
+        rc = verify_mirror_states(
+            pool_types,
+            rbd_primary,
+            rbd_secondary,
+            "post-upgrade-io-before-cephx",
             **kw,
         )
         if rc:
             return 1
 
-        # ---- Step 9: Final IO verification ----
-        log.info("Step 9: Final IO verification on fully upgraded clusters")
-        # Swap back to primary for final IOs
-        kw["ceph_cluster"] = cluster_primary
+        # ---- Step 10: Customer scenario 2 - RBD CephX migration ----
+        log.info(
+            "Step 10: Performing RBD-specific CephX rotation when required "
+            "(customer scenario 2: migrate RBD credentials to aes256k)"
+        )
+        rc = post_upgrade_rbd_cephx_workflow(
+            rbd_primary=rbd_primary,
+            rbd_secondary=rbd_secondary,
+            client_primary=client_primary,
+            client_secondary=client_secondary,
+            cluster_primary_name=cluster_primary.name,
+            cluster_secondary_name=cluster_secondary.name,
+            pool_types=pool_types,
+            config=kw.get("config", {}),
+        )
+        if rc:
+            log.error("Post-upgrade RBD CephX rotation workflow failed")
+            return 1
+        log.info(
+            "Customer scenario 2 validated: RBD CephX credentials migrated "
+            "to aes256k when required"
+        )
+
+        # ---- Step 11: Verify mirroring after CephX migration ----
+        log.info("Step 11: Verifying mirroring after RBD CephX migration")
+        rc = verify_mirror_states(
+            pool_types,
+            rbd_primary,
+            rbd_secondary,
+            "post-cephx-migration",
+            **kw,
+        )
+        if rc:
+            return 1
+
+        # ---- Step 12: Final IO and data integrity verification ----
+        log.info("Step 12: Final IO verification on fully upgraded clusters")
         for pool_type in pool_types:
             rc = run_io_verify_snap_schedule(
                 pool_type=pool_type,
@@ -417,8 +493,8 @@ def run(**kw):
 
         log.info(
             "Rolling upgrade test completed successfully. "
-            "Mirroring verified at all stages: pre-upgrade, "
-            "mixed-version, and post-upgrade."
+            "Mirroring verified at all stages: pre-upgrade, mixed-version, "
+            "post-upgrade with legacy keys, and post-CephX migration."
         )
     except Exception as e:
         log.error(
