@@ -174,6 +174,63 @@ def _cloudinit_secret_name(vm_name: str) -> str:
     return f"{vm_name}-cloudinit"[:63].rstrip("-")
 
 
+def _iface_ip_candidates(iface: dict) -> List[str]:
+    """Unique IP strings from a VMI status.interfaces entry."""
+    seen = set()
+    out: List[str] = []
+    for ip in [iface.get("ipAddress"), *(iface.get("ipAddresses") or [])]:
+        if ip and ip not in seen:
+            seen.add(ip)
+            out.append(ip)
+    return out
+
+
+def is_global_ipv6(ip: str) -> bool:
+    """True for routable guest IPv6 (not link-local or loopback)."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return addr.version == 6 and not addr.is_link_local and not addr.is_loopback
+
+
+def pick_vmi_ipv6_ip(interfaces: List[dict]) -> Optional[str]:
+    """First global IPv6 on the VMI (skips link-local)."""
+    for iface in interfaces or []:
+        for ip in _iface_ip_candidates(iface):
+            if is_global_ipv6(ip):
+                return ip
+    return None
+
+
+def vm_wait_address(interfaces: List[dict], use_ipv6: bool) -> Optional[str]:
+    """Address to wait for before proceeding (IPv6 when requested, else IPv4)."""
+    if use_ipv6:
+        return pick_vmi_ipv6_ip(interfaces)
+    ipv4s: List[str] = []
+    for iface in interfaces or []:
+        for ip in _iface_ip_candidates(iface):
+            if ":" not in ip:
+                ipv4s.append(ip)
+    return ipv4s[0] if ipv4s else None
+
+
+def ipv6_subnet_from_cred(
+    cred: Optional[dict],
+    ipv6_address: Optional[str],
+) -> Optional[str]:
+    """IPv6 CIDR for ``public_network`` from cred or the guest address /64."""
+    for key in ("subnet6", "ipv6_subnet", "ipv6_network_cidr"):
+        if cred and cred.get(key):
+            return str(cred[key])
+    if not ipv6_address:
+        return None
+    try:
+        return str(ipaddress.IPv6Network(f"{ipv6_address}/64", strict=False))
+    except ValueError:
+        return None
+
+
 def build_virtualmachine_cr(
     node_name: str,
     namespace: str,
@@ -621,7 +678,13 @@ def resolve_ocpvirt_credentials(osp_cred: dict, custom_config=None) -> dict:
     """
     auth_cred = validate_ocpvirt_credentials(osp_cred)
     namespace_config = load_ocpvirt_namespace_config(custom_config)
-    return merge_ocpvirt_credentials(auth_cred, namespace_config)
+    merged = merge_ocpvirt_credentials(auth_cred, namespace_config)
+    from utility.utils import resolve_use_ipv6
+
+    if resolve_use_ipv6(custom_config, "ocpvirt", osp_cred):
+        merged = dict(merged)
+        merged["use_ipv6"] = True
+    return merged
 
 
 def validate_ocpvirt_inventory(
@@ -1001,10 +1064,12 @@ class CephVMNodeOCP:
         """Restore state and recreate API clients."""
         self.__dict__.update(state)
         self.custom_api, self.core_api = get_k8s_clients(self._ocp_cred)
+        self._cached_ip = None
+        self._cached_ipv6 = None
 
     @property
     def ip_address(self) -> str:
-        """Return the primary IP address of the VMI."""
+        """Primary IPv4 from the VMI (SSH / Ceph when not using IPv6)."""
         cached = getattr(self, "_cached_ip", None)
         if cached:
             return cached
@@ -1012,6 +1077,22 @@ class CephVMNodeOCP:
         if ip:
             self._cached_ip = ip
         return ip
+
+    @property
+    def ipv6_address(self) -> Optional[str]:
+        """Global IPv6 from the VMI (skips link-local)."""
+        cached = getattr(self, "_cached_ipv6", None)
+        if cached:
+            return cached
+        ip = pick_vmi_ipv6_ip(self._vmi_interfaces())
+        if ip:
+            self._cached_ipv6 = ip
+        return ip
+
+    @property
+    def ipv6_subnet(self) -> Optional[str]:
+        """IPv6 CIDR for ``public_network`` when ``use_ipv6=true``."""
+        return ipv6_subnet_from_cred(self._ocp_cred, self.ipv6_address)
 
     @property
     def hostname(self) -> str:
@@ -1377,36 +1458,27 @@ class CephVMNodeOCP:
             LOG.warning(f"get VMI {vm_name} failed: {exc}")
             return None
 
+    def _vmi_interfaces(self) -> List[dict]:
+        if not self.node:
+            return []
+        vm_name = self.node.get("metadata", {}).get("name")
+        if not vm_name:
+            return []
+        vmi = self._get_vmi(vm_name)
+        if not vmi:
+            return []
+        return (vmi.get("status") or {}).get("interfaces") or []
+
     def _get_vmi_ip(self) -> Optional[str]:
         if not self.node:
             return None
-        vm_name = self.node.get("metadata", {}).get("name")
-        if not vm_name:
-            return None
-        vmi = self._get_vmi(vm_name)
-        if not vmi:
-            return None
-        interfaces = (vmi.get("status") or {}).get("interfaces") or []
+        interfaces = self._vmi_interfaces()
         ipv4s: List[str] = []
-        ipv6s: List[str] = []
         for iface in interfaces:
-            candidates = []
-            if iface.get("ipAddress"):
-                candidates.append(iface["ipAddress"])
-            candidates.extend(iface.get("ipAddresses") or [])
-            for ip in candidates:
-                if not ip:
-                    continue
-                if ":" in ip:
-                    ipv6s.append(ip)
-                else:
+            for ip in _iface_ip_candidates(iface):
+                if ":" not in ip:
                     ipv4s.append(ip)
-        # Prefer IPv4: jump hosts / TenantEgress paths are often IPv4-only.
-        if ipv4s:
-            return ipv4s[0]
-        if ipv6s:
-            return ipv6s[0]
-        return None
+        return ipv4s[0] if ipv4s else None
 
     def _wait_until_vm_ready(
         self, vm_name: str, timeout: int = VM_POLL_TIMEOUT
@@ -1442,27 +1514,31 @@ class CephVMNodeOCP:
     def _wait_until_ip_known(
         self, vm_name: str, timeout: int = IP_POLL_TIMEOUT
     ) -> None:
-        """Poll VMI until an IPv4 address is assigned (fall back to any IP late)."""
+        """Poll VMI until the target address is assigned."""
+        use_ipv6 = bool(self._ocp_cred.get("use_ipv6"))
+        label = "IPv6" if use_ipv6 else "IPv4"
         for w in WaitUntil(timeout=timeout, interval=VM_POLL_INTERVAL):
-            # Refresh node so ip_address can read VMI
             self.node = self._get_vm(vm_name) or self.node
-            ip = self._get_vmi_ip()
-            if ip and ":" not in ip:
-                LOG.info(f"VirtualMachine {vm_name} has IP {ip}")
+            self._cached_ipv6 = None
+            addr = vm_wait_address(self._vmi_interfaces(), use_ipv6)
+            if addr:
+                LOG.info(f"VirtualMachine {vm_name} has {label} {addr}")
                 return
-            # Keep waiting while only IPv6 is visible — DHCP IPv4 often arrives later.
-            if ip:
-                LOG.debug(f"VirtualMachine {vm_name} has IPv6 {ip}; waiting for IPv4")
+            if w._attempt == 1 or w._attempt % 6 == 0:
+                LOG.info(f"Waiting for VirtualMachine {vm_name} {label}")
         if w.expired:
-            # Last chance: accept whatever IP is present
             self.node = self._get_vm(vm_name) or self.node
-            ip = self._get_vmi_ip()
-            if ip:
+            self._cached_ipv6 = None
+            addr = vm_wait_address(self._vmi_interfaces(), use_ipv6)
+            if addr:
                 LOG.warning(
-                    f"VirtualMachine {vm_name} timed out waiting for IPv4; using {ip}"
+                    f"VirtualMachine {vm_name} timed out waiting for {label}; "
+                    f"using {addr}"
                 )
                 return
-            raise NodeError(f"VirtualMachine {vm_name} has no IP within {timeout}s")
+            raise NodeError(
+                f"VirtualMachine {vm_name} has no {label} within {timeout}s"
+            )
 
     def _wait_until_vm_deleted(
         self, vm_name: str, timeout: int = VM_POLL_TIMEOUT
