@@ -16,6 +16,7 @@ from ceph.utils import (
 )
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
+from utility.registry_auth import PODMAN_AUTH_PATH
 from utility.utils import get_cephci_config
 
 from ..ceph import ResourceNotFoundError
@@ -343,38 +344,48 @@ class BootstrapMixin:
         registry_url = args.pop("registry-url", None)
         registry_json = args.pop("registry-json", None)
 
-        # Auto-detect registry from custom_image or container image and add credentials if needed
-        if custom_image and isinstance(custom_image, str):
-            image_registry = custom_image.split("/")[0]
+        # Check if podman-auth-file is configured
+        # If yes, skip adding registry credentials (cephadm will use the auth file)
+        use_podman_auth = self.config.get("podman_auth_file")
+
+        if use_podman_auth:
+            logger.info(
+                f"podman-auth-file is configured, skipping registry credentials "
+                f"(cephadm will use {PODMAN_AUTH_PATH})"
+            )
         else:
-            image_registry = self.config["container_image"].split("/")[0]
+            # Auto-detect registry from custom_image or container image and add credentials if needed
+            if custom_image and isinstance(custom_image, str):
+                image_registry = custom_image.split("/")[0]
+            else:
+                image_registry = self.config["container_image"].split("/")[0]
 
-        registry_url = image_registry
-        logger.info(
-            f"Auto-detected registry {registry_url} from container image, adding credentials"
-        )
-
-        if registry_url or manifest_obj.product == "ibm":
-            cmd += construct_registry(
-                self,
-                registry_url,
-                product=manifest_obj.product,
-                build_type=build_type,
+            registry_url = image_registry
+            logger.info(
+                f"Auto-detected registry {registry_url} from container image, adding credentials"
             )
 
-        if registry_json:
-            # Suite YAML often hardcodes registry.redhat.io for RH test_bootstrap
-            # cases; for IBM builds use the image registry host in registry-json.
-            json_registry = registry_json
-            if manifest_obj.product == "ibm" and image_registry:
-                json_registry = image_registry
-            cmd += construct_registry(
-                self,
-                json_registry,
-                json_file=True,
-                product=manifest_obj.product,
-                build_type=build_type,
-            )
+            if registry_url or manifest_obj.product == "ibm":
+                cmd += construct_registry(
+                    self,
+                    registry_url,
+                    product=manifest_obj.product,
+                    build_type=build_type,
+                )
+
+            if registry_json:
+                # Suite YAML often hardcodes registry.redhat.io for RH test_bootstrap
+                # cases; for IBM builds use the image registry host in registry-json.
+                json_registry = registry_json
+                if manifest_obj.product == "ibm" and image_registry:
+                    json_registry = image_registry
+                cmd += construct_registry(
+                    self,
+                    json_registry,
+                    json_file=True,
+                    product=manifest_obj.product,
+                    build_type=build_type,
+                )
 
         # Generate dashboard certificate and key if bootstrap cli
         # have this options as dashboard-key and dashboard-crt
