@@ -261,6 +261,46 @@ tests:
   #     comments: Intermittent bug IBMCEPH-13839
 
   - test:
+      name: 7 - OSD redeployment tests - lvm data and db device - spec file
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: spec
+        test_scenarios:
+          - scenario7
+      desc: OSD redeployment tests - lvm data and db device - spec file
+
+  - test:
+      name: 8 - OSD redeployment tests - lvm data, db and wal device - spec file
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: spec
+        test_scenarios:
+          - scenario8
+      desc: OSD redeployment tests - lvm data, db and wal device - spec file
+
+  - test:
+      name: Case7_CLI - OSD redeployment tests - lvm data and db device
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: cli
+        test_scenarios:
+          - scenario7
+      desc: OSD redeployment tests - lvm data and db device - CLI
+
+  - test:
+      name: Case8_CLI - OSD redeployment tests - lvm data, db and wal device
+      module: osd_deploy_tests.py
+      polarion-id: CEPH-83632255
+      config:
+        deployment_type: cli
+        test_scenarios:
+          - scenario8
+      desc: OSD redeployment tests - lvm data, db and wal device - CLI
+
+  - test:
       name: Remove the added backup host node5
       desc: Remove the added backup host node5
       module: test_hosts.py
