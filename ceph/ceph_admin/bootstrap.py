@@ -31,6 +31,14 @@ __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
+def _manifest_has_cdn_tools_repo(manifest_obj: CephTestManifest) -> bool:
+    """Return True when the manifest defines a Red Hat CDN tools repo."""
+    if manifest_obj.product != "redhat":
+        return False
+    repo_ids = manifest_obj.build_info.get("repo_ids") or {}
+    return manifest_obj.platform in repo_ids
+
+
 def _detect_registry_tier(registry: str, build_type: str) -> str:
     """Return credential tier (cdn/stage/preprod) from registry host, else from build_type."""
     if not registry:
@@ -288,11 +296,15 @@ class BootstrapMixin:
         elif build_type == "cdn" or custom_repo.lower() == "cdn":
             custom_image = False
             self.cluster.use_cdn = True
-            self.set_cdn_tool_repo(_ceph_version, manifest_obj)
-        elif build_type == "released" and base_url == manifest_obj.repository:
+            self.set_cdn_tool_repo(ctm=manifest_obj)
+        elif (
+            build_type == "released"
+            and base_url == manifest_obj.repository
+            and _manifest_has_cdn_tools_repo(manifest_obj)
+        ):
             custom_image = False
             self.cluster.use_cdn = True
-            self.set_cdn_tool_repo(manifest_obj)
+            self.set_cdn_tool_repo(ctm=manifest_obj)
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
