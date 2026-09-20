@@ -164,6 +164,20 @@ def test_export_id_from_entry_variants():
     assert clu.export_id_from_entry({}) is None
 
 
+def test_export_path_from_entry_prefers_pseudo_over_cephfs_path():
+    entry = {
+        "export_id": 2,
+        "path": "/",
+        "pseudo": "/cl_export_0",
+    }
+    assert clu.export_path_from_entry(entry) == "/cl_export_0"
+    assert (
+        clu.export_path_from_entry({"bind": "/nfs1", "path": "/volumes/x"}) == "/nfs1"
+    )
+    assert clu.export_path_from_entry({"path": "/only"}) == "/only"
+    assert clu.export_path_from_entry({}) is None
+
+
 @pytest.mark.parametrize(
     "policy_in,policy_out",
     [

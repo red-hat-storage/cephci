@@ -152,8 +152,8 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
     TC-CL-CONFIG-01: Static Match_Policy=ANY (two-phase).
 
     Part A — no Conditional block: elevated FSAL:F_DBG / EXPORT|NFS:M_DBG must be absent.
-    Part B — Conditional enabled for client1 + export: matching client elevates;
-             non-matching client does not.
+    Part B — Conditional ANY for client1 + export1: matching client+export elevates;
+             non-matching client on a different export does not.
     """
     result = TestCaseResult("TC-CL-CONFIG-01", "Static Config – Basic ANY Policy")
     try:
@@ -166,16 +166,18 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
         path_to_id = create_nfs_exports(
             ctx["cmd_host"], ctx["fs_name"], ctx["nfs_name"], export_paths
         )
-        # Same export mounted on both clients; ANY policy filters by Clients IP.
-        shared_export = export_paths[0]
-        shared_export_id = path_to_id[shared_export]
+        # ANY = client OR export. Non-matching client must use a different export
+        # or Export_Id alone would still elevate logging.
+        matched_export = export_paths[0]
+        unmatched_export = export_paths[1]
+        matched_export_id = path_to_id[matched_export]
         mp_matched = mount_paths[0]
         mp_unmatched = mount_paths[1]
 
         mount_export(
             matched_client,
             ctx["nfs_server"],
-            shared_export,
+            matched_export,
             mp_matched,
             ctx["version"],
             ctx["port"],
@@ -183,7 +185,7 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
         mount_export(
             unmatched_client,
             ctx["nfs_server"],
-            shared_export,
+            unmatched_export,
             mp_unmatched,
             ctx["version"],
             ctx["port"],
@@ -224,14 +226,14 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             "=== TC-CL-CONFIG-01 Part B: Conditional ANY "
             "(Clients=%s Exports=%s) ===",
             matched_ip,
-            shared_export_id,
+            matched_export_id,
         )
         conditional_block = build_conditional_log_block(
             match_policy="ANY",
             global_level="EVENT",
             components={"FSAL": "INFO", "NFS_V4": "INFO"},
             conditional_components={"FSAL": "FULL_DEBUG", "NFS_V4": "MID_DEBUG"},
-            exports=[shared_export_id],
+            exports=[matched_export_id],
             clients=[matched_ip],
         )
         apply_conditional_log_template(ctx["cmd_host"], conditional_block)
@@ -538,6 +540,11 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
                     ctx["service_wait_timeout"],
                 )
                 reload_ganesha(ctx["nfs_node"], container_id)
+                # Capture parse/reload WARNs before capture_ganesha_log_window
+                # truncates the file for the I/O window.
+                reload_warn_log = read_ganesha_log(
+                    ctx["nfs_node"], container_id, tail_lines=8000
+                )
 
                 if not is_ganesha_running(ctx["nfs_node"], container_id):
                     failures.append(f"{case_name}: ganesha not running after reload")
@@ -559,11 +566,10 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
                 case_log = capture_ganesha_log_window(
                     ctx["nfs_node"], container_id, _io, settle_sec=6
                 )
-                # Also include a wider tail in case WARN was logged at reload time.
                 wide_log = read_ganesha_log(
                     ctx["nfs_node"], container_id, tail_lines=8000
                 )
-                combined_log = case_log + "\n" + wide_log
+                combined_log = reload_warn_log + "\n" + case_log + "\n" + wide_log
 
                 if log_contains_fatal(combined_log):
                     failures.append(f"{case_name}: FATAL/abort found in ganesha log")
@@ -574,7 +580,9 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
 
                 if case.get("require_warn"):
                     tokens = case.get("expect_warn") or []
-                    if not log_contains_any(combined_log, tokens):
+                    if not log_contains_any(
+                        reload_warn_log, tokens
+                    ) and not log_contains_any(combined_log, tokens):
                         failures.append(
                             f"{case_name}: expected warn tokens {tokens!r} not found"
                         )
@@ -842,7 +850,9 @@ def run(ceph_cluster, **kw):
 
     installer = installers[0]
     nfs_node = nfs_nodes[0]
-    nfs_cmd_host = nfs_node
+    # Admin ceph CLI via cephadm shell must run on the installer (has keyring).
+    # NFS nodes often fail with: "no keyring found; disabled cephx authentication".
+    nfs_cmd_host = installer
     cephadm = CephAdm(installer).ceph
     redeploy_wait = int(config.get("redeploy_wait", 15))
     service_wait_timeout = int(config.get("service_wait_timeout", 300))

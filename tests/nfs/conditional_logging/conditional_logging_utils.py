@@ -548,7 +548,10 @@ def export_id_from_entry(entry: Mapping[str, Any]) -> Optional[int]:
 
 
 def export_path_from_entry(entry: Mapping[str, Any]) -> Optional[str]:
-    for key in ("path", "pseudo", "export_path", "bind"):
+    # Prefer NFS client/pseudo path over CephFS ``path``. Detailed export JSON
+    # always has both (e.g. pseudo=/cl_export_0, path=/); matching on ``path``
+    # first incorrectly skips the export we just created.
+    for key in ("pseudo", "bind", "export_path", "path"):
         if entry.get(key):
             return str(entry[key])
     return None
@@ -559,8 +562,15 @@ def create_nfs_exports(
     fs_name: str,
     nfs_name: str,
     export_paths: Sequence[str],
+    cephfs_path: str = "/",
 ) -> Dict[str, int]:
-    """Create exports and return mapping export_path -> export_id."""
+    """Create exports and return mapping export_path (pseudo) -> export_id.
+
+    ``cmd_host`` must be able to authenticate to the cluster (typically the
+    installer via ``cephadm shell``, or a client with an admin keyring).
+    ``export_paths`` are NFS pseudo paths; ``cephfs_path`` is the CephFS path
+    behind them (defaults to filesystem root).
+    """
     path_to_id: Dict[str, int] = {}
     for export_path in export_paths:
         run_cephadm_shell(
@@ -570,7 +580,10 @@ def create_nfs_exports(
         )
         run_cephadm_shell(
             cmd_host,
-            f"ceph nfs export create {fs_name} {nfs_name} {export_path} {fs_name} {export_path}",
+            (
+                f"ceph nfs export create {fs_name} {nfs_name} {export_path} "
+                f"{fs_name} --path={cephfs_path}"
+            ),
         )
         time.sleep(2)
     entries = list_exports_detailed(cmd_host, nfs_name)
