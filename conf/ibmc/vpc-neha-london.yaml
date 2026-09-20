@@ -1,0 +1,17 @@
+---
+# Virtual Private Cloud details.
+# Don't include IDs or image name.
+datacenters:
+  - eu-gb-1
+  - eu-gb-2
+  - eu-gb-3
+dns_zone_name: "qe.ceph.lab"
+networks:
+  eu-gb-1: sn-eu-gb-1
+  eu-gb-2: sn-eu-gb-2
+  eu-gb-3: sn-eu-gb-3
+private_key: ceph-qe-sa-svc
+profile: bx2-2x8
+security_group: "sg-neha-london"
+service_url: "https://eu-gb.iaas.cloud.ibm.com/v1"
+vpc_name: "vpc-neha-london"

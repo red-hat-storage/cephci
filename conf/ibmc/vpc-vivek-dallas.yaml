@@ -1,0 +1,17 @@
+---
+# Virtual Private Cloud details.
+# Don't include IDs or image name.
+datacenters:
+  - us-south-1
+  - us-south-2
+  - us-south-3
+dns_zone_name: "qe.ceph.lab"
+networks:
+  us-south-1: sn-us-south-1
+  us-south-2: sn-us-south-2
+  us-south-3: sn-us-south-3
+private_key: ceph-qe-sa-svc
+profile: bx2-2x8
+security_group: "sg-vivek-dallas"
+service_url: "https://us-south.iaas.cloud.ibm.com/v1"
+vpc_name: "vpc-vivek-dallas"
