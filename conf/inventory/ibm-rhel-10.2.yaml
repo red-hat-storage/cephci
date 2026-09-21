@@ -38,8 +38,8 @@ instance:
     # write_files: sysctl/sshd/policy only (no Frankfurt registry mirror)
     write_files:
       # Container registries: do NOT mirror via nginx-vm-01 (Frankfurt).
-      # Regional IBMC VPCs pull upstream hosts directly (preprod.icr.io,
-      # cp.icr.io, quay.io, registry.*.redhat.io) to avoid cross-region latency.
+      # Shared by Dallas, London, and Madrid. VMs pull upstream hosts directly
+      # (preprod.icr.io, cp.icr.io, quay.io, registry.*.redhat.io).
       # Auth uses bootstrap --registry-url / credentials (see #6124 / #6156).
       - content: |
           net.core.default_qdisc=netem
