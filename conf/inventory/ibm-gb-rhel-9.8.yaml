@@ -116,6 +116,8 @@ instance:
       - wget
 
     package_upgrade: true
+    # Reboot when a kernel (or other package) marks the system reboot-required
+    package_reboot_if_required: true
 
     runcmd:
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf
