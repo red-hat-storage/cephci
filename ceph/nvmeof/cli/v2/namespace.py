@@ -38,6 +38,10 @@ class Namespace:
             self.name, "change_load_balancing_group", **kwargs
         )
 
+    def change_location(self, **kwargs):
+        """Change location for namespace under subsystem."""
+        return self.base.run_nvme_cli(self.name, "change_location", **kwargs)
+
     @substitute_keys(FORCE_KEY_MAP)
     def change_visibility(self, **kwargs):
         """Change visibility for namespace under subsystem."""

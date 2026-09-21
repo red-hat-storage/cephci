@@ -399,7 +399,7 @@ def step3_nonexistent_key_id(gw, config, results):
 
 
 def step4_kmip_network_blocked_during_ns_add(
-    ceph_cluster, gw, config, kmip_info, results
+    ceph_cluster, gw, config, kmip_info, results, nvme_service=None
 ):
     """Step 4: block KMIP network on GW nodes; ns add must fail; restore.
 
@@ -418,6 +418,8 @@ def step4_kmip_network_blocked_during_ns_add(
         config (dict): Test config.
         kmip_info (dict): From setup_kmip_for_nvmeof().
         results (dict): Mutable results dict.
+        nvme_service: NVMeService whose gw_nodes must be blocked (not cluster
+            role nvmeof-gw).
     """
     nqn = config["subsystems"][0]["nqn"]
     pool = config["rbd_pool"]
@@ -431,7 +433,9 @@ def step4_kmip_network_blocked_during_ns_add(
         kmip_host,
         kmip_port,
     )
-    block_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port)
+    block_kmip_on_gw_nodes(
+        ceph_cluster, kmip_host, kmip_port, nvme_service=nvme_service
+    )
     # Brief pause so the kernel rule takes effect
     time.sleep(2)
 
@@ -468,7 +472,9 @@ def step4_kmip_network_blocked_during_ns_add(
         LOG.info("Step 4 — expected CommandFailed (KMIP unreachable): %s", exc)
     finally:
         LOG.info("Step 4 — restoring KMIP network access on GW nodes")
-        unblock_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port)
+        unblock_kmip_on_gw_nodes(
+            ceph_cluster, kmip_host, kmip_port, nvme_service=nvme_service
+        )
 
     assert error_detected, "Step 4: ns add with KMIP blocked did not produce any error"
     verify_no_namespace_for_image(gw, nqn, fake_img)
@@ -546,7 +552,9 @@ def step5_kmip_blocked_gw_restart(
 
     # ── B: Block KMIP from GW nodes ───────────────────────────────────────────
     LOG.info("Step 5B — blocking KMIP %s:%s on GW nodes", kmip_host, kmip_port)
-    block_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port)
+    block_kmip_on_gw_nodes(
+        ceph_cluster, kmip_host, kmip_port, nvme_service=nvme_service
+    )
     time.sleep(2)
 
     # ── C: Restart GW daemons — passphrase re-fetch must fail ────────────────
@@ -590,7 +598,9 @@ def step5_kmip_blocked_gw_restart(
 
     # ── D: Restore KMIP ───────────────────────────────────────────────────────
     LOG.info("Step 5D — restoring KMIP network access on GW nodes")
-    unblock_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port)
+    unblock_kmip_on_gw_nodes(
+        ceph_cluster, kmip_host, kmip_port, nvme_service=nvme_service
+    )
     time.sleep(2)
 
     # ── E: Restart GW daemons — passphrase re-fetch must now succeed ─────────
@@ -803,7 +813,15 @@ def step6_passphrase_rotation_mismatch(gw, config, kmip_node, initiator, results
 
 
 def _teardown_neg_test(
-    ceph_cluster, config, gw, nqn, step5_image, step6_image, kmip_info, kmip_owned
+    ceph_cluster,
+    config,
+    gw,
+    nqn,
+    step5_image,
+    step6_image,
+    kmip_info,
+    kmip_owned,
+    nvme_service=None,
 ):
     """Remove namespaces, RBD images, and KMIP resources created by TC-04.
 
@@ -815,6 +833,8 @@ def _teardown_neg_test(
         step5_image (str|None): Image from step 5 to remove.
         step6_image (str|None): Image from step 6 to remove.
         kmip_info (dict): From setup_kmip_for_nvmeof().
+        nvme_service: NVMeService used so leftover nft rules are removed from
+            the same GW hosts that were blocked.
     """
     pool = config["rbd_pool"]
     initiator_node = get_node_by_id(ceph_cluster, config["initiator_node"])
@@ -854,7 +874,12 @@ def _teardown_neg_test(
     # Best-effort iptables flush on GW nodes (in case a step left rules in place)
     try:
         kmip_cfg = kmip_info["kmip_cfg"]
-        unblock_kmip_on_gw_nodes(ceph_cluster, kmip_cfg["host"], kmip_cfg["port"])
+        unblock_kmip_on_gw_nodes(
+            ceph_cluster,
+            kmip_cfg["host"],
+            kmip_cfg["port"],
+            nvme_service=nvme_service,
+        )
     except Exception as exc:
         LOG.warning("TC-04 cleanup: iptables unblock error: %s", exc)
 
@@ -909,7 +934,7 @@ def run_byok_neg_paths_e2e(ceph_cluster, config, nvme_service, rbd_obj, custom_d
 
         # ── Step 4: iptables block during ns add ────────────────────────────
         step4_kmip_network_blocked_during_ns_add(
-            ceph_cluster, gw, config, kmip_info, results
+            ceph_cluster, gw, config, kmip_info, results, nvme_service=nvme_service
         )
 
         # ── Step 5: block KMIP → GW restart → cannot re-open → restore ─────
@@ -937,6 +962,7 @@ def run_byok_neg_paths_e2e(ceph_cluster, config, nvme_service, rbd_obj, custom_d
             step6_image,
             kmip_info,
             kmip_owned,
+            nvme_service=nvme_service,
         )
 
     # ── Summary ───────────────────────────────────────────────────────────────

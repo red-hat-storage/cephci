@@ -36,6 +36,7 @@ class NVMeGatewayBase:
         self._ana_group = None
         self._ana_group_id = None
         self._daemon_name = None
+        self._gw_id = None
         self.systemctl = SystemCtl(node)
 
     @property
@@ -88,6 +89,24 @@ class NVMeGatewayBase:
     @property
     def hostname(self):
         return self.node.hostname
+
+    @property
+    def gw_id(self):
+        """Monitor gateway id as used by ``ceph nvme-gw`` (client.<daemon_name>)."""
+        if getattr(self, "_gw_id", None):
+            return self._gw_id
+        name = None
+        if getattr(self, "ana_group", None):
+            name = self.ana_group.get("name")
+        if not name and self.daemon_name:
+            name = self.daemon_name
+        if name and not str(name).startswith("client."):
+            name = f"client.{name}"
+        return name
+
+    @gw_id.setter
+    def gw_id(self, value):
+        self._gw_id = value
 
     def get_io_stats(self, subsystem, namespaces):
         """Fetch I/O statistics - must be implemented in version-specific class."""

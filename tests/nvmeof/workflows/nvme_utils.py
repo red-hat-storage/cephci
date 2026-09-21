@@ -82,6 +82,35 @@ def setup_firewalld(nodes) -> None:
         LOG.info("Configured firewalld to allow port range: %s", port_range)
 
 
+def _ensure_dashboard_ready_for_nvmeof_cli(orch, timeout=180):
+    """Create dashboard TLS cert if needed and wait until mgr exposes the service.
+
+    Bootstrap with skip-dashboard leaves the module off; enabling it without a
+    cert is not enough for ``ceph nvmeof`` commands.
+    """
+    out, _ = orch.shell(args=["ceph", "mgr", "services", "--format", "json"])
+    services = json.loads(out or "{}")
+    if services.get("dashboard"):
+        LOG.info("Dashboard service already available: %s", services["dashboard"])
+        return
+
+    LOG.info("Creating dashboard self-signed certificate for ceph nvmeof CLI")
+    orch.shell(args=["ceph", "dashboard", "create-self-signed-cert"])
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        time.sleep(10)
+        out, _ = orch.shell(args=["ceph", "mgr", "services", "--format", "json"])
+        services = json.loads(out or "{}")
+        if services.get("dashboard"):
+            LOG.info("Dashboard service is available: %s", services["dashboard"])
+            return
+        LOG.info("Waiting for dashboard mgr service to come up...")
+    raise Exception(
+        "Dashboard module is enabled but mgr did not expose a dashboard URL "
+        f"within {timeout}s"
+    )
+
+
 def check_and_enable_nvmeof_module(**kwargs):
     """Check and enable NVMeoF module if not enabled."""
     ceph_cluster = kwargs.get("ceph_cluster")
@@ -109,6 +138,22 @@ def check_and_enable_nvmeof_module(**kwargs):
             )
         else:
             LOG.info(f"NVMeoF module already enabled for ceph version: {ceph_version}")
+
+        # ceph nvmeof CLI commands are served by the dashboard mgr module
+        if "dashboard" not in modules["enabled_modules"]:
+            LOG.info("Enabling dashboard module required by ceph nvmeof CLI")
+            orch.shell(args=["ceph", "mgr", "module", "enable", "dashboard"])
+            out, _ = orch.shell(
+                args=["ceph", "mgr", "module", "ls", "--format", "json"]
+            )
+            modules = json.loads(out)
+            if "dashboard" not in modules["enabled_modules"]:
+                raise Exception(
+                    "Failed to enable dashboard module required by ceph nvmeof CLI"
+                )
+            LOG.info("Dashboard module enabled successfully")
+
+        _ensure_dashboard_ready_for_nvmeof_cli(orch)
 
 
 def apply_nvme_sdk_cli_support(ceph_cluster, config):
@@ -680,7 +725,8 @@ def validate_io(orch, namespaces, negative=False):
     """Validate Continuous IO on namespaces.
 
     - Collect rbd disk usage info for each rbd image.
-    - Validate written bytes value is incremental.
+    - Validate written bytes value is incremental, or the image is fully allocated
+      (used_size >= provisioned_size, so rbd du cannot grow further).
 
     Args:
         namespaces: list of namespaces
@@ -705,6 +751,15 @@ def validate_io(orch, namespaces, negative=False):
                 return False
         return True
 
+    def image_fully_allocated(du_samples):
+        """rbd du used_size cannot grow once it reaches provisioned_size."""
+        if not du_samples:
+            return False
+        last = du_samples[-1]
+        used = last.get("used_size") or 0
+        provisioned = last.get("provisioned_size") or 0
+        return provisioned > 0 and used >= provisioned
+
     with parallel() as p:
         for namespace in namespaces:
             p.spawn(io_value, namespace)
@@ -712,16 +767,27 @@ def validate_io(orch, namespaces, negative=False):
         for result in p:
             subsys, pool_img, samples = result
             res = [i["used_size"] for i in samples]
+            io_grew = validate_incremetal_io(res)
+            io_full = image_fully_allocated(samples)
 
             LOG.info(
                 f"[ {subsys}|{pool_img} ] RBD DU Detailed - {log_json_dump(samples)}"
             )
             LOG.info(f"[ {subsys}|{pool_img} ] RBD DU samples - {res}")
-            if not validate_incremetal_io(res):
+            if not io_grew:
                 if negative:
                     LOG.info(
                         f"[ {subsys}|{pool_img} ] IO is not progressing as expected - {res}"
                     )
+                    continue
+                # Positive check: a filled image is successful IO, not a stall.
+                # FIO on a 1G image often hits provisioned_size before three samples.
+                if io_full:
+                    LOG.info(
+                        f"[ {subsys}|{pool_img} ] image is fully allocated {res}, "
+                        "treating as IO success"
+                    )
+                    LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
                     continue
                 raise IOError(f"[ {subsys}|{pool_img} ] IO is not progressing - {res}")
             if negative:
