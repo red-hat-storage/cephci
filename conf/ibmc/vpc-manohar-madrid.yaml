@@ -10,7 +10,7 @@ networks:
   eu-es-1: sn-eu-es-1
   eu-es-2: sn-eu-es-2
   eu-es-3: sn-eu-es-3
-private_key: ceph-qe-sa-svc
+private_key: ceph-qe-sa-svc-fips
 profile: bx2-2x8
 security_group: "sg-manohar-madrid"
 service_url: "https://eu-es.iaas.cloud.ibm.com/v1"
