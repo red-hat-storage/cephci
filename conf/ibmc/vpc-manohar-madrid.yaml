@@ -1,0 +1,17 @@
+---
+# Virtual Private Cloud details.
+# Don't include IDs or image name.
+datacenters:
+  - eu-es-1
+  - eu-es-2
+  - eu-es-3
+dns_zone_name: "qe.ceph.lab"
+networks:
+  eu-es-1: sn-eu-es-1
+  eu-es-2: sn-eu-es-2
+  eu-es-3: sn-eu-es-3
+private_key: ceph-qe-sa-svc
+profile: bx2-2x8
+security_group: "sg-manohar-madrid"
+service_url: "https://eu-es.iaas.cloud.ibm.com/v1"
+vpc_name: "vpc-manohar-madrid"
