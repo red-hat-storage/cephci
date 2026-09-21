@@ -3,6 +3,7 @@
 # Used by:
 #   suites/tentacle/rgw/test_ss_upgrade_7_1_GA_to_9.x_latest.yaml
 #   suites/tentacle/rgw/tier-1_rgw_upgrade_ssl_ecpool_81GA_to_9x_latest.yaml
+#   suites/tentacle/rgw/tier-1_rgw_upgrade_ssl_ecpool_91GA_to_9x_latest.yaml
 ---
 globals:
   - ceph-cluster:

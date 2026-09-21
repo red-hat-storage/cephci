@@ -1,0 +1,363 @@
+# Objective: P0 singlesite SSL upgrade from RHCS 9.1z(GA) released to 9.x latest.
+# Cluster: EC 2+2 @4 nodes + SSL + haproxy + min 3 RGW daemons (ss + ssl)
+# platform: RHEL-9
+# global-conf: conf/tentacle/rgw/ec-profile-2+2@4nodes.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: Setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 9.1
+                release: released
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.index 32 32"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.index rgw"
+              command: shell
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node2
+                      - node3
+                      - node4
+                  spec:
+                    ssl: true
+                    generate_cert: true
+                    rgw_frontend_extra_args:
+                      - "port=80"
+      desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS-ssl cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: Configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node4
+        rgw_endpoints:
+          - node2:80
+          - node3:80
+          - node4:80
+      desc: Configure HAproxy
+      module: haproxy.py
+      name: Configure HAproxy
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert
+      polarion-id: CEPH-10362
+
+  # Pre upgrade P0 tests (Tentacle 9.1 introduced / different from 7.1 and 8.1 SS P0)
+  - test:
+      name: Conditional put with if match etag pre upgrade
+      desc: Test Conditional put with if match etag pre upgrade
+      polarion-id: CEPH-83632219
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_put_if_match.yaml
+
+  - test:
+      name: Conditional delete with correct etag pre upgrade
+      desc: Test Conditional delete with correct etag pre upgrade
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_etag.yaml
+
+  - test:
+      name: bucket logging journal mode pre upgrade
+      desc: test bucket logging with Journal mode, SimplePrefix, rgw_admin_flush pre upgrade
+      polarion-id: CEPH-83623532
+      module: sanity_rgw.py
+      config:
+        script-name: test_server_access_logging.py
+        config-file-name: test_bucket_logging_journal_mode.yaml
+
+  - test:
+      name: GetObjectAttributes with normal objects pre upgrade
+      desc: Test GetObjectAttributes with normal objects pre upgrade
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: LC multipart object expiration pre upgrade
+      desc: RGW multipart object expiration through lc pre upgrade
+      polarion-id: CEPH-83574797
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lc_object_exp_multipart.py
+        config-file-name: test_bucket_lc_object_exp_multipart.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: bucket check fix pre upgrade
+      desc: Test functionality of bucket check fix pre upgrade
+      polarion-id: CEPH-83574832
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bucket_check_fix.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: user stats reset pre upgrade
+      desc: Test functionality of user stat reset pre upgrade
+      polarion-id: CEPH-83575439
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_user_stats_reset.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: s3cmd put with malformed bucket url pre upgrade
+      desc: test s3cmd put operation with malformed bucket url pre upgrade
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Lua script prerequest object lock pre upgrade
+      desc: Test Lua script prerequest basic test with object lock pre upgrade
+      polarion-id: CEPH-83632330
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_lua_script_prerequest.py
+        config-file-name: ../../aws/configs/test_aws_lua_object_lock_minimal.yaml
+
+  - test:
+      name: swift versioning pre upgrade
+      desc: Test versioned object in swift pre upgrade
+      polarion-id: CEPH-10640
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_versioning.yaml
+
+  # upgrade cluster
+  - test:
+      name: Upgrade cluster to latest ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791
+      verify_cluster_health: true
+      abort-on-fail: true
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes post upgrade
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert post upgrade
+      polarion-id: CEPH-10362
+
+  - test:
+      desc: Retrieve the versions of the cluster
+      module: exec.py
+      name: post upgrade gather version
+      polarion-id: CEPH-83575200
+      config:
+        cephadm: true
+        commands:
+          - "ceph versions"
+
+  # Post upgrade P0 tests
+  - test:
+      name: Conditional put with if match etag post upgrade
+      desc: Test Conditional put with if match etag post upgrade
+      polarion-id: CEPH-83632219
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_put_if_match.yaml
+
+  - test:
+      name: Conditional delete with correct etag post upgrade
+      desc: Test Conditional delete with correct etag post upgrade
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_etag.yaml
+
+  - test:
+      name: bucket logging journal mode post upgrade
+      desc: test bucket logging with Journal mode, SimplePrefix, rgw_admin_flush post upgrade
+      polarion-id: CEPH-83623532
+      module: sanity_rgw.py
+      config:
+        script-name: test_server_access_logging.py
+        config-file-name: test_bucket_logging_journal_mode.yaml
+
+  - test:
+      name: GetObjectAttributes with normal objects post upgrade
+      desc: Test GetObjectAttributes with normal objects post upgrade
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: LC multipart object expiration post upgrade
+      desc: RGW multipart object expiration through lc post upgrade
+      polarion-id: CEPH-83574797
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lc_object_exp_multipart.py
+        config-file-name: test_bucket_lc_object_exp_multipart.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: bucket check fix post upgrade
+      desc: Test functionality of bucket check fix post upgrade
+      polarion-id: CEPH-83574832
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bucket_check_fix.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: user stats reset post upgrade
+      desc: Test functionality of user stat reset post upgrade
+      polarion-id: CEPH-83575439
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_user_stats_reset.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: s3cmd put with malformed bucket url post upgrade
+      desc: test s3cmd put operation with malformed bucket url post upgrade
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Lua script prerequest object lock post upgrade
+      desc: Test Lua script prerequest basic test with object lock post upgrade
+      polarion-id: CEPH-83632330
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_lua_script_prerequest.py
+        config-file-name: ../../aws/configs/test_aws_lua_object_lock_minimal.yaml
+
+  - test:
+      name: swift versioning post upgrade
+      desc: Test versioned object in swift post upgrade
+      polarion-id: CEPH-10640
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_versioning.yaml
