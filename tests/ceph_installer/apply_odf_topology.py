@@ -1,7 +1,11 @@
 """
 Suite-callable wrapper to apply ODF topology after deploy.
 
-Use when deploy is not via test_cephadm.py, or to re-apply topology::
+**DO NOT USE** for new suites. Zone topology here conflicts with compact
+Rook-aligned deploy (``deploy_rook_defaults_ceph.py``). Prefer
+``-c apply-odf-defaults=true`` and the rook deploy suite/module instead.
+
+Legacy / experiment only::
 
     - test:
         module: apply_odf_topology.py
@@ -25,10 +29,15 @@ def run(ceph_cluster, **kwargs):
     force = config.get("apply_odf_topology", False)
     if not force and not overrides_enabled(overrides, APPLY_ODF_TOPOLOGY_KEY):
         LOG.info(
-            "Skipping ODF topology (set --custom-config apply-odf-topology=true "
-            "or config.apply_odf_topology: true)"
+            "Skipping ODF topology (apply-odf-topology is do-not-use; "
+            "prefer deploy_rook_defaults_ceph.py + apply-odf-defaults=true)"
         )
         return 0
+
+    LOG.warning(
+        "apply-odf-topology is marked do-not-use; prefer Rook-aligned deploy "
+        "(deploy_rook_defaults_ceph.py) with -c apply-odf-defaults=true"
+    )
 
     # Ensure flag is seen by apply_odf_topology when forced from suite config
     if force:

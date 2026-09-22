@@ -160,12 +160,13 @@ Options:
                                     conf/tentacle/rook/odf_rook_defaults.yaml into
                                     bootstrap --config (OSDMap ratios, ms_bind_msgr1=false,
                                     RBD ms_mode); v2-only mon set-addrs runs at end of
-                                    bootstrap.py, after test_cephadm deploy, and in
+                                    bootstrap.py, after test_cephadm deploy,
+                                    tests/ceph_installer/deploy_rook_defaults_ceph.py
+                                    after mon apply, and in
                                     tests/cephadm/test_mon.py after mon apply.
-                                    apply-odf-topology=true injects msgr2 bootstrap keys
-                                    if defaults unset; after deploy applies
-                                    zone CRUSH, crush rules, container limits,
-                                    SSD device-class.
+                                    apply-odf-topology=true is DO-NOT-USE (legacy
+                                    zone CRUSH path); use deploy_rook_defaults_ceph.py
+                                    for rack+ssd topology instead.
                                     verify-odf-defaults=true checks config/osd/mon dump.
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
   --xunit-results                   Create xUnit result file for test suite run

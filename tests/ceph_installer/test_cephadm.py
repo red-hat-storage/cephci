@@ -222,8 +222,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 LOG.error("v2-only mon set-addrs failed: %s", failures)
                 return 1
 
-        # Post-OSD ODF topology / platform settings (zones, limits, etc.)
+        # Post-OSD ODF topology — DO-NOT-USE (legacy zones). Prefer
+        # deploy_rook_defaults_ceph.py for rack+ssd Rook-aligned topology.
         if overrides_enabled(overrides, APPLY_ODF_TOPOLOGY_KEY):
+            LOG.warning(
+                "apply-odf-topology is do-not-use; prefer deploy_rook_defaults_ceph.py "
+                "with -c apply-odf-defaults=true"
+            )
             LOG.info("Applying ODF topology (--custom-config apply-odf-topology=true)")
             apply_odf_topology(
                 ceph_cluster,

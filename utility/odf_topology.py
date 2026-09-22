@@ -1,19 +1,22 @@
 """
 Post-OSD ODF-like topology / platform settings for standalone CephCI.
 
-Opt-in via::
+**DO NOT USE** ``--custom-config apply-odf-topology=true`` on suites.
 
-    --custom-config apply-odf-topology=true
+This zone-based path (zones, unbound ``odf-*`` crush rules, container limits,
+label-only SSD class) is superseded by the compact Rook-aligned deploy module
+``tests/ceph_installer/deploy_rook_defaults_ceph.py`` (host racks + DriveGroup
+``crush_device_class: ssd`` + ``.mgr_rack_ssd``). Prefer::
 
-Applies (when possible):
-  - Zone-based CRUSH failure domains
-  - Per-pool zone CRUSH rules (for newly named helper pools only by default)
-  - cephadm container resource limits (OSD/MON/MDS)
-  - SSD device class label on OSDs
+    --custom-config apply-odf-defaults=true
+
+with ``suites/tentacle/rook/deploy_rook_defaults_ceph.yaml`` (or equivalent).
+
+Kept for legacy / explicit experiments only. Do not mix ``zones`` with the
+rack-based Rook deploy suite.
 
 msgr2 monmap (v2-only ``set-addrs``) and ``rbd_default_map_options`` are applied
-via ``utility.odf_defaults`` (``apply-odf-defaults``). Pass topology ``steps``
-including ``msgr2`` only for an explicit post-deploy re-apply.
+via ``utility.odf_defaults`` (``apply-odf-defaults``).
 """
 
 from __future__ import annotations
@@ -227,6 +230,9 @@ def apply_odf_topology(
     """
     Apply ODF-like topology/platform settings when ``apply-odf-topology`` is set.
 
+    **DO NOT USE** on suites — legacy zone path. Prefer
+    ``deploy_rook_defaults_ceph.py`` with ``apply-odf-defaults=true``.
+
     Args:
         ceph_cluster: Ceph cluster object
         shell_fn: cephadm.shell-compatible callable
@@ -240,6 +246,11 @@ def apply_odf_topology(
         overrides, APPLY_ODF_TOPOLOGY_KEY
     ):
         return
+
+    LOG.warning(
+        "apply-odf-topology is do-not-use; prefer deploy_rook_defaults_ceph.py "
+        "with -c apply-odf-defaults=true"
+    )
 
     wanted = set(steps or DEFAULT_TOPOLOGY_STEPS)
     hosts = _hostnames_from_cluster(ceph_cluster)

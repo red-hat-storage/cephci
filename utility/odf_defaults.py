@@ -4,7 +4,6 @@ ODF / Rook-like Ceph defaults helpers for standalone CephCI (cephadm) clusters.
 Opt-in via run.py::
 
     --custom-config apply-odf-defaults=true
-    --custom-config apply-odf-topology=true
 
 ``apply-odf-defaults`` merges a shared YAML profile into bootstrap ``args.config``
 so ``cephadm bootstrap --config`` seeds the mon store and OSDMap ratios, including
@@ -13,8 +12,8 @@ so ``cephadm bootstrap --config`` seeds the mon store and OSDMap ratios, includi
 ``ceph mon set-addrs`` (``[v2:IP:3300/0]``). Mons often ignore ``ms_bind_msgr1`` for
 bind ports and follow the monmap (tracker #70457), so both steps are required.
 
-``apply-odf-topology`` alone injects ``rbd_default_map_options`` at bootstrap.
-Post-OSD it applies CRUSH / container-limit / device-class steps.
+``apply-odf-topology`` is **do-not-use** (legacy zone path). Use Rook-aligned
+deploy ``deploy_rook_defaults_ceph.py`` for compact rack + ssd topology instead.
 """
 
 from __future__ import annotations
@@ -39,9 +38,11 @@ DEFAULT_ODF_PROFILE_PATH = os.path.join(
 
 # CLI override keys (from --custom-config key=value)
 APPLY_ODF_DEFAULTS_KEY = "apply-odf-defaults"
+# Do-not-use: legacy zone topology; prefer deploy_rook_defaults_ceph.py
 APPLY_ODF_TOPOLOGY_KEY = "apply-odf-topology"
 
 # Applied at bootstrap when apply-odf-topology is set without the full defaults profile
+# (legacy only — do not enable apply-odf-topology on new suites)
 MSGR2_BOOTSTRAP_CONFIG: Dict[str, Dict[str, Any]] = {
     "global": {
         "ms_bind_msgr1": "false",
@@ -188,7 +189,7 @@ def apply_odf_defaults_to_bootstrap_config(
     Merge ODF Rook settings into bootstrap ``args["config"]``.
 
     - ``apply-odf-defaults=true``: full profile from YAML.
-    - ``apply-odf-topology=true`` alone: ``rbd_default_map_options`` only.
+    - ``apply-odf-topology=true`` alone (**do-not-use**): legacy light msgr2 keys only.
 
     Mutates and returns *args*. No-op when neither flag is set.
     """

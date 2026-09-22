@@ -6,7 +6,8 @@
 # Msgr2-only monmap (v2:IP:3300 only) is applied post-deploy via
 # `ceph mon set-addrs`. Also set ms_bind_msgr1=false at bootstrap (OSD/MDS/etc.).
 # Note: mons often still bind v1 from monmap until set-addrs runs (tracker #70457).
-# SSD device class stays post-OSD (apply-odf-topology).
+# SSD device class: use deploy_rook_defaults_ceph.py (DriveGroup crush_device_class),
+# not apply-odf-topology (do-not-use).
 
 global:
   mon_osd_full_ratio: "0.85"

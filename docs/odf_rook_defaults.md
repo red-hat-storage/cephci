@@ -10,7 +10,7 @@ regressions **without changing default CephCI behavior**.
 |------|-----|
 | Opt-in ODF-like Ceph config at bootstrap | Seed OSDMap ratios and daemon defaults the way Rook’s `rook-config-override` does |
 | Opt-in v2-only mon endpoints | Match ODF `requireMsgr2`-style monmaps (`v2:IP:3300` only) |
-| Opt-in topology/platform steps | Zones, CRUSH rules, container limits, SSD class labels |
+| Compact Rook-aligned topology | Racks + `ssd` class + `.mgr_rack_ssd` via `deploy_rook_defaults_ceph.py` (not zone `apply-odf-topology`) |
 | Keep CephFS / RBD / SMB tests working | Kernel CephFS mounts break on v2-only clusters unless mounts use msgr2 correctly |
 | Zero impact when flags are off | Existing suites and smoke runs stay unchanged |
 
@@ -22,8 +22,11 @@ regressions **without changing default CephCI behavior**.
 
 ```bash
 --custom-config apply-odf-defaults=true    # full profile + v2-only set-addrs
---custom-config apply-odf-topology=true    # post-OSD topology (+ light bootstrap msgr2 keys if defaults unset)
 --custom-config verify-odf-defaults=true   # assert config/osd/mon dump after deploy
+
+# DO NOT USE:
+# --custom-config apply-odf-topology=true  # legacy zone path; superseded by
+#                                          # deploy_rook_defaults_ceph.py
 ```
 
 Suite YAML keys win over profile keys when both set the same option.
@@ -34,12 +37,14 @@ Suite YAML keys win over profile keys when both set the same option.
 |-----------|------|----------------|
 | Profile YAML | `conf/tentacle/rook/odf_rook_defaults.yaml` | Declared ODF-like defaults |
 | Defaults helper | `utility/odf_defaults.py` | Merge into bootstrap; `set-addrs`; verify; kernel mount helpers |
-| Topology helper | `utility/odf_topology.py` | Zones, crush rules, container limits, SSD class |
+| Topology helper | `utility/odf_topology.py` | **Do-not-use** legacy zones / `odf-*` rules / container limits / label SSD |
 | Bootstrap | `ceph/ceph_admin/bootstrap.py` | Merge profile into `--config`; post-bootstrap `set-addrs` |
-| Deploy | `tests/ceph_installer/test_cephadm.py` | Re-apply `set-addrs` after mon steps / full deploy; run topology + verify |
+| Deploy | `tests/ceph_installer/test_cephadm.py` | Re-apply `set-addrs` after mon steps / full deploy; optional verify |
 | Mon apply | `tests/cephadm/test_mon.py` | `set-addrs` after mon `apply` when defaults flag set |
-| Topology entry | `tests/ceph_installer/apply_odf_topology.py` | Standalone topology apply helper |
-| Unit tests | `unittests/utility/test_odf_*.py` | Profile merge, set-addrs, topology, mount helpers |
+| Topology entry | `tests/ceph_installer/apply_odf_topology.py` | **Do-not-use** standalone zone topology wrapper |
+| Rook-aligned deploy | `tests/ceph_installer/deploy_rook_defaults_ceph.py` | Post-bootstrap hosts+racks, mon/mgr/OSD `ssd`, `.mgr_rack_ssd` |
+| Sample suite | `suites/tentacle/rook/deploy_rook_defaults_ceph.yaml` | Vanilla bootstrap + the module above |
+| Unit tests | `unittests/utility/test_odf_*.py`, `unittests/ceph_installer/` | Profile merge, set-addrs, topology, rack/volume helpers |
 
 **Design choice:** `ceph mon set-addrs` is **not** in library `ceph/ceph_admin/mon.py`.
 It runs only when `apply-odf-defaults=true`, at bootstrap / deploy / mon-apply hooks.
@@ -47,23 +52,57 @@ It runs only when `apply-odf-defaults=true`, at bootstrap / deploy / mon-apply h
 ### 2.3 Lifecycle (what runs when)
 
 ```text
-run.py  -c apply-odf-defaults=true  [-c apply-odf-topology=true] [-c verify-odf-defaults=true]
+run.py  -c apply-odf-defaults=true  [-c verify-odf-defaults=true]
    │
    ├─ bootstrap
    │     ├─ merge odf_rook_defaults.yaml → args.config → cephadm bootstrap --config
    │     └─ after success: ceph mon set-addrs <mon> '[v2:<ip>:3300/0]'   (first mon)
    │
-   ├─ test_cephadm deploy
+   ├─ test_cephadm deploy (or deploy_rook_defaults_ceph.py for rack+ssd)
    │     ├─ after each mon apply step: set-addrs again (all current mons)
    │     ├─ after full deploy: set-addrs again
-   │     ├─ if apply-odf-topology: zones / crush_rules / container_limits / ssd_class
    │     └─ if verify-odf-defaults: compare config dump + osd dump ratios + v2-only monmap
+   │
+   │  (apply-odf-topology: DO-NOT-USE — legacy zones; do not enable)
    │
    └─ later tests (CephFS/RBD/SMB/RADOS)
          └─ kernel CephFS mounts consult: ceph config get mon ms_bind_msgr1
               false → device :3300 + ms_mode=crc
               true  → legacy bare IP / :6789 behavior
 ```
+
+### 2.4 Rook-aligned deploy suite (racks + `default~ssd`)
+
+[`suites/tentacle/rook/deploy_rook_defaults_ceph.yaml`](../suites/tentacle/rook/deploy_rook_defaults_ceph.yaml)
+uses **vanilla bootstrap** (no Rook keys in suite args). Cluster conf:
+[`conf/tentacle/common/3node-1client.yaml`](../conf/tentacle/common/3node-1client.yaml).
+
+```text
+install_prereq → test_cephadm bootstrap (mon-ip node1)
+              → deploy_rook_defaults_ceph.py
+              → optional test_client
+```
+
+Pass `-c apply-odf-defaults=true` on `run.py` for the YAML profile + first-mon `set-addrs`.
+Omit `-c` for topology-only (stock Ceph config, still racks + ssd class).
+
+This module does **not** re-check [`odf_rook_defaults.yaml`](../conf/tentacle/rook/odf_rook_defaults.yaml)
+against `ceph config dump`. That profile is merged at **bootstrap**; use
+`-c verify-odf-defaults=true` on the bootstrap/`test_cephadm` step if you want
+config-dump vs YAML. The module verifies crush topology it created (racks, `ssd`, `.mgr`).
+
+The module:
+
+1. Fails if an **osd** role node has no volumes, or if OSDs already exist (no crush-move).
+2. Applies host specs: labels from roles; OSD roles get `location: {root: default, rack: rackN}`.
+3. `ceph orch apply mon/mgr` by label; `set-addrs` again when the defaults flag is on.
+4. OSD DriveGroup `crush_device_class: ssd` so the shadow root **`default~ssd`** exists
+   (not `default~ssd_class`). Fallback: `ceph osd crush set-device-class ssd`.
+5. `ceph osd crush rule create-replicated .mgr_rack_ssd default rack ssd`
+   → `take default~ssd` + `chooseleaf type rack`. Binds `.mgr`. Leaves `replicated_rule` (host) alone.
+
+Do **not** use `apply-odf-topology` (do-not-use). That flag enables legacy **zones**
+and conflicts with this rack-based suite.
 
 ---
 
@@ -113,28 +152,33 @@ ceph mon set-addrs <name> '[v2:<ip>:3300/0]'
 **Effect:** Public monmap becomes **v2-only** (no `:6789` / `v1:`). This is the
 ODF-like “require msgr2” mon endpoint shape.
 
-### 3.3 Topology-only bootstrap (`apply-odf-topology=true` without full defaults)
+### 3.3 Topology-only bootstrap (`apply-odf-topology=true`) — **DO NOT USE**
 
-Injects only:
+Legacy. Prefer `-c apply-odf-defaults=true` for msgr2/RBD options in the full profile.
+
+If somehow set alone (unsupported), it historically injected only:
 
 ```text
 global.ms_bind_msgr1 = false
 global.rbd_default_map_options = ms_mode=prefer-crc
 ```
 
-Full ratios/limits from YAML are **not** applied unless `apply-odf-defaults` is also set.
+### 3.4 Topology post-OSD (`apply-odf-topology=true`) — **DO NOT USE**
 
-### 3.4 Topology post-OSD (`apply-odf-topology=true`)
+**Superseded** by [`deploy_rook_defaults_ceph.py`](../tests/ceph_installer/deploy_rook_defaults_ceph.py)
+(compact `root→rack→host→osd` + DriveGroup `ssd` + `.mgr_rack_ssd`).
 
-Default steps: `zones`, `crush_rules`, `container_limits`, `ssd_class`
+Do **not** enable this flag on new or existing suites. Code remains for legacy
+experiments only and logs a warning when invoked.
 
-| Step | What is applied | Effect / caveats |
-|------|-----------------|------------------|
-| `zones` | region/zone CRUSH buckets; move first 3 hosts into `zone-a/b/c` | Skipped if fewer than 3 hosts |
-| `crush_rules` | Creates rules `odf-block`, `odf-fs-meta`, `odf-fs-data` (failure domain `zone`) | **Does not auto-rebind existing pools** to those rules |
-| `container_limits` | Orch specs: OSD 2 CPU / 5g; MON 1 CPU / 2g; MDS 2 CPU / 6g | May OOM or be ignored on small CephCI VMs (best-effort) |
-| `ssd_class` | `ceph osd crush set-device-class ssd <all osds>` | **Label only** — does not change media |
-| `msgr2` (optional step) | Re-run set-addrs + set `rbd_default_map_options` | Prefer defaults flag for this; not in default step list |
+Historical steps (for archaeology): `zones`, `crush_rules`, `container_limits`, `ssd_class`
+
+| Step | What was applied | Effect / caveats |
+|------|------------------|------------------|
+| `zones` | region/zone CRUSH buckets; move first 3 hosts into `zone-a/b/c` | Skipped if fewer than 3 hosts; **conflicts with rack deploy** |
+| `crush_rules` | Creates rules `odf-block`, `odf-fs-meta`, `odf-fs-data` (failure domain `zone`) | **Does not auto-rebind existing pools** |
+| `container_limits` | Orch specs: OSD 2 CPU / 5g; MON 1 CPU / 2g; MDS 2 CPU / 6g | May OOM on small CephCI VMs |
+| `ssd_class` | `ceph osd crush set-device-class ssd <all osds>` | Label only; prefer DriveGroup `crush_device_class` |
 
 ---
 
@@ -149,7 +193,7 @@ Default steps: `zones`, `crush_rules`, `container_limits`, `ssd_class`
 | Messenger | New binds prefer msgr2 only; after set-addrs, **clients must use v2 (:3300)** to reach mons |
 | RBD kernel map | Gets `ms_mode=prefer-crc` from central config |
 | MDS | Larger cache limit |
-| Topology (if enabled) | Zone CRUSH + SSD labels + optional container caps |
+| Topology | Use `deploy_rook_defaults_ceph.py` (racks + ssd). Do **not** use `apply-odf-topology` |
 
 ### 4.2 CephFS — the critical side effect
 
@@ -272,11 +316,17 @@ Helpers in `utility/odf_defaults.py`:
 ## 7. How to run and verify
 
 ```bash
-# Example (ODF interop / BVT with ODF flags)
+# Rook-aligned deploy (racks + ssd class + .mgr rule); profile at bootstrap
+python run.py --suite suites/tentacle/rook/deploy_rook_defaults_ceph.yaml \
+  --conf conf/tentacle/common/3node-1client.yaml \
+  -c apply-odf-defaults=true
+
+# Optional verify of bootstrap profile / v2-only monmap
 python run.py ... \
   -c apply-odf-defaults=true \
-  -c apply-odf-topology=true \
   -c verify-odf-defaults=true
+
+# DO NOT USE: -c apply-odf-topology=true  (legacy zones; superseded)
 ```
 
 For ODF interop pipeline runs, always pass `-c verify-odf-defaults=true` together with
@@ -304,7 +354,8 @@ mount -t ceph <ip>:3300:/ <mnt> -o name=admin,secretfile=...,ms_mode=crc
 Unit tests:
 
 ```bash
-python -m pytest unittests/utility/test_odf_defaults.py unittests/utility/test_odf_topology.py -q
+python -m pytest unittests/utility/test_odf_defaults.py unittests/utility/test_odf_topology.py \
+  unittests/ceph_installer/test_deploy_rook_defaults_ceph.py -q
 ```
 
 ---
@@ -315,7 +366,7 @@ python -m pytest unittests/utility/test_odf_defaults.py unittests/utility/test_o
 |-------|-------------|--------|------------|
 | Bootstrap Ceph config | YAML profile (ratios, PG, msgr1 off, RBD prefer-crc, OSD/MDS knobs) | ODF-like OSDMap + daemon defaults | More Rook override keys; size/min_size; version drift |
 | Monmap | `set-addrs` → v2-only | Clients must use msgr2 | Optional closer ODF parity (`ms_bind_msgr1` true + monmap only); client conf refresh |
-| Topology | Zones / rules / limits / SSD label | Partial platform shape | Pool↔rule binding; richer topologies; robust limits on small HW |
+| Topology | Host spec racks + OSD `ssd` class (this suite) | Compact `root→rack→host→osd`; `default~ssd` | Pool↔rule binding for every CephCI pool create; stretch. **`apply-odf-topology` do-not-use** |
 | CephFS kernel | `:3300` + `ms_mode=crc` via helpers | Mounts work again | Remaining raw mounts; legacy option-matrix on v2-only; V0→V1 migration |
 | Default CephCI (no flags) | Nothing | Unchanged | — |
 
