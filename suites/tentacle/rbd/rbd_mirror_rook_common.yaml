@@ -1,0 +1,870 @@
+# RBD Mirror common suite for Rook / dual-cluster validation
+#
+# Curated high-value RBD mirror tests drawn from:
+#   tier-1_rbd_mirror.yaml,
+#   tier-2_rbd_mirror_image_operations.yaml,
+#   tier-2_rbd_mirror_image_trash_purge.yaml,
+#   tier-2_rbd_mirror_failover_recovery.yaml,
+#   tier-2_rbd_mirror_snapshot_regression.yaml,
+#   tier-2_rbd_group_mirror.yaml,
+#   tier-2_rbd_group_mirror_dynamic.yaml,
+#   tier-2_rbd_group_mirror_failover.yaml,
+#   tier-2_default_namespace_mirroring.yaml,
+#   tier-2_non_default_namespace_mirroring.yaml,
+#   tier-3_namespace_mirroring_scale.yaml,
+#   tier-3_snap_mirroring.yaml,
+#   tier-3_rbd_mirror_encrypted_image.yaml,
+#   tier-2_rbd_migration_external_ceph.yaml,
+#   tier-2_rbd_migration_key_import_9_2.yaml
+#
+# Cluster Configuration:
+#   Conf file - conf/tentacle/rbd/5-node-2-clusters.yaml
+#   No of Clusters : 2
+#   Node 2 must be a client node
+#
+# Covered areas:
+#   - Basic pool/image mirroring + daemon status
+#   - Image ops (clone, journal→snap, features, meta)
+#   - Trash / delete / secondary restrictions
+#   - Failover / failback (planned + unplanned)
+#   - Snapshot mirroring regression + snap/clone ops
+#   - Consistency group mirror (basic, add/remove, dynamic, failover)
+#   - Namespace mirroring (default + non-default + scale)
+#   - Encrypted mirrored images
+#   - Cross-cluster live migration + native key import
+#
+---
+tests:
+
+  # ---------------------------------------------------------------------------
+  # Cluster setup (2-site mirror)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup to deploy the required pre-requisites for running the tests
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - rbd-nbd
+              - fio
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - rbd-nbd
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      desc: Remove epel and install packages needed for migration/encryption
+      module: exec.py
+      name: Install RBD packages
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+          - "dnf install rbd-nbd -y --nogpgcheck"
+          - "dnf install qemu-img -y --nogpgcheck"
+
+  # ---------------------------------------------------------------------------
+  # Core mirror (from tier-1_rbd_mirror)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: test_rbd_mirror
+      module: test_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            resize_to: 5G
+      polarion-id: CEPH-83573332
+      desc: Create RBD mirrored image in pools and run IOs
+
+  - test:
+      name: test_rbd_mirror_image
+      module: test_rbd_mirror_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573619,CEPH-83573620
+      desc: Create RBD mirrored images and run IOs
+
+  - test:
+      name: test_rbd_mirror_daemon_status
+      module: test_rbd_mirror_daemon_status.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573760
+      desc: Verify rbd mirror and daemon status on cluster
+
+  # ---------------------------------------------------------------------------
+  # Image operations (from tier-2_rbd_mirror_image_operations)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: Mirroring of cloned image
+      module: test_rbd_clone_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+      polarion-id: CEPH-9521
+      desc: Testing mirroring of cloned image
+
+  - test:
+      name: Mirroring from journal to snapshot
+      module: test_rbd_mirror_journal_to_snap.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              mode: "image"
+              size: "2G"
+            ec_pool_config:
+              mode: "image"
+              size: "2G"
+      polarion-id: CEPH-83573618
+      desc: Testing journal mirroring to snapshot mirroring
+
+  - test:
+      name: test image meta operations sync to secondary
+      module: test_rbd_image_meta_mirroring.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            key: ping
+            value: pong
+      polarion-id: CEPH-9524
+      desc: Verify removal of image meta gets mirrored
+
+  - test:
+      desc: Enable and disable image feature from primary gets reflected to secondary
+      module: test_rbd_mirror_image_features.py
+      clusters:
+        ceph-rbd1:
+          config:
+            journal:
+              ec_pool_config:
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                size: 2G
+                io_total: 10
+            snapshot:
+              ec_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+              rep_pool_config:
+                mode: image
+                mirrormode: snapshot
+                size: 2G
+                io_total: 10
+      name: Testing change of image feature reflection from primary to secondary
+      polarion-id: CEPH-9520
+
+  # ---------------------------------------------------------------------------
+  # Trash / delete (from tier-2_rbd_mirror_image_trash_purge)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: test-image-delete-from-primary-site
+      module: test-image-delete-primary-site.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              imagesize: 2G
+              io_total: 200M
+            ec_pool_config:
+              imagesize: 2G
+              io_total: 200M
+      polarion-id: CEPH-9501
+      desc: Verify that image deleted at primary site updated at secondary
+
+  - test:
+      name: >
+        test mirror on image having snap and clone
+        after restoring from trash
+      module: test_mirror_move_primary_trash_restore.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-11417
+      desc: Verify that image is restore and mirroring is intact
+
+  - test:
+      name: Attempt moving secondary image to trash
+      module: test_mirror_move_secondary_trash.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-11416
+      desc: Verify that moving secondary to trash fails
+
+  # ---------------------------------------------------------------------------
+  # Failover / failback (from tier-2_rbd_mirror_failover_recovery)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: Recovery of abrupt failure of primary cluster
+      module: test_9470.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9470
+      desc: Test unplanned failover and failback scenario
+
+  - test:
+      name: Recovery of shutdown primary cluster
+      module: test_9471.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9471
+      desc: Test planned failover and failback scenario
+
+  - test:
+      name: Mirroring in same cluster should be prevented
+      module: test_rbd_mirror_reconfig.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-9511
+      desc: Verify configuring mirror to same source and target should fail
+
+  # ---------------------------------------------------------------------------
+  # Snapshot mirroring (from tier-2_rbd_mirror_snapshot_regression + tier-3_snap)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: test_rbd_mirror_snapshot_pool
+      module: test_rbd_mirror_snapshot.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            ec_pool_config:
+              mirrormode: snapshot
+              mode: image
+            rep_pool_config:
+              mirrormode: snapshot
+              mode: image
+            snapshot_schedule_level: "pool"
+      polarion-id: CEPH-83575375
+      desc: Create snapshot based RBD mirrored pools, schedule snapshots at pool level and verify
+
+  - test:
+      abort-on-fail: True
+      desc: Verify snapshot based mirroring cannot be enabled at pool mode
+      name: Test validating neg scenario snapshot mirroring in pool mode
+      module: test_snapshot_mirroring_on_pool_negative.py
+      polarion-id: CEPH-83573617
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: pool
+              mirrormode: snapshot
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: pool
+              mirrormode: snapshot
+
+  - test:
+      abort-on-fail: True
+      desc: Verify image expand/shrink/remove from mirroring cluster
+      name: Verify image operations from primary and secondary cluster
+      module: test_image_operations_on_snap_mirroring.py
+      polarion-id: CEPH-83574857
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 10
+              mode: image
+              mirrormode: snapshot
+            ec_pool_config:
+              num_pools: 1
+              num_images: 10
+              mode: image
+              mirrormode: snapshot
+
+  - test:
+      abort-on-fail: True
+      desc: Verify snapshot mirroring with snap and clone operations
+      name: Test snap and clone operations on snapshot mirrored clusters
+      module: test_rbd_snap_mirroring_with_snap_clone_op.py
+      polarion-id: CEPH-83574861
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+              io_size: 200M
+            ec_pool_config:
+              ec-pool-k-m: "2,1"
+              ec_profile: "ec_profile"
+              num_pools: 1
+              num_images: 1
+              size: 2G
+              mode: image
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+              io_size: 200M
+
+  # ---------------------------------------------------------------------------
+  # Consistency group mirroring
+  # (from group_mirror / dynamic / failover)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Verify Consistency group mirroring across two clusters
+      name: Test Consistency Group Mirroring
+      module: test_group_mirror.py
+      polarion-id: CEPH-83610860
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83610860
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: Verify Addition and removal of Images to Consistency group
+      name: Test Addition and removal in Consistency Group Mirroring
+      module: test_add_remove_group_mirror.py
+      polarion-id: CEPH-83611277
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: >
+        Verify dynamic addition of images to a mirror-enabled RBD consistency group
+        without disabling mirroring, during active I/O and snapshot scheduling
+      name: Test Dynamic Image Addition to Mirror-Enabled Group
+      module: test_group_mirror_dynamic.py
+      polarion-id: CEPH-83632349
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632349
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: >
+        Verify failover failback during orderly and
+        non-orderly shutdown
+      name: Verify failover failback during orderly and non-orderly shutdown
+      module: test_rbd_group_mirror_failover.py
+      polarion-id: CEPH-83613277
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            fio:
+              size: 1G
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  # ---------------------------------------------------------------------------
+  # Namespace mirroring (default + non-default + scale)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Verify non-default to default namespace mirroring
+      name: >
+        Snapshot based Namespace level mirroring from
+        Non-default to default namespace
+      module: test_rbd_non-default_to_default_namespace_mirroring.py
+      polarion-id: CEPH-83612860
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_default
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - namespace
+              snap_schedule_intervals:
+                - 1m
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_default
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - namespace
+              snap_schedule_intervals:
+                - 1m
+            test_function: CEPH-83612860
+            fio:
+              size: 100M
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: >
+        Verify demote, promote, resync, rename, resize,
+        remove for namespace mirrored images
+      name: >
+        Test to verify non-default to non default namespace mirroring
+      module: test_namespace_mirror_operations.py
+      polarion-id: CEPH-83601539
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83601539
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_non-default
+              mirrormode: snapshot
+              snap_schedule_intervals:
+                - 1m
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_non-default
+              mirrormode: snapshot
+              snap_schedule_intervals:
+                - 1m
+            fio:
+              size: 100M
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  # ---------------------------------------------------------------------------
+  # Encrypted mirrored image (from tier-3_rbd_mirror_encrypted_image)
+  # ---------------------------------------------------------------------------
+  - test:
+      abort-on-fail: True
+      desc: Run encryption tests on images with mirroring enabled
+      name: Verify the luks encryption functionality for a mirrored image
+      module: test_encryption_on_mirrored_image.py
+      polarion-id: CEPH-83575408
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 8
+              mode: image
+              mirrormode: snapshot
+              do_not_enable_mirror_on_image: True
+              test_config:
+                encryption_type:
+                  - luks1,luks1
+                  - luks1,NA
+                  - luks2,luks1
+                  - luks2,luks2
+                  - luks2,NA
+                  - NA,luks1
+                  - NA,luks2
+                  - luks1,luks2
+            ec_pool_config:
+              num_pools: 1
+              num_images: 8
+              mode: image
+              mirrormode: snapshot
+              do_not_enable_mirror_on_image: True
+              test_config:
+                encryption_type:
+                  - luks1,luks1
+                  - luks1,NA
+                  - luks2,luks1
+                  - luks2,luks2
+                  - luks2,NA
+                  - NA,luks1
+                  - NA,luks2
+                  - luks1,luks2
+
+  # ---------------------------------------------------------------------------
+  # Cross-cluster live migration (from tier-2_rbd_migration_external_ceph)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: Test image migration with external ceph cluster
+      desc: live migration with external ceph native data format
+      module: test_rbd_migration_external_native_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+      polarion-id: CEPH-83597689
+
+  - test:
+      name: Test image migration with external ceph cluster for qcow data
+      desc: live migration with external ceph qcow data format
+      module: test_rbd_migration_external_qcow_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+      polarion-id: CEPH-83597837
+
+  # ---------------------------------------------------------------------------
+  # Native import with mon_host key (from tier-2_rbd_migration_key_import_9_2)
+  # NVMe-oF case CEPH-83632851 omitted (needs nvmeof conf)
+  # ---------------------------------------------------------------------------
+  - test:
+      name: Test native import with mon_host and key
+      desc: Verify RBD native import-only migration using mon_host and inline Ceph key
+      module: test_rbd_native_import_mon_host_inline_key.py
+      polarion-id: CEPH-83632846
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83632846
+            rep_pool_config:
+              src_pool: src_pool
+              dst_pool: dst_pool
+              src_image: src_image
+              target_image: target_image
+              src_snap: snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+              source_pattern_size: 1G
+              source_pattern_a_offset: "0"
+              source_pattern_b_offset: 6G
+              target_write_offset: 2G
+              target_write_size: 256M
+              active_io_offset: 4G
+              active_io_size: 1G
+              active_io_rate: 64M
+            ec_pool_config:
+              src_pool: ec_src_pool
+              dst_pool: ec_dst_pool
+              src_image: ec_src_image
+              target_image: ec_target_image
+              src_snap: ec_snap1
+              source_client_name: client.rbd-migration
+              image_size: 10G
+              source_pattern_size: 1G
+              source_pattern_a_offset: "0"
+              source_pattern_b_offset: 6G
+              target_write_offset: 2G
+              target_write_size: 256M
+              active_io_offset: 4G
+              active_io_size: 1G
+              active_io_rate: 64M
