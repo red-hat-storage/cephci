@@ -23,6 +23,7 @@ from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.onecloud import (
     CephVMNodeOneCloud,
+    extra_disks_for_onecloud_vm,
     generate_onecloud_node_name,
     get_onecloud_client,
     get_vlan_for_site,
@@ -32,6 +33,7 @@ from compute.onecloud import (
     process_onecloud_custom_config,
     resolve_image_for_site,
     resolve_project_for_site,
+    verify_onecloud_extra_disks,
 )
 from compute.openshift import (
     CephVMNodeOCP,
@@ -552,13 +554,15 @@ def create_onecloud_ceph_nodes(
         node_name = generate_onecloud_node_name(
             run_id, node_key, role, instances_name=instances_name
         )
-        virtual_machines.append(
-            {
-                "vmname": node_name,
-                "vmnotes": f"CephCI node {node_key}",
-            }
-        )
-        # OneCloud does not support custom disk provisioning; ignore no-of-volumes/disk-size
+        vm_spec = {
+            "vmname": node_name,
+            "vmnotes": f"CephCI node {node_key}",
+        }
+        extra_disks = extra_disks_for_onecloud_vm(role, node_dict)
+        extra_disk_sizes = [int(d["size_gb"]) for d in extra_disks]
+        if extra_disks:
+            vm_spec["disks"] = extra_disks
+        virtual_machines.append(vm_spec)
         node_specs[node_name] = {
             "node_key": node_key,
             "node_dict": node_dict,
@@ -566,8 +570,7 @@ def create_onecloud_ceph_nodes(
             "id": node_dict.get("id") or node_key,
             "location": node_dict.get("location"),
             "root_login": node_dict.get("root-login", True),
-            "no_of_volumes": 0,
-            "disk_size": 0,
+            "extra_disk_sizes": extra_disk_sizes,
         }
 
     if not virtual_machines:
@@ -736,6 +739,12 @@ def create_onecloud_ceph_nodes(
             log.warning("OneCloud: VM %s not found in cluster response", vmname)
             continue
 
+        vm_data = verify_onecloud_extra_disks(
+            vmname,
+            vm_data,
+            spec["extra_disk_sizes"],
+            client=client,
+        )
         vm = CephVMNodeOneCloud(
             node=vm_data,
             api_key=api_key,
