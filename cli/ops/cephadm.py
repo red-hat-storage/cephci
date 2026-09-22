@@ -182,7 +182,7 @@ def bootstrap(
 
     # Check for registry details
     if not kw.get("registry-url") and ibm_build:
-        kw.update(get_registry_details(ibm_build))
+        kw.update(get_registry_details(ibm_build, image=image))
 
     # Get yes-i-know tag
     yes_i_know = kw.pop("yes-i-know") if kw.get("yes-i-know") else None

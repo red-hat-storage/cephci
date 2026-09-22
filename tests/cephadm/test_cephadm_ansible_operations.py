@@ -25,6 +25,7 @@ def run(ceph_cluster, **kwargs):
 
     # Get build details
     ibm_build = config.get("ibm_build", False)
+    container_image = config.get("container_image")
 
     # Get config specs
     config = kwargs.get("config")
@@ -82,7 +83,9 @@ def run(ceph_cluster, **kwargs):
         elif module == "cephadm_registry_login":
             # Check for registry details
             if module_config.get("autoload_registry_details"):
-                module_args.update(autoload_registry_details(ibm_build))
+                module_args.update(
+                    autoload_registry_details(ibm_build, image=container_image)
+                )
 
             exec_cephadm_registry_login(installer, playbook, **module_args)
 

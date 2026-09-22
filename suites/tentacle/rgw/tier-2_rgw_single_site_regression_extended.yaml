@@ -416,3 +416,69 @@ tests:
         test-version: v2
         script-name: test_user_bucket_rename.py
         config-file-name: test_object_unlink.yaml
+
+  - test:
+      name: Object Unlink with ZG max shard set to 0
+      desc: RGW Object unlink JIRA IBMCEPH-12702 [BZ#2412473]
+      polarion-id: CEPH-83572908
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_user_bucket_rename.py
+        config-file-name: test_zg_max_index_shards.yaml
+
+  # Enhanced quota regression coverage
+  - test:
+      name: Test decreasing quota below current usage
+      desc: Test decreasing quota below current usage
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: test_quota_edge_cases.py
+        config-file-name: test_quota_decrease_below_usage.yaml
+
+  - test:
+      name: Test exact boundary - upload exactly at quota limit
+      desc: Test exact boundary - upload exactly at quota limit
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: test_quota_edge_cases.py
+        config-file-name: test_quota_edge_exact_boundary.yaml
+      comments: possible product issue - under investigation
+
+  - test:
+      name: Test very large quota values (1PB)
+      desc: Test very large quota values (1PB)
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: test_quota_edge_cases.py
+        config-file-name: test_quota_edge_large_values.yaml
+
+  - test:
+      name: Test quota set to 1 - minimum boundary test
+      desc: Test quota set to 1 - minimum boundary test
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: test_quota_edge_cases.py
+        config-file-name: test_quota_edge_one.yaml
+
+  - test:
+      name: Test quota set to 0 - should reject all uploads
+      desc: Test quota set to 0 - should reject all uploads
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: test_quota_edge_cases.py
+        config-file-name: test_quota_edge_zero.yaml
+
+  - test:
+      name: Test quota recalculation timing after object deletion (eventual consistency)
+      desc: Test quota recalculation timing after object deletion (eventual consistency)
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: test_quota_edge_cases.py
+        config-file-name: test_quota_timing_after_delete.yaml

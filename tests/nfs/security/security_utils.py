@@ -297,6 +297,12 @@ def check_mount_fails(client_node, mount_cmd):
     result = attempt_nfs_mount_expect_failure(client_node, mount_cmd)
     if result["exit_code"] == 0:
         log.error("Mount succeeded but was expected to fail!")
+        mount_path = mount_cmd.strip().split()[-1]
+        client_node.exec_command(
+            sudo=True,
+            cmd="umount -l {}".format(mount_path),
+            check_ec=False,
+        )
         return False
     log.info("Mount failed as expected (exit=%s).", result["exit_code"])
     return True

@@ -32,11 +32,13 @@ __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
 
 
 def _detect_registry_tier(registry: str, build_type: str) -> str:
-    """Return credential tier (cdn/stage) from registry host, else from build_type."""
+    """Return credential tier (cdn/stage/preprod) from registry host, else from build_type."""
     if not registry:
         return "cdn" if build_type in ("released", "cdn") else "stage"
     if "registry.redhat.io" in registry or "cp.icr.io" in registry:
         return "cdn"
+    if "preprod.icr.io" in registry:
+        return "preprod"
     if "stage" in registry or "stg" in registry or "quay" in registry:
         return "stage"
     return "cdn" if build_type in ("released", "cdn") else "stage"
@@ -60,7 +62,8 @@ def construct_registry(
         build_type: CLI build type (released|cdn|stage|nightly etc.)
 
     Registry tier is chosen from the registry hostname when it matches a known
-    RH/IBM host; otherwise build_type is used (released/cdn -> cdn, else stage).
+    RH/IBM host (cdn, stage, preprod); otherwise build_type is used
+    (released/cdn -> cdn, else stage).
 
     Example::
 
@@ -96,8 +99,14 @@ def construct_registry(
         cdn_cred = _config.get(
             f"{_vendor}_registry_credentials", _config["cdn_credentials"]
         )
+        if _tier and _reg:
+            logger.warning(
+                "No credentials for registry tier '%s'; using legacy %s_registry_credentials",
+                _tier,
+                _vendor,
+            )
     reg_args = {
-        "registry-url": cdn_cred.get("registry", registry),
+        "registry-url": _reg or cdn_cred.get("registry"),
         "registry-username": cdn_cred.get("username"),
         "registry-password": cdn_cred.get("password"),
     }
@@ -354,9 +363,14 @@ class BootstrapMixin:
             )
 
         if registry_json:
+            # Suite YAML often hardcodes registry.redhat.io for RH test_bootstrap
+            # cases; for IBM builds use the image registry host in registry-json.
+            json_registry = registry_json
+            if manifest_obj.product == "ibm" and image_registry:
+                json_registry = image_registry
             cmd += construct_registry(
                 self,
-                registry_json,
+                json_registry,
                 json_file=True,
                 product=manifest_obj.product,
                 build_type=build_type,

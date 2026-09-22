@@ -37,18 +37,20 @@ EPEL_REPOS = {
 }
 
 
-def generate_registry_json_config(node, ibm_build=False):
+def generate_registry_json_config(node, ibm_build=False, image=None, registry=None):
     """Create json with registry credential details
 
     Args:
         node (CephInstallerNode): Ceph installer node
         ibm_build (bool): IBM build flag
+        image (str): Container image reference used to select registry credentials
+        registry (str): Registry host/URL used to select registry credentials
     """
     # Create temporory file path
     temp_file = tempfile.NamedTemporaryFile(suffix=".json")
 
     # Get credential details
-    registry = get_registry_details(ibm_build)
+    registry = get_registry_details(ibm_build, registry=registry, image=image)
 
     # Create temporary file and dump data
     with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as _f:

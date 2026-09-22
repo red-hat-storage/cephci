@@ -69,7 +69,7 @@ def run(ceph_cluster, **kwargs):
 
     # Get registry details
     if bootstrap_config.get("autoload_registry_details") or ibm_build:
-        module_args.update(autoload_registry_details(ibm_build))
+        module_args.update(autoload_registry_details(ibm_build, image=image))
 
     # IBM Storage Ceph 9.1+ bootstrap requires explicit license acceptance.
     # Add IBM 9.1+ specific IBM license flags

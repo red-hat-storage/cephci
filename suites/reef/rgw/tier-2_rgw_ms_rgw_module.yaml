@@ -212,10 +212,13 @@ tests:
               - "ceph config set client.rgw rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:india.primary} rgw_verify_ssl False"
               - "ceph orch restart {service_name:india.primary}"
-              - "sudo yum install -y sshpass"
               - "sleep 120"
               - "ceph rgw realm tokens | jq -r '.[0].token' > /home/cephuser/realm-token.txt"
-              - "sshpass -p 'passwd' scp /home/cephuser/realm-token.txt root@{node_ip:ceph-sec#node6}:/tmp/realm-token.txt"
+            copy_file:
+              src: /home/cephuser/realm-token.txt
+              dest: /tmp/realm-token.txt
+              dest_cluster: ceph-sec
+              dest_node: node6
         ceph-sec:
           config:
             cephadm: false
@@ -245,7 +248,7 @@ tests:
               - "ceph orch restart {service_name:india.secondary}"
               - "sleep 120"
       desc: Setting up RGW multisite replication environment using rgw module with token
-      module: exec.py
+      module: copy_cephadm_root_ca_cert.py
       name: setup multisite with rgw module
       polarion-id: CEPH-10362
   - test:

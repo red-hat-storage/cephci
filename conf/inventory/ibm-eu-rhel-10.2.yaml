@@ -68,6 +68,11 @@ instance:
           insecure = true
 
           [[registry]]
+          location = "nginx-vm-01.qe.ceph.lab:5000/ibm-stage"
+          prefix = "preprod.icr.io"
+          insecure = true
+
+          [[registry]]
           location = "nginx-vm-01.qe.ceph.lab:5000/ibm-prod"
           prefix = "cp.icr.io"
           insecure = true

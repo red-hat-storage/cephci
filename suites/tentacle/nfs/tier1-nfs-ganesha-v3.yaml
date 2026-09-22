@@ -305,3 +305,110 @@ tests:
   #       clients: 2
   #       total_num_exports: 4
   #     comments: cthon tests for NFS ganesha - BZ-2418561
+
+  # cephadm NFS RADOS timeout (no client mount, not NFSv3-specific).
+  # Last block only: test does OSD pause/unpause.
+  # Unique service_id/ports vs 2049.
+  - test:
+      name: NFS rados timeout setup
+      module: test_nfs_rados_command_timeout.py
+      desc: Seed NFS and leave running (creates pool .nfs)
+      polarion-id: CEPH-83632973
+      abort-on-fail: true
+      config:
+        mode: setup
+        service_id: nfs-14352-seed
+        port: 62100
+        monitoring_port: 62600
+        cluster_qos_port: 63100
+
+  - test:
+      name: NFS rados timeout default 30s
+      module: test_nfs_rados_command_timeout.py
+      desc: get must be 30; pause; new NFS spec; health 30s
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-30
+        seed_service_id: nfs-14352-seed
+        port: 62110
+        monitoring_port: 62610
+        cluster_qos_port: 63110
+        expect: 30.0
+        get_ok:
+          - "30"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout set 60s
+      module: test_nfs_rados_command_timeout.py
+      desc: config set 60; pause; new NFS; health timeout 60s
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-60
+        seed_service_id: nfs-14352-seed
+        port: 62120
+        monitoring_port: 62620
+        cluster_qos_port: 63120
+        set_value: 60
+        expect: 60.0
+        get_ok:
+          - "60"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout floor 5s
+      module: test_nfs_rados_command_timeout.py
+      desc: config set 5; pause; new NFS; health timeout 5s
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-5
+        seed_service_id: nfs-14352-seed
+        port: 62130
+        monitoring_port: 62630
+        cluster_qos_port: 63130
+        set_value: 5
+        expect: 5.0
+        get_ok:
+          - "5"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout below 0s
+      module: test_nfs_rados_command_timeout.py
+      desc: set 0; get 0|1 not leftover 5; health 5s; unpause
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-0
+        seed_service_id: nfs-14352-seed
+        port: 62140
+        monitoring_port: 62640
+        cluster_qos_port: 63140
+        set_value: 0
+        expect: 5.0
+        get_ok:
+          - "0"
+          - "1"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout teardown
+      module: test_nfs_rados_command_timeout.py
+      desc: Unpause OSDs, set timeout 30, orch rm seed and stalls
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: teardown
+        service_id: nfs-14352-seed
+        stall_service_ids:
+          - nfs-14352-stall-30
+          - nfs-14352-stall-60
+          - nfs-14352-stall-5
+          - nfs-14352-stall-0

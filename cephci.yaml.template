@@ -41,6 +41,24 @@
 #  registry: <registry_url>
 #  username: <user_name>
 #  password: <user_password>
+#
+# IBM staging may use cp.stg.icr.io or preprod.icr.io. For tier-specific creds use:
+#
+# credentials:
+#   registry:
+#     ibm:
+#       stage:
+#         registry: cp.stg.icr.io
+#         username: <user_name>
+#         password: <user_password>
+#       preprod:
+#         registry: preprod.icr.io
+#         username: <user_name>
+#         password: <user_password>
+#       cp:
+#         registry: cp.icr.io
+#         username: <user_name>
+#         password: <user_password>
 
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn

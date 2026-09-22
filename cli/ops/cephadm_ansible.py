@@ -24,14 +24,16 @@ CEPH_CONF_PATH = "/etc/ceph/ceph.conf"
 CEPH_CLIENT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 
 
-def autoload_registry_details(ibm_build=False):
+def autoload_registry_details(ibm_build=False, image=None, registry=None):
     """Get registry details
 
     Args:
         ibm_build (bool): Tag for IBM build
+        image (str): Container image reference used to select registry credentials
+        registry (str): Registry host/URL used to select registry credentials
     """
     # Get registry details
-    registry_details = get_registry_details(ibm_build)
+    registry_details = get_registry_details(ibm_build, registry=registry, image=image)
 
     # Update module arguments
     args = {}

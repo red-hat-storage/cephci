@@ -3,7 +3,7 @@ CEPH-83575375 and CEPH-83575376
 
 Test Case Flow:
 1. Configure snapshot based mirroring between two clusters
-2. Add mirror snapshot schedule at cluster and pool level
+2. Add 1m mirror snapshot schedule at cluster and pool level
 3. create some images and wait for them to mirror to secondary
 4. Check that mirror snapshots are created for each images
 5. Create a snapshot mirror schedule and list the snapshots
@@ -16,6 +16,9 @@ from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
 
 log = Log(__name__)
+
+# Default snapshot schedule interval used when suite config does not override it.
+DEFAULT_SNAPSHOT_SCHEDULE_INTERVAL = "1m"
 
 
 def test_snapshot_schedule(rbd_mirror, pool_type, **kw):
@@ -50,54 +53,95 @@ def test_snapshot_schedule(rbd_mirror, pool_type, **kw):
         imagename = config[pool_type]["image"]
         imagespec = poolname + "/" + imagename
 
-        # check if snapshots are created for image created above
-        snapshot_schedule_level = config.get("snapshot_schedule_level")
-        if not snapshot_schedule_level or snapshot_schedule_level == "cluster":
-            mirror1.mirror_snapshot_schedule_add()
-            mirror1.mirror_snapshot_schedule_add(interval="1h")
+        snapshot_schedule_level = config.get("snapshot_schedule_level") or "cluster"
+        snap_interval = config.get(
+            "snapshot_schedule_interval", DEFAULT_SNAPSHOT_SCHEDULE_INTERVAL
+        )
+        interval_min = int(str(snap_interval).strip()[:-1])
+        log.info(
+            "Using %s snapshot schedule at %s level for image %s",
+            snap_interval,
+            snapshot_schedule_level,
+            imagespec,
+        )
+
+        if snapshot_schedule_level == "cluster":
+            mirror1.mirror_snapshot_schedule_add(interval=snap_interval)
         elif snapshot_schedule_level == "pool":
-            mirror1.mirror_snapshot_schedule_add(poolname=poolname)
-            mirror1.mirror_snapshot_schedule_add(poolname=poolname, interval="1h")
-        else:
-            mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename)
             mirror1.mirror_snapshot_schedule_add(
-                poolname=poolname, imagename=imagename, interval="1h"
+                poolname=poolname, interval=snap_interval
             )
-        # this is the verification of interval 1h
-        mirror1.verify_snapshot_schedule(imagespec, interval=40)
+        else:
+            mirror1.mirror_snapshot_schedule_add(
+                poolname=poolname, imagename=imagename, interval=snap_interval
+            )
+        log.info(
+            "Added %s snapshot schedule at %s level for %s",
+            snap_interval,
+            snapshot_schedule_level,
+            imagespec,
+        )
+
+        log.info(
+            "Verifying %s snapshot schedule for %s (wait %s seconds)",
+            snap_interval,
+            imagespec,
+            interval_min * 120,
+        )
+        mirror1.verify_snapshot_schedule(imagespec, interval=interval_min)
+        log.info("Verified %s snapshot schedule for %s", snap_interval, imagespec)
         mirror1.mirror_snapshot_schedule_list(poolname=poolname, imagename=imagename)
         mirror1.mirror_snapshot_schedule_status(poolname=poolname, imagename=imagename)
 
         # create one more image in the pool and check if snapshots are created
         imagename_2 = mirror1.random_string() + "_tier_1_rbd_mirror_image"
         imagespec_2 = poolname + "/" + imagename_2
+        log.info(
+            "Creating additional image %s to verify %s snapshot schedule",
+            imagespec_2,
+            snap_interval,
+        )
         mirror1.create_image(imagespec=imagespec_2, size=config.get("imagesize"))
         mirror1.enable_mirror_image(poolname, imagename_2, "snapshot")
         if snapshot_schedule_level == "image":
             mirror1.mirror_snapshot_schedule_add(
-                poolname=poolname, imagename=imagename_2
+                poolname=poolname, imagename=imagename_2, interval=snap_interval
             )
-        mirror1.verify_snapshot_schedule(imagespec_2)
+            log.info(
+                "Added %s snapshot schedule at image level for %s",
+                snap_interval,
+                imagespec_2,
+            )
+        log.info(
+            "Verifying %s snapshot schedule for %s (wait %s seconds)",
+            snap_interval,
+            imagespec_2,
+            interval_min * 120,
+        )
+        mirror1.verify_snapshot_schedule(imagespec_2, interval=interval_min)
+        log.info("Verified %s snapshot schedule for %s", snap_interval, imagespec_2)
         mirror1.mirror_snapshot_schedule_list(poolname=poolname, imagename=imagename_2)
         mirror1.mirror_snapshot_schedule_status(
             poolname=poolname, imagename=imagename_2
         )
 
         # snapshot schedule should be removed at the level (cluster, pool, image) at which it was added
-        if not snapshot_schedule_level or snapshot_schedule_level == "cluster":
-            mirror1.mirror_snapshot_schedule_remove(interval="1h")
-            mirror1.mirror_snapshot_schedule_remove()
+        log.info(
+            "Removing %s snapshot schedule at %s level",
+            snap_interval,
+            snapshot_schedule_level,
+        )
+        if snapshot_schedule_level == "cluster":
+            mirror1.mirror_snapshot_schedule_remove(interval=snap_interval)
             mirror1.verify_snapshot_schedule_remove()
         elif snapshot_schedule_level == "pool":
-            mirror1.mirror_snapshot_schedule_remove(poolname=poolname, interval="1h")
-            mirror1.mirror_snapshot_schedule_remove(poolname=poolname)
+            mirror1.mirror_snapshot_schedule_remove(
+                poolname=poolname, interval=snap_interval
+            )
             mirror1.verify_snapshot_schedule_remove(poolname=poolname)
         else:
             mirror1.mirror_snapshot_schedule_remove(
-                poolname=poolname, imagename=imagename, interval="1h"
-            )
-            mirror1.mirror_snapshot_schedule_remove(
-                poolname=poolname, imagename=imagename
+                poolname=poolname, imagename=imagename, interval=snap_interval
             )
             mirror1.verify_snapshot_schedule_remove(
                 poolname=poolname, imagename=imagename
@@ -108,6 +152,11 @@ def test_snapshot_schedule(rbd_mirror, pool_type, **kw):
             mirror1.verify_snapshot_schedule_remove(
                 poolname=poolname, imagename=imagename_2
             )
+        log.info(
+            "Removed %s snapshot schedule at %s level",
+            snap_interval,
+            snapshot_schedule_level,
+        )
 
         return 0
 
@@ -149,8 +198,8 @@ def run(**kw):
         int: The return value. 0 for success, 1 otherwise
     """
     log.info(
-        "Starting CEPH-83575375 and CEPH-83575376"
-        "Create snapshot based RBD mirror at cluster and pool level and verify the same"
+        "Starting CEPH-83575375 and CEPH-83575376: "
+        "Create snapshot based RBD mirror at cluster and pool level with 1m interval and verify"
     )
 
     mirror_obj = rbd_mirror_config(**kw)
