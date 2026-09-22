@@ -61,15 +61,13 @@ def run(ceph_cluster, **kw):
             mds_ls = fs_util.get_active_mdss(client1, fs_name=fs_name)
             upgrade_done = False
             for mds in mds_ls:
+                # Recheck before each fail. The status read above only covers
+                # the start of this pass; the upgrade can finish during recovery.
                 out, rc = client1.exec_command(
                     cmd="ceph orch upgrade status", sudo=True
                 )
                 if UPGRADE_IDLE_MSG in out:
                     log.info("Upgrade Complete...")
-                    upgrade_done = True
-                    break
-                if not is_upgrade_in_progress(out):
-                    log.info("Upgrade not in progress; stopping MDS failover")
                     upgrade_done = True
                     break
                 out, rc = retry_exec_command(

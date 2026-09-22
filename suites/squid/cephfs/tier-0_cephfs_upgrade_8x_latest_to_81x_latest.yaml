@@ -29,6 +29,7 @@ tests:
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
+                # 8x→8.1x pre-req: monitoring stack and mgr prometheus both bind 9283.
                 skip-monitoring-stack: true
               base_cmd_args:
                 verbose: true
