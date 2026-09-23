@@ -1,3 +1,14 @@
+"""Cephadm host management tests (DMFG).
+
+Maintenance enter/exit verification is overridden here so DMFG-specific
+podman checks (e.g. excluding systemd-managed cephadm agent) do not change
+the shared ``ceph.ceph_admin.maintenance`` library used by other FGs.
+"""
+
+from json import loads
+from time import sleep
+from types import MethodType
+
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.host import Host
@@ -7,6 +18,85 @@ log = Log(__name__)
 
 
 CLUSTER_STATE = ["ceph orch host ls -f yaml"]
+
+
+def _podman_container_names(containers):
+    """Normalize podman ``Names`` field (list or string) to a flat name list."""
+    names = []
+    for container in containers:
+        value = container.get("Names")
+        if isinstance(value, list):
+            if value:
+                names.append(value[0])
+        elif value:
+            names.append(value)
+    return names
+
+
+def check_maintenance_status(self, op, node) -> bool:
+    """DMFG verification of host maintenance enter/exit via orch + podman.
+
+    Same contract as ``MaintenanceMixin.check_maintenance_status``, but:
+    - excludes ``daemon_type == "agent"`` (systemd, not a ceph-* container)
+    - uses a fixed retry budget so exit can wait for containers to return
+    - normalizes podman Names and casts daemon_id to str
+    """
+    status = self.get_host_status(node.hostname)
+    out, _ = self.shell(args=["ceph", "fsid"])
+    fsid = out.strip()
+    config = {
+        "command": "ps",
+        "base_cmd_args": {"format": "json"},
+        "args": {"hostname": node.hostname},
+    }
+    out, _ = self.ps(config)
+    daemons = loads(out)
+    # cephadm "agent" runs via systemd, not as a ceph-<fsid>-agent-* container.
+    daemon_names = [
+        f"ceph-{fsid}-{daemon['daemon_type']}-{str(daemon['daemon_id']).replace('.', '-')}"
+        for daemon in daemons
+        if daemon.get("daemon_type") != "agent"
+    ]
+    if not daemon_names:
+        return op == "exit" and status != "maintenance"
+
+    retry_count = 20
+    count = 0
+
+    if op == "enter" and status == "maintenance":
+        active_daemon = True
+        while count < retry_count:
+            sleep(30)
+            stdout, _ = node.exec_command(sudo=True, cmd="podman ps --format json")
+            container_out = stdout.replace("\n", "")
+            containers = loads(container_out) if container_out else list()
+            if not containers:
+                active_daemon = False
+                break
+            container_names = _podman_container_names(containers)
+            if any(daemon in container_names for daemon in daemon_names):
+                count += 1
+            else:
+                active_daemon = False
+                break
+        return not bool(active_daemon)
+
+    if op == "exit" and status != "maintenance":
+        daemons_active = False
+        while count < retry_count:
+            sleep(30)
+            stdout, _ = node.exec_command(sudo=True, cmd="podman ps --format json")
+            container_out = stdout.replace("\n", "")
+            containers = loads(container_out) if container_out else list()
+            if containers:
+                container_names = _podman_container_names(containers)
+                if all(daemon in container_names for daemon in daemon_names):
+                    daemons_active = True
+                    break
+            count += 1
+        return daemons_active
+
+    return False
 
 
 def run(ceph_cluster, **kw):
@@ -58,6 +148,9 @@ def run(ceph_cluster, **kw):
     log.info("Executing %s %s" % (service, command))
 
     host = Host(cluster=ceph_cluster, **config)
+    if command in ("enter", "exit"):
+        host.check_maintenance_status = MethodType(check_maintenance_status, host)
+
     try:
         method = fetch_method(host, command)
         method(config)
