@@ -1,6 +1,6 @@
 import json
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from time import sleep
+from time import monotonic, sleep
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
@@ -28,12 +28,22 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def _wait_futures_with_health_check(futures, io_monitor=None, poll_timeout_s=2.0):
+def _wait_futures_with_health_check(
+    futures, io_monitor=None, poll_timeout_s=2.0, total_timeout_s=3600
+):
     """Wait for futures while polling the I/O health monitor for critical failures."""
     pending = set(futures)
+    deadline = monotonic() + total_timeout_s
     while pending:
         if io_monitor is not None:
             io_monitor.raise_if_unhealthy()
+        if monotonic() >= deadline:
+            for future in list(pending):
+                future.cancel()
+            raise TimeoutError(
+                f"NFS I/O operations did not complete within {total_timeout_s}s "
+                f"({len(pending)} task(s) still pending)"
+            )
         done, pending = wait(
             pending,
             timeout=poll_timeout_s,
@@ -295,12 +305,22 @@ def perform_io_operations_in_loop(
     file_name = "created_during_upgrade_file"
     renamed_file_name = "re_renamed_during_upgrade_file"
 
+    def _run_io_batch(submit):
+        """Run one IO batch and return even if a worker is still blocked in NFS."""
+        executor = ThreadPoolExecutor(max_workers=None)
+        futures = []
+        try:
+            submit(executor, futures)
+            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+
     def _process_single_cluster(mount_dict):
         """Helper function to process IO for a single cluster's mounts"""
         # Create files
         log.info(f"Creating {file_count} files on each mount point")
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = []
+
+        def _submit_creates(executor, futures):
             for client in clients:
                 for mount in mount_dict[client]["mount"]:
                     for i in range(file_count):
@@ -313,13 +333,14 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
+
+        _run_io_batch(_submit_creates)
         log.info("File creation completed")
 
         # Write to files using dd
         log.info(f"Writing {dd_command_size_in_M}M to each file")
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = []
+
+        def _submit_writes(executor, futures):
             for client in clients:
                 for mount in mount_dict[client]["mount"]:
                     for i in range(file_count):
@@ -333,13 +354,14 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
+
+        _run_io_batch(_submit_writes)
         log.info("Write operations completed")
 
         # Read from files using dd
         log.info("Reading back written files")
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = []
+
+        def _submit_reads(executor, futures):
             for client in clients:
                 for mount in mount_dict[client]["mount"]:
                     for i in range(file_count):
@@ -353,13 +375,14 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
+
+        _run_io_batch(_submit_reads)
         log.info("Read operations completed")
 
         # Rename files
         log.info("Renaming all files")
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = []
+
+        def _submit_renames(executor, futures):
             for client in clients:
                 for mount in mount_dict[client]["mount"]:
                     for i in range(file_count):
@@ -373,13 +396,14 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
+
+        _run_io_batch(_submit_renames)
         log.info("Rename operations completed")
 
         # Delete files
         log.info("Deleting all files")
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = []
+
+        def _submit_deletes(executor, futures):
             for client in clients:
                 for mount in mount_dict[client]["mount"]:
                     for i in range(file_count):
@@ -392,7 +416,8 @@ def perform_io_operations_in_loop(
                                 sudo,
                             )
                         )
-            _wait_futures_with_health_check(futures, io_monitor=io_monitor)
+
+        _run_io_batch(_submit_deletes)
         log.info("Delete operations completed")
 
     if multicluster:

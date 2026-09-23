@@ -205,6 +205,9 @@ tests:
   - test:
       name: Upgrade along with IOs for nfs
       module: test_parallel.py
+      config:
+        max_time: 14400
+        cancel_pending: true
       desc: Upgrade along with IOs for nfs in parallel
       parallel:
         - test:

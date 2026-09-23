@@ -631,7 +631,7 @@ class NfsIoHealthMonitor:
                 log.error(summary, *args)
             else:
                 log.info(summary, *args)
-            self._log_client_heartbeat_counts()
+        self._log_client_heartbeat_counts()
 
     def _log_client_heartbeat_counts(self) -> None:
         """Log per-client OK heartbeat totals and which client recorded the most."""
