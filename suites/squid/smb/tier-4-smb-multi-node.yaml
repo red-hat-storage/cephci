@@ -1,0 +1,101 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node13
+        install_packages:
+          # - ceph-common
+          - samba-client
+          - cifs-utils
+          - fio
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Grow SMB cluster from 3 to 12 nodes
+      desc: Check SMB access, CIFS mounts, and fio I/O after each three-node scale-up
+      module: smb_multi_node_scale.py
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        smb_node_groups:
+          - [node1, node2, node3]
+          - [node4, node5, node6]
+          - [node7, node8, node9]
+          - [node10, node11, node12]
+        fio:
+          size: 16m
+          runtime: 10
+      destroy-cluster: false
+      abort-on-fail: true
