@@ -47,23 +47,8 @@ log = Log(__name__)
 
 CephNode = Any
 
-LOG_BLOCK_START = re.compile(r"^\s*LOG\s*\{", re.M)
 LOG_BLOCK_PATTERN = re.compile(r"LOG\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.S)
 
-RE_PARSE_ERROR = re.compile(
-    r"(parse|syntax|invalid|unknown|error|failed|DEBUGX|malformed)",
-    re.I,
-)
-RE_COMPONENT_DEBUG = re.compile(
-    r"(?:FSAL|NFS[_ ]?V?4|COMPONENT_FSAL|COMPONENT_NFS_V4)"
-    r".{0,120}?(?:FULL_DEBUG|MID_DEBUG|NIV_DEBUG|\bDEBUG\b|\bDBG\b)",
-    re.I,
-)
-RE_COMPONENT_INFO = re.compile(
-    r"(?:FSAL|NFS[_ ]?V?4|COMPONENT_FSAL|COMPONENT_NFS_V4)"
-    r".{0,120}?(?:\bINFO\b|\bEVENT\b|\bNIV_EVENT\b)",
-    re.I,
-)
 # Conditional-logging markers used by TC-CL-CONFIG-01 pass/fail criteria.
 RE_FSAL_F_DBG = re.compile(r"FSAL\s*:F_DBG", re.I)
 RE_FSAL_FULL_DEBUG = re.compile(r"FSAL\s*:FULL_DEBUG", re.I)
@@ -129,16 +114,6 @@ def build_log_facility_block(destination: str = "/var/log/ganesha.log") -> str:
         "        name = FILE;\n"
         f'        destination = "{destination}";\n'
         "        enable = active;\n"
-        "    }\n"
-    )
-
-
-def build_global_components_block(level: str = "EVENT") -> str:
-    return (
-        "    Components {\n"
-        f"        ALL = {level};\n"
-        f"        FSAL = {level};\n"
-        f"        NFS_V4 = {level};\n"
         "    }\n"
     )
 
@@ -324,8 +299,11 @@ def reload_ganesha(nfs_node: CephNode, container_id: str) -> None:
         '[ -n "$pid" ] && kill -HUP "$pid" || exit 1\''
     )
     out, err = nfs_node.exec_command(sudo=True, cmd=cmd, check_ec=False, timeout=60)
-    if err and "exit" in str(err).lower():
-        raise OperationFailedError(f"Ganesha reload failed: {err or out}")
+    rc = getattr(nfs_node, "exit_status", None)
+    if rc not in (0, None) or (err and "exit" in str(err).lower()):
+        raise OperationFailedError(
+            "Ganesha reload failed: rc=%s err=%s out=%s" % (rc, err, out)
+        )
     log.info("Sent SIGHUP to ganesha.nfsd in container %s", container_id)
     time.sleep(3)
 
@@ -370,15 +348,6 @@ def count_component_debug_lines(log_text: str, component: str) -> int:
     pattern = re.compile(
         rf"(?:{re.escape(component)}|COMPONENT_{re.escape(component)})"
         rf".{{0,160}}?(?:FULL_DEBUG|MID_DEBUG|NIV_DEBUG|\bDEBUG\b|\bDBG\b)",
-        re.I,
-    )
-    return len(pattern.findall(log_text or ""))
-
-
-def count_component_info_lines(log_text: str, component: str) -> int:
-    pattern = re.compile(
-        rf"(?:{re.escape(component)}|COMPONENT_{re.escape(component)})"
-        rf".{{0,160}}?(?:\bINFO\b|\bEVENT\b|\bNIV_EVENT\b)",
         re.I,
     )
     return len(pattern.findall(log_text or ""))
@@ -664,18 +633,16 @@ def _safe_umount(client: CephNode, mount_path: str) -> None:
 def run_light_io(client: CephNode, mount_path: str, dd_count: int = 100) -> None:
     """Run ls -R and dd write/read workload on a mount."""
     mp = mount_path.rstrip("/")
-    client.exec_command(sudo=True, cmd=f"ls -R {mp} >/dev/null 2>&1", check_ec=False)
     test_file = f"{mp}/cl_testfile.dat"
+    client.exec_command(sudo=True, cmd=f"ls -R {mp} >/dev/null 2>&1", timeout=120)
     client.exec_command(
         sudo=True,
         cmd=f"dd if=/dev/zero of={test_file} bs=1M count={int(dd_count)} conv=fsync",
-        check_ec=False,
         timeout=600,
     )
     client.exec_command(
         sudo=True,
         cmd=f"dd if={test_file} of=/dev/null bs=1M",
-        check_ec=False,
         timeout=300,
     )
 
@@ -826,6 +793,19 @@ def redeploy_and_wait(
     return get_nfs_daemon_container(cephadm, nfs_name)
 
 
+def _redeploy_refresh(ctx) -> str:
+    """Redeploy NFS and refresh ctx container_id so later ops use the live container."""
+    container_id, _, _ = redeploy_and_wait(
+        ctx["cephadm"],
+        ctx["installer"],
+        ctx["nfs_name"],
+        ctx["redeploy_wait"],
+        ctx["service_wait_timeout"],
+    )
+    ctx["container_id"] = container_id
+    return container_id
+
+
 # --- test operations ---
 
 OP_TC_CL_CONFIG_01 = "tc_cl_config_01"
@@ -965,13 +945,7 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             components={"FSAL": "INFO", "NFS_V4": "INFO"},
         )
         apply_conditional_log_template(ctx["cmd_host"], baseline_block)
-        container_id, _, _ = redeploy_and_wait(
-            ctx["cephadm"],
-            ctx["installer"],
-            ctx["nfs_name"],
-            ctx["redeploy_wait"],
-            ctx["service_wait_timeout"],
-        )
+        container_id = _redeploy_refresh(ctx)
         reload_ganesha(ctx["nfs_node"], container_id)
 
         def _part_a_io():
@@ -1002,13 +976,7 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             clients=[matched_ip],
         )
         apply_conditional_log_template(ctx["cmd_host"], conditional_block)
-        container_id, _, _ = redeploy_and_wait(
-            ctx["cephadm"],
-            ctx["installer"],
-            ctx["nfs_name"],
-            ctx["redeploy_wait"],
-            ctx["service_wait_timeout"],
-        )
+        container_id = _redeploy_refresh(ctx)
         reload_ganesha(ctx["nfs_node"], container_id)
 
         def _matched_io():
@@ -1079,13 +1047,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             components={"FSAL": "INFO", "NFS_V4": "INFO"},
         )
         apply_conditional_log_template(ctx["cmd_host"], baseline_block)
-        container_id, _, _ = redeploy_and_wait(
-            ctx["cephadm"],
-            ctx["installer"],
-            ctx["nfs_name"],
-            ctx["redeploy_wait"],
-            ctx["service_wait_timeout"],
-        )
+        container_id = _redeploy_refresh(ctx)
         reload_ganesha(ctx["nfs_node"], container_id)
 
         # Mount matching export on both clients for baseline I/O.
@@ -1136,13 +1098,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             clients=[matched_ip],
         )
         apply_conditional_log_template(ctx["cmd_host"], conditional_block)
-        container_id, _, _ = redeploy_and_wait(
-            ctx["cephadm"],
-            ctx["installer"],
-            ctx["nfs_name"],
-            ctx["redeploy_wait"],
-            ctx["service_wait_timeout"],
-        )
+        container_id = _redeploy_refresh(ctx)
         # Capture confirmation of policy acceptance around reload.
         policy_log = capture_ganesha_log_window(
             ctx["nfs_node"],
@@ -1304,13 +1260,7 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
             log.info("=== TC-CL-CONFIG-03 %s ===", case_name)
             try:
                 apply_conditional_log_template(ctx["cmd_host"], case["log_block"])
-                container_id, _, _ = redeploy_and_wait(
-                    ctx["cephadm"],
-                    ctx["installer"],
-                    ctx["nfs_name"],
-                    ctx["redeploy_wait"],
-                    ctx["service_wait_timeout"],
-                )
+                container_id = _redeploy_refresh(ctx)
                 reload_ganesha(ctx["nfs_node"], container_id)
                 # Capture parse/reload WARNs before capture_ganesha_log_window
                 # truncates the file for the I/O window.
@@ -1383,13 +1333,7 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
                 components={"FSAL": "INFO", "NFS_V4": "INFO"},
             ),
         )
-        redeploy_and_wait(
-            ctx["cephadm"],
-            ctx["installer"],
-            ctx["nfs_name"],
-            ctx["redeploy_wait"],
-            ctx["service_wait_timeout"],
-        )
+        container_id = _redeploy_refresh(ctx)
 
         if failures:
             return result.mark(
@@ -1539,13 +1483,7 @@ def _run_tc_cl_dynamic_02(ctx) -> TestCaseResult:
             clients=[matched_ip],
         )
         apply_conditional_log_template(ctx["cmd_host"], base_block)
-        redeploy_and_wait(
-            ctx["cephadm"],
-            ctx["installer"],
-            ctx["nfs_name"],
-            ctx["redeploy_wait"],
-            ctx["service_wait_timeout"],
-        )
+        container_id = _redeploy_refresh(ctx)
 
         ganesha_mgr(
             ctx["nfs_node"],
@@ -1683,7 +1621,11 @@ def run(ceph_cluster, **kw):
 
         if not report.all_passed():
             failed = [r.tc_id for r in report.results if not r.passed]
-            raise OperationFailedError(f"Conditional logging failures: {failed}")
+            raise OperationFailedError("Conditional logging failures: %s" % failed)
+        log.info(
+            "TEST PASSED - conditional logging operations OK: %s",
+            ", ".join(r.tc_id for r in report.results),
+        )
         return 0
 
     except Exception as err:
@@ -1708,9 +1650,11 @@ def run(ceph_cluster, **kw):
         if created_cluster and config.get("cleanup_cluster_on_exit", False):
             try:
                 cleanup_cluster(
-                    clients[0],
-                    nfs_name,
-                    fs_name=config.get("fs_name", "cephfs"),
+                    clients=[clients[0]],
+                    nfs_mount=config.get("nfs_mount", "/mnt/nfs_cl"),
+                    nfs_name=nfs_name,
+                    nfs_export=config.get("bootstrap_export", "/export_cl_bootstrap"),
+                    nfs_nodes=nfs_nodes,
                 )
             except Exception as cleanup_err:
                 log.error("Cluster cleanup failed: %s", cleanup_err)
