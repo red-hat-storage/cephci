@@ -11,12 +11,40 @@ from ceph.rados.rados_bench import RadosBench
 from ceph.utils import is_legacy_container_present, mgr_accept_license, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
+from utility.utils import resolve_registry_host, resolve_registry_login
 
 log = Log(__name__)
 
 
 class UpgradeFailure(Exception):
     pass
+
+
+def _login_upgrade_registry(orch, ceph_cluster, config):
+    """
+    Authenticate against the upgrade target registry before pull/upgrade-check.
+
+    Prefer --custom-config upgrade-registry=<host>; else the container image host.
+    Credentials come from the host-keyed ``registries:`` section in ~/.cephci.yaml.
+    """
+    overrides = config.get("overrides") or {}
+    registry_host = resolve_registry_host(
+        overrides=overrides,
+        image=config.get("container_image"),
+        key="upgrade-registry",
+    )
+    if not registry_host:
+        log.warning("No upgrade registry host resolved; skipping registry login")
+        return
+
+    reg_args = resolve_registry_login(registry_host)
+    log.info(
+        "Logging into upgrade registry %s (image=%s)",
+        registry_host,
+        config.get("container_image"),
+    )
+    for node in ceph_cluster.get_nodes(ignore="client"):
+        orch.registry_login(node=node, args=reg_args)
 
 
 def run(ceph_cluster, **kwargs) -> int:
@@ -113,6 +141,9 @@ def run(ceph_cluster, **kwargs) -> int:
 
         # Update cephadm rpms
         orch.install(**{"upgrade": True})
+
+        # Authenticate against upgrade image registry (host-keyed registries:)
+        _login_upgrade_registry(orch, ceph_cluster, config)
 
         # Check service versions vs available and target containers
         orch.upgrade_check(image=config.get("container_image"))

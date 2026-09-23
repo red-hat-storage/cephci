@@ -29,8 +29,9 @@
 #  username: <user_name>
 #  password: <user_password>
 
-# Provide container registry details for redhat and ibm images. Registry keyword should
-# start with 'rh' for redhat and 'ibm' for IBM builds
+# Provide container registry details (DEPRECATED for login — use top-level
+# registries: host keys; see "Container Registry information" below).
+# Flat keys retained only for older tooling that has not migrated yet.
 
 # rh_registry_credentials:
 #  registry: <registry_url>
@@ -41,24 +42,6 @@
 #  registry: <registry_url>
 #  username: <user_name>
 #  password: <user_password>
-#
-# IBM staging may use cp.stg.icr.io or preprod.icr.io. For tier-specific creds use:
-#
-# credentials:
-#   registry:
-#     ibm:
-#       stage:
-#         registry: cp.stg.icr.io
-#         username: <user_name>
-#         password: <user_password>
-#       preprod:
-#         registry: preprod.icr.io
-#         username: <user_name>
-#         password: <user_password>
-#       cp:
-#         registry: cp.icr.io
-#         username: <user_name>
-#         password: <user_password>
 
 # Provide email address(es) in comma-seperated values
 # Example., address: email1, email2, ...... ,emailn
@@ -116,13 +99,39 @@ root-ca-location: <URL to base location of rootCA cert>
 #         - <base-os>
 
 
-# Container Registry information
-# ===============================
+# Container Registry information (RHCEPHQE-16003 — host-keyed)
+# ============================================================
+# Login credentials are selected by registry hostname, not product/build type.
+# Pass the host via:
+#   --custom-config bootstrap-registry=<host>
+#   --custom-config upgrade-registry=<host>
+#   --custom-config registries=<host1>,<host2>
+# If unset, bootstrap/upgrade use the container image hostname as the key.
+#
 # registries:
-#   regsitry-1:
-#     user: user1
-#     password: password1
-#   registry-2:
-#     user: user2
-#     password: password2
-#   ...
+#   cp.icr.io:
+#     production: true
+#     product: ibm
+#     username: <user_name>
+#     password: <user_password>
+#   cp.stg.icr.io:
+#     product: ibm
+#     username: <user_name>
+#     password: <user_password>
+#   preprod.icr.io:
+#     product: ibm
+#     username: <user_name>
+#     password: <user_password>
+#   registry.redhat.io:
+#     production: true
+#     product: rh
+#     username: <user_name>
+#     password: <user_password>
+#   registry.stage.redhat.io:
+#     product: rh
+#     username: <user_name>
+#     password: <user_password>
+#
+# Deprecated for login (do not use for new configs):
+#   credentials.registry.<ibm|rh>.<cdn|stage|preprod|cp>
+#   rh_registry_credentials / ibm_registry_credentials / cdn_credentials

@@ -19,7 +19,12 @@ from cli.utilities.utils import (
     set_service_state,
 )
 from utility.log import Log
-from utility.utils import get_cephci_config, is_unsecured_registry
+from utility.utils import (
+    get_cephci_config,
+    is_unsecured_registry,
+    parse_custom_config_list,
+    resolve_registry_login,
+)
 
 log = Log(__name__)
 
@@ -462,9 +467,15 @@ def enable_rhel_eus_rpms(ceph, distro_ver):
 
 def registry_login(ceph, distro_ver, test_data=None, cloud_type="openstack"):
     """
-    Login to the given Container registries provided in the configuration.
+    Login to container registries listed for this run.
 
-    In this method, docker or podman is installed based on OS.
+    Hosts come from --custom-config keys:
+      - bootstrap-registry
+      - upgrade-registry
+      - registries (comma-separated list)
+
+    Credentials are loaded from the host-keyed ``registries:`` section in
+    ~/.cephci.yaml. No unconditional login to registry.redhat.io is performed.
     """
     container = "podman"
     if distro_ver.startswith("7"):
@@ -477,30 +488,41 @@ def registry_login(ceph, distro_ver, test_data=None, cloud_type="openstack"):
     if container == "docker":
         ceph.exec_command(cmd="sudo systemctl restart docker", long_running=True)
 
-    config = get_cephci_config()
-    registries = [
-        {
-            "registry": "registry.redhat.io",
-            "user": config["cdn_credentials"]["username"],
-            "passwd": config["cdn_credentials"]["password"],
-        }
-    ]
+    hosts = set()
+    custom_dict = {}
+    if test_data:
+        custom_dict = test_data.get("custom_config_dict") or {}
+        if not custom_dict and test_data.get("custom-config"):
+            custom_dict = parse_custom_config_list(test_data.get("custom-config"))
 
-    if (
-        config.get("registry_credentials")
-        and config["registry_credentials"]["registry"] != "registry.redhat.io"
-    ):
-        registries.append(
-            {
-                "registry": config["registry_credentials"]["registry"],
-                "user": config["registry_credentials"]["username"],
-                "passwd": config["registry_credentials"]["password"],
-            }
+    for key in ("bootstrap-registry", "upgrade-registry"):
+        if custom_dict.get(key):
+            hosts.add(custom_dict[key].strip())
+    if custom_dict.get("registries"):
+        for host in str(custom_dict["registries"]).split(","):
+            host = host.strip()
+            if host:
+                hosts.add(host)
+
+    if not hosts:
+        log.info(
+            "No bootstrap-registry / upgrade-registry / registries custom-config; "
+            "skipping install_prereq registry login"
         )
+        return
+
     auths = {}
-    for r in registries:
-        b64_auth = base64.b64encode(f"{r['user']}:{r['passwd']}".encode("ascii"))
-        auths[r["registry"]] = {"auth": b64_auth.decode("utf-8")}
+    for host in sorted(hosts):
+        try:
+            reg_args = resolve_registry_login(host)
+        except KeyError as err:
+            raise ConfigError(str(err)) from err
+        user = reg_args["registry-username"]
+        passwd = reg_args["registry-password"]
+        b64_auth = base64.b64encode(f"{user}:{passwd}".encode("ascii"))
+        auths[host] = {"auth": b64_auth.decode("utf-8")}
+        log.info("Prepared auth for registry host %s", host)
+
     auths_dict = {"auths": auths}
     ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
     ceph.exec_command(cmd="mkdir -p ~/.docker")
