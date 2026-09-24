@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from looseversion import LooseVersion
 
+from ceph.ceph import CommandFailed, SocketTimeoutException
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.cephfs_subvol_metric_utils import MDSMetricsHelper
@@ -27,25 +28,159 @@ def _get_unique_mds_hosts(ceph_cluster) -> List[str]:
 
 
 def _wait_for_mds_daemon_count(
-    client, fs_name: str, expected_count: int, timeout: int = 240
+    client,
+    fs_name: str,
+    expected_count: int,
+    timeout: int = 240,
+    match: str = "gte",
 ):
+    """
+    Wait until orch MDS daemons for fs_name satisfy expected_count.
+
+    Only daemons whose id starts with ``{fs_name}.`` and whose
+    ``status_desc`` is ``running`` are counted.
+
+    ``match`` exists because a single ``>= expected_count`` check is wrong
+    for scale-down. After ``ceph orch apply`` shrinks placement (e.g. 3
+    hosts -> 2), 3 daemons may still be running. ``3 >= 2`` would return
+    immediately, the next apply (2 -> 3) would race orch, and add would
+    time out waiting for 3 running MDS.
+
+    Args:
+        client: Ceph client node used to run ``ceph orch ps``.
+        fs_name: Filesystem whose MDS daemons to count.
+        expected_count: Target number of running MDS daemons.
+        timeout: Seconds to poll before giving up (default 240).
+        match: How to compare the running count to expected_count.
+            ``gte`` — ``running >= expected_count``. Use for setup and
+            scale-up: "at least N are up" (placing 3 hosts but only
+            requiring 2 is enough to continue).
+            ``eq`` — ``running == expected_count``. Use after remove so
+            shrink has finished before add, and after add so the count
+            is back to the original placement.
+
+    Returns:
+        0 if the condition matched within timeout, else 1.
+    """
+    if match not in ("gte", "eq"):
+        raise ValueError(f"match must be 'gte' or 'eq', got {match!r}")
+
     end_time = time.time() + timeout
+    last_fs_daemons = []
+    last_running = 0
     while time.time() < end_time:
-        out, _ = client.exec_command(
-            sudo=True,
-            cmd="ceph orch ps --daemon_type=mds --format json",
-            check_ec=False,
-        )
-        daemons = json.loads(out)
-        running = [
-            d
-            for d in daemons
-            if d.get("daemon_id", "").startswith(f"{fs_name}.")
-            and d.get("status_desc") == "running"
+        try:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd="ceph orch ps --daemon_type=mds --format json",
+                check_ec=False,
+                timeout=60,
+            )
+        except (CommandFailed, SocketTimeoutException):
+            log.info("ceph orch ps MDS list timed out or failed; retrying")
+            out = ""
+        try:
+            daemons = json.loads(out) if out else []
+        except json.JSONDecodeError:
+            daemons = []
+        if not isinstance(daemons, list):
+            daemons = []
+        fs_daemons = [
+            d for d in daemons if d.get("daemon_id", "").startswith(f"{fs_name}.")
         ]
-        if len(running) >= expected_count:
+        running = [d for d in fs_daemons if d.get("status_desc") == "running"]
+        last_fs_daemons = fs_daemons
+        last_running = len(running)
+        matched = (
+            last_running >= expected_count
+            if match == "gte"
+            else last_running == expected_count
+        )
+        if matched:
+            log.info(
+                "MDS count wait matched: match=%s expected=%s running=%s",
+                match,
+                expected_count,
+                last_running,
+            )
             return 0
+        log.info(
+            "MDS count wait: match=%s expected=%s running=%s statuses=%s",
+            match,
+            expected_count,
+            last_running,
+            [(d.get("daemon_id"), d.get("status_desc")) for d in fs_daemons],
+        )
         time.sleep(10)
+    log.error(
+        "MDS count wait failed: match=%s expected=%s running=%s daemons=%s",
+        match,
+        expected_count,
+        last_running,
+        [(d.get("daemon_id"), d.get("status_desc")) for d in last_fs_daemons],
+    )
+    return 1
+
+
+def _wait_for_orch_host_not_offline(client, hostname: str, timeout: int = 600):
+    """
+    After test SSH is back, mgr can still list the host as offline.
+
+    ``ceph orch ps`` paints ``host is offline`` from mgr ``offline_hosts``.
+    Background refresh skips those hosts. ``--refresh`` forces mgr SSH
+    (cephadm ls); a successful probe clears offline and updates cache.
+
+    Each ``--refresh`` is capped at 60s so a stuck mgr SSH cannot consume
+    this waiter's 600s budget in a single poll. Timeout raises; catch it and
+    keep polling.
+
+    Returns:
+        0 when at least one daemon is listed and none have status_desc
+        ``host is offline``, else 1.
+    """
+    end_time = time.time() + timeout
+    last_statuses = []
+    while time.time() < end_time:
+        try:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=f"ceph orch ps {hostname} --refresh --format json",
+                check_ec=False,
+                timeout=60,
+            )
+        except (CommandFailed, SocketTimeoutException):
+            log.info(
+                "Orch ps --refresh for %s timed out or failed; retrying",
+                hostname,
+            )
+            out = ""
+        try:
+            daemons = json.loads(out) if out else []
+        except json.JSONDecodeError:
+            daemons = []
+        if not isinstance(daemons, list):
+            daemons = []
+        last_statuses = [(d.get("daemon_id"), d.get("status_desc")) for d in daemons]
+        offline = [d for d in daemons if d.get("status_desc") == "host is offline"]
+        if daemons and not offline:
+            log.info(
+                "Orch host %s is no longer offline after refresh; daemons=%s",
+                hostname,
+                last_statuses,
+            )
+            return 0
+        log.info(
+            "Orch host %s still offline or empty after refresh: %s",
+            hostname,
+            last_statuses,
+        )
+        time.sleep(10)
+    log.error(
+        "Orch host %s still offline after %ss: %s",
+        hostname,
+        timeout,
+        last_statuses,
+    )
     return 1
 
 
@@ -61,20 +196,43 @@ def _validate_metrics(
     log.info("Collecting metrics for stage: %s", stage)
     quota_attrs = fs_util.get_quota_attrs(client, fuse_mount_dir)
     expected_quota_bytes = int(quota_attrs.get("bytes", 0))
-    subvol_metrics = helper.collect_subvolume_metrics(
-        client=client,
-        fs_name=fs_name,
-        role="active",
-        ranks=None,
-        path_prefix=subvol_path,
-    )
+
+    # stage is the op label, e.g. "after MDS node reboot".
+    # After MDS restart/reboot the dump list starts empty until the next write
+    # lands on the new MDS. HEALTH_OK is not that moment, so retry the dump.
+    # @retry: first dump immediately, then every 30s (backoff=1, not 2).
+    # Last try starts at (21 - 1) * 30s = 600s (~10 min).
+    @retry(RuntimeError, tries=21, delay=30, backoff=1)
+    def _wait_for_subvol_metrics():
+        results = helper.collect_subvolume_metrics(
+            client=client,
+            fs_name=fs_name,
+            role="active",
+            ranks=None,
+            path_prefix=subvol_path,
+        )
+        # results is {mds_name: [rows]}. {} does not only mean "no MDS":
+        # collect_subvolume_metrics omits keys with no rows, so {} also happens
+        # when there is no active MDS yet, every dump failed, or the dump had
+        # no matching metrics (new MDS has not seen IO yet).
+        if not results:
+            raise RuntimeError(f"{stage}: metrics dump has no MDS entries (empty dict)")
+        # Unlikely with current collect_subvolume_metrics (it does not store
+        # empty lists). Kept if a caller ever returns {mds: []}.
+        metric_rows = [row for rows in results.values() for row in rows]
+        if not metric_rows:
+            raise RuntimeError(
+                f"{stage}: dump listed MDS daemon(s) but none had subvolume "
+                "metrics yet (list empty until IO is seen on the new MDS)"
+            )
+        return results
+
+    subvol_metrics = _wait_for_subvol_metrics()
     log.info(
         "%s: expected values from CLI quota_bytes=%s",
         stage,
         expected_quota_bytes,
     )
-    if not subvol_metrics:
-        raise RuntimeError(f"{stage}: subvolume metrics are empty")
 
     found_subvol_item = False
     for mds_name, items in subvol_metrics.items():
@@ -241,6 +399,7 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph orch apply mds {fs_name} --placement='{len(selected_hosts)} {placement}'",
             )
+            # Default match="gte": placement may be 3 hosts; continue once at least 2 are running.
             if _wait_for_mds_daemon_count(client, fs_name, expected_count=2):
                 raise RuntimeError(
                     "MDS daemons did not reach expected count after placement apply"
@@ -343,6 +502,12 @@ def run(ceph_cluster, **kw):
                 raise RuntimeError("Active MDS node not found for reboot operation")
             fs_util.reboot_node(ceph_node=active_mds_node)
             log.info("Rebooted active MDS node: %s", active_host)
+            # Test SSH is back; orch may still show host is offline until mgr
+            # SSH succeeds. --refresh forces that probe before remove-add.
+            if _wait_for_orch_host_not_offline(client, active_host):
+                raise RuntimeError(
+                    f"Orch still reports host {active_host} offline after reboot"
+                )
 
         def _remove_add_mds_service():
             out, _ = client.exec_command(
@@ -373,8 +538,13 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"ceph orch apply mds {fs_name} --placement='{len(reduced_hosts)} {reduced_placement}'",
             )
+            # match="eq": wait until running count has actually dropped (not >= reduced).
+            # Otherwise add is issued while 3 MDS are still up and orch races.
             if _wait_for_mds_daemon_count(
-                client, fs_name, expected_count=len(reduced_hosts)
+                client,
+                fs_name,
+                expected_count=len(reduced_hosts),
+                match="eq",
             ):
                 raise RuntimeError("MDS count did not converge after remove operation")
 
@@ -383,8 +553,12 @@ def run(ceph_cluster, **kw):
                 cmd=f"ceph orch apply mds {fs_name} --placement='{len(fs_hosts)} {full_placement}'",
             )
 
+            # match="eq": original host count must be running again before metrics check.
             if _wait_for_mds_daemon_count(
-                client, fs_name, expected_count=len(fs_hosts)
+                client,
+                fs_name,
+                expected_count=len(fs_hosts),
+                match="eq",
             ):
                 out, _ = client.exec_command(
                     sudo=True,
@@ -419,7 +593,10 @@ def run(ceph_cluster, **kw):
                 fuse_mount_dir=fuse_mount_dir,
             )
 
-        log.info("All disruptive operations completed.")
+        log.info(
+            "TEST PASSED CEPH-83632428: metrics validated after MDS restart, "
+            "MGR restart, MDS reboot, and MDS remove-add"
+        )
         if stop_event:
             stop_event.set()
         if io_thread and io_thread.is_alive():
