@@ -59,17 +59,7 @@ def run(ceph_cluster, **kw):
                 log.info("Upgrade Complete...")
                 break
             mds_ls = fs_util.get_active_mdss(client1, fs_name=fs_name)
-            upgrade_done = False
             for mds in mds_ls:
-                # Recheck before each fail. The status read above only covers
-                # the start of this pass; the upgrade can finish during recovery.
-                out, rc = client1.exec_command(
-                    cmd="ceph orch upgrade status", sudo=True
-                )
-                if UPGRADE_IDLE_MSG in out:
-                    log.info("Upgrade Complete...")
-                    upgrade_done = True
-                    break
                 out, rc = retry_exec_command(
                     cmd=f"ceph mds fail {mds}", client_exec=True
                 )
@@ -95,8 +85,6 @@ def run(ceph_cluster, **kw):
                 if ceph_status["health"]["status"] == "HEALTH_ERR":
                     log.error("Ceph Health is NOT OK")
                     return 1
-            if upgrade_done:
-                break
 
         out, rc = retry_exec_command(sudo=True, cmd="ceph crash ls")
         if out:
