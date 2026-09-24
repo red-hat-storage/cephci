@@ -1495,6 +1495,7 @@ class CompressionIO:
         offset: str,
         rbd_cephfs_folder_full_path: str,
         rgw_bucket_name: str,
+        verify_checksum: bool = False,
     ):
         timestamp = get_cluster_timestamp(self.rados_obj.node)
         fio_test_name = "fio_test_" + str(timestamp)
@@ -1512,7 +1513,12 @@ class CompressionIO:
           --group_reporting=1 \
           --zero_buffers=0 \
           --refill_buffers=1 \
-          --buffer_compress_percentage={compression_percentage} \
+          --bs 64k \
+          --buffer_compress_percentage={compression_percentage}"
+        # For data-integrity workflows (e.g. scenario-12 / verify_checksum=True),
+        # store md5 verify state during write so a later read can validate it.
+        if verify_checksum:
+            cmd += " \
           --verify=md5 \
           --do_verify=0 \
           --verify_dump=1"

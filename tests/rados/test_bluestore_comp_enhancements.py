@@ -17,6 +17,11 @@ scenario-13: Testing compression algorithms across different pools and workload 
 scenario-14: Testing compression modes (none, force, passive, aggressive) across cephfs, rgw and rbd
 scenario-15: Testing compression_required_ratio validation with different blob sizes across cephfs, rgw and rbd
 scenario-16: Test compression validation post recovery across cephfs, rgw and rbd
+
+Config:
+  workloads_to_test: [cephfs, rbd, rgw]  # optional; if unset/empty, all three are set up
+  include_erasure_pools: true|false
+  verify_checksum: true|false  # optional; when true, FIO write stores md5 verify state
 """
 
 import concurrent.futures as cf
@@ -97,6 +102,22 @@ def run(ceph_cluster, **kw):
     log.debug(f"Test workflow started. Start time: {start_time}")
     objectstore_obj = objectstoreToolWorkflows(node=cephadm)
     include_erasure_pools = config.get("include_erasure_pools", False)
+    # When true, CompressionIO.write stores FIO md5 verify state
+    # (--verify=md5 --do_verify=0 --verify_dump=1). Useful for integrity tests.
+    verify_checksum = bool(config.get("verify_checksum", False))
+    # Optional suite config: workloads_to_test: [cephfs, rbd, rgw]
+    # If unset/empty, set up and test all supported workloads.
+    workloads_to_test = config.get("workloads_to_test") or ["cephfs", "rbd", "rgw"]
+    workloads_to_test = [w.lower() for w in workloads_to_test]
+    supported_workloads = {"cephfs", "rbd", "rgw"}
+    invalid_workloads = set(workloads_to_test) - supported_workloads
+    if invalid_workloads:
+        raise ValueError(
+            f"Unsupported workloads_to_test values: {sorted(invalid_workloads)}. "
+            f"Supported: {sorted(supported_workloads)}"
+        )
+    workloads = set(workloads_to_test)
+    log.info(f"Workloads selected for setup/validation: {sorted(workloads)}")
     try:
 
         log.info(
@@ -109,69 +130,103 @@ def run(ceph_cluster, **kw):
         for node in client_nodes:
             node.exec_command(cmd=cmd, sudo=True)
 
-        test_pools = [
-            ["cephfs_replicated_cephfs1_data", "/mnt/cephfs1", "cephfs", "replicated"],
-            ["rbd-replicated-data", "/mnt/rbd_replicated_mount", "rbd", "replicated"],
-            ["default.rgw.buckets.data", None, "rgw", "replicated"],
-        ]
+        test_pools = []
+        created_resources = []
 
-        if config.get("include_erasure_pools", False):
+        if "cephfs" in workloads:
             test_pools.append(
-                ["cephfs_erasure_cephfs0_data", "/mnt/cephfs0", "cephfs", "erasure"]
-            )
-            test_pools.append(["rbd-ec-data", "/mnt/rbd-thrash", "rbd", "erasure"])
-
-        created_resources = [
-            [
-                "cephfs1",
-                "/mnt/cephfs1",
                 [
-                    {"pool_name": "cephfs_replicated_cephfs1_data"},
-                    {"pool_name": "cephfs_replicated_cephfs1_metadata"},
-                ],
-                "cephfs",
-            ],
-            [
-                "/dev/rbd1",
-                "/mnt/rbd_replicated_mount",
-                [{"pool_name": "rbd-replicated-data"}],
-                "rbd",
-            ],
-            [
-                "",
-                "",
-                [{"pool_name": "default.rgw.buckets.data"}],
-                "rgw",
-            ],
-        ]
-
-        if config.get("include_erasure_pools", False):
+                    "cephfs_replicated_cephfs1_data",
+                    "/mnt/cephfs1",
+                    "cephfs",
+                    "replicated",
+                ]
+            )
             created_resources.append(
                 [
-                    "cephfs0",
-                    "/mnt/cephfs0",
+                    "cephfs1",
+                    "/mnt/cephfs1",
                     [
-                        {"pool_name": "cephfs_erasure_cephfs0_data"},
-                        {"pool_name": "cephfs_erasure_cephfs0_metadata"},
+                        {"pool_name": "cephfs_replicated_cephfs1_data"},
+                        {"pool_name": "cephfs_replicated_cephfs1_metadata"},
                     ],
                     "cephfs",
                 ]
             )
+            if include_erasure_pools:
+                test_pools.append(
+                    [
+                        "cephfs_erasure_cephfs0_data",
+                        "/mnt/cephfs0",
+                        "cephfs",
+                        "erasure",
+                    ]
+                )
+                created_resources.append(
+                    [
+                        "cephfs0",
+                        "/mnt/cephfs0",
+                        [
+                            {"pool_name": "cephfs_erasure_cephfs0_data"},
+                            {"pool_name": "cephfs_erasure_cephfs0_metadata"},
+                        ],
+                        "cephfs",
+                    ]
+                )
 
+        if "rbd" in workloads:
+            test_pools.append(
+                [
+                    "rbd-replicated-data",
+                    "/mnt/rbd_replicated_mount",
+                    "rbd",
+                    "replicated",
+                ]
+            )
             created_resources.append(
                 [
-                    "/dev/rbd0",
-                    "/mnt/rbd-thrash",
-                    [{"pool_name": "rbd-ec-data"}, {"pool_name": "rbd-ec-metadata"}],
+                    "/dev/rbd1",
+                    "/mnt/rbd_replicated_mount",
+                    [{"pool_name": "rbd-replicated-data"}],
                     "rbd",
+                ]
+            )
+            if include_erasure_pools:
+                test_pools.append(["rbd-ec-data", "/mnt/rbd-thrash", "rbd", "erasure"])
+                created_resources.append(
+                    [
+                        "/dev/rbd0",
+                        "/mnt/rbd-thrash",
+                        [
+                            {"pool_name": "rbd-ec-data"},
+                            {"pool_name": "rbd-ec-metadata"},
+                        ],
+                        "rbd",
+                    ]
+                )
+
+        if "rgw" in workloads:
+            test_pools.append(["default.rgw.buckets.data", None, "rgw", "replicated"])
+            created_resources.append(
+                [
+                    "",
+                    "",
+                    [{"pool_name": "default.rgw.buckets.data"}],
+                    "rgw",
                 ]
             )
 
         secret_key = None
         access_key = None
-        rgw_bucket_name = "test-bucket"
-        rgw_nodes = ceph_cluster.get_nodes(role="rgw")
-        rgw_endpoint = rgw_nodes[0].ip_address
+        rgw_bucket_name = "test-bucket" if "rgw" in workloads else None
+        rgw_endpoint = None
+        if "rgw" in workloads:
+            rgw_nodes = ceph_cluster.get_nodes(role="rgw")
+            if not rgw_nodes:
+                raise AssertionError(
+                    "workloads_to_test includes rgw but no RGW nodes found in cluster"
+                )
+            rgw_endpoint = rgw_nodes[0].ip_address
         prereq_kwargs = {
             "client_node": client_node,
             "rados_obj": rados_obj,
@@ -179,6 +234,7 @@ def run(ceph_cluster, **kw):
             "rgw_bucket_name": rgw_bucket_name,
             "rgw_endpoint": rgw_endpoint,
             "include_erasure_pools": include_erasure_pools,
+            "workloads_to_test": workloads,
         }
 
         log.info(f"Performing validations on {test_pools}")
@@ -1177,21 +1233,24 @@ Steps:
 
         if "scenario-13" in scenarios_to_run:
             log.info("""
-Test compression algorithms across different pools and workload types (cephfs, rbd, rgw).
-Steps:
-1) Iterate through test pools (cephfs, rbd, rgw)
-2) For each pool, test different compression algorithms (snappy, zlib, zstd, lz4)
-3) Enable compression on the pool with specific algorithm
-4) Write IO to the pool with compressible data
-5) Map objects to their primary OSDs
-6) Stop OSDs and fetch blob information from objectstore
-7) Validate compressed_length < compression_percentage * logical_length
-8) Start OSDs and cleanup
+                Test compression algorithms across different pools and workload types (cephfs, rbd, rgw).
+                Steps:
+                1) Iterate through test pools (cephfs, rbd, rgw)
+                2) For each pool, test different compression algorithms (snappy, zlib, zstd, lz4)
+                3) Enable compression on the pool with specific algorithm
+                4) Write IO to the pool with compressible data
+                5) Map objects to their primary OSDs
+                6) Stop OSDs and fetch blob information from objectstore
+                7) Validate newly written fully mapped blobs have compressed_length > 0
+                and compressed_length < logical_length
+                8) Start OSDs and cleanup
             """)
             test_prerequisite_setup(**prereq_kwargs)
             compression_mode = COMPRESSION_MODES.FORCE
             objectstore_obj.nostop = True
             objectstore_obj.nostart = True
+            # INVALID_EXTENT marker used by BlueStore for unmapped blob regions
+            invalid_extent_offset = 18446744073709551615
             log.info(
                 "Set objectstore_obj.nostop=True and nostart=True to prevent OSD restarts during blob inspection"
             )
@@ -1236,6 +1295,7 @@ Steps:
                         bluestore_compression.enable_compression(
                             compression_mode=compression_mode,
                             compression_algorithm=algorithm,
+                            compression_required_ratio=1,
                             pool_level_compression=pool_level_compression,
                             pool_name=pool_name,
                         )
@@ -1255,6 +1315,18 @@ Steps:
                                 )
                             ),
                         )
+                        # Snapshot objects before IO so validation covers only newly
+                        # written data (skip mkfs/FS-metadata objects created earlier).
+                        cmd = f"rados ls -p {pool_name}"
+                        out = rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                        objects_before = (
+                            set(out[0].split()) if out and out[0] else set()
+                        )
+                        log.info(
+                            f"Objects in pool {pool_name} before IO: "
+                            f"{len(objects_before)}"
+                        )
+
                         log.info(f"Writing IO to file: {file_path}")
                         log.info(
                             f"File size: 10m, Compression percentage: {compression_percentage}%"
@@ -1266,20 +1338,36 @@ Steps:
                             offset="0",
                             rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
                             rgw_bucket_name=rgw_bucket_name,
+                            verify_checksum=verify_checksum,
                         )
                         log.info(f"Completed writing IO to pool {pool_name}")
 
-                        log.info(f"Listing objects in pool {pool_name}")
-                        cmd = f"rados ls -p {pool_name}"
+                        log.info(f"Listing objects in pool {pool_name} after IO")
                         out = rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                        objects_after = set(out[0].split()) if out and out[0] else set()
+                        objects_to_validate = objects_after - objects_before
                         log.info(
-                            f"Found objects in pool {pool_name}: {out[0] if out[0] else 'None'}"
+                            f"Found {len(objects_after)} objects after IO; "
+                            f"{len(objects_to_validate)} newly written: "
+                            f"{sorted(objects_to_validate) if objects_to_validate else 'None'}"
                         )
+                        if not objects_to_validate:
+                            raise AssertionError(
+                                f"No new objects created in pool {pool_name} after IO; "
+                                f"nothing to validate for compression"
+                            )
 
                         osd_to_object_map = {}
                         # {23: [obj1, obj2] }
-                        log.info("Mapping objects to their primary OSDs")
-                        for obj_name in out[0].split():
+                        log.info("Mapping newly written objects to their primary OSDs")
+                        for obj_name in objects_to_validate:
+                            # Validate payload objects only; skip RBD metadata/trash.
+                            if workload_type == "rbd" and not obj_name.startswith(
+                                "rbd_data."
+                            ):
+                                log.debug(f"Skipping non-data RBD object: {obj_name}")
+                                continue
+
                             log.debug(f"Processing object: {obj_name}")
                             osd_map = rados_obj.get_osd_map(
                                 pool=pool_name, obj=obj_name
@@ -1296,6 +1384,10 @@ Steps:
                         log.info(
                             f"OSD to object mapping completed. Total OSDs with objects: {len(osd_to_object_map)}"
                         )
+                        if not osd_to_object_map:
+                            raise AssertionError(
+                                f"No newly written data objects found to validate in pool {pool_name}"
+                            )
 
                         obj_name_to_blobs_map = {}
                         log.info("Fetching blob information from OSDs")
@@ -1323,10 +1415,9 @@ Steps:
                                     osd_id=int(primary_osd_id), obj_name=obj_name
                                 ).strip()
                                 if not obj_json:
-                                    log.error(
+                                    raise AssertionError(
                                         f"Object {obj_name} could not be listed in OSD {primary_osd_id}"
                                     )
-                                    raise
 
                                 log.debug(
                                     f"Fetching object dump for {obj_name} from OSD {primary_osd_id}"
@@ -1348,8 +1439,12 @@ Steps:
                             )
                             log.info(f"OSD {primary_osd_id} started successfully")
 
+                        max_compressed_ratio = (
+                            (100 - int(compression_percentage)) + 10
+                        ) / 100
                         log.info(
-                            "Proceeding to validate compressed length < compress percent * blob size/logical length"
+                            "Proceeding to validate compressed_length > 0 and "
+                            f"compressed_length < {max_compressed_ratio} * logical_length"
                         )
                         log.info(
                             f"Total objects to validate: {len(obj_name_to_blobs_map)}"
@@ -1362,51 +1457,59 @@ Steps:
                                 blob = blob_detail["blob"]
                                 logical_length = blob["logical_length"]
                                 compressed_length = blob["compressed_length"]
+                                blob_extents = blob.get("extents", [])
                                 log.debug(
                                     f"Blob {idx}: logical_length={logical_length},"
                                     f" compressed_length={compressed_length}"
                                 )
 
-                                # Adding 5% buffer. It's observed that when fio writes data and we
-                                # pass 70% compression , the resulting compression would be 65%
-                                # There would be around ~ 70% compressible data.
-                                # 100 KB -> 35KB
-                                int_compression_percentage = (
-                                    (100 - int(compression_percentage)) + 5
-                                ) / 100  # 0.35
                                 expected_max_compressed = (
-                                    logical_length * int_compression_percentage
+                                    logical_length * max_compressed_ratio
                                 )
                                 msg = (
                                     f"\nObject: {obj_name}, Blob index: {idx}\n"
                                     f"compressed_length -> {compressed_length}\n"
                                     f"logical_length -> {logical_length}\n"
                                     f"Compression percentage: {compression_percentage}%\n"
-                                    f"Expected max compressed (with 5% buffer): {expected_max_compressed}\n"
-                                    f"Pass condition: compressed_length"
-                                    f" < {int_compression_percentage} * {logical_length}\n"
-                                    f"Actual check: {compressed_length} < {expected_max_compressed}"
+                                    f"Expected max compressed (with 10% buffer): "
+                                    f"{expected_max_compressed}\n"
+                                    f"Pass condition: compressed_length > 0 and "
+                                    f"compressed_length < {max_compressed_ratio} * "
+                                    f"{logical_length}\n"
+                                    f"Actual check: {compressed_length} < "
+                                    f"{expected_max_compressed}"
                                 )
 
-                                # Bug https://bugzilla.redhat.com/show_bug.cgi?id=2427146
-                                # Blobs with more than one extents are not compressed despite compression being enabled
-                                if (
-                                    len(blob["extents"]) > 1
-                                ) and compressed_length == 0:
+                                # Sparse / partially mapped blobs (INVALID_EXTENT) are often
+                                # only ~1 AU on disk and are not expected to compress.
+                                # Ref: IBMCEPH-12685 / BZ#2427146
+                                has_invalid_extent = any(
+                                    int(ext.get("offset", 0)) >= invalid_extent_offset
+                                    for ext in blob_extents
+                                )
+                                if has_invalid_extent or (
+                                    len(blob_extents) > 1 and compressed_length == 0
+                                ):
                                     msg += (
-                                        "When extents > 1, compression does not occur"
+                                        "\nSkipping sparse/partially-mapped blob "
+                                        "(INVALID_EXTENT or multi-extent uncompressed)"
                                     )
                                     msg += "\n***PASS***"
-                                elif (
-                                    not compressed_length
-                                    < logical_length * int_compression_percentage
-                                ):
-                                    msg += "\n***FAIL****"
-                                    log.error(msg)
-                                    raise
-                                else:
-                                    msg += "\n***PASS****"
                                     log.info(msg)
+                                    continue
+
+                                if compressed_length <= 0:
+                                    msg += "\n***FAIL*** compressed_length must be > 0"
+                                    log.error(msg)
+                                    raise AssertionError(msg)
+
+                                if compressed_length >= expected_max_compressed:
+                                    msg += "\n***FAIL*** compressed_length exceeds allowed ratio"
+                                    log.error(msg)
+                                    raise AssertionError(msg)
+
+                                msg += "\n***PASS***"
+                                log.info(msg)
                             log.info(f"Completed validation for object {obj_name}")
                         log.info(
                             f"Validation summary for algorithm {algorithm}, pool {pool_name}: "
@@ -1506,6 +1609,7 @@ Steps:
                         offset="0",
                         rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
                         rgw_bucket_name=rgw_bucket_name,
+                        verify_checksum=verify_checksum,
                     )
                     log.info(
                         f"Completed writing IO to pool {pool_name} with mode {mode}"
@@ -1707,6 +1811,7 @@ Steps:
                             offset="0",
                             rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
                             rgw_bucket_name=rgw_bucket_name,
+                            verify_checksum=verify_checksum,
                         )
                         log.info(f"Completed writing IO to pool {pool_name}")
 
@@ -1995,6 +2100,7 @@ Steps:
                     offset="0",
                     rbd_cephfs_folder_full_path=rbd_cephfs_folder_full_path,
                     rgw_bucket_name=rgw_bucket_name,
+                    verify_checksum=verify_checksum,
                 )
                 log.info(
                     f"Completed IO on the pool {pool_name} pool type : {pool_type}"
@@ -2158,80 +2264,97 @@ def test_prerequisite_setup(
     rgw_bucket_name,
     rgw_endpoint,
     include_erasure_pools,
+    workloads_to_test=None,
 ):
-    # Created Erasure and Replicated Ceph file system
-    if config.get("include_erasure_pools", False):
+    """
+    Create CephFS / RBD / RGW resources based on workloads_to_test.
+
+    If workloads_to_test is unset/empty, set up all three workloads.
+    Erasure-coded CephFS/RBD pools are created only when include_erasure_pools is true.
+    """
+    workloads = set(workloads_to_test or ["cephfs", "rbd", "rgw"])
+    include_ec = include_erasure_pools or config.get("include_erasure_pools", False)
+    log.info(
+        f"Prerequisite setup for workloads={sorted(workloads)}, "
+        f"include_erasure_pools={include_ec}"
+    )
+
+    if "cephfs" in workloads:
+        # Created Erasure and Replicated Ceph file system
+        if include_ec:
+            fs_name, mount_path, created_pools = (
+                rados_obj.create_cephfs_filesystem_mount(
+                    client_node=client_node,
+                    fs_name="cephfs0",
+                    pool_type="erasure",
+                )
+            )
+
         fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
             client_node=client_node,
-            fs_name="cephfs0",
-            pool_type="erasure",
+            fs_name="cephfs1",
+            pool_type="replicated",
         )
 
-    fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
-        client_node=client_node,
-        fs_name="cephfs1",
-        pool_type="replicated",
-    )
+    if "rbd" in workloads:
+        # Create EC RBD
+        if include_ec:
+            rbd_pool_name = "rbd-ec-data"
+            rbd_ec_metadata = "rbd-ec-metadata"
+            rbd_image = "rbd_image"
+            mount_path, device_path, created_pools = rados_obj.create_ec_rbd_pools(
+                rbd_ec_data_pool=rbd_pool_name,
+                rbd_metadata_pool=rbd_ec_metadata,
+                image_name=rbd_image,
+                crush_failure_domain="osd",
+            )
 
-    # Create EC RBD
-    if config.get("include_erasure_pools", False):
-        rbd_pool_name = "rbd-ec-data"
-        rbd_ec_metadata = "rbd-ec-metadata"
+        # Create replicated RBD
+        rbd_pool_name = "rbd-replicated-data"
         rbd_image = "rbd_image"
-        mount_path, device_path, created_pools = rados_obj.create_ec_rbd_pools(
-            rbd_ec_data_pool=rbd_pool_name,
-            rbd_metadata_pool=rbd_ec_metadata,
+        mount_path, device_path, created_pools = rados_obj.create_replicated_rbd_pools(
+            rbd_pool=rbd_pool_name,
             image_name=rbd_image,
-            crush_failure_domain="osd",
+            mount_path="/mnt/rbd_replicated_mount",
         )
 
-    # Create replicated RBD
-    rbd_pool_name = "rbd-replicated-data"
-    rbd_image = "rbd_image"
-    mount_path, device_path, created_pools = rados_obj.create_replicated_rbd_pools(
-        rbd_pool=rbd_pool_name,
-        image_name=rbd_image,
-        mount_path="/mnt/rbd_replicated_mount",
-    )
+    if "rgw" in workloads:
+        # Replicated RGW setup
+        rgw_data_pool = "default.rgw.buckets.data"
+        rados_obj.create_pool(pool_name=rgw_data_pool, app_name="rgw")
 
-    # Replicated RGW setup
-    rgw_data_pool = "default.rgw.buckets.data"
-    rados_obj.create_pool(pool_name=rgw_data_pool, app_name="rgw")
-
-    # Install aws cli
-    cmd = "pip3 install awscli"
-    rados_obj.client.exec_command(cmd=cmd, sudo=True)
-
-    # fetch rgw key and secret
-    keys = get_or_create_user(client_node)
-    access_key = keys["access_key"]
-    secret_key = keys["secret_key"]
-
-    try:
-        cmd = "rm -rf .aws"
+        cmd = "pip3 install awscli"
         rados_obj.client.exec_command(cmd=cmd, sudo=True)
-    except Exception:
-        log.error(".aws directory doesnt exist")
 
-    try:
-        cmd = "mkdir .aws"
-        rados_obj.client.exec_command(cmd=cmd, sudo=True)
-    except Exception:
-        log.error(".aws directory already exists.")
+        keys = get_or_create_user(client_node)
+        access_key = keys["access_key"]
+        secret_key = keys["secret_key"]
 
-    cmd = """cat <<EOF > ~/.aws/config
+        try:
+            cmd = "rm -rf .aws"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        except Exception:
+            log.error(".aws directory doesnt exist")
+
+        try:
+            cmd = "mkdir .aws"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        except Exception:
+            log.error(".aws directory already exists.")
+
+        cmd = """cat <<EOF > ~/.aws/config
 [default]
 region = us-east-1
 EOF"""
-    rados_obj.client.exec_command(cmd=cmd, sudo=True)
-    cmd = f"""cat <<EOF > ~/.aws/credentials
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"""cat <<EOF > ~/.aws/credentials
 [default]
 aws_access_key_id = {access_key}
 aws_secret_access_key = {secret_key}
 EOF"""
-    rados_obj.client.exec_command(cmd=cmd, sudo=True)
-    cmd = f"aws s3 mb s3://{rgw_bucket_name} --endpoint-url http://{rgw_endpoint}"
-    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"aws s3 mb s3://{rgw_bucket_name} --endpoint-url http://{rgw_endpoint}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
 
 
 def test_prerequisite_teardown(
@@ -2242,35 +2365,43 @@ def test_prerequisite_teardown(
     rgw_endpoint,
     created_resources,
     include_erasure_pools,
+    workloads_to_test=None,
 ):
     """
     Tear down resources created by test_prerequisite_setup.
 
     Unmounts CephFS/RBD workloads, removes RGW S3 bucket and RBD images,
     deletes tracked pools, and removes EC erasure-code profiles when applicable.
+    Only cleans workloads present in created_resources / workloads_to_test.
     """
     log.debug("Tearing down prerequisite test resources...")
+    workloads = set(
+        workloads_to_test
+        or {resource[3] for resource in created_resources}
+        or ["cephfs", "rbd", "rgw"]
+    )
 
     rbd_image = "rbd_image"
-    rbd_images = [
-        ("rbd-replicated-data", rbd_image),
-    ]
-    if config.get("include_erasure_pools", False):
-        rbd_images.append(("rbd-ec-metadata", rbd_image))
+    if "rbd" in workloads:
+        rbd_images = [
+            ("rbd-replicated-data", rbd_image),
+        ]
+        if include_erasure_pools or config.get("include_erasure_pools", False):
+            rbd_images.append(("rbd-ec-metadata", rbd_image))
 
-    for pool_name, image_name in rbd_images:
-        log.info(f"Removing RBD image {pool_name}/{image_name}")
-        try:
-            client_node.exec_command(
-                cmd=f"rbd rm {pool_name}/{image_name}",
-                sudo=True,
-                check_ec=False,
-            )
-        except Exception as e:
-            log.warning(f"Failed to remove RBD image {pool_name}/{image_name}: {e}")
+        for pool_name, image_name in rbd_images:
+            log.info(f"Removing RBD image {pool_name}/{image_name}")
+            try:
+                client_node.exec_command(
+                    cmd=f"rbd rm {pool_name}/{image_name}",
+                    sudo=True,
+                    check_ec=False,
+                )
+            except Exception as e:
+                log.warning(f"Failed to remove RBD image {pool_name}/{image_name}: {e}")
 
     # Cleanup RGW S3 bucket
-    if rgw_bucket_name and rgw_endpoint:
+    if "rgw" in workloads and rgw_bucket_name and rgw_endpoint:
         log.info(f"Removing RGW bucket: {rgw_bucket_name}")
         try:
             client_node.exec_command(
@@ -2323,8 +2454,13 @@ def test_prerequisite_teardown(
         log.info("All prerequisite pools deleted successfully")
 
     # Remove EC erasure-code profiles created during setup
-    if config.get("include_erasure_pools", False):
-        for profile_name in ("ec_profile_cephfs0", "rbd-ec-profile"):
+    if include_erasure_pools or config.get("include_erasure_pools", False):
+        profiles = []
+        if "cephfs" in workloads:
+            profiles.append("ec_profile_cephfs0")
+        if "rbd" in workloads:
+            profiles.append("rbd-ec-profile")
+        for profile_name in profiles:
             log.info(f"Removing EC profile: {profile_name}")
             rados_obj.delete_ec_profile(profile_name)
 

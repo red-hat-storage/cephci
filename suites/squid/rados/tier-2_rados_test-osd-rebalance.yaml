@@ -200,6 +200,16 @@ tests:
 # scenario 16 - compression tests post recovery
 
   - test:
+      name: Bluestore compression negative scenarios
+      module: test_bluestore_comp_negative.py
+      polarion-id: CEPH-83620071
+      desc: negative scenarios for bluestore compression
+      config:
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+
+  - test:
       name: Bluestore compression v1 - compression mode tests with rbd, rgw and cephfs
       module: test_bluestore_comp_enhancements.py
       desc: Positive workflows for bluestore data compression enhancements
