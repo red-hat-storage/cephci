@@ -2178,7 +2178,7 @@ def test_prerequisite_setup(
     include_erasure_pools,
 ):
     # Created Erasure and Replicated Ceph file system
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
             client_node=client_node,
             fs_name="cephfs0",
@@ -2192,7 +2192,7 @@ def test_prerequisite_setup(
     )
 
     # Create EC RBD
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         rbd_pool_name = "rbd-ec-data"
         rbd_ec_metadata = "rbd-ec-metadata"
         rbd_image = "rbd_image"
@@ -2273,7 +2273,7 @@ def test_prerequisite_teardown(
     rbd_images = [
         ("rbd-replicated-data", rbd_image),
     ]
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         rbd_images.append(("rbd-ec-metadata", rbd_image))
 
     for pool_name, image_name in rbd_images:
@@ -2341,7 +2341,7 @@ def test_prerequisite_teardown(
         log.info("All prerequisite pools deleted successfully")
 
     # Remove EC erasure-code profiles created during setup
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         for profile_name in ("ec_profile_cephfs0", "rbd-ec-profile"):
             log.info(f"Removing EC profile: {profile_name}")
             rados_obj.delete_ec_profile(profile_name)
