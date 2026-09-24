@@ -9,7 +9,7 @@
 # Test Steps:
 # - Deploy Ceph 9.0(GA) cluster in RHEL 9
 # - Deploy Ceph 9.0 client
-# - Upgrade cluster along with NFS-Ganesha IOs parllel
+# - Upgrade cluster along with NFS-Ganesha IOs and a smallfile workload in parallel
 ################################################################################################
 tests:
   - test:
@@ -221,7 +221,7 @@ tests:
       config:
         max_time: 14400
         cancel_pending: true
-      desc: Upgrade along with IOs for nfs in parallel
+      desc: Upgrade along with NFS IOs and a smallfile workload in parallel
       parallel:
         - test:
             name: Upgrade cluster to latest Ceph 9.x
@@ -253,6 +253,21 @@ tests:
               stall_threshold_s: 5
               stall_recovery_timeout_s: 100
               probe_interval_s: 1
+
+        - test:
+            name: smallfile workload during upgrade
+            module: test_nfs_smallfile_during_upgrade.py
+            desc: Smallfile create/read/append/rename/delete on a dedicated NFS export
+            abort-on-fail: false
+            config:
+              sudo: false
+              nfs_version: 4.2
+              clients: 1
+              threads: 4
+              file_size: 4
+              files: 50
+              max_time: 10800
+              max_consecutive_failures: 5
       abort-on-fail: true
 
   - test:
