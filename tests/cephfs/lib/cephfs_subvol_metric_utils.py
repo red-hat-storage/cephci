@@ -55,6 +55,7 @@ class MDSMetricsHelper:
       - launch/wait for fio (background)
       - parse fio summary output
       - compare fio stats vs MDS counters (read/write/both)
+      - compare MDS used_bytes to subvolume info using a parent-rbytes baseline
     """
 
     def __init__(self, ceph_cluster, **kwargs):
@@ -193,6 +194,9 @@ class MDSMetricsHelper:
                 flat = self._flatten_subvolume_items(
                     items, fs_filter=fs_name, path_prefix=norm_prefix
                 )
+                # Only store MDS keys that have rows. Empty dump / no path match
+                # is omitted, so the return value can be {} even when MDS was
+                # queried (no active name, dump failed, or no IO in the window).
                 if flat:
                     results[mds_name] = flat
             except Exception as e:
@@ -288,6 +292,154 @@ class MDSMetricsHelper:
                 break
             time.sleep(1)
         return snapshots
+
+    # ---------------------------------------------------------------------
+    # used_bytes vs subvolume info (parent rbytes baseline)
+    # ---------------------------------------------------------------------
+
+    def parent_subvol_path(self, subvol_getpath: str) -> str:
+        """
+        Metrics label / nested-usage path: /volumes/_nogroup/<name>.
+        'ceph fs subvolume getpath' includes a UUID directory under that path.
+        """
+        return self._normalize_metrics_prefix(subvol_getpath) or subvol_getpath
+
+    def get_dir_rbytes(self, client, path: str) -> int:
+        """Return ceph.dir.rbytes for a mounted directory."""
+        path = path.rstrip("/") or path
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=f"getfattr --only-values -n ceph.dir.rbytes '{path}'",
+            timeout=60,
+        )
+        for line in reversed((out or "").splitlines()):
+            token = line.strip()
+            if token.isdigit():
+                return int(token)
+        raise ValueError(f"Failed to parse ceph.dir.rbytes from output: {out!r}")
+
+    def get_quota_and_used(
+        self,
+        client,
+        fs_name: str,
+        subvol_path: str,
+        ranks: Optional[List[int]] = None,
+    ) -> Optional[Tuple[int, int]]:
+        """Return (quota_bytes, used_bytes) from MDS metrics for the subvolume."""
+        results = self.collect_subvolume_metrics(
+            client=client,
+            fs_name=fs_name,
+            role="active",
+            ranks=ranks or [0],
+            path_prefix=subvol_path,
+        )
+        for _mds_name, items in results.items():
+            for it in items:
+                if "quota_bytes" in it and "used_bytes" in it:
+                    return (int(it["quota_bytes"]), int(it["used_bytes"]))
+        return None
+
+    @staticmethod
+    def expected_metrics_used_bytes(
+        bytes_used: int, parent_rbytes_baseline: int
+    ) -> int:
+        """MDS used_bytes is parent rbytes: UUID bytes_used + pre-IO parent rbytes."""
+        return int(bytes_used) + int(parent_rbytes_baseline)
+
+    def wait_for_metrics_used_bytes(
+        self,
+        client,
+        fs_name: str,
+        subvol_path: str,
+        parent_rbytes_baseline: int,
+        get_bytes_used,
+        expected_quota: Optional[int] = None,
+        ranks: Optional[List[int]] = None,
+        retries: int = 20,
+        sleep_sec: int = 5,
+    ) -> Optional[Tuple[int, int, int]]:
+        """
+        Retry until metrics used_bytes == get_bytes_used() + parent_rbytes_baseline
+        and quota_bytes matches expected_quota when that is set.
+
+        MDS used_bytes tracks the parent path and can lag by a sliding window.
+        The wait is bounded: retries * sleep_sec (default 100s). It always
+        returns; it does not loop until metrics leave the parent baseline.
+
+        Returns (quota_bytes, used_bytes, bytes_used) on success. On timeout,
+        logs an error and returns the last sample, or None if metrics never
+        appeared. Caller must still assert the returned values.
+        """
+        last_quota: Optional[int] = None
+        last_used: Optional[int] = None
+        last_bu: Optional[int] = None
+        expected_used = 0
+        for attempt in range(1, retries + 1):
+            last_bu = int(get_bytes_used() or 0)
+            expected_used = self.expected_metrics_used_bytes(
+                last_bu, parent_rbytes_baseline
+            )
+            result = self.get_quota_and_used(client, fs_name, subvol_path, ranks=ranks)
+            if result is None:
+                log.info(
+                    "used_bytes wait %s/%s: no metrics yet "
+                    "(bytes_used=%s baseline=%s exp_used=%s)",
+                    attempt,
+                    retries,
+                    last_bu,
+                    parent_rbytes_baseline,
+                    expected_used,
+                )
+                if attempt < retries:
+                    time.sleep(sleep_sec)
+                continue
+            last_quota, last_used = result
+            quota_ok = expected_quota is None or last_quota == expected_quota
+            used_ok = last_used == expected_used
+            log.info(
+                "used_bytes wait %s/%s: quota=%s (exp=%s) used=%s "
+                "(exp=%s bytes_used=%s baseline=%s)",
+                attempt,
+                retries,
+                last_quota,
+                expected_quota,
+                last_used,
+                expected_used,
+                last_bu,
+                parent_rbytes_baseline,
+            )
+            if quota_ok and used_ok:
+                return (last_quota, last_used, last_bu)
+            if attempt < retries:
+                time.sleep(sleep_sec)
+
+        wait_s = retries * sleep_sec
+        if last_used is None:
+            log.error(
+                "used_bytes wait timed out after %ss (%s tries): "
+                "metrics never appeared",
+                wait_s,
+                retries,
+            )
+            return None
+        stuck = (
+            last_used == parent_rbytes_baseline
+            and expected_used != parent_rbytes_baseline
+        )
+        log.error(
+            "used_bytes wait timed out after %ss (%s tries): "
+            "quota=%s (exp=%s) used=%s (exp=%s bytes_used=%s baseline=%s)%s",
+            wait_s,
+            retries,
+            last_quota,
+            expected_quota,
+            last_used,
+            expected_used,
+            last_bu,
+            parent_rbytes_baseline,
+            " ; metrics still at parent rbytes baseline" if stuck else "",
+        )
+        return (last_quota, last_used, last_bu)
 
     # ---------------------------------------------------------------------
     # Internals
