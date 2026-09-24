@@ -137,7 +137,7 @@ tests:
       name: NFS CephX cluster rotate-key
       module: test_nfs_cephx_key_rotation.py
       desc: NFS export stays mounted post nfs cluster key rotate
-      polarion-id: CEPH-83632951
+      polarion-id: CEPH-83633001
       abort-on-fail: false
       config:
         nfs_version: 4.1
