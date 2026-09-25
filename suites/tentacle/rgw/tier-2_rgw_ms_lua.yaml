@@ -475,3 +475,29 @@ tests:
             script-name: ../aws/test_lua_postauth_cache.py
             config-file-name: ../../aws/configs/test_aws_lua_postauth_cache.yaml
             verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua prerequest stale bytecode cache test
+      desc: Test Lua prerequest script A warm-up then script B runs after rm+put (stale bytecode)
+      polarion-id: CEPH-83633020
+      module: sanity_rgw_multisite.py
+      known-issues: IBMCEPH-19435
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_postauth_cache.py
+            config-file-name: ../../aws/configs/test_aws_lua_prerequest_stale_bytecode_cache.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua prerequest cache invalidation test
+      desc: Test Lua prerequest blocking script takes effect immediately on put_object
+      polarion-id: CEPH-83633021
+      module: sanity_rgw_multisite.py
+      known-issues: IBMCEPH-19436
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_postauth_cache.py
+            config-file-name: ../../aws/configs/test_aws_lua_prerequest_cache_invalidation.yaml
+            verify-io-on-site: ["ceph-sec"]
