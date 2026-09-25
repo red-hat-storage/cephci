@@ -9,7 +9,10 @@ from compute.openshift import (
     apply_ocpvirt_vm_profile,
     build_virtualmachine_cr,
     datavolume_names_from_vm,
+    ipv6_subnet_from_cred,
+    is_global_ipv6,
     load_ocpvirt_namespace_config,
+    pick_vmi_ipv6_ip,
     process_ocpvirt_custom_config,
     resolve_ocpvirt_credentials,
     resolve_ocpvirt_image_name,
@@ -18,6 +21,7 @@ from compute.openshift import (
     validate_ocpvirt_inventory,
     validate_ocpvirt_namespace_config,
     validate_precreated_volume_names,
+    vm_wait_address,
 )
 
 AUTH_OSP_CRED = {
@@ -225,3 +229,39 @@ def test_datavolume_names_from_vm_includes_root_and_precreated():
     assert "ceph-test-node-root" in names
     assert "ceph-test-node-vol-0" in names
     assert "ceph-test-node-vol-1" in names
+
+
+OCPVIRT_IFACES = [
+    {
+        "name": "default",
+        "ipAddress": "10.5.228.122",
+        "ipAddresses": [
+            "10.5.228.122",
+            "2620:52:8:2105:45c:88ff:fe0b:80d",
+            "fe80::2d:d0ff:fe40:d876",
+        ],
+    },
+]
+
+
+def test_is_global_ipv6():
+    assert is_global_ipv6("2620:52:8:2105:45c:88ff:fe0b:80d")
+    assert not is_global_ipv6("fe80::1")
+    assert not is_global_ipv6("10.5.228.122")
+
+
+def test_pick_vmi_ipv6_ip():
+    assert pick_vmi_ipv6_ip(OCPVIRT_IFACES) == "2620:52:8:2105:45c:88ff:fe0b:80d"
+
+
+def test_ipv6_subnet_from_cred():
+    addr = "2620:52:8:2105:45c:88ff:fe0b:80d"
+    assert ipv6_subnet_from_cred({}, addr) == "2620:52:8:2105::/64"
+    assert ipv6_subnet_from_cred({"subnet6": "2001:db8::/48"}, addr) == "2001:db8::/48"
+
+
+def test_vm_wait_address():
+    assert vm_wait_address(OCPVIRT_IFACES, use_ipv6=False) == "10.5.228.122"
+    assert vm_wait_address(OCPVIRT_IFACES, use_ipv6=True) == (
+        "2620:52:8:2105:45c:88ff:fe0b:80d"
+    )
