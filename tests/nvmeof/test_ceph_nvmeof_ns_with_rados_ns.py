@@ -227,7 +227,7 @@ def test_ceph_nvmeof_ns_with_rados_ns(ceph_cluster, nvme_service, config, rbd_ob
     config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_node"], **config)
     ha.gateways = nvme_service.gateways
-    ha.run()
+    ha.run(iodepth=2)
     return 0
 
 

@@ -80,5 +80,5 @@ def run_stretch_ha(
             raise RuntimeError("set_gateway_locations failed")
         LOG.info("Gateway locations set for stretch HA")
 
-    ha.run()
+    ha.run(iodepth=2)
     return 0
