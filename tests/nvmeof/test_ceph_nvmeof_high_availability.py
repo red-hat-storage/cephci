@@ -51,7 +51,7 @@ def test_ceph_83595464(ceph_cluster, config, rbd_obj):
     ha.gateways = nvme_service.gateways
 
     configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
-    ha.run()
+    ha.run(iodepth=2)
 
     # Update the config
     config["mtls"] = False
@@ -197,7 +197,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 LOG.info(f"HA failover and failback with IO depth: {iodepth} completed")
         else:
             LOG.info("Running HA failover and failback")
-            ha.run()
+            ha.run(iodepth=2)
             LOG.info("HA failover and failback completed")
         return 0
     except Exception as err:

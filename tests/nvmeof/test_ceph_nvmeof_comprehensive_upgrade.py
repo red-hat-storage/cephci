@@ -1460,7 +1460,7 @@ def _perform_ha_operations(ceph_cluster, config, nvme_service):
         for depth in config["iodepth"]:
             ha.run(iodepth=int(depth))
     else:
-        ha.run()
+        ha.run(iodepth=2)
 
 
 def _stop_background_io(io_tasks, initiator_objs, executor):

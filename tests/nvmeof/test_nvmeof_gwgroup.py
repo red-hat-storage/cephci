@@ -43,7 +43,7 @@ def run_gateway_group_operations(
         if gwgroup_config.get("fault-injection-methods") or config.get(
             "fault-injection-methods"
         ):
-            ha.run(FEWR_NAMESPACES=True)
+            ha.run(FEWR_NAMESPACES=True, iodepth=2)
 
     except Exception as err:
         LOG.error(f"Error in gateway group {gwgroup_config['gw_nodes']}: {err}")

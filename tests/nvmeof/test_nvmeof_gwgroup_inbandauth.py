@@ -121,7 +121,7 @@ def test_ceph_83595512(ceph_cluster, gwgroup_config, nvme_service, ha):
                 updated_initiators.append(new_initiator)
 
         ha.config["initiators"] = updated_initiators
-        ha.run()
+        ha.run(iodepth=2)
 
 
 testcases = {
@@ -185,7 +185,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 if gwgroup_config.get("fault-injection-methods") or config.get(
                     "fault-injection-methods"
                 ):
-                    ha.run()
+                    ha.run(iodepth=2)
 
                 if "initiators" in config["cleanup"] and gwgroup_config.get(
                     "initiators"
