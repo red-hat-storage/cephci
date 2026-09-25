@@ -145,7 +145,13 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
                 or get_network_mask(nvme_service.gateways)
             )
 
-        gateway.subsystem.add(**{"args": args})
+        try:
+            gateway.subsystem.add(**{"args": args})
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "already" not in msg and "exist" not in msg:
+                raise
+            LOG.info("Subsystem %s already present, reusing it: %s", nqn, exc)
 
     if subsystem_config is None:
         subsystem_config = nvme_service.config.get("subsystems", [])
@@ -222,9 +228,15 @@ def configure_hosts(gateway, config: dict, ceph_cluster=None, initiators=None):
 
         sub_args = {"subsystem": nqn}
         if sub_cfg.get("allow_host"):
-            gateway.host.add(
-                **{"args": {**sub_args, **{"host": repr(sub_cfg["allow_host"])}}}
-            )
+            try:
+                gateway.host.add(
+                    **{"args": {**sub_args, **{"host": repr(sub_cfg["allow_host"])}}}
+                )
+            except Exception as exc:
+                msg = str(exc).lower()
+                if "already" not in msg and "exist" not in msg:
+                    raise
+                LOG.info("Host already present: %s", exc)
             if sub_cfg["allow_host"] == "*":
                 validate_hosts(gateway, True, nqn)
             else:
@@ -539,7 +551,13 @@ def configure_listeners(gateways, config: dict, listeners=None):
                         ),
                     }
                 }
-                gateway.listener.add(**listener_config)
+                try:
+                    gateway.listener.add(**listener_config)
+                except Exception as exc:
+                    msg = str(exc).lower()
+                    if "already" not in msg and "exist" not in msg:
+                        raise
+                    LOG.info("Listener already present: %s", exc)
                 expected_listeners.append(listener_config["args"])
             validate_listeners(gateway, expected_listeners, nqn)
 

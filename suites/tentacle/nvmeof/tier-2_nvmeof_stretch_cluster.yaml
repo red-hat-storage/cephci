@@ -1,0 +1,399 @@
+# Stretch mode tests for NVMe-oF (two-site + tie-breaker, GW locations, namespace locations, failover/failback)
+# conf: conf/tentacle/nvmeof/9-node-cluster-2-clients.yaml
+# Cluster: node1 (tiebreaker), node2-5 (DC1), node6-9 (DC2), node10-11 (client). NVMe GW: node3,4,5 (DC1), node7,8,9 (DC2)
+
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes (DC1, DC2, tiebreaker)
+      module: test_bootstrap.py
+      polarion-id: CEPH-83575289
+      config:
+        command: bootstrap
+        base_cmd_args:
+          #verbose: true
+        args:
+          #registry-json: registry.redhat.io
+          mon-ip: node1
+          orphan-initial-daemons: true
+          skip-dashboard: true
+          ssh-user: cephuser
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node2
+                - node3
+                - node4
+                - node5
+              location:
+                root: default
+                datacenter: DC1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node6
+                - node7
+                - node8
+                - node9
+              location:
+                root: default
+                datacenter: DC2
+            - service_type: mon
+              spec:
+                crush_locations:
+                  node1:
+                    - datacenter=tiebreaker
+                  node2:
+                    - datacenter=DC1
+                  node3:
+                    - datacenter=DC1
+                  node6:
+                    - datacenter=DC2
+                  node7:
+                    - datacenter=DC2
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Service deployment with spec
+      desc: Add OSD services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+          - config:
+              command: shell
+              args:
+                - "ceph osd tree"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure Ceph client for NVMe tests
+      desc: Setup client on NVMEoF gateway (node10, node11)
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+          - node11
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy Two-Site Stretch Cluster with Tie-Breaker
+      desc: >
+        Define stretched CRUSH rule (ceph-base, export/decompile crush map, add rule),
+        make rule available and validate, set election strategy to connectivity,
+        enable stretch mode on tie-breaker node.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      config:
+        test_case: deploy_stretch
+        stretch_rule_name: stretch_rule
+        tiebreaker_mon_site_name: tiebreaker
+        stretch_bucket: datacenter
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy NVMe service and configure entities (3 GW per DC)
+      desc: >
+        Deploy NVMe service with 3 gateways from DC1 (node3,4,5) and 3 from DC2 (node7,8,9).
+        Configure subsystems, listeners, hosts, namespaces with location, initiator.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      config:
+        test_case: deploy_nvme
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        gw_nodes:
+          - node3
+          - node4
+          - node5
+          - node7
+          - node8
+          - node9
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        #namespace_default_location: DC1
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:stretch1
+            serial: "1"
+            # bdevs:
+            #   - count: 2
+            #     size: 2G
+            #     ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node3
+              - node4
+              - node5
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        # Keep the NVMe service for later tests. Initiator sessions are dropped after
+        # each IO case; pool/gateway teardown is only on the last suite test.
+      destroy-cluster: false
+      abort-on-fail: true
+
+
+  - test:
+      name: Test set get modify unset GW locations
+      desc: >
+        Set location of NVMe-oF gateways for DC1 and DC2, get locations (ceph nvme-gw show),
+        modify one gateway location, unset that location, then restore the original map.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      polarion-id: CEPH-83632337
+      config:
+        test_case: gw_locations
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        gw_nodes:
+          - node3
+          - node4
+          - node5
+          - node7
+          - node8
+          - node9
+        location:
+          DC1:
+            gw_nodes:
+              - node3
+              - node4
+              - node5
+          DC2:
+            gw_nodes:
+              - node7
+              - node8
+              - node9
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Test add modify namespaces with locations
+      desc: >
+        Add namespaces with valid locations, verify ANA placement and IO, reject an
+        invalid location, then change_location and re-verify ANA and IO.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      polarion-id: CEPH-83632337
+      config:
+        test_case: namespace_locations
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        gw_nodes:
+          - node3
+          - node4
+          - node5
+          - node7
+          - node8
+          - node9
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:stretch1
+            serial: "1"
+            location: DC1
+            bdevs:
+              - count: 2
+                size: 10G
+                ns_create_image: true
+        invalid_namespace_location: INVALID_SITE
+        valid_namespace_locations: [DC1, DC2]
+        namespace_new_location: DC2
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - initiators
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Test homeless namespaces and auto rebalance
+      desc: >
+        Unset every gateway in a namespace location so those namespaces become homeless.
+        Verify alerts, auto rebalance stops, no optimized ANA path, and IO is blocked.
+        Recover with ns change_location, move a namespace to another valid location,
+        then add a GW back into the original location and verify same-location ANA rebalance.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      polarion-id: CEPH-83632339
+      config:
+        test_case: homeless_namespaces
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        gw_nodes:
+          - node3
+          - node4
+          - node5
+          - node7
+          - node8
+          - node9
+        location:
+          DC1:
+            gw_nodes:
+              - node3
+              - node4
+              - node5
+          DC2:
+            gw_nodes:
+              - node7
+              - node8
+              - node9
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:stretch1
+        homeless_location: DC1
+        recover_location: DC2
+        namespace_image_size: 10G
+        fault-injection-methods:
+          - tool: daemon
+            nodes: node3
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - initiators
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Single Gateway failover on DC1 and failback
+      desc: >
+        Pick a DC1 gateway that owns namespaces, run IO, then fail it with
+        ceph orch daemon stop and verify a same-location GW takes the ANA group.
+        Fail back with ceph orch daemon start, then repeat with
+        nvme-gw disable/enable and verify IO throughout.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      polarion-id: CEPH-83632337
+      config:
+        test_case: failover_failback
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        gw_nodes:
+          - node3
+          - node4
+          - node5
+          - node7
+          - node8
+          - node9
+        dc1_nodes: [node3, node4, node5]
+        dc2_nodes: [node7, node8, node9]
+        location_dc1: DC1
+        location_dc2: DC2
+        failover_node: node3
+        namespace_image_size: 10G
+        fault-injection-methods:
+          - tool: daemon
+            nodes: node3
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - initiators
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Same-site ANA relocation after Site A GW failure
+      desc: >
+        Site A has 3 GWs and Site B has 3 GWs. Verify ANA groups of failed Site A
+        gateways relocate to recovered same-site gateways.
+        (i) Site A in disaster and all 3 GWs down: recovered GW1 stays Standby with
+        Site A ANA ACTIVE on Site B; failing Site B GWs does not give ANA to GW1;
+        GW2 comes up while disaster is still set and all three ANA groups stay
+        ACTIVE on Site B; disaster-clear then relocates Site A ANA onto GW1/GW2;
+        remaining Site A GWs fail back one group each.
+        (ii) No disaster and all 3 Site A GWs down: GW1 immediately takes all three
+        ANA groups; remaining Site A GWs fail back one group each.
+        (iii) Stop all Site A GWs: ANA fails over to Site B; disaster-set; Site A
+        GWs come back AVAILABLE without ANA; stopping Site B GWs rebalances only
+        on B; Site B failback is allowed while A is in disaster; disaster-clear
+        drives failback to A with IO throughout.
+      module: test_ceph_nvmeof_stretch_cluster.py
+      polarion-id: CEPH-83632338
+      config:
+        test_case: ana_relocation
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        gw_nodes:
+          - node3
+          - node4
+          - node5
+          - node7
+          - node8
+          - node9
+        dc1_nodes: [node3, node4, node5]
+        dc2_nodes: [node7, node8, node9]
+        site_a_nodes: [node3, node4, node5]
+        location_dc1: DC1
+        location_dc2: DC2
+        namespace_image_size: 10G
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        fault-injection-methods:
+          - tool: daemon
+            nodes: node3
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:stretch1
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+      destroy-cluster: false
+      abort-on-fail: true
+      comments: Product bug IBMCEPH-19167

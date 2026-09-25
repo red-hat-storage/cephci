@@ -724,6 +724,23 @@ def setup_gklm_for_nvmeof(ceph_cluster, config, custom_data):
 # ---------------------------------------------------------------------------
 
 
+def _resolve_gw_nodes(ceph_cluster, nvme_service=None):
+    """Return gateway nodes for the NVMe-oF service under test.
+
+    Prefer ``nvme_service.gw_nodes`` (suite placement). Cluster role
+    ``nvmeof-gw`` can include hosts that are not running this service, so
+    KMIP cert copy / network block would miss the CLI target gateway.
+    """
+    if nvme_service is not None:
+        nodes = getattr(nvme_service, "gw_nodes", None)
+        if nodes:
+            return list(nodes)
+        gateways = getattr(nvme_service, "gateways", None)
+        if gateways:
+            return [gw.node for gw in gateways]
+    return ceph_cluster.get_nodes("nvmeof-gw")
+
+
 def copy_kmip_certs_to_gw_nodes(ceph_cluster, kmip_cfg, nvme_service=None):
     """Copy CA, client cert, and client key to every GW node.
 
@@ -746,10 +763,7 @@ def copy_kmip_certs_to_gw_nodes(ceph_cluster, kmip_cfg, nvme_service=None):
         "client_key.pem": kmip_cfg["client_key_pem"],
     }
 
-    if nvme_service is not None and getattr(nvme_service, "gw_nodes", None):
-        gw_nodes = nvme_service.gw_nodes
-    else:
-        gw_nodes = ceph_cluster.get_nodes("nvmeof-gw")
+    gw_nodes = _resolve_gw_nodes(ceph_cluster, nvme_service)
     cert_dir = f"/etc/kmip/{server_name}"
 
     for node in gw_nodes:
@@ -1371,7 +1385,7 @@ def extract_passphrase_map(kmip_cfg, key_entries):
 # ---------------------------------------------------------------------------
 
 
-def block_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port):
+def block_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port, nvme_service=None):
     """Block outbound KMIP traffic from every GW node.
 
     On RHEL 10 the GW daemons run inside cephadm containers that share the
@@ -1391,8 +1405,10 @@ def block_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port):
         ceph_cluster: Ceph cluster object.
         kmip_host (str): IP address of the KMIP server.
         kmip_port (int): TCP port of the KMIP server.
+        nvme_service: NVMeService whose gw_nodes should be blocked. Prefer this
+            over cluster role ``nvmeof-gw``, which may not match suite placement.
     """
-    gw_nodes = ceph_cluster.get_nodes("nvmeof-gw")
+    gw_nodes = _resolve_gw_nodes(ceph_cluster, nvme_service)
     handle_file = f"/tmp/byok-nft-{kmip_host}-{kmip_port}.handle"
 
     # Ensure the inet filter table and output chain exist (nftables may not
@@ -1447,7 +1463,7 @@ def block_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port):
     )
 
 
-def unblock_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port):
+def unblock_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port, nvme_service=None):
     """Remove the KMIP block installed by :func:`block_kmip_on_gw_nodes`.
 
     Reads the handle stored by :func:`block_kmip_on_gw_nodes` from the temp
@@ -1460,8 +1476,10 @@ def unblock_kmip_on_gw_nodes(ceph_cluster, kmip_host, kmip_port):
         ceph_cluster: Ceph cluster object.
         kmip_host (str): IP address of the KMIP server.
         kmip_port (int): TCP port of the KMIP server.
+        nvme_service: Same NVMeService passed to :func:`block_kmip_on_gw_nodes`
+            so cleanup targets the same hosts.
     """
-    gw_nodes = ceph_cluster.get_nodes("nvmeof-gw")
+    gw_nodes = _resolve_gw_nodes(ceph_cluster, nvme_service)
     handle_file = f"/tmp/byok-nft-{kmip_host}-{kmip_port}.handle"
 
     # Primary path: delete by stored handle then remove the temp file.

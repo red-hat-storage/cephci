@@ -354,6 +354,79 @@ class NVMeService:
                     f"Gateway {hostname} did not become ready within {timeout}s"
                 )
 
+    def register_dashboard_nvmeof_gateways(self):
+        """Register running NVMe-oF daemons with dashboard so ``ceph nvmeof`` works.
+
+        Bootstrap with skip-dashboard leaves ``ceph dashboard nvmeof-gateway-list``
+        empty; the CLI then fails with "Gateway group does not exist".
+        """
+        orch = Orch(self.ceph_cluster, **{})
+        out, _ = orch.shell(args=["ceph", "dashboard", "nvmeof-gateway-list"])
+        try:
+            listed = json.loads(out)
+        except (TypeError, json.JSONDecodeError):
+            listed = {}
+        if listed.get("gateways"):
+            LOG.info("Dashboard already has NVMe-oF gateways registered")
+            return
+
+        out, _ = orch.shell(
+            args=["ceph", "orch", "ps", "--daemon_type", "nvmeof", "--format", "json"]
+        )
+        daemons = json.loads(out)
+        installer = getattr(orch.installer, "node", orch.installer)
+        port = getattr(self, "port", DEFAULT_PORT)
+        url_file = "/tmp/nvmeof-dashboard-gw.url"
+
+        for daemon in daemons:
+            service_name = daemon.get("service_name") or ""
+            daemon_name = daemon.get("daemon_name") or daemon.get("daemon_id") or ""
+            hostname = daemon.get("hostname") or ""
+            if (
+                self.group
+                and self.group not in service_name
+                and self.group not in daemon_name
+            ):
+                continue
+            node = None
+            for gw in self.gw_nodes:
+                names = {
+                    gw.hostname,
+                    getattr(gw, "shortname", ""),
+                    getattr(gw, "id", ""),
+                }
+                if hostname in names or any(n and n in hostname for n in names if n):
+                    node = gw
+                    break
+            if not node:
+                LOG.warning(
+                    "No gateway node match to register with dashboard: %s", hostname
+                )
+                continue
+            url = f"{node.ip_address}:{port}"
+            installer.exec_command(
+                sudo=True, cmd=f"printf '%s\\n' '{url}' > {url_file}"
+            )
+            # Dashboard looks up orch.services.get(name); name must be the
+            # nvmeof service name (e.g. nvmeof.nvmeof.gw_group1), not hostname.
+            dash_name = service_name or hostname
+            args = ["ceph", "dashboard", "nvmeof-gateway-add", dash_name]
+            if self.group:
+                args.append(self.group)
+            if daemon_name:
+                args.append(daemon_name)
+            args.extend(["-i", url_file])
+            LOG.info(
+                "Registering dashboard NVMe-oF gateway %s (%s) -> %s",
+                dash_name,
+                hostname,
+                url,
+            )
+            orch.shell(args=args, base_cmd_args={"mount": "/tmp:/tmp"})
+
+        out, _ = orch.shell(args=["ceph", "dashboard", "nvmeof-gateway-list"])
+        LOG.info("Dashboard NVMe-oF gateway list: %s", out)
+
     def init_gateways(self, timeout=300, interval=10):
         """
         Initialize NVMeGateway objects for each ceph_node in the group.
@@ -365,6 +438,7 @@ class NVMeService:
             timeout (int): Max seconds to wait per node (default 300).
             interval (int): Retry interval in seconds (default 10).
         """
+        self.register_dashboard_nvmeof_gateways()
         self.gateways = []
         port = getattr(self, "port", DEFAULT_PORT)
         ceph = Orch(self.ceph_cluster, **{})
@@ -383,6 +457,7 @@ class NVMeService:
                         port=port,
                         gw_group=self.group,
                     )
+                    self._sync_gateway_identity(gw)
                     self.gateways.append(gw)
                     LOG.info("Gateway %s initialised", node.hostname)
                     break
@@ -400,3 +475,43 @@ class NVMeService:
                     )
                     time.sleep(interval)
         self._discover_service_name()
+
+    def _sync_gateway_identity(self, gw):
+        """Overlay orch / nvme-gw identity when dashboard returns the first GW in the group."""
+        orch = Orch(self.ceph_cluster, **{})
+        out, _ = orch.shell(
+            args=["ceph", "orch", "ps", "--daemon_type", "nvmeof", "--format", "json"]
+        )
+        daemons = json.loads(out) if isinstance(out, str) else out
+        if isinstance(daemons, str):
+            start, end = daemons.find("["), daemons.rfind("]")
+            daemons = json.loads(daemons[start : end + 1]) if start != -1 else []
+        hostname = gw.node.hostname
+        for daemon in daemons:
+            dhost = daemon.get("hostname") or ""
+            if hostname == dhost or hostname in dhost or dhost in hostname:
+                daemon_name = daemon.get("daemon_name")
+                if daemon_name:
+                    gw.daemon_name = daemon_name
+                    gw.gw_id = (
+                        daemon_name
+                        if str(daemon_name).startswith("client.")
+                        else f"client.{daemon_name}"
+                    )
+                break
+        try:
+            from cli.ceph.nvme_gw import NvmeGw
+
+            nvme_gw = NvmeGw(orch.installer, "ceph")
+            show = nvme_gw.show(self.nvme_metadata_pool, self.group, format="json")
+            text = show if isinstance(show, str) else str(show)
+            start, end = text.find("{"), text.rfind("}")
+            data = json.loads(text[start : end + 1]) if start != -1 else {}
+            for item in data.get("Created Gateways:", data.get("gateways", [])):
+                gid = item.get("gw-id") or ""
+                if gw.gw_id == gid or hostname in gid:
+                    if item.get("anagrp-id") is not None:
+                        gw.ana_group_id = item["anagrp-id"]
+                    break
+        except Exception as exc:
+            LOG.debug("Could not sync ANA group from nvme-gw show: %s", exc)
