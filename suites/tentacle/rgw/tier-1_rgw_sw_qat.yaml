@@ -178,3 +178,21 @@ tests:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_aws_create_bucket_for_existing_bucket.yaml
         run-on-haproxy: true
+
+  - test:
+      name: Test signv4 GET with unsigned x-amz-content-sha256
+      desc: Test signv4 GET with x-amz-content-sha256 on wire but not in SignedHeaders
+      polarion-id: CEPH-83633018
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws_sigv4.py
+        config-file-name: ../../aws/configs/test_sigv4_unsigned_content_sha256.yaml
+
+  - test:
+      name: Test signv4 PUT with unsigned Content-Type
+      desc: Test signv4 PUT with Content-Type on wire but not in SignedHeaders
+      polarion-id: CEPH-83633019
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws_sigv4.py
+        config-file-name: ../../aws/configs/test_sigv4_content_type_unsigned_put.yaml
