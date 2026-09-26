@@ -22,6 +22,11 @@ from tests.rados.rados_test_util import (
 )
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
+from utility.odf_defaults import (
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+    kernel_ms_mode_opt,
+)
 from utility.utils import method_should_succeed
 
 log = Log(__name__)
@@ -983,8 +988,12 @@ def run(ceph_cluster, **kw):
             mon_dump = rados_obj.run_ceph_command(cmd="ceph mon dump", client_exec=True)
             # Extract monitor address from rank 0 monitor
             mon_info = mon_dump["mons"][0]
-            mon_addr = mon_info["public_addr"].split("/")[0]
-            log.info(f"Monitor address: {mon_addr}")
+            use_msgr2 = is_msgr1_disabled(client_node)
+            mon_addr = format_mons_for_kernel_mount(
+                mon_info["public_addr"].split("/")[0], use_msgr2
+            )
+            ms_opt = kernel_ms_mode_opt(use_msgr2)
+            log.info(f"Monitor address: {mon_addr} (msgr2={use_msgr2})")
 
             # Step 5: Use existing admin client for mounting
             log.debug("Using admin client for mounting...")
@@ -1009,7 +1018,8 @@ def run(ceph_cluster, **kw):
                 mount_cmd = (
                     f"mount -t ceph {mon_addr}:{subvol_path} {mount_point} "
                     f"-o fs={fs_name},name={client_name},secretfile={key_file_path},"
-                    f"read_from_replica=localize,crush_location=region:east\\|zone:east-zone1,_netdev"
+                    f"read_from_replica=localize,crush_location=region:east\\|zone:east-zone1"
+                    f"{ms_opt},_netdev"
                 )
                 client_node.exec_command(sudo=True, cmd=mount_cmd, long_running=True)
             else:
