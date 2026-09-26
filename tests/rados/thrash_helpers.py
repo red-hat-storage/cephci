@@ -1086,6 +1086,83 @@ def _export_pseudo(export_entry) -> str:
     )
 
 
+def _nfs_churn_export_create_cmd(nfs_config, cluster_id, pseudo, fs_name) -> str:
+    """Build export create. PEC: exact ``sv_path`` only (never ``--path=/``)."""
+    if not nfs_config.get("enable_pec"):
+        return (
+            f"ceph nfs export create cephfs {cluster_id} {pseudo} "
+            f"{fs_name} --path=/"
+        )
+
+    sv_path = None
+    for entry in nfs_config.get("exports") or []:
+        if (
+            entry.get("cluster_id") == cluster_id
+            and entry.get("pseudo_path") == pseudo
+            and entry.get("sv_path")
+        ):
+            sv_path = entry["sv_path"]
+            break
+    if not sv_path:
+        raise RuntimeError(f"PEC enabled but no sv_path for {cluster_id}:{pseudo}")
+    return (
+        f"ceph nfs export create cephfs {cluster_id} {pseudo} {fs_name} "
+        f"--path={sv_path} --cmount_path={sv_path}"
+    )
+
+
+def _nfs_pec_provision_churn_export(installer, nfs_config, cluster_id, pseudo, fs_name):
+    """Create a dedicated subvolume for a new PEC churn export; register in config.
+
+    Returns ``(sv_name, svg)`` for caller cleanup after ``export rm``.
+    """
+    svg = nfs_config.get("pec_svg") or "pecgroup"
+    # Unique name: pseudo is /churn_export_N
+    safe = re.sub(r"[^A-Za-z0-9_]", "_", pseudo.strip("/"))
+    sv_name = f"nfsvol_{safe}"
+    installer.exec_command(
+        sudo=True,
+        cmd=(
+            f"ceph fs subvolume create {fs_name} {sv_name} "
+            f"--group_name {svg} --namespace-isolated"
+        ),
+        timeout=60,
+    )
+    sv_path, _ = installer.exec_command(
+        sudo=True,
+        cmd=f"ceph fs subvolume getpath {fs_name} {sv_name} --group_name {svg}",
+        timeout=30,
+    )
+    sv_path = (sv_path or "").strip()
+    if not sv_path:
+        raise RuntimeError(f"empty getpath for churn SV {sv_name}")
+    nfs_config.setdefault("exports", []).append(
+        {
+            "cluster_id": cluster_id,
+            "pseudo_path": pseudo,
+            "fs_name": fs_name,
+            "sv_name": sv_name,
+            "svg": svg,
+            "sv_path": sv_path,
+        }
+    )
+    return sv_name, svg
+
+
+def _nfs_pec_rm_subvolume(installer, fs_name, sv_name, svg):
+    """Best-effort remove a PEC churn subvolume."""
+    if not (fs_name and sv_name and svg):
+        return
+    installer.exec_command(
+        sudo=True,
+        cmd=(
+            f"ceph fs subvolume rm {fs_name} {sv_name} " f"--group_name {svg} --force"
+        ),
+        timeout=60,
+        check_ec=False,
+    )
+
+
 def _nfs_export_mount_targets(nfs_config: Dict) -> List[Dict[str, Any]]:
     """Build mount targets from ``nfs_config`` with multi-host fallback support.
 
@@ -1469,7 +1546,9 @@ def thrash_nfs_export_churn(
 
     Randomly selects one of three operations each cycle:
         - ``create``: create a new churn export then immediately delete it.
-        - ``delete_recreate``: delete a non-churn export and recreate it.
+          With PEC, provisions a dedicated subvolume (never ``--path=/``).
+        - ``delete_recreate``: delete a non-churn export and recreate it
+          (PEC recreates with the same ``sv_path`` from ``nfs_config``).
         - ``modify_access``: toggle ``access_type`` between RW and RO via
           ``ceph nfs export apply``.
 
@@ -1502,21 +1581,41 @@ def thrash_nfs_export_churn(
             if op == "create":
                 pseudo = f"/churn_export_{churn_export_idx}"
                 churn_export_idx += 1
-                installer.exec_command(
-                    sudo=True,
-                    cmd=f"ceph nfs export create cephfs {cluster_id} "
-                    f"{pseudo} {fs_name} --path=/",
-                    timeout=30,
-                )
-                result["creates"] += 1
-                _sleep_with_stop(stop_flag, total_seconds=3, step=1)
-                installer.exec_command(
-                    sudo=True,
-                    cmd=f"ceph nfs export rm {cluster_id} {pseudo}",
-                    timeout=30,
-                    check_ec=False,
-                )
-                result["deletes"] += 1
+                churn_sv = None
+                churn_svg = None
+                try:
+                    if nfs_config.get("enable_pec"):
+                        churn_sv, churn_svg = _nfs_pec_provision_churn_export(
+                            installer, nfs_config, cluster_id, pseudo, fs_name
+                        )
+                    installer.exec_command(
+                        sudo=True,
+                        cmd=_nfs_churn_export_create_cmd(
+                            nfs_config, cluster_id, pseudo, fs_name
+                        ),
+                        timeout=30,
+                    )
+                    result["creates"] += 1
+                    _sleep_with_stop(stop_flag, total_seconds=3, step=1)
+                    installer.exec_command(
+                        sudo=True,
+                        cmd=f"ceph nfs export rm {cluster_id} {pseudo}",
+                        timeout=30,
+                        check_ec=False,
+                    )
+                    result["deletes"] += 1
+                finally:
+                    if churn_sv:
+                        exports = nfs_config.get("exports") or []
+                        nfs_config["exports"] = [
+                            e
+                            for e in exports
+                            if not (
+                                e.get("cluster_id") == cluster_id
+                                and e.get("pseudo_path") == pseudo
+                            )
+                        ]
+                        _nfs_pec_rm_subvolume(installer, fs_name, churn_sv, churn_svg)
 
             elif op == "delete_recreate":
                 exports = _list_cluster_exports(rados_obj, cluster_id)
@@ -1535,8 +1634,9 @@ def thrash_nfs_export_churn(
                         _sleep_with_stop(stop_flag, total_seconds=2, step=1)
                         installer.exec_command(
                             sudo=True,
-                            cmd=f"ceph nfs export create cephfs {cluster_id} "
-                            f"{pseudo} {fs_name} --path=/",
+                            cmd=_nfs_churn_export_create_cmd(
+                                nfs_config, cluster_id, pseudo, fs_name
+                            ),
                             timeout=30,
                         )
                         result["creates"] += 1

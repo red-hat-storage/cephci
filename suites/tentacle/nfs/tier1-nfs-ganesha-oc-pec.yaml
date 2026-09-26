@@ -1,0 +1,256 @@
+#===============================================================================================
+#---    Test Suite for NFS Ganesha Object Cache and Per-Export Client   ---
+#===============================================================================================
+# Conf: conf/tentacle/nfs/1admin-12node-4client.yaml
+#    - 8 cluster nodes (node1-node8): OSD, MON/MGR spread, NFS on node2-node8
+#    - Configure clients on node9-node12
+#    - OC/PEC scenarios (test_nfs_oc_pec_basic.py)
+#    - OSD thrash with NFS OC + PEC
+#
+# Requires live Ceph >= 20.2.2 (OC/PEC steps skip with exit 0 otherwise).
+#
+#===============================================================================================
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node9
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node10
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node11
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node12
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: NFS OC - object cache on
+      module: test_nfs_oc_pec_basic.py
+      desc: >-
+        Two NFS clusters: create then orch-apply OC, and OC in the initial
+        orch spec. Assert ganesha.conf CEPH {} and remount integrity on both.
+      abort-on-fail: false
+      config:
+        scenario: oc_on
+        port: "2050"
+        port_oc: "2051"
+        oc_size: "200MiB"
+        oc_max_dirty: "100MiB"
+
+  - test:
+      name: NFS OC - enable on existing cluster
+      module: test_nfs_oc_pec_basic.py
+      desc: Create without OC, then orch apply OC and assert ganesha.conf updated
+      abort-on-fail: false
+      config:
+        scenario: enable_oc_on_existing
+        port: "2050"
+        oc_size: "200MiB"
+        oc_max_dirty: "100MiB"
+
+  - test:
+      name: NFS PEC - cmount_path clients
+      module: test_nfs_oc_pec_basic.py
+      desc: Three exports with --cmount_path; assert 3 asoks and 3 user_ids
+      abort-on-fail: false
+      config:
+        scenario: pec_cmount_path
+        port: "2050"
+        exports: 3
+
+  - test:
+      name: NFS OC+PEC - PEC then enable OC
+      module: test_nfs_oc_pec_basic.py
+      desc: Isolate three clients, then enable OC; conf CEPH {} and still 3 clients
+      abort-on-fail: false
+      config:
+        scenario: pec_then_enable_oc
+        port: "2050"
+        exports: 3
+        oc_size: "200MiB"
+        oc_max_dirty: "100MiB"
+
+  - test:
+      name: NFS PEC - convert shared export via apply
+      module: test_nfs_oc_pec_basic.py
+      desc: >-
+        Shared export (cmount_path=/) converted to PEC by setting cmount_path=path
+        and dropping user_id, then ceph nfs export apply -i. Confirms new CephX
+        client and remount integrity. Does not use nfs export update.
+      abort-on-fail: false
+      config:
+        scenario: shared_to_pec_via_apply
+        port: "2050"
+
+  - test:
+      name: OSD thrashing with NFS OC and PEC
+      desc: >-
+        OSD thrashing with NFS object cache and per-export client
+        (--cmount_path). Skipped automatically if live Ceph < 20.2.2.
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      abort-on-fail: false
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 40
+        duration: 1800
+        aggressive: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: false
+        inject_errors: false
+        inconsistent_object_fail: true
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: true
+        nfs_num_clusters: 1
+        nfs_exports_per_cluster: 3
+        nfs_placement: 1
+        enable_nfs_object_cache: true
+        enable_nfs_pec: true
+        enable_nfs_daemon_thrashing: true
+        nfs_daemon_kill_method: pkill
+        nfs_daemon_thrash_interval: 60
+        nfs_daemon_recovery_timeout: 180
+        enable_nfs_data_integrity: true
+        enable_nfs_protocol_state_thrash: true
+        nfs_client_churn_rate: 5
+        nfs_export_churn_enabled: true
+        nfs_admin_interleave_enabled: true
+        enable_smb_thrashing: false
+
