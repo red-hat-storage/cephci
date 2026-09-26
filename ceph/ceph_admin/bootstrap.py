@@ -284,6 +284,27 @@ class BootstrapMixin:
                 build_type=_manifest_section,
                 platform=_target_platform,
             )
+
+            # Guard against invalid downgrade paths.
+            # The baseline version (from the manifest section e.g. stable/respin)
+            # must be <= the target build version being tested. If the baseline is
+            # higher, the upgrade would actually be a downgrade — an unsupported
+            # Ceph scenario that produces misleading failures and wastes CI resources.
+            # Example of invalid path: baseline 19.2.1-416 (stable) -> target 19.2.1-405 (respin)
+            _baseline_ver = manifest_obj.ceph_version
+            _target_ver = self.config["manifest"].ceph_version
+            if LooseVersion(_baseline_ver) > LooseVersion(_target_ver):
+                raise RuntimeError(
+                    f"Invalid upgrade path detected — aborting. "
+                    f"Baseline '{_manifest_section}' build ({_baseline_ver}) is higher "
+                    f"than the target build ({_target_ver}). "
+                    f"This is a downgrade, which is not a supported Ceph upgrade "
+                    f"scenario. Skipping upgrade suite to avoid misleading failures."
+                )
+            logger.info(
+                f"Upgrade path validated: baseline {_baseline_ver} -> target {_target_ver}."
+            )
+
             self.config["base_url"] = manifest_obj.repository
             self.config["container_image"] = manifest_obj.ceph_image
             rhbuild = f"{manifest_obj.ceph_version}-{manifest_obj.platform}"
