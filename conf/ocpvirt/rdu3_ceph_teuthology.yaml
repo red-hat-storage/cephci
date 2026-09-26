@@ -1,12 +1,13 @@
 ---
-# OCP Virtualization namespace template for RDU3 ceph-jenkins tenant.
-# Use with: --custom-config ocpvirt_namespace=rdu3_ceph_jenkins
+# OCP Virtualization namespace template for RDU3 ceph-teuthology tenant.
+# Use with: --custom-config ocpvirt_namespace=rdu3_ceph_teuthology
 #
 # Auth (token, certificate_authority_data, private_key_path) stays in --osp-cred.
 # Cloud-init stays in --inventory; compute sizing uses ocpvirt_profile (cluster instance type).
+# Guests are single-NIC on UDN ceph-public; agent is DHCP/NAT at 192.168.0.8/20.
 
 server: https://10.5.229.33:6443
-namespace: ceph-jenkins--runtime-int
+namespace: ceph-teuthology--runtime-int
 storage_class: rh-restricted-nfs
 network: ceph-public
 subnet: 192.168.0.0/20
@@ -18,5 +19,5 @@ datasources:
   rhel10: datasource://openshift-virtualization-os-images/rhel10
 
 # Optional PVC access modes (default ReadWriteOnce when omitted)
-# access_modes:
-#   - ReadWriteOnce
+access_modes:
+  - ReadWriteMany
