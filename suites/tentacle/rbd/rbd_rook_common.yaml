@@ -1,0 +1,492 @@
+# RBD common suite for Rook default settings validation
+#
+# Curated high-value RBD tests drawn from:
+#   tier-1_rbd.yaml, tier-1_rbd_kernel.yaml, tier-2_rbd_regression.yaml,
+#   tier-2_rbd_trash.yaml, tier-2_rbd_namespace.yaml, tier-2_rbd_group.yaml,
+#   tier-2_rbd_trash_purge.yaml, tier-2_rbd_encryption.yaml,
+#   tier-2_rbd_regression_Image_migration.yaml
+#
+#
+# Cluster Configuration:
+#   Conf file - conf/tentacle/rbd/4-node-cluster-with-1-client.yaml
+#   Node 4 must be a client node
+#
+# Covered areas:
+#   - Upstream CLI / librbd / kernel (krbd)
+#   - Snap / clone / exclusive-lock / deep-flatten
+#   - Trash + trash purge
+#   - Namespace
+#   - Groups + group snapshots
+#   - LUKS encryption
+#   - Image migration (rep/EC/abort/namespace)
+---
+tests:
+
+  # ---------------------------------------------------------------------------
+  # Cluster setup
+  # ---------------------------------------------------------------------------
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+          - git
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Remove any epel packages
+      module: exec.py
+      name: Remove epel packages
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+
+  # ---------------------------------------------------------------------------
+  # Core RBD CLI / librbd / kernel (from tier-1)
+  # ---------------------------------------------------------------------------
+  - test:
+      config:
+        script: import_export.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+      desc: Executing upstream RBD CLI Import Export scenarios
+      module: test_rbd.py
+      name: rbd_cli_import_export
+      polarion-id: CEPH-83574240
+
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: test_librbd_python.sh
+        branch: tentacle
+      desc: Executing upstream LibRBD scenarios
+      module: test_rbd.py
+      name: librbd_python
+      polarion-id: CEPH-83574524
+
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: permissions.sh
+        branch: tentacle
+      desc: Executing upstream RBD permissions scenarios
+      module: test_rbd.py
+      name: rbd_permissions
+      polarion-id: CEPH-83574525
+
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: journal.sh
+        branch: tentacle
+      desc: Executing upstream RBD Journal scenarios
+      module: test_rbd.py
+      name: rbd_journal
+      polarion-id: CEPH-83574527
+
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: kernel.sh
+        branch: tentacle
+      desc: Executing upstream RBD Kernel scenarios
+      module: test_rbd.py
+      name: rbd_kernel
+      polarion-id: CEPH-83574528
+
+  - test:
+      config:
+        script_path: qa/workunits/rbd
+        script: krbd_exclusive_option.sh
+        branch: tentacle
+      desc: Executing upstream RBD kernel exclusive scenarios
+      module: test_rbd.py
+      name: rbd_krbd_exclusive
+      polarion-id: CEPH-83574531
+
+  - test:
+      module: delete_clones_with_io.py
+      name: test delete clones with io
+      polarion-id: CEPH-9225
+      desc: Create clone of an image and delete while krbd IO is running
+
+  # ---------------------------------------------------------------------------
+  # Snap / clone / exclusive-lock / deep-flatten (from tier-2 regression)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: snap and clone operations on imported image
+      destroy-cluster: false
+      module: rbd_snap_clone_imported_image.py
+      name: snap and clone on imported image
+      polarion-id: CEPH-9230
+
+  - test:
+      desc: Verify Delayed deletion with exclusive feature on RBD image
+      module: rbd_exclusive_lock_rm_image.py
+      config:
+        io-total: 5G
+      name: Verify exclusive lock feature
+      polarion-id: CEPH-11408
+
+  - test:
+      desc: verify for parent image deletion after flattening the clone and removing snap
+      config:
+        io-total: 5G
+      module: rbd_clone_delete_parent_image.py
+      name: Test for parent image deletion after flattening the clone and removing snap
+      polarion-id: CEPH-11409
+
+  - test:
+      desc: Verify that clones creation and deletion of parent image with V2 enabled
+      destroy-cluster: false
+      module: rbd_clonev2.py
+      name: clones creation with v2clone format
+      polarion-id: CEPH-83573309
+
+  - test:
+      desc: Verify parent snapshot deletion after flattening the clone
+      destroy-cluster: false
+      module: rbd_clone_delete_parent_snapshot.py
+      name: parent snap deletion after clone flattening
+      polarion-id: CEPH-83573650
+
+  - test:
+      desc: Rename image snapshots on an image on replicated and ecpools and its clones
+      module: rbd_snapshot_rename.py
+      name: Test Snapshot Rename functionality
+      polarion-id: CEPH-9833
+
+  # ---------------------------------------------------------------------------
+  # Trash + trash purge (from tier-2 trash / trash_purge)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Enable "rbd_move_to_trash_on_remove" config setting, delete images and check if they are moved to trash automatically
+      destroy-cluster: false
+      config:
+        enable: true
+      module: rbd_trash.py
+      name: Check trash if the deleted images are moved to trash automatically
+      polarion-id: CEPH-83573297
+
+  - test:
+      desc: Move images to trash, restore them and verify
+      destroy-cluster: false
+      module: trash_restore.py
+      name: Check trash restore functionality
+      polarion-id: CEPH-83573298
+
+  - test:
+      desc: Move image to trash restore back and try create snap and clone on restored image
+      module: trash_restore_create_clone_snap.py
+      name: Test snap and clone creation on restored image from trash
+      polarion-id: CEPH-11413
+
+  - test:
+      desc: Verify parent-clone relationship and clone IOs are not affected when parent moved to trash
+      module: rbd_trash_restore_image_having_clone.py
+      name: Test parent trash restore with clone IOs
+      polarion-id: CEPH-11414
+
+  - test:
+      desc: Perform trash purge on images with clone and images without clone
+      module: rbd_trash_purge.py
+      config:
+        do_not_create_image: True
+        no_of_images: 10
+        no_of_clones: 4
+      name: Test to perform trash purge on images with and without clone
+      polarion-id: CEPH-83574482
+
+  # ---------------------------------------------------------------------------
+  # Namespace (from tier-2 namespace)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Run namespace creation in default pool
+      module: test_rbd_namespace_default_pool.py
+      name: RBD namespace creation in default pool
+      polarion-id: CEPH-83582474
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
+
+  - test:
+      desc: Run image creation in the namespace
+      module: test_rbd_namespace_image_pool.py
+      name: RBD image creation in the namespace
+      polarion-id: CEPH-83582476
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          rbd: {}
+
+  # ---------------------------------------------------------------------------
+  # Groups (from tier-2 group)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Run group creation and image add, IO
+      module: test_rbd_groups_image_usecase.py
+      name: RBD group create and image add
+      polarion-id: CEPH-83585132
+      config:
+        group: image_group
+        rep_pool_config:
+          rbd_pool:
+            rbd_image1_group:
+              size: 4G
+            rbd_image2_group:
+              size: 4G
+        ec_pool_config:
+          rbd_ec_pool1:
+            data_pool: rbd_ec_pool
+            rbd_ec_image1_group:
+              size: 4G
+            rbd_ec_image2_group:
+              size: 4G
+        fio:
+          size: 100M
+
+  - test:
+      desc: Run group snap creation and rollback
+      module: test_rbd_group_snapshot_usecase.py
+      name: RBD group snap creation and rollback
+      polarion-id: CEPH-83588302
+      config:
+        group: image_group
+        snap: group_snap
+        rep_pool_config:
+          rbd_pool:
+            rbd_image1_group:
+              size: 4G
+            rbd_image2_group:
+              size: 4G
+        ec_pool_config:
+          rbd_ec_pool1:
+            data_pool: rbd_ec_pool
+            rbd_ec_image1_group:
+              size: 4G
+            rbd_ec_image2_group:
+              size: 4G
+        fio:
+          size: 100M
+
+  - test:
+      desc: Cloning an image from a Group Snapshot
+      module: test_rbd_groups_image_clone.py
+      name: RBD group image clone create and delete
+      polarion-id: CEPH-83594298
+      config:
+        group: group1
+        group_snap: group_snap
+        user_snap: user_snap
+        rep_pool_config:
+          rbd_pool:
+            rbd_image_group:
+              size: 4G
+        ec_pool_config:
+          rbd_ec_pool:
+            data_pool: rbd_ec_data_pool
+            rbd_ec_image_group:
+              size: 4G
+        fio:
+          size: 100M
+
+  - test:
+      desc: Verify rbd group commands
+      config:
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+      module: test_rbd_group_commands_validation.py
+      name: RBD Group-related commands validation
+      polarion-id: CEPH-83594545
+
+  # ---------------------------------------------------------------------------
+  # Encryption (from tier-2 encryption) — relevant for Rook CSI encryption
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Encrypt & decrypt file using same keys and different keys
+      config:
+        encryption_type:
+          - luks1,luks1
+      destroy-cluster: false
+      module: test_rbd_encryption.py
+      name: encrypt image and clone using different keys
+      polarion-id: CEPH-83575263
+
+  - test:
+      desc: Apply different combinations of encryption to parent and clone
+      config:
+        encryption_type:
+          - luks1,luks1
+          - luks1,NA
+          - luks2,luks1
+          - luks2,luks2
+          - luks2,NA
+          - NA,luks1
+          - NA,luks2
+          - luks1,luks2
+      destroy-cluster: false
+      module: test_rbd_encryption.py
+      name: Encrypt image and clone using combinations of encryption type
+      polarion-id: CEPH-83575251
+
+  # ---------------------------------------------------------------------------
+  # Image migration (from tier-2_rbd_regression_Image_migration)
+  # ---------------------------------------------------------------------------
+  - test:
+      desc: Image migration from two different EC pools to EC pool
+      module: rbd_migration_2diff_ec_pool_ec.py
+      name: Test image migration on ecpool with different K_m values
+      polarion-id: CEPH-83573322
+
+  - test:
+      desc: Image migration from replication pools to replication pool
+      module: rbd_image_migration.py
+      config:
+        source:
+          rep-pool-only: True
+          rep_pool_config:
+            pool: rbd_RepPool1
+            image: rbd_image
+            size: 10G
+        destination:
+          rep-pool-only: True
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool2
+      name: Test image migration on replication pool
+      polarion-id: CEPH-83573293
+
+  - test:
+      desc: Image migration from EC pool to EC pool with default K_m value
+      module: rbd_image_migration.py
+      config:
+        source:
+          ec-pool-only: True
+          ec-pool-k-m: "2,2"
+          crush-failure-domain: osd
+          ec_pool_config:
+            pool: rbd_ECpool1
+            image: rbd_image_ec1
+            data_pool: data_pool_ec1
+            size: 10G
+        destination:
+          ec-pool-only: True
+          ec-pool-k-m: "2,2"
+          do_not_create_image: True
+          crush-failure-domain: osd
+          ec_pool_config:
+            pool: rbd_ECpool2
+            data_pool: data_pool_ec2
+      name: Test image migration on EC pool with default k_m value
+      polarion-id: CEPH-83573327
+
+  - test:
+      desc: Abort image migration from source to destination pool
+      module: rbd_abort_image_migration.py
+      config:
+        source:
+          ec-pool-k-m: "2,2"
+          crush-failure-domain: osd
+          rep_pool_config:
+            pool: rbd_RepPool1
+            image: rbd_image
+            size: 10G
+          ec_pool_config:
+            pool: rbd_ECpool1
+            image: rbd_image_ec1
+            data_pool: data_pool_ec1
+            size: 10G
+        destination:
+          ec-pool-k-m: "2,2"
+          do_not_create_image: True
+          crush-failure-domain: osd
+          rep_pool_config:
+            pool: rbd_RepPool2
+          ec_pool_config:
+            pool: rbd_ECpool2
+            data_pool: data_pool_ec2
+      name: Test abort image migration from source to destination pool
+      polarion-id: CEPH-83573324
+
+  - test:
+      desc: Image migration pool namespace
+      module: readonly_namespace_image_migration.py
+      config:
+        source:
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool1
+          ec_pool_config:
+            pool: rbd_ECpool1
+            data_pool: data_pool_ec1
+        destination:
+          do_not_create_image: True
+          rep_pool_config:
+            pool: rbd_RepPool2
+          ec_pool_config:
+            pool: rbd_ECpool1
+            data_pool: data_pool_ec2
+      name: Test image migration from pool namespace
+      polarion-id: CEPH-83573341
