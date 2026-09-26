@@ -92,7 +92,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 2G
+              size: 8G
             listener_port: 4420
             listeners:
               - node6
@@ -102,7 +102,7 @@ tests:
             serial: 2
             bdevs:
             - count: 2
-              size: 2G
+              size: 8G
             listener_port: 4420
             listeners:
               - node6
@@ -144,7 +144,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 2G
+              size: 8G
             listener_port: 4420
             listeners:
               - node6
@@ -154,7 +154,7 @@ tests:
             serial: 2
             bdevs:
             - count: 2
-              size: 2G
+              size: 8G
             listener_port: 4420
             listeners:
               - node6
