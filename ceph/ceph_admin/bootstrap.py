@@ -277,6 +277,26 @@ class BootstrapMixin:
         _ceph_version = args.pop("rhcs-version", None)
         _manifest_section = args.pop("release", None)
         _target_platform = args.pop("platform", self.config["platform"])
+
+        # If release section is requested but rhcs-version is not hardcoded in
+        # the suite YAML, derive the version dynamically from the job release
+        # (self.config["release"] is set by run.py from --rhbuild).
+        # This allows upgrade suites to automatically pick up the same-version
+        # stable baseline (e.g. 9.2 stable when running against a 9.2 job release)
+        # without any hardcoding in the suite YAML.
+        if not _ceph_version and _manifest_section:
+            _ceph_version = self.config.get("release")
+            if not _ceph_version:
+                raise ValueError(
+                    "release section is set in suite YAML but config['release'] is "
+                    "unset — cannot derive baseline version automatically. "
+                    "Pass rhcs-version explicitly in the suite YAML."
+                )
+            logger.info(
+                f"rhcs-version not set in suite; deriving baseline version "
+                f"{_ceph_version!r} from job release for '{_manifest_section}' section."
+            )
+
         if _ceph_version and _manifest_section:
             manifest_obj = CephTestManifest(
                 product=self.config["product"],

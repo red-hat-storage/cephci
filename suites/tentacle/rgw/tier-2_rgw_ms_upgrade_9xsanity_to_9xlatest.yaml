@@ -1,4 +1,5 @@
 # Test suite for evaluating RGW multi-site upgrade scenario.
+# Objective: Testing multi-site upgrade from RHCS 9.x sanity latest to 9.x latest build
 #
 # This suite deploys a single realm (India) spanning across two RHCS clusters. It has a
 # zonegroup (shared) which also spans across the clusters. There exists a master (pri)
@@ -25,7 +26,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 9.1
                     release: stable
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -75,7 +75,6 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 9.1
                     release: stable
                     registry-url: registry.redhat.io
                     mon-ip: node1
