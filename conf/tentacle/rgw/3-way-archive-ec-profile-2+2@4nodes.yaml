@@ -1,4 +1,9 @@
-#Conf for 2+2 EC profile on 4 nodes for 3 way active-active-archive rgw-multisite
+# EC 2+2 on 4 OSD hosts per site for 3-way RGW MS + archive upgrade.
+# Min 6 rgw_io + rgw_sync daemons per cluster (IO on 443, sync on 8443).
+# Client/haproxy colocated on node4.
+# Used by:
+#   suites/tentacle/rgw/tier-1_rgw_ms_upgrade_71GA_to_9x_latest.yaml
+#   suites/tentacle/rgw/tier-1_rgw_upgrade_archive_ssl_ecpool_81GA_to_9x_latest.yaml
 ---
 globals:
   - ceph-cluster:
@@ -21,6 +26,7 @@ globals:
           - mgr
           - mon
           - osd
+          - rgw
 
       node3:
         disk-size: 15
@@ -35,6 +41,7 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
 
   - ceph-cluster:
@@ -57,6 +64,7 @@ globals:
           - mgr
           - mon
           - osd
+          - rgw
 
       node3:
         disk-size: 15
@@ -71,6 +79,7 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
 
   - ceph-cluster:
@@ -93,6 +102,7 @@ globals:
           - mgr
           - mon
           - osd
+          - rgw
 
       node3:
         disk-size: 15
@@ -107,4 +117,5 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client

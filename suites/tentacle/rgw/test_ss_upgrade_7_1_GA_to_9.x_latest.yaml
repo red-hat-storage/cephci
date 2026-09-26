@@ -1,6 +1,7 @@
-#Objective: Testing single site single zone upgrade from RHCS 7.1 ga to 9.x latest build
-#platform : RHEL-9
-#conf: conf/tentacle/rgw/tier-0_rgw.yaml
+# Objective: P0 singlesite SSL upgrade from RHCS 7.1z(GA) to 9.x latest.
+# Cluster: EC 2+2 @4 nodes + SSL + haproxy + min 3 RGW daemons (ss + ssl)
+# platform: RHEL-9
+# global-conf: conf/tentacle/rgw/ec-profile-2+2@4nodes.yaml
 
 tests:
   - test:
@@ -49,17 +50,36 @@ tests:
               args:
                 all-available-devices: true
           - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - shared.pri
               args:
-                placement:
-                  label: rgw
-                  nodes:
-                    - node3
-                    - node4
-                    - node5
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "primary.rgw.buckets.data rgw"
+              command: shell
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: shared.pri
+                  placement:
+                    nodes:
+                      - node2
+                      - node3
+                      - node4
+                  spec:
+                    ssl: true
+                    rgw_frontend_ssl_certificate: create-cert
+                    rgw_frontend_extra_args:
+                      - "port=80"
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
@@ -73,25 +93,25 @@ tests:
         commands:
           - "sleep 120"
           - "radosgw-admin realm create --rgw-realm india --default"
-          - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
-          - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+          - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node2},https://{node_ip:node3},https://{node_ip:node4} --master --default"
+          - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node2},https://{node_ip:node3},https://{node_ip:node4} --master --default"
           - "radosgw-admin period update --rgw-realm india --commit"
           - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
           - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
           - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+          - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
           - "ceph orch restart {service_name:shared.pri}"
       desc: Setting single zone environment
       module: exec.py
       name: Setting single zone environment
       polarion-id: CEPH-10362
 
-
   - test:
       abort-on-fail: true
       config:
         command: add
         id: client.1
-        node: node6
+        node: node4
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -101,18 +121,17 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
-  # configuring HAproxy on the client node 'node4' and port '5000'
   - test:
       abort-on-fail: true
       clusters:
         ceph:
           config:
             haproxy_clients:
-              - node6
+              - node4
             rgw_endpoints:
+              - node2:80
               - node3:80
               - node4:80
-              - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
@@ -128,15 +147,135 @@ tests:
       name: Get period pre upgrade
       polarion-id: CEPH-10362
 
+  # Pre upgrade P0 tests
   - test:
-      name: Mbuckets_with_Nobjects with etag verification pre upgrade
-      desc: test etag verification
+      name: S3CMD small and multipart object download pre upgrade
+      desc: S3CMD small and multipart object download or GET pre upgrade
+      polarion-id: CEPH-83575477
       module: sanity_rgw.py
-      polarion-id: CEPH-83574871
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: M buckets with N objects put pre upgrade
+      desc: test to create M buckets and N objects pre upgrade
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
       config:
         script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
         run-on-haproxy: true
+
+  - test:
+      name: M buckets with N objects MPU put pre upgrade
+      desc: test to create M buckets and N objects with multipart upload pre upgrade
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: M buckets with N objects put delete pre upgrade
+      desc: test to create M buckets and N objects with delete pre upgrade
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: ordered listing of buckets pre upgrade
+      desc: test duration for ordered listing of bucket with top level objects pre upgrade
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Dynamic Resharding tests pre upgrade
+      desc: Resharding test - dynamic pre upgrade
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: LC expiration pre upgrade
+      desc: Test object expiration for Prefix and tag based filter pre upgrade
+      polarion-id: CEPH-10737
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        run-on-haproxy: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent pre upgrade
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent pre upgrade
+      polarion-id: CEPH-83575226
+
+  - test:
+      name: vault encryption sse-s3 per bucket pre upgrade
+      desc: test sse-s3 per bucket encryption pre upgrade
+      polarion-id: CEPH-83574615
+      module: sanity_rgw.py
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+
+  - test:
+      name: compression with zstd type pre upgrade
+      desc: test compression with zstd type pre upgrade
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: NFS cluster and export create pre upgrade
+      desc: Test NFS cluster and export create pre upgrade
+      polarion-id: CEPH-83574597
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+
+  - test:
+      name: STS rename large object pre upgrade
+      desc: Test rename of large object using sts user through AWS pre upgrade
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+
+  - test:
+      name: swift basic operations pre upgrade
+      desc: Test object operations with swift pre upgrade
+      polarion-id: CEPH-11019
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
 
   - test:
       name: Upgrade cluster to latest ceph version
@@ -173,12 +312,132 @@ tests:
       name: Get period post upgrade
       polarion-id: CEPH-10362
 
+  # Post upgrade P0 tests
   - test:
-      name: Mbuckets_with_Nobjects with etag verification post upgrade
-      desc: test etag verification
+      name: S3CMD small and multipart object download post upgrade
+      desc: S3CMD small and multipart object download or GET post upgrade
+      polarion-id: CEPH-83575477
       module: sanity_rgw.py
-      polarion-id: CEPH-83574871
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: M buckets with N objects put post upgrade
+      desc: test to create M buckets and N objects post upgrade
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
       config:
         script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
         run-on-haproxy: true
+
+  - test:
+      name: M buckets with N objects MPU put post upgrade
+      desc: test to create M buckets and N objects with multipart upload post upgrade
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: M buckets with N objects put delete post upgrade
+      desc: test to create M buckets and N objects with delete post upgrade
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: ordered listing of buckets post upgrade
+      desc: test duration for ordered listing of bucket with top level objects post upgrade
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Dynamic Resharding tests post upgrade
+      desc: Resharding test - dynamic post upgrade
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: LC expiration post upgrade
+      desc: Test object expiration for Prefix and tag based filter post upgrade
+      polarion-id: CEPH-10737
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+        run-on-haproxy: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent post upgrade
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent post upgrade
+      polarion-id: CEPH-83575226
+
+  - test:
+      name: vault encryption sse-s3 per bucket post upgrade
+      desc: test sse-s3 per bucket encryption post upgrade
+      polarion-id: CEPH-83574615
+      module: sanity_rgw.py
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+
+  - test:
+      name: compression with zstd type post upgrade
+      desc: test compression with zstd type post upgrade
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: NFS cluster and export create post upgrade
+      desc: Test NFS cluster and export create post upgrade
+      polarion-id: CEPH-83574597
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+
+  - test:
+      name: STS rename large object post upgrade
+      desc: Test rename of large object using sts user through AWS post upgrade
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+
+  - test:
+      name: swift basic operations post upgrade
+      desc: Test object operations with swift post upgrade
+      polarion-id: CEPH-11019
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml

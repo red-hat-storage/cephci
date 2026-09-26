@@ -1,6 +1,7 @@
-#Objective: Testing single site ssl setup upgrade from RHCS 8.1 G.A latest to 9.x latest build
-#platform : RHEL-9
-#conf: conf/tentacle/rgw/ec-profile-4+2-cluster.yaml
+# Objective: P0 singlesite SSL upgrade from RHCS 8.1z(GA) to 9.x latest.
+# Cluster: EC 2+2 @4 nodes + SSL + haproxy + min 3 RGW daemons (ss + ssl)
+# platform: RHEL-9
+# global-conf: conf/tentacle/rgw/ec-profile-2+2@4nodes.yaml
 
 tests:
   - test:
@@ -51,13 +52,13 @@ tests:
                 all-available-devices: true
           - config:
               args:
-                - "ceph osd erasure-code-profile set rgwecprofile01 k=4 m=2"
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
                 - "crush-failure-domain=host crush-device-class=hdd"
               command: shell
           - config:
               args:
                 - "ceph osd pool create default.rgw.buckets.data 32 32"
-                - "erasure rgwecprofile01"
+                - "erasure rgwec22_4"
               command: shell
           - config:
               args:
@@ -81,10 +82,14 @@ tests:
                   service_id: rgw.ssl
                   placement:
                     nodes:
-                      - node7
+                      - node2
+                      - node3
+                      - node4
                   spec:
                     ssl: true
                     generate_cert: true
+                    rgw_frontend_extra_args:
+                      - "port=80"
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
@@ -96,7 +101,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node8
+        node: node4
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -106,6 +111,18 @@ tests:
       name: Configure client
       polarion-id: CEPH-83573758
 
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node4
+        rgw_endpoints:
+          - node2:80
+          - node3:80
+          - node4:80
+      desc: Configure HAproxy
+      module: haproxy.py
+      name: Configure HAproxy
 
   - test:
       abort-on-fail: true
@@ -118,51 +135,118 @@ tests:
       name: copy cephadm root ca cert
       polarion-id: CEPH-10362
 
+  # Pre upgrade P0 tests (Squid 8.1 introduced / different from 7.1 SS P0)
   - test:
-      name: Manual Resharding tests pre upgrade
-      desc: Resharding test - manual
-      polarion-id: CEPH-83571740
-      module: sanity_rgw.py
-      config:
-        script-name: test_dynamic_bucket_resharding.py
-        config-file-name: test_manual_resharding_without_bucket_delete.yaml
-
-  - test:
-      name: Dynamic Resharding tests with version pre upgrade
-      desc: Resharding test - dynamic
-      polarion-id: CEPH-83571740
-      module: sanity_rgw.py
-      config:
-        script-name: test_dynamic_bucket_resharding.py
-        config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-
-  - test:
-      name: S3CMD small and multipart object download pre upgrade
-      desc: S3CMD small and multipart object download or GET
-      polarion-id: CEPH-83575477
-      module: sanity_rgw.py
-      config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-
-  - test:
-      name: compression_with_zstd_type pre upgrade
-      desc: test compression with zstd type pre upgrade
-      polarion-id: CEPH-11350
+      name: Mbuckets_with_Nobjects with etag verification pre upgrade
+      desc: test etag verification pre upgrade
+      polarion-id: CEPH-83574871
       module: sanity_rgw.py
       config:
         script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
-      name: Test NFS cluster and export create
-      desc: Test NFS cluster and export create
-      polarion-id: CEPH-83574597
+      name: Test large omap creation pre upgrade
+      desc: Test large omap creation pre upgrade
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_pre_upgrade.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: notify on multipart upload events with SASL_PLAINTEXT PLAIN pre upgrade
+      desc: notify on multipart upload events with SASL_PLAINTEXT PLAIN pre upgrade
+      polarion-id: CEPH-83575407
       module: sanity_rgw.py
       config:
         run-on-rgw: true
-        script-name: ../nfs_ganesha/nfs_cluster.py
-        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+        extra-pkgs:
+          - jdk
+        git_clone_configs_repo: true
+        install_start_kafka: true
+        configure_kafka_security: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with SASL_PLAINTEXT PLAIN pre upgrade
+      desc: notify put,copy,delete events with SASL_PLAINTEXT PLAIN pre upgrade
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent.yaml
+
+  - test:
+      name: GetObjectAttributes with checksum sha256 pre upgrade
+      desc: Test GetObjectAttributes with checksum sha256 pre upgrade
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_checksum_sha256.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: GetObjectAttributes with multipart objects pre upgrade
+      desc: Test GetObjectAttributes with multipart objects pre upgrade
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: checksum with go script pre upgrade
+      desc: test checksum with go script pre upgrade. rgw ssl required for chunked upload with trailing checksum
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../go_scripts/test_rgw_using_go.py
+        config-file-name: ../../go_scripts/configs/test_checksum_using_go.yaml
+
+  - test:
+      name: S3CMD tests, rgw log details pre upgrade
+      desc: S3CMD tests, rgw log details pre upgrade
+      polarion-id: CEPH-83575470
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Ratelimit for versioned buckets pre upgrade
+      desc: Test Ratelimit for versioned buckets pre upgrade
+      polarion-id: CEPH-83574912
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
+
+  - test:
+      name: LC expiration header with days pre upgrade
+      desc: Test header validation bucket lifecycle expiration with days pre upgrade
+      polarion-id: CEPH-83573254
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_days_expire_header.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: swift object expire pre upgrade
+      desc: test object expiration with swift pre upgrade
+      polarion-id: CEPH-9718
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_object_expire_op.yaml
 
   # upgrade cluster
   - test:
@@ -171,6 +255,7 @@ tests:
       module: test_cephadm_upgrade.py
       polarion-id: CEPH-83573791
       verify_cluster_health: true
+      abort-on-fail: true
       config:
         command: start
         service: upgrade
@@ -188,7 +273,6 @@ tests:
       name: copy cephadm root ca cert post upgrade
       polarion-id: CEPH-10362
 
-# Post Upgrade tests
   - test:
       desc: Retrieve the versions of the cluster
       module: exec.py
@@ -199,41 +283,110 @@ tests:
         commands:
           - "ceph versions"
 
+  # Post upgrade P0 tests
   - test:
-      name: NFS export delete
-      desc: NFS cluster and exports delete
-      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      name: Mbuckets_with_Nobjects with etag verification post upgrade
+      desc: test etag verification post upgrade
+      polarion-id: CEPH-83574871
       module: sanity_rgw.py
       config:
-        script-name: ../nfs_ganesha/nfs_cluster.py
-        config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
-      abort-on-fail: true
+      name: Test large omap clearance post upgrade
+      desc: Test large omap clearance post upgrade
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
       config:
-        install:
-          - agent
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_post_upgrade.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: notify on multipart upload events with SASL_PLAINTEXT PLAIN post upgrade
+      desc: notify on multipart upload events with SASL_PLAINTEXT PLAIN post upgrade
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
         run-on-rgw: true
-      desc: Setup and configure vault agent
-      destroy-cluster: false
-      module: install_vault.py
-      name: configure vault agent
-      polarion-id: CEPH-83575226
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent_multipart.yaml
 
   - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-      desc: test sse-s3 per bucket encryption pre upgrade
+      name: notify put,copy,delete events with SASL_PLAINTEXT PLAIN post upgrade
+      desc: notify put,copy,delete events with SASL_PLAINTEXT PLAIN post upgrade
+      polarion-id: CEPH-83575407
       module: sanity_rgw.py
-      name: sse-s3 per bucket encryption test pre upgrade
-      polarion-id: CEPH-83574615 # CEPH-83574617, CEPH-83575151
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent.yaml
 
   - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+      name: GetObjectAttributes with checksum sha256 post upgrade
+      desc: Test GetObjectAttributes with checksum sha256 post upgrade
+      polarion-id: CEPH-83595849
       module: sanity_rgw.py
-      desc: test sse-s3 per bucket encryption with multipart post upgrade
-      name: test sse-s3 per bucket encryption with multipart post upgrade
-      polarion-id: CEPH-83575155
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_checksum_sha256.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: GetObjectAttributes with multipart objects post upgrade
+      desc: Test GetObjectAttributes with multipart objects post upgrade
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: checksum with go script post upgrade
+      desc: test checksum with go script post upgrade. rgw ssl required for chunked upload with trailing checksum
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../go_scripts/test_rgw_using_go.py
+        config-file-name: ../../go_scripts/configs/test_checksum_using_go.yaml
+
+  - test:
+      name: S3CMD tests, rgw log details post upgrade
+      desc: S3CMD tests, rgw log details post upgrade
+      polarion-id: CEPH-83575470
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Ratelimit for versioned buckets post upgrade
+      desc: Test Ratelimit for versioned buckets post upgrade
+      polarion-id: CEPH-83574912
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
+
+  - test:
+      name: LC expiration header with days post upgrade
+      desc: Test header validation bucket lifecycle expiration with days post upgrade
+      polarion-id: CEPH-83573254
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_days_expire_header.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: swift object expire post upgrade
+      desc: test object expiration with swift post upgrade
+      polarion-id: CEPH-9718
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_object_expire_op.yaml

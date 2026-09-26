@@ -1,5 +1,6 @@
-#upgrade multisite with archive zone to latest 8.1(GA) to 9x
-#global-conf: conf/tentacle/rgw/3-way-archive-ec-profile-2+2@4nodes.yaml
+# P0 MS + archive SSL upgrade from RHCS 8.1z(GA) to 9.x latest.
+# Cluster: EC 2+2 @4 nodes + SSL + haproxy + min 6 [rgw_io, rgw_sync] daemons
+# global-conf: conf/tentacle/rgw/3-way-archive-ec-profile-2+2@4nodes.yaml
 tests:
 
   # Cluster deployment stage
@@ -71,13 +72,35 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.pri
-                      placement:
-                        nodes:
-                          - node3
+                      service_id: shared.pri.io
                       spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
                         ssl: true
                         generate_cert: true
+                        rgw_frontend_extra_args:
+                          - "port=80"
+                      placement:
+                        nodes:
+                          - node2
+                          - node3
+                          - node4
+                    - service_type: rgw
+                      service_id: shared.pri.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
+                        ssl: true
+                        generate_cert: true
+                        rgw_frontend_port: 8443
+                      placement:
+                        nodes:
+                          - node2
+                          - node3
+                          - node4
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -139,13 +162,35 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.sec
-                      placement:
-                        nodes:
-                          - node3
+                      service_id: shared.sec.io
                       spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
                         ssl: true
                         generate_cert: true
+                        rgw_frontend_extra_args:
+                          - "port=80"
+                      placement:
+                        nodes:
+                          - node2
+                          - node3
+                          - node4
+                    - service_type: rgw
+                      service_id: shared.sec.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
+                        ssl: true
+                        generate_cert: true
+                        rgw_frontend_port: 8443
+                      placement:
+                        nodes:
+                          - node2
+                          - node3
+                          - node4
         ceph-arc:
           config:
             verify_cluster_health: true
@@ -207,13 +252,35 @@ tests:
                   service: orch
                   specs:
                     - service_type: rgw
-                      service_id: shared.arc
-                      placement:
-                        nodes:
-                          - node3
+                      service_id: shared.arc.io
                       spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: archive
                         ssl: true
                         generate_cert: true
+                        rgw_frontend_extra_args:
+                          - "port=80"
+                      placement:
+                        nodes:
+                          - node2
+                          - node3
+                          - node4
+                    - service_type: rgw
+                      service_id: shared.arc.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: archive
+                        ssl: true
+                        generate_cert: true
+                        rgw_frontend_port: 8443
+                      placement:
+                        nodes:
+                          - node2
+                          - node3
+                          - node4
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83573386
       destroy-cluster: false
@@ -341,6 +408,37 @@ tests:
       module: test_client.py
       name: configure client
 
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node2:80
+              - node3:80
+              - node4:80
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node2:80
+              - node3:80
+              - node4:80
+        ceph-arc:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node2:80
+              - node3:80
+              - node4:80
+      desc: Configure HAproxy in front of SSL RGW IO daemons
+      module: haproxy.py
+      name: Configure HAproxy
+
 
   - test:
       abort-on-fail: true
@@ -372,44 +470,41 @@ tests:
           config:
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node3} --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node3} --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.shared.pri rgw_realm india"
-              - "ceph config set client.rgw.shared.pri rgw_zonegroup shared"
-              - "ceph config set client.rgw.shared.pri rgw_zone primary"
-              - "ceph config set client.rgw.shared.pri rgw_verify_ssl False"
-              - "ceph orch restart {service_name:shared.pri}"
+              - "ceph config set client.rgw.shared.pri.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.pri.sync rgw_verify_ssl False"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
               - "sleep 120"
         ceph-sec:
           config:
             commands:
-              - "ceph config set client.rgw.shared.sec rgw_verify_ssl False"
-              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "ceph config set client.rgw.shared.sec.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec.sync rgw_verify_ssl False"
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node2}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node2}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.shared.sec rgw_realm india"
-              - "ceph config set client.rgw.shared.sec rgw_zonegroup shared"
-              - "ceph config set client.rgw.shared.sec rgw_zone secondary"
-              - "ceph orch restart {service_name:shared.sec}"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
               - "sleep 120"
         ceph-arc:
           config:
             commands:
-              - "ceph config set client.rgw.shared.arc rgw_verify_ssl False"
-              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints https://{node_ip:node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --tier-type=archive"
+              - "ceph config set client.rgw.shared.arc.io rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.arc.sync rgw_verify_ssl False"
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node2}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node2}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --tier-type=archive"
               - "radosgw-admin zone modify  --rgw-realm india --rgw-zonegroup shared --rgw-zone archive  --sync-from-all false --sync-from-rm secondary --sync-from primary"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.shared.arc rgw_realm india"
-              - "ceph config set client.rgw.shared.arc rgw_zonegroup shared"
-              - "ceph config set client.rgw.shared.arc rgw_zone archive"
-              - "ceph orch restart {service_name:shared.arc}"
+              - "ceph orch restart {service_name:shared.arc.io}"
+              - "ceph orch restart {service_name:shared.arc.sync}"
               - "sleep 120"
       desc: Setting up RGW multisite replication environment with archive zone
       module: exec.py
@@ -619,35 +714,35 @@ tests:
           config:
             cephadm: true
             commands:
-              - "ceph config set client.rgw.shared.sec rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart rgw.shared.sec"
+              - "ceph config set client.rgw.shared.sec.io rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.sec.io rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.sec.io rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.sec.io rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.sec.io rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.sec.io rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.sec.io"
         ceph-pri:
           config:
             cephadm: true
             commands:
-              - "ceph config set client.rgw.shared.pri rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart rgw.shared.pri"
+              - "ceph config set client.rgw.shared.pri.io rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.pri.io rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.pri.io rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.pri.io rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.pri.io rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.pri.io rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.pri.io"
         ceph-arc:
           config:
             cephadm: true
             commands:
-              - "ceph config set client.rgw.shared.arc rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart rgw.shared.arc"
+              - "ceph config set client.rgw.shared.arc.io rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.arc.io rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.arc.io rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.arc.io rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.arc.io rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.arc.io rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.arc.io"
       desc: Setting vault configs for sse-s3 on multisite archive
       module: exec.py
       name: set sse-s3 vault configs on multisite
