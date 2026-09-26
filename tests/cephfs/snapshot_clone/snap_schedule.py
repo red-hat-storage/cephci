@@ -4,7 +4,6 @@ import random
 import string
 import time
 import traceback
-from time import sleep
 
 from looseversion import LooseVersion
 
@@ -199,7 +198,11 @@ def run(ceph_cluster, **kw):
 
         for cmd in modified_commands:
             client1.exec_command(sudo=True, cmd=cmd)
-        sleep(300)
+        for mount_path in (
+            f"{fuse_mounting_dir_1}dir_fuse/",
+            f"{kernel_mounting_dir_1}dir_kernel/",
+        ):
+            snap_util.wait_for_scheduled_snaps(client1, mount_path, min_count=4)
         verify_snap_schedule(
             client1,
             f"{fuse_mounting_dir_1}dir_fuse/",
