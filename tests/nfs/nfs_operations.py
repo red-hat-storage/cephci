@@ -30,6 +30,79 @@ setup_start_time = None
 GANESHA_SUBVOL_GROUP = "ganeshagroup"
 
 
+def _export_path_to_subvol_name(export_path):
+    """Map NFS export pseudo path to CephFS subvolume name (export.create convention)."""
+    return (export_path or "").replace("/", "")
+
+
+def _remove_owned_ganesha_subvolumes(client, export_paths, fs_name="cephfs"):
+    """
+    Remove only subvolumes that back the given export paths.
+
+    Do not wipe the entire ganeshagroup — other NFS clusters in the same suite
+    (e.g. ``cephfs-nfs`` still used after a mid-suite ``cephfs-nfs-cephx``
+    cleanup) share that group. See RCA tentacle-test-executor#3174.
+    """
+    owned = []
+    for path in export_paths:
+        name = _export_path_to_subvol_name(path)
+        if name and name not in owned:
+            owned.append(name)
+    for subvol in owned:
+        cmd = (
+            f"ceph fs subvolume rm {fs_name} {subvol} "
+            f"--group_name {GANESHA_SUBVOL_GROUP}"
+        )
+        try:
+            client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            log.info("Removed ganeshagroup subvolume %s (export cleanup)", subvol)
+        except Exception as exc:
+            log.warning("Subvolume rm %s failed (continuing): %s", subvol, exc)
+
+
+def _maybe_remove_ganeshagroup(client, fs_name="cephfs"):
+    """
+    Remove ganeshagroup only when no NFS clusters remain and the group is empty.
+
+    Mid-suite cleanups must leave the group intact for sibling clusters.
+    """
+    try:
+        remaining = Ceph(client).nfs.cluster.ls() or []
+    except Exception as exc:
+        log.warning(
+            "Could not list NFS clusters before ganeshagroup rm; leaving group: %s",
+            exc,
+        )
+        return
+    if remaining:
+        log.info(
+            "Leaving ganeshagroup in place; NFS cluster(s) still present: %s",
+            remaining,
+        )
+        return
+    cmd = f"ceph fs subvolume ls {fs_name} --group_name {GANESHA_SUBVOL_GROUP}"
+    try:
+        out = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+        raw = out[0] if isinstance(out, tuple) else out
+        data = json.loads(raw or "[]")
+    except Exception as exc:
+        log.warning("Could not list ganeshagroup subvolumes; leaving group: %s", exc)
+        return
+    if data:
+        names = [item.get("name") for item in data if isinstance(item, dict)]
+        log.info(
+            "Leaving ganeshagroup; leftover subvolume(s) after scoped cleanup: %s",
+            names,
+        )
+        return
+    cmd = f"ceph fs subvolumegroup rm {fs_name} {GANESHA_SUBVOL_GROUP} --force"
+    try:
+        client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+        log.info("Removed empty ganeshagroup (no NFS clusters remain)")
+    except Exception as exc:
+        log.warning("ganeshagroup rm failed (continuing): %s", exc)
+
+
 def _redact_kmip_key_for_log(obj):
     """Deep-copy NFS spec(s) with kmip_key private key material removed."""
     redacted = deepcopy(obj)
@@ -893,28 +966,18 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
         client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}")
         sleep(3)
 
-    # Delete all exports
-    for i in range(len(clients)):
-        Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
+    # Delete exports created for this cluster only
+    owned_exports = [f"{nfs_export}_{i}" for i in range(len(clients))]
+    for export_name in owned_exports:
+        Ceph(clients[0]).nfs.export.delete(nfs_name, export_name)
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
     check_nfs_daemons_removed(clients[0], nfs_name)
 
-    # Delete the subvolume
-    for i in range(len(clients)):
-        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
-        out = client.exec_command(sudo=True, cmd=cmd)
-        json_string, _ = out
-        data = json.loads(json_string)
-        # Extract names of subvolume
-        for item in data:
-            subvol = item["name"]
-            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
-            client.exec_command(sudo=True, cmd=cmd)
-
-    # Delete the subvolume group
-    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
-    client.exec_command(sudo=True, cmd=cmd)
+    # Only remove subvolumes that back this cluster's exports; keep shared
+    # ganeshagroup contents used by other NFS clusters in the same suite.
+    _remove_owned_ganesha_subvolumes(clients[0], owned_exports)
+    _maybe_remove_ganeshagroup(clients[0])
 
 
 def setup_custom_nfs_cluster_multi_export_client(
@@ -1154,18 +1217,20 @@ def cleanup_custom_nfs_cluster_multi_export_client(
     client_export_mount_dict = exports_mounts_perclient(
         clients, nfs_export, nfs_mount, export_num
     )
+    owned_exports = []
 
     for client_num in range(len(clients)):
-        for export_num in range(
+        for exp_idx in range(
             len(client_export_mount_dict[clients[client_num]]["export"])
         ):
             export_name = client_export_mount_dict[clients[client_num]]["export"][
-                export_num
+                exp_idx
             ]
             mount_name = client_export_mount_dict[clients[client_num]]["mount"][
-                export_num
+                exp_idx
             ]
             client = list(client_export_mount_dict.keys())[client_num]
+            owned_exports.append(export_name)
             # Clear the nfs_mount, at times rm operation can fail
             # as the dir is not empty, this being an expected behaviour,
             # the solution is to repeat the rm operation.
@@ -1191,21 +1256,8 @@ def cleanup_custom_nfs_cluster_multi_export_client(
     sleep(30)
     check_nfs_daemons_removed(clients[0], nfs_name)
 
-    # Delete the subvolume
-    for i in range(len(clients)):
-        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
-        out = client.exec_command(sudo=True, cmd=cmd)
-        json_string, _ = out
-        data = json.loads(json_string)
-        # Extract names of subvolume
-        for item in data:
-            subvol = item["name"]
-            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
-            client.exec_command(sudo=True, cmd=cmd)
-
-    # Delete the subvolume group
-    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
-    client.exec_command(sudo=True, cmd=cmd)
+    _remove_owned_ganesha_subvolumes(clients[0], owned_exports)
+    _maybe_remove_ganeshagroup(clients[0])
 
 
 def _nfs_mount_version_key_is_v3(key):
@@ -1513,9 +1565,11 @@ def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
     """Check NFS daemons are removed; verify deleted cluster deps are cleared.
 
     Use prefix_cephadm=True when running on installer (no host ceph binary).
+    When ``nfs_name`` is set, only that cluster must be gone — other NFS
+    services may remain (e.g. suite cluster during upgrade + rotate-key).
     """
     if not prefix_cephadm:
-        check_nfs_daemons_removed_retry(client)
+        check_nfs_daemons_removed_retry(client, nfs_name=nfs_name)
     if nfs_name:
         ceph_version = get_ceph_version(client, prefix_cephadm=prefix_cephadm)
         if ceph_version and LooseVersion(ceph_version) >= LooseVersion("20.2.2-75"):
@@ -1523,11 +1577,14 @@ def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
 
 
 @retry(OperationFailedError, tries=30, delay=10, backoff=1)
-def check_nfs_daemons_removed_retry(client):
+def check_nfs_daemons_removed_retry(client, nfs_name=None):
     """
     Helper function to check if NFS daemons are removed.
     Raises OperationFailedError if daemons are still present (to trigger retry).
-    Returns True if all daemons are removed.
+    Returns True if removed.
+
+    If ``nfs_name`` is provided (str or list), only those ``nfs.<name>``
+    services must be absent. Other NFS clusters may still be running.
     """
     # We are increasing the timeout to 300 seconds to avoid the timeout error
     # with some of the QoS tests which were intermittently failing to cleanup
@@ -1537,8 +1594,29 @@ def check_nfs_daemons_removed_retry(client):
     if "No services reported" in out:
         log.info("All NFS daemons have been removed.")
         return True
-    else:
+
+    if nfs_name is None:
         raise OperationFailedError("NFS daemons still present")
+
+    names = [nfs_name] if isinstance(nfs_name, str) else list(nfs_name)
+    wanted = {f"nfs.{n}" for n in names}
+    still_present = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or line.startswith("NAME"):
+            continue
+        svc = line.split()[0]
+        if svc in wanted or any(svc.startswith(f"{w}.") for w in wanted):
+            still_present.append(svc)
+    if still_present:
+        raise OperationFailedError(
+            f"NFS daemon(s) still present for {names}: {still_present}"
+        )
+    log.info(
+        "NFS cluster(s) %s removed (other NFS services may remain).",
+        names,
+    )
+    return True
 
 
 def _orch_ps_json_stdout(installer_node, cmd):

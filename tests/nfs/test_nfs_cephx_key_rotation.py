@@ -44,7 +44,9 @@ log = Log(__name__)
 # ── constants ────────────────────────────────────────────────────────────────
 NFS_NAME = "cephfs-nfs-cephx"
 FS_NAME = "cephfs"
-NFS_EXPORT = "/export_0"
+# Unique export prefix so subvol ``export_cephx_0`` does not collide with suite
+# ``cephfs-nfs`` exports ``/export_0`` (shared ganeshagroup). See RCA #3174.
+NFS_EXPORT = "/export_cephx_0"
 NFS_MOUNT = "/mnt/nfs_cephx"
 NFS_VERSION = "4.1"
 NFS_PORT = "2049"
@@ -448,9 +450,9 @@ def run(ceph_cluster, **kw):
 
     # All NFS hostnames so CephX keys register on every NFS daemon.
     nfs_server_hostnames = [n.hostname for n in nfs_nodes]
-    # setup_nfs_cluster appends _{i} to form the export name, so pass the
-    # base prefix "/export"; the resulting export will be "/export_0"
-    nfs_export_base = "/export"
+    # setup_nfs_cluster appends _{i}; unique prefix avoids colliding with suite
+    # ``/export_0`` subvolume in shared ganeshagroup (RCA #3174).
+    nfs_export_base = "/export_cephx"
     export = NFS_EXPORT
 
     try:
@@ -487,6 +489,15 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        # Suite NFS (e.g. cephfs-nfs) often remains during upgrade suites;
+        # cleanup must not fail the test after rotate-key already passed.
         log.info("Cleaning up NFS cluster %r ...", nfs_name)
-        cleanup_cluster(clients, mount_point, nfs_name, nfs_export_base)
-        log.info("Cleanup done.")
+        try:
+            cleanup_cluster(clients, mount_point, nfs_name, nfs_export_base)
+            log.info("Cleanup done.")
+        except Exception as cleanup_exc:
+            log.warning(
+                "Cleanup of %r raised after test body finished: %s",
+                nfs_name,
+                cleanup_exc,
+            )
