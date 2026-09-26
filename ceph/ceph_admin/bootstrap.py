@@ -494,7 +494,15 @@ class BootstrapMixin:
 
                 images_dict[key] = value
 
-        ignore_images = ["cephcsi", "nvmeof_cli", "crimson"]
+        # Skip images not yet supported as mgr/cephadm/container_image_* config keys
+        ignore_images = [
+            "cephcsi",
+            "nvmeof_cli",
+            "crimson",
+            "rgw_standalone",
+            "rgw_developer_experience",
+            "object_browser",
+        ]
         check_ignored_images = lambda image: image in ignore_images
         for image, value in images_dict.items():
             _image = image.removesuffix("_image")
