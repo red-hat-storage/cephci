@@ -50,16 +50,22 @@ def upgrade_prerequisites(cluster, orch, **upg_cfg):
     """
     cdn = upg_cfg.get("cdn", False)
     ibm_build = upg_cfg.get("ibm_build", False)
-    overrides = upg_cfg.get("overrides")
+    overrides = upg_cfg.get("overrides") or {}
     release = upg_cfg.get("release")
     registry = None
 
     if ibm_build:
         get_configs()
-        if not cdn:
-            registry = get_registry_credentials("stage", "ibm")
-        else:
-            registry = get_registry_credentials("cdn", "ibm")
+        from utility.utils import resolve_registry_host
+
+        # Prefer upgrade-registry custom-config; else container image host
+        host = resolve_registry_host(
+            overrides=overrides,
+            image=upg_cfg.get("container_image") or upg_cfg.get("nvmeof_cli_image"),
+            key="upgrade-registry",
+        )
+        if host:
+            registry = get_registry_credentials(host)
     if registry:
         for node in cluster.get_nodes(ignore="client"):
             Registry(node).login(

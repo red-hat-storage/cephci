@@ -2843,18 +2843,80 @@ def log_json_dump(data):
 
 
 def get_registry_info(registry):
-    """Get Registry details from cephci configuration yaml file.
+    """Get registry entry from the host-keyed ``registries`` section.
 
     Args:
-        registry: registry name
+        registry: Registry hostname (e.g. ``cp.icr.io``, ``preprod.icr.io``).
+
+    Returns:
+        dict with at least username/password (``user`` is accepted as an alias
+        for ``username``). Optional keys: ``product``, ``production``.
+
+    Raises:
+        KeyError: when ``registries`` is missing or ``registry`` is not listed.
     """
+    if not registry:
+        raise KeyError("Registry host is required")
     try:
-        __regs = get_cephci_config()["registries"]
-        return __regs[registry]
+        regs = get_cephci_config()["registries"]
+        info = regs[registry]
     except KeyError:
         raise KeyError(
-            "CephCI configuration yaml file does not have 'registries' section"
+            f"CephCI configuration has no registries entry for {registry!r}. "
+            "Add it under the top-level 'registries:' section in ~/.cephci.yaml."
         )
+    if not isinstance(info, dict):
+        raise KeyError(f"Invalid registries entry for {registry!r}")
+    # Normalize user/username from template variants
+    username = info.get("username") or info.get("user")
+    password = info.get("password")
+    if not username or not password:
+        raise KeyError(
+            f"registries[{registry!r}] must include username/user and password"
+        )
+    normalized = dict(info)
+    normalized["username"] = username
+    normalized["password"] = password
+    return normalized
+
+
+def registry_host_from_image(image):
+    """Return registry host from a container image reference."""
+    if not image or not isinstance(image, str):
+        return None
+    host = image.split("/")[0]
+    return host or None
+
+
+def resolve_registry_host(
+    overrides=None, image=None, explicit=None, key="bootstrap-registry"
+):
+    """
+    Resolve which registry host to authenticate against.
+
+    Preference: ``explicit`` > ``overrides[key]`` > image hostname.
+    """
+    if explicit:
+        return explicit
+    overrides = overrides or {}
+    if isinstance(overrides, dict) and overrides.get(key):
+        return overrides[key]
+    return registry_host_from_image(image)
+
+
+def resolve_registry_login(registry_host):
+    """
+    Resolve cephadm/podman login args for a registry host.
+
+    Returns:
+        dict: registry-url, registry-username, registry-password
+    """
+    info = get_registry_info(registry_host)
+    return {
+        "registry-url": registry_host,
+        "registry-username": info["username"],
+        "registry-password": info["password"],
+    }
 
 
 def is_unsecured_registry(test_data):
