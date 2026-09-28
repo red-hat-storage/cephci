@@ -684,6 +684,16 @@ def run(ceph_cluster, **kw):
     if not operation:
         raise ConfigError("'operation' is required in config")
 
+    cloud_type = str(config.get("cloud-type", "")).lower()
+    if cloud_type == "aws" and operation in (
+        "verify_id_after_unmount",
+        "verify_client_session_ids",
+    ):
+        log.info(
+            f"Skipping NFS gRPC '{operation}' test: not supported on AWS (ganesha instability on AWS ARM)"
+        )
+        return 0
+
     nfs_name = config.get("nfs_name", "cephfs-nfs")
     nfs_export = config.get("nfs_export", "/export")
     nfs_mount = config.get("nfs_mount", "/mnt/nfs")
