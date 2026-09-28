@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import traceback
 from typing import List, Optional, Tuple
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -19,11 +22,124 @@ from utility.log import Log
 
 log = Log(__name__)
 
+# Subvolume quarantine requires RHCS 9.2+ / Ceph 20.2.2+ (MGR volumes + MDS).
+QUARANTINE_MIN_UPSTREAM_BUILD = "20.2.2"
+QUARANTINE_MIN_RHCS_BUILD = "9.2"
+
 _QUARANTINE_KEYS = ("quarantine", "quarantined", "is_quarantined")
 _QUARANTINE_ENABLED = frozenset({"1", "true", "yes", "on", "enabled", "quarantined"})
 _QUARANTINE_DISABLED = frozenset(
     {"0", "false", "no", "off", "disabled", "not_quarantined", "unset"}
 )
+
+
+def _numeric_version_token(value):
+    """Extract Ceph/RHCS version digits only; ignore platform suffixes.
+
+    ``run.py`` appends the OS platform to rhbuild (e.g. ``20.2.2-rhel-9`` or
+    ``9.2-rhel-9``). Quarantine is gated on the Ceph/RHCS version alone.
+
+    Examples:
+      ``20.2.2-rhel-10``      -> ``20.2.2``
+      ``20.2.2-rhel-9``       -> ``20.2.2``
+      ``9.2-rhel-9``          -> ``9.2``
+      ``20.2.2-104.el10cp``   -> ``20.2.2``
+      ``main-rhel-9``         -> None (named release)
+    """
+    if not value:
+        return None
+    match = re.match(r"(\d+\.\d+(?:\.\d+)?)", str(value).strip())
+    return match.group(1) if match else None
+
+
+def _version_meets_quarantine_min(version_token):
+    """Compare a numeric Ceph/RHCS version token against quarantine minima."""
+    major = int(version_token.split(".")[0])
+    lv = LooseVersion(version_token)
+    if major < 10:
+        return lv >= LooseVersion(QUARANTINE_MIN_RHCS_BUILD)
+    return lv >= LooseVersion(QUARANTINE_MIN_UPSTREAM_BUILD)
+
+
+def quarantine_supported_for_rhbuild(rhbuild, installed_version=None):
+    """
+    Return True when the Ceph/RHCS *version* supports subvolume quarantine.
+
+    Only the numeric version is considered (e.g. ``20.2.2`` or ``9.2``).
+    Platform suffixes from ``run.py`` (``-rhel-9``, ``-rhel-10``, …) are
+    ignored.
+
+    Numeric RHCS builds (major < 10) require >= 9.2.
+    Numeric upstream/Ceph builds (major >= 10) require >= 20.2.2.
+
+    Named ``--release`` values (``main``, ``tentacle``, ``quincy``, …) are not
+    version numbers; *installed_version* from the cluster is used when present.
+    If the name cannot be resolved to a version, return True so the suite is not
+    silently skipped on current upstream distinct names.
+    """
+    token = _numeric_version_token(rhbuild)
+    if token:
+        return _version_meets_quarantine_min(token)
+
+    installed_token = _numeric_version_token(installed_version)
+    if installed_token:
+        return _version_meets_quarantine_min(installed_token)
+
+    if rhbuild:
+        log.info(
+            "rhbuild=%s is a named release and installed Ceph version is "
+            "unavailable; allowing subvolume quarantine suite to run",
+            rhbuild,
+        )
+        return True
+    return False
+
+
+def _installed_ceph_version_for_gate(ceph_cluster):
+    """Best-effort installed Ceph version string from the cluster, or None."""
+    if ceph_cluster is None:
+        return None
+    try:
+        from utility.utils import get_ceph_version_from_cluster
+
+        nodes = ceph_cluster.get_nodes(role="client") or ceph_cluster.get_nodes(
+            role="installer"
+        )
+        if not nodes:
+            return None
+        return get_ceph_version_from_cluster(nodes[0])
+    except Exception as exc:
+        log.warning("Unable to resolve installed Ceph version for gate: %s", exc)
+        return None
+
+
+def skip_quarantine_tests_unless_supported(config=None, ceph_cluster=None):
+    """
+    Return True when subvolume quarantine tests should be skipped.
+
+    Uses ``config['rhbuild']`` (from cephci ``--rhbuild`` / ``--release``). For
+    named upstream releases, falls back to the installed cluster Ceph version.
+    Callers should ``return 0`` immediately when this is True.
+    """
+    config = config or {}
+    rhbuild = config.get("rhbuild")
+    installed_version = None
+    if not _numeric_version_token(rhbuild):
+        installed_version = _installed_ceph_version_for_gate(ceph_cluster)
+        if not installed_version:
+            installed_version = config.get("upstream_build")
+    if quarantine_supported_for_rhbuild(rhbuild, installed_version=installed_version):
+        return False
+    log.info(
+        "Skipping subvolume quarantine test: requires Ceph/RHCS version >= %s "
+        "(RHCS) or >= %s (upstream); rhbuild=%s (platform suffix ignored) "
+        "installed=%s",
+        QUARANTINE_MIN_RHCS_BUILD,
+        QUARANTINE_MIN_UPSTREAM_BUILD,
+        rhbuild,
+        installed_version,
+    )
+    return True
 
 
 def _parse_quarantine_flag(value) -> Optional[bool]:

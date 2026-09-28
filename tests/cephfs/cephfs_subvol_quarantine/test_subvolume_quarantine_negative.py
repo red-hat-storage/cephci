@@ -14,7 +14,10 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
-from tests.cephfs.lib.cephfs_subvol_quarantine_utils import SubvolQuarantineUtils
+from tests.cephfs.lib.cephfs_subvol_quarantine_utils import (
+    SubvolQuarantineUtils,
+    skip_quarantine_tests_unless_supported,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -319,6 +322,9 @@ SUBTESTS = {
 def run(ceph_cluster, **kw):
     """Run Negative subtests for CephFS subvolume quarantine."""
     config = kw.get("config") or {}
+    if skip_quarantine_tests_unless_supported(config, ceph_cluster):
+        return 0
+
     log.info("=" * 80)
     log.info("TEST TYPE : Negative")
     log.info("MODULE    : test_subvolume_quarantine_negative.py")

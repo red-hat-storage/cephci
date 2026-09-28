@@ -21,7 +21,10 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
-from tests.cephfs.lib.cephfs_subvol_quarantine_utils import SubvolQuarantineUtils
+from tests.cephfs.lib.cephfs_subvol_quarantine_utils import (
+    SubvolQuarantineUtils,
+    skip_quarantine_tests_unless_supported,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -531,6 +534,9 @@ def run(ceph_cluster, **kw):
       fs_name, subvol_a/b, mount_*, client_*
     """
     config = kw.get("config") or {}
+    if skip_quarantine_tests_unless_supported(config, ceph_cluster):
+        return 0
+
     log.info("=" * 80)
     log.info("TEST TYPE : Sanity (Acceptance)")
     log.info("MODULE    : test_subvolume_quarantine_sanity.py")
