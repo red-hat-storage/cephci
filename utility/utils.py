@@ -2090,7 +2090,7 @@ def configure_kafka_cluster_with_security(ceph_cluster, cloud_type):
     redeploy_rgw_service_for_kafka_security(rgw_node1)
 
 
-def config_keystone_ldap(rgw_node, client_node, cloud_type):
+def config_keystone(rgw_node, client_node, cloud_type):
     """Set the keystone config option on the cluster at startup and run deploy_keystone_on_client.sh"""
     cephci_config = get_cephci_config()
     keystone_cfg = cephci_config.get("keystone", {})
@@ -2144,6 +2144,94 @@ def config_keystone_ldap(rgw_node, client_node, cloud_type):
         cmd=f"ceph config set client.{rgw_name} rgw_keystone_url {keystone_server}",
     )
     # Restart rgw service and wait for it to come up
+    restart_rgw_and_wait(rgw_node, rgw_name)
+
+
+def config_ldap(rgw_node, client_node, cloud_type, config=None):
+    """Deploy RHDS on the client node and configure RGW LDAP authentication.
+
+    Mirrors config_keystone(): run deploy_rhds_on_client.sh on the client,
+    point RGW at ldap://<client_ip>:389, then restart RGW.
+    Optional ~/.cephci.yaml keys:
+      ldap.image: container image (e.g. quay.io/389ds/dirsrv:latest)
+    """
+    config = config or {}
+    cephci_config = get_cephci_config()
+    ldap_cfg = cephci_config.get("ldap", {})
+    lookup = cloud_type if cloud_type in ldap_cfg else "openstack"
+    ldap_cloud_cfg = ldap_cfg.get(lookup, ldap_cfg.get("openstack", {}))
+    ldap_image = ldap_cfg.get("image") or ldap_cloud_cfg.get("image")
+    yaml_ldap_url = ldap_cloud_cfg.get("url")
+
+    out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
+    rgw_name = out[0].split()[0]
+    client_ip = client_node.ip_address
+    ldap_url = yaml_ldap_url
+
+    clone_configs_repo(client_node, "rgw_configs")
+    ldap_path = "/home/cephuser/configs/rgw/ldap/"
+    ldap_script = os.path.join(ldap_path, "deploy_rhds_on_client.sh")
+    ldap_script_candidates = [
+        ldap_script,
+        "/root/rgw-tests/ceph-qe-scripts/utility/deploy_rhds_on_client.sh",
+        "/home/cephuser/rgw-tests/ceph-qe-scripts/utility/deploy_rhds_on_client.sh",
+        "/root/rhds-src/deploy_rhds_on_client.sh",
+    ]
+    ldap_src = None
+    for candidate in ldap_script_candidates:
+        found, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"test -f {candidate} && echo found || true",
+            check_ec=False,
+        )
+        if found and "found" in str(found):
+            ldap_src = os.path.dirname(candidate)
+            ldap_script = candidate
+            break
+
+    if ldap_src is None:
+        git_url = config.get(
+            "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+        )
+        branch = config.get("branch", "master")
+        dest = "/home/cephuser/rgw-tests"
+        repo_path = f"{dest}/ceph-qe-scripts"
+        log.info(f"Cloning {git_url} ({branch}) onto client for RHDS scripts")
+        client_node.exec_command(sudo=True, cmd=f"mkdir -p {dest}")
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"test -e {repo_path} || git clone {git_url} -b {branch} {repo_path}",
+        )
+        ldap_src = f"{repo_path}/utility"
+        ldap_script = f"{ldap_src}/deploy_rhds_on_client.sh"
+
+    try:
+        client_node.exec_command(sudo=True, cmd="pip install podman-compose")
+        client_node.exec_command(
+            sudo=True, cmd=f"chmod +x {ldap_script} {ldap_src}/init-rhds.sh"
+        )
+        env_prefix = f"LDAP_IMAGE={ldap_image} " if ldap_image else ""
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"{env_prefix}{ldap_script} {ldap_src} {client_ip} --configure-rgw",
+            long_running=True,
+        )
+        log.info("Successfully deployed RHDS on client using deploy_rhds_on_client.sh")
+        ldap_url = f"ldap://{client_ip}:389"
+    except BaseException as be:
+        log.debug(f"Failed to run deploy_rhds_on_client.sh: {be}")
+
+    if not ldap_url:
+        raise ConfigError(
+            f"ldap config missing for cloud_type '{cloud_type}'. "
+            "Add ldap.{cloud}.url to cephci config, or ensure "
+            "deploy_rhds_on_client.sh is available on the client."
+        )
+
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
+    )
     restart_rgw_and_wait(rgw_node, rgw_name)
 
 
