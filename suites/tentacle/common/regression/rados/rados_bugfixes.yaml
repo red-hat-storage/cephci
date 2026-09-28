@@ -56,8 +56,8 @@ tests:
         - recovery_pool
 
   - test:
-      name: Inconsistent objects in  EC pool functionality check
-      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+      name: EC Case 1-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects>auto repair errors count & auto_repair is true
       module: test_osd_ecpool_inconsistency_scenario.py
       polarion-id: CEPH-83586175
       config:
@@ -73,8 +73,114 @@ tests:
         debug_enable: False
         delete_pool:
           - ecpool
+        case_to_run:
+          - case1
       comments: Active bugs 2277111,2335727 and 2335762
 
+  - test:
+      name: EC Case 2-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          pool_name: ecpool
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        debug_enable: False
+        delete_pool:
+          - ecpool
+        case_to_run:
+          - case2
+
+  - test:
+      name: EC Case 3-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects<auto repair errors count, auto_repair enabled; expect auto-repair
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          pool_name: ecpool
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        debug_enable: False
+        delete_pool:
+          - ecpool
+        case_to_run:
+          - case3
+
+  - test:
+      name: EC Case 4-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects>auto repair errors count & auto_repair is true
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          pool_name: ecpool
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        debug_enable: False
+        delete_pool:
+          - ecpool
+        case_to_run:
+          - case4
+
+  - test:
+      name: EC Case 5-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          pool_name: ecpool
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        debug_enable: False
+        delete_pool:
+          - ecpool
+        case_to_run:
+          - case5
+
+  - test:
+      name: EC Case 6-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects<auto repair errors count, auto_repair enabled
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          pool_name: ecpool
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        debug_enable: False
+        delete_pool:
+          - ecpool
+        case_to_run:
+          - case6
   - test:
       name: Inconsistent objects in replicated pool functionality check
       desc: Scub and deep-scrub on  inconsistent objects in Replicated pool

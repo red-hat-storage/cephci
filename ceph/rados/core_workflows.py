@@ -5234,12 +5234,28 @@ EOF"""
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
         self.run_deep_scrub(pgid=pg_id)
-        self.start_check_deep_scrub_complete(
-            pg_id=pg_id, user_initiated=True, wait_time=1800
-        )
 
-        inconsistent_details = self.get_inconsistent_object_details(pg_id)
-        obj_count = len(inconsistent_details["inconsistents"])
+        # Return as soon as inconsistent objects are visible instead of waiting
+        # for the full deep-scrub stamp (can save several minutes).
+        end_time = time.time() + 180
+        obj_count = 0
+        while time.time() < end_time:
+            inconsistent_details = self.get_inconsistent_object_details(pg_id)
+            obj_count = len(inconsistent_details["inconsistents"])
+            log.info(
+                f"Waiting for inconsistent objects on PG {pg_id}; "
+                f"current count: {obj_count}/{no_of_objects}"
+            )
+            if obj_count >= no_of_objects:
+                break
+            time.sleep(10)
+        else:
+            log.error(
+                f"Timed out waiting for {no_of_objects} inconsistent objects on PG {pg_id}; "
+                f"found {obj_count}"
+            )
+            return None
+
         log.info(f"The inconsistent object count is -{obj_count}")
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id, obj_count

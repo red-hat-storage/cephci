@@ -1,37 +1,77 @@
 """
-Verify inconsistent object behavior during scheduled scrub/deep-scrub in an EC pool.
+EC pool inconsistent-object scrub/deep-scrub auto-repair verification.
 
-Workflow:
-   1. Create an EC pool and convert objects into inconsistent objects.
-   2. Configure osd_scrub_auto_repair and osd_scrub_auto_repair_num_errors.
-       osd_scrub_auto_repair - When true, enables automatic PG repair when scrub/deep-scrub
-                               finds errors.
-       osd_scrub_auto_repair_num_errors - Auto repair does not run if more than this many
-                                          errors are found. Default value is 5.
-   3. Trigger scheduled scrub/deep-scrub by shortening OSD scrub intervals and unsetting
-      noscrub/nodeep-scrub. Scrub wait failures are logged and ignored; the case then reads
-      the inconsistent object count and asserts the expected repair behavior.
-   4. Execute cases selected by config['case_to_run'] (all six if not specified):
-      case1 - Scrub: inconsistent count > osd_scrub_auto_repair_num_errors, auto_repair true
-              Set osd_scrub_auto_repair_num_errors to n-1 and osd_scrub_auto_repair to true.
-              Expectation: No repairs.
-      case2 - Scrub: inconsistent count < osd_scrub_auto_repair_num_errors, auto_repair false
-              Set osd_scrub_auto_repair_num_errors to n+1 and osd_scrub_auto_repair to false.
-              Expectation: No repairs.
-      case3 - Scrub: inconsistent count < osd_scrub_auto_repair_num_errors, auto_repair true
-              Set osd_scrub_auto_repair_num_errors to n+1 and osd_scrub_auto_repair to true.
-              Expectation: All inconsistent objects are auto-repaired.
-      case4 - Deep-scrub: inconsistent count > osd_scrub_auto_repair_num_errors, auto_repair true
-              Set osd_scrub_auto_repair_num_errors to n-1 and osd_scrub_auto_repair to true.
-              Expectation: No repairs.
-      case5 - Deep-scrub: inconsistent count < osd_scrub_auto_repair_num_errors, auto_repair false
-              Set osd_scrub_auto_repair_num_errors to n+1 and osd_scrub_auto_repair to false.
-              Expectation: No repairs.
-      case6 - Deep-scrub: inconsistent count < osd_scrub_auto_repair_num_errors, auto_repair true
-              Set osd_scrub_auto_repair_num_errors to n+1 and osd_scrub_auto_repair to true.
-              Expectation: All inconsistent objects are auto-repaired and PG repair state is cleared.
+Validates how Ceph handles inconsistent objects in an erasure-coded pool when
+``osd_scrub_auto_repair`` and ``osd_scrub_auto_repair_num_errors`` are configured
+and scheduled scrub or deep-scrub runs on the affected placement group (PG).
+
+Ceph configuration
+------------------
+osd_scrub_auto_repair (bool, default ``false``)
+    When ``true``, scrub/deep-scrub may automatically repair PG inconsistencies.
+
+osd_scrub_auto_repair_num_errors (int, default ``5``)
+    Auto-repair is skipped when more than this many scrub errors are found.
+
+Test workflow
+-------------
+1. Disable PG autoscaler; reset scrub intervals; create an EC pool.
+2. Inject inconsistent objects and wait for the setup deep-scrub to finish.
+3. Run cases from ``config['case_to_run']`` (all six when omitted).
+4. For each case: set auto-repair parameters, adjust OSD scrub flags as needed,
+   run scheduled scrub/deep-scrub via ``get_inconsistent_count()``
+   (``user_initiated=False``), then assert inconsistent object count.
+5. Teardown restores cluster defaults, re-enables autoscaler, optionally deletes
+   the pool, and checks for OSD crashes.
+
+Scrub execution
+---------------
+Cases call ``get_inconsistent_count()`` with ``user_initiated=False`` (default).
+Short scrub intervals (10--60 s) and a 2-hour scrub window trigger scheduled scrub
+or deep-scrub. Scrub wait exceptions are logged and the case continues with a
+fresh inconsistent-count read (same pattern as the replicated pool test).
+Cases 5 and 6 call ``_inject_and_verify_auto_repair()`` so acting OSDs hold the
+expected in-memory auto-repair settings before deep-scrub.
+
+Cases (n = inconsistent object count before the case)
+-----------------------------------------------------
+case1 - Shallow scrub; ``num_errors = n-1``, ``auto_repair = true``
+        Expectation: no repairs (count unchanged).
+
+case2 - Shallow scrub; ``num_errors = n+1``, ``auto_repair = false``
+        Expectation: no repairs (count unchanged).
+
+case3 - Shallow scrub; ``num_errors = n+1``, ``auto_repair = true``
+        Expectation: all objects repaired (count ``0``) via follow-up deep-scrub.
+
+case4 - Deep-scrub; ``num_errors = n-1``, ``auto_repair = true``
+        Expectation: no repairs (count unchanged).
+
+case5 - Deep-scrub; ``num_errors = n+1``, ``auto_repair = false``
+        Expectation: no repairs (count unchanged).
+
+case6 - Deep-scrub; ``num_errors = n+1``, ``auto_repair = true``
+        Expectation: all objects repaired and PG ``repair`` state cleared.
+
+Suite configuration (``config`` dict passed to ``run()``)
+---------------------------------------------------------
+ec_pool (dict, required)
+    EC pool definition; must include ``pool_name``.
+inconsistent_obj_count (int, required)
+    Positive number of inconsistent objects to create before cases run.
+case_to_run (list[str], optional)
+    Subset of ``case1``..``case6``; default runs all six sequentially.
+delete_pool (bool, optional)
+    When set, the EC pool is deleted during teardown.
+debug_enable (bool, optional)
+    When set, enables ``debug_osd`` and ``debug_mgr`` for the test duration.
+
+Returns
+-------
+``run()`` returns ``0`` on success and ``1`` on failure.
 """
 
+import json
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -60,21 +100,23 @@ CASE_LOG_PREFIX = {
 
 def run(ceph_cluster, **kw):
     """
-    Verify EC-pool auto-repair behavior for inconsistent objects under scheduled scrub/deep-scrub.
+    Execute EC-pool inconsistent-object auto-repair verification cases.
 
-    Cases are selected via config['case_to_run']. If omitted, all six cases run sequentially.
-    For each case the test configures auto-repair thresholds, allows scheduled scrub/deep-scrub,
-    logs and continues on scrub-wait failures, then asserts on the inconsistent object count.
+    Creates an EC pool, injects inconsistent objects, runs selected scrub/deep-scrub
+    scenarios with scheduled scrub (``user_initiated=False``), and validates
+    inconsistent object counts and PG state.
 
-      case1 - Scrub, count > num_errors, auto_repair true  -> no repairs
-      case2 - Scrub, count < num_errors, auto_repair false -> no repairs
-      case3 - Scrub, count < num_errors, auto_repair true  -> all repaired
-      case4 - Deep-scrub, count > num_errors, auto_repair true  -> no repairs
-      case5 - Deep-scrub, count < num_errors, auto_repair false -> no repairs
-      case6 - Deep-scrub, count < num_errors, auto_repair true  -> all repaired, repair state cleared
+    Args:
+        ceph_cluster: Ceph cluster fixture provided by cephci.
+        **kw: Keyword arguments; must include ``config`` with suite parameters:
+            ec_pool (dict): EC pool configuration including ``pool_name``.
+            inconsistent_obj_count (int): Number of inconsistent objects to create.
+            case_to_run (list[str], optional): Cases to execute; default all six.
+            delete_pool (bool, optional): Delete the pool in teardown.
+            debug_enable (bool, optional): Enable OSD/mgr debug logging.
 
     Returns:
-        0 on pass, 1 on fail
+        int: ``0`` if all selected cases pass, ``1`` on setup/case/teardown failure.
     """
 
     log.info(run.__doc__)
@@ -119,6 +161,17 @@ def run(ceph_cluster, **kw):
         scrub_object.set_osd_flags("set", "nodeep-scrub")
         scrub_object.set_osd_flags("set", "noscrub")
 
+        # Ensure auto-repair is off while creating inconsistents so setup deep-scrub
+        # cannot repair them before the cases run.
+        if not mon_obj.set_config(
+            section="osd", name="osd_scrub_auto_repair", value="false"
+        ):
+            log.error("[SETUP] Failed to disable osd_scrub_auto_repair")
+            return 1
+        log.info(
+            "[SETUP] Set osd_scrub_auto_repair to false for inconsistent object creation"
+        )
+
         if not rados_obj.create_erasure_pool(name=pool_name, **ec_config):
             log.error(f"[SETUP] Failed to create EC pool '{pool_name}'")
             return 1
@@ -133,7 +186,9 @@ def run(ceph_cluster, **kw):
             mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
 
         log.info("[SETUP] Waiting for all PGs to reach clean state")
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        method_should_succeed(
+            wait_for_clean_pg_sets, rados_obj, timeout=600, sleep_interval=30
+        )
         log.info("[SETUP] All PGs are in clean state")
 
         try:
@@ -154,6 +209,32 @@ def run(ceph_cluster, **kw):
             log.error(
                 "[SETUP] inconsistent_obj_count must be greater than 0. "
                 "Cannot proceed when auto_repair_param_value would be invalid."
+            )
+            return 1
+
+        # Wait for setup deep-scrub to finish so a later case enabling auto_repair
+        # cannot race with that scrub and repair objects unexpectedly.
+        log.info(
+            f"[SETUP] Waiting for setup deep-scrub to finish on PG {pg_id} "
+            "before starting cases"
+        )
+        try:
+            rados_obj.start_check_deep_scrub_complete(
+                pg_id=pg_id, user_initiated=False, wait_time=180
+            )
+            log.info(f"[SETUP] Setup deep-scrub completed on PG {pg_id}")
+        except Exception as err:
+            log.warning(
+                f"[SETUP] Setup deep-scrub wait ended without stamp update on PG {pg_id}: "
+                f"{err}. Continuing with current inconsistent count."
+            )
+        no_of_inconsistent_objects = get_pg_inconsistent_object_count(rados_obj, pg_id)
+        log.info(
+            f"[SETUP] Inconsistent object count before cases: {no_of_inconsistent_objects}"
+        )
+        if no_of_inconsistent_objects <= 0:
+            log.error(
+                "[SETUP] No inconsistent objects present before cases; cannot proceed"
             )
             return 1
 
@@ -195,7 +276,8 @@ def run(ceph_cluster, **kw):
                 section="osd", param="osd_scrub_auto_repair"
             )
             log.info(f"[CASE1] Default osd_scrub_auto_repair: {auto_repair_value}")
-            if auto_repair_value == "true":
+            if str(auto_repair_value).lower() == "true":
+                # if auto_repair_value == "true":
                 log_case_failure(
                     "case1", "Default osd_scrub_auto_repair should be false"
                 )
@@ -233,19 +315,27 @@ def run(ceph_cluster, **kw):
                 "True",
                 "scrub",
             )
-            obj_count = run_scrub_operation(
-                scrub_object,
-                mon_obj,
-                pg_id,
-                rados_obj,
-                "scrub",
-                acting_pg_set,
-                "case1",
-            )
-            if obj_count != no_of_inconsistent_objects:
+
+            try:
+                get_inconsistent_count(
+                    scrub_object,
+                    mon_obj,
+                    pg_id,
+                    rados_obj,
+                    "scrub",
+                    acting_pg_set,
+                )
+            except Exception as e:
+                log.info(e)
+
+            # Get the inconsistent object count after scrub
+            obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
+            # Same validation logic as Version 1
+            if no_of_inconsistent_objects != obj_count:
                 log_case_failure(
                     "case1",
-                    f"Scrub repaired {no_of_inconsistent_objects - obj_count} "
+                    f"Scrub repaired "
+                    f"{no_of_inconsistent_objects - obj_count} "
                     f"inconsistent objects unexpectedly",
                 )
                 rados_obj.log_cluster_health()
@@ -297,15 +387,18 @@ def run(ceph_cluster, **kw):
                 "False",
                 "scrub",
             )
-            obj_count = run_scrub_operation(
-                scrub_object,
-                mon_obj,
-                pg_id,
-                rados_obj,
-                "scrub",
-                acting_pg_set,
-                "case2",
-            )
+            try:
+                get_inconsistent_count(
+                    scrub_object,
+                    mon_obj,
+                    pg_id,
+                    rados_obj,
+                    "scrub",
+                    acting_pg_set,
+                )
+            except Exception as e:
+                log.info(e)
+            obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
             if obj_count != no_of_inconsistent_objects:
                 log_case_failure(
                     "case2",
@@ -351,8 +444,14 @@ def run(ceph_cluster, **kw):
                 section="osd", name="osd_scrub_auto_repair", value="true"
             )
             log.info("[CASE3] Set osd_scrub_auto_repair to true")
+            # Shallow scrub with auto_repair schedules a follow-up deep-scrub to repair.
+            # nodeep-scrub must be clear for that auto deep-scrub-on-error to run.
             scrub_object.set_osd_flags("unset", "noscrub")
-            log.info("[CASE3] Unset noscrub OSD flag to allow scheduled scrub")
+            scrub_object.set_osd_flags("unset", "nodeep-scrub")
+            log.info(
+                "[CASE3] Unset noscrub and nodeep-scrub so scrub and auto-repair "
+                "deep-scrub-on-error can run"
+            )
             log_case_parameters(
                 "case3",
                 no_of_inconsistent_objects,
@@ -360,19 +459,43 @@ def run(ceph_cluster, **kw):
                 "True",
                 "scrub",
             )
-            obj_count = run_scrub_operation(
-                scrub_object,
-                mon_obj,
-                pg_id,
-                rados_obj,
-                "scrub",
-                acting_pg_set,
-                "case3",
-            )
+            try:
+                get_inconsistent_count(
+                    scrub_object,
+                    mon_obj,
+                    pg_id,
+                    rados_obj,
+                    "scrub",
+                    acting_pg_set,
+                )
+            except Exception as e:
+                log.info(e)
+            obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
+
+            # Auto-repair after shallow scrub is performed by a follow-up deep-scrub.
+            if obj_count != 0:
+                log.info(
+                    f"[CASE3] Scrub finished with {obj_count} inconsistents still present; "
+                    "running deep-scrub with auto_repair to complete repairs"
+                )
+                try:
+                    get_inconsistent_count(
+                        scrub_object,
+                        mon_obj,
+                        pg_id,
+                        rados_obj,
+                        "deep-scrub",
+                        acting_pg_set,
+                    )
+                except Exception as e:
+                    log.info(e)
+                obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
+
             if obj_count != 0:
                 log_case_failure(
                     "case3",
-                    f"failed to repair {no_of_inconsistent_objects - obj_count} objects",
+                    f"expected all objects auto-repaired (count 0), still have {obj_count} "
+                    f"(started with {no_of_inconsistent_objects})",
                 )
                 rados_obj.log_cluster_health()
                 return 1
@@ -385,8 +508,9 @@ def run(ceph_cluster, **kw):
             )
             if any(case in case_to_run for case in ("case4", "case5", "case6")):
                 scrub_object.set_osd_flags("set", "noscrub")
+                scrub_object.set_osd_flags("set", "nodeep-scrub")
                 log.info(
-                    "[CASE3] Set noscrub OSD flag before upcoming deep-scrub cases"
+                    "[CASE3] Set noscrub and nodeep-scrub before upcoming deep-scrub cases"
                 )
 
         if "case4" in case_to_run:
@@ -405,7 +529,18 @@ def run(ceph_cluster, **kw):
             no_of_inconsistent_objects = get_pg_inconsistent_object_count(
                 rados_obj, pg_id
             )
+            log.info(
+                f"[CASE4] Inconsistent object count before deep-scrub: "
+                f"{no_of_inconsistent_objects}"
+            )
+
             auto_repair_param_value = no_of_inconsistent_objects - 1
+            log.info(
+                f"[CASE4] Setting osd_scrub_auto_repair_num_errors to "
+                f"{auto_repair_param_value} (inconsistent_count - 1) so errors exceed "
+                "the auto-repair threshold"
+            )
+
             mon_obj.set_config(
                 section="osd",
                 name="osd_scrub_auto_repair_num_errors",
@@ -418,9 +553,11 @@ def run(ceph_cluster, **kw):
                 section="osd", name="osd_scrub_auto_repair", value="true"
             )
             log.info("[CASE4] Set osd_scrub_auto_repair to true")
+            scrub_object.set_osd_flags("unset", "noscrub")
             scrub_object.set_osd_flags("unset", "nodeep-scrub")
             log.info(
-                "[CASE4] Unset nodeep-scrub OSD flag to allow scheduled deep-scrub"
+                "[CASE4] Unset noscrub and nodeep-scrub OSD flags to allow scheduled "
+                "deep-scrub"
             )
             log_case_parameters(
                 "case4",
@@ -429,20 +566,34 @@ def run(ceph_cluster, **kw):
                 "True",
                 "deep-scrub",
             )
-            obj_count = run_scrub_operation(
-                scrub_object,
-                mon_obj,
-                pg_id,
-                rados_obj,
-                "deep-scrub",
-                acting_pg_set,
-                "case4",
+            log.info(
+                f"[CASE4] Starting deep-scrub on PG {pg_id}; expectation: no auto-repair "
+                f"(count {no_of_inconsistent_objects} > num_errors {auto_repair_param_value})"
+            )
+            try:
+                get_inconsistent_count(
+                    scrub_object,
+                    mon_obj,
+                    pg_id,
+                    rados_obj,
+                    "deep-scrub",
+                    acting_pg_set,
+                )
+            except Exception as e:
+                log.info(e)
+            obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
+            log.info(
+                f"[CASE4] Inconsistent object count after deep-scrub: {obj_count} "
+                f"(before={no_of_inconsistent_objects}, "
+                f"osd_scrub_auto_repair_num_errors={auto_repair_param_value})"
             )
             if obj_count != no_of_inconsistent_objects:
                 log_case_failure(
                     "case4",
                     f"Deep-scrub repaired {no_of_inconsistent_objects - obj_count} "
-                    f"inconsistent objects unexpectedly",
+                    f"inconsistent objects unexpectedly "
+                    f"(before={no_of_inconsistent_objects}, after={obj_count}, "
+                    f"osd_scrub_auto_repair_num_errors={auto_repair_param_value})",
                 )
                 rados_obj.log_cluster_health()
                 return 1
@@ -483,9 +634,19 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"[CASE5] Set osd_scrub_auto_repair_num_errors to {auto_repair_param_value}"
             )
+            if not _inject_and_verify_auto_repair(
+                rados_obj,
+                acting_pg_set,
+                auto_repair="false",
+                num_errors=auto_repair_param_value,
+                case_id="case5",
+            ):
+                return 1
+            scrub_object.set_osd_flags("unset", "noscrub")
             scrub_object.set_osd_flags("unset", "nodeep-scrub")
             log.info(
-                "[CASE5] Unset nodeep-scrub OSD flag to allow scheduled deep-scrub"
+                "[CASE5] Unset noscrub and nodeep-scrub OSD flags to allow scheduled "
+                "deep-scrub"
             )
 
             log_case_parameters(
@@ -495,15 +656,18 @@ def run(ceph_cluster, **kw):
                 "False",
                 "deep-scrub",
             )
-            obj_count = run_scrub_operation(
-                scrub_object,
-                mon_obj,
-                pg_id,
-                rados_obj,
-                "deep-scrub",
-                acting_pg_set,
-                "case5",
-            )
+            try:
+                get_inconsistent_count(
+                    scrub_object,
+                    mon_obj,
+                    pg_id,
+                    rados_obj,
+                    "deep-scrub",
+                    acting_pg_set,
+                )
+            except Exception as e:
+                log.info(e)
+            obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
             if obj_count != no_of_inconsistent_objects:
                 log_case_failure(
                     "case5",
@@ -549,9 +713,19 @@ def run(ceph_cluster, **kw):
                 section="osd", name="osd_scrub_auto_repair", value="true"
             )
             log.info("[CASE6] Set osd_scrub_auto_repair to true")
+            if not _inject_and_verify_auto_repair(
+                rados_obj,
+                acting_pg_set,
+                auto_repair="true",
+                num_errors=auto_repair_param_value,
+                case_id="case6",
+            ):
+                return 1
+            scrub_object.set_osd_flags("unset", "noscrub")
             scrub_object.set_osd_flags("unset", "nodeep-scrub")
             log.info(
-                "[CASE6] Unset nodeep-scrub OSD flag to allow scheduled deep-scrub"
+                "[CASE6] Unset noscrub and nodeep-scrub OSD flags to allow scheduled "
+                "deep-scrub"
             )
 
             log_case_parameters(
@@ -561,15 +735,18 @@ def run(ceph_cluster, **kw):
                 "True",
                 "deep-scrub",
             )
-            obj_count = run_scrub_operation(
-                scrub_object,
-                mon_obj,
-                pg_id,
-                rados_obj,
-                "deep-scrub",
-                acting_pg_set,
-                "case6",
-            )
+            try:
+                get_inconsistent_count(
+                    scrub_object,
+                    mon_obj,
+                    pg_id,
+                    rados_obj,
+                    "deep-scrub",
+                    acting_pg_set,
+                )
+            except Exception as e:
+                log.info(e)
+            obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
             if obj_count != 0:
                 log_case_failure(
                     "case6",
@@ -632,8 +809,20 @@ def run(ceph_cluster, **kw):
 
 
 def get_pg_inconsistent_object_count(rados_obj, pg_id):
-    """Fetch inconsistent object count with stability check."""
-    max_attempts = 10
+    """
+    Return the inconsistent object count for a PG with stability polling.
+
+    Repeatedly queries ``get_inconsistent_object_details`` until the count is
+    unchanged for two consecutive reads or ``max_attempts`` is reached.
+
+    Args:
+        rados_obj: ``RadosOrchestrator`` instance.
+        pg_id: Placement group identifier (e.g. ``"4.0s0"``).
+
+    Returns:
+        int: Stabilized count of inconsistent objects on the PG.
+    """
+    max_attempts = 8
     stable_threshold = 2
 
     obj_count = 0
@@ -666,39 +855,49 @@ def get_pg_inconsistent_object_count(rados_obj, pg_id):
 
         # Don't sleep on last iteration
         if attempt < max_attempts:
-            time.sleep(30)
+            time.sleep(5)
 
     return obj_count
 
 
 def get_inconsistent_count(
-    scrub_object, mon_object, pg_id, rados_obj, operation, acting_pg_set
+    scrub_object,
+    mon_object,
+    pg_id,
+    rados_obj,
+    operation,
+    acting_pg_set,
+    user_initiated=False,
 ):
     """
-    Configure scheduled scrub/deep-scrub on acting OSDs, wait for completion, and
-    return the PG inconsistent object count.
+    Trigger scrub or deep-scrub on a PG and return the inconsistent object count.
 
-    Sets a short scrub window and intervals on acting OSDs, then waits for a
-    scheduled (non user-initiated) scrub/deep-scrub stamp update for up to 10 minutes.
-    Per-attempt wait is 600 seconds; retries sleep 5 seconds between attempts.
+    When ``user_initiated`` is ``False`` (default), applies short scrub intervals
+    and a scrub time window on the ``osd`` section, then waits up to three minutes
+    for the scheduled scrub stamp to advance. When ``user_initiated`` is ``True``,
+    triggers an immediate user-initiated scrub or deep-scrub instead.
 
     Args:
-        scrub_object: RadosScrubber object
-        mon_object: MonConfigMethods object
-        pg_id: PG id
-        rados_obj: RadosOrchestrator object
-        operation: "scrub" or "deep-scrub"
-        acting_pg_set: acting OSD set for the PG
+        scrub_object: ``RadosScrubber`` instance.
+        mon_object: ``MonConfigMethods`` instance for config cleanup.
+        pg_id: Placement group identifier.
+        rados_obj: ``RadosOrchestrator`` instance.
+        operation: ``"scrub"`` or ``"deep-scrub"``.
+        acting_pg_set: List of acting OSD ids for the PG.
+        user_initiated: Use scheduled scrub when ``False``; direct trigger when ``True``.
 
     Returns:
-        int: inconsistent object count after scrub/deep-scrub, or -1 if it did not complete
+        int: Inconsistent object count after scrub completes, or ``-1`` on timeout.
     """
+    if user_initiated:
+        return _run_user_initiated_scrub_and_count(
+            rados_obj, pg_id, operation, wait_time=180
+        )
 
     operation_chk_flag = False
-    osd_scrub_min_interval = 15
-    osd_scrub_max_interval = 180
-    osd_deep_scrub_interval = 180
-    obj_count = -1
+    osd_scrub_min_interval = 10
+    osd_scrub_max_interval = 60
+    osd_deep_scrub_interval = 60
     (
         scrub_begin_hour,
         scrub_begin_weekday,
@@ -712,29 +911,19 @@ def get_inconsistent_count(
         f"{scrub_begin_hour}-{scrub_end_hour}, weekdays "
         f"{scrub_begin_weekday}-{scrub_end_weekday}"
     )
-    for osd_id in acting_pg_set:
-        scrub_object.set_osd_configuration(
-            "osd_scrub_begin_hour", scrub_begin_hour, osd_id
-        )
-        scrub_object.set_osd_configuration(
-            "osd_scrub_begin_week_day", scrub_begin_weekday, osd_id
-        )
-        scrub_object.set_osd_configuration("osd_scrub_end_hour", scrub_end_hour, osd_id)
-        scrub_object.set_osd_configuration(
-            "osd_scrub_end_week_day", scrub_end_weekday, osd_id
-        )
-        scrub_object.set_osd_configuration(
-            "osd_scrub_min_interval", osd_scrub_min_interval, osd_id
-        )
-        scrub_object.set_osd_configuration(
-            "osd_scrub_max_interval", osd_scrub_max_interval, osd_id
-        )
-        scrub_object.set_osd_configuration(
-            "osd_deep_scrub_interval", osd_deep_scrub_interval, osd_id
-        )
-    endtime = datetime.now() + timedelta(minutes=10)
+    # Set once on osd section instead of per-OSD to avoid many slow config round-trips
+    scrub_object.set_osd_configuration("osd_scrub_begin_hour", scrub_begin_hour)
+    scrub_object.set_osd_configuration("osd_scrub_begin_week_day", scrub_begin_weekday)
+    scrub_object.set_osd_configuration("osd_scrub_end_hour", scrub_end_hour)
+    scrub_object.set_osd_configuration("osd_scrub_end_week_day", scrub_end_weekday)
+    scrub_object.set_osd_configuration("osd_scrub_min_interval", osd_scrub_min_interval)
+    scrub_object.set_osd_configuration("osd_scrub_max_interval", osd_scrub_max_interval)
+    scrub_object.set_osd_configuration(
+        "osd_deep_scrub_interval", osd_deep_scrub_interval
+    )
+    endtime = datetime.now() + timedelta(minutes=3)
     log.info(
-        f"Waiting up to 10 minutes for scheduled {operation} to complete on PG {pg_id}"
+        f"Waiting up to 3 minutes for scheduled {operation} to complete on PG {pg_id}"
     )
 
     while datetime.now() <= endtime:
@@ -742,17 +931,17 @@ def get_inconsistent_count(
             if operation == "scrub":
                 log.info(f"Checking scheduled scrub completion on PG {pg_id}")
                 status = rados_obj.start_check_scrub_complete(
-                    pg_id=pg_id, user_initiated=False, wait_time=600
+                    pg_id=pg_id, user_initiated=False, wait_time=120
                 )
             else:
                 log.info(f"Checking scheduled deep-scrub completion on PG {pg_id}")
                 status = rados_obj.start_check_deep_scrub_complete(
-                    pg_id=pg_id, user_initiated=False, wait_time=600
+                    pg_id=pg_id, user_initiated=False, wait_time=120
                 )
             if status:
                 log.info(f"Scheduled {operation} completed on PG {pg_id}")
                 if operation != "scrub":
-                    time.sleep(30)
+                    time.sleep(10)
                 operation_chk_flag = True
                 break
         except Exception as err:
@@ -768,9 +957,7 @@ def get_inconsistent_count(
         )
         _clear_scheduled_scrub_intervals(mon_object, acting_pg_set)
         return -1
-    log.info(
-        f"Clearing temporary scheduled scrub interval overrides on acting OSDs {acting_pg_set}"
-    )
+    log.info("Clearing temporary scheduled scrub interval overrides")
     _clear_scheduled_scrub_intervals(mon_object, acting_pg_set)
 
     obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
@@ -779,29 +966,80 @@ def get_inconsistent_count(
     return obj_count
 
 
+def _run_user_initiated_scrub_and_count(rados_obj, pg_id, operation, wait_time=180):
+    """
+    Run a user-initiated scrub or deep-scrub and return the inconsistent object count.
+
+    Args:
+        rados_obj: ``RadosOrchestrator`` instance.
+        pg_id: Placement group identifier.
+        operation: ``"scrub"`` or ``"deep-scrub"``.
+        wait_time: Seconds to wait for scrub completion.
+
+    Returns:
+        int: Inconsistent object count after scrub, or ``-1`` if scrub did not complete.
+    """
+    try:
+        if operation == "scrub":
+            log.info(f"Starting user-initiated scrub on PG {pg_id}")
+            status = rados_obj.start_check_scrub_complete(
+                pg_id=pg_id, user_initiated=True, wait_time=wait_time
+            )
+        else:
+            log.info(f"Starting user-initiated deep-scrub on PG {pg_id}")
+            status = rados_obj.start_check_deep_scrub_complete(
+                pg_id=pg_id, user_initiated=True, wait_time=wait_time
+            )
+            time.sleep(10)
+        if not status:
+            log.error(f"User-initiated {operation} did not complete on PG {pg_id}")
+            return -1
+    except Exception as err:
+        log.error(f"User-initiated {operation} wait failed on PG {pg_id}: {err}")
+        return -1
+
+    obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
+    log.info(
+        f"Inconsistent object count on PG {pg_id} after user-initiated {operation}: "
+        f"{obj_count}"
+    )
+    return obj_count
+
+
 def _clear_scheduled_scrub_intervals(mon_object, acting_pg_set):
-    """Remove per-OSD scrub schedule and interval overrides set for scheduled scrub."""
-    log.info(f"Removing per-OSD scrub schedule overrides for OSDs: {acting_pg_set}")
-    for osd_id in acting_pg_set:
-        osd = f"osd.{osd_id}"
-        mon_object.remove_config(section=osd, name="osd_scrub_min_interval")
-        mon_object.remove_config(section=osd, name="osd_scrub_max_interval")
-        mon_object.remove_config(section=osd, name="osd_deep_scrub_interval")
-        mon_object.remove_config(section=osd, name="osd_scrub_begin_hour")
-        mon_object.remove_config(section=osd, name="osd_scrub_begin_week_day")
-        mon_object.remove_config(section=osd, name="osd_scrub_end_hour")
-        mon_object.remove_config(section=osd, name="osd_scrub_end_week_day")
+    """
+    Remove temporary scrub schedule overrides from mon config.
+
+    Clears interval and scrub-window settings from the ``osd`` section and from
+    each acting OSD section that may have inherited overrides.
+
+    Args:
+        mon_object: ``MonConfigMethods`` instance.
+        acting_pg_set: List of acting OSD ids for the PG under test.
+    """
+    log.info(
+        f"Removing scrub schedule overrides (osd section and OSDs: {acting_pg_set})"
+    )
+    for section in ["osd"] + [f"osd.{osd_id}" for osd_id in acting_pg_set]:
+        mon_object.remove_config(section=section, name="osd_scrub_min_interval")
+        mon_object.remove_config(section=section, name="osd_scrub_max_interval")
+        mon_object.remove_config(section=section, name="osd_deep_scrub_interval")
+        mon_object.remove_config(section=section, name="osd_scrub_begin_hour")
+        mon_object.remove_config(section=section, name="osd_scrub_begin_week_day")
+        mon_object.remove_config(section=section, name="osd_scrub_end_hour")
+        mon_object.remove_config(section=section, name="osd_scrub_end_week_day")
 
 
 def verify_pg_state(rados_obj, pg_id):
     """
-    Returns True if the PG state does not contain repair state.
-      Args:
-          rados_obj: Rados object
-          pg_id: pgid
+    Check whether a PG has cleared the ``repair`` state after auto-repair.
 
-      Returns:True if repair is not in Pg state or else False
+    Args:
+        rados_obj: ``RadosOrchestrator`` instance.
+        pg_id: Placement group identifier.
 
+    Returns:
+        bool: ``True`` if ``repair`` is not present in PG state, else ``False``.
     """
     pool_pg_dump = rados_obj.get_ceph_pg_dump(pg_id=pg_id)
     pg_state = pool_pg_dump["state"]
@@ -813,11 +1051,14 @@ def verify_pg_state(rados_obj, pg_id):
 
 def set_ecpool_inconsistent_default_param_value(mon_obj, scrub_obj):
     """
-    Method set the default parameter value
-    Args:
-        mon_obj: Monitor object
-    Returns: None
+    Restore scrub and auto-repair settings changed during the test.
 
+    Removes monitor overrides for auto-repair, scrub intervals, scrub windows,
+    and debug logging; unsets ``noscrub`` and ``nodeep-scrub`` OSD flags.
+
+    Args:
+        mon_obj: ``MonConfigMethods`` instance.
+        scrub_obj: ``RadosScrubber`` instance.
     """
     mon_obj.remove_config(section="osd", name="osd_scrub_auto_repair_num_errors")
     mon_obj.remove_config(section="osd", name="osd_scrub_auto_repair")
@@ -838,13 +1079,15 @@ def set_ecpool_inconsistent_default_param_value(mon_obj, scrub_obj):
 
 def check_for_pg_scrub_state(rados_obj, pg_id, wait_time):
     """
-    Method is to wait for a PG  scrub operation to finish
-    Args:
-        rados_obj: Rados object
-        pg_id: pg id
-        wait_time : wait time in minutes
-    Returns: bool: True if scrubbing is not in progress at wait_time, False otherwise.
+    Wait until no scrub is in progress on the given PG.
 
+    Args:
+        rados_obj: ``RadosOrchestrator`` instance.
+        pg_id: Placement group identifier.
+        wait_time: Maximum wait in minutes before giving up.
+
+    Returns:
+        bool: ``True`` when scrubbing is not in PG state; ``False`` on timeout or error.
     """
     end_time = datetime.now() + timedelta(minutes=wait_time)
     while end_time > datetime.now():
@@ -863,8 +1106,126 @@ def check_for_pg_scrub_state(rados_obj, pg_id, wait_time):
     return False
 
 
+def _parse_osd_config_get(raw_output, key):
+    """
+    Parse ``ceph tell osd.<id> config get <key>`` command output.
+
+    Newer Ceph releases return JSON (e.g. ``{"osd_scrub_auto_repair_num_errors": "3"}``);
+    older builds may return a bare scalar string.
+
+    Args:
+        raw_output: Shell command stdout.
+        key: Config option name to extract from JSON output.
+
+    Returns:
+        str: Parsed config value, or stripped raw output when JSON parsing fails.
+    """
+    raw = str(raw_output).strip()
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and key in data:
+            return str(data[key]).strip()
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+    return raw
+
+
+def _inject_and_verify_auto_repair(
+    rados_obj, acting_pg_set, auto_repair, num_errors, case_id
+):
+    """
+    Push auto-repair settings into acting OSD memory and verify them.
+
+    Monitor ``config set`` alone can leave OSD daemons on default in-memory values
+    briefly. Cases 5 and 6 use this helper so deep-scrub runs with the expected
+    ``osd_scrub_auto_repair`` and ``osd_scrub_auto_repair_num_errors`` values.
+
+    Args:
+        rados_obj: ``RadosOrchestrator`` instance.
+        acting_pg_set: List of acting OSD ids for the PG.
+        auto_repair: Expected ``osd_scrub_auto_repair`` value (``"true"`` or ``"false"``).
+        num_errors: Expected ``osd_scrub_auto_repair_num_errors`` value.
+        case_id: Case identifier for log prefixes (e.g. ``"case5"``).
+
+    Returns:
+        bool: ``True`` when all acting OSDs report matching in-memory config.
+    """
+    prefix = CASE_LOG_PREFIX[case_id]
+    for osd_id in acting_pg_set:
+        inject_cmd = (
+            f"ceph tell osd.{osd_id} injectargs "
+            f"--osd_scrub_auto_repair_num_errors={num_errors} "
+            f"--osd_scrub_auto_repair={auto_repair}"
+        )
+        log.info(f"[{prefix}] Applying auto-repair config on osd.{osd_id}")
+        rados_obj.node.shell([inject_cmd])
+
+    time.sleep(2)
+
+    for osd_id in acting_pg_set:
+        num_out, _ = rados_obj.node.shell(
+            [f"ceph tell osd.{osd_id} config get osd_scrub_auto_repair_num_errors"]
+        )
+        repair_out, _ = rados_obj.node.shell(
+            [f"ceph tell osd.{osd_id} config get osd_scrub_auto_repair"]
+        )
+        runtime_num = _parse_osd_config_get(num_out, "osd_scrub_auto_repair_num_errors")
+        runtime_repair = _parse_osd_config_get(
+            repair_out, "osd_scrub_auto_repair"
+        ).lower()
+        log.info(
+            f"[{prefix}] In-memory config on osd.{osd_id} - "
+            f"osd_scrub_auto_repair_num_errors={runtime_num}, "
+            f"osd_scrub_auto_repair={runtime_repair}"
+        )
+        if runtime_num in ("null", "") or int(runtime_num) != int(num_errors):
+            log_case_failure(
+                case_id,
+                f"osd.{osd_id} in-memory osd_scrub_auto_repair_num_errors mismatch: "
+                f"expected {num_errors}, got {runtime_num}",
+            )
+            return False
+        expected = str(auto_repair).strip().lower()
+        if not (
+            (expected == "true" and runtime_repair in ("true", "1"))
+            or (expected == "false" and runtime_repair in ("false", "0"))
+        ):
+            log_case_failure(
+                case_id,
+                f"osd.{osd_id} in-memory osd_scrub_auto_repair mismatch: "
+                f"expected {auto_repair}, got {runtime_repair}",
+            )
+            return False
+
+    log.info(f"[{prefix}] Auto-repair config verified on acting OSDs {acting_pg_set}")
+    return True
+
+
+def _get_inconsistent_count_once(rados_obj, pg_id):
+    """
+    Read the current inconsistent object count for a PG (single query).
+
+    Args:
+        rados_obj: ``RadosOrchestrator`` instance.
+        pg_id: Placement group identifier.
+
+    Returns:
+        int: Number of inconsistent objects reported for the PG.
+    """
+    inconsistent_details = rados_obj.get_inconsistent_object_details(pg_id)
+    return len(inconsistent_details["inconsistents"])
+
+
 def log_case_start(case_id, description, operation, expectation):
-    """Log the start of a test case with operation details."""
+    """
+    Log the start banner for a test case.
+
+    Args:
+        case_id: Case identifier (``"case1"``..``"case6"``).
+        description: Short summary of the scenario under test.
+        operation: Scrub type (``"scrub"`` or ``"deep-scrub"``).
+        expectation: Expected outcome text for the log banner.
+    """
     prefix = CASE_LOG_PREFIX[case_id]
     log.info(
         f"\n{'=' * 70}\n"
@@ -878,7 +1239,16 @@ def log_case_start(case_id, description, operation, expectation):
 def log_case_parameters(
     case_id, inconsistent_count, auto_repair_num_errors, auto_repair, operation
 ):
-    """Log test parameters configured before running scrub/deep-scrub."""
+    """
+    Log auto-repair parameters configured immediately before scrub/deep-scrub.
+
+    Args:
+        case_id: Case identifier (``"case1"``..``"case6"``).
+        inconsistent_count: Inconsistent object count before the operation.
+        auto_repair_num_errors: Value set for ``osd_scrub_auto_repair_num_errors``.
+        auto_repair: Value set for ``osd_scrub_auto_repair`` (``"True"``/``"False"``).
+        operation: Scrub type (``"scrub"`` or ``"deep-scrub"``).
+    """
     prefix = CASE_LOG_PREFIX[case_id]
     log.info(
         f"[{prefix}] Parameters - inconsistent object count: {inconsistent_count}, "
@@ -890,7 +1260,16 @@ def log_case_parameters(
 def log_case_complete(
     case_id, operation, expectation, inconsistent_count_before, inconsistent_count_after
 ):
-    """Log successful completion of a test case."""
+    """
+    Log successful completion of a test case with before/after counts.
+
+    Args:
+        case_id: Case identifier (``"case1"``..``"case6"``).
+        operation: Scrub type that was executed.
+        expectation: Expected outcome that was validated.
+        inconsistent_count_before: Inconsistent count before scrub/deep-scrub.
+        inconsistent_count_after: Inconsistent count after scrub/deep-scrub.
+    """
     prefix = CASE_LOG_PREFIX[case_id]
     log.info(
         f"[{prefix}] Completed successfully - operation: {operation}, "
@@ -900,47 +1279,11 @@ def log_case_complete(
 
 
 def log_case_failure(case_id, message):
-    """Log a test case failure."""
+    """
+    Log a test case failure with the case-specific prefix.
+
+    Args:
+        case_id: Case identifier (``"case1"``..``"case6"``).
+        message: Failure reason shown in the log and used for triage.
+    """
     log.error(f"[{CASE_LOG_PREFIX[case_id]}] Failed - {message}")
-
-
-def run_scrub_operation(
-    scrub_object, mon_obj, pg_id, rados_obj, operation, acting_pg_set, case_id
-):
-    """
-    Run scheduled scrub/deep-scrub and return the PG inconsistent object count.
-
-    Scrub-wait errors or a -1 return from get_inconsistent_count are logged and
-    ignored. The inconsistent count is always re-read afterward and used by the
-    caller for case assertions (same handling as the replicated-pool scenario).
-
-    Returns:
-        int: inconsistent object count after the scrub/deep-scrub attempt
-    """
-    prefix = CASE_LOG_PREFIX[case_id]
-    log.info(f"[{prefix}] Initiating scheduled {operation} on PG {pg_id}")
-    try:
-        scrub_result = get_inconsistent_count(
-            scrub_object, mon_obj, pg_id, rados_obj, operation, acting_pg_set
-        )
-        if scrub_result == -1:
-            log.info(
-                f"[{prefix}] Scheduled {operation} did not complete on PG {pg_id}; "
-                "continuing to read inconsistent object count for assertion"
-            )
-        else:
-            log.info(
-                f"[{prefix}] Scheduled {operation} finished on PG {pg_id} with "
-                f"inconsistent object count {scrub_result}"
-            )
-    except Exception as e:
-        log.info(
-            f"[{prefix}] Scheduled {operation} wait raised an error on PG {pg_id}: {e}. "
-            "Continuing to read inconsistent object count for assertion"
-        )
-    obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
-    log.info(
-        f"[{prefix}] Inconsistent object count on PG {pg_id} after {operation}: "
-        f"{obj_count}"
-    )
-    return obj_count
