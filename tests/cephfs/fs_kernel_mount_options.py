@@ -7,6 +7,11 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.odf_defaults import (
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+    kernel_ms_mode_opt,
+)
 
 log = Log(__name__)
 
@@ -81,8 +86,11 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd="sed -i 's/fsid = /fsid = t1/g' /home/cephuser/ceph_dup.conf"
         )
         mon_node_ip = ",".join(mon_node_ips)
+        use_msgr2 = is_msgr1_disabled(clients[0])
+        mount_mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+        ms_opt = kernel_ms_mode_opt(use_msgr2)
         kernel_cmd = (
-            f"mount -t ceph {mon_node_ip}:/ {kernel_mounting_dir} "
+            f"mount -t ceph {mount_mons}:/ {kernel_mounting_dir} "
             f"-o conf=/home/cephuser/ceph_dup.conf"
         )
         out, rc = clients[0].exec_command(sudo=True, cmd=kernel_cmd, check_ec=False)
@@ -159,10 +167,13 @@ def run(ceph_cluster, **kw):
         out, _ = clients[0].exec_command(cmd=f"cat {secert_file}", sudo=True)
         log.info("Output : %s" % out)
         mon_node_ip = ",".join(mon_node_ips)
+        use_msgr2 = is_msgr1_disabled(clients[0])
+        mount_mons = format_mons_for_kernel_mount(mon_node_ip, use_msgr2)
+        ms_opt = kernel_ms_mode_opt(use_msgr2)
         kernel_cmd = (
-            f"mount -t ceph {mon_node_ip}:/ {kernel_mounting_dir} "
+            f"mount -t ceph {mount_mons}:/ {kernel_mounting_dir} "
             f"-o name={clients[0].node.hostname},"
-            f"secret={out}"
+            f"secret={out}{ms_opt}"
         )
         clients[0].exec_command(sudo=True, cmd=kernel_cmd)
         fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)
@@ -175,10 +186,12 @@ def run(ceph_cluster, **kw):
         # Skipping the validation because of above issue for RHEL-8
         if int(os_ver) > 8:
             log.info("mount with mon_address")
+            mon_addr = mount_mons.replace(",", "/")
             kernel_cmd = (
                 f"mount -t ceph {clients[0].node.hostname}@.cephfs=/ {kernel_mounting_dir} "
                 f"-o name={clients[0].node.hostname},"
-                f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,mon_addr={mon_node_ip.replace(',', '/')}"
+                f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,"
+                f"mon_addr={mon_addr}{ms_opt}"
             )
             clients[0].exec_command(sudo=True, cmd=kernel_cmd)
             fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)

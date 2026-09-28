@@ -27,6 +27,11 @@ from ceph.rados import utils as osd_utils
 from tests.rados.rados_test_util import wait_for_device_rados
 from utility import utils
 from utility.log import Log
+from utility.odf_defaults import (
+    _mon_name_and_ip,
+    format_mons_for_kernel_mount,
+    is_msgr1_disabled,
+)
 
 log = Log(__name__)
 
@@ -7425,9 +7430,38 @@ EOF"""
         client_node.exec_command(
             cmd=f"mkdir -p {mount_path}", sudo=True, check_ec=False
         )
-        client_node.exec_command(
-            cmd=f"mount -t ceph admin@.{fs_name}=/ {mount_path}", sudo=True
+        use_msgr2 = is_msgr1_disabled(client_node)
+        mount_opts = []
+        if use_msgr2:
+            mount_opts.append("ms_mode=crc")
+            try:
+                mon_dump = self.run_ceph_command(cmd="ceph mon dump", client_exec=True)
+                mon_addrs = []
+                for mon in mon_dump.get("mons") or []:
+                    parsed = _mon_name_and_ip(mon)
+                    if parsed:
+                        # mount.ceph mon_addr uses slash-separated IP:port
+                        mon_addrs.append(format_mons_for_kernel_mount(parsed[1], True))
+            except Exception as exc:
+                log.error("Could not build mon_addr for msgr2 mount: %s", exc)
+                raise CommandFailed(
+                    f"Could not build mon_addr for msgr2 CephFS mount: {exc}"
+                ) from exc
+            if not mon_addrs:
+                log.error(
+                    "msgr2 mount requires mon_addr but mon dump had no usable mons"
+                )
+                raise CommandFailed("missing mon_addr for msgr2 CephFS mount")
+            mount_opts.append("mon_addr=" + "/".join(mon_addrs))
+        mount_cmd = f"mount -t ceph admin@.{fs_name}=/ {mount_path}"
+        if mount_opts:
+            mount_cmd += " -o " + ",".join(mount_opts)
+        client_node.exec_command(cmd=mount_cmd, sudo=True)
+        mount_out, mount_rc = client_node.exec_command(
+            cmd=f"findmnt -T {mount_path}", sudo=True, check_ec=False
         )
+        if mount_rc != 0 or mount_path not in (mount_out or ""):
+            raise CommandFailed(f"CephFS mount missing at {mount_path}")
         log.info(f"Mounted CephFS at {mount_path}")
 
         # Return created pool names
