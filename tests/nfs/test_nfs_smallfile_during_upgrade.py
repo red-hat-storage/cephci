@@ -91,7 +91,7 @@ def run(ceph_cluster, **kw):
     threads = int(config.get("threads", 4))
     file_size = int(config.get("file_size", 4))
     files = int(config.get("files", 50))
-    max_time = int(config.get("max_time", 10800))
+    max_time = int(config.get("max_time", 3600))
     max_consecutive_failures = int(config.get("max_consecutive_failures", 5))
     version = config.get("nfs_version", "4.2")
     port = config.get("port", "2049")
