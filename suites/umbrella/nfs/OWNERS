@@ -1,0 +1,19 @@
+---
+# Based on the information found
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - Manimaran-MM
+  - neha-gangadhar
+  - pdhiran
+  - aravindrrh
+
+reviewers:
+  - sumabai
+  - Harishacharya-redhat
+  - hkadam134
+  - kdhaduk81
+  - SinghSamosa
+
+labels:
+  - NFS-Ganesha

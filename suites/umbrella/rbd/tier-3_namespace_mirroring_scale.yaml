@@ -1,0 +1,200 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-3_namespace_mirroring_scale.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/tentacle/rbd/5-node-2-clusters.yaml
+#    No of Clusters : 2
+#    Node 2 to be a client node
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: >
+        Setup phase to deploy the required pre-requisites
+        for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      abort-on-fail: True
+      desc: >
+        Verify Scale testing for namespace-level mirrored images
+      name: >
+        Test Scale for namespace-level mirrored images
+      module: test_non_default_to_non_default_scale.py
+      polarion-id: CEPH-83601547
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_non-default
+              mirrormode: snapshot
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_non-default
+              mirrormode: snapshot
+            fio:
+              size: 10M
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw

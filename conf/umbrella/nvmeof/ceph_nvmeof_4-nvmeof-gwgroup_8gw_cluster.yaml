@@ -1,0 +1,192 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      vm-size: ci.standard.xl
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+      node2:
+        role:
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node3:
+        role:
+          - mon
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node4:
+        role:
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node5:
+        role:
+          - mds
+          - osd
+          - rgw
+        no-of-volumes: 4
+        disk-size: 40
+      node6:
+        id: node6
+        role:
+          - nvmeof-gw
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node7:
+        id: node7
+        role:
+          - nvmeof-gw
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node8:
+        id: node8
+        role:
+          - nvmeof-gw
+      node9:
+        id: node9
+        role:
+          - nvmeof-gw
+      node10:
+        id: node10
+        role:
+          - nvmeof-gw
+      node11:
+        id: node11
+        role:
+          - nvmeof-gw
+      node12:
+        id: node12
+        role:
+          - nvmeof-gw
+      node13:
+        id: node13
+        role:
+          - nvmeof-gw
+      node14:
+        id: node14
+        role:
+          - nvmeof-gw
+      node15:
+        id: node15
+        role:
+          - nvmeof-gw
+      node16:
+        id: node16
+        role:
+          - nvmeof-gw
+      node17:
+        id: node17
+        role:
+          - nvmeof-gw
+      node18:
+        id: node18
+        role:
+          - nvmeof-gw
+      node19:
+        id: node19
+        role:
+          - nvmeof-gw
+      node20:
+        id: node20
+        role:
+          - nvmeof-gw
+      node21:
+        id: node21
+        role:
+          - nvmeof-gw
+      node22:
+        id: node22
+        role:
+          - nvmeof-gw
+      node23:
+        id: node23
+        role:
+          - nvmeof-gw
+      node24:
+        id: node24
+        role:
+          - nvmeof-gw
+      node25:
+        id: node25
+        role:
+          - nvmeof-gw
+      node26:
+        id: node26
+        role:
+          - nvmeof-gw
+      node27:
+        id: node27
+        role:
+          - nvmeof-gw
+      node28:
+        id: node28
+        role:
+          - nvmeof-gw
+      node29:
+        id: node29
+        role:
+          - nvmeof-gw
+      node30:
+        id: node30
+        role:
+          - nvmeof-gw
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node31:
+        id: node31
+        role:
+          - nvmeof-gw
+          - osd
+        no-of-volumes: 4
+        disk-size: 40
+      node32:
+        id: node32
+        role:
+          - nvmeof-gw
+      node33:
+        id: node33
+        role:
+          - nvmeof-gw
+      node34:
+        id: node34
+        role:
+          - nvmeof-gw
+      node35:
+        id: node35
+        role:
+          - nvmeof-gw
+      node36:
+        id: node36
+        role:
+          - nvmeof-gw
+      node37:
+        id: node37
+        role:
+          - nvmeof-gw
+      node38:
+        id: node38
+        role:
+          - client
+      node39:
+        id: node39
+        role:
+          - client
+      node40:
+        id: node40
+        role:
+          - client
+      node41:
+        id: node41
+        role:
+          - client

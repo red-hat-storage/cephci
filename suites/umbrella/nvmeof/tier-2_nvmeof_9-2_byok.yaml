@@ -1,0 +1,362 @@
+# NVMe-oF BYOK (Bring Your Own Key) LUKS Encryption Test Suite — Ceph 9.2
+# cluster configuration: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
+# inventory: conf/inventory/rhel-10.2-server-x86_64.yaml
+#
+# Topology (from ceph_nvmeof_2GW_1Client.yaml):
+#   node5  — nvmeof-gw (GW1)
+#   node6  — nvmeof-gw (GW2)
+#   node7  — client (aliased as node10)
+#
+# KMIP backend selection (per test config):
+#   use_dummy_kmip: true   — default; spins up a self-contained PyKMIP server
+#                            on the client node.  No external appliance needed.
+#   use_dummy_kmip: false  — use a real GKLM/Thales appliance.
+#                            Credentials loaded from ~/.cephci.yaml gklm_config.
+#                            Override with --custom-config gklm_ip=x.x.x.x etc.
+---
+tests:
+
+  # ── Cluster bootstrap ──────────────────────────────────────────────────
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                allow-overwrite: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+        copy_admin_keyring: true
+        install_packages:
+          - ceph-common
+      desc: Setup client for NVMe-oF BYOK tests
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+
+  # ── Shared dummy KMIP (reused by TC-01–TC-04) ──────────────────────────
+  - test:
+      abort-on-fail: true
+      config:
+        command: setup
+        initiator_node: node10
+        gw_nodes:
+          - node5
+          - node6
+        use_dummy_kmip: true
+        kmip_port: 5696
+        kmip_server_image: quay.io/gdidi/kmip/kmip-server:latest
+        kmip_cli_image: quay.io/gdidi/kmip/kmip-cli:latest
+        luks_combos: []
+      desc: >
+        Start a dummy KMIP server on the initiator node, copy certs to GW
+        hosts, and stash the handle for TC-01–TC-04.
+      destroy-cluster: false
+      module: test_nvmeof_byok_kmip_setup.py
+      name: setup dummy KMIP server for BYOK tests
+
+  # ── TC-01: All LUKS combos + lifecycle + GW restart + HA ───────────
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        do_not_create_image: true
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        bdev_size: 1G
+        # ── KMIP backend ──────────────────────────────────────────────────
+        # true  → dummy PyKMIP server (no external appliance needed, CI default)
+        # false → real GKLM/Thales server (credentials from ~/.cephci.yaml)
+        use_dummy_kmip: true
+        kmip_port: 5696
+        kmip_server_image: quay.io/gdidi/kmip/kmip-server:latest
+        kmip_cli_image: quay.io/gdidi/kmip/kmip-cli:latest
+        # gklm_client_name / gklm_cert_alias only used when use_dummy_kmip: false
+        gklm_client_name: nvmeof_byok_tc01
+        gklm_cert_alias: nvmeof_byok_tc01_cert
+        luks_combos:
+          - key_id: key-id-luks1-aes128
+            key_uid: "1"
+            format: luks1
+            algo: aes128
+          - key_id: key-id-luks1-aes256
+            key_uid: "2"
+            format: luks1
+            algo: aes256
+          - key_id: key-id-luks2-aes128
+            key_uid: "3"
+            format: luks2
+            algo: aes128
+          - key_id: key-id-luks2-aes256
+            key_uid: "4"
+            format: luks2
+            algo: aes256
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode-byok1
+            no-group-append: true
+            allow_host: "*"
+            listeners:
+              - node5
+              - node6
+        fault-injection-methods:
+          - tool: systemctl
+            nodes: node5
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        TC-01: BYOK LUKS namespace encryption E2E — all LUKS format/algo
+        combinations, lifecycle (delete/reopen pre-existing image), GW restart
+        with KMIP passphrase re-fetch, and HA ANA failover/failback.
+        use_dummy_kmip=true (default): self-contained PyKMIP server, no external
+        appliance required. Set use_dummy_kmip=false to use a real GKLM server.
+      destroy-cluster: false
+      module: test_nvmeof_byok_luks_encryption.py
+      name: NVMe-oF BYOK LUKS namespace encryption E2E TC-01
+      comments: product bug IBMCEPH-18446
+      polarion-id: CEPH-83632656
+
+  # ── TC-02: Multi-Level Encryption — Clone Chain ────────────────────────────
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        do_not_create_image: true
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        bdev_size: 2G
+        # ── KMIP backend ──────────────────────────────────────────────────
+        use_dummy_kmip: true
+        kmip_port: 5696
+        kmip_server_image: quay.io/gdidi/kmip/kmip-server:latest
+        kmip_cli_image: quay.io/gdidi/kmip/kmip-cli:latest
+        # luks_combos is empty for TC-02; the KMIP server is started only to
+        # provide an endpoint — chain keys are registered via chain_keys below.
+        luks_combos: []
+        # ── Chain key configuration ───────────────────────────────────────
+        # key_id values used when calling `rbd encryption format` on the
+        # parent and clone images and when adding the namespace chain.
+        parent_key_id: key-id-parent
+        child_clone_key_id: key-id-child-clone
+        chain_keys:
+          - key_id: key-id-parent
+          - key_id: key-id-child-clone
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode-byok2
+            no-group-append: true
+            allow_host: "*"
+            listeners:
+              - node5
+              - node6
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        TC-02: BYOK multi-level encryption — validate that the NVMe-oF gateway
+        correctly opens an unflattened LUKS clone by accepting an ordered list
+        of key-ids (child-first, then parent). Covers: (1) clone with two-key
+        chain + FIO data-integrity verify, (2) negative — wrong key-id rejected
+        with no orphan namespace, (3) negative — rbd-create-image with
+        multi-key chain rejected by CLI. use_dummy_kmip=true (default).
+      destroy-cluster: false
+      module: test_nvmeof_byok_clone_chain.py
+      name: NVMe-oF BYOK multi-level clone chain encryption TC-02
+      comments: product bug IBMCEPH-18370
+      polarion-id: CEPH-83632659
+
+  # ── TC-03: Multiple KMIP Servers and KMIP Failover ────────────────────────
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        do_not_create_image: true
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        bdev_size: 2G
+        # ── KMIP backend ──────────────────────────────────────────────────
+        use_dummy_kmip: true
+        # KMIP-1: primary server, runs on initiator_node (node10) port 5696
+        kmip_port: 5696
+        # KMIP-2: failover server, runs on a DIFFERENT node (node1 — installer)
+        # to avoid the port-5696 conflict that occurs when both containers use
+        # --network host on the same host.  Port 5696 is reused on node1 since
+        # there is no collision with the KMIP-1 container on node10.
+        kmip_port_2: 5696
+        kmip_node_2: node1
+        kmip_server_image: quay.io/gdidi/kmip/kmip-server:latest
+        kmip_cli_image: quay.io/gdidi/kmip/kmip-cli:latest
+        # NOTE: kmip2_server_name is intentionally NOT passed here.
+        # The GW requires both endpoints to share the same server_name.
+        # The test code derives kmip2_server_name from kmip1_info["kmip_cfg"]["server_name"]
+        # (i.e. the KMIP-1 node hostname) so both endpoints register under
+        # the same KMIP server entry on the subsystem.
+        # ── Key configuration ─────────────────────────────────────────────
+        # Single key used for the encrypted namespace in this test.
+        # The same passphrase is loaded onto both KMIP servers so the GW
+        # can retrieve it from either one.
+        failover_key_id: key-id-failover
+        # luks_combos is empty — the failover key is registered manually
+        # via register_kmip_passphrases() inside the test module.
+        luks_combos: []
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode-byok14
+            no-group-append: true
+            allow_host: "*"
+            listeners:
+              - node5
+              - node6
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        TC-03: BYOK multi-KMIP failover — configure subsystem with two KMIP
+        servers (KMIP-1 on node10:5696, KMIP-2 on node1:5696) holding identical
+        key material. Steps: (1) both servers up, create encrypted namespace,
+        FIO; (2) stop KMIP-1, delete+re-add namespace to force re-fetch — GW
+        uses KMIP-2, IO succeeds; (3) restore KMIP-1, stop KMIP-2, restart GW
+        daemons — GW re-opens namespace via KMIP-1, IO succeeds; (4) restore
+        both, final clean-state FIO. use_dummy_kmip=true (default).
+      destroy-cluster: false
+      module: test_nvmeof_byok_kmip_failover.py
+      name: NVMe-oF BYOK multi-KMIP failover TC-03
+      polarion-id: CEPH-83632974
+
+  # ── TC-04: Negative Error Paths ───────────────────────────────────────────
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        do_not_create_image: true
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        bdev_size: 2G
+        # ── KMIP backend ──────────────────────────────────────────────────
+        use_dummy_kmip: true
+        kmip_port: 5696
+        kmip_server_image: quay.io/gdidi/kmip/kmip-server:latest
+        kmip_cli_image: quay.io/gdidi/kmip/kmip-cli:latest
+        # ── Key configuration ─────────────────────────────────────────────
+        # Single key used for all steps that require a valid passphrase.
+        # The test also intentionally probes a nonexistent key ('key-id-does-not-exist-99999')
+        # and a rotated key (passphrase replaced mid-test) to cover all error paths.
+        neg_key_id: key-id-neg
+        # luks_combos is empty — the test key is registered manually inside
+        # the test module via register_kmip_passphrases().
+        luks_combos: []
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode-byok23
+            no-group-append: true
+            allow_host: "*"
+            listeners:
+              - node5
+              - node6
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        TC-04: BYOK negative error paths — six sub-scenarios:
+        (1) ns add with unsupported format luks3 → CLI validation error, no orphan NS;
+        (2) format=luks2,luks2 but single key-id → count-mismatch error, no orphan NS;
+        (3) nonexistent key-id in KMIP → key-not-found error, no orphan NS;
+        (4) iptables block KMIP on GW nodes during ns add → connectivity error, no orphan NS;
+        (5) add namespace + block KMIP + restart GW → cannot re-open; restore KMIP + restart
+            GW → re-opens with IO success;
+        (6) add namespace with key A + rotate KMIP passphrase to key B + re-add namespace
+            → librbd LUKS header mismatch propagated to CLI; GW healthy throughout.
+        use_dummy_kmip=true (default).
+      destroy-cluster: false
+      module: test_nvmeof_byok_neg_paths.py
+      name: NVMe-oF BYOK negative error paths TC-04
+      polarion-id: CEPH-83632661
+
+  # ── Shared dummy KMIP teardown ─────────────────────────────────────────
+  - test:
+      abort-on-fail: false
+      config:
+        command: teardown
+      desc: Stop the suite-level dummy KMIP server started before TC-01.
+      destroy-cluster: false
+      module: test_nvmeof_byok_kmip_setup.py
+      name: teardown dummy KMIP server for BYOK tests
+
+# Future BYOK test cases will be added below this line

@@ -1,0 +1,126 @@
+#=======================================================================================================================
+# Conf file : conf/baremetal/cephfs_bruuni_6node_system_scale_test.yaml
+# Suite Description : This suite file runs CephFS System and Scale test on Baremetal cluster
+#  Cluster : 6-node Bruuni node type, Clients:5 VMs
+# Example run cmd for IBM Ceph:
+# run.py --log-level <> --osp-cred osp/osp-cred-sys.yaml  --global-conf conf/baremetal/cephfs_bruuni_6node_system_scale_test.yaml
+#  --suite suites/squid/cephfs/tier-2-nfs-ha-baremetal.yaml --inventory conf/inventory/rhel-9.5-server-x86_64.yaml --platform rhel-9
+#  --cloud baremetal  --instances-name sys-scale-test --skip-sos-report --rhbuild 8.1 --custom-config ibm-build=True
+#  --rhs-ceph-repo https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.1-202507241636.ci.0/IBM-CEPH-8.1-202507241636.ci.0-rhel9.repo
+#  --docker-registry cp.stg.icr.io --docker-image cp/ibm-ceph/ceph-8-rhel9 --docker-tag 8-178 --store
+#=======================================================================================================================
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: false
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+
+          - config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+
+          - config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+
+
+### Configure Clients
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+        - ceph-common
+        node: node101
+      desc: Configure the Cephfs client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+        - ceph-common
+        node: node102
+      desc: Configure the Cephfs client system 2
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client

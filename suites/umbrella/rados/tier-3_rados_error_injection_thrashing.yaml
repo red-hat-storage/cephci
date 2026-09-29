@@ -1,0 +1,763 @@
+# =============================================================================
+# Error Injection Thrash Test Suite
+# =============================================================================
+# This suite performs component-focused thrashing with Ceph error injection
+# variables enabled via the CephErrorInjector framework. It exercises MON,
+# OSD, MGR, and MDS thrashing at three intensity tiers (light, moderate,
+# aggressive) to verify cluster resilience under injected fault conditions.
+#
+# Each test entry targets a single component with a matching chaos profile
+# from ceph/rados/ceph_error_injector.py. The error_injection config block
+# is read by test_osd_thrashing.py and applied via CephErrorInjector.
+#
+# To be run with conf: 9-node-ec-cluster-1-client.yaml
+#
+# INTENSITY TIERS:
+# ----------------
+# Light     - Low probability injection, short duration (600s)
+# Moderate  - Medium probability, layered profiles (1200s)
+# Aggressive - High probability, multiple fault domains (1800s)
+# =============================================================================
+
+tests:
+  # ===========================================================================
+  # Deployment Preamble
+  # ===========================================================================
+  - test:
+      name: Setup install prerequisites
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+            - node5
+            - node6
+            - node8
+            - node9
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node7
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - ceph-fuse
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      desc: Install fio
+      module: exec.py
+      name: Install FIO
+      config:
+        sudo: true
+        commands:
+          - "dnf install fio -y"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  # ===========================================================================
+  # MON Error Injection Thrashing
+  # ===========================================================================
+
+  - test:
+      name: MON error injection thrashing light
+      desc: MON thrashing with low-probability paxos delays and scrub CRC mismatch injection
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 600
+        aggressive: false
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_osd_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: mon_instability
+          profile_overrides:
+            mon_inject_transaction_delay_probability: 0.02
+            mon_scrub_inject_crc_mismatch: 0.01
+
+  - test:
+      name: MON error injection thrashing moderate
+      desc: MON thrashing with mon_instability profile and sync chunk delay injection
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1200
+        aggressive: true
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_osd_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: mon_instability
+          configs:
+            mon_inject_sync_get_chunk_delay: 3.0
+
+  - test:
+      name: MON error injection thrashing aggressive
+      desc: MON thrashing with high-probability paxos delays, scrub faults, and network latency
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 1800
+        aggressive: true
+        enable_mon_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_osd_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: mon_instability
+          profile_overrides:
+            mon_inject_transaction_delay_probability: 0.15
+            mon_scrub_inject_crc_mismatch: 0.15
+            mon_scrub_inject_missing_keys: 0.1
+          configs:
+            ms_inject_delay_type: mon
+            ms_inject_delay_max: 3
+            ms_inject_delay_probability: 0.05
+            mon_inject_sync_get_chunk_delay: 5.0
+
+  # ===========================================================================
+  # OSD Error Injection Thrashing
+  # ===========================================================================
+
+  - test:
+      name: OSD error injection thrashing light
+      desc: OSD thrashing with low-probability dispatch delays during peering and recovery
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 600
+        aggressive: false
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: osd_dispatch_delays
+          profile_overrides:
+            osd_debug_inject_dispatch_delay_probability: 0.02
+            osd_debug_inject_dispatch_delay_duration: 0.5
+
+  - test:
+      name: OSD error injection thrashing moderate
+      desc: OSD thrashing with BlueStore read errors and EC write error injection on 2 OSDs
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1200
+        aggressive: true
+        inject_errors: true
+        num_osds_to_inject: 2
+        num_writes_to_inject: 500
+        inconsistent_object_fail: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: true
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: storage_corruption
+
+  - test:
+      name: OSD error injection thrashing aggressive
+      desc: OSD thrashing with storage corruption, bdev crash, dispatch delays, and EC errors on 3 OSDs
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 1800
+        aggressive: true
+        inject_errors: true
+        num_osds_to_inject: 3
+        num_writes_to_inject: 1000
+        inconsistent_object_fail: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: storage_corruption
+          configs:
+            bdev_inject_crash: 50000
+            bdev_inject_crash_flush_delay: 5
+            osd_debug_inject_dispatch_delay_probability: 0.05
+            osd_debug_inject_dispatch_delay_duration: 2
+            osd_inject_bad_map_crc_probability: 0.005
+
+  # ===========================================================================
+  # BlueStore Full Corruption Thrashing
+  # ===========================================================================
+
+  - test:
+      name: BlueStore corruption thrashing light
+      desc: OSD thrashing with BlueStore read errors and all client IO types
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 600
+        aggressive: false
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: true
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: storage_corruption
+
+  - test:
+      name: BlueStore corruption thrashing moderate
+      desc: OSD thrashing with full BlueStore corruption, EC errors, and all client IO
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1200
+        aggressive: true
+        inject_errors: true
+        num_osds_to_inject: 2
+        num_writes_to_inject: 500
+        inconsistent_object_fail: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: true
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: true
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: bluestore_full_corruption
+
+  - test:
+      name: BlueStore corruption thrashing aggressive
+      desc: OSD thrashing with multi-layer chaos, all client IO, and maximum EC error injection
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 1800
+        aggressive: true
+        inject_errors: true
+        num_osds_to_inject: 3
+        num_writes_to_inject: 1000
+        inconsistent_object_fail: true
+        enable_osd_thrashing: true
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: true
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: multi_layer_chaos
+          configs:
+            bluestore_debug_inject_csum_err_probability: 0.01
+            bluestore_debug_inject_allocation_from_file_failure: 0.01
+
+  # ===========================================================================
+  # MGR Error Injection Thrashing
+  # ===========================================================================
+
+  - test:
+      name: MGR error injection thrashing light
+      desc: MGR thrashing with low-probability message latency injection during failover
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 600
+        aggressive: false
+        enable_mgr_thrashing: true
+        enable_osd_thrashing: false
+        enable_mon_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: network_latency
+          profile_overrides:
+            ms_inject_delay_probability: 0.02
+            ms_inject_delay_max: 1
+
+  - test:
+      name: MGR error injection thrashing moderate
+      desc: MGR thrashing with network chaos - socket failures, delays, and congestion
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1200
+        aggressive: true
+        enable_mgr_thrashing: true
+        enable_osd_thrashing: false
+        enable_mon_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: network_chaos
+
+  - test:
+      name: MGR error injection thrashing aggressive
+      desc: MGR thrashing with full network chaos plus heartbeat failure injection
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 1800
+        aggressive: true
+        enable_mgr_thrashing: true
+        enable_osd_thrashing: false
+        enable_mon_thrashing: false
+        enable_mds_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: false
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: false
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: network_chaos
+          profile_overrides:
+            ms_inject_delay_probability: 0.1
+            ms_inject_socket_failures: 200
+          configs:
+            heartbeat_inject_failure: 500
+
+  # ===========================================================================
+  # MDS Error Injection Thrashing
+  # ===========================================================================
+
+  - test:
+      name: MDS error injection thrashing light
+      desc: MDS thrashing with low-probability traceless reply and health dummy injection
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 600
+        aggressive: false
+        enable_mds_thrashing: true
+        enable_osd_thrashing: false
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: false
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: mds_chaos
+          profile_overrides:
+            mds_inject_traceless_reply_probability: 0.01
+
+  - test:
+      name: MDS error injection thrashing moderate
+      desc: MDS thrashing with migration race, health faults, and client cap release failures
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1200
+        aggressive: true
+        enable_mds_thrashing: true
+        enable_osd_thrashing: false
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: false
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: mds_chaos
+          configs:
+            client_inject_release_failure: true
+            client_debug_inject_tick_delay: 5
+
+  - test:
+      name: MDS error injection thrashing aggressive
+      desc: MDS thrashing with dentry corruption, client faults, and network delays
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 1800
+        aggressive: true
+        enable_mds_thrashing: true
+        enable_osd_thrashing: false
+        enable_mon_thrashing: false
+        enable_mgr_thrashing: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: false
+        enable_election_strategy_thrash: false
+        enable_fio_cephfs: true
+        enable_fio_rbd: false
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: false
+        enable_ec_snapshots: false
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: false
+        error_injection:
+          profile: mds_corruption
+          profile_overrides:
+            mds_inject_rename_corrupt_dentry_first: 0.05
+            mds_inject_journal_corrupt_dentry_first: 0.03
+          configs:
+            mds_inject_migrator_session_race: true
+            mds_inject_traceless_reply_probability: 0.05
+            client_inject_release_failure: true
+            client_debug_inject_tick_delay: 5
+            ms_inject_delay_type: mds
+            ms_inject_delay_max: 2
+            ms_inject_delay_probability: 0.03
