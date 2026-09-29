@@ -150,3 +150,56 @@ tests:
         service_wait_timeout: 600
         redeploy_wait: 20
         timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-04 default Match_Policy MATCH_ANY
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Cluster config set without Match_Policy (default MATCH_ANY / OR).
+        Conditional Clients=client1 Exports=export_A NFS4=DEBUG —
+        export-only and client-only traffic must elevate; neither must not.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_04
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-05 MATCH_ALL via cluster config
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Cluster-config MATCH_ALL (ALL) with Clients+Export_A and NFS4=FULL_DEBUG
+        — counterpart of CONFIG-02 via ceph nfs cluster config set. Elevate only
+        when both match; client-only, export-only, and neither must not.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_05
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-06 MATCH_ANY exports only
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Match_Policy=ANY with Exports only (no Clients). Any client on
+        export A gets NFS4 FULL_DEBUG; traffic on export B never does.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_06
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200

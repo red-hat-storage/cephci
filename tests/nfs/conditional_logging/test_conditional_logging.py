@@ -1,10 +1,22 @@
 """
-NFS-Ganesha conditional logging automation.
+NFS-Ganesha conditional logging automation (Cephadm / Ceph NFS).
+
+Effective conf on each NFS host (after template + redeploy)::
+
+  /var/lib/ceph/<fsid>/nfs.<cluster>..../etc/ganesha/ganesha.conf
+
+LOG/Facility/Conditional are applied via the cephadm ganesha template
+(``mgr/cephadm/services/nfs/ganesha.conf``) and ``ceph nfs cluster config set``
+(RADOS ``%url``). Capture always resolves Facility.destination from that host
+ganesha.conf (not a hardcoded log path).
 
 Operations (config.operation):
   tc_cl_config_01  — Static ANY policy (Part A baseline + Part B Conditional)
   tc_cl_config_02  — Static MATCH_ALL (Part A baseline + Part B1–B4)
   tc_cl_config_03  — Invalid/malformed config handling
+  tc_cl_config_04  — Default Match_Policy (MATCH_ANY) via cluster config set
+  tc_cl_config_05  — MATCH_ALL via cluster config set (Clients+Export_A)
+  tc_cl_config_06  — MATCH_ANY, exports only via cluster config set
   tc_cl_dynamic_01 — ganesha_mgr CRUD
   tc_cl_dynamic_02 — DBus persistence / hot-reload
   conditional_logging_all — run all of the above in order
@@ -28,7 +40,6 @@ from nfs_delegation_operations import (
     redeploy_nfs_clusters,
     restore_ganesha_template,
     run_cephadm_shell,
-    truncate_ganesha_container_log,
 )
 from nfs_operations import (
     cleanup_cluster,
@@ -53,9 +64,41 @@ LOG_BLOCK_PATTERN = re.compile(r"LOG\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.S)
 RE_FSAL_F_DBG = re.compile(r"FSAL\s*:F_DBG", re.I)
 RE_FSAL_FULL_DEBUG = re.compile(r"FSAL\s*:FULL_DEBUG", re.I)
 RE_EXPORT_OR_NFS_M_DBG = re.compile(r"(?:EXPORT|NFS_V4|NFS4)\s*:M_DBG", re.I)
+# NFS4 elevated markers for cluster-config MATCH_ANY cases (CONFIG-04/05/06).
+# Require the Ganesha log-level colon form ("NFS4 : DEBUG"), NOT config assignment
+# ("NFS4 = DEBUG") which appears in conf dumps and caused false positives on
+# non-matching traffic.
+RE_NFS4_DEBUG = re.compile(
+    r"(?:NFS4|NFS_V4)\s*:\s*(?:FULL_DEBUG|DEBUG|F_DBG|NIV_DEBUG|NIV_FULL_DEBUG)\b",
+    re.I,
+)
+RE_NFS4_FULL_DEBUG = re.compile(
+    r"(?:NFS4|NFS_V4)\s*:\s*(?:FULL_DEBUG|F_DBG|NIV_FULL_DEBUG)\b",
+    re.I,
+)
+MOUNTED_USERCONF_PATH = "/tmp/cl_nfs_userconf.conf"
+EXP_A_PSEUDO = "/exp_a"
+EXP_B_PSEUDO = "/exp_b"
+EXP_A_MOUNT = "/mnt/exp_a"
+EXP_B_MOUNT = "/mnt/exp_b"
+
+# Container path (bind-mounted from the host cephadm unit dir).
+GANESHA_CONF_IN_CONTAINER = "/etc/ganesha/ganesha.conf"
+# Host path pattern on the NFS node (cephadm):
+#   /var/lib/ceph/<fsid>/nfs.<cluster>..../etc/ganesha/ganesha.conf
+# Used only when writing a new Facility into ganesha.conf: cephadm's default
+# template has no LOG/Facility. Capture always reads Facility.destination from
+# the live host ganesha.conf above.
+_CL_FACILITY_DEST_WHEN_ABSENT = "/var/log/ganesha.log"
 
 CONDITIONAL_LOG_WORK_SUFFIX = "conditional_logging_work.conf.j2"
 CONDITIONAL_LOG_BACKUP_SUFFIX = "conditional_logging_backup.conf.j2"
+
+RE_FACILITY_BLOCK = re.compile(r"Facility\s*\{([^{}]*)\}", re.I | re.S)
+RE_FACILITY_DESTINATION = re.compile(
+    r"""destination\s*=\s*(?:"([^"]+)"|'([^']+)')""",
+    re.I,
+)
 
 
 @dataclass
@@ -108,7 +151,36 @@ def cl_config_get(config: Mapping[str, Any], *keys: str, default=None):
     return default
 
 
-def build_log_facility_block(destination: str = "/var/log/ganesha.log") -> str:
+def parse_facility_destination(conf_text: str) -> Optional[str]:
+    """Return FILE Facility destination from ganesha.conf / LOG text, if any."""
+    for fac in RE_FACILITY_BLOCK.finditer(conf_text or ""):
+        m = RE_FACILITY_DESTINATION.search(fac.group(1))
+        if not m:
+            continue
+        path = (m.group(1) or m.group(2) or "").strip()
+        if path:
+            return path
+    return None
+
+
+def facility_destination_for_write(cmd_host: CephNode) -> str:
+    """Destination to put in Facility when updating the cephadm ganesha template.
+
+    Prefer the path already declared in the template / prior ganesha.conf LOG.
+    Cephadm's stock template has no Facility; only then use the test default that
+    will be written *into* ganesha.conf (capture still reads live conf).
+    """
+    existing = parse_facility_destination(read_ganesha_template(cmd_host))
+    if existing:
+        return existing
+    return _CL_FACILITY_DEST_WHEN_ABSENT
+
+
+def build_log_facility_block(destination: str) -> str:
+    if not destination:
+        raise OperationFailedError(
+            "Facility destination is required (from ganesha.conf)"
+        )
     return (
         "    Facility {\n"
         "        name = FILE;\n"
@@ -129,9 +201,13 @@ def build_components_block(components: Mapping[str, str]) -> str:
 def build_baseline_log_block(
     global_level: str = "EVENT",
     components: Optional[Mapping[str, str]] = None,
-    log_destination: str = "/var/log/ganesha.log",
+    log_destination: Optional[str] = None,
 ) -> str:
     """Return a LOG block with no Conditional section (baseline / Part A)."""
+    if not log_destination:
+        raise OperationFailedError(
+            "log_destination required — resolve from ganesha.conf Facility"
+        )
     components = components or {"FSAL": "INFO", "NFS_V4": "INFO"}
     return (
         "LOG {\n"
@@ -161,15 +237,24 @@ def build_conditional_subblock(
 
 
 def build_conditional_log_block(
-    match_policy: str = "ANY",
+    match_policy: Optional[str] = "ANY",
     global_level: str = "EVENT",
     conditional_components: Optional[Mapping[str, str]] = None,
     exports: Optional[Sequence[int]] = None,
     clients: Optional[Sequence[str]] = None,
     components: Optional[Mapping[str, str]] = None,
-    log_destination: str = "/var/log/ganesha.log",
+    log_destination: Optional[str] = None,
 ) -> str:
-    """Return a complete LOG { ... } block for ganesha template injection."""
+    """Return a complete LOG { ... } block for ganesha template injection.
+
+    Facility destination must come from ganesha.conf (caller resolves via
+    ``facility_destination_for_write`` / live conf). Pass ``match_policy=None``
+    to omit Match_Policy (Ganesha default MATCH_ANY — TC-CL-CONFIG-04).
+    """
+    if not log_destination:
+        raise OperationFailedError(
+            "log_destination required — resolve from ganesha.conf Facility"
+        )
     conditional_components = conditional_components or {
         "FSAL": "FULL_DEBUG",
         "NFS_V4": "MID_DEBUG",
@@ -178,17 +263,20 @@ def build_conditional_log_block(
     components = components or {"FSAL": "INFO", "NFS_V4": "INFO"}
     exports = list(exports or [])
     clients = list(clients or [])
-    policy = str(match_policy).strip().upper()
-    if policy in ("MATCH_ANY", "ANY"):
-        policy = "ANY"
-    elif policy in ("MATCH_ALL", "ALL"):
-        policy = "ALL"
+    policy_line = ""
+    if match_policy is not None:
+        policy = str(match_policy).strip().upper()
+        if policy in ("MATCH_ANY", "ANY"):
+            policy = "ANY"
+        elif policy in ("MATCH_ALL", "ALL"):
+            policy = "ALL"
+        policy_line = f"    Match_Policy = {policy};\n"
     return (
         "LOG {\n"
         f"    Default_Log_Level = {global_level};\n"
         f"{build_log_facility_block(log_destination)}"
         f"{build_components_block(components)}"
-        f"    Match_Policy = {policy};\n"
+        f"{policy_line}"
         f"{build_conditional_subblock(conditional_components, exports, clients)}"
         "}\n"
     )
@@ -318,16 +406,236 @@ def is_ganesha_running(nfs_node: CephNode, container_id: str) -> bool:
     return bool(str(out or "").strip())
 
 
-def read_ganesha_log(
-    nfs_node: CephNode, container_id: str, tail_lines: int = 8000
-) -> str:
+def find_host_ganesha_conf(nfs_node: CephNode, nfs_name: str) -> Tuple[str, str]:
+    """Locate live ganesha.conf on the NFS node under ``/var/lib/ceph``.
+
+    Cephadm layout::
+
+        /var/lib/ceph/<fsid>/nfs.<cluster>..../etc/ganesha/ganesha.conf
+
+    Returns ``(absolute_host_path, conf_text)``.
+    """
+    if not nfs_name:
+        raise OperationFailedError("nfs_name required to locate host ganesha.conf")
+    try:
+        fsids = nfs_node.get_dir_list("/var/lib/ceph", sudo=True) or []
+    except Exception as exc:
+        raise OperationFailedError(
+            f"Unable to list /var/lib/ceph on {nfs_node.hostname}: {exc}"
+        ) from exc
+    for fsid in fsids:
+        fsid = str(fsid).strip()
+        if not fsid or fsid.startswith("."):
+            continue
+        base = f"/var/lib/ceph/{fsid}"
+        try:
+            entries = nfs_node.get_dir_list(base, sudo=True) or []
+        except Exception:
+            continue
+        # Prefer directories that contain the NFS cluster id (nfs.<name>...).
+        candidates = [e for e in entries if nfs_name in str(e)]
+        # Stable order: nfs.* first, then others.
+        candidates.sort(key=lambda e: (0 if str(e).startswith("nfs.") else 1, str(e)))
+        for entry in candidates:
+            path = f"{base}/{entry}/etc/ganesha/ganesha.conf"
+            out, _ = nfs_node.exec_command(
+                sudo=True,
+                cmd=f"test -s {path} && cat {path}",
+                check_ec=False,
+                timeout=60,
+            )
+            if (out or "").strip():
+                log.info(
+                    "Live ganesha.conf on NFS host %s: %s",
+                    nfs_node.hostname,
+                    path,
+                )
+                return path, str(out)
+    raise OperationFailedError(
+        f"No host ganesha.conf at /var/lib/ceph/<fsid>/*{nfs_name}*/etc/ganesha/ganesha.conf "
+        f"on {nfs_node.hostname}"
+    )
+
+
+def read_live_ganesha_conf(
+    nfs_node: CephNode,
+    container_id: str,
+    nfs_name: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Return ``(conf_path, conf_text)`` — prefer host ``/var/lib/ceph/.../ganesha.conf``."""
+    if nfs_name:
+        try:
+            return find_host_ganesha_conf(nfs_node, nfs_name)
+        except OperationFailedError as exc:
+            log.warning(
+                "%s; falling back to container %s", exc, GANESHA_CONF_IN_CONTAINER
+            )
     out, _ = nfs_node.exec_command(
         sudo=True,
-        cmd=f"podman exec {container_id} tail -n {int(tail_lines)} /var/log/ganesha.log",
+        cmd=f"podman exec {container_id} cat {GANESHA_CONF_IN_CONTAINER}",
+        check_ec=False,
+        timeout=60,
+    )
+    text = str(out or "")
+    if not text.strip():
+        raise OperationFailedError(
+            f"Unable to read ganesha.conf from host /var/lib/ceph or "
+            f"container {GANESHA_CONF_IN_CONTAINER} on {nfs_node.hostname}"
+        )
+    return f"podman://{container_id}{GANESHA_CONF_IN_CONTAINER}", text
+
+
+def _host_unit_dir_from_conf_path(conf_path: str) -> Optional[str]:
+    """``/var/lib/ceph/<fsid>/nfs....`` from a host ganesha.conf path."""
+    marker = "/etc/ganesha/ganesha.conf"
+    if (
+        conf_path
+        and conf_path.endswith(marker)
+        and conf_path.startswith("/var/lib/ceph/")
+    ):
+        return conf_path[: -len(marker)]
+    return None
+
+
+def resolve_ganesha_file_log_path(
+    nfs_node: CephNode,
+    container_id: str,
+    nfs_name: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Return ``(conf_path, file_log_path)`` from live ganesha.conf Facility.destination."""
+    conf_path, conf = read_live_ganesha_conf(nfs_node, container_id, nfs_name=nfs_name)
+    path = parse_facility_destination(conf)
+    if not path:
+        raise OperationFailedError(
+            f"No LOG Facility destination in {conf_path}; "
+            "cannot capture conditional logging FILE output from ganesha.conf"
+        )
+    log.info(
+        "Using Ganesha FILE log from %s Facility.destination=%s",
+        conf_path,
+        path,
+    )
+    return conf_path, path
+
+
+def _truncate_and_read_file_log(
+    nfs_node: CephNode,
+    container_id: str,
+    facility_dest: str,
+    conf_path: str,
+    *,
+    truncate: bool,
+    tail_lines: int = 8000,
+) -> str:
+    """Truncate and/or tail Facility FILE log via host unit dir, else container."""
+    unit = _host_unit_dir_from_conf_path(conf_path)
+    host_candidates: List[str] = []
+    if unit:
+        base_name = os.path.basename(facility_dest.rstrip("/")) or "ganesha.log"
+        host_candidates = [
+            (
+                f"{unit}{facility_dest}"
+                if facility_dest.startswith("/")
+                else f"{unit}/{facility_dest}"
+            ),
+            f"{unit}/log/{base_name}",
+            f"{unit}/var/log/{base_name}",
+        ]
+    # Prefer a host path that already exists under the cephadm unit dir.
+    for host_path in host_candidates:
+        exists, _ = nfs_node.exec_command(
+            sudo=True,
+            cmd=f"test -e {host_path} && echo yes || echo no",
+            check_ec=False,
+            timeout=30,
+        )
+        if "yes" not in str(exists or ""):
+            continue
+        if truncate:
+            nfs_node.exec_command(
+                sudo=True,
+                cmd=f"truncate -s 0 {host_path} || : > {host_path}",
+                check_ec=False,
+                timeout=30,
+            )
+            return host_path
+        out, _ = nfs_node.exec_command(
+            sudo=True,
+            cmd=f"tail -n {int(tail_lines)} {host_path}",
+            check_ec=False,
+            timeout=120,
+        )
+        return str(out or "")
+
+    # Container path (Facility.destination as Ganesha sees it).
+    if truncate:
+        nfs_node.exec_command(
+            sudo=True,
+            cmd=(
+                f"podman exec {container_id} sh -c "
+                f'\'mkdir -p "$(dirname "{facility_dest}")" && '
+                f'touch "{facility_dest}" && :> "{facility_dest}"\''
+            ),
+            check_ec=False,
+            timeout=60,
+        )
+        return facility_dest
+    out, _ = nfs_node.exec_command(
+        sudo=True,
+        cmd=f'podman exec {container_id} tail -n {int(tail_lines)} "{facility_dest}"',
         check_ec=False,
         timeout=120,
     )
     return str(out or "")
+
+
+def truncate_ganesha_file_log(
+    nfs_node: CephNode,
+    container_id: str,
+    log_path: Optional[str] = None,
+    nfs_name: Optional[str] = None,
+) -> str:
+    """Truncate the FILE log declared in live ganesha.conf; return facility dest."""
+    if log_path:
+        path = log_path
+        conf_path, _ = read_live_ganesha_conf(nfs_node, container_id, nfs_name=nfs_name)
+    else:
+        conf_path, path = resolve_ganesha_file_log_path(
+            nfs_node, container_id, nfs_name=nfs_name
+        )
+    _truncate_and_read_file_log(
+        nfs_node,
+        container_id,
+        path,
+        conf_path,
+        truncate=True,
+    )
+    return path
+
+
+def read_ganesha_log(
+    nfs_node: CephNode,
+    container_id: str,
+    tail_lines: int = 8000,
+    log_path: Optional[str] = None,
+    nfs_name: Optional[str] = None,
+) -> str:
+    """Tail the FILE log path from live host ganesha.conf Facility.destination."""
+    if log_path:
+        path = log_path
+        conf_path, _ = read_live_ganesha_conf(nfs_node, container_id, nfs_name=nfs_name)
+    else:
+        conf_path, path = resolve_ganesha_file_log_path(
+            nfs_node, container_id, nfs_name=nfs_name
+        )
+    return _truncate_and_read_file_log(
+        nfs_node,
+        container_id,
+        path,
+        conf_path,
+        truncate=False,
+        tail_lines=tail_lines,
+    )
 
 
 def capture_ganesha_log_window(
@@ -336,12 +644,19 @@ def capture_ganesha_log_window(
     action,
     settle_sec: int = 5,
     tail_lines: int = 8000,
+    nfs_name: Optional[str] = None,
 ) -> str:
-    """Truncate log, run ``action()``, wait, return new log tail."""
-    truncate_ganesha_container_log(nfs_node, container_id)
+    """Truncate FILE log from ganesha.conf Facility, run action, return new tail."""
+    path = truncate_ganesha_file_log(nfs_node, container_id, nfs_name=nfs_name)
     action()
     time.sleep(settle_sec)
-    return read_ganesha_log(nfs_node, container_id, tail_lines=tail_lines)
+    return read_ganesha_log(
+        nfs_node,
+        container_id,
+        tail_lines=tail_lines,
+        log_path=path,
+        nfs_name=nfs_name,
+    )
 
 
 def count_component_debug_lines(log_text: str, component: str) -> int:
@@ -647,6 +962,466 @@ def run_light_io(client: CephNode, mount_path: str, dd_count: int = 100) -> None
     )
 
 
+def run_echo_io(client: CephNode, mount_path: str, filename: str, content: str) -> None:
+    """ls + echo write + cat on a mount (CONFIG-04/06 style)."""
+    mp = mount_path.rstrip("/")
+    path = f"{mp}/{filename}"
+    client.exec_command(sudo=True, cmd=f"ls {mp}", timeout=60)
+    client.exec_command(
+        sudo=True,
+        cmd=f"bash -c 'echo {content} > {path}'",
+        timeout=60,
+    )
+    client.exec_command(sudo=True, cmd=f"cat {path}", check_ec=False, timeout=60)
+
+
+def run_dd_small_io(
+    client: CephNode, mount_path: str, filename: str, count: int = 16
+) -> None:
+    """ls + small dd write (CONFIG-05 style)."""
+    mp = mount_path.rstrip("/")
+    path = f"{mp}/{filename}"
+    client.exec_command(sudo=True, cmd=f"ls {mp}", timeout=60)
+    client.exec_command(
+        sudo=True,
+        cmd=f"dd if=/dev/urandom of={path} bs=4k count={int(count)} conv=fsync",
+        timeout=120,
+    )
+
+
+def build_cluster_userconf(
+    components: Mapping[str, str],
+    conditional_components: Mapping[str, str],
+    exports: Optional[Sequence[int]] = None,
+    clients: Optional[Sequence[str]] = None,
+    match_policy: Optional[str] = None,
+    log_destination: Optional[str] = None,
+) -> str:
+    """Build LOG text for ``ceph nfs cluster config set``.
+
+    Facility.destination must match ganesha.conf (caller resolves). A second
+    LOG via RADOS ``%url`` without Facility was observed to leave the FILE log
+    empty (CONFIG-04/05/06 Scenario A).
+    """
+    if not log_destination:
+        raise OperationFailedError(
+            "log_destination required — resolve from ganesha.conf Facility"
+        )
+    comps = _mirror_nfs4_aliases(dict(components))
+    cond = _mirror_nfs4_aliases(dict(conditional_components))
+    lines = [
+        "LOG {",
+        "  Default_Log_Level = EVENT;",
+        "  Facility {",
+        "    name = FILE;",
+        f'    destination = "{log_destination}";',
+        "    enable = active;",
+        "  }",
+        "  Components {",
+    ]
+    for comp, level in comps.items():
+        lines.append(f"    {comp} = {level};")
+    lines.append("  }")
+    if match_policy:
+        policy = str(match_policy).strip().upper()
+        # Keep tokens identical to build_conditional_log_block (ALL/ANY).
+        # Dual template + %url userconf with MATCH_ALL vs ALL was observed to
+        # break AND semantics (export-only traffic elevated under CONFIG-05).
+        if policy in ("ANY", "MATCH_ANY"):
+            policy = "ANY"
+        elif policy in ("ALL", "MATCH_ALL"):
+            policy = "ALL"
+        lines.append(f"  Match_Policy = {policy};")
+    lines.append("  Conditional {")
+    # Same field order as build_conditional_subblock (levels, then Exports, Clients).
+    for comp, level in cond.items():
+        lines.append(f"    {comp} = {level};")
+    if exports:
+        lines.append(f"    Exports = {', '.join(str(e) for e in exports)};")
+    if clients:
+        lines.append(f"    Clients = {', '.join(str(c) for c in clients)};")
+    lines.append("  }")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _mirror_nfs4_aliases(components: Dict[str, str]) -> Dict[str, str]:
+    """Ensure NFS4 and NFS_V4 both appear when either is set."""
+    out = dict(components)
+    if "NFS4" in out and "NFS_V4" not in out:
+        out["NFS_V4"] = out["NFS4"]
+    if "NFS_V4" in out and "NFS4" not in out:
+        out["NFS4"] = out["NFS_V4"]
+    return out
+
+
+def nfs_cluster_config_reset(cmd_host: CephNode, nfs_name: str) -> int:
+    """Reset RADOS userconf; return 0 on success (best-effort)."""
+    out, err = run_cephadm_shell(
+        cmd_host,
+        f"ceph nfs cluster config reset {nfs_name}",
+        check_ec=False,
+    )
+    log.info(
+        "nfs cluster config reset %s: out=%r err=%r",
+        nfs_name,
+        (out or "")[:200],
+        (err or "")[:200],
+    )
+    return 0
+
+
+def nfs_cluster_config_get(cmd_host: CephNode, nfs_name: str) -> str:
+    out, _ = run_cephadm_shell(
+        cmd_host,
+        f"ceph nfs cluster config get {nfs_name}",
+        check_ec=False,
+    )
+    return str(out or "")
+
+
+def nfs_cluster_config_set(
+    cmd_host: CephNode, nfs_name: str, conf_text: str
+) -> Tuple[int, str]:
+    """Write conf to host temp file and ``ceph nfs cluster config set -i``.
+
+    Returns (rc, combined_output). Success when command reports success or
+    a subsequent config get contains a Conditional block from conf_text.
+    """
+    work = _cl_tmp_path("userconf.conf")
+    remote = None
+    try:
+        try:
+            remote = cmd_host.remote_file(sudo=True, file_name=work, file_mode="w")
+            remote.write(conf_text)
+            remote.flush()
+        except AttributeError:
+            remote = cmd_host.remote_file(sudo=True, file_name=work, file_mode="wb")
+            remote.write(conf_text.encode("utf-8"))
+            remote.flush()
+    finally:
+        if remote and hasattr(remote, "close"):
+            remote.close()
+
+    try:
+        out, err = cmd_host.exec_command(
+            sudo=True,
+            cmd=(
+                f"cephadm shell --mount {work}:{MOUNTED_USERCONF_PATH} "
+                f"-- ceph nfs cluster config set {nfs_name} -i {MOUNTED_USERCONF_PATH}"
+            ),
+            check_ec=True,
+        )
+        combined = f"{out or ''}{err or ''}"
+        log.info("nfs cluster config set %s: %s", nfs_name, combined.strip())
+        return 0, combined
+    except Exception as exc:
+        log.error("nfs cluster config set failed: %s", exc)
+        return 1, str(exc)
+
+
+def log_has_nfs4_debug(log_text: str, full_debug: bool = False) -> bool:
+    """True when NFS4/NFS_V4 elevated DEBUG (or FULL_DEBUG) markers are present."""
+    pat = RE_NFS4_FULL_DEBUG if full_debug else RE_NFS4_DEBUG
+    return bool(pat.search(log_text or ""))
+
+
+def verify_nfs4_matching_logs(
+    log_text: str, full_debug: bool = False
+) -> Tuple[bool, str]:
+    if not (log_text or "").strip():
+        return False, "FILE log empty (no Facility.destination active in ganesha.conf?)"
+    if log_has_nfs4_debug(log_text, full_debug=full_debug):
+        kind = "FULL_DEBUG" if full_debug else "DEBUG"
+        return True, f"NFS4 {kind} present"
+    return False, "NFS4 DEBUG/FULL_DEBUG markers absent (policy not loaded?)"
+
+
+def verify_nfs4_non_matching_logs(log_text: str) -> Tuple[bool, str]:
+    if log_has_nfs4_debug(log_text, full_debug=False):
+        samples = RE_NFS4_DEBUG.findall(log_text or "")[:5]
+        # Also show a short surrounding snippet for the first hit
+        m = RE_NFS4_DEBUG.search(log_text or "")
+        snippet = ""
+        if m:
+            start = max(0, m.start() - 80)
+            end = min(len(log_text or ""), m.end() + 80)
+            snippet = (log_text or "")[start:end].replace("\n", " ")
+        return (
+            False,
+            "unexpected NFS4 DEBUG/FULL_DEBUG on non-matching traffic "
+            f"(hits={samples!r} snippet={snippet!r})",
+        )
+    if not (log_text or "").strip():
+        # Empty capture is ambiguous: either Facility is dead (and matching
+        # scenarios will fail) or non-matching traffic logged nothing at CRIT.
+        return (
+            True,
+            "no NFS4 DEBUG (FILE log empty — Facility check deferred to matching)",
+        )
+    return True, "no NFS4 DEBUG on non-matching traffic"
+
+
+def _dump_policy_not_loaded(ctx: dict, container_id: str) -> None:
+    """Dump config get / RADOS userconf / host ganesha.conf / FILE log."""
+    nfs_name = ctx["nfs_name"]
+    cmd_host = ctx["cmd_host"]
+    get_out = nfs_cluster_config_get(cmd_host, nfs_name)
+    log.error("policy not loaded — config get:\n%s", get_out)
+    rados_out, _ = run_cephadm_shell(
+        cmd_host,
+        f"rados -p .nfs -N {nfs_name} get userconf-nfs.{nfs_name} -",
+        check_ec=False,
+    )
+    log.error("policy not loaded — rados userconf:\n%s", rados_out)
+    try:
+        conf_path, live_conf = read_live_ganesha_conf(
+            ctx["nfs_node"], container_id, nfs_name=nfs_name
+        )
+    except Exception as exc:
+        conf_path, live_conf = "<unavailable>", str(exc)
+    log.error(
+        "policy not loaded — live ganesha.conf %s Facility.destination=%r:\n%s",
+        conf_path,
+        parse_facility_destination(live_conf if isinstance(live_conf, str) else ""),
+        "\n".join(
+            ln
+            for ln in str(live_conf).splitlines()
+            if re.search(
+                r"LOG|Facility|destination|Conditional|Match_Policy|Components|COMPONENTS",
+                ln,
+                re.I,
+            )
+        )
+        or str(live_conf)[:2000],
+    )
+    try:
+        file_log = read_ganesha_log(
+            ctx["nfs_node"],
+            container_id,
+            tail_lines=200,
+            nfs_name=nfs_name,
+        )
+    except Exception as exc:
+        file_log = f"<unavailable: {exc}>"
+    log.error(
+        "policy not loaded — FILE log from ganesha.conf Facility:\n%s",
+        file_log,
+    )
+
+
+def _nfs_node_for_hostname(
+    nfs_nodes: Sequence[CephNode], hostname: str
+) -> Optional[CephNode]:
+    """Resolve an orch hostname to a CephNode (short-name tolerant)."""
+    want = (hostname or "").split(".")[0]
+    if not want:
+        return None
+    by_short = {n.hostname.split(".")[0]: n for n in nfs_nodes}
+    node = by_short.get(want)
+    if node:
+        return node
+    for short, candidate in by_short.items():
+        if short in want or want in short:
+            return candidate
+    return None
+
+
+def _iter_running_nfs_daemons(ctx: dict) -> List[Tuple[CephNode, str]]:
+    """Return [(node, container_id), ...] for running nfs.<name> daemons."""
+    raw = ctx["cephadm"].orch.ps(service_name=f"nfs.{ctx['nfs_name']}", format="json")
+    daemons = json.loads(raw) if raw else []
+    out: List[Tuple[CephNode, str]] = []
+    for daemon in daemons:
+        cid = daemon.get("container_id")
+        status = str(daemon.get("status_desc", "")).lower()
+        if not cid or status != "running":
+            continue
+        node = _nfs_node_for_hostname(ctx["nfs_nodes"], str(daemon.get("hostname", "")))
+        if node:
+            out.append((node, str(cid)))
+    return out
+
+
+def _container_on_mount_host(ctx: dict) -> str:
+    """Return container_id for the daemon on ctx['nfs_node'] (mount target)."""
+    prefer = ctx["nfs_node"].hostname.split(".")[0]
+    for node, cid in _iter_running_nfs_daemons(ctx):
+        if node.hostname.split(".")[0] == prefer:
+            return cid
+    # Fall back to first running daemon and retarget mount host to match logs.
+    targets = _iter_running_nfs_daemons(ctx)
+    if not targets:
+        raise OperationFailedError(
+            f"No running nfs.{ctx['nfs_name']} daemon with container_id"
+        )
+    node, cid = targets[0]
+    ctx["nfs_node"] = node
+    ctx["nfs_server"] = node.hostname
+    log.warning(
+        "Mount NFS host retargeted to %s (container %s) for log capture alignment",
+        node.hostname,
+        cid,
+    )
+    return cid
+
+
+def _ensure_host_ganesha_policy_ready(
+    ctx: dict,
+    container_id: str,
+    *,
+    require_conditional: bool = False,
+) -> str:
+    """After redeploy, require host ganesha.conf to carry Facility (+ Conditional).
+
+    Conf path: ``/var/lib/ceph/<fsid>/nfs.<cluster>..../etc/ganesha/ganesha.conf``.
+    Returns Facility.destination used for FILE log capture.
+    """
+    conf_path, conf = read_live_ganesha_conf(
+        ctx["nfs_node"], container_id, nfs_name=ctx["nfs_name"]
+    )
+    dest = parse_facility_destination(conf)
+    if not dest:
+        raise OperationFailedError(
+            f"After apply, {conf_path} has no LOG Facility.destination — "
+            "conditional logging FILE capture cannot run"
+        )
+    has_conditional = bool(re.search(r"\bConditional\b", conf, re.I))
+    if require_conditional and not has_conditional:
+        raise OperationFailedError(
+            f"After apply, {conf_path} has Facility but no Conditional block — "
+            "template/userconf policy did not materialize into host ganesha.conf"
+        )
+    if has_conditional:
+        log.info(
+            "Host ganesha.conf ready: %s (Facility.destination=%s, Conditional present)",
+            conf_path,
+            dest,
+        )
+    else:
+        log.info(
+            "Host ganesha.conf ready: %s (Facility.destination=%s, no Conditional)",
+            conf_path,
+            dest,
+        )
+    truncate_ganesha_file_log(
+        ctx["nfs_node"],
+        container_id,
+        log_path=dest,
+        nfs_name=ctx["nfs_name"],
+    )
+    ctx["ganesha_conf_path"] = conf_path
+    ctx["ganesha_file_log"] = dest
+    return dest
+
+
+def _apply_match_any_policy(
+    ctx: dict,
+    *,
+    components: Mapping[str, str],
+    conditional_components: Mapping[str, str],
+    exports: Optional[Sequence[int]] = None,
+    clients: Optional[Sequence[str]] = None,
+    match_policy: Optional[str] = None,
+) -> Tuple[str, int, str]:
+    """Apply Conditional for CONFIG-04/05/06 onto Ceph NFS ganesha.conf.
+
+    1. Inject Facility + COMPONENTS + Conditional into the cephadm ganesha
+       template (materialized on NFS hosts as
+       ``/var/lib/ceph/<fsid>/nfs.<cluster>..../etc/ganesha/ganesha.conf``).
+    2. Mirror the same policy via ``ceph nfs cluster config set`` (API under test;
+       included via ``%url`` — also carries Facility so FILE logging is not wiped).
+    3. Redeploy, then verify the host ganesha.conf and prepare FILE log capture.
+    """
+    comps = _mirror_nfs4_aliases(dict(components))
+    cond = _mirror_nfs4_aliases(dict(conditional_components))
+    log_dest = facility_destination_for_write(ctx["cmd_host"])
+    log_block = build_conditional_log_block(
+        match_policy=match_policy,
+        global_level="EVENT",
+        components=comps,
+        conditional_components=cond,
+        exports=exports,
+        clients=clients,
+        log_destination=log_dest,
+    )
+    apply_conditional_log_template(ctx["cmd_host"], log_block)
+
+    userconf = build_cluster_userconf(
+        components=comps,
+        conditional_components=cond,
+        exports=exports,
+        clients=clients,
+        match_policy=match_policy,
+        log_destination=log_dest,
+    )
+    set_rc, set_out = nfs_cluster_config_set(ctx["cmd_host"], ctx["nfs_name"], userconf)
+    container_id = _redeploy_refresh(ctx)
+    _ensure_host_ganesha_policy_ready(ctx, container_id, require_conditional=True)
+    return container_id, set_rc, set_out
+
+
+def _prepare_match_any_fixture(ctx: dict) -> dict:
+    """One NFS cluster, two exports (/exp_a, /exp_b), reset userconf."""
+    nfs_cluster_config_reset(ctx["cmd_host"], ctx["nfs_name"])
+    export_paths = [EXP_A_PSEUDO, EXP_B_PSEUDO]
+    path_to_id = create_nfs_exports(
+        ctx["cmd_host"],
+        ctx["fs_name"],
+        ctx["nfs_name"],
+        export_paths,
+        cephfs_path="/",
+    )
+    client_match = ctx["clients"][0]
+    client_other = ctx["clients"][1]
+    return {
+        "export_a": EXP_A_PSEUDO,
+        "export_b": EXP_B_PSEUDO,
+        "export_a_id": path_to_id[EXP_A_PSEUDO],
+        "export_b_id": path_to_id[EXP_B_PSEUDO],
+        "mp_a": EXP_A_MOUNT,
+        "mp_b": EXP_B_MOUNT,
+        "client_match": client_match,
+        "client_other": client_other,
+        "client_match_ip": client_ip(client_match),
+        "client_other_ip": client_ip(client_other),
+    }
+
+
+def _scenario_io_capture(
+    ctx: dict,
+    container_id: str,
+    client: CephNode,
+    export_path: str,
+    mount_path: str,
+    io_callable,
+    settle_sec: int = 8,
+) -> str:
+    """Mount, run IO, umount; capture log the same way as TC-CL-CONFIG-01/02/03."""
+
+    def _action():
+        mount_export(
+            client,
+            ctx["nfs_server"],
+            export_path,
+            mount_path,
+            ctx["version"],
+            ctx["port"],
+        )
+        try:
+            io_callable()
+        finally:
+            _safe_umount(client, mount_path)
+
+    return capture_ganesha_log_window(
+        ctx["nfs_node"],
+        container_id,
+        _action,
+        settle_sec=settle_sec,
+        nfs_name=ctx.get("nfs_name"),
+    )
+
+
 def client_ip(client: CephNode) -> str:
     return str(getattr(client, "ip_address", None) or client.hostname)
 
@@ -671,6 +1446,7 @@ def log_contains_any(log_text: str, tokens: Sequence[str]) -> bool:
 def malformed_log_block_cases(
     export_id: int = 1,
     client: str = "10.0.0.1",
+    log_destination: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Return graceful-malformation cases for TC-CL-CONFIG-03.
@@ -678,16 +1454,21 @@ def malformed_log_block_cases(
     Each case dict:
       name, log_block, expect_warn (tokens), require_warn, verify_no_elevate
     """
+    if not log_destination:
+        raise OperationFailedError(
+            "log_destination required — resolve from ganesha.conf Facility"
+        )
     export_id = int(export_id)
     client = str(client)
     components = {"FSAL": "INFO", "NFS_V4": "INFO"}
+    facility = build_log_facility_block(log_destination)
     return [
         {
             "name": "case1_invalid_match_policy",
             "log_block": (
                 "LOG {\n"
                 "    Default_Log_Level = EVENT;\n"
-                f"{build_log_facility_block()}"
+                f"{facility}"
                 f"{build_components_block(components)}"
                 "    Match_Policy = INVALID_POLICY;\n"
                 "    Conditional {\n"
@@ -707,7 +1488,7 @@ def malformed_log_block_cases(
             "log_block": (
                 "LOG {\n"
                 "    Default_Log_Level = EVENT;\n"
-                f"{build_log_facility_block()}"
+                f"{facility}"
                 f"{build_components_block(components)}"
                 "    Match_Policy = ANY;\n"
                 "    Conditional {\n"
@@ -728,7 +1509,7 @@ def malformed_log_block_cases(
             "log_block": (
                 "LOG {\n"
                 "    Default_Log_Level = EVENT;\n"
-                f"{build_log_facility_block()}"
+                f"{facility}"
                 f"{build_components_block(components)}"
                 "    Match_Policy = ANY;\n"
                 "    Conditional {\n"
@@ -748,7 +1529,7 @@ def malformed_log_block_cases(
             "log_block": (
                 "LOG {\n"
                 "    Default_Log_Level = EVENT;\n"
-                f"{build_log_facility_block()}"
+                f"{facility}"
                 f"{build_components_block(components)}"
                 "    Match_Policy = ANY;\n"
                 "    Conditional {\n"
@@ -768,7 +1549,7 @@ def malformed_log_block_cases(
             "log_block": (
                 "LOG {\n"
                 "    Default_Log_Level = EVENT;\n"
-                f"{build_log_facility_block()}"
+                f"{facility}"
                 f"{build_components_block(components)}"
                 "    Match_Policy = ANY;\n"
                 "}\n"
@@ -794,14 +1575,15 @@ def redeploy_and_wait(
 
 
 def _redeploy_refresh(ctx) -> str:
-    """Redeploy NFS and refresh ctx container_id so later ops use the live container."""
-    container_id, _, _ = redeploy_and_wait(
+    """Redeploy NFS and refresh ctx container_id on the mount-target host."""
+    redeploy_and_wait(
         ctx["cephadm"],
         ctx["installer"],
         ctx["nfs_name"],
         ctx["redeploy_wait"],
         ctx["service_wait_timeout"],
     )
+    container_id = _container_on_mount_host(ctx)
     ctx["container_id"] = container_id
     return container_id
 
@@ -811,6 +1593,9 @@ def _redeploy_refresh(ctx) -> str:
 OP_TC_CL_CONFIG_01 = "tc_cl_config_01"
 OP_TC_CL_CONFIG_02 = "tc_cl_config_02"
 OP_TC_CL_CONFIG_03 = "tc_cl_config_03"
+OP_TC_CL_CONFIG_04 = "tc_cl_config_04"
+OP_TC_CL_CONFIG_05 = "tc_cl_config_05"
+OP_TC_CL_CONFIG_06 = "tc_cl_config_06"
 OP_TC_CL_DYNAMIC_01 = "tc_cl_dynamic_01"
 OP_TC_CL_DYNAMIC_02 = "tc_cl_dynamic_02"
 OP_CONDITIONAL_LOGGING_ALL = "conditional_logging_all"
@@ -819,6 +1604,9 @@ _ALL_OPERATIONS = [
     OP_TC_CL_CONFIG_01,
     OP_TC_CL_CONFIG_02,
     OP_TC_CL_CONFIG_03,
+    OP_TC_CL_CONFIG_04,
+    OP_TC_CL_CONFIG_05,
+    OP_TC_CL_CONFIG_06,
     OP_TC_CL_DYNAMIC_01,
     OP_TC_CL_DYNAMIC_02,
 ]
@@ -940,12 +1728,15 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
 
         # --- Part A: baseline LOG without Conditional ---
         log.info("=== TC-CL-CONFIG-01 Part A: baseline (no conditional logging) ===")
+        log_dest = facility_destination_for_write(ctx["cmd_host"])
         baseline_block = build_baseline_log_block(
             global_level="EVENT",
             components={"FSAL": "INFO", "NFS_V4": "INFO"},
+            log_destination=log_dest,
         )
         apply_conditional_log_template(ctx["cmd_host"], baseline_block)
         container_id = _redeploy_refresh(ctx)
+        _ensure_host_ganesha_policy_ready(ctx, container_id)
         reload_ganesha(ctx["nfs_node"], container_id)
 
         def _part_a_io():
@@ -953,7 +1744,11 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             run_light_io(unmatched_client, mp_unmatched, dd_count=10)
 
         part_a_log = capture_ganesha_log_window(
-            ctx["nfs_node"], container_id, _part_a_io, settle_sec=8
+            ctx["nfs_node"],
+            container_id,
+            _part_a_io,
+            settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         ok_a, detail_a = verify_baseline_no_conditional_debug(part_a_log)
         if not ok_a:
@@ -967,6 +1762,7 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             matched_ip,
             matched_export_id,
         )
+        log_dest = facility_destination_for_write(ctx["cmd_host"])
         conditional_block = build_conditional_log_block(
             match_policy="ANY",
             global_level="EVENT",
@@ -974,9 +1770,11 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             conditional_components={"FSAL": "FULL_DEBUG", "NFS_V4": "MID_DEBUG"},
             exports=[matched_export_id],
             clients=[matched_ip],
+            log_destination=log_dest,
         )
         apply_conditional_log_template(ctx["cmd_host"], conditional_block)
         container_id = _redeploy_refresh(ctx)
+        _ensure_host_ganesha_policy_ready(ctx, container_id, require_conditional=True)
         reload_ganesha(ctx["nfs_node"], container_id)
 
         def _matched_io():
@@ -986,10 +1784,18 @@ def _run_tc_cl_config_01(ctx) -> TestCaseResult:
             run_light_io(unmatched_client, mp_unmatched, dd_count=10)
 
         matched_log = capture_ganesha_log_window(
-            ctx["nfs_node"], container_id, _matched_io, settle_sec=8
+            ctx["nfs_node"],
+            container_id,
+            _matched_io,
+            settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         unmatched_log = capture_ganesha_log_window(
-            ctx["nfs_node"], container_id, _unmatched_io, settle_sec=8
+            ctx["nfs_node"],
+            container_id,
+            _unmatched_io,
+            settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
 
         ok_b1, detail_b1 = verify_matching_client_conditional_debug(matched_log)
@@ -1042,12 +1848,15 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
 
         # --- Part A: baseline LOG without Conditional ---
         log.info("=== TC-CL-CONFIG-02 Part A: baseline (no conditional logging) ===")
+        log_dest = facility_destination_for_write(ctx["cmd_host"])
         baseline_block = build_baseline_log_block(
             global_level="EVENT",
             components={"FSAL": "INFO", "NFS_V4": "INFO"},
+            log_destination=log_dest,
         )
         apply_conditional_log_template(ctx["cmd_host"], baseline_block)
         container_id = _redeploy_refresh(ctx)
+        _ensure_host_ganesha_policy_ready(ctx, container_id)
         reload_ganesha(ctx["nfs_node"], container_id)
 
         # Mount matching export on both clients for baseline I/O.
@@ -1073,7 +1882,11 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             run_light_io(unmatched_client, mount_paths[1], dd_count=5)
 
         part_a_log = capture_ganesha_log_window(
-            ctx["nfs_node"], container_id, _part_a_io, settle_sec=8
+            ctx["nfs_node"],
+            container_id,
+            _part_a_io,
+            settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         ok_a, detail_a = verify_baseline_no_conditional_debug(part_a_log)
         _safe_umount(matched_client, mount_paths[0])
@@ -1089,6 +1902,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             matched_ip,
             matched_export_id,
         )
+        log_dest = facility_destination_for_write(ctx["cmd_host"])
         conditional_block = build_conditional_log_block(
             match_policy="ALL",
             global_level="EVENT",
@@ -1096,22 +1910,27 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             conditional_components={"FSAL": "FULL_DEBUG", "NFS_V4": "MID_DEBUG"},
             exports=[matched_export_id],
             clients=[matched_ip],
+            log_destination=log_dest,
         )
         apply_conditional_log_template(ctx["cmd_host"], conditional_block)
         container_id = _redeploy_refresh(ctx)
+        _ensure_host_ganesha_policy_ready(ctx, container_id, require_conditional=True)
         # Capture confirmation of policy acceptance around reload.
         policy_log = capture_ganesha_log_window(
             ctx["nfs_node"],
             container_id,
             lambda: reload_ganesha(ctx["nfs_node"], container_id),
             settle_sec=5,
+            nfs_name=ctx["nfs_name"],
         )
         ok_policy, detail_policy = verify_match_policy_in_log(
             policy_log, expected_policy="MATCH_ALL"
         )
         if not ok_policy:
             # Also check a wider log tail in case confirmation was slightly earlier.
-            wider = read_ganesha_log(ctx["nfs_node"], container_id, tail_lines=4000)
+            wider = read_ganesha_log(
+                ctx["nfs_node"], container_id, tail_lines=4000, nfs_name=ctx["nfs_name"]
+            )
             ok_policy, detail_policy = verify_match_policy_in_log(
                 wider, expected_policy="MATCH_ALL"
             )
@@ -1136,6 +1955,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(matched_client, mount_paths[0], dd_count=5),
             settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         _safe_umount(matched_client, mount_paths[0])
         ok_b1, detail_b1 = verify_matching_client_conditional_debug(log_b1)
@@ -1158,6 +1978,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(matched_client, mount_paths[1], dd_count=5),
             settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         _safe_umount(matched_client, mount_paths[1])
         ok_b2, detail_b2 = verify_baseline_no_conditional_debug(log_b2)
@@ -1182,6 +2003,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(unmatched_client, mount_paths[2], dd_count=5),
             settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         _safe_umount(unmatched_client, mount_paths[2])
         ok_b3, detail_b3 = verify_baseline_no_conditional_debug(log_b3)
@@ -1206,6 +2028,7 @@ def _run_tc_cl_config_02(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(unmatched_client, mount_paths[3], dd_count=5),
             settle_sec=8,
+            nfs_name=ctx["nfs_name"],
         )
         _safe_umount(unmatched_client, mount_paths[3])
         ok_b4, detail_b4 = verify_baseline_no_conditional_debug(log_b4)
@@ -1254,7 +2077,11 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
         export_id = path_to_id[export_paths[0]]
         mount_path = mount_paths[0]
 
-        cases = malformed_log_block_cases(export_id=export_id, client=matched_ip)
+        cases = malformed_log_block_cases(
+            export_id=export_id,
+            client=matched_ip,
+            log_destination=facility_destination_for_write(ctx["cmd_host"]),
+        )
         for case in cases:
             case_name = case["name"]
             log.info("=== TC-CL-CONFIG-03 %s ===", case_name)
@@ -1265,7 +2092,10 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
                 # Capture parse/reload WARNs before capture_ganesha_log_window
                 # truncates the file for the I/O window.
                 reload_warn_log = read_ganesha_log(
-                    ctx["nfs_node"], container_id, tail_lines=8000
+                    ctx["nfs_node"],
+                    container_id,
+                    tail_lines=8000,
+                    nfs_name=ctx["nfs_name"],
                 )
 
                 if not is_ganesha_running(ctx["nfs_node"], container_id):
@@ -1286,10 +2116,17 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
                     run_light_io(matched_client, mount_path, dd_count=2)
 
                 case_log = capture_ganesha_log_window(
-                    ctx["nfs_node"], container_id, _io, settle_sec=6
+                    ctx["nfs_node"],
+                    container_id,
+                    _io,
+                    settle_sec=6,
+                    nfs_name=ctx["nfs_name"],
                 )
                 wide_log = read_ganesha_log(
-                    ctx["nfs_node"], container_id, tail_lines=8000
+                    ctx["nfs_node"],
+                    container_id,
+                    tail_lines=8000,
+                    nfs_name=ctx["nfs_name"],
                 )
                 combined_log = reload_warn_log + "\n" + case_log + "\n" + wide_log
 
@@ -1331,6 +2168,7 @@ def _run_tc_cl_config_03(ctx) -> TestCaseResult:
             build_baseline_log_block(
                 global_level="EVENT",
                 components={"FSAL": "INFO", "NFS_V4": "INFO"},
+                log_destination=facility_destination_for_write(ctx["cmd_host"]),
             ),
         )
         container_id = _redeploy_refresh(ctx)
@@ -1422,6 +2260,7 @@ def _run_tc_cl_dynamic_01(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(matched_client, mount_path, dd_count=5),
             settle_sec=6,
+            nfs_name=ctx["nfs_name"],
         )
         ok_add, detail_add = verify_conditional_verbosity(log_after_add, "")
 
@@ -1448,6 +2287,7 @@ def _run_tc_cl_dynamic_01(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(matched_client, mount_path, dd_count=5),
             settle_sec=6,
+            nfs_name=ctx["nfs_name"],
         )
         ok_remove, detail_remove = verify_no_elevated_debug(log_after_remove)
         passed = ok_add and ok_remove
@@ -1481,6 +2321,7 @@ def _run_tc_cl_dynamic_02(ctx) -> TestCaseResult:
             conditional_components={"FSAL": "EVENT", "NFS_V4": "EVENT"},
             exports=[export_id],
             clients=[matched_ip],
+            log_destination=facility_destination_for_write(ctx["cmd_host"]),
         )
         apply_conditional_log_template(ctx["cmd_host"], base_block)
         container_id = _redeploy_refresh(ctx)
@@ -1505,6 +2346,7 @@ def _run_tc_cl_dynamic_02(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(matched_client, mount_path, dd_count=5),
             settle_sec=6,
+            nfs_name=ctx["nfs_name"],
         )
         ok_dbus, _ = verify_conditional_verbosity(log_dbus, "")
 
@@ -1520,6 +2362,7 @@ def _run_tc_cl_dynamic_02(ctx) -> TestCaseResult:
             container_id,
             lambda: run_light_io(matched_client, mount_path, dd_count=5),
             settle_sec=6,
+            nfs_name=ctx["nfs_name"],
         )
 
         if not is_ganesha_running(ctx["nfs_node"], container_id):
@@ -1537,10 +2380,413 @@ def _run_tc_cl_dynamic_02(ctx) -> TestCaseResult:
             _safe_umount(matched_client, mount_path)
 
 
+def _assert_config_get_04(
+    get_out: str, client_ip_s: str, export_a_id: int
+) -> Tuple[bool, str]:
+    text = get_out or ""
+    if "Conditional" not in text:
+        return False, "Conditional missing from config get"
+    if client_ip_s not in text:
+        return False, f"Clients={client_ip_s} missing from config get"
+    if str(export_a_id) not in text:
+        return False, f"Exports={export_a_id} missing from config get"
+    if not re.search(r"NFS4\s*=\s*DEBUG", text, re.I):
+        return False, "NFS4 = DEBUG missing from config get"
+    if re.search(r"Match_Policy\s*=\s*MATCH_ALL\b", text, re.I) or re.search(
+        r"Match_Policy\s*=\s*ALL\b", text, re.I
+    ):
+        return False, "MATCH_ALL must not appear (default MATCH_ANY expected)"
+    # Match_Policy absent or MATCH_ANY/ANY is OK
+    return True, "config get OK (Conditional, Clients, Exports, NFS4=DEBUG)"
+
+
+def _assert_config_get_05(
+    get_out: str,
+    client_ip_s: str,
+    export_a_id: int,
+) -> Tuple[bool, str]:
+    text = get_out or ""
+    if "Conditional" not in text:
+        return False, "Conditional missing"
+    # Cluster-config counterpart of CONFIG-02: MATCH_ALL/ALL + Clients + one Export.
+    # Pure Clients-only (no Exports) ignores Clients on this Ganesha build.
+    if not re.search(r"Match_Policy\s*=\s*(?:MATCH_ALL|ALL)\b", text, re.I):
+        return False, "Match_Policy = ALL/MATCH_ALL missing"
+    if client_ip_s not in text:
+        return False, f"Clients={client_ip_s} missing"
+    if str(export_a_id) not in text:
+        return False, f"Exports={export_a_id} missing"
+    if not re.search(r"NFS4\s*=\s*FULL_DEBUG", text, re.I):
+        return False, "NFS4 = FULL_DEBUG missing"
+    return True, "config get OK (MATCH_ALL, Clients+Export_A, NFS4=FULL_DEBUG)"
+
+
+def _assert_config_get_06(get_out: str, export_a_id: int) -> Tuple[bool, str]:
+    text = get_out or ""
+    if "Conditional" not in text:
+        return False, "Conditional missing"
+    if not re.search(r"Match_Policy\s*=\s*(?:MATCH_ANY|ANY)\b", text, re.I):
+        return False, "Match_Policy = ANY/MATCH_ANY missing"
+    if str(export_a_id) not in text:
+        return False, f"Exports={export_a_id} missing"
+    if re.search(r"^\s*Clients\s*=", text, re.M | re.I):
+        return False, "Clients line must be absent (exports-only)"
+    if not re.search(r"NFS4\s*=\s*FULL_DEBUG", text, re.I):
+        return False, "NFS4 = FULL_DEBUG missing"
+    return True, "config get OK (MATCH_ANY, Exports only, NFS4=FULL_DEBUG)"
+
+
+def _run_tc_cl_config_04(ctx) -> TestCaseResult:
+    """
+    TC-CL-CONFIG-04: default Match_Policy is MATCH_ANY (OR).
+
+    No Match_Policy line. Conditional applies if client OR export matches.
+    A: client-2 + exp_a → DEBUG (export matches)
+    B: client-1 + exp_b → DEBUG (client matches)
+    C: client-2 + exp_b → no DEBUG (neither matches)
+    """
+    result = TestCaseResult(
+        "TC-CL-CONFIG-04", "Default Match_Policy MATCH_ANY (cluster config)"
+    )
+    fx = None
+    try:
+        fx = _prepare_match_any_fixture(ctx)
+        container_id, set_rc, set_out = _apply_match_any_policy(
+            ctx,
+            components={"NFS4": "CRIT", "FSAL": "WARN"},
+            conditional_components={"NFS4": "DEBUG"},
+            clients=[fx["client_match_ip"]],
+            exports=[fx["export_a_id"]],
+            match_policy=None,
+        )
+        if set_rc != 0:
+            return result.mark(False, f"config_set failed rc={set_rc}: {set_out}")
+
+        get_out = nfs_cluster_config_get(ctx["cmd_host"], ctx["nfs_name"])
+        ok_get, detail_get = _assert_config_get_04(
+            get_out, fx["client_match_ip"], fx["export_a_id"]
+        )
+        if not ok_get:
+            return result.mark(False, f"config_get assert: {detail_get}")
+        log.info("CONFIG-04 config get: %s", detail_get)
+
+        # Run non-matching first so client_other has never hit a matching export
+        # (avoids sticky per-client elevation from Scenario A).
+        log_c = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_other"],
+            fx["export_b"],
+            fx["mp_b"],
+            lambda: run_echo_io(fx["client_other"], fx["mp_b"], "cl04_c", "test_c"),
+        )
+        ok_c, detail_c = verify_nfs4_non_matching_logs(log_c)
+        if not ok_c:
+            return result.mark(False, f"Scenario C FAIL: {detail_c}")
+
+        # Scenario A — export matches, client does not
+        log_a = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_other"],
+            fx["export_a"],
+            fx["mp_a"],
+            lambda: run_echo_io(fx["client_other"], fx["mp_a"], "cl04_a", "test_a"),
+        )
+        ok_a, detail_a = verify_nfs4_matching_logs(log_a, full_debug=False)
+        if not ok_a:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario A FAIL: {detail_a}")
+
+        # Scenario B — client matches, export does not
+        log_b = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_match"],
+            fx["export_b"],
+            fx["mp_b"],
+            lambda: run_echo_io(fx["client_match"], fx["mp_b"], "cl04_b", "test_b"),
+        )
+        ok_b, detail_b = verify_nfs4_matching_logs(log_b, full_debug=False)
+        if not ok_b:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario B FAIL: {detail_b}")
+
+        if not is_ganesha_running(ctx["nfs_node"], container_id):
+            return result.mark(False, "ganesha not running after scenarios")
+
+        return result.mark(
+            True,
+            f"C={detail_c}; A={detail_a}; B={detail_b}; daemon running",
+        )
+    except Exception as err:
+        return result.mark(False, str(err))
+    finally:
+        try:
+            nfs_cluster_config_reset(ctx["cmd_host"], ctx["nfs_name"])
+        except Exception:
+            pass
+        if fx:
+            for client, mp in (
+                (fx["client_match"], fx["mp_a"]),
+                (fx["client_match"], fx["mp_b"]),
+                (fx["client_other"], fx["mp_a"]),
+                (fx["client_other"], fx["mp_b"]),
+            ):
+                _safe_umount(client, mp)
+
+
+def _run_tc_cl_config_05(ctx) -> TestCaseResult:
+    """
+    TC-CL-CONFIG-05: MATCH_ALL via ``ceph nfs cluster config set``.
+
+    Cluster-config counterpart of CONFIG-02 (static template MATCH_ALL):
+      A  client_match + exp_a → FULL_DEBUG (both match)
+      B  client_match + exp_b → no elevate (export mismatch)
+      C  client_other + exp_a → no elevate (client mismatch)
+      D  client_other + exp_b → no elevate (neither)
+
+    Pure Clients-only (omitted Exports) ignores Clients on this build and
+    elevates everyone; a sentinel Export_Id crashed NFS. So CONFIG-05 uses
+    Clients + Export_A with Match_Policy=ALL — the same shape CONFIG-02 already
+    proved works — exercised through cluster config set/get/reset.
+    """
+    result = TestCaseResult("TC-CL-CONFIG-05", "MATCH_ALL via cluster config")
+    fx = None
+    try:
+        fx = _prepare_match_any_fixture(ctx)
+        log.info(
+            "CONFIG-05 apply: Clients=%s Exports=[%s] Match_Policy=ALL",
+            fx["client_match_ip"],
+            fx["export_a_id"],
+        )
+        # Use ALL (not MATCH_ALL) so template + userconf tokens stay identical;
+        # CONFIG-02 already proved ALL works for AND semantics.
+        container_id, set_rc, set_out = _apply_match_any_policy(
+            ctx,
+            components={"NFS4": "CRIT"},
+            conditional_components={"NFS4": "FULL_DEBUG"},
+            clients=[fx["client_match_ip"]],
+            exports=[fx["export_a_id"]],
+            match_policy="ALL",
+        )
+        if set_rc != 0:
+            return result.mark(False, f"config_set failed rc={set_rc}: {set_out}")
+
+        get_out = nfs_cluster_config_get(ctx["cmd_host"], ctx["nfs_name"])
+        ok_get, detail_get = _assert_config_get_05(
+            get_out, fx["client_match_ip"], fx["export_a_id"]
+        )
+        if not ok_get:
+            return result.mark(False, f"config_get assert: {detail_get}")
+        log.info("CONFIG-05 config get: %s", detail_get)
+
+        # Non-matching first (CONFIG-02 B3/B4 / CONFIG-04 Scenario C ordering).
+        # C — client mismatch, export match (proves Clients filter under MATCH_ALL)
+        log_c = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_other"],
+            fx["export_a"],
+            fx["mp_a"],
+            lambda: run_dd_small_io(fx["client_other"], fx["mp_a"], "cl05_c"),
+        )
+        ok_c, detail_c = verify_nfs4_non_matching_logs(log_c)
+        if not ok_c:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario C FAIL: {detail_c}")
+
+        # D — neither matches
+        log_d = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_other"],
+            fx["export_b"],
+            fx["mp_b"],
+            lambda: run_dd_small_io(fx["client_other"], fx["mp_b"], "cl05_d"),
+        )
+        ok_d, detail_d = verify_nfs4_non_matching_logs(log_d)
+        if not ok_d:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario D FAIL: {detail_d}")
+
+        # A — both match
+        log_a = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_match"],
+            fx["export_a"],
+            fx["mp_a"],
+            lambda: run_dd_small_io(fx["client_match"], fx["mp_a"], "cl05_a"),
+        )
+        ok_a, detail_a = verify_nfs4_matching_logs(log_a, full_debug=True)
+        if not ok_a:
+            ok_a, detail_a = verify_nfs4_matching_logs(log_a, full_debug=False)
+        if not ok_a:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario A FAIL: {detail_a}")
+
+        # B — client match, export mismatch (proves MATCH_ALL AND, not OR)
+        log_b = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_match"],
+            fx["export_b"],
+            fx["mp_b"],
+            lambda: run_dd_small_io(fx["client_match"], fx["mp_b"], "cl05_b"),
+        )
+        ok_b, detail_b = verify_nfs4_non_matching_logs(log_b)
+        if not ok_b:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario B FAIL: {detail_b}")
+
+        if not is_ganesha_running(ctx["nfs_node"], container_id):
+            return result.mark(False, "ganesha not running after scenarios")
+
+        return result.mark(
+            True,
+            f"C={detail_c}; D={detail_d}; A={detail_a}; B={detail_b}; daemon running",
+        )
+    except Exception as err:
+        return result.mark(False, str(err))
+    finally:
+        try:
+            nfs_cluster_config_reset(ctx["cmd_host"], ctx["nfs_name"])
+        except Exception:
+            pass
+        if fx:
+            for client, mp in (
+                (fx["client_match"], fx["mp_a"]),
+                (fx["client_match"], fx["mp_b"]),
+                (fx["client_other"], fx["mp_a"]),
+                (fx["client_other"], fx["mp_b"]),
+            ):
+                _safe_umount(client, mp)
+
+
+def _run_tc_cl_config_06(ctx) -> TestCaseResult:
+    """
+    TC-CL-CONFIG-06: MATCH_ANY, exports only.
+
+    Any client on export A gets FULL_DEBUG; export B never does.
+    """
+    result = TestCaseResult(
+        "TC-CL-CONFIG-06", "MATCH_ANY exports-only (cluster config)"
+    )
+    fx = None
+    try:
+        fx = _prepare_match_any_fixture(ctx)
+        container_id, set_rc, set_out = _apply_match_any_policy(
+            ctx,
+            components={"NFS4": "CRIT"},
+            conditional_components={"NFS4": "FULL_DEBUG"},
+            clients=None,
+            exports=[fx["export_a_id"]],
+            match_policy="MATCH_ANY",
+        )
+        if set_rc != 0:
+            return result.mark(False, f"config_set failed rc={set_rc}: {set_out}")
+
+        get_out = nfs_cluster_config_get(ctx["cmd_host"], ctx["nfs_name"])
+        ok_get, detail_get = _assert_config_get_06(get_out, fx["export_a_id"])
+        if not ok_get:
+            return result.mark(False, f"config_get assert: {detail_get}")
+        log.info("CONFIG-06 config get: %s", detail_get)
+
+        log_a = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_match"],
+            fx["export_a"],
+            fx["mp_a"],
+            lambda: run_echo_io(fx["client_match"], fx["mp_a"], "cl06_a", "cl06_a"),
+        )
+        ok_a, detail_a = verify_nfs4_matching_logs(log_a, full_debug=True)
+        if not ok_a:
+            ok_a, detail_a = verify_nfs4_matching_logs(log_a, full_debug=False)
+        if not ok_a:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario A FAIL: {detail_a}")
+
+        log_b = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_other"],
+            fx["export_a"],
+            fx["mp_a"],
+            lambda: run_echo_io(fx["client_other"], fx["mp_a"], "cl06_a2", "cl06_a2"),
+        )
+        ok_b, detail_b = verify_nfs4_matching_logs(log_b, full_debug=True)
+        if not ok_b:
+            ok_b, detail_b = verify_nfs4_matching_logs(log_b, full_debug=False)
+        if not ok_b:
+            _dump_policy_not_loaded(ctx, container_id)
+            return result.mark(False, f"Scenario B FAIL: {detail_b}")
+
+        log_c = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_match"],
+            fx["export_b"],
+            fx["mp_b"],
+            lambda: run_echo_io(fx["client_match"], fx["mp_b"], "cl06_b", "cl06_b"),
+        )
+        ok_c, detail_c = verify_nfs4_non_matching_logs(log_c)
+        if not ok_c:
+            return result.mark(False, f"Scenario C FAIL: {detail_c}")
+
+        log_d = _scenario_io_capture(
+            ctx,
+            container_id,
+            fx["client_other"],
+            fx["export_b"],
+            fx["mp_b"],
+            lambda: run_echo_io(fx["client_other"], fx["mp_b"], "cl06_b2", "cl06_b2"),
+        )
+        ok_d, detail_d = verify_nfs4_non_matching_logs(log_d)
+        if not ok_d:
+            return result.mark(False, f"Scenario D FAIL: {detail_d}")
+
+        if not is_ganesha_running(ctx["nfs_node"], container_id):
+            return result.mark(False, "ganesha not running after scenarios")
+
+        reset_rc = nfs_cluster_config_reset(ctx["cmd_host"], ctx["nfs_name"])
+        get_after = nfs_cluster_config_get(ctx["cmd_host"], ctx["nfs_name"])
+        if "Conditional" in (get_after or ""):
+            return result.mark(
+                False,
+                f"config reset left Conditional present (rc={reset_rc})",
+            )
+
+        return result.mark(
+            True,
+            f"A={detail_a}; B={detail_b}; C={detail_c}; D={detail_d}; "
+            "reset OK; daemon running",
+        )
+    except Exception as err:
+        return result.mark(False, str(err))
+    finally:
+        try:
+            nfs_cluster_config_reset(ctx["cmd_host"], ctx["nfs_name"])
+        except Exception:
+            pass
+        if fx:
+            for client, mp in (
+                (fx["client_match"], fx["mp_a"]),
+                (fx["client_match"], fx["mp_b"]),
+                (fx["client_other"], fx["mp_a"]),
+                (fx["client_other"], fx["mp_b"]),
+            ):
+                _safe_umount(client, mp)
+
+
 _TC_DISPATCH = {
     OP_TC_CL_CONFIG_01: _run_tc_cl_config_01,
     OP_TC_CL_CONFIG_02: _run_tc_cl_config_02,
     OP_TC_CL_CONFIG_03: _run_tc_cl_config_03,
+    OP_TC_CL_CONFIG_04: _run_tc_cl_config_04,
+    OP_TC_CL_CONFIG_05: _run_tc_cl_config_05,
+    OP_TC_CL_CONFIG_06: _run_tc_cl_config_06,
     OP_TC_CL_DYNAMIC_01: _run_tc_cl_dynamic_01,
     OP_TC_CL_DYNAMIC_02: _run_tc_cl_dynamic_02,
 }
@@ -1599,6 +2845,7 @@ def run(ceph_cluster, **kw):
             "config": config,
             "clients": clients,
             "nfs_node": nfs_node,
+            "nfs_nodes": nfs_nodes,
             "nfs_server": nfs_node.hostname,
             "cmd_host": nfs_cmd_host,
             "installer": installer,
