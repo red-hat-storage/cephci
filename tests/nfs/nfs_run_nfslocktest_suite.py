@@ -42,7 +42,9 @@ def run(ceph_cluster, **kw):
     fs = "cephfs"
     nfs_lock_export = "/nfs_lock_export"
 
-    nfstest_repo = "git://git.linux-nfs.org/projects/mora/nfstest.git"
+    # git:// (port 9418) hangs from IBM Cloud, and git.linux-nfs.org HTTPS
+    # returns 403. This mirror is a clone of the upstream nfstest tree.
+    nfstest_repo = "https://github.com/iomesh/nfstest.git"
     nfstest_dir = "/root/nfstest"
     nfstest_lock = "%s/test/nfstest_lock" % nfstest_dir
     log_file = "%s/nfstest.log" % nfstest_dir
@@ -87,7 +89,9 @@ def run(ceph_cluster, **kw):
             sudo=True,
         )
         client.exec_command(
-            cmd="git clone %s %s" % (nfstest_repo, nfstest_dir), sudo=True
+            cmd="git clone %s %s" % (nfstest_repo, nfstest_dir),
+            sudo=True,
+            timeout=300,
         )
         client.exec_command(cmd="export PYTHONPATH=%s/nfstest" % nfstest_dir, sudo=True)
         client.exec_command(cmd="ls %s" % nfstest_lock, sudo=True)
