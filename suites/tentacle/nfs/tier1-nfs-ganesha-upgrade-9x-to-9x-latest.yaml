@@ -266,7 +266,7 @@ tests:
               threads: 4
               file_size: 4
               files: 50
-              max_time: 10800
+              max_time: 3600
               max_consecutive_failures: 5
       abort-on-fail: true
 
