@@ -93,6 +93,7 @@ def run(ceph_cluster, **kw):
     files = int(config.get("files", 50))
     max_time = int(config.get("max_time", 3600))
     max_consecutive_failures = int(config.get("max_consecutive_failures", 5))
+    require_upgrade = bool(config.get("require_upgrade", True))
     version = config.get("nfs_version", "4.2")
     port = config.get("port", "2049")
 
@@ -166,11 +167,16 @@ def run(ceph_cluster, **kw):
                 log.info("Upgrade finished after %s smallfile cycle(s)", cycles)
                 break
         else:
-            if not seen_upgrade:
+            if not seen_upgrade and require_upgrade:
                 log.error(
                     "Smallfile ran for %ss without observing an upgrade", max_time
                 )
                 result = 1
+            elif not seen_upgrade:
+                log.info(
+                    "Smallfile ran for %ss; upgrade observation not required",
+                    max_time,
+                )
             else:
                 log.info(
                     "Smallfile reached max_time=%ss after %s cycle(s); "
