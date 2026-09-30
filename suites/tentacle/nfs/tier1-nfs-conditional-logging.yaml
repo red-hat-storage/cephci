@@ -1,5 +1,5 @@
 # Suite: NFS Ganesha conditional logging (Configuration & Management)
-# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
 
 tests:
   - test:
@@ -200,6 +200,44 @@ tests:
         min_clients: 2
         nfs_name: cephfs-nfs-cl
         operation: tc_cl_config_06
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-DYNAMIC-01 ganesha_mgr CRUD
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Runtime conditional logging CRUD via ganesha_mgr — add/update/remove
+        Conditional rules and verify matching vs non-matching client log levels.
+        Skips (soft-pass) when the cephadm NFS container has no system D-Bus
+        for ganesha_mgr (dbus.SystemBus failure).
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_dynamic_01
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-DYNAMIC-02 DBus persistence hot-reload
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        DBus conditional overrides vs config reload — elevated logs under DBus
+        policy; ganesha remains stable after SIGHUP reload.
+        Skips (soft-pass) when ganesha_mgr cannot open dbus.SystemBus in the
+        NFS container.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        min_clients: 1
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_dynamic_02
         service_wait_timeout: 600
         redeploy_wait: 20
         timeout: 7200
