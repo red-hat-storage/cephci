@@ -908,6 +908,7 @@ def initial_rbd_config(**kw):
         Advanced configuration:
             config:
                do_not_create_image: True  # if not set then images will be created by default
+               do_not_create_pool: True  # if not set then pools will be created by default
                ec-pool-k-m: 2,1
                ec-pool-only: False
                ec_pool_config:
@@ -954,13 +955,19 @@ def initial_rbd_config(**kw):
                 "size": "10G",
             }
 
-        if not rbd_reppool.create_pool(
-            poolname=kw["config"]["rep_pool_config"]["pool"]
-        ):
-            log.error(
-                f"Pool creation failed for pool {kw['config']['rep_pool_config']['pool']}"
+        if not kw.get("config").get("do_not_create_pool"):
+            if not rbd_reppool.create_pool(
+                poolname=kw["config"]["rep_pool_config"]["pool"]
+            ):
+                log.error(
+                    f"Pool creation failed for pool {kw['config']['rep_pool_config']['pool']}"
+                )
+                return None
+        else:
+            log.info(
+                "Skipping pool creation for "
+                f"{kw['config']['rep_pool_config']['pool']} (do_not_create_pool)"
             )
-            return None
         if not kw.get("config").get("do_not_create_image"):
             rbd_reppool.create_image(
                 pool_name=kw["config"]["rep_pool_config"]["pool"],
@@ -994,11 +1001,19 @@ def initial_rbd_config(**kw):
                 "size": "10G",
             }
 
-        if not rbd_ecpool.create_pool(poolname=kw["config"]["ec_pool_config"]["pool"]):
-            log.error(
-                f"Pool creation failed for pool {kw['config']['ec_pool_config']['pool']}"
+        if not kw.get("config").get("do_not_create_pool"):
+            if not rbd_ecpool.create_pool(
+                poolname=kw["config"]["ec_pool_config"]["pool"]
+            ):
+                log.error(
+                    f"Pool creation failed for pool {kw['config']['ec_pool_config']['pool']}"
+                )
+                return None
+        else:
+            log.info(
+                "Skipping pool creation for "
+                f"{kw['config']['ec_pool_config']['pool']} (do_not_create_pool)"
             )
-            return None
         if not kw.get("config").get("do_not_create_image"):
             rbd_ecpool.create_image(
                 pool_name=kw["config"]["ec_pool_config"]["pool"],
