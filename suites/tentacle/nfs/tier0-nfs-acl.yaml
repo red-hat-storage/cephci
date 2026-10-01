@@ -11,6 +11,8 @@
 #      UID/GID denial, symlink skip/traversal
 #    - Scale: large ACL (2000+ ACEs), performance, overwrite/append/duplicate,
 #      scale limit, persistence after remount
+#    - Hotfix coverage: named-group inherit (existing vs new children),
+#      multi-group file w/a loss, special-identity access ACE retention
 #
 #===============================================================================================
 tests:
@@ -182,3 +184,19 @@ tests:
         nfs_version: 4.2
         clients: 1
         mount_type: nfs
+
+  - test:
+      name: NFS ACL - Hotfix Coverage (NFS mount)
+      module: acl.hotfix_coverage.py
+      desc: >
+        Hotfix coverage for named-group inheritance (parent access vs
+        inherit-only; existing children unchanged; new children inherit;
+        GID member vs non-member access), multi-group inherit w/a loss on
+        child files (IBMCEPH-19501/19502), and special-identity
+        OWNER@/GROUP@/EVERYONE@ access ACE retention after fdi adds.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        mount_type: nfs
+      comments: "IBMCEPH-19501, IBMCEPH-19502"
