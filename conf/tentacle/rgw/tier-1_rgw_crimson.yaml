@@ -1,0 +1,55 @@
+# Conf for Crimson OSD + RGW deployment (Tentacle)
+#
+# Crimson CPU guidance:
+#   (OSDs_per_host * crimson_seastar_num_threads) < nproc
+# On typical 2-vCPU lab VMs with crimson_seastar_num_threads=1, use 1 OSD/host.
+# One larger volume per OSD host so the selected device has more space.
+#
+# Suites:
+#   - suites/tentacle/rgw/tier-1_rgw_crimson_bluestore.yaml
+#   - suites/tentacle/rgw/tier-1_rgw_crimson_seastore.yaml
+# Doc: https://docs.ceph.com/en/umbrella/crimson/crimson/
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        disk-size: 30
+        no-of-volumes: 1
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 30
+        no-of-volumes: 1
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 30
+        no-of-volumes: 1
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 30
+        no-of-volumes: 1
+        role:
+          - osd
+          - rgw
+
+      node5:
+        role:
+          - rgw
+
+      node6:
+        role:
+          - client
