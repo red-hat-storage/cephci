@@ -1,0 +1,79 @@
+# Bare minimal Multi-Site configuration that supports 8 + 6 EC code profile.
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+
+      node1:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - osd
+          - rgw
+
+      node5:
+        role:
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+
+      node1:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - rgw
+
+      node2:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - mon
+          - osd
+
+      node4:
+        disk-size: 20
+        no-of-volumes: 4
+        role:
+          - osd
+          - rgw
+
+      node5:
+        role:
+          - client

@@ -1,0 +1,421 @@
+# NVMeoF functional regression tests suite: restart, bdev lifecycle, cluster-under-IO, QoS negative, and GW placement
+# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_functional.yaml
+# Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+          - node11
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83576087
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83576087
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83576087
+      desc: Perform reboot on initiator node and validate the namespaces.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - Reboot initiator node and verify NVMe namespace persistence
+      polarion-id: CEPH-83576087
+
+  # Reboot GW node
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83576093
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83576093
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83576093
+      desc: Perform reboot on GW node and validate the namespaces.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - Reboot NVMe gateway node and verify namespace accessibility
+      polarion-id: CEPH-83576093
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83576084
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83576084
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83576084
+      desc: Delete-recreate bdev in loop and rediscover namespace
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - Cyclic bdev delete and recreate with namespace rediscovery
+      polarion-id: CEPH-83576084
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group2
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83575814
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - nqn: nqn.2016-06.io.spdk:ceph-83575814
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83575814
+      desc: >
+        Perform cluster operations when IO operations between NVMeOF
+        target NVMe-OF initiator are in progress.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - Cluster operations concurrent with active NVMe IO
+      polarion-id: CEPH-83575814
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83576085
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83576085
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83576085
+      desc: Perform map and unmap NVMe namespaces in loop
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - Continuous map and unmap of NVMe namespaces in loop
+      polarion-id: CEPH-83576085
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83581753
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83581753
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83581753
+      desc: set QoS for namespace in subsystem with invalid values and args
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - QoS namespace set with invalid values and arguments (negative)
+      polarion-id: CEPH-83581753
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83581945
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83581945
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83581945
+      desc: set QoS for namespace in subsystem without mandatory values and args
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - QoS namespace set with missing mandatory arguments (negative)
+      polarion-id: CEPH-83581945
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83581755
+            serial: 1
+            bdevs:
+              count: 2
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83581755
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        operation: CEPH-83581755
+      desc: set QoS for multiple namespace in a single go.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - QoS bulk set across multiple namespaces in one operation
+      polarion-id: CEPH-83581755
+
+  - test:
+      abort-on-fail: false
+      config:
+        command: apply
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
+        service: nvmeof
+        gw_group: 'gw_group1'
+        install: true
+        nvme_metadata_pool: rbd
+        pos_args:
+          - rbd                 # name of the pool
+        gw_nodes: ["node5", "node6"]
+        args:
+          placement_options:
+            - nodes: ["node5", "node6"]
+            - label: nvmeof-gw
+            - apply_spec: True
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiators:
+          - node: node10
+            nqn: connect-all
+            listener_port: 4420
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83608266
+            serial: 1
+            bdevs:
+              count: 1
+              size: 5G
+            listener_port: 4420
+            allow_host: "*"
+        operation: CEPH-83608266
+      desc: restrict same GW node deployment into multiple GW groups
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: NVMeoF - Prevent duplicate GW node assignment across multiple GW groups (negative)
+      polarion-id: CEPH-83608266

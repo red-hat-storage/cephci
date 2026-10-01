@@ -1,0 +1,155 @@
+# Single site cluster with 13 Ceph & 4 Client nodes
+# with daemons - 13 crash, 5 mon, 3 mgr, 3 rgw
+# 5 nfs, 10 (+2 backup) osds and
+# 1 alertmanager, node-exporter, prometheus, grafana
+
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - shared_net_4
+        role:
+          - _admin
+          - installer
+          - crash
+          - alertmanager
+          - mon
+      node2:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - mon
+          - nfs
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node3:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - mon
+          - nfs
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node4:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - rgw
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node5:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - nfs
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node6:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - nfs
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node7:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - node-exporter
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node8:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - prometheus
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node9:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - grafana
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node10:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - rgw
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node11:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - rgw
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node12:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - mon
+          - nfs
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 20
+      node13:
+        networks:
+          - shared_net_4
+        role:
+          - crash
+          - mon
+          - mgr
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 20
+      node14:
+        networks:
+          - shared_net_5
+        role:
+          - client
+      node15:
+        networks:
+          - shared_net_5
+        role:
+          - client
+      node16:
+        networks:
+          - shared_net_15
+        role:
+          - client
+      node17:
+        networks:
+          - shared_net_15
+        role:
+          - client

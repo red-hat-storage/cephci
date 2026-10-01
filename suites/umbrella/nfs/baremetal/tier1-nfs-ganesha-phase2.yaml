@@ -1,0 +1,125 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha ---
+#-------------------------------------
+# Conf: conf/baremetal/nfs_extensa_1admin_3node_4client.yaml
+# Baremetal test cases for
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test NFS cluster and export create
+#
+#===============================================================================================
+tests:
+  - test:
+      name: Verify create file, create hardlink and lookups from nfs clients
+      module: nfs_verify_file_ops_hard_links.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id: CEPH-83577597
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+
+  - test:
+      name: Modifying file attributes such as size, modification time, and access time
+      module: nfs_verify_file_modification.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id: CEPH-83577602
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        file_count: 100
+
+  - test:
+     name: Nfs export with client permission
+     module: nfs_client_permission_export
+     desc: Test nfs export with authorized client mount
+     polarion-id: CEPH-83578394
+     abort-on-fail: false
+     config:
+       nfs_version: 4.1
+       clients: 2
+
+  - test:
+     name: Nfs Test File Truncate
+     module: nfs_file_truncate.py
+     desc: Perform file truncate operation from clients
+     polarion-id: CEPH-83577598
+     abort-on-fail: false
+     config:
+       nfs_version: 4.1
+       clients: 2
+
+  - test:
+      name: Nfs Verify multiple parallel io and lookups
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      desc: Perform look ups while multiple parallel io are in progress
+      polarion-id: CEPH-83581304
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+  - test:
+      name: Nfs Verify rm write lookups in parellel from multi clients
+      module: nfs_verify_parallel_rm_write_lookup.py
+      desc: Perform lookups rm and write at the same time
+      polarion-id: CEPH-83577591
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
+
+  - test:
+     name: Nfs Test File Append
+     module: nfs_file_append.py
+     desc: Perform file append operation from clients
+     polarion-id: CEPH-83577599
+     abort-on-fail: false
+     config:
+       nfs_version: 4.1
+       clients: 4
+
+  - test:
+      name: Nfs Verify read write operation permissions
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write without permissions on nfs share
+      polarion-id: CEPH-83575941
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_permission
+
+  - test:
+      name: Nfs verify read and write non existing file
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write of no existing file on nfs share
+      polarion-id: CEPH-83575927
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+        operation: verify_non_existing_file
+
+  - test:
+      name: Nfs verify export unexport while nfs share is in use
+      module: nfs_verify_stress.py
+      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
+      polarion-id: CEPH-83575994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000

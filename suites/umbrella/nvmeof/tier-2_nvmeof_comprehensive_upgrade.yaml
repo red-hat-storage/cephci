@@ -1,0 +1,245 @@
+##############################################################################################
+# Tier-Level: 2
+# Test-Suite: tier-2_nvmeof_comprehensive_upgrade.yaml
+# Scenario: Modernized comprehensive NVMe-oF upgrade E2E
+#
+# Cluster Configuration: conf/tentacle/nvmeof/ceph_nvmeof_ha_cluster_4nodes.yaml
+#
+# Pre-upgrade feature matrix (single orchestrated test):
+#   - mTLS-enabled NVMe-oF service
+#   - 4-GW HA with load-balancing groups
+#   - Host-restricted, open-host, and DHCHAP/inband-auth subsystems
+#   - Namespace QoS limits
+#   - Namespace resize (manual refresh + auto-resize)
+#   - Namespace masking (no-auto-visible, add_host, change_visibility)
+# Continuous IO through upgrade, post-upgrade validation, then HA failover/failback
+##############################################################################################
+tests:
+  - test:
+      name: setup install pre-requisites
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap RHCS cluster and deploy services
+      desc: Bootstrap RHCS cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 9.1
+                release: released
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure NVMe-oF client nodes
+      desc: Configure the RBD/NVMe client systems
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+          - node11
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Comprehensive NVMe-oF upgrade with IO and post-upgrade HA
+      desc: >
+        Configure mTLS, DHCHAP, QoS, resize, masking, run continuous IO through upgrade,
+        validate post-upgrade state, and execute HA failover/failback.
+      module: test_ceph_nvmeof_comprehensive_upgrade.py
+      polarion-id: CEPH-83576090
+      config:
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        gw_group: gw_group1
+        mtls: true
+        inband_auth_mode: bidirectional
+        enable_encryption: true
+        encryption_key_path: true
+        rep_pool_config:
+          pool: rbd
+        install: true
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+          - subsystems
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            no-group-append: true
+            max_ns: 32
+            bdevs:
+              - count: 4
+                size: 10G
+                lb_group: node6
+              - count: 2
+                size: 8G
+                lb_group: node7
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            hosts:
+              - node10
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 2
+            no-group-append: true
+            bdevs:
+              - count: 4
+                size: 10G
+                lb_group: node8
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - subnqn: nqn.2016-06.io.spdk:cnode3
+            serial: 3
+            inband_auth: true
+            bdevs:
+              - count: 2
+                size: 8G
+                lb_group: node9
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            hosts:
+              - node: node11
+                inband_auth: true
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            serial: 4
+            no-group-append: true
+            bdevs:
+              count: 1
+              size: 8G
+              ns_create_image: true
+              qos:
+                - subsystem: nqn.2016-06.io.spdk:cnode4
+                  nsid: 1
+                  w-megabytes-per-second: 20
+                  r-megabytes-per-second: 90
+                  rw-megabytes-per-second: 50
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode5
+            serial: 5
+            bdevs:
+              - count: 2
+                size: 2G
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode6
+            serial: 6
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        qos_validation:
+          subsystem_nqn: nqn.2016-06.io.spdk:cnode4
+        namespace_resize:
+          subsystem_nqn: nqn.2016-06.io.spdk:cnode5
+        # Namespace masking: create >=2 no-auto-visible namespaces, add_host,
+        # change_visibility; re-validated on gateway during upgrade IO and at
+        # initiator after upgrade completes.
+        namespace_masking:
+          subsystem_nqn: nqn.2016-06.io.spdk:cnode6
+          initiator_node: node10
+          namespace_count: 2
+          image_size: 5G
+        initiators:
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+            iodepth: 32
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            listener_port: 4420
+            node: node11
+            inband_auth: true
+            iodepth: 32
+        fault-injection-methods:
+          - tool: systemctl
+            nodes: node7
+          - tool: daemon
+            nodes: node9
+        upgrade:
+          cdn: false
+          release: null
+        upgrade_io:
+          registry_login_timeout: 1200
+          cephadm_install_timeout: 1200
+          fio_ready_timeout: 300
+          post_upgrade_sleep: 60
+          fio_runtime: 10800
+          io_type: write
+          io_size: 30%
+          iodepth: 1
+      destroy-cluster: false
+      abort-on-fail: true

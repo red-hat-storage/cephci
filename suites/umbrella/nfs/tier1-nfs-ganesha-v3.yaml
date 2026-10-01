@@ -1,0 +1,414 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha v3 ---
+#-------------------------------------
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test tier1 scenarios
+#
+#===============================================================================================
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Nfs Ganesha rename operations
+      module: test_file_ops_renames.py
+      desc: Perform file and dir renaming and lookups in parallel
+      polarion-id: CEPH-83577594
+      abort-on-fail: true
+      config:
+        nfs_version: 3
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+        sudo: false
+
+  - test:
+      name: Running nfstest lock suite
+      module: nfs_run_nfslocktest_suite.py
+      desc: Running nfstest lock suite
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: Nfs export Readonly parameter
+      module: test_export_readonly.py
+      desc: Test NFS export with Readonly
+      polarion-id: CEPH-83578392
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+        sudo: false
+
+  - test:
+      name: Nfs export rootsquash permission
+      module: test_export_rootsquash.py
+      desc: Test NFS export with rootsquash
+      polarion-id: CEPH-83578393
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: Nfs Verify locks over nfs mount with root_squash enabled
+      module: nfs_verify_file_lock_root_squash.py
+      desc: Perform lock on file with root_squash enabled
+      polarion-id: CEPH-83578386
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  - test:
+      name: NFS-Ganesha export config to mount with RO
+      desc: Verify edit export config to mount with RO
+      module: nfs_edit_export_config_with_ro.py
+      polarion-id: CEPH-83578395
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: NFS-Ganesha export config to mount with 1 client access
+      desc: Verify edit the export config to mount with allow access to only 1 client
+      module: nfs_edit_export_config_with_1client_access.py
+      polarion-id: CEPH-83578397
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 2
+
+  - test:
+      name: Nfs Verify setuid bit set on a file
+      module: nfs_verify_setuid_bit.py
+      desc: Verify setuid bit set on a file
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : setuid_bit
+          client03 : perform_lookups
+
+  - test:
+      name: NFS-Ganesha test cmount_path param in export file
+      desc: Verify cmount_path entry in export file
+      module: nfs_validate_cmount_path_export_conf.py
+      polarion-id: CEPH-83593816
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: Nfs Verify File Operations
+      module: nfs_verify_file_operations.py
+      desc: Set different file permissions (read, write, execute) for files within the NFS
+      polarion-id: CEPH-83577602
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_permission
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs Verify File Operations
+      module: nfs_verify_file_operations.py
+      desc: Change the ownership (user and group) of files within the NFS export
+      polarion-id: CEPH-83577601
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_ownership
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs Verify Readdir Ops NFSv3
+      module: nfs_verify_readdir_ops.py
+      desc: Perform readir operation from clients
+      polarion-id: CEPH-83577590
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  - test:
+      name: Verify create file, create soflink and lookups from nfs clients NFSv3
+      module: nfs_verify_file_ops_soft_links.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id: CEPH-83577596
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 3
+        file_count: 100
+
+  - test:
+      name: NFS Ganesha non-overlapping byte-range locks test NFSv3
+      module: nfs_non_overlapping_locks.py
+      desc: Test non-overlapping byte-range locks - verify multiple clients can hold non-overlapping locks simultaneously
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
+
+  # - test:
+  #     name: cthon tests for NFS ganesha
+  #     module: test_cthon.py
+  #     desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
+  #     polarion-id: CEPH-83617827
+  #     abort-on-fail: false
+  #     config:
+  #       nfs_version: 3
+  #       clients: 2
+  #       total_num_exports: 4
+  #     comments: cthon tests for NFS ganesha - BZ-2418561
+
+  # cephadm NFS RADOS timeout (no client mount, not NFSv3-specific).
+  # Last block only: test does OSD pause/unpause.
+  # Unique service_id/ports vs 2049.
+  - test:
+      name: NFS rados timeout setup
+      module: test_nfs_rados_command_timeout.py
+      desc: Seed NFS and leave running (creates pool .nfs)
+      polarion-id: CEPH-83632973
+      abort-on-fail: true
+      config:
+        mode: setup
+        service_id: nfs-14352-seed
+        port: 62100
+        monitoring_port: 62600
+        cluster_qos_port: 63100
+
+  - test:
+      name: NFS rados timeout default 30s
+      module: test_nfs_rados_command_timeout.py
+      desc: get must be 30; pause; new NFS spec; health 30s
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-30
+        seed_service_id: nfs-14352-seed
+        port: 62110
+        monitoring_port: 62610
+        cluster_qos_port: 63110
+        expect: 30.0
+        get_ok:
+          - "30"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout set 60s
+      module: test_nfs_rados_command_timeout.py
+      desc: config set 60; pause; new NFS; health timeout 60s
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-60
+        seed_service_id: nfs-14352-seed
+        port: 62120
+        monitoring_port: 62620
+        cluster_qos_port: 63120
+        set_value: 60
+        expect: 60.0
+        get_ok:
+          - "60"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout floor 5s
+      module: test_nfs_rados_command_timeout.py
+      desc: config set 5; pause; new NFS; health timeout 5s
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-5
+        seed_service_id: nfs-14352-seed
+        port: 62130
+        monitoring_port: 62630
+        cluster_qos_port: 63130
+        set_value: 5
+        expect: 5.0
+        get_ok:
+          - "5"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout below 0s
+      module: test_nfs_rados_command_timeout.py
+      desc: set 0; get 0|1 not leftover 5; health 5s; unpause
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: timeout
+        service_id: nfs-14352-stall-0
+        seed_service_id: nfs-14352-seed
+        port: 62140
+        monitoring_port: 62640
+        cluster_qos_port: 63140
+        set_value: 0
+        expect: 5.0
+        get_ok:
+          - "0"
+          - "1"
+        strict_get: true
+
+  - test:
+      name: NFS rados timeout teardown
+      module: test_nfs_rados_command_timeout.py
+      desc: Unpause OSDs, set timeout 30, orch rm seed and stalls
+      polarion-id: CEPH-83632973
+      abort-on-fail: false
+      config:
+        mode: teardown
+        service_id: nfs-14352-seed
+        stall_service_ids:
+          - nfs-14352-stall-30
+          - nfs-14352-stall-60
+          - nfs-14352-stall-5
+          - nfs-14352-stall-0

@@ -1,0 +1,41 @@
+# Configuration file for rbd tier-1 and tier-2 testcases
+# Total 4 nodes with 3 - mons, 2 Mgrs, 3 OSDs, 1-Client
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 3
+        disk-size: 15
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - node-exporter
+          - alertmanager
+          - crash
+        no-of-volumes: 3
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+        no-of-volumes: 3
+        disk-size: 15
+      node4:
+        role:
+          - client
