@@ -8,7 +8,9 @@ apply``, or unmount/remount.
 
 Steps:
     1. If ``ceph nfs cluster --help`` has no rotate-key, skip (pre-CephX).
-    2. Setup NFS cluster and mount (version from suite YAML).
+    2. Default: create ``cephfs-nfs-cephx`` and mount it (tier-1).
+       Upgrade suites set ``setup: false`` and use the existing
+       ``cephfs-nfs`` mount. That path does not create or delete a cluster.
     3. Write a baseline file on the live mount.
     4. Snapshot CephX keys (logged half-masked).
     5. Run ``ceph nfs cluster rotate-key <cluster> --key-type aes256k``.
@@ -19,7 +21,8 @@ Steps:
     9. Snapshot keys again; log masked before/after; fail if any key is
        unchanged.
     10. Assert Ganesha logs do not contain export-init errors.
-    11. Cleanup (unmount is teardown only).
+    11. Cleanup only the cluster this test created. ``setup: false`` leaves
+        the suite mount in place.
 
 Conf:  conf/tentacle/nfs/1admin-7node-3client.yaml
 Suite: suites/tentacle/nfs/tier1-nfs-ganesha.yaml
@@ -44,7 +47,9 @@ log = Log(__name__)
 # ── constants ────────────────────────────────────────────────────────────────
 NFS_NAME = "cephfs-nfs-cephx"
 FS_NAME = "cephfs"
-NFS_EXPORT = "/export_0"
+# Unique export prefix so subvol ``export_cephx_0`` does not collide with suite
+# ``cephfs-nfs`` exports ``/export_0`` (shared ganeshagroup). See RCA #3174.
+NFS_EXPORT = "/export_cephx_0"
 NFS_MOUNT = "/mnt/nfs_cephx"
 NFS_VERSION = "4.1"
 NFS_PORT = "2049"
@@ -165,6 +170,23 @@ def _assert_keys_rotated(baseline_keys, after_keys):
             "Key value did not change after rotate-key for: " + ", ".join(unchanged)
         )
     log.info("All overlapping NFS CephX keys changed after rotate-key.")
+
+
+def _assert_existing_nfs_mount(client, mount_point, export):
+    """Fail unless *mount_point* is already an NFS mount of *export*."""
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"findmnt -n -o SOURCE --target {mount_point}",
+        check_ec=False,
+    )
+    source = (out or "").strip().splitlines()
+    source = source[0].strip() if source else ""
+    if client.exit_status != 0 or not source.endswith(f":{export}"):
+        raise OperationFailedError(
+            f"Expected existing NFS mount of {export} at {mount_point}, "
+            f"findmnt returned: {source or '<empty>'}"
+        )
+    log.info("Using existing NFS mount %s at %s", source, mount_point)
 
 
 def _assert_exports_listed(installer, nfs_name, expected):
@@ -413,18 +435,25 @@ def run(ceph_cluster, **kw):
         nfs_version (str): NFS mount version, default "4.1"
         port (str): NFS port, default "2049"
         clients (int): number of client nodes to use, default 1
-        nfs_name (str): NFS cluster name, default "cephfs-nfs-cephx"
+        setup (bool): True (default) creates ``cephfs-nfs-cephx``.
+            False reuses the suite cluster and does not delete it.
+        nfs_name (str): NFS cluster name. Default ``cephfs-nfs-cephx``,
+            or ``cephfs-nfs`` when setup is false.
+        nfs_export (str): Mounted pseudo path when setup is false.
+            Default ``/export_0``.
         fs_name (str): CephFS filesystem name, default "cephfs"
-        nfs_mount (str): client mount point, default "/mnt/nfs_cephx"
+        nfs_mount (str): Client mount point. Default ``/mnt/nfs_cephx``,
+            or ``/mnt/nfs`` when setup is false.
 
     Returns:
         0 on success, 1 on failure, -1 if rotate-key is absent (pre-CephX).
     """
     config = kw.get("config", {})
 
-    nfs_name = config.get("nfs_name", NFS_NAME)
+    reuse_mount = config.get("setup", True) is False
+    nfs_name = config.get("nfs_name", "cephfs-nfs" if reuse_mount else NFS_NAME)
     fs_name = config.get("fs_name", FS_NAME)
-    mount_point = config.get("nfs_mount", NFS_MOUNT)
+    mount_point = config.get("nfs_mount", "/mnt/nfs" if reuse_mount else NFS_MOUNT)
     nfs_version = config.get("nfs_version", NFS_VERSION)
     nfs_port = str(config.get("port", NFS_PORT))
     no_clients = int(config.get("clients", 1))
@@ -448,26 +477,34 @@ def run(ceph_cluster, **kw):
 
     # All NFS hostnames so CephX keys register on every NFS daemon.
     nfs_server_hostnames = [n.hostname for n in nfs_nodes]
-    # setup_nfs_cluster appends _{i} to form the export name, so pass the
-    # base prefix "/export"; the resulting export will be "/export_0"
-    nfs_export_base = "/export"
-    export = NFS_EXPORT
+    # setup_nfs_cluster appends _{i}; unique prefix avoids colliding with suite
+    # ``/export_0`` subvolume in shared ganeshagroup (RCA #3174).
+    nfs_export_base = "/export_cephx"
+    export = config.get("nfs_export", "/export_0" if reuse_mount else NFS_EXPORT)
 
     try:
-        # Framework helper mounts using nfs_version / first NFS host from conf.
-        # skip_mount=False: one mount for the whole test (customer stays mounted).
-        setup_nfs_cluster(
-            clients,
-            nfs_server_hostnames,
-            nfs_port,
-            nfs_version,
-            nfs_name,
-            mount_point,
-            fs_name,
-            nfs_export_base,
-            fs_name,
-            ceph_cluster=ceph_cluster,
-        )
+        if reuse_mount:
+            log.info(
+                "setup=false: rotate-key on existing cluster %s mount %s export %s",
+                nfs_name,
+                mount_point,
+                export,
+            )
+            _assert_existing_nfs_mount(clients[0], mount_point, export)
+        else:
+            # Default path used by tier-1: create cephfs-nfs-cephx and mount it.
+            setup_nfs_cluster(
+                clients,
+                nfs_server_hostnames,
+                nfs_port,
+                nfs_version,
+                nfs_name,
+                mount_point,
+                fs_name,
+                nfs_export_base,
+                fs_name,
+                ceph_cluster=ceph_cluster,
+            )
 
         _run_rotate_key_live_mount(
             installer,
@@ -487,6 +524,32 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
-        log.info("Cleaning up NFS cluster %r ...", nfs_name)
-        cleanup_cluster(clients, mount_point, nfs_name, nfs_export_base)
-        log.info("Cleanup done.")
+        if reuse_mount:
+            # Do not unmount or delete cephfs-nfs. Later suite steps still use it.
+            log.info(
+                "Leaving NFS cluster %r and mount %s in place",
+                nfs_name,
+                mount_point,
+            )
+            try:
+                clients[0].exec_command(
+                    sudo=True,
+                    cmd=(
+                        f"rm -f {mount_point}/pre_rotate_file "
+                        f"{mount_point}/post_rotate_file"
+                    ),
+                    check_ec=False,
+                )
+            except Exception as cleanup_exc:
+                log.warning("Could not remove rotate-key probe files: %s", cleanup_exc)
+        else:
+            log.info("Cleaning up NFS cluster %r ...", nfs_name)
+            try:
+                cleanup_cluster(clients, mount_point, nfs_name, nfs_export_base)
+                log.info("Cleanup done.")
+            except Exception as cleanup_exc:
+                log.warning(
+                    "Cleanup of %r raised after test body finished: %s",
+                    nfs_name,
+                    cleanup_exc,
+                )
