@@ -6,6 +6,7 @@ Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 from looseversion import LooseVersion
 
 from ceph.ceph_admin import CephAdmin
+from ceph.ceph_admin.bootstrap import resolve_registry_login_args
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
 from ceph.utils import is_legacy_container_present, mgr_accept_license, remove_repos
@@ -17,6 +18,44 @@ log = Log(__name__)
 
 class UpgradeFailure(Exception):
     pass
+
+
+def _login_upgrade_registry(orch, ceph_cluster, config):
+    """
+    Login to the upgrade target image registry before pull/upgrade-check.
+
+    Bootstrap may have authenticated against a different host (e.g. cp.icr.io
+    for released builds) while the upgrade target lives on another
+    (e.g. preprod.icr.io for 9.2 / latest). Without re-login, cephadm pull fails
+    with unauthorized against the target registry.
+    """
+    container_image = config.get("container_image")
+    if not container_image:
+        log.warning("No container_image set; skipping upgrade registry login")
+        return
+
+    registry = container_image.split("/", 1)[0]
+    if not registry or ("." not in registry and ":" not in registry):
+        log.debug(
+            "container_image %r has no registry host; skipping upgrade registry login",
+            container_image,
+        )
+        return
+
+    product = config.get("product", "redhat")
+    build_type = (
+        config.get("args", {}).get("release") or config.get("build_type") or "released"
+    )
+    reg_args = resolve_registry_login_args(
+        registry, product=product, build_type=build_type
+    )
+    log.info(
+        "Logging into upgrade target registry %s (image=%s)",
+        reg_args.get("registry-url"),
+        container_image,
+    )
+    for node in ceph_cluster.get_nodes(ignore="client"):
+        orch.registry_login(node=node, args=reg_args)
 
 
 def run(ceph_cluster, **kwargs) -> int:
@@ -113,6 +152,9 @@ def run(ceph_cluster, **kwargs) -> int:
 
         # Update cephadm rpms
         orch.install(**{"upgrade": True})
+
+        # Authenticate against the upgrade image registry (may differ from bootstrap)
+        _login_upgrade_registry(orch, ceph_cluster, config)
 
         # Check service versions vs available and target containers
         orch.upgrade_check(image=config.get("container_image"))
