@@ -17,33 +17,8 @@ credentials:
       timeout: 60
       retry: 6
 
-  registry:
-    ibm:
-      cp:
-        registry: <fake-registry>
-        username: <fake-username>
-        password: <fake-password>
-
-      stage:
-        registry: <fake-registry>
-        username: <fake-username>
-        password: <fake-password>
-
-      preprod:
-        registry: preprod.icr.io
-        username: <fake-username>
-        password: <fake-password>
-
-    rh:
-      cdn:
-        registry: <fake-registry>
-        username: <fake-username>
-        password: <fake-password>
-
-      stage:
-        registry: <fake-registry>
-        username: <fake-username>
-        password: <fake-password>
+  # Nested credentials.registry.* is deprecated for login.
+  # Prefer top-level registries: (host-keyed) below.
 
   cloud:
     openstack:
@@ -83,6 +58,34 @@ credentials:
       role-id: <fake-role-id>
       secret-id: <fake-secret-id>
       prefix: <fake-prefix>
+
+# Host-keyed container registry credentials (RHCEPHQE-16003)
+# Use with:
+#   --custom-config bootstrap-registry=preprod.icr.io
+#   --custom-config upgrade-registry=cp.icr.io
+registries:
+  cp.icr.io:
+    production: true
+    product: ibm
+    username: <fake-username>
+    password: <fake-password>
+  cp.stg.icr.io:
+    product: ibm
+    username: <fake-username>
+    password: <fake-password>
+  preprod.icr.io:
+    product: ibm
+    username: <fake-username>
+    password: <fake-password>
+  registry.redhat.io:
+    production: true
+    product: rh
+    username: <fake-username>
+    password: <fake-password>
+  registry.stage.redhat.io:
+    product: rh
+    username: <fake-username>
+    password: <fake-password>
 
 repos:
   local:

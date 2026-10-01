@@ -180,9 +180,13 @@ def bootstrap(
                 generate_bootstrap_spec(nodes, **kw)
             kw[k] = generate_bootstrap_config(installer, kw.get(k))
 
-    # Check for registry details
-    if not kw.get("registry-url") and ibm_build:
-        kw.update(get_registry_details(ibm_build, image=image))
+    # Check for registry details (host-keyed registries: in ~/.cephci.yaml)
+    if not kw.get("registry-url"):
+        registry_host = None
+        if kw.get("bootstrap-registry"):
+            registry_host = kw.pop("bootstrap-registry")
+        details = get_registry_details(ibm_build, image=image, registry=registry_host)
+        kw.update(details)
 
     # Get yes-i-know tag
     yes_i_know = kw.pop("yes-i-know") if kw.get("yes-i-know") else None

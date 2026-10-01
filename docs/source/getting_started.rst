@@ -71,12 +71,27 @@ only required if you plan on posting to that particular service.
         email:
             address: <email-address>
 
+        # Host-keyed registry login (RHCEPHQE-16003). Select host via:
+        #   --custom-config bootstrap-registry=preprod.icr.io
+        #   --custom-config upgrade-registry=registry.stage.redhat.io
         registries:
-            registry-1:
-              user: user1
+            cp.icr.io:
+              production: true
+              product: ibm
+              username: user1
               password: password1
-            registry-2:
-              user: user2
+            preprod.icr.io:
+              product: ibm
+              username: user1
+              password: password1
+            registry.redhat.io:
+              production: true
+              product: rh
+              username: user2
+              password: password2
+            registry.stage.redhat.io:
+              product: rh
+              username: user2
               password: password2
 
 

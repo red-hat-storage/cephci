@@ -13,25 +13,39 @@ instance:
     ssh_pwauth: true
     timezone: Etc/UTC
 
+    # Derive repos/<major>/<minor>/ from guest VERSION_ID so mix-os
+    # (e.g. rhel-100 on a 9.8 default inventory) hits the matching mirror.
+    # RHEL 9 uses dnf vars under /etc/dnf/vars (yum is dnf-compatible).
+    bootcmd:
+      - |
+        set -e
+        . /etc/os-release
+        major=${VERSION_ID%%.*}
+        minor=${VERSION_ID#*.}
+        minor=${minor%%.*}
+        mkdir -p /etc/dnf/vars
+        printf '%s\n' "$major" > /etc/dnf/vars/releasever_major
+        printf '%s\n' "$minor" > /etc/dnf/vars/releasever_minor
+
     # We are forcing an update of the packages
     package_update: true
 
-    # Create the base repositories
+    # Create the base repositories (dnf vars from bootcmd above)
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/BaseOS/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/BaseOS/
         gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/CRB/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/CRB/
         gpgcheck: false
         enabled: true
 
