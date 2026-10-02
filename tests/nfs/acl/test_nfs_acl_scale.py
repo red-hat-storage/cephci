@@ -96,6 +96,8 @@ def run(ceph_cluster, **kw):
         client = clients[0]
         acl = NfsAcl(client, nfs_mount)
         acl.install_acl_tools()
+        # Avoid world-readable defaults (EVERYONE@:r) that mask ACL denial checks
+        acl.set_umask("0027")
 
         NfsAcl.create_user(client, "u1001", 1001)
         NfsAcl.create_user(client, "u1500", 1500)
@@ -365,9 +367,14 @@ def _test_append_behaviour(acl):
     acl_file = _apply_2001_aces(acl)
 
     count_before = len(acl.get_acl("f1"))
+    # Appending wx (write without read) is stored as two ACEs:
+    # D::<uid>:r (deny read) + A::<uid>:waxtcy (allow wx).
     acl.add_acl("f1", "A::5000:wx")
     if not acl.verify_acl_contains("f1", f"A::5000:{PERM_WX}"):
         log.error("Appended ACE A::5000:%s not found", PERM_WX)
+        return 1
+    if not acl.verify_acl_contains("f1", "D::5000:r"):
+        log.error("Complementary deny ACE D::5000:r not found after wx append")
         return 1
     if not acl.verify_acl_contains("f1", f"A::1500:{PERM_RX}"):
         log.error("Original ACE A::1500:%s lost after append", PERM_RX)
@@ -375,9 +382,10 @@ def _test_append_behaviour(acl):
 
     count_after = len(acl.get_acl("f1"))
     log.info("ACE count before append=%d, after=%d", count_before, count_after)
-    if count_after != count_before + 1:
+    if count_after != count_before + 2:
         log.error(
-            "Expected ACE count to increase by 1 after append: before=%d, after=%d",
+            "Expected ACE count to increase by 2 after wx append "
+            "(deny-r + allow-wx): before=%d, after=%d",
             count_before,
             count_after,
         )
