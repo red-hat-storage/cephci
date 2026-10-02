@@ -253,8 +253,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Check and set NVMe CLI image")
     check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
     nvme_service = NVMeService(config, ceph_cluster)
-    LOG.info("Deploy NVMe service")
-    nvme_service.deploy()
+    if config.get("install"):
+        LOG.info("deploy nvme service")
+        nvme_service.deploy()
     LOG.info("Initialize gateways")
     nvme_service.init_gateways()
 

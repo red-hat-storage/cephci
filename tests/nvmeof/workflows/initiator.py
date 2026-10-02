@@ -97,10 +97,13 @@ class NVMeInitiator(Initiator):
         nqns_discovered, _ = self.discover(**_disc_cmd)
         LOG.debug(nqns_discovered)
 
-        # connect-all
+        # connect-all (--persistent and nvmf-autoconnect only when opted in)
+        nvmf_autoconnect = bool(config.get("nvmf_autoconnect"))
         connect_all = {}
         if config["nqn"] == "connect-all":
             connect_all = {"ctrl-loss-tmo": 3600}
+            if nvmf_autoconnect:
+                connect_all["persistent"] = True
             # Add authentication parameters based on auth_mode
             if self.auth_mode == "bidirectional":
                 if not self.host_key or not self.subsys_key:
@@ -124,6 +127,13 @@ class NVMeInitiator(Initiator):
                     )
                 cmd_args.update({"dhchap-secret": self.host_key})
             cmd = {**discovery_port, **cmd_args, **connect_all}
+            if nvmf_autoconnect:
+                self.configure_discovery_conf(
+                    traddr=cmd_args["traddr"],
+                    trsvcid=self.discovery_port,
+                    transport="tcp",
+                )
+                self.enable_nvmf_autoconnect()
             self.connect_all(**cmd)
             self.list()
             return
@@ -138,6 +148,15 @@ class NVMeInitiator(Initiator):
             allowed_subsystems = set(subsystems)
         else:
             allowed_subsystems = {subsystem}
+
+        if nvmf_autoconnect:
+            self.configure_discovery_conf(
+                traddr=cmd_args["traddr"],
+                trsvcid=self.discovery_port,
+                transport="tcp",
+            )
+            self.enable_nvmf_autoconnect()
+
         sub_endpoints = []
         discovered_records = json.loads(nqns_discovered)["records"]
 
@@ -240,46 +259,14 @@ class NVMeInitiator(Initiator):
         LOG.debug(targets)
         return targets
 
-    def stop_fio(self):
-        """Stop any running FIO processes on the client node.
-
-        Sends SIGTERM first to allow fio to flush, then SIGKILL after 5 seconds
-        if any processes remain.
-        """
-        LOG.info(f"Stopping FIO on node {self.node.hostname}")
-        try:
-            self.node.exec_command(cmd="pkill -SIGTERM fio", sudo=True)
-            sleep(5)
-        except Exception:
-            # pkill exits non-zero when no matching process is found; that is fine.
-            pass
-        try:
-            self.node.exec_command(cmd="pkill -9 fio", sudo=True)
-        except Exception:
-            pass
-        LOG.info(f"FIO stopped on node {self.node.hostname}")
-
-    def start_fio(
-        self, io_size="100%", runtime=None, paths=None, serial=False, **kwargs
-    ):
+    def start_fio(self, io_size="100%", runtime=None, paths=None, **kwargs):
         """Start FIO on the all targets on client node.
 
         Args:
             io_size: Size of the IO to be performed
-            runtime: FIO runtime in seconds. When set, size is not sent to fio.
             paths: List of paths to perform IO on
-            serial (bool): When True, run fio on each path sequentially (one at
-                a time).  When False (default), all paths are spawned in parallel
-                via the thread pool.
-            stop_io (bool): When True, stop any running FIO processes on this
-                            node and return immediately without starting new IO.
             **kwargs: Additional arguments for FIO
         """
-        # Handle stop_io before any IO is set up.
-        if kwargs.get("stop_io"):
-            self.stop_fio()
-            return []
-
         if not paths:
             LOG.info("No paths provided, fetching all devices")
             paths = self.list_devices()
@@ -295,7 +282,8 @@ class NVMeInitiator(Initiator):
 
         if runtime:
             io_args.update({"run_time": runtime})
-        elif io_size:
+
+        if io_size:
             io_args.update({"size": io_size})
 
         # Update io_args if test_name is provided
@@ -318,87 +306,94 @@ class NVMeInitiator(Initiator):
         if kwargs.get("io_type"):
             io_args.update({"io_type": kwargs.get("io_type")})
 
+        # Forward data-integrity options to run_fio
+        if kwargs.get("verify"):
+            io_args.update({"verify": kwargs.get("verify")})
+        if kwargs.get("verify_fatal") is not None:
+            io_args.update({"verify_fatal": kwargs.get("verify_fatal")})
+        if kwargs.get("bs"):
+            io_args.update({"bs": kwargs.get("bs")})
+        # Customer-workload knobs (DB multi-queue, O_DIRECT, sync cadence)
+        if kwargs.get("num_jobs") is not None:
+            io_args.update({"num_jobs": kwargs.get("num_jobs")})
+        if kwargs.get("fsync") is not None:
+            io_args.update({"fsync": kwargs.get("fsync")})
+        if kwargs.get("direct") is not None:
+            io_args.update({"direct": kwargs.get("direct")})
+
         # Check whether to execute blkdiscard
         # For read only namespaces, blkdiscard is not required
         blkdiscard_cmd = kwargs.get("execute_blkdiscard", True)
 
-        def _build_io_args(path):
-            _io_args = {}
-            if blkdiscard_cmd:
-                self.node.exec_command(cmd=f"blkdiscard {path}", sudo=True)
-            else:
-                LOG.info(f"Skipping blkdiscard for {path}")
-            if io_args.get("test_name"):
-                _io_args["test_name"] = (
-                    f"{io_args['test_name']}-{path.replace('/', '_')}"
+        # Use max_workers to ensure all FIO processes can start simultaneously
+        with parallel(max_workers=len(paths) + 4) as p:
+            # Configure SSH MaxSessions to accommodate max_workers
+            max_workers = len(paths) + 4
+            required_sessions = max_workers + 10  # Add buffer for safety
+            try:
+                # Backup original sshd_config
+                self.node.exec_command(
+                    cmd="cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup", sudo=True
                 )
-            _io_args.update(
-                {
-                    "device_name": path,
-                    "client_node": self.node,
-                    "long_running": True,
-                    "cmd_timeout": "notimeout",
-                    "verbose": True,
-                }
-            )
-            if kwargs.get("output_dir"):
+
+                # Update MaxSessions in sshd_config
+                self.node.exec_command(
+                    cmd=f"sed -i 's/^#*MaxSessions.*/MaxSessions {required_sessions}/' /etc/ssh/sshd_config",
+                    sudo=True,
+                )
+
+                # Add MaxSessions if it doesn't exist
+                self.node.exec_command(
+                    cmd=(
+                        f"grep -q '^MaxSessions' /etc/ssh/sshd_config || "
+                        f"echo 'MaxSessions {required_sessions}' >> /etc/ssh/sshd_config"
+                    ),
+                    sudo=True,
+                )
+
+                # Restart sshd service to apply changes
+                self.node.exec_command(cmd="systemctl restart sshd", sudo=True)
+
+                LOG.info(
+                    f"Configured SSH MaxSessions to {required_sessions} for max_workers={max_workers}"
+                )
+                sleep(3)  # To ensure sshd restarted
+            except Exception as e:
+                LOG.warning(f"Failed to configure SSH MaxSessions: {e}")
+
+            for path in paths:
+                _io_args = {}
+                # TODO: blkdiscard is temporary workaround for same image usage
+                #  in the IO progression tasks especially HA failover and failback.
+                if blkdiscard_cmd:
+                    self.node.exec_command(cmd=f"blkdiscard {path}", sudo=True)
+                else:
+                    LOG.info(f"Skipping blkdiscard for {path}")
+                if io_args.get("test_name"):
+                    test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
+                    _io_args.update({"test_name": test_name})
                 _io_args.update(
                     {
-                        "test_name": f"{kwargs['test_name']}-{path.replace('/', '_')}",
-                        "output_format": "json",
-                        "output_dir": kwargs["output_dir"],
+                        "device_name": path,
+                        "client_node": self.node,
+                        "long_running": True,
+                        "cmd_timeout": "notimeout",
+                        "verbose": True,
                     }
                 )
-            return {**io_args, **_io_args}
-
-        if serial:
-            # Run fio on each path one at a time — no threads, no parallel context.
-            LOG.info("Running FIO serially on %d path(s)", len(paths))
-            for path in paths:
-                LOG.info("FIO on %s", path)
-                results.append(run_fio(**_build_io_args(path)))
-        else:
-            # Use max_workers to ensure all FIO processes can start simultaneously
-            with parallel(max_workers=len(paths) + 4) as p:
-                # Configure SSH MaxSessions to accommodate max_workers
-                max_workers = len(paths) + 4
-                required_sessions = max_workers + 10  # Add buffer for safety
-                try:
-                    # Backup original sshd_config
-                    self.node.exec_command(
-                        cmd="cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup",
-                        sudo=True,
+                if kwargs.get("output_dir"):
+                    test_name = f"{kwargs['test_name']}-" f"{path.replace('/', '_')}"
+                    _io_args.update(
+                        {
+                            "test_name": test_name,
+                            "output_format": "json",
+                            "output_dir": kwargs["output_dir"],
+                        }
                     )
-
-                    # Update MaxSessions in sshd_config
-                    self.node.exec_command(
-                        cmd=f"sed -i 's/^#*MaxSessions.*/MaxSessions {required_sessions}/' /etc/ssh/sshd_config",
-                        sudo=True,
-                    )
-
-                    # Add MaxSessions if it doesn't exist
-                    self.node.exec_command(
-                        cmd=(
-                            f"grep -q '^MaxSessions' /etc/ssh/sshd_config || "
-                            f"echo 'MaxSessions {required_sessions}' >> /etc/ssh/sshd_config"
-                        ),
-                        sudo=True,
-                    )
-
-                    # Restart sshd service to apply changes
-                    self.node.exec_command(cmd="systemctl restart sshd", sudo=True)
-
-                    LOG.info(
-                        f"Configured SSH MaxSessions to {required_sessions} for max_workers={max_workers}"
-                    )
-                    sleep(3)  # To ensure sshd restarted
-                except Exception as e:
-                    LOG.warning(f"Failed to configure SSH MaxSessions: {e}")
-
-                for path in paths:
-                    p.spawn(run_fio, **_build_io_args(path))
-                for op in p:
-                    results.append(op)
+                _io_args = {**io_args, **_io_args}
+                p.spawn(run_fio, **_io_args)
+            for op in p:
+                results.append(op)
         return results
 
     def register(self, base, register_args, nrkey, client_node):

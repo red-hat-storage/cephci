@@ -384,12 +384,17 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             initiator_node = get_node_by_id(ceph_cluster, node)
             initiator = Initiator(initiator_node)
             initiator.disconnect_all()
-            configure_cmds = [
-                "nvme gen-hostnqn > /etc/nvme/hostnqn",
-                "uuidgen > /etc/nvme/hostid",
-            ]
-            for cmd in configure_cmds:
-                initiator_node.exec_command(cmd=cmd, sudo=True)
+            # Do not overwrite an existing hostnqn (stacked suites already added
+            # that NQN on the subsystem in Phase 2). Dedicated masking still
+            # generates one when the file is missing.
+            initiator_node.exec_command(
+                cmd="bash -c 'test -s /etc/nvme/hostnqn || nvme gen-hostnqn > /etc/nvme/hostnqn'",
+                sudo=True,
+            )
+            initiator_node.exec_command(
+                cmd="bash -c 'test -s /etc/nvme/hostid || uuidgen > /etc/nvme/hostid'",
+                sudo=True,
+            )
             hostnqn, _ = initiator_node.exec_command(
                 cmd="cat /etc/nvme/hostnqn",
                 sudo=True,

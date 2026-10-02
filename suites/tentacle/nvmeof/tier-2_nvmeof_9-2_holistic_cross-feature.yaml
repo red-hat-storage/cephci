@@ -1,0 +1,1068 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_nvmeof_9-2_holistic_cross-feature.yaml
+# Customer-centric holistic system test (features under continuous IO)
+#
+# Cluster configuration:
+#   conf/tentacle/nvmeof/ceph_nvmeof_9-2_holistic.yaml
+# Inventory:
+#   conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml (or later)
+#
+# Model:
+#   1) Deploy full Ceph + NVMeoF once (nvmeof_metadata pool; 2 GWs colocated with OSDs)
+#      DHCHAP prerequisite: GW must be applied with encryption: true so orch
+#      injects encryption_key (IBM: RSA key in NVMeoF spec before in-band auth).
+#      Companions get this via install:true + inband_auth_mode → NVMeService.
+#   2) Configure stacked standing subsystems (same NS used by multiple features)
+#   3) QoS first on those NS, then masking + reservation on the SAME NS
+#      (2 clients see the same/all NS; writes are reservation-serialized)
+#   4) After DHCHAP, multi-client FIO on each initiator's visible NS, then day-2
+#      (QoS validate, visibility, resize, GW scale-down/up, HA failover)
+#   5) DB engines on all four initiators (each mkfs only NS it can see)
+#   6) Initiator reboot/autoconnect, then EC RBD data pool;
+#      NS images live in replicated rbd with --data-pool rbd_ec, then ns add
+#      --rbd-pool rbd on new subsystem cnode5 via existing group1 (orch/GW OMAP
+#      stays on replicated nvmeof_metadata — do NOT apply nvmeof with the EC pool;
+#      EC has no omap. GW ns add also rejects EC as --rbd-pool:
+#      "RBD pool is not a replicated pool".)
+#
+# Coverage map:
+#   suites/tentacle/nvmeof/HOLISTIC_9-2_COVERAGE.md
+#
+# Standing NQN map (consecutive cnode1–cnode5; masking requires cnode1+cnode2):
+#   Density: 8 × 5G NS on cnode1–cnode4; cnode5 also 8 × 5G (EC data-pool).
+#   cnode1 : STACKED + NQN-ACL (hosts node9/10) + HA FIO
+#            Sequence on nsid 1–8:
+#              1) QoS  2) masking hide + add_host node9 then node10 on all NS
+#              3) reservation serialized writes
+#              4) Phase 5 FIO + visibility/resize under load + listener asserts
+#              5) Phase 5b DB engines (node9 on this NQN after block FIO)
+#   cnode2 : STACKED + NQN-ACL (hosts node9/10); masking pair with cnode1
+#            + Phase 5 FIO (node9/10) + Phase 5b DB (node10 on this NQN)
+# Capability NQNs (modules always subsystem.add or destructive):
+#   cnode3–4 : secure DHCHAP per-host FIO (Phase 4d; created after reservation)
+#              + Phase 5 FIO + Phase 5b DB (node11/cnode3, node12/cnode4)
+#   cnode5   : EC-backed NS (Phase 7 last; 8 × 5G on rbd + data-pool rbd_ec)
+# DB engines: each initiator mkfs NS visible only to it (not a dedicated DB NQN).
+# Phase 6: initiator reboot + nvmf-autoconnect
+#   node9/10 → cnode1+cnode2 (reboot node10).
+#   Before EC; node9/10 cannot use cnode3/cnode4 without keys.
+#
+# Tenant map / customer FIO personas (Phase 5 — Linux block emulation):
+#   node9  : OLTP on stacked cnode1+cnode2 (masking hosts); DB on cnode1
+#   node10 : VM+verify on stacked cnode1+cnode2 (same NS as node9); DB on cnode2
+#   node11 : Phase 4d/5 DHCHAP FIO + Phase 5b DB (cnode3)
+#   node12 : Phase 4d/5 DHCHAP FIO + Phase 5b DB (cnode4)
+#   Secure : Phase 4d DHCHAP FIO on cnode3/cnode4 (after reservation, so 4b
+#            connect-all only sees stacked cnode1+cnode2)
+#
+# Workloads needing CSI/VMware/SAP/etc. stay companion — see HOLISTIC_9-2_WORKLOADS.md
+#
+# Profiles:
+#   Smoke : tier-2_nvmeof_9-2_holistic_smoke.yaml
+#
+# Companion suites (not inlined): upgrades, FIPS, mirror,
+# alerts break-GW, scale extremes, VMware, Dashboard, CSI, stretch HA.
+# ISCE-2203 auto-listeners: covered in-suite (Phase 2 derived network-mask +
+# Phase 5 assert_listeners); single-network only (no dual-iface).
+#===============================================================================================
+tests:
+  # --------------------------------------------------------------------------------------------
+  # Phase 0 — Deploy full Ceph stack + clients
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  label: mds
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: Deploy IBM Ceph with mon/mgr/osd plus MDS and RGW
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy full Ceph cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node9
+          - node10
+          - node11
+          - node12
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure 4 NVMe initiator clients
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph clients for NVMe tests
+      polarion-id: CEPH-83573758
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 1 — Pools + NVMeoF (nvmeof_metadata; 2 colocated + 2 dedicated GWs)
+  # encryption: true → cephadm helper generates RSA key into spec.encryption_key
+  # (required before any host/subsystem --dhchap-key; plain `apply` omits it)
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create nvmeof_metadata
+          - config:
+              command: shell
+              args:
+                - rbd pool init nvmeof_metadata
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nvmeof
+                  service_id: nvmeof_metadata.group1
+                  encryption: true
+                  placement:
+                    nodes:
+                      - node4
+                      - node5
+                      - node6
+                      - node7
+                  spec:
+                    pool: nvmeof_metadata
+                    group: group1
+      desc: Create rbd + nvmeof_metadata pools and deploy NVMeoF on 4 GWs
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy NVMeoF service group1 (nvmeof_metadata)
+      polarion-id: CEPH-83595696
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 2 — Tenant configuration (standing; no cleanup)
+  # Auto-listeners (ISCE-2203), single-network only:
+  #   upstream configure_subsystems passes suite network-mask as CIDR, or derives
+  #   minimal CIDR from gw_nodes via get_network_mask().
+  #   node8 is NOT in Phase 2 gw_nodes; it joins only via Phase 5 day2 scale_up.
+  #   Auto-listeners/mask at create time are derived from node4–node7 only.
+  #   Auto-listener port defaults to 4420 (omit listener_port). Do not set static
+  #   listeners: on these subsystems — auto-listeners make the node list unnecessary.
+  # Coverage: Phase 2 mask (node4–7) + Phase 5 day2 assert_listeners after scale_up.
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: true
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        subsystems:
+          # cnode1: stacked NS (QoS/masking/reservation/FIO/resize) + NQN-ACL
+          # (hosts node9/10 only). Autoconnect/HA FIO also here.
+          # Masking walks nsid 1–8 only.
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            max_ns: 128
+            no-group-append: true
+            hosts:
+              - node9
+              - node10
+            bdevs:
+              - count: 8
+                size: 5G
+                ns_create_image: true
+          # cnode2: same 8 NS as cnode1; node9/10 host NQNs at create (no *).
+          # Masking is hardcoded cnode1+cnode2 and uses node9/10 only.
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 2
+            max_ns: 128
+            no-group-append: true
+            hosts:
+              - node9
+              - node10
+            bdevs:
+              - count: 8
+                size: 5G
+                ns_create_image: true
+      desc: Configure stacked standing subsystems (cnode1+cnode2 hosts node9/10)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway.py
+      name: Configure tenant subsystems
+      polarion-id: CEPH-83609777
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 2b — QoS on stacked NS BEFORE masking / reservation / other features
+  # test_ceph_nvmeof_qos_tests.py cannot be used here without editing it:
+  #   install:true → subsystem.add on standing NQNs; install:false → nvmegwcli is None;
+  #   then it overwrites limits to 10/20/30. Gateway CLI set_qos on existing NS instead.
+  # Limits stay on these NS for later TCs (Phase 5 FIO-validates under load).
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        node: node4
+        pool: nvmeof_metadata
+        gw_group: group1
+        steps:
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 1
+                r-megabytes-per-second: 200
+                w-megabytes-per-second: 200
+                rw-megabytes-per-second: 300
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 2
+                r-megabytes-per-second: 200
+                w-megabytes-per-second: 200
+                rw-megabytes-per-second: 300
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 1
+                r-megabytes-per-second: 200
+                w-megabytes-per-second: 200
+                rw-megabytes-per-second: 300
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 2
+                r-megabytes-per-second: 200
+                w-megabytes-per-second: 200
+                rw-megabytes-per-second: 300
+      desc: Set QoS on stacked cnode1/cnode2 NS before masking and reservation
+      destroy-cluster: false
+      module: test_nvme_cli.py
+      name: QoS before stacked features
+      polarion-id: CEPH-83575441
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 3 — Masking on the SAME stacked NS (do not add new NS)
+  # Phase 2 already added node9/10 as subsystem hosts on cnode1 and cnode2.
+  # add_host uses the top-level initiators list and splits if len>1, so each
+  # TC has one initiator → that host is added to every nsid. No auto-visible=yes.
+  # Masking is node9 and node10 only.
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        service: namespace
+        steps:
+          - config:
+              command: change_visibility
+              args:
+                subsystems: 2
+                namespaces: 16
+                auto-visible: "no"
+                group: group1
+          - config:
+              command: add_host
+              args:
+                subsystems: 2
+                namespaces: 16
+                group: group1
+        initiators:
+          - node9
+      desc: Hide cnode1/cnode2 NS and add node9 hostnqn on every nsid
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_masking.py
+      name: Mask stacked NS — add node9 on all nsids
+      polarion-id: CEPH-83609777
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        service: namespace
+        steps:
+          - config:
+              command: add_host
+              args:
+                subsystems: 2
+                namespaces: 16
+                group: group1
+        initiators:
+          - node10
+      desc: Add node10 hostnqn on every hidden cnode1/cnode2 nsid
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_masking.py
+      name: Mask stacked NS — add node10 on all nsids
+      polarion-id: CEPH-83609777
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 4 — Reservation on the SAME stacked NS (cnode1)
+  # node9+node10 share those NS via per-NS host ACL (auto-visible stays no).
+  # release → both write (one-after-the-other, not concurrent owners).
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        reservation:
+          - register_args:
+              rrega: 0
+          - acquire_args:
+              racqa: 0
+              rtype: 1
+          - release_args:
+              rrela: 0
+              rtype: 1
+          - unregister_args:
+              rrega: 1
+        initiators:
+          - node: node9
+            nqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
+          - node: node10
+            nqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
+        cleanup:
+          - disconnect_all
+      desc: >
+        Reservation lifecycle on stacked cnode1 NS — two masked clients,
+        writes serialized by reservation (same NS as QoS + masking)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_ns_reservation.py
+      name: Validate namespace reservations on stacked NS
+      polarion-id: CEPH-83626134
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 4b — Multi-initiator reservation types on the same stacked NS (ISCE-2086)
+  # Module always subsystem.add when subsystems: are listed — omit that block so
+  # connect-all reuses standing NQNs (cnode1/cnode2, hosts node9/10).
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_node:
+          - node4
+          - node5
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        # No subsystems: — reuse stacked cnode1/cnode2 (not a dedicated resv NQN)
+        initiators:
+          - node9
+          - node10
+        cleanup:
+          - disconnect_all
+      desc: Reservation type matrix on stacked cnode1/cnode2 NS (two initiators)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_reservation_multi_init.py
+      name: Multi-initiator reservation type matrix
+      polarion-id: CEPH-83627298
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 4d — DHCHAP per-host FIO in SAME phase as key create (ISCE-3542)
+  # Requires Phase 1 GW encryption_key (suite auth flags alone are not enough).
+  # Created after Phase 4/4b so reservation connect-all only sees cnode1+cnode2.
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        mode: auth_fio
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        auth_fio:
+          inband_auth_mode: bidirectional
+          fio_runtime: 60
+          subsystems:
+            # Secure tenants after standing cnode1–cnode2 (Phase 4b already ran)
+            - subnqn: nqn.2016-06.io.spdk:cnode3
+              serial: 3
+              max_ns: 32
+              no-group-append: true
+              inband_auth: true
+              hosts:
+                - node: node11
+                  inband_auth: true
+              bdevs:
+                - count: 8
+                  size: 5G
+                  ns_create_image: true
+            - subnqn: nqn.2016-06.io.spdk:cnode4
+              serial: 4
+              max_ns: 32
+              no-group-append: true
+              inband_auth: true
+              hosts:
+                - node: node12
+                  inband_auth: true
+              bdevs:
+                - count: 8
+                  size: 5G
+                  ns_create_image: true
+          initiators:
+            - nqn: nqn.2016-06.io.spdk:cnode3
+              listener_port: 4420
+              node: node11
+              io_args:
+                io_type: randrw
+                rwmixread: 70
+                iodepth: 8
+                run_time: 60
+                size: 1G
+                test_name: dhchap-host-c11
+                execute_blkdiscard: true
+            - nqn: nqn.2016-06.io.spdk:cnode4
+              listener_port: 4420
+              node: node12
+              io_args:
+                io_type: randwrite
+                iodepth: 8
+                run_time: 60
+                size: 1G
+                test_name: dhchap-host-c12
+                execute_blkdiscard: true
+      desc: >
+        ISCE-3542 — set controller/host DHCHAP keys and run authenticated FIO
+        in the same phase (keys never leave this TC; needs GW encryption_key)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_holistic_io.py
+      name: DHCHAP per-host authenticated FIO
+      polarion-id: CEPH-83632329
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 5 — UNDER LOAD: background FIO + day-2 ops (customer system test)
+  #   320GB raw / replica-3 lab: blkdiscard before FIO, 1G time-based jobs,
+  #   ~480s covers day-2 settles (~7–8 min). Soak: fio_runtime 1800.
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        fio_runtime: 480
+        fio_settle_seconds: 20
+        op_settle_seconds: 20
+        initiators:
+          # Persona: OLTP database (low-latency mixed 4k, multi-queue)
+          - nqn: discover-all
+            listener_port: 4420
+            node: node9
+            subsystems:
+              - nqn.2016-06.io.spdk:cnode1
+              - nqn.2016-06.io.spdk:cnode2
+            io_args:
+              io_type: randrw
+              rwmixread: 70
+              bs: 4k
+              iodepth: 32
+              num_jobs: 4
+              fsync: 32
+              direct: 1
+              run_time: 480
+              size: 1G
+              test_name: persona-oltp-db-c9
+              execute_blkdiscard: true
+          # Persona: VM boot disk + integrity (small random + crc32c under day-2)
+          - nqn: discover-all
+            listener_port: 4420
+            node: node10
+            subsystems:
+              - nqn.2016-06.io.spdk:cnode1
+              - nqn.2016-06.io.spdk:cnode2
+            io_args:
+              io_type: randrw
+              rwmixread: 85
+              bs: 4k
+              iodepth: 16
+              num_jobs: 2
+              direct: 1
+              run_time: 480
+              size: 1G
+              verify: crc32c
+              verify_fatal: 1
+              test_name: persona-vm-boot-integrity-c10
+              execute_blkdiscard: true
+          # DHCHAP: only cnode3 is visible to node11
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            listener_port: 4420
+            node: node11
+            inband_auth: true
+            io_args:
+              io_type: randrw
+              rwmixread: 70
+              bs: 4k
+              iodepth: 8
+              direct: 1
+              run_time: 480
+              size: 1G
+              test_name: persona-dhchap-c11
+              execute_blkdiscard: true
+          # DHCHAP: only cnode4 is visible to node12
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            listener_port: 4420
+            node: node12
+            inband_auth: true
+            io_args:
+              io_type: randrw
+              rwmixread: 70
+              bs: 4k
+              iodepth: 8
+              direct: 1
+              run_time: 480
+              size: 1G
+              test_name: persona-dhchap-c12
+              execute_blkdiscard: true
+        day2_ops:
+          # Same stacked NS as Phase 2b QoS + masking + reservation
+          - op: qos_validate_io
+            args:
+              subsystem: nqn.2016-06.io.spdk:cnode1
+              nsid: 1
+              initiator_node: node9
+              w-megabytes-per-second: 40
+              r-megabytes-per-second: 40
+              rw-megabytes-per-second: 60
+              io_runtime: 40
+            settle_seconds: 20
+          - op: set_qos
+            args:
+              subsystem: nqn.2016-06.io.spdk:cnode1
+              nsid: 1
+              r-megabytes-per-second: 200
+              w-megabytes-per-second: 200
+              rw-megabytes-per-second: 300
+            settle_seconds: 20
+          - op: resize
+            args:
+              subsystem: nqn.2016-06.io.spdk:cnode1
+              nsid: 1
+              size: 6G
+            settle_seconds: 30
+          - op: scale_down
+            args:
+              nodes: ["node6"]
+            settle_seconds: 30
+          # ISCE-2203: restore GW; auto-listeners must reappear via Phase 2 derived network-mask
+          - op: scale_up
+            args:
+              nodes: ["node6"]
+              assert_listeners:
+                subsystems:
+                  - nqn.2016-06.io.spdk:cnode1
+                  - nqn.2016-06.io.spdk:cnode2
+                  - nqn.2016-06.io.spdk:cnode3
+                  - nqn.2016-06.io.spdk:cnode4
+                listener_port: 4420
+            settle_seconds: 30
+          - op: scale_down
+            args:
+              nodes: ["node7"]
+            settle_seconds: 30
+          # ISCE-2203: new spare GW (node8); auto-listeners via Phase 2 derived network-mask
+          - op: scale_up
+            args:
+              nodes: ["node8"]
+              assert_listeners:
+                subsystems:
+                  - nqn.2016-06.io.spdk:cnode1
+                  - nqn.2016-06.io.spdk:cnode2
+                  - nqn.2016-06.io.spdk:cnode3
+                  - nqn.2016-06.io.spdk:cnode4
+                listener_port: 4420
+            settle_seconds: 45
+          - op: assert_listeners
+            args:
+              subsystems:
+                - nqn.2016-06.io.spdk:cnode1
+                - nqn.2016-06.io.spdk:cnode2
+                - nqn.2016-06.io.spdk:cnode3
+                - nqn.2016-06.io.spdk:cnode4
+              listener_port: 4420
+            settle_seconds: 5
+          - op: ha_failover
+            args:
+              tool: systemctl
+              nodes: ["node4"]
+            settle_seconds: 30
+      desc: >
+        Customer system test — FIO on stacked NS (QoS+masking+reservation already
+        exercised) while QoS, visibility, resize, LB + listener asserts, and HA
+        execute under load
+      destroy-cluster: false
+      module: test_ceph_nvmeof_holistic_io.py
+      name: Under-load day-2 ops with multi-tenant FIO
+      polarion-id: CEPH-83575441
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 5b — DB engines after under-load FIO (mkfs is destructive)
+  # Each initiator connects only to the NQN(s) it is allowed to see:
+  #   node9 → cnode1, node10 → cnode2, node11 → cnode3, node12 → cnode4
+  # (node9/10 share stacked ACL but must not mkfs the same images).
+  # Six runnable engines consume 6 of each NQN's 8 NS (oracle skipped).
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiators:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
+            node: node9
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            listener_port: 4420
+            node: node10
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            listener_port: 4420
+            node: node11
+            inband_auth: true
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            listener_port: 4420
+            node: node12
+            inband_auth: true
+        databases:
+          - engine: postgresql
+            duration: 60
+            scale: 10
+            clients: 8
+            jobs: 4
+          - engine: mysql
+            duration: 60
+            clients: 8
+            rows: 10000
+          - engine: mariadb
+            duration: 60
+            clients: 8
+            rows: 10000
+          - engine: mongodb
+            duration: 60
+            docs: 30000
+          - engine: redis
+            duration: 60
+            clients: 50
+          - engine: cassandra
+            ops: 10000
+          - engine: oracle
+            # always skipped — documents intentional exclusion
+        cleanup:
+          - disconnect_all
+      desc: >
+        DB engines on every initiator using only NS visible to that host
+        (node9/cnode1, node10/cnode2, node11/cnode3, node12/cnode4)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_db_workloads.py
+      name: Database workloads on per-initiator visible namespaces
+      polarion-id: CEPH-83575441
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 6 — Initiator reboot + nvmf-autoconnect (before EC)
+  # node9/10 have per-NS ACL on hidden cnode1+cnode2. Connect those, reboot node10.
+  # DHCHAP cnode3/cnode4 exist but node9/10 have no keys — they will not see those NS.
+  # EC cnode5 is created after this TC so autoconnect cannot pick up host:*.
+  # No subsystems: — would subsystem.add standing NQNs.
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        autoconnect_timeout: 300
+        post_reboot_settle: 15
+        fio_smoke: true
+        fio_runtime: 30
+        initiators:
+          - nqn: discover-all
+            listener_port: 4420
+            node: node10
+            nvmf_autoconnect: true
+            subsystems:
+              - nqn.2016-06.io.spdk:cnode1
+              - nqn.2016-06.io.spdk:cnode2
+          - nqn: discover-all
+            listener_port: 4420
+            node: node9
+            nvmf_autoconnect: true
+            subsystems:
+              - nqn.2016-06.io.spdk:cnode1
+              - nqn.2016-06.io.spdk:cnode2
+        cleanup: []
+      desc: >
+        Connect node9/10 to cnode1+cnode2, reboot node10, assert nvmf-autoconnect
+      destroy-cluster: false
+      module: test_ceph_nvmeof_initiator_reboot_autoconnect.py
+      name: Initiator reboot persistent autoconnect
+      polarion-id: CEPH-83609777
+
+  # --------------------------------------------------------------------------------------------
+  # Phase 7 — NVMeoF namespaces backed by an erasure-coded (EC) RBD pool (last)
+  # --------------------------------------------------------------------------------------------
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd erasure-code-profile set nvmeof_ec_profile k=2 m=1
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd_ec 32 32 erasure nvmeof_ec_profile
+          - config:
+              command: shell
+              args:
+                - ceph osd pool set rbd_ec allow_ec_overwrites true
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd_ec
+          # GW ns add requires replicated --rbd-pool; EC is RBD --data-pool only
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img0 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img1 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img2 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img3 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img4 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img5 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img6 --size 5G --data-pool rbd_ec
+          - config:
+              command: shell
+              args:
+                - rbd create rbd/nvmeof-ec-img7 --size 5G --data-pool rbd_ec
+      desc: >
+        Create EC profile + rbd_ec data pool (k=2,m=1, allow_ec_overwrites)
+        and 8 images in replicated rbd with --data-pool rbd_ec
+        (GW OMAP remains on nvmeof_metadata; ns add cannot use EC as rbd-pool)
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: Create EC pool for NVMeoF namespaces
+      polarion-id: CEPH-83575441
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node4
+        pool: nvmeof_metadata
+        gw_group: group1
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                serial-number: 5
+                no-group-append: true
+                max-namespaces: 128
+                network-mask: node4
+          - config:
+              service: host
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                host: '"*"'
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img0
+                rbd-pool: rbd
+                nsid: 1
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img1
+                rbd-pool: rbd
+                nsid: 2
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img2
+                rbd-pool: rbd
+                nsid: 3
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img3
+                rbd-pool: rbd
+                nsid: 4
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img4
+                rbd-pool: rbd
+                nsid: 5
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img5
+                rbd-pool: rbd
+                nsid: 6
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img6
+                rbd-pool: rbd
+                nsid: 7
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode5
+                rbd-image: nvmeof-ec-img7
+                rbd-pool: rbd
+                nsid: 8
+      desc: >
+        Add cnode5 + 8 EC-backed NS (ns add --rbd-pool rbd on images created
+        with --data-pool rbd_ec; auto-listeners from network-mask)
+      destroy-cluster: false
+      module: test_nvme_cli.py
+      name: Configure NVMeoF entities on EC pool
+      polarion-id: CEPH-83575441
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: false
+        gw_nodes:
+          - node4
+          - node5
+          - node6
+          - node7
+        rbd_pool: rbd
+        nvme_metadata_pool: nvmeof_metadata
+        gw_group: group1
+        do_not_create_image: true
+        do_not_create_pool: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiators:
+          - nqn: nqn.2016-06.io.spdk:cnode5
+            listener_port: 4420
+            node: node9
+            io_args:
+              io_type: randrw
+              rwmixread: 70
+              iodepth: 8
+              run_time: 60
+              size: 1G
+              test_name: ec-pool-ns-c9
+              execute_blkdiscard: true
+        cleanup:
+          - disconnect_all
+      desc: FIO on EC-backed cnode5 namespaces (node9)
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway.py
+      name: FIO on EC-backed NVMeoF namespaces
+      polarion-id: CEPH-83575441
