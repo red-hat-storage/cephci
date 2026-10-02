@@ -1,0 +1,45 @@
+# EC 2+2 on 4 OSD hosts for singlesite RGW upgrade (ss + ssl).
+# Min 3 RGW daemons; client/haproxy colocated on node4.
+# Used by:
+#   suites/tentacle/rgw/test_ss_upgrade_7_1_GA_to_9.x_latest.yaml
+#   suites/tentacle/rgw/tier-1_rgw_upgrade_ssl_ecpool_81GA_to_9x_latest.yaml
+#   suites/tentacle/rgw/tier-1_rgw_upgrade_ssl_ecpool_91GA_to_9x_latest.yaml
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+          - rgw
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
