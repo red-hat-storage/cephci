@@ -300,7 +300,8 @@ def run(ceph_cluster, **kw):
                 assert False, f"Test {test_name} failed"
             else:
                 log.info(f"Test {test_name} passed \n")
-            time.sleep(30)  # Wait before next test start
+            if cephfs_common_utils.wait_for_healthy_ceph(client1, 60):
+                log.warning("Cluster not fully healthy before next CG test; continuing")
         return 0
     except Exception as e:
         log.error(e)
@@ -491,7 +492,7 @@ def cg_snap_func_1(cg_test_params):
                 expiration=300,
                 fs_name=fs_name,
             )
-            time.sleep(30)
+            wait_for_quiesced(client, cg_snap_util, qs_id_val, fs_name=fs_name)
             log.info("Perform snapshot creation on all members")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -540,7 +541,7 @@ def cg_snap_func_1(cg_test_params):
                 client, qs_id_val, if_await=True, fs_name=fs_name
             )
             i += 1
-            time.sleep(30)
+            wait_for_released(client, cg_snap_util, qs_id_val, fs_name=fs_name)
         else:
             i = repeat_cnt
 
@@ -699,7 +700,7 @@ def cg_snap_func_1(cg_test_params):
                 raise Exception(
                     f"quiesce state of set_id {qs_id_val} is still not QUIESCED after 5mins"
                 )
-            time.sleep(30)
+            wait_for_quiesced(client, cg_snap_util, qs_id_val, fs_name=fs_name)
             log.info("Perform snapshot creation on all members")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -930,7 +931,7 @@ def cg_snap_func_2(cg_test_params):
                 fs_name=fs_name,
             )
             db_version = qs_op_out["sets"][qs_id_val]["version"]
-            time.sleep(30)
+            wait_for_quiesced(client, cg_snap_util, qs_id_val, fs_name=fs_name)
             log.info("Perform snapshot creation on all members")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -1308,7 +1309,7 @@ def cg_snap_func_3(cg_test_params):
                 fs_name=fs_name,
             )
             log.info(f"quiesce cmd response : {qs_op_out}")
-            time.sleep(30)
+            wait_for_quiesced(client, cg_snap_util, qs_id_val, fs_name=fs_name)
             log.info("Perform snapshot creation on all members")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -1517,7 +1518,7 @@ def cg_snap_func_4(cg_test_params):
         fs_name=fs_name,
     )
     log.info(f"quiesce cmd response : {qs_op_out}")
-    time.sleep(30)
+    wait_for_quiesced(client, cg_snap_util, qs_id_val, fs_name=fs_name)
     log.info("Perform snapshot creation on all members")
     rand_str = "".join(
         random.choice(string.ascii_lowercase + string.digits) for _ in list(range(3))
@@ -2791,7 +2792,8 @@ def cg_snap_neg_1(cg_test_params):
 
             for quiesce_proc in quiesce_procs:
                 quiesce_proc.join()
-            time.sleep(30)
+            for qs_id in qs_id_list:
+                wait_for_quiesced(client, cg_snap_util, qs_id, fs_name=fs_name)
 
             for qs_id in qs_id_list:
                 qs_query_out = cg_snap_util.get_qs_query(client, qs_id, fs_name=fs_name)
@@ -2961,15 +2963,28 @@ def wait_for_cg_state(client, cg_snap_util, qs_id_val, exp_state, fs_name="cephf
         actual_state = qs_query_out["sets"][qs_id_val]["state"]["name"]
         if actual_state == exp_state:
             log.info(f"State of qs set {qs_id_val} is {exp_state}")
-        else:
-            log.error(
-                f"State of qs set {qs_id_val} is not as expected - {exp_state},current state - {actual_state}"
-            )
+            return 0
+        log.info(
+            f"Waiting for qs set {qs_id_val} state {exp_state}, current: {actual_state}"
+        )
         time.sleep(2)
     if actual_state == exp_state:
         return 0
-    else:
-        return 1
+    log.error(
+        f"State of qs set {qs_id_val} is not as expected - {exp_state}, "
+        f"current state - {actual_state}"
+    )
+    return 1
+
+
+def wait_for_quiesced(client, cg_snap_util, qs_id_val, fs_name="cephfs"):
+    if wait_for_cg_state(client, cg_snap_util, qs_id_val, "QUIESCED", fs_name):
+        raise Exception(f"quiesce set {qs_id_val} did not reach QUIESCED state")
+
+
+def wait_for_released(client, cg_snap_util, qs_id_val, fs_name="cephfs"):
+    if wait_for_cg_state(client, cg_snap_util, qs_id_val, "RELEASED", fs_name):
+        raise Exception(f"quiesce set {qs_id_val} did not reach RELEASED state")
 
 
 def cg_quiesce_lifecycle(client, cg_snap_util, qs_set, fs_name="cephfs"):
