@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
             Thread(
                 target=perform_lookups,
                 args=(clients[2], nfs_mount, num_files + num_dirs),
-                kwargs={"sudo": sudo, "timeout": 60},
+                kwargs={"sudo": sudo},
             ),
         ]
 

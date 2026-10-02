@@ -30,13 +30,11 @@ def linux_untar(clients, mountpoint, dirs=("."), full_untar=False):
             cmd = "cp /root/linux-5.4.54.tar.xz {}/{}".format(mountpoint, directory)
             client.exec_command(cmd=cmd, sudo=True)
 
-            # Start linux untar
+            # Start linux untar (already cd'd into mount dir; extract archive members only)
             cmd = "cd {}/{};tar -xvf linux-5.4.54.tar.xz".format(mountpoint, directory)
             if not full_untar:
-                # If full untar is not required, perform untar of few directories alone
-                cmd += (
-                    f"{mountpoint}/{directory} linux-5.4.54/drivers linux-5.4.54/tools"
-                )
+                # Partial untar: members must be space-separated after the archive name
+                cmd += " linux-5.4.54/drivers linux-5.4.54/tools"
             untar = Thread(
                 target=lambda: client.exec_command(
                     cmd=cmd, sudo=True, long_running=True
