@@ -18,7 +18,6 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 8.1
                 release: stable
                 registry-url: registry.redhat.io
                 mon-ip: node1
