@@ -1,8 +1,11 @@
 # Tier - 2: Execute S3Tests over RGW HTTPS using a reference certificate.
 #
 # The certificate and key are stored in the cephadm certificate manager and
-# the RGW spec sets certificate_source: reference. The material is registered
-# before the RGW service is applied.
+# the RGW spec sets certificate_source: reference. Beast does not read
+# certmgr directly: it loads ssl_certificate from the monitor config-key
+# rgw/cert/<service>. That key is written before the RGW service is applied.
+# The certificate names the RGW node and its IP so clients can reach
+# https://<node>:443.
 #
 # Requires the following keys in cephci.yaml
 #
@@ -97,14 +100,19 @@ tests:
         sudo: true
         role: installer
         commands:
-          - "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/rgw_key.pem -out /tmp/rgw_cert.pem -subj '/CN=rgw.example.com/O=Ceph Test/C=US'"
+          - "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/rgw_key.pem -out /tmp/rgw_cert.pem -subj '/CN={node:node7}/O=Ceph Test/C=US' -addext 'subjectAltName=DNS:{node:node7},IP:{node_ip:node7}' -addext 'basicConstraints=CA:FALSE' -addext 'keyUsage=digitalSignature,keyEncipherment' -addext 'extendedKeyUsage=serverAuth'"
           - "openssl x509 -in /tmp/rgw_cert.pem -text -noout"
           - "openssl rsa -in /tmp/rgw_key.pem -check -noout"
           - "bash -c 'c=$(openssl x509 -noout -modulus -in /tmp/rgw_cert.pem | openssl md5); k=$(openssl rsa -noout -modulus -in /tmp/rgw_key.pem | openssl md5); echo \"$c\"; echo \"$k\"; test \"$c\" = \"$k\"'"
+          - "openssl x509 -in /tmp/rgw_cert.pem -noout -ext subjectAltName | grep -q '{node:node7}'"
+          - "openssl x509 -in /tmp/rgw_cert.pem -noout -ext subjectAltName | grep -q '{node_ip:node7}'"
           - "cephadm shell -v /tmp/rgw_cert.pem:/etc/ceph/rgw_cert.pem -- bash -c 'ceph orch certmgr cert set --cert-name rgw_ssl_cert --service-name rgw.rgw.ssl -i /etc/ceph/rgw_cert.pem'"
           - "cephadm shell -v /tmp/rgw_key.pem:/etc/ceph/rgw_key.pem -- bash -c 'ceph orch certmgr key set --key-name rgw_ssl_key --service-name rgw.rgw.ssl -i /etc/ceph/rgw_key.pem'"
           - "cephadm shell -- bash -c 'ceph orch certmgr cert ls | grep -q rgw_ssl_cert && ceph orch certmgr cert ls | grep -q rgw.rgw.ssl'"
           - "cephadm shell -- bash -c 'ceph orch certmgr key ls | grep -q rgw_ssl_key && ceph orch certmgr key ls | grep -q rgw.rgw.ssl'"
+          - "cat /tmp/rgw_key.pem /tmp/rgw_cert.pem > /tmp/rgw_combined.pem"
+          - "cephadm shell -v /tmp/rgw_combined.pem:/etc/ceph/rgw_combined.pem -- bash -c 'ceph config-key set rgw/cert/rgw.rgw.ssl -i /etc/ceph/rgw_combined.pem'"
+          - "cephadm shell -- bash -c 'ceph config-key get rgw/cert/rgw.rgw.ssl | grep -q \"BEGIN PRIVATE KEY\" && ceph config-key get rgw/cert/rgw.rgw.ssl | grep -q \"BEGIN CERTIFICATE\"'"
       desc: Generate a certificate pair and store it in certmgr for the RGW service.
       module: exec.py
       name: register reference certificate
@@ -131,6 +139,20 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy rgw with reference certificate
+      polarion-id: CEPH-83573777
+
+  - test:
+      abort-on-fail: true
+      config:
+        sudo: true
+        role: rgw
+        commands:
+          - "firewall-cmd --add-port=443/tcp --permanent"
+          - "firewall-cmd --reload"
+          - "bash -c 'for i in $(seq 1 18); do curl -k -sS --connect-timeout 5 -o /dev/null https://127.0.0.1:443 && curl -k -sS --connect-timeout 5 -o /dev/null https://{node_ip:node7}:443 && exit 0; sleep 10; done; exit 1'"
+      desc: Open port 443 and confirm the RGW HTTPS endpoint accepts connections.
+      module: exec.py
+      name: verify rgw https endpoint
       polarion-id: CEPH-83573777
 
   - test:
@@ -190,6 +212,22 @@ tests:
       module: copy_cephadm_root_ca_cert.py
       name: copy cephadm root ca cert
       polarion-id: CEPH-10362
+
+  - test:
+      abort-on-fail: true
+      config:
+        sudo: true
+        role: client
+        commands:
+          - "bash -c 'ceph config-key get rgw/cert/rgw.rgw.ssl | sed -n \"/BEGIN CERTIFICATE/,/END CERTIFICATE/p\" > /etc/pki/ca-trust/source/anchors/rgw-reference.crt'"
+          - "test -s /etc/pki/ca-trust/source/anchors/rgw-reference.crt"
+          - "update-ca-trust extract"
+          - "bash -c 'for i in $(seq 1 6); do curl -sS --connect-timeout 10 -o /dev/null https://{node_ip:node7}:443 && exit 0; sleep 5; done; exit 1'"
+      desc: Trust the reference certificate and confirm the client can reach RGW.
+      module: exec.py
+      name: trust reference certificate
+      polarion-id: CEPH-83573777
+
   - test:
       abort-on-fail: true
       config:
