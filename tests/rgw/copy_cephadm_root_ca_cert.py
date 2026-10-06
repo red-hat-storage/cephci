@@ -10,6 +10,7 @@ from utility.log import Log
 LOG = Log(__name__)
 
 CEPHADM_ROOT_CA_FILE = "cephadm-root-ca.crt"
+REFERENCE_CERT_FILE = "rgw-reference.crt"
 CA_TRUST_ANCHORS = "/etc/pki/ca-trust/source/anchors"
 
 
@@ -61,6 +62,55 @@ def copy_cephadm_root_ca_cert_to_roles(cluster, roles=("rgw", "client")):
             seen.add(node.hostname)
             LOG.info("Copying cephadm root CA cert to %s", node.hostname)
             install_cephadm_root_ca_cert(node, cert)
+
+
+def get_reference_cert(installer, config_key):
+    """Return the certificate from an RGW config-key, without the private key."""
+    out, _ = installer.exec_command(
+        cmd=f"cephadm shell -- ceph config-key get {config_key}",
+        sudo=True,
+    )
+    match = re.search(
+        r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
+        out,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError(f"{config_key} does not contain a certificate")
+    return match.group(0) + "\n"
+
+
+def copy_reference_cert_to_roles(cluster, config_key, roles=("client",)):
+    """Install the RGW reference certificate into the system trust store."""
+    installer = cluster.get_nodes(role="installer")[0]
+    cert = get_reference_cert(installer, config_key)
+    seen = set()
+    for role in roles:
+        for node in cluster.get_nodes(role=role):
+            if node.hostname in seen:
+                continue
+            seen.add(node.hostname)
+            LOG.info("Copying RGW reference certificate to %s", node.hostname)
+            install_cephadm_root_ca_cert(node, cert, cert_name=REFERENCE_CERT_FILE)
+
+
+def confirm_client_trusts_endpoint(cluster, config):
+    """Fail unless the client accepts the RGW certificate without -k."""
+    client = cluster.get_nodes(role="client")[0]
+    rgw = cluster.get_nodes(role="rgw")[0]
+    endpoint = config.get("endpoint", rgw.ip_address)
+    port = config.get("port", 443)
+    url = f"https://{endpoint}:{port}"
+    LOG.info("Checking %s trusts %s", client.hostname, url)
+    cmd = (
+        "bash -c '"
+        "for i in $(seq 1 6); do "
+        f"curl -sS --connect-timeout 10 -o /dev/null {url} && exit 0; "
+        "sleep 5; "
+        "done; "
+        "exit 1'"
+    )
+    client.exec_command(sudo=True, cmd=cmd)
 
 
 def copy_peer_cas_to_roles(cluster, ceph_cluster_dict, roles=("rgw", "client")):
@@ -137,11 +187,24 @@ def run(ceph_cluster, **kwargs):
         commands: optional exec.py command list; copy_file runs after commands
         copy_file: copy a local file to a peer cluster
             src, dest, dest_cluster, dest_node (optional)
+        reference_config_key: copy this RGW config-key certificate instead
+            of the cephadm root CA. The private key is not copied.
+        port: HTTPS port used when verifying the reference certificate
+        endpoint: host or IP used for that verification
     """
     config = kwargs.get("config", {})
     roles = config.get("roles", ["rgw", "client"])
     ceph_cluster_dict = kwargs.get("ceph_cluster_dict", {})
     try:
+        if config.get("reference_config_key"):
+            copy_reference_cert_to_roles(
+                ceph_cluster,
+                config["reference_config_key"],
+                roles,
+            )
+            if config.get("verify", True):
+                confirm_client_trusts_endpoint(ceph_cluster, config)
+            return 0
         if config.get("commands"):
             rc = importlib.import_module("exec").run(ceph_cluster, **kwargs)
             if rc != 0:

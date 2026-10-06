@@ -5,7 +5,9 @@
 # certmgr directly: it loads ssl_certificate from the monitor config-key
 # named by rgw_frontends. That key is written before apply and rewritten
 # afterwards, because apply can replace it. The certificate names the RGW
-# node and its IP so clients can reach https://<node>:443.
+# node and its IP so clients can reach https://<node>:443. It is a CA, and
+# the client installs it with the same trust-store copy used for the
+# cephadm root CA.
 #
 # Requires the following keys in cephci.yaml
 #
@@ -100,7 +102,7 @@ tests:
         sudo: true
         role: installer
         commands:
-          - "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/rgw_key.pem -out /tmp/rgw_cert.pem -subj '/CN={node:node7}/O=Ceph Test/C=US' -addext 'subjectAltName=DNS:{node:node7},IP:{node_ip:node7}' -addext 'basicConstraints=CA:FALSE' -addext 'keyUsage=digitalSignature,keyEncipherment' -addext 'extendedKeyUsage=serverAuth'"
+          - "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/rgw_key.pem -out /tmp/rgw_cert.pem -subj '/CN={node:node7}/O=Ceph Test/C=US' -addext 'subjectAltName=DNS:{node:node7},IP:{node_ip:node7}' -addext 'basicConstraints=CA:TRUE' -addext 'keyUsage=digitalSignature,keyEncipherment,keyCertSign' -addext 'extendedKeyUsage=serverAuth'"
           - "openssl x509 -in /tmp/rgw_cert.pem -text -noout"
           - "openssl rsa -in /tmp/rgw_key.pem -check -noout"
           - "bash -c 'c=$(openssl x509 -noout -modulus -in /tmp/rgw_cert.pem | openssl md5); k=$(openssl rsa -noout -modulus -in /tmp/rgw_key.pem | openssl md5); echo \"$c\"; echo \"$k\"; test \"$c\" = \"$k\"'"
@@ -291,15 +293,12 @@ tests:
   - test:
       abort-on-fail: true
       config:
-        sudo: true
-        role: client
-        commands:
-          - "bash -c 'ceph config-key get rgw/cert/rgw.rgw.ssl | sed -n \"/BEGIN CERTIFICATE/,/END CERTIFICATE/p\" > /etc/pki/ca-trust/source/anchors/rgw-reference.crt'"
-          - "test -s /etc/pki/ca-trust/source/anchors/rgw-reference.crt"
-          - "update-ca-trust extract"
-          - "bash -c 'for i in $(seq 1 6); do curl -sS --connect-timeout 10 -o /dev/null https://{node_ip:node7}:443 && exit 0; sleep 5; done; exit 1'"
+        roles:
+          - client
+        reference_config_key: rgw/cert/rgw.rgw.ssl
+        port: 443
       desc: Trust the reference certificate and confirm the client can reach RGW.
-      module: exec.py
+      module: copy_cephadm_root_ca_cert.py
       name: trust reference certificate
       polarion-id: CEPH-83573777
 
