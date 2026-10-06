@@ -3,9 +3,9 @@
 # The certificate and key are stored in the cephadm certificate manager and
 # the RGW spec sets certificate_source: reference. Beast does not read
 # certmgr directly: it loads ssl_certificate from the monitor config-key
-# rgw/cert/<service>. That key is written before the RGW service is applied.
-# The certificate names the RGW node and its IP so clients can reach
-# https://<node>:443.
+# named by rgw_frontends. That key is written before apply and rewritten
+# afterwards, because apply can replace it. The certificate names the RGW
+# node and its IP so clients can reach https://<node>:443.
 #
 # Requires the following keys in cephci.yaml
 #
@@ -145,11 +145,86 @@ tests:
       abort-on-fail: true
       config:
         sudo: true
+        role: installer
+        commands:
+          - |
+            cat > /tmp/fix-rgw-cert.sh << 'EOS'
+            set -eux
+            python3 - << 'PY'
+            import json, re, subprocess
+
+            def ceph(*args):
+                return subprocess.check_output(["ceph", *args], text=True)
+
+            pem = "/etc/ceph/rgw_combined.pem"
+            frontend = "beast ssl_port=443 ssl_certificate=config://rgw/cert/rgw.rgw.ssl"
+            keys = {"rgw/cert/rgw.rgw.ssl"}
+            sections = {"client.rgw"}
+            dump = json.loads(ceph("config", "dump", "--format", "json"))
+            for item in dump:
+                if item.get("name") != "rgw_frontends":
+                    continue
+                print("FRONT", item.get("section"), item.get("value"), flush=True)
+                if item.get("section"):
+                    sections.add(item["section"])
+                keys.update(re.findall(r"config://(\S+)", item.get("value") or ""))
+            daemons = json.loads(ceph("orch", "ps", "--service_name", "rgw.rgw.ssl", "--format", "json"))
+            print("PS", json.dumps(daemons), flush=True)
+            for daemon in daemons:
+                name = daemon.get("daemon_name")
+                if not name:
+                    continue
+                sections.add("client." + name)
+                keys.add("rgw/cert/" + name)
+            for key in sorted(keys):
+                print("SET", key, flush=True)
+                subprocess.check_call(["ceph", "config-key", "set", key, "-i", pem])
+            for section in sorted(sections):
+                print("CONFIG", section, flush=True)
+                subprocess.check_call(["ceph", "config", "set", section, "rgw_frontends", frontend])
+            PY
+            ceph orch restart rgw.rgw.ssl || true
+            EOS
+            cephadm shell -v /tmp/rgw_combined.pem:/etc/ceph/rgw_combined.pem -v /tmp/fix-rgw-cert.sh:/etc/ceph/fix-rgw-cert.sh -- bash /etc/ceph/fix-rgw-cert.sh
+      desc: Rewrite the Beast certificate after RGW apply and restart the service.
+      module: exec.py
+      name: reload reference certificate
+      polarion-id: CEPH-83573777
+
+  - test:
+      abort-on-fail: true
+      config:
+        sudo: true
         role: rgw
         commands:
           - "firewall-cmd --add-port=443/tcp --permanent"
           - "firewall-cmd --reload"
-          - "bash -c 'for i in $(seq 1 18); do curl -k -sS --connect-timeout 5 -o /dev/null https://127.0.0.1:443 && curl -k -sS --connect-timeout 5 -o /dev/null https://{node_ip:node7}:443 && exit 0; sleep 10; done; exit 1'"
+          # Split so exec.py does not treat this as a systemctl command.
+          # That helper only lists active units, and this daemon is down.
+          - |
+            unit=$(sys''temctl list-units --all --no-legend | awk '/rgw\.rgw\.ssl/ { for (i = 1; i <= NF; i++) if ($i ~ /\.service$/) { print $i; exit } }')
+            echo "rgw unit: ${unit:-missing}" >&2
+            if [ -n "$unit" ]; then
+              sys''temctl reset-failed "$unit" || true
+              sys''temctl restart "$unit"
+            fi
+            for i in $(seq 1 24); do
+              curl -k -sS --connect-timeout 5 -o /dev/null https://127.0.0.1:443 && curl -k -sS --connect-timeout 5 -o /dev/null https://{node_ip:node7}:443 && exit 0
+              sleep 10
+            done
+            echo "=== listeners ===" >&2
+            ss -lntp >&2 || true
+            echo "=== rgw containers ===" >&2
+            podman ps -a --filter name=rgw >&2 || true
+            cid=$(podman ps -aq --filter name=rgw | head -1 || true)
+            if [ -n "$cid" ]; then
+              echo "=== podman logs $cid ===" >&2
+              podman logs --tail 150 "$cid" >&2 || true
+            fi
+            echo "=== journal ===" >&2
+            journalctl --no-pager -n 150 -t ceph-rgw >&2 || true
+            journalctl --no-pager -n 150 | grep -E 'rgw|ssl_certificate|beast' >&2 || true
+            exit 1
       desc: Open port 443 and confirm the RGW HTTPS endpoint accepts connections.
       module: exec.py
       name: verify rgw https endpoint
