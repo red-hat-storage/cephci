@@ -1618,7 +1618,8 @@ def create_nfs_via_file_and_verify(
         service_id (str, optional): Passed to ``verify_nfs_ganesha_service`` so
             only the newly applied NFS cluster must be healthy.
         **kwargs: Optional ``timings`` dict and ``timings_key`` str to record when
-            ``ceph orch apply`` completes.
+            ``ceph orch apply`` completes. Optional ``nfs_name`` is an alias for
+            ``service_id`` (OC/PEC helpers).
     Returns:
         bool: True if apply and verification succeeded, else False.
     """
@@ -1666,8 +1667,9 @@ def create_nfs_via_file_and_verify(
                 triggered_at,
                 timings_key,
             )
+        scoped_id = service_id or kwargs.get("nfs_name")
         verify_nfs_ganesha_service(
-            node=installer_node, timeout=timeout, service_id=service_id
+            node=installer_node, timeout=timeout, service_id=scoped_id
         )
         log.info("NFS Ganesha spec file applied successfully.")
         nodes_for_coredump = None
