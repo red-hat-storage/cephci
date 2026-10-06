@@ -182,27 +182,171 @@ class GenerateServiceSpec:
                 subnets.append(subnet)
         return subnets
 
-    def _allocate_ingress_vip(self, placement_hosts=None):
-        """
-        Pick an unused IP from the host subnet for keepalived VIP.
+    # IBMC VM subnets are wide /18 blocks (not /24): the deployed VM's IP can
+    # land anywhere in 10.245.{0,64,128}.0/18. Each /18 block reserves 6
+    # floating IPs for RGW ingress VIPs, split 2-per-release so that
+    # tentacle/squid/reef pipelines landing in the same /18 block never fight
+    # over the same keepalived VIP.
+    _VIP_POOL_SUBNETS = {
+        128: "10.245.128.0/18",
+        64: "10.245.64.0/18",
+        0: "10.245.0.0/18",
+    }
+    RESERVED_INGRESS_VIPS = {
+        128: {
+            "tentacle": ["10.245.128.246", "10.245.128.247"],
+            "squid": ["10.245.128.248", "10.245.128.249"],
+            "reef": ["10.245.128.250", "10.245.128.251"],
+        },
+        64: {
+            "tentacle": ["10.245.64.246", "10.245.64.247"],
+            "squid": ["10.245.64.248", "10.245.64.249"],
+            "reef": ["10.245.64.250", "10.245.64.251"],
+        },
+        0: {
+            "tentacle": ["10.245.0.246", "10.245.0.247"],
+            "squid": ["10.245.0.248", "10.245.0.249"],
+            "reef": ["10.245.0.250", "10.245.0.251"],
+        },
+    }
 
-        Prefers the subnet of placement hosts when available so the VIP is on
-        the same L2/L3 domain as the ingress NICs (required on IBMC where
-        reserved floating IPs are outside the VM private CIDR).
+    def _get_placement_vip_bucket(self, placement_hosts=None):
         """
-        subnet = None
-        if placement_hosts:
-            for node in self.cluster.get_nodes():
-                if node.hostname in placement_hosts and getattr(node, "subnet", None):
-                    subnet = node.subnet
-                    break
-        if not subnet:
-            subnets = self._get_cluster_subnets()
-            if not subnets:
-                raise ValueError("virtual_ip: auto set but no node subnets found")
-            subnet = subnets[0]
+        Determine which reserved-pool /18 block the deployed VMs actually
+        landed in, derived from the real IP addresses of the VMs (not a
+        config value), so the VIP picked matches wherever IBMC placed them.
 
-        network = ipaddress.ip_network(subnet, strict=False)
+        Args:
+            placement_hosts (List): hostnames of the ingress placement nodes
+
+        Returns:
+            (bucket, node) tuple: bucket is a key of RESERVED_INGRESS_VIPS and
+            node is the matched CephNode (used to read its real subnet mask),
+            or (None, None) when no placement IP falls in a known pool.
+        """
+        nodes = self.cluster.get_nodes()
+        candidates = [
+            node
+            for node in nodes
+            if not placement_hosts or node.hostname in placement_hosts
+        ]
+        if not candidates:
+            candidates = nodes
+
+        for node in candidates:
+            ip = getattr(node, "ip_address", None)
+            if not ip:
+                continue
+            for bucket, cidr in self._VIP_POOL_SUBNETS.items():
+                try:
+                    if ipaddress.ip_address(ip) in ipaddress.ip_network(cidr):
+                        return bucket, node
+                except ValueError:
+                    continue
+        return None, None
+
+    def _get_vip_prefix(self, node, bucket):
+        """
+        Return the subnet prefix length to use for a reserved VIP.
+
+        Prefers the real subnet mask reported for the matched node so the
+        VIP's CIDR matches the actual NIC configuration; falls back to the
+        known IBMC pool width (/18) when the node has no subnet info.
+        """
+        subnet = getattr(node, "subnet", None) if node else None
+        if subnet:
+            try:
+                return ipaddress.ip_network(subnet, strict=False).prefixlen
+            except ValueError:
+                pass
+        return ipaddress.ip_network(self._VIP_POOL_SUBNETS[bucket]).prefixlen
+
+    def _next_reserved_vip(self, bucket, release):
+        """
+        Return the next unused reserved VIP for the given pool bucket/release.
+
+        Args:
+            bucket: key in RESERVED_INGRESS_VIPS (e.g. 128, 64, 0)
+            release (Str): release pool name (tentacle/squid/reef)
+
+        Returns:
+            IP (Str), or None if no reserved pool/IP is available
+        """
+        pool = self.RESERVED_INGRESS_VIPS.get(bucket, {}).get(release)
+        if not pool:
+            return None
+
+        key = f"{bucket}:{release}"
+        used_idx = getattr(self.cluster, "_cephci_reserved_vip_idx", {})
+        idx = used_idx.get(key, 0)
+        if idx >= len(pool):
+            raise ValueError(
+                f"No more reserved ingress VIPs available for release "
+                f"'{release}' in pool {bucket} (pool exhausted: {pool})"
+            )
+
+        used_idx[key] = idx + 1
+        self.cluster._cephci_reserved_vip_idx = used_idx
+        return pool[idx]
+
+    def _allocate_ingress_vip(self, placement_hosts=None, release=None):
+        """
+        Resolve the keepalived VIP for ingress.
+
+        When `release` is provided (tentacle/squid/reef), the VIP is picked
+        from the static reserved pool for that release, matched to the /18
+        block the deployed VMs actually landed in (determined from the
+        placement hosts' real IP addresses). This avoids blind free-IP
+        discovery across the whole subnet, which could race with other
+        concurrently running pipelines sharing the same IBMC subnet.
+
+        Falls back to free-IP discovery in the host subnet when no release
+        is given, or when the deployed VMs' subnet doesn't match any known
+        reserved pool (e.g. a different IBMC region/VPC not covered by
+        RESERVED_INGRESS_VIPS) -- this is a soft fallback, not a hard error,
+        so suites keep working against environments outside the known pools.
+        A pool match that is exhausted of reserved IPs, however, is treated
+        as a real conflict and still raises.
+        """
+        bucket, matched_node = self._get_placement_vip_bucket(placement_hosts)
+
+        if release:
+            if bucket is not None:
+                reserved_ip = self._next_reserved_vip(bucket, release)
+                if not reserved_ip:
+                    raise ValueError(
+                        f"virtual_ip: auto:{release} - unknown release pool "
+                        f"(expected one of {list(self.RESERVED_INGRESS_VIPS[bucket])})"
+                    )
+                prefix = self._get_vip_prefix(matched_node, bucket)
+                return f"{reserved_ip}/{prefix}"
+            LOG.warning(
+                "virtual_ip: auto:%s set but deployed VM IP does not fall in "
+                "any reserved pool %s; falling back to free-IP discovery in "
+                "the host subnet",
+                release,
+                list(self._VIP_POOL_SUBNETS.values()),
+            )
+
+        # Legacy fallback: pick an unused IP from the host subnet.
+        if matched_node and getattr(matched_node, "subnet", None):
+            node_subnet = matched_node.subnet
+        else:
+            node_subnet = None
+            if placement_hosts:
+                for node in self.cluster.get_nodes():
+                    if node.hostname in placement_hosts and getattr(
+                        node, "subnet", None
+                    ):
+                        node_subnet = node.subnet
+                        break
+            if not node_subnet:
+                subnets = self._get_cluster_subnets()
+                if not subnets:
+                    raise ValueError("virtual_ip: auto set but no node subnets found")
+                node_subnet = subnets[0]
+
+        network = ipaddress.ip_network(node_subnet, strict=False)
         used = set()
         for node in self.cluster.get_nodes():
             ip = getattr(node, "ip_address", None)
@@ -219,7 +363,7 @@ class GenerateServiceSpec:
             self.cluster._cephci_allocated_ingress_vips = allocated
             return f"{ip_str}/{network.prefixlen}"
 
-        raise ValueError(f"virtual_ip: auto found no free address in {subnet}")
+        raise ValueError(f"virtual_ip: auto found no free address in {node_subnet}")
 
     def get_hostnames(self, node_names):
         """
@@ -788,7 +932,11 @@ class GenerateServiceSpec:
                   label: rgw
                 spec:
                   backend_service: rgw.ceph-scale-test-y7nmci-node2
-                  virtual_ip: auto | <ip>/<prefix>   # auto = unused host-subnet IP
+                  virtual_ip: auto | auto:<release> | <ip>/<prefix>
+                    # auto         = unused host-subnet IP (legacy discovery)
+                    # auto:<release> = next IP from the release's reserved VIP
+                    #                   pool (tentacle/squid/reef), matched to
+                    #                   the subnet the VMs actually landed in
                   virtual_interface_networks: auto | [<cidr>, ...]
                   frontend_port: 8000
                   monitor_port: 1967
@@ -804,11 +952,19 @@ class GenerateServiceSpec:
 
         # Opt-in only: suite must set virtual_ip / virtual_interface_networks: auto
         ingress_spec = spec.setdefault("spec", {})
-        if ingress_spec.get("virtual_ip") == "auto":
+        virtual_ip_cfg = ingress_spec.get("virtual_ip")
+        if isinstance(virtual_ip_cfg, str) and virtual_ip_cfg.startswith("auto"):
+            release = None
+            if ":" in virtual_ip_cfg:
+                release = virtual_ip_cfg.split(":", 1)[1].strip() or None
             ingress_spec["virtual_ip"] = self._allocate_ingress_vip(
-                placement_hosts=spec["placement"].get("hosts")
+                placement_hosts=spec["placement"].get("hosts"), release=release
             )
-            LOG.info("Resolved virtual_ip: auto -> %s", ingress_spec["virtual_ip"])
+            LOG.info(
+                "Resolved virtual_ip: %s -> %s",
+                virtual_ip_cfg,
+                ingress_spec["virtual_ip"],
+            )
 
         if ingress_spec.get("virtual_interface_networks") == "auto":
             subnets = self._get_cluster_subnets()

@@ -164,7 +164,7 @@ tests:
                       - node4
                   spec:
                     backend_service: rgw.rgw.realm1
-                    virtual_ip: auto  # unused IP from host subnet (IBMC-safe)
+                    virtual_ip: auto:squid  # reserved VIP for squid (matched to deployed VM subnet)
                     virtual_interface_networks: auto
                     frontend_port: 443
                     monitor_port: 1967
@@ -192,7 +192,7 @@ tests:
                       - node6
                   spec:
                     backend_service: rgw.rgw.realm2
-                    virtual_ip: auto  # unused IP from host subnet (IBMC-safe)
+                    virtual_ip: auto:squid  # reserved VIP for squid (matched to deployed VM subnet)
                     virtual_interface_networks: auto
                     frontend_port: 8083
                     monitor_port: 1968
