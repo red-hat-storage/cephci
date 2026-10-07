@@ -1,0 +1,146 @@
+---
+#=======================================================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_multifs.yaml
+# Conf file : conf/pacific/cephfs/tier_0_fs.yaml
+# Test-Case Covered:
+#   CEPH-83573878 - Verify the option to enable/disable multiFS support
+#   CEPH-83573873 - Try creating 2 Filesystem using same Pool(negative)
+#   CEPH-83573872 - Tests the file system with fstab entries with multiple file systems and reboots with kernel mounts
+#   CEPH-83573871 - Tests the file system with fstab entries with multiple file systems and reboots with fuse mounts
+#   CEPH-83573870 - Create 2 Filesystem with default values on different MDS daemons
+#   CEPH-83573867 - Create 4-5 Filesystem randomly on different MDS daemons
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: multifs flag
+      module: multifs.multifs_flag.py
+      polarion-id: CEPH-83573878
+      desc: Tests the multifs flag functionality
+      abort-on-fail: false
+  - test:
+        name: multifs same pool
+        module: multifs.multifs_same_pool.py
+        polarion-id: CEPH-83573873
+        desc: Tests the file system with same pools
+        abort-on-fail: false
+  - test:
+        name: multifs reboot with fstab
+        module: multifs.multifs_kernelmounts.py
+        polarion-id: CEPH-83573872
+        desc: Tests the file system with fstab entries with multiple file systems and reboots using kernel mount
+        abort-on-fail: false
+  - test:
+      name: multifs reboot with fstab fuse
+      module: multifs.multifs_fusemounts.py
+      polarion-id: CEPH-83573871
+      desc: Tests the file system with fstab entries with multiple file systems and reboots using fuse mount
+      abort-on-fail: false
+  - test:
+      name: creation of multiple file systems wtih different MDS daemons
+      module: multifs.multifs_default_values.py
+      polarion-id: CEPH-83573870
+      desc: Create 2 Filesystem with default values on different MDS daemons
+      abort-on-fail: false
+  - test:
+      name: creation of multiple file systems
+      module: multifs.multifs_multiplefs.py
+      polarion-id: CEPH-83573867
+      desc: Create 4-5 Filesystem randomly on different MDS daemons
+      abort-on-fail: false

@@ -1,0 +1,624 @@
+---
+#=======================================================================================================================
+# Tier-level: 0
+# Test-Suite: tier-0_fs.yaml
+# Conf file : conf/quincy/cephfs/tier-0_fs.yaml
+# options : --cloud baremetal if required to run on baremetal
+# Test-Case Covered:
+#	CEPH-83573777: Execute the cluster deployment workflow with label placement.
+#	CEPH-XXXXX: FS_FIO_REPL_MAX_MDS_2
+#	CEPH-XXXXX: FS_FIO_REPL_MAX_MDS_1
+#	CEPH-XXXXX: FS_FIO_EC_MAX_MDS_1
+#	CEPH-XXXXX: FS_FIO_EC_MAX_MDS_2
+#   CEPH-83588102:
+      #FS_SPEC_REPL_MAX_MDS_2_SWBUILD
+      #FS_SPEC_REPL_MAX_MDS_2_VDA
+      #FS_SPEC_REPL_MAX_MDS_2_EDA_BLENDED
+      #FS_SPEC_REPL_MAX_MDS_2_AI_IMAGE
+      #FS_SPEC_REPL_MAX_MDS_2_GENOMICS
+      #FS_SPEC_REPL_MAX_MDS_1_SWBUILD
+      #FS_SPEC_REPL_MAX_MDS_1_VDA
+      #FS_SPEC_REPL_MAX_MDS_1_EDA_BLENDED
+      #FS_SPEC_REPL_MAX_MDS_1_AI_IMAGE
+      #FS_SPEC_REPL_MAX_MDS_1_GENOMICS
+      #FS_SPEC_EC_MAX_MDS_1_SWBUILD
+      #FS_SPEC_EC_MAX_MDS_1_VDA
+      #FS_SPEC_EC_MAX_MDS_1_EDA_BLENDED
+      #FS_SPEC_EC_MAX_MDS_1_AI_IMAGE
+      #FS_SPEC_EC_MAX_MDS_1_GENOMICS
+      #FS_SPEC_EC_MAX_MDS_2SWBUILD
+      #FS_SPEC_EC_MAX_MDS_2_VDA
+      #FS_SPEC_EC_MAX_MDS_2_EDA_BLENDED
+      #FS_SPEC_EC_MAX_MDS_2_AI_IMAGE
+      #FS_SPEC_EC_MAX_MDS_2_GENOMICS
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: FS_FIO_REPL_MAX_MDS_2
+      module: cephfs_fio_storage.py
+      config:
+        io_tool: fio
+        fs_name: cephfs
+        max_mds: 2
+        fio_config:
+          global_params:
+            ioengine: libaio
+            direct: "1"
+            size: [ "500m" ]
+            time_based: ""
+            runtime: "60"
+          workload_params:
+            random_rw:
+              rw: [ "read","write" ]
+              bs: 4k
+              numjobs: "2"
+              iodepth: [ "1" ]
+      desc: FS_FIO_REPL_MAX_MDS_2
+      polarion-id: CEPH-83575092
+      abort-on-fail: false
+
+  - test:
+      name: FS_FIO_REPL_MAX_MDS_1
+      module: cephfs_fio_storage.py
+      config:
+        io_tool: fio
+        fs_name: cephfs
+        max_mds: 1
+        fio_config:
+          global_params:
+            ioengine: libaio
+            direct: "1"
+            size: [ "500m" ]
+            time_based: ""
+            runtime: "60"
+          workload_params:
+            random_rw:
+              rw: [ "read","write" ]
+              bs: 4k
+              numjobs: "2"
+              iodepth: [ "1" ]
+      desc: FS_FIO_REPL_MAX_MDS_1
+      polarion-id: CEPH-83575092
+      abort-on-fail: false
+
+  - test:
+      name: FS_FIO_EC_MAX_MDS_1
+      module: cephfs_fio_storage.py
+      config:
+        io_tool: fio
+        fs_name: cephfs-ec
+        erasure: yes
+        max_mds: 1
+        fio_config:
+          global_params:
+            ioengine: libaio
+            direct: "1"
+            size: [ "500m" ]
+            time_based: ""
+            runtime: "60"
+          workload_params:
+            random_rw:
+              rw: [ "read","write" ]
+              bs: 4k
+              numjobs: "2"
+              iodepth: [ "1" ]
+      desc: FS_FIO_EC_MAX_MDS_1.
+      polarion-id: CEPH-83575092
+      abort-on-fail: false
+  - test:
+      name: FS_FIO_EC_MAX_MDS_2
+      module: cephfs_fio_storage.py
+      config:
+        io_tool: fio
+        fs_name: cephfs-ec
+        erasure: yes
+        max_mds: 2
+        fio_config:
+          global_params:
+            ioengine: libaio
+            direct: "1"
+            size: [ "500m" ]
+            time_based: ""
+            runtime: "60"
+          workload_params:
+            random_rw:
+              rw: [ "read","write" ]
+              bs: 4k
+              numjobs: "2"
+              iodepth: [ "1" ]
+      desc: FS_FIO_EC_MAX_MDS_2
+      polarion-id: CEPH-83575092
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Run SWBUILD Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_2_SWBUILD
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: SWBUILD
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 2
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run VDA Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_2_VDA
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: VDA
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 2
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run EDA_BLENDED Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_2_EDA_BLENDED
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: EDA_BLENDED
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 2
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run AI_IMAGE Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_2_AI_IMAGE
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: AI_IMAGE
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 2
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run GENOMICS Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_2_GENOMICS
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: GENOMICS
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 2
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run SWBUILD Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_1_SWBUILD
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: SWBUILD
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 1
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run VDA Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_1_VDA
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: VDA
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 1
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run EDA_BLENDED Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_1_EDA_BLENDED
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: EDA_BLENDED
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 1
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run AI_IMAGE Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_1_AI_IMAGE
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: AI_IMAGE
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 1
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run GENOMICS Workload"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_REPL_MAX_MDS_1_GENOMICS
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        benchmark: GENOMICS
+        parse_result: True
+        fs_name: cephfs
+        max_mds: 1
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+
+  - test:
+      abort-on-fail: false
+      desc: "Run SWBUILD Workload on EC FS max mds 1"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_1_SWBUILD
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 1
+        benchmark: SWBUILD
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run SWBUILD Workload on EC FS max mds 1"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_1_VDA
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 1
+        benchmark: VDA
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run EDA_BLENDED Workload on EC FS max mds 1"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_1_EDA_BLENDED
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 1
+        benchmark: EDA_BLENDED
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run AI_IMAGE Workload on EC FS max mds 1"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_1_AI_IMAGE
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 1
+        benchmark: AI_IMAGE
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+
+  - test:
+      abort-on-fail: false
+      desc: "Run GENOMICS Workload on EC FS max mds 1"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_1_GENOMICS
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 1
+        benchmark: GENOMICS
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+
+  - test:
+      abort-on-fail: false
+      desc: "Run SWBUILD Workload on EC FS max mds 2"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_2_SWBUILD
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 2
+        benchmark: SWBUILD
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run SWBUILD Workload on EC FS max mds 2"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_2_VDA
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 2
+        benchmark: VDA
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run EDA_BLENDED Workload on EC FS max mds 2"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_2_EDA_BLENDED
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 2
+        benchmark: EDA_BLENDED
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+  - test:
+      abort-on-fail: false
+      desc: "Run AI_IMAGE Workload on EC FS max mds 2"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_2_AI_IMAGE
+      polarion-id: "CEPH-XXXXX"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 2
+        benchmark: AI_IMAGE
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1
+
+  - test:
+      abort-on-fail: false
+      desc: "Run GENOMICS Workload on EC FS max mds 2"
+      module: cephfs_spec_storage.py
+      name: FS_SPEC_EC_MAX_MDS_2_GENOMICS
+      polarion-id: "CEPH-83588102"
+      config:
+        clients:
+          - client1
+        fs_name: cephfs-ec
+        parse_result: True
+        erasure: yes
+        max_mds: 2
+        benchmark: GENOMICS
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 1
+          Files_per_dir: 1
+          File_size: 1k
+          Instances: 1

@@ -1,0 +1,83 @@
+# Configuration for RBD two-cluster suites that also need NVMe-oF on destination.
+#   - vm-size: ci.standard.large
+#   - ceph-rbd2 node6: dedicated nvmeof-gw (orch-managed)
+#
+# ceph-rbd1 (5 nodes):
+#   node1 - mon, mgr, installer
+#   node2 - client
+#   node3 - osd, mon, mgr
+#   node4 - osd, mon
+#   node5 - osd, rbd-mirror
+#
+# ceph-rbd2 (6 nodes):
+#   node1 - mon, mgr, installer
+#   node2 - client
+#   node3 - osd, mon, mgr
+#   node4 - osd, mon
+#   node5 - osd, rbd-mirror
+#   node6 - nvmeof-gw  (NVMe-oF gateway; part of ceph orch)
+globals:
+  - ceph-cluster:
+      name: ceph-rbd1
+      vm-size: ci.standard.large
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+      node2:
+        role: client
+      node3:
+        role:
+          - osd
+          - mon
+          - mgr
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mon
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 15
+
+  - ceph-cluster:
+      name: ceph-rbd2
+      vm-size: ci.standard.large
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+      node2:
+        role: client
+      node3:
+        role:
+          - osd
+          - mon
+          - mgr
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mon
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        role:
+          - nvmeof-gw

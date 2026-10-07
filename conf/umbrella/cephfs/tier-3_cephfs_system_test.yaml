@@ -1,0 +1,182 @@
+# Cluster for System test on Baremetal environment.
+# The below defined cluster has 11 nodes.
+globals:
+  -
+    ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.8.128.0/21']
+      nodes:
+        -
+          hostname: magna021
+          id: node1
+          ip: 10.8.128.21
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna022
+          id: node2
+          ip: 10.8.128.22
+          root_password: passwd
+          role:
+            - mgr
+            - mon
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna023
+          id: node3
+          ip: 10.8.128.23
+          root_password: passwd
+          role:
+            - mon
+            - osd
+            - mds
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna024
+          id: node4
+          ip: 10.8.128.24
+          root_password: passwd
+          role:
+            - mds
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna025
+          id: node5
+          ip: 10.8.128.25
+          root_password: passwd
+          role:
+            - mds
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: magna026
+          id: node6
+          ip: 10.8.128.26
+          root_password: passwd
+          role:
+            - mds
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+        -
+          hostname: magna027
+          id: node7
+          ip: 10.8.128.27
+          root_password: passwd
+          role:
+            - mds
+            - osd
+            - nfs
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdd
+        -
+          hostname: magna028
+          id: node8
+          ip: 10.8.128.28
+          root_password: passwd
+          role:
+            - mds
+            - osd
+            - nfs
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+        -
+          hostname: rhel94client1
+          id: node101
+          ip: 10.8.131.201
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client2
+          id: node102
+          ip: 10.8.131.202
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client3
+          id: node103
+          ip: 10.8.131.203
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client4
+          id: node104
+          ip: 10.8.131.204
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client5
+          id: node105
+          ip: 10.8.131.205
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client6
+          id: node106
+          ip: 10.8.131.206
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client7
+          id: node107
+          ip: 10.8.131.207
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client8
+          id: node108
+          ip: 10.8.131.208
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client9
+          id: node109
+          ip: 10.8.131.209
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client10
+          id: node110
+          ip: 10.8.131.210
+          root_password: passwd
+          role:
+            - client
