@@ -145,15 +145,19 @@ tests:
 
   - test:
       abort-on-fail: true
+      config:
+        action: reload
       desc: Rewrite the Beast certificate after RGW apply and restart the service.
-      module: reload_rgw_reference_cert.py
+      module: rgw_reference_https.py
       name: reload reference certificate
       polarion-id: CEPH-83573777
 
   - test:
       abort-on-fail: true
+      config:
+        action: verify
       desc: Open port 443 and confirm the RGW HTTPS endpoint accepts connections.
-      module: verify_rgw_https_endpoint.py
+      module: rgw_reference_https.py
       name: verify rgw https endpoint
       polarion-id: CEPH-83573777
 
@@ -217,8 +221,10 @@ tests:
 
   - test:
       abort-on-fail: true
+      config:
+        action: trust
       desc: Trust the reference certificate and confirm the client can reach RGW.
-      module: trust_rgw_reference_cert.py
+      module: rgw_reference_https.py
       name: trust reference certificate
       polarion-id: CEPH-83573777
 
