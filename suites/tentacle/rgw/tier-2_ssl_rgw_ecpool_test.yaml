@@ -292,13 +292,8 @@ tests:
 
   - test:
       abort-on-fail: true
-      config:
-        roles:
-          - client
-        reference_config_key: rgw/cert/rgw.rgw.ssl
-        port: 443
       desc: Trust the reference certificate and confirm the client can reach RGW.
-      module: copy_cephadm_root_ca_cert.py
+      module: trust_rgw_reference_cert.py
       name: trust reference certificate
       polarion-id: CEPH-83573777
 
