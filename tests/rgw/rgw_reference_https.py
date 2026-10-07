@@ -152,11 +152,33 @@ def dump_failure(node):
     log_cmd(node, "journalctl --no-pager -n 150 | grep -E 'rgw|ssl_certificate|beast'")
 
 
+def open_https_port(node):
+    """Open 443 when firewalld is installed. Curl is the real check."""
+    cmd = f"firewall-cmd --add-port={PORT}/tcp --permanent && firewall-cmd --reload"
+    out, err, rc, _ = node.exec_command(
+        sudo=True,
+        cmd=cmd,
+        check_ec=False,
+        verbose=True,
+    )
+    text = f"{out or ''}\n{err or ''}"
+    if rc == 0:
+        LOG.info("Opened TCP %s in firewalld", PORT)
+        return
+    if rc == 127 or "command not found" in text:
+        LOG.info("firewall-cmd is not installed; leaving the firewall unchanged")
+        return
+    LOG.info("firewall-cmd returned %s; continuing to the port check", rc)
+    if out:
+        LOG.info(out)
+    if err:
+        LOG.info(err)
+
+
 def verify_endpoint(cluster):
     """Restart RGW and wait until HTTPS port 443 accepts connections."""
     node = cluster.get_nodes(role="rgw")[0]
-    node.exec_command(sudo=True, cmd=f"firewall-cmd --add-port={PORT}/tcp --permanent")
-    node.exec_command(sudo=True, cmd="firewall-cmd --reload")
+    open_https_port(node)
     unit = rgw_unit(node)
     LOG.info("rgw unit: %s", unit or "missing")
     if unit:
