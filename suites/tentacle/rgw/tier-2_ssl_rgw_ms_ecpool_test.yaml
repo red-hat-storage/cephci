@@ -83,8 +83,8 @@ tests:
                         rgw_realm: india
                         rgw_zonegroup: shared
                         rgw_zone: primary
-                        generate_cert: true
                         ssl: true
+                        certificate_source: inline
                       placement:
                         count_per_host: 2
                         nodes:
@@ -99,8 +99,8 @@ tests:
                         rgw_realm: india
                         rgw_zonegroup: shared
                         rgw_zone: primary
-                        generate_cert: true
                         ssl: true
+                        certificate_source: inline
                       placement:
                         count_per_host: 2
                         nodes:
@@ -166,8 +166,8 @@ tests:
                         rgw_realm: india
                         rgw_zonegroup: shared
                         rgw_zone: secondary
-                        generate_cert: true
                         ssl: true
+                        certificate_source: inline
                       placement:
                         count_per_host: 2
                         nodes:
@@ -182,8 +182,8 @@ tests:
                         rgw_realm: india
                         rgw_zonegroup: shared
                         rgw_zone: secondary
-                        generate_cert: true
                         ssl: true
+                        certificate_source: inline
                       placement:
                         count_per_host: 2
                         nodes:
