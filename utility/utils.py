@@ -2294,6 +2294,18 @@ def generate_self_signed_cert_on_rgw(rgw_node):
     log.debug(pem)
 
 
+def ensure_git(node):
+    """Install git when the node image does not provide the git command."""
+    out, _ = node.exec_command(cmd="command -v git", check_ec=False)
+    if out and out.strip():
+        return
+    log.info("git is not installed on %s; installing it", node.hostname)
+    if node.pkg_type == "deb":
+        node.exec_command(sudo=True, cmd="apt-get install -y git")
+    else:
+        node.exec_command(sudo=True, cmd="yum install -y git")
+
+
 def clone_the_repo(config, node, path_to_clone):
     """clone the repo on to test node.
 
@@ -2306,6 +2318,7 @@ def clone_the_repo(config, node, path_to_clone):
           node and clone the repo in it.
     """
     log.info("cloning the repo")
+    ensure_git(node)
     branch = config.get("branch", "master")
     log.info(f"branch: {branch}")
     repo_url = config.get("git-url")

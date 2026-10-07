@@ -24,6 +24,7 @@ from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode
 from utility.log import Log
+from utility.utils import ensure_git
 
 log = Log(__name__)
 S3CONF = """bucket_prefix : test-
@@ -182,6 +183,7 @@ def create_s3_conf(
 def clone_java_tests(node: CephNode) -> None:
     """Clone the Java S3tests repository on the given node."""
     repo_url = "https://github.com/ceph/java_s3tests.git"
+    ensure_git(node)
     node.exec_command(cmd="if test -d java_s3tests; then sudo rm -r java_s3tests; fi")
     node.exec_command(cmd=f"git clone {repo_url}")
 
@@ -333,6 +335,7 @@ def maven_setup(cluster: Ceph, config: dict, port) -> None:
 def install_req(node: CephNode, data: Dict) -> None:
     """Clone the Ceph repository on the given node."""
     repo_url = "https://github.com/ceph/ceph.git"
+    ensure_git(node)
     node.exec_command(cmd=f"git clone {repo_url}")
     node.exec_command(cmd="yum install java-21-openjdk -y", sudo=True)
     rgw_endpoint = data["endpoint"]
