@@ -29,7 +29,7 @@ from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rbd.initial_config import initial_rbd_config
-from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.utils import getdict, random_string, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.cluster_operations import (
     check_health,
@@ -151,101 +151,106 @@ def test_immutable_cache(rbd_obj, **kw):
             return 1
         log.info("Immutable object cache configuration completed successfully.")
 
-        for pool_type in rbd_obj.get("pool_types"):
-            rbd_config = kw.get("config", {}).get(pool_type, {})
-            multi_pool_config = getdict(rbd_config)
+        pool_types = rbd_obj.get("pool_types")
+        # Execute test on either Replicated or EC pool
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+        )
+        rbd_config = kw.get("config", {}).get(pool_type, {})
+        multi_pool_config = getdict(rbd_config)
 
-            for pool, pool_config in multi_pool_config.items():
-                multi_image_config = getdict(pool_config)
-                for image in multi_image_config.keys():
-                    image_spec = f"{pool}/{image}"
-                    config["image_spec"] = image_spec
-                    rbd = rbd_obj.get("rbd")
+        for pool, pool_config in multi_pool_config.items():
+            multi_image_config = getdict(pool_config)
+            for image in multi_image_config.keys():
+                image_spec = f"{pool}/{image}"
+                config["image_spec"] = image_spec
+                rbd = rbd_obj.get("rbd")
 
-                    with parallel() as p:
-                        log.info("Test to restart mon service along with cache test")
-                        p.spawn(
-                            operation,
-                            rados_obj,
-                            "restart_daemon_services",
-                            daemon="mon",
-                        )
-                        p.spawn(
-                            verify_immutable_cache_objects,
-                            rbd,
-                            client_node,
-                            **kw,
-                        )
+                with parallel() as p:
+                    log.info("Test to restart mon service along with cache test")
+                    p.spawn(
+                        operation,
+                        rados_obj,
+                        "restart_daemon_services",
+                        daemon="mon",
+                    )
+                    p.spawn(
+                        verify_immutable_cache_objects,
+                        rbd,
+                        client_node,
+                        **kw,
+                    )
 
-                    with parallel() as p:
-                        log.info("Test to restart osd service along with cache test")
-                        p.spawn(restart_osd, client_node=client_node)
-                        p.spawn(
-                            verify_immutable_cache_objects,
-                            rbd,
-                            client_node,
-                            **kw,
-                        )
+                with parallel() as p:
+                    log.info("Test to restart osd service along with cache test")
+                    p.spawn(restart_osd, client_node=client_node)
+                    p.spawn(
+                        verify_immutable_cache_objects,
+                        rbd,
+                        client_node,
+                        **kw,
+                    )
 
-                    with parallel() as p:
-                        log.info(
-                            "Test to restart ceph target service along with cache test"
-                        )
-                        p.spawn(restart_ceph_target, admin_node=admin_node)
-                        p.spawn(
-                            verify_immutable_cache_objects,
-                            rbd,
-                            client_node,
-                            **kw,
-                        )
+                with parallel() as p:
+                    log.info(
+                        "Test to restart ceph target service along with cache test"
+                    )
+                    p.spawn(restart_ceph_target, admin_node=admin_node)
+                    p.spawn(
+                        verify_immutable_cache_objects,
+                        rbd,
+                        client_node,
+                        **kw,
+                    )
 
-                    mon_host = ceph_cluster.get_nodes(role="mon")[0]
-                    with parallel() as p:
-                        log.info("Test to remove mon service along with cache test")
-                        cmd = f"ceph orch host label rm {mon_host.hostname} mon"
-                        out, err = client_node.exec_command(cmd=cmd, sudo=True)
+                mon_host = ceph_cluster.get_nodes(role="mon")[0]
+                with parallel() as p:
+                    log.info("Test to remove mon service along with cache test")
+                    cmd = f"ceph orch host label rm {mon_host.hostname} mon"
+                    out, err = client_node.exec_command(cmd=cmd, sudo=True)
 
-                        if err:
-                            raise Exception(f"ceph mon remove command failed as {err}")
+                    if err:
+                        raise Exception(f"ceph mon remove command failed as {err}")
 
-                        p.spawn(
-                            operation,
-                            mon_obj,
-                            "remove_mon_service",
-                            host=mon_host.hostname,
-                        )
-                        p.spawn(
-                            verify_immutable_cache_objects,
-                            rbd,
-                            client_node,
-                            **kw,
-                        )
+                    p.spawn(
+                        operation,
+                        mon_obj,
+                        "remove_mon_service",
+                        host=mon_host.hostname,
+                    )
+                    p.spawn(
+                        verify_immutable_cache_objects,
+                        rbd,
+                        client_node,
+                        **kw,
+                    )
 
-                    with parallel() as p:
-                        log.info(
-                            "Test to add the mon service back to the cluster with cache test"
-                        )
-                        cmd = f"ceph orch host label add {mon_host.hostname} mon"
-                        out, err = client_node.exec_command(cmd=cmd, sudo=True)
+                with parallel() as p:
+                    log.info(
+                        "Test to add the mon service back to the cluster with cache test"
+                    )
+                    cmd = f"ceph orch host label add {mon_host.hostname} mon"
+                    out, err = client_node.exec_command(cmd=cmd, sudo=True)
 
-                        if err:
-                            raise Exception(f"ceph mon add command failed as {err}")
+                    if err:
+                        raise Exception(f"ceph mon add command failed as {err}")
 
-                        time.sleep(10)
-                        p.spawn(
-                            operation,
-                            mon_obj,
-                            "check_mon_exists_on_host",
-                            host=mon_host.hostname,
-                        )
-                        p.spawn(
-                            verify_immutable_cache_objects,
-                            rbd,
-                            client_node,
-                            **kw,
-                        )
+                    time.sleep(10)
+                    p.spawn(
+                        operation,
+                        mon_obj,
+                        "check_mon_exists_on_host",
+                        host=mon_host.hostname,
+                    )
+                    p.spawn(
+                        verify_immutable_cache_objects,
+                        rbd,
+                        client_node,
+                        **kw,
+                    )
 
-                    check_health(client_node)
+                check_health(client_node)
     except Exception as err:
         log.error(err)
         return 1

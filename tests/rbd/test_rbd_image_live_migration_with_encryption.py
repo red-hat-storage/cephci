@@ -50,6 +50,7 @@ from ceph.rbd.utils import (
     get_md5sum_rbd_image,
     getdict,
     random_string,
+    select_pool_type,
 )
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.encryption import create_passphrase_file
@@ -76,48 +77,49 @@ def migration_encrypted_rbd_images(rbd_obj, client, namespace, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=pool_types,
+    )
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            encryption_type = random.choice(
-                kw.get("config", {}).get("encryption_type", {})
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        encryption_type = random.choice(kw.get("config", {}).get("encryption_type", {}))
+        kw.update({f"{pool}": {}})
+        kw[pool].update({"encryption_type": encryption_type})
+        kw[pool].update({"pool_type": pool_type})
+        image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
+        kw[pool].update({"image": image})
+
+        if namespace:
+            # Create Namespace in pool
+            namespace_name = "namespace" + random_string(len=5)
+            rc = create_namespace_and_verify(
+                **{
+                    "pool-name": pool,
+                    "namespace": namespace_name,
+                    "client": client,
+                }
             )
-            kw.update({f"{pool}": {}})
-            kw[pool].update({"encryption_type": encryption_type})
-            kw[pool].update({"pool_type": pool_type})
-            image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
-            kw[pool].update({"image": image})
+            if rc != 0:
+                raise Exception("Error creating namespace in pool " + {pool})
+            # Set image Spec
+            image_spec = f"{pool}/{namespace_name}/{image}"
+        else:
+            # Set image Spec
+            image_spec = f"{pool}/{image}"
 
-            if namespace:
-                # Create Namespace in pool
-                namespace_name = "namespace" + random_string(len=5)
-                rc = create_namespace_and_verify(
-                    **{
-                        "pool-name": pool,
-                        "namespace": namespace_name,
-                        "client": client,
-                    }
-                )
-                if rc != 0:
-                    raise Exception("Error creating namespace in pool " + {pool})
-                # Set image Spec
-                image_spec = f"{pool}/{namespace_name}/{image}"
-            else:
-                # Set image Spec
-                image_spec = f"{pool}/{image}"
+        err = run_io_on_encryption_formatted_image(rbd, pool, image, image_spec, **kw)
+        if err:
+            return 1
 
-            err = run_io_on_encryption_formatted_image(
-                rbd, pool, image, image_spec, **kw
-            )
-            if err:
-                return 1
-
-            err = migrate_check_consistency(rbd, image_spec, **kw)
-            if err:
-                return 1
+        err = migrate_check_consistency(rbd, image_spec, **kw)
+        if err:
+            return 1
 
     return 0
 
@@ -449,7 +451,6 @@ def run(**kw):
         kw.update({"cleanup_files": []})
 
         if rbd_obj:
-            log.info("Executing test on Replicated and EC pool")
             if kw.get("config")["operation"] == "CEPH-83596443":
                 namespace = True
             else:

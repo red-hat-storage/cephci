@@ -49,6 +49,7 @@ import datetime
 import time
 
 from ceph.parallel import parallel
+from ceph.rbd.utils import select_pool_type
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from tests.rbd_mirror.rbd_mirror_utils import fail_back
@@ -97,9 +98,20 @@ def run(**kw):
             },
         }
         kw["config"].update(pool_image_config)
+
+    # Run on either replicated or EC pool
+    available_pool_types = [
+        pt
+        for pt in ["rep_pool_config", "ec_pool_config"]
+        if pt in kw.get("config", {}) and kw["config"][pt].get("pool")
+    ]
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=available_pool_types,
+        apply_pool_only=True,
+    )
     imagespecs = [
-        f'{kw["config"]["rep_pool_config"]["pool"]}/{kw["config"]["rep_pool_config"]["image"]}',
-        f'{kw["config"]["ec_pool_config"]["pool"]}/{kw["config"]["ec_pool_config"]["image"]}',
+        f'{kw["config"][pool_type]["pool"]}/{kw["config"][pool_type]["image"]}',
     ]
 
     delay = config.get("delay", 600)
