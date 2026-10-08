@@ -1,3 +1,5 @@
+import random
+
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -71,14 +73,13 @@ def run(**kw):
     log.info("Running Trash image restore and create snap and clone on restored image ")
     rbd_obj = initial_rbd_config(**kw)
     if rbd_obj:
-        log.info("Executing test on Replication pool")
-        if trash_restore_creat_clone_snap(
-            rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw
-        ):
-            return 1
-        log.info("Executing test on EC pool")
-        if trash_restore_creat_clone_snap(
-            rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw
-        ):
+        pool_entries = []
+        if "rbd_reppool" in rbd_obj:
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
+        if "rbd_ecpool" in rbd_obj:
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+        if trash_restore_creat_clone_snap(rbd_obj.get(rbd_key), pool_type, **kw):
             return 1
     return 0

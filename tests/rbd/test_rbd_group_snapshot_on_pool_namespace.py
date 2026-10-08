@@ -32,6 +32,7 @@ Test Case Flow:
 """
 
 import json
+import random
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import get_md5sum_rbd_image, getdict, random_string
@@ -62,169 +63,166 @@ def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            namespace = "namespace_" + random_string(len=5)
-            kw["namespace"] = namespace
-            rc = create_namespace_and_verify(**kw)
-            if rc != 0:
-                return rc
-            images = (
-                "test_image1_" + random_string(len=5),
-                "test_image2_" + random_string(len=5),
-            )
-            for image in images:
-                create_kw = {"image-spec": f"{pool}/{namespace}/{image}", "size": "1G"}
-                out, err = rbd.create(**create_kw)
-                if err:
-                    log.error(
-                        f"Image {pool}/{namespace}/{image} failed with error {err}"
-                    )
-                    return 1
-                else:
-                    log.info(f"Image {pool}/{namespace}/{image} creation is complete")
-
-            bench_kw = kw.get("config", {}).get("io", {})
-            bench_kw.update({"image-spec": f"{pool}/{namespace}/{images[0]}"})
-
-            out, err = rbd.bench(**bench_kw)
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        namespace = "namespace_" + random_string(len=5)
+        kw["namespace"] = namespace
+        rc = create_namespace_and_verify(**kw)
+        if rc != 0:
+            return rc
+        images = (
+            "test_image1_" + random_string(len=5),
+            "test_image2_" + random_string(len=5),
+        )
+        for image in images:
+            create_kw = {"image-spec": f"{pool}/{namespace}/{image}", "size": "1G"}
+            out, err = rbd.create(**create_kw)
             if err:
-                log.error(
-                    f"rbd bench on {pool}/{namespace}/{images[0]} failed with error {err}"
-                )
+                log.error(f"Image {pool}/{namespace}/{image} failed with error {err}")
                 return 1
             else:
-                log.info(f"rbd bench on {pool}/{namespace}/{images[0]} is complete")
+                log.info(f"Image {pool}/{namespace}/{image} creation is complete")
 
-            md5_before_snap = get_md5sum_rbd_image(
-                image_spec=f"{pool}/{namespace}/{images[0]}",
-                rbd=rbd,
-                client=client,
-                file_path="file" + random_string(len=5),
+        bench_kw = kw.get("config", {}).get("io", {})
+        bench_kw.update({"image-spec": f"{pool}/{namespace}/{images[0]}"})
+
+        out, err = rbd.bench(**bench_kw)
+        if err:
+            log.error(
+                f"rbd bench on {pool}/{namespace}/{images[0]} failed with error {err}"
             )
-            log.info(f"md5 before snap is {md5_before_snap}")
+            return 1
+        else:
+            log.info(f"rbd bench on {pool}/{namespace}/{images[0]} is complete")
 
-            # Create a group and add the image to an RBD group
-            group = kw.get("config", {}).get("group", "image_group_default")
-            group_create_kw = {
-                "client": client,
-                "pool": pool,
-                "group": group,
-                "namespace": namespace,
-            }
-            rc = create_group_and_verify(**group_create_kw)
-            if rc != 0:
-                return rc
+        md5_before_snap = get_md5sum_rbd_image(
+            image_spec=f"{pool}/{namespace}/{images[0]}",
+            rbd=rbd,
+            client=client,
+            file_path="file" + random_string(len=5),
+        )
+        log.info(f"md5 before snap is {md5_before_snap}")
 
-            # Add images to the group
-            add_image_group_kw = {
-                "group-spec": f"{pool}/{namespace}/{group}",
-                "image-spec": f"{pool}/{namespace}/{images[0]}",
-                "client": client,
-            }
-            rc = add_image_to_group_and_verify(**add_image_group_kw)
-            if rc != 0:
-                return rc
+        # Create a group and add the image to an RBD group
+        group = kw.get("config", {}).get("group", "image_group_default")
+        group_create_kw = {
+            "client": client,
+            "pool": pool,
+            "group": group,
+            "namespace": namespace,
+        }
+        rc = create_group_and_verify(**group_create_kw)
+        if rc != 0:
+            return rc
 
-            snap = kw.get("config", {}).get("snap", "group_snap_default")
+        # Add images to the group
+        add_image_group_kw = {
+            "group-spec": f"{pool}/{namespace}/{group}",
+            "image-spec": f"{pool}/{namespace}/{images[0]}",
+            "client": client,
+        }
+        rc = add_image_to_group_and_verify(**add_image_group_kw)
+        if rc != 0:
+            return rc
 
-            # Create group snapshot
-            rc = create_snap_and_verify(
-                client=client, pool=pool, group=group, snap=snap, namespace=namespace
+        snap = kw.get("config", {}).get("snap", "group_snap_default")
+
+        # Create group snapshot
+        rc = create_snap_and_verify(
+            client=client, pool=pool, group=group, snap=snap, namespace=namespace
+        )
+        if rc != 0:
+            return rc
+
+        # fetch snap id
+        out = rbd.snap.ls(all=f"{pool}/{namespace}/{images[0]}", format="json")
+        out_json = json.loads(out[0])
+        for entry in out_json:
+            if "namespace" in entry:
+                if (
+                    entry["namespace"].get("type") == "group"
+                    and entry["namespace"].get("pool") == pool
+                    and entry["namespace"].get("group") == group
+                    and entry["namespace"].get("group snap") == snap
+                ):
+                    snap_id = int(entry["id"])
+        log.info(f"Snap id is {snap_id} ")
+
+        # Clone the group snapshot with clone_format=2
+        clone = kw.get("config", {}).get("clone", "clone_group_snap_default")
+        clone_spec = {
+            "snap-id": snap_id,
+            "source-snap-spec": f"{pool}/{namespace}/{images[0]}",
+            "dest-image-spec": f"{pool}/{namespace}/{clone}",
+            "rbd-default-clone-format": 2,
+        }
+        _, err = rbd.clone(**clone_spec)
+        if err:
+            log.error(
+                f"Clone creation failed for {pool}/{namespace}/{image} with error {err}"
             )
-            if rc != 0:
-                return rc
+            return 1
+        else:
+            log.info(f"Clone created successfully for {pool}/{namespace}/{image}")
 
-            # fetch snap id
-            out = rbd.snap.ls(all=f"{pool}/{namespace}/{images[0]}", format="json")
-            out_json = json.loads(out[0])
-            for entry in out_json:
-                if "namespace" in entry:
-                    if (
-                        entry["namespace"].get("type") == "group"
-                        and entry["namespace"].get("pool") == pool
-                        and entry["namespace"].get("group") == group
-                        and entry["namespace"].get("group snap") == snap
-                    ):
-                        snap_id = int(entry["id"])
-            log.info(f"Snap id is {snap_id} ")
-
-            # Clone the group snapshot with clone_format=2
-            clone = kw.get("config", {}).get("clone", "clone_group_snap_default")
-            clone_spec = {
-                "snap-id": snap_id,
-                "source-snap-spec": f"{pool}/{namespace}/{images[0]}",
-                "dest-image-spec": f"{pool}/{namespace}/{clone}",
-                "rbd-default-clone-format": 2,
-            }
-            _, err = rbd.clone(**clone_spec)
-            if err:
-                log.error(
-                    f"Clone creation failed for {pool}/{namespace}/{image} with error {err}"
-                )
-                return 1
-            else:
-                log.info(f"Clone created successfully for {pool}/{namespace}/{image}")
-
-            out, err = rbd.bench(**bench_kw)
-            if err:
-                log.error(
-                    f"rbd bench on {pool}/{namespace}/{images[0]} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(f"rbd bench on {pool}/{namespace}/{images[0]} is complete")
-
-            md5_after_modification = get_md5sum_rbd_image(
-                image_spec=f"{pool}/{namespace}/{images[0]}",
-                rbd=rbd,
-                client=client,
-                file_path="file" + random_string(len=5),
+        out, err = rbd.bench(**bench_kw)
+        if err:
+            log.error(
+                f"rbd bench on {pool}/{namespace}/{images[0]} failed with error {err}"
             )
-            log.info(
-                f"md5 after modification of {images[0]} is {md5_after_modification}"
+            return 1
+        else:
+            log.info(f"rbd bench on {pool}/{namespace}/{images[0]} is complete")
+
+        md5_after_modification = get_md5sum_rbd_image(
+            image_spec=f"{pool}/{namespace}/{images[0]}",
+            rbd=rbd,
+            client=client,
+            file_path="file" + random_string(len=5),
+        )
+        log.info(f"md5 after modification of {images[0]} is {md5_after_modification}")
+
+        rollback_kw = {
+            "client": client,
+            "pool": pool,
+            "namespace": namespace,
+            "group": group,
+            "snap": snap,
+        }
+        rollback_to_snap(**rollback_kw)
+        if rc != 0:
+            return rc
+
+        md5_after_rollback = get_md5sum_rbd_image(
+            image_spec=f"{pool}/{namespace}/{images[0]}",
+            rbd=rbd,
+            client=client,
+            file_path="file" + random_string(len=5),
+        )
+        log.info(f"md5 after rollback is {md5_after_rollback}")
+
+        if md5_before_snap == md5_after_rollback:
+            log.info("md5 before snap is same as after snap rollback")
+            log.info("Group is reverted to the state captured in snap")
+        else:
+            log.error("md5 before snap is not equal to that of after snap rollback")
+            log.error("Group is not reverted to the state captured in snap")
+            return 1
+        _, err = rbd.group.remove(**{"group-spec": f"{pool}/{namespace}/{group}"})
+        if err:
+            log.error(
+                f"Remove namespace group {pool}/{namespace}/{group} failed with error {err}"
             )
-
-            rollback_kw = {
-                "client": client,
-                "pool": pool,
-                "namespace": namespace,
-                "group": group,
-                "snap": snap,
-            }
-            rollback_to_snap(**rollback_kw)
-            if rc != 0:
-                return rc
-
-            md5_after_rollback = get_md5sum_rbd_image(
-                image_spec=f"{pool}/{namespace}/{images[0]}",
-                rbd=rbd,
-                client=client,
-                file_path="file" + random_string(len=5),
-            )
-            log.info(f"md5 after rollback is {md5_after_rollback}")
-
-            if md5_before_snap == md5_after_rollback:
-                log.info("md5 before snap is same as after snap rollback")
-                log.info("Group is reverted to the state captured in snap")
-            else:
-                log.error("md5 before snap is not equal to that of after snap rollback")
-                log.error("Group is not reverted to the state captured in snap")
-                return 1
-            _, err = rbd.group.remove(**{"group-spec": f"{pool}/{namespace}/{group}"})
-            if err:
-                log.error(
-                    f"Remove namespace group {pool}/{namespace}/{group} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(
-                    f"Remove namespace group {pool}/{namespace}/{images[0]} completed"
-                )
+            return 1
+        else:
+            log.info(f"Remove namespace group {pool}/{namespace}/{images[0]} completed")
     return 0
 
 

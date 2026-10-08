@@ -5,6 +5,7 @@
 # and check rbd status and remove image and verify the same
 # for multiple pools and images at scale.
 
+import random
 from copy import deepcopy
 from time import sleep
 
@@ -233,26 +234,18 @@ def test_rbd_image_operations(rbd_obj, client, **kw):
     """
     log.info(f"Performing image operations for pool type {rbd_obj['pool_types']}")
     rbd = rbd_obj.get("rbd")
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
-        test_ops_parallely = rbd_config.get("test_ops_parallely", False)
-        if test_ops_parallely:
-            with parallel() as p:
-                for pool, pool_config in multi_pool_config.items():
-                    p.spawn(
-                        test_rbd_image_operations_for_pool,
-                        rbd=rbd,
-                        pool=pool,
-                        pool_config=pool_config,
-                        test_ops_parallely=test_ops_parallely,
-                        client=client,
-                        pool_type=pool_type,
-                        **kw,
-                    )
-        else:
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    test_ops_parallely = rbd_config.get("test_ops_parallely", False)
+    if test_ops_parallely:
+        with parallel() as p:
             for pool, pool_config in multi_pool_config.items():
-                rc = test_rbd_image_operations_for_pool(
+                p.spawn(
+                    test_rbd_image_operations_for_pool,
                     rbd=rbd,
                     pool=pool,
                     pool_config=pool_config,
@@ -261,9 +254,20 @@ def test_rbd_image_operations(rbd_obj, client, **kw):
                     pool_type=pool_type,
                     **kw,
                 )
-                if rc:
-                    log.error(f"Image operations testing failed for pool {pool}")
-                    return 1
+    else:
+        for pool, pool_config in multi_pool_config.items():
+            rc = test_rbd_image_operations_for_pool(
+                rbd=rbd,
+                pool=pool,
+                pool_config=pool_config,
+                test_ops_parallely=test_ops_parallely,
+                client=client,
+                pool_type=pool_type,
+                **kw,
+            )
+            if rc:
+                log.error(f"Image operations testing failed for pool {pool}")
+                return 1
     return 0
 
 

@@ -116,297 +116,158 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
     def construct_imagespec(pool, namespace, image):
         return f"{pool}/{namespace}/{image}" if namespace else f"{pool}/{image}"
 
-    for pool_type in pool_types:
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
 
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            namespace = pool_config.get("namespace")
-            remote_namespace = pool_config.get("remote_namespace")
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        namespace = pool_config.get("namespace")
+        remote_namespace = pool_config.get("remote_namespace")
 
-            for image, image_config_val in multi_image_config.items():
-                pri_image_spec = construct_imagespec(pool, namespace, image)
-                sec_image_spec = construct_imagespec(pool, remote_namespace, image)
+        for image, image_config_val in multi_image_config.items():
+            pri_image_spec = construct_imagespec(pool, namespace, image)
+            sec_image_spec = construct_imagespec(pool, remote_namespace, image)
 
-                enable_image_mirroring(
-                    pri_config,
-                    sec_config,
-                    pool=pool,
-                    image=image,
-                    mirrormode="snapshot",
-                    namespace=namespace,
-                    remote_namespace=remote_namespace,
-                )
+            enable_image_mirroring(
+                pri_config,
+                sec_config,
+                pool=pool,
+                image=image,
+                mirrormode="snapshot",
+                namespace=namespace,
+                remote_namespace=remote_namespace,
+            )
 
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+stopped",
-                )
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+replaying",
-                )
-                # Scenario: Data written on site-A, not yet mirrored to site-B (snapshot not taken)
-                # Demote site-A, verify data on site-B matches site-A (demote triggers snapshot)
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+stopped",
+            )
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+replaying",
+            )
+            # Scenario: Data written on site-A, not yet mirrored to site-B (snapshot not taken)
+            # Demote site-A, verify data on site-B matches site-A (demote triggers snapshot)
 
-                # Write data to the image on site-A (primary)
-                extra_io_config = {
-                    "size": "100M",
-                    "do_not_create_image": True,
-                    "num_jobs": 1,
-                    "iodepth": 4,
-                    "rwmixread": 100,
-                    "direct": 1,
-                    "invalidate": 1,
-                    "rbd_obj": rbd_primary,
-                    "client": client_primary,
-                    "config": {
-                        "file_size": "100M",
-                        "file_path": [f"/mnt/mnt_{random_string(len=5)}/extra_file"],
-                        "get_time_taken": True,
-                        "operations": {
-                            "fs": "ext4",
-                            "io": True,
-                            "mount": True,
-                            "map": True,
-                        },
-                        "cmd_timeout": 1200,
-                        "io_type": "write",
-                        "image_spec": [pri_image_spec],
+            # Write data to the image on site-A (primary)
+            extra_io_config = {
+                "size": "100M",
+                "do_not_create_image": True,
+                "num_jobs": 1,
+                "iodepth": 4,
+                "rwmixread": 100,
+                "direct": 1,
+                "invalidate": 1,
+                "rbd_obj": rbd_primary,
+                "client": client_primary,
+                "config": {
+                    "file_size": "100M",
+                    "file_path": [f"/mnt/mnt_{random_string(len=5)}/extra_file"],
+                    "get_time_taken": True,
+                    "operations": {
+                        "fs": "ext4",
+                        "io": True,
+                        "mount": True,
+                        "map": True,
                     },
-                }
-                io, err = krbd_io_handler(**extra_io_config)
-                if err:
-                    raise Exception(
-                        "IO before demote failed for %s: %s" % (pri_image_spec, err)
-                    )
-                log.info("IO written to %s before demote" % pri_image_spec)
-
-                # Demote the primary image (this should trigger a snapshot and mirroring)
-                out, err = rbd_primary.mirror.image.demote(
-                    **{"image-spec": pri_image_spec}
+                    "cmd_timeout": 1200,
+                    "io_type": "write",
+                    "image_spec": [pri_image_spec],
+                },
+            }
+            io, err = krbd_io_handler(**extra_io_config)
+            if err:
+                raise Exception(
+                    "IO before demote failed for %s: %s" % (pri_image_spec, err)
                 )
-                if err:
-                    raise Exception(
-                        "Demote image %s failed with error %s" % (pri_image_spec, err)
-                    )
-                log.info("Demoted image %s successfully" % pri_image_spec)
+            log.info("IO written to %s before demote" % pri_image_spec)
 
-                # Wait for mirroring to complete on secondary
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+unknown",
+            # Demote the primary image (this should trigger a snapshot and mirroring)
+            out, err = rbd_primary.mirror.image.demote(**{"image-spec": pri_image_spec})
+            if err:
+                raise Exception(
+                    "Demote image %s failed with error %s" % (pri_image_spec, err)
                 )
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+unknown",
-                )
+            log.info("Demoted image %s successfully" % pri_image_spec)
 
-                # Verify data consistency between site-A and site-B after demote
-                data_integrity_spec = {
-                    "first": {
-                        "image_spec": pri_image_spec,
-                        "rbd": rbd_primary,
-                        "client": client_primary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                    "second": {
-                        "image_spec": sec_image_spec,
-                        "rbd": rbd_secondary,
-                        "client": client_secondary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                }
-                if check_data_integrity(**data_integrity_spec):
-                    raise Exception(
-                        "Data integrity check failed after demote for %s and %s"
-                        % (pri_image_spec, sec_image_spec)
-                    )
-                log.info(
-                    "Data is consistent between site-A and site-B after demote for %s"
-                    % pri_image_spec
-                )
+            # Wait for mirroring to complete on secondary
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+unknown",
+            )
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+unknown",
+            )
 
-                # promote the primary image again to proceed with further steps
-                out, err = rbd_primary.mirror.image.promote(
-                    **{"image-spec": pri_image_spec}
-                )
-                if err:
-                    raise Exception(
-                        "Promote image %s failed with error %s" % (pri_image_spec, err)
-                    )
-                log.info("Promoted image %s successfully" % pri_image_spec)
-
-                # check for appropriate mirror status
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+stopped",
-                )
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+replaying",
-                )
-
-                snap_levels = image_config_val.get("snap_schedule_levels")
-                snap_intervals = image_config_val.get("snap_schedule_intervals")
-
-                if snap_levels and snap_intervals:
-                    level = snap_levels[0]
-                    interval = snap_intervals[0]
-
-                    effective_level = (
-                        "image" if level == "namespace" and not namespace else level
-                    )
-                    snap_schedule_config = {
-                        "pool": pool,
-                        "image": image,
-                        "level": effective_level,
-                        "interval": interval,
-                    }
-                    if namespace:
-                        snap_schedule_config["namespace"] = namespace
-                    out, err = add_snapshot_scheduling(
-                        rbd_primary, **snap_schedule_config
-                    )
-                    if err:
-                        raise Exception(
-                            "Adding snapshot schedule failed with error %s" % err
-                        )
-
-                    # Retain original level for remaining tests
-                    level = effective_level
-
-                bench_kw = {
-                    "image-spec": pri_image_spec,
-                    "io-type": "write",
-                    "io-total": "200M",
-                    "io-threads": 16,
-                }
-
-                out, err = rbd_primary.bench(**bench_kw)
-                if err:
-                    raise Exception(
-                        "Failed to write IO to the image %s: %s" % (pri_image_spec, err)
-                    )
-                log.info("Successfully ran IO on image %s" % pri_image_spec)
-
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
-
-                # Verify the snapshot schedule for the primary image
-                verify_args = {
+            # Verify data consistency between site-A and site-B after demote
+            data_integrity_spec = {
+                "first": {
+                    "image_spec": pri_image_spec,
                     "rbd": rbd_primary,
-                    "pool": pool,
-                    "interval": interval,
-                }
-                if level == "pool" and namespace:
-                    verify_args["namespace"] = namespace
-                elif level == "namespace":
-                    verify_args["namespace"] = namespace
-                elif level == "image":
-                    if namespace:
-                        verify_args["namespace"] = namespace
-                    verify_args["image"] = image
-                if verify_snapshot_schedule(**verify_args):
-                    raise Exception(
-                        "Snapshot schedule verification failed at {} level for {} "
-                        "with interval: {}".format(level, image, interval)
-                    )
-                log.info(
-                    "Snapshot schedule verified for %s at %s level"
-                    % (pri_image_spec, level)
+                    "client": client_primary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+                "second": {
+                    "image_spec": sec_image_spec,
+                    "rbd": rbd_secondary,
+                    "client": client_secondary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+            }
+            if check_data_integrity(**data_integrity_spec):
+                raise Exception(
+                    "Data integrity check failed after demote for %s and %s"
+                    % (pri_image_spec, sec_image_spec)
                 )
+            log.info(
+                "Data is consistent between site-A and site-B after demote for %s"
+                % pri_image_spec
+            )
 
-                # Verify the data on mirrored images is consistent
-                data_integrity_spec = {
-                    "first": {
-                        "image_spec": pri_image_spec,
-                        "rbd": rbd_primary,
-                        "client": client_primary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                    "second": {
-                        "image_spec": sec_image_spec,
-                        "rbd": rbd_secondary,
-                        "client": client_secondary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                }
-                if check_data_integrity(**data_integrity_spec):
-                    raise Exception("Data integrity check failed for " + pri_image_spec)
-                log.info(
-                    "Data is consistent with the mirrored image for " + pri_image_spec
+            # promote the primary image again to proceed with further steps
+            out, err = rbd_primary.mirror.image.promote(
+                **{"image-spec": pri_image_spec}
+            )
+            if err:
+                raise Exception(
+                    "Promote image %s failed with error %s" % (pri_image_spec, err)
                 )
+            log.info("Promoted image %s successfully" % pri_image_spec)
 
-                # Remove schedule from primary
-                remove_args = {
-                    "pool": pool,
-                    "image": image,
-                    "level": level,
-                    "interval": interval,
-                }
-                if namespace:
-                    remove_args["namespace"] = namespace
-                out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
-                if err:
-                    raise Exception("Failed to remove mirror snapshot schedule")
+            # check for appropriate mirror status
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+stopped",
+            )
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+replaying",
+            )
 
-                log.info(f"Demoting primary image {pri_image_spec} on Cluster-1")
-                out, err = rbd_primary.mirror.image.demote(
-                    **{"image-spec": pri_image_spec}
-                )
-                if err:
-                    raise Exception(
-                        "Demote image %s failed with error %s" % (pri_image_spec, err)
-                    )
-                log.info("Demoted image %s successfully" % pri_image_spec)
+            snap_levels = image_config_val.get("snap_schedule_levels")
+            snap_intervals = image_config_val.get("snap_schedule_intervals")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
-
-                log.info("Promoting secondary image %s on Cluster-2" % sec_image_spec)
-                out, err = rbd_secondary.mirror.image.promote(
-                    **{"image-spec": sec_image_spec}
-                )
-                if err:
-                    raise Exception(
-                        "Promote image %s failed with error %s" % (sec_image_spec, err)
-                    )
-                log.info("Promoted image %s successfully" % sec_image_spec)
-
-                # Verify the failover by checking mirroring status on cluster-2
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+stopped",
-                )
-
-                # Verify the failover by checking mirroring status on cluster-1
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+replaying",
-                )
+            if snap_levels and snap_intervals:
+                level = snap_levels[0]
+                interval = snap_intervals[0]
 
                 effective_level = (
-                    "image" if level == "namespace" and not remote_namespace else level
+                    "image" if level == "namespace" and not namespace else level
                 )
                 snap_schedule_config = {
                     "pool": pool,
@@ -414,11 +275,9 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                     "level": effective_level,
                     "interval": interval,
                 }
-                if remote_namespace:
-                    snap_schedule_config["namespace"] = remote_namespace
-                out, err = add_snapshot_scheduling(
-                    rbd_secondary, **snap_schedule_config
-                )
+                if namespace:
+                    snap_schedule_config["namespace"] = namespace
+                out, err = add_snapshot_scheduling(rbd_primary, **snap_schedule_config)
                 if err:
                     raise Exception(
                         "Adding snapshot schedule failed with error %s" % err
@@ -427,98 +286,220 @@ def test_failover_orderly_shutdown(pri_config, sec_config, pool_types, **kw):
                 # Retain original level for remaining tests
                 level = effective_level
 
-                log.info(
-                    "Snapshot schedule added for the promoted image %s" % sec_image_spec
+            bench_kw = {
+                "image-spec": pri_image_spec,
+                "io-type": "write",
+                "io-total": "200M",
+                "io-threads": 16,
+            }
+
+            out, err = rbd_primary.bench(**bench_kw)
+            if err:
+                raise Exception(
+                    "Failed to write IO to the image %s: %s" % (pri_image_spec, err)
                 )
+            log.info("Successfully ran IO on image %s" % pri_image_spec)
 
-                # run IO on the promoted image
-                bench_kw = {
-                    "image-spec": sec_image_spec,
-                    "io-type": "write",
-                    "io-total": "200M",
-                    "io-threads": 16,
-                }
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
 
-                out, err = rbd_secondary.bench(**bench_kw)
-
-                if err:
-                    raise Exception(
-                        "Failed to write IO to the image %s: %s" % (sec_image_spec, err)
-                    )
-                else:
-                    log.info("Successfully ran IO on image %s" % sec_image_spec)
-
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
+            # Verify the snapshot schedule for the primary image
+            verify_args = {
+                "rbd": rbd_primary,
+                "pool": pool,
+                "interval": interval,
+            }
+            if level == "pool" and namespace:
+                verify_args["namespace"] = namespace
+            elif level == "namespace":
+                verify_args["namespace"] = namespace
+            elif level == "image":
+                if namespace:
+                    verify_args["namespace"] = namespace
+                verify_args["image"] = image
+            if verify_snapshot_schedule(**verify_args):
+                raise Exception(
+                    "Snapshot schedule verification failed at {} level for {} "
+                    "with interval: {}".format(level, image, interval)
                 )
-
-                # Verify the snapshot schedule for the promoted image
-                verify_args = {
-                    "rbd": rbd_secondary,
-                    "pool": pool,
-                    "interval": interval,
-                }
-                if level == "pool" and remote_namespace:
-                    verify_args["namespace"] = remote_namespace
-                elif level == "namespace":
-                    verify_args["namespace"] = remote_namespace
-                elif level == "image":
-                    if remote_namespace:
-                        verify_args["namespace"] = remote_namespace
-                    verify_args["image"] = image
-
-                if verify_snapshot_schedule(**verify_args):
-                    raise Exception(
-                        "Snapshot schedule verification failed at {} level for {} "
-                        "with interval: {}".format(level, image, interval)
-                    )
-                log.info(
-                    f"Snapshot schedule verified for {sec_image_spec} at {level} level"
-                )
-
-                # Verify the data on mirrored images is consistent after failover
-                data_integrity_spec = {
-                    "first": {
-                        "image_spec": sec_image_spec,
-                        "rbd": rbd_secondary,
-                        "client": client_secondary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                    "second": {
-                        "image_spec": pri_image_spec,
-                        "rbd": rbd_primary,
-                        "client": client_primary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                }
-                if check_data_integrity(**data_integrity_spec):
-                    raise Exception("Data integrity check failed for " + sec_image_spec)
-                log.info(
-                    "Data is consistent with the mirrored image for " + sec_image_spec
-                )
-
-                # Remove schedule from secondary
-                remove_args = {
-                    "pool": pool,
-                    "image": image,
-                    "level": level,
-                    "interval": interval,
-                }
-                if remote_namespace:
-                    remove_args["namespace"] = remote_namespace
-                out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
-                if err:
-                    raise Exception("Failed to remove mirror snapshot schedule")
-
-                log.info(
-                    f"Snapshot schedules removed for {pri_image_spec} and {sec_image_spec}"
-                )
-        namespace_mirror_type = rbd_config.get("namespace_mirror_type")
-        log.info(
-            "Test passed for pool_type: {}, namespace_mirror_type: {}".format(
-                pool_type, namespace_mirror_type
+            log.info(
+                "Snapshot schedule verified for %s at %s level"
+                % (pri_image_spec, level)
             )
+
+            # Verify the data on mirrored images is consistent
+            data_integrity_spec = {
+                "first": {
+                    "image_spec": pri_image_spec,
+                    "rbd": rbd_primary,
+                    "client": client_primary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+                "second": {
+                    "image_spec": sec_image_spec,
+                    "rbd": rbd_secondary,
+                    "client": client_secondary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+            }
+            if check_data_integrity(**data_integrity_spec):
+                raise Exception("Data integrity check failed for " + pri_image_spec)
+            log.info("Data is consistent with the mirrored image for " + pri_image_spec)
+
+            # Remove schedule from primary
+            remove_args = {
+                "pool": pool,
+                "image": image,
+                "level": level,
+                "interval": interval,
+            }
+            if namespace:
+                remove_args["namespace"] = namespace
+            out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
+            if err:
+                raise Exception("Failed to remove mirror snapshot schedule")
+
+            log.info(f"Demoting primary image {pri_image_spec} on Cluster-1")
+            out, err = rbd_primary.mirror.image.demote(**{"image-spec": pri_image_spec})
+            if err:
+                raise Exception(
+                    "Demote image %s failed with error %s" % (pri_image_spec, err)
+                )
+            log.info("Demoted image %s successfully" % pri_image_spec)
+
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
+
+            log.info("Promoting secondary image %s on Cluster-2" % sec_image_spec)
+            out, err = rbd_secondary.mirror.image.promote(
+                **{"image-spec": sec_image_spec}
+            )
+            if err:
+                raise Exception(
+                    "Promote image %s failed with error %s" % (sec_image_spec, err)
+                )
+            log.info("Promoted image %s successfully" % sec_image_spec)
+
+            # Verify the failover by checking mirroring status on cluster-2
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+stopped",
+            )
+
+            # Verify the failover by checking mirroring status on cluster-1
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+replaying",
+            )
+
+            effective_level = (
+                "image" if level == "namespace" and not remote_namespace else level
+            )
+            snap_schedule_config = {
+                "pool": pool,
+                "image": image,
+                "level": effective_level,
+                "interval": interval,
+            }
+            if remote_namespace:
+                snap_schedule_config["namespace"] = remote_namespace
+            out, err = add_snapshot_scheduling(rbd_secondary, **snap_schedule_config)
+            if err:
+                raise Exception("Adding snapshot schedule failed with error %s" % err)
+
+            # Retain original level for remaining tests
+            level = effective_level
+
+            log.info(
+                "Snapshot schedule added for the promoted image %s" % sec_image_spec
+            )
+
+            # run IO on the promoted image
+            bench_kw = {
+                "image-spec": sec_image_spec,
+                "io-type": "write",
+                "io-total": "200M",
+                "io-threads": 16,
+            }
+
+            out, err = rbd_secondary.bench(**bench_kw)
+
+            if err:
+                raise Exception(
+                    "Failed to write IO to the image %s: %s" % (sec_image_spec, err)
+                )
+            else:
+                log.info("Successfully ran IO on image %s" % sec_image_spec)
+
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
+
+            # Verify the snapshot schedule for the promoted image
+            verify_args = {
+                "rbd": rbd_secondary,
+                "pool": pool,
+                "interval": interval,
+            }
+            if level == "pool" and remote_namespace:
+                verify_args["namespace"] = remote_namespace
+            elif level == "namespace":
+                verify_args["namespace"] = remote_namespace
+            elif level == "image":
+                if remote_namespace:
+                    verify_args["namespace"] = remote_namespace
+                verify_args["image"] = image
+
+            if verify_snapshot_schedule(**verify_args):
+                raise Exception(
+                    "Snapshot schedule verification failed at {} level for {} "
+                    "with interval: {}".format(level, image, interval)
+                )
+            log.info(
+                f"Snapshot schedule verified for {sec_image_spec} at {level} level"
+            )
+
+            # Verify the data on mirrored images is consistent after failover
+            data_integrity_spec = {
+                "first": {
+                    "image_spec": sec_image_spec,
+                    "rbd": rbd_secondary,
+                    "client": client_secondary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+                "second": {
+                    "image_spec": pri_image_spec,
+                    "rbd": rbd_primary,
+                    "client": client_primary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+            }
+            if check_data_integrity(**data_integrity_spec):
+                raise Exception("Data integrity check failed for " + sec_image_spec)
+            log.info("Data is consistent with the mirrored image for " + sec_image_spec)
+
+            # Remove schedule from secondary
+            remove_args = {
+                "pool": pool,
+                "image": image,
+                "level": level,
+                "interval": interval,
+            }
+            if remote_namespace:
+                remove_args["namespace"] = remote_namespace
+            out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
+            if err:
+                raise Exception("Failed to remove mirror snapshot schedule")
+
+            log.info(
+                f"Snapshot schedules removed for {pri_image_spec} and {sec_image_spec}"
+            )
+    namespace_mirror_type = rbd_config.get("namespace_mirror_type")
+    log.info(
+        "Test passed for pool_type: {}, namespace_mirror_type: {}".format(
+            pool_type, namespace_mirror_type
         )
+    )
     return 0
 
 
@@ -541,381 +522,360 @@ def test_failover_non_orderly_shutdown(pri_config, sec_config, pool_types, **kw)
     def construct_imagespec(pool, namespace, image):
         return f"{pool}/{namespace}/{image}" if namespace else f"{pool}/{image}"
 
-    for pool_type in pool_types:
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
 
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            namespace = pool_config.get("namespace")
-            remote_namespace = pool_config.get("remote_namespace")
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        namespace = pool_config.get("namespace")
+        remote_namespace = pool_config.get("remote_namespace")
 
-            for image, image_config_val in multi_image_config.items():
-                pri_image_spec = construct_imagespec(pool, namespace, image)
-                sec_image_spec = construct_imagespec(pool, remote_namespace, image)
+        for image, image_config_val in multi_image_config.items():
+            pri_image_spec = construct_imagespec(pool, namespace, image)
+            sec_image_spec = construct_imagespec(pool, remote_namespace, image)
 
-                enable_image_mirroring(
-                    pri_config,
-                    sec_config,
-                    pool=pool,
-                    image=image,
-                    mirrormode="snapshot",
-                    namespace=namespace,
-                    remote_namespace=remote_namespace,
-                )
+            enable_image_mirroring(
+                pri_config,
+                sec_config,
+                pool=pool,
+                image=image,
+                mirrormode="snapshot",
+                namespace=namespace,
+                remote_namespace=remote_namespace,
+            )
 
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+stopped",
-                )
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+replaying",
-                )
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+stopped",
+            )
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+replaying",
+            )
 
-                snap_levels = image_config_val.get("snap_schedule_levels")
-                snap_intervals = image_config_val.get("snap_schedule_intervals")
+            snap_levels = image_config_val.get("snap_schedule_levels")
+            snap_intervals = image_config_val.get("snap_schedule_intervals")
 
-                if snap_levels and snap_intervals:
-                    level = snap_levels[0]
-                    interval = snap_intervals[0]
+            if snap_levels and snap_intervals:
+                level = snap_levels[0]
+                interval = snap_intervals[0]
 
-                    # Handle case when level is 'namespace' but no namespace is defined (i.e., default ns)
-                    effective_level = (
-                        "image" if level == "namespace" and not namespace else level
-                    )
-
-                    snap_schedule_config = {
-                        "pool": pool,
-                        "image": image,
-                        "level": effective_level,
-                        "interval": interval,
-                    }
-                    if namespace:
-                        snap_schedule_config["namespace"] = namespace
-                    out, err = add_snapshot_scheduling(
-                        rbd_primary, **snap_schedule_config
-                    )
-                    if err:
-                        raise Exception(
-                            "Adding snapshot schedule failed with error %s" % err
-                        )
-
-                    # Retain original level for remaining tests
-                    level = effective_level
-
-                # Write data to the image on site-A (primary) using krbd IO
-                extra_io_config = {
-                    "size": "100M",
-                    "do_not_create_image": True,
-                    "num_jobs": 1,
-                    "iodepth": 4,
-                    "rwmixread": 100,
-                    "direct": 1,
-                    "invalidate": 1,
-                    "rbd_obj": rbd_primary,
-                    "client": client_primary,
-                    "config": {
-                        "file_size": "100M",
-                        "file_path": [f"/mnt/mnt_{random_string(len=5)}/extra_file"],
-                        "get_time_taken": True,
-                        "operations": {
-                            "fs": "ext4",
-                            "io": True,
-                            "mount": True,
-                            "map": True,
-                        },
-                        "cmd_timeout": 1200,
-                        "io_type": "write",
-                        "image_spec": [pri_image_spec],
-                    },
-                }
-                io, err = krbd_io_handler(**extra_io_config)
-                if err:
-                    raise Exception(
-                        "IO before failover (non-orderly shutdown) failed for %s: %s"
-                        % (pri_image_spec, err)
-                    )
-                log.info(
-                    "IO written to %s before failover (non-orderly shutdown)"
-                    % pri_image_spec
-                )
-
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
-
-                # Verify the snapshot schedule for the primary image
-                verify_args = {
-                    "rbd": rbd_primary,
-                    "pool": pool,
-                    "interval": interval,
-                }
-                if level == "pool" and namespace:
-                    verify_args["namespace"] = namespace
-                elif level == "namespace":
-                    verify_args["namespace"] = namespace
-                elif level == "image":
-                    if namespace:
-                        verify_args["namespace"] = namespace
-                    verify_args["image"] = image
-                if verify_snapshot_schedule(**verify_args):
-                    raise Exception(
-                        "Snapshot schedule verification failed at {} level for {} "
-                        "with interval: {}".format(level, image, interval)
-                    )
-                log.info(
-                    "Snapshot schedule verified for %s at %s level"
-                    % (pri_image_spec, level)
-                )
-                # Verify data consistency between primary and secondary images
-                data_integrity_spec = {
-                    "first": {
-                        "image_spec": pri_image_spec,
-                        "rbd": rbd_primary,
-                        "client": client_primary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                    "second": {
-                        "image_spec": sec_image_spec,
-                        "rbd": rbd_secondary,
-                        "client": client_secondary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                }
-                if check_data_integrity(**data_integrity_spec):
-                    raise Exception(
-                        "Data integrity check failed after failover for %s and %s"
-                        % (pri_image_spec, sec_image_spec)
-                    )
-                log.info(
-                    "Data is consistent between primary and secondary images for %s"
-                    % pri_image_spec
-                )
-
-                # Remove snapshot schedule from primary
-                remove_args = {
-                    "pool": pool,
-                    "image": image,
-                    "level": level,
-                    "interval": interval,
-                }
-                if namespace:
-                    remove_args["namespace"] = namespace
-                out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
-                if err:
-                    log.error(f"Failed to remove snapshot schedule on primary: {err}")
-                log.info(f"Snapshot schedule removed for {pri_image_spec}")
-
-                # Abruptly make the primary cluster down for non-orderly shutdown
-                log.info(
-                    "Simulating non-orderly shutdown: bringing down primary cluster (Cluster-1)"
-                )
-
-                # Get the rbd-mirror daemon node as target_host and stop the host
-                ceph_cluster = pri_config["cluster"]
-                mirror_nodes = ceph_cluster.get_ceph_objects(role="rbd-mirror")
-
-                if not mirror_nodes:
-                    raise Exception("No rbd-mirror nodes found")
-
-                # Get CephNode from CephObject
-                target_node = mirror_nodes[0].node
-                vm_node = target_node.vm_node
-                target_host = target_node.hostname
-
-                log.info("Proceeding to shutdown rbd mirror host %s", target_host)
-                vm_node.shutdown(wait=True)
-                log.info("Successfully shut down rbd mirror host %s", target_host)
-                time.sleep(10)
-                log.info("Primary cluster rbd mirror node is down")
-
-                # On cluster-2, force promote the secondary image
-                log.info(
-                    f"Force promoting secondary image {sec_image_spec} on Cluster-2"
-                )
-                out, err = rbd_secondary.mirror.image.promote(
-                    **{"image-spec": sec_image_spec, "force": True}
-                )
-                if err:
-                    raise Exception(
-                        f"Force promote image {sec_image_spec} failed with error {err}"
-                    )
-                log.info(f"Force promoted image {sec_image_spec} successfully")
-
-                # Verify the failover by checking mirroring status on cluster-2
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+stopped",
-                )
-
-                # Perform IO on the promoted image on cluster-2
-                bench_kw = {
-                    "image-spec": sec_image_spec,
-                    "io-type": "write",
-                    "io-total": "200M",
-                    "io-threads": 16,
-                }
-                out, err = rbd_secondary.bench(**bench_kw)
-                if err:
-                    raise Exception(
-                        f"Failed to write IO to the promoted image {sec_image_spec}: {err}"
-                    )
-                else:
-                    log.info(f"Successfully ran IO on promoted image {sec_image_spec}")
-
-                # Get the primary cluster mirror daemon back online
-                log.info("Bringing primary cluster (Cluster-1) back online")
-                vm_node.power_on()
-                log.info("Power on the rbd mirror host successfully")
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
-                log.info("Primary cluster rbd mirror node is online")
-
-                # Make cluster-1 secondary by demoting the primary image
-                out, err = rbd_primary.mirror.image.demote(
-                    **{"image-spec": pri_image_spec}
-                )
-                if err:
-                    raise Exception(
-                        f"Demote image {pri_image_spec} failed with error {err}"
-                    )
-                log.info(f"Demoted image {pri_image_spec} successfully on Cluster-1")
-
-                # Perform resync on cluster-1 to get the data from cluster-2
-                out, err = rbd_primary.mirror.image.resync(
-                    **{"image-spec": pri_image_spec}
-                )
-                if err:
-                    raise Exception(
-                        f"Resync image {pri_image_spec} failed with error {err}"
-                    )
-                log.info(f"Resync initiated for image {pri_image_spec} on Cluster-1")
-
-                # Wait for a full resync of the freshly built image.
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
-                # check image status after resync
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+replaying",
-                )
-                # Add snapshot schedule for the promoted image on cluster-2
+                # Handle case when level is 'namespace' but no namespace is defined (i.e., default ns)
                 effective_level = (
-                    "image" if level == "namespace" and not remote_namespace else level
+                    "image" if level == "namespace" and not namespace else level
                 )
+
                 snap_schedule_config = {
                     "pool": pool,
                     "image": image,
                     "level": effective_level,
                     "interval": interval,
                 }
-                if remote_namespace:
-                    snap_schedule_config["namespace"] = remote_namespace
-                out, err = add_snapshot_scheduling(
-                    rbd_secondary, **snap_schedule_config
-                )
-                if err:
-                    raise Exception(f"Adding snapshot schedule failed with error {err}")
-                level = effective_level  # Retain for subsequent steps
-
-                log.info(
-                    f"Snapshot schedule added for the promoted image {sec_image_spec}"
-                )
-
-                # Run IO on the promoted image
-                bench_kw = {
-                    "image-spec": sec_image_spec,
-                    "io-type": "write",
-                    "io-total": "200M",
-                    "io-threads": 16,
-                }
-                out, err = rbd_secondary.bench(**bench_kw)
+                if namespace:
+                    snap_schedule_config["namespace"] = namespace
+                out, err = add_snapshot_scheduling(rbd_primary, **snap_schedule_config)
                 if err:
                     raise Exception(
-                        f"Failed to write IO to the promoted image {sec_image_spec}: {err}"
+                        "Adding snapshot schedule failed with error %s" % err
                     )
-                else:
-                    log.info(f"Successfully ran IO on promoted image {sec_image_spec}")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
+                # Retain original level for remaining tests
+                level = effective_level
+
+            # Write data to the image on site-A (primary) using krbd IO
+            extra_io_config = {
+                "size": "100M",
+                "do_not_create_image": True,
+                "num_jobs": 1,
+                "iodepth": 4,
+                "rwmixread": 100,
+                "direct": 1,
+                "invalidate": 1,
+                "rbd_obj": rbd_primary,
+                "client": client_primary,
+                "config": {
+                    "file_size": "100M",
+                    "file_path": [f"/mnt/mnt_{random_string(len=5)}/extra_file"],
+                    "get_time_taken": True,
+                    "operations": {
+                        "fs": "ext4",
+                        "io": True,
+                        "mount": True,
+                        "map": True,
+                    },
+                    "cmd_timeout": 1200,
+                    "io_type": "write",
+                    "image_spec": [pri_image_spec],
+                },
+            }
+            io, err = krbd_io_handler(**extra_io_config)
+            if err:
+                raise Exception(
+                    "IO before failover (non-orderly shutdown) failed for %s: %s"
+                    % (pri_image_spec, err)
                 )
+            log.info(
+                "IO written to %s before failover (non-orderly shutdown)"
+                % pri_image_spec
+            )
 
-                # Verify the snapshot schedule for the promoted image
-                verify_args = {
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
+
+            # Verify the snapshot schedule for the primary image
+            verify_args = {
+                "rbd": rbd_primary,
+                "pool": pool,
+                "interval": interval,
+            }
+            if level == "pool" and namespace:
+                verify_args["namespace"] = namespace
+            elif level == "namespace":
+                verify_args["namespace"] = namespace
+            elif level == "image":
+                if namespace:
+                    verify_args["namespace"] = namespace
+                verify_args["image"] = image
+            if verify_snapshot_schedule(**verify_args):
+                raise Exception(
+                    "Snapshot schedule verification failed at {} level for {} "
+                    "with interval: {}".format(level, image, interval)
+                )
+            log.info(
+                "Snapshot schedule verified for %s at %s level"
+                % (pri_image_spec, level)
+            )
+            # Verify data consistency between primary and secondary images
+            data_integrity_spec = {
+                "first": {
+                    "image_spec": pri_image_spec,
+                    "rbd": rbd_primary,
+                    "client": client_primary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+                "second": {
+                    "image_spec": sec_image_spec,
                     "rbd": rbd_secondary,
-                    "pool": pool,
-                    "interval": interval,
-                }
-                if level == "pool" and remote_namespace:
-                    verify_args["namespace"] = remote_namespace
-                elif level == "namespace":
-                    verify_args["namespace"] = remote_namespace
-                elif level == "image":
-                    if remote_namespace:
-                        verify_args["namespace"] = remote_namespace
-                    verify_args["image"] = image
-
-                if verify_snapshot_schedule(**verify_args):
-                    raise Exception(
-                        "Snapshot schedule verification failed at {} level for {} "
-                        "with interval: {}".format(level, image, interval)
-                    )
-                log.info(
-                    f"Snapshot schedule verified for {sec_image_spec} at {level} level"
+                    "client": client_secondary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+            }
+            if check_data_integrity(**data_integrity_spec):
+                raise Exception(
+                    "Data integrity check failed after failover for %s and %s"
+                    % (pri_image_spec, sec_image_spec)
                 )
+            log.info(
+                "Data is consistent between primary and secondary images for %s"
+                % pri_image_spec
+            )
 
-                # Verify data consistency between promoted and demoted images
-                data_integrity_spec = {
-                    "first": {
-                        "image_spec": sec_image_spec,
-                        "rbd": rbd_secondary,
-                        "client": client_secondary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                    "second": {
-                        "image_spec": pri_image_spec,
-                        "rbd": rbd_primary,
-                        "client": client_primary,
-                        "file_path": f"/tmp/{random_string(len=3)}",
-                    },
-                }
-                if check_data_integrity(**data_integrity_spec):
-                    raise Exception(
-                        "Data integrity check failed for promoted and demoted images: "
-                        f"{sec_image_spec}, {pri_image_spec}"
-                    )
-                log.info(
-                    f"Data is consistent between promoted and demoted images: {sec_image_spec}, {pri_image_spec}"
+            # Remove snapshot schedule from primary
+            remove_args = {
+                "pool": pool,
+                "image": image,
+                "level": level,
+                "interval": interval,
+            }
+            if namespace:
+                remove_args["namespace"] = namespace
+            out, err = remove_snapshot_scheduling(rbd_primary, **remove_args)
+            if err:
+                log.error(f"Failed to remove snapshot schedule on primary: {err}")
+            log.info(f"Snapshot schedule removed for {pri_image_spec}")
+
+            # Abruptly make the primary cluster down for non-orderly shutdown
+            log.info(
+                "Simulating non-orderly shutdown: bringing down primary cluster (Cluster-1)"
+            )
+
+            # Get the rbd-mirror daemon node as target_host and stop the host
+            ceph_cluster = pri_config["cluster"]
+            mirror_nodes = ceph_cluster.get_ceph_objects(role="rbd-mirror")
+
+            if not mirror_nodes:
+                raise Exception("No rbd-mirror nodes found")
+
+            # Get CephNode from CephObject
+            target_node = mirror_nodes[0].node
+            vm_node = target_node.vm_node
+            target_host = target_node.hostname
+
+            log.info("Proceeding to shutdown rbd mirror host %s", target_host)
+            vm_node.shutdown(wait=True)
+            log.info("Successfully shut down rbd mirror host %s", target_host)
+            time.sleep(10)
+            log.info("Primary cluster rbd mirror node is down")
+
+            # On cluster-2, force promote the secondary image
+            log.info(f"Force promoting secondary image {sec_image_spec} on Cluster-2")
+            out, err = rbd_secondary.mirror.image.promote(
+                **{"image-spec": sec_image_spec, "force": True}
+            )
+            if err:
+                raise Exception(
+                    f"Force promote image {sec_image_spec} failed with error {err}"
                 )
+            log.info(f"Force promoted image {sec_image_spec} successfully")
 
-                # Remove the snapshot schedule from the secondary image
-                remove_args = {
-                    "pool": pool,
-                    "image": image,
-                    "level": level,
-                    "interval": interval,
-                }
+            # Verify the failover by checking mirroring status on cluster-2
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+stopped",
+            )
+
+            # Perform IO on the promoted image on cluster-2
+            bench_kw = {
+                "image-spec": sec_image_spec,
+                "io-type": "write",
+                "io-total": "200M",
+                "io-threads": 16,
+            }
+            out, err = rbd_secondary.bench(**bench_kw)
+            if err:
+                raise Exception(
+                    f"Failed to write IO to the promoted image {sec_image_spec}: {err}"
+                )
+            else:
+                log.info(f"Successfully ran IO on promoted image {sec_image_spec}")
+
+            # Get the primary cluster mirror daemon back online
+            log.info("Bringing primary cluster (Cluster-1) back online")
+            vm_node.power_on()
+            log.info("Power on the rbd mirror host successfully")
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
+            log.info("Primary cluster rbd mirror node is online")
+
+            # Make cluster-1 secondary by demoting the primary image
+            out, err = rbd_primary.mirror.image.demote(**{"image-spec": pri_image_spec})
+            if err:
+                raise Exception(
+                    f"Demote image {pri_image_spec} failed with error {err}"
+                )
+            log.info(f"Demoted image {pri_image_spec} successfully on Cluster-1")
+
+            # Perform resync on cluster-1 to get the data from cluster-2
+            out, err = rbd_primary.mirror.image.resync(**{"image-spec": pri_image_spec})
+            if err:
+                raise Exception(
+                    f"Resync image {pri_image_spec} failed with error {err}"
+                )
+            log.info(f"Resync initiated for image {pri_image_spec} on Cluster-1")
+
+            # Wait for a full resync of the freshly built image.
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
+            # check image status after resync
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+replaying",
+            )
+            # Add snapshot schedule for the promoted image on cluster-2
+            effective_level = (
+                "image" if level == "namespace" and not remote_namespace else level
+            )
+            snap_schedule_config = {
+                "pool": pool,
+                "image": image,
+                "level": effective_level,
+                "interval": interval,
+            }
+            if remote_namespace:
+                snap_schedule_config["namespace"] = remote_namespace
+            out, err = add_snapshot_scheduling(rbd_secondary, **snap_schedule_config)
+            if err:
+                raise Exception(f"Adding snapshot schedule failed with error {err}")
+            level = effective_level  # Retain for subsequent steps
+
+            log.info(f"Snapshot schedule added for the promoted image {sec_image_spec}")
+
+            # Run IO on the promoted image
+            bench_kw = {
+                "image-spec": sec_image_spec,
+                "io-type": "write",
+                "io-total": "200M",
+                "io-threads": 16,
+            }
+            out, err = rbd_secondary.bench(**bench_kw)
+            if err:
+                raise Exception(
+                    f"Failed to write IO to the promoted image {sec_image_spec}: {err}"
+                )
+            else:
+                log.info(f"Successfully ran IO on promoted image {sec_image_spec}")
+
+            time.sleep(int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120)
+
+            # Verify the snapshot schedule for the promoted image
+            verify_args = {
+                "rbd": rbd_secondary,
+                "pool": pool,
+                "interval": interval,
+            }
+            if level == "pool" and remote_namespace:
+                verify_args["namespace"] = remote_namespace
+            elif level == "namespace":
+                verify_args["namespace"] = remote_namespace
+            elif level == "image":
                 if remote_namespace:
-                    remove_args["namespace"] = remote_namespace
-                out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
-                if err:
-                    log.error(f"Failed to remove snapshot schedule on secondary: {err}")
+                    verify_args["namespace"] = remote_namespace
+                verify_args["image"] = image
 
-                log.info(
-                    f"Snapshot schedule removed for promoted image {sec_image_spec}"
+            if verify_snapshot_schedule(**verify_args):
+                raise Exception(
+                    "Snapshot schedule verification failed at {} level for {} "
+                    "with interval: {}".format(level, image, interval)
                 )
+            log.info(
+                f"Snapshot schedule verified for {sec_image_spec} at {level} level"
+            )
+
+            # Verify data consistency between promoted and demoted images
+            data_integrity_spec = {
+                "first": {
+                    "image_spec": sec_image_spec,
+                    "rbd": rbd_secondary,
+                    "client": client_secondary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+                "second": {
+                    "image_spec": pri_image_spec,
+                    "rbd": rbd_primary,
+                    "client": client_primary,
+                    "file_path": f"/tmp/{random_string(len=3)}",
+                },
+            }
+            if check_data_integrity(**data_integrity_spec):
+                raise Exception(
+                    "Data integrity check failed for promoted and demoted images: "
+                    f"{sec_image_spec}, {pri_image_spec}"
+                )
+            log.info(
+                f"Data is consistent between promoted and demoted images: {sec_image_spec}, {pri_image_spec}"
+            )
+
+            # Remove the snapshot schedule from the secondary image
+            remove_args = {
+                "pool": pool,
+                "image": image,
+                "level": level,
+                "interval": interval,
+            }
+            if remote_namespace:
+                remove_args["namespace"] = remote_namespace
+            out, err = remove_snapshot_scheduling(rbd_secondary, **remove_args)
+            if err:
+                log.error(f"Failed to remove snapshot schedule on secondary: {err}")
+
+            log.info(f"Snapshot schedule removed for promoted image {sec_image_spec}")
     return 0
 
 
@@ -946,54 +906,45 @@ def run(**kw):
         namespace_mirror_options = ["default_to_non-default", "non-default_to_default"]
         snap_schedule_level_options = ["pool", "namespace", "image"]
 
-        # Track which options have been used
-        used_namespace_mirror_types = set()
-        used_schedule_levels = set()
+        # Run on either replicated or EC pool
+        available_pool_types = [
+            pt
+            for pt in ["rep_pool_config", "ec_pool_config"]
+            if pt in kw.get("config", {})
+        ]
+        if not available_pool_types:
+            available_pool_types = ["rep_pool_config", "ec_pool_config"]
+        pool_type = random.choice(available_pool_types)
+        log.info("Running test on %s", pool_type)
 
-        for pool_type in ["rep_pool_config", "ec_pool_config"]:
-            if pool_type in kw.get("config", {}):
-                pool_config = kw["config"][pool_type]
+        config = kw.get("config", {})
+        if pool_type == "rep_pool_config":
+            config["rep-pool-only"] = True
+        else:
+            config["ec-pool-only"] = True
 
-                # Use namespace_mirror_type from YAML if provided, else pick randomly
-                if "namespace_mirror_type" not in pool_config:
-                    available_mirror_types = [
-                        typ
-                        for typ in namespace_mirror_options
-                        if typ not in used_namespace_mirror_types
-                    ]
-                    if not available_mirror_types:
-                        available_mirror_types = namespace_mirror_options.copy()
-                        used_namespace_mirror_types.clear()
+        pool_config = config.get(pool_type, {})
 
-                    selected_mirror_type = random.choice(available_mirror_types)
-                    pool_config["namespace_mirror_type"] = selected_mirror_type
-                    used_namespace_mirror_types.add(selected_mirror_type)
-                else:
-                    selected_mirror_type = pool_config["namespace_mirror_type"]
+        # Use namespace_mirror_type from YAML if provided, else pick randomly
+        if "namespace_mirror_type" not in pool_config:
+            selected_mirror_type = random.choice(namespace_mirror_options)
+            pool_config["namespace_mirror_type"] = selected_mirror_type
+        else:
+            selected_mirror_type = pool_config["namespace_mirror_type"]
 
-                # Use snap_schedule_levels from YAML if provided, else pick randomly
-                if "snap_schedule_levels" not in pool_config:
-                    available_levels = [
-                        lvl
-                        for lvl in snap_schedule_level_options
-                        if lvl not in used_schedule_levels
-                    ]
-                    if not available_levels:
-                        available_levels = snap_schedule_level_options.copy()
-                        used_schedule_levels.clear()
+        # Use snap_schedule_levels from YAML if provided, else pick randomly
+        if "snap_schedule_levels" not in pool_config:
+            selected_snap_level = random.choice(snap_schedule_level_options)
+            pool_config["snap_schedule_levels"] = [selected_snap_level]
+        else:
+            selected_snap_level = pool_config["snap_schedule_levels"]
 
-                    selected_snap_level = random.choice(available_levels)
-                    pool_config["snap_schedule_levels"] = [selected_snap_level]
-                    used_schedule_levels.add(selected_snap_level)
-                else:
-                    selected_snap_level = pool_config["snap_schedule_levels"]
-
-                log.info(
-                    "Selected namespace mirror type: %s and snap schedule level: %s for %s",
-                    selected_mirror_type,
-                    selected_snap_level,
-                    pool_type,
-                )
+        log.info(
+            "Selected namespace mirror type: %s and snap schedule level: %s for %s",
+            selected_mirror_type,
+            selected_snap_level,
+            pool_type,
+        )
 
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])

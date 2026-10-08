@@ -83,234 +83,235 @@ def test_migration_encryption_two_cluster(rbd_obj, c1_client, c2_client, **kw):
     snap_name = "snap1"
     rbd2 = Rbd(c2_client)
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
-        rbd = rbd_obj.get("rbd")
-        for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
-            multi_image_config = getdict(pool_config)
-            encryption_type = random.choice(
-                kw.get("config", {}).get("encryption_type", {})
-            )
-            log.info("Encryption algorithm choosen randomly is: " + encryption_type)
-            for image_name, image_conf in multi_image_config.items():
-                try:
-                    # Format the image with encryption
-                    passphrase = (
-                        f"{encryption_type}_passphrase_" + random_string(len=3) + ".bin"
-                    )
-                    create_passphrase_file(c1_client, passphrase)
-                    out, err = rbd.encryption_format(
-                        **{
-                            "image-spec": f"{pool}/{image_name}",
-                            "format": encryption_type,
-                            "passphrase-file": passphrase,
-                        }
-                    )
-                    if err:
-                        raise Exception(
-                            "Encryption format with "
-                            + encryption_type
-                            + " failed on "
-                            + pool
-                            + "/"
-                            + image_name
-                            + " with "
-                            + err
-                        )
-                    else:
-                        log.info(
-                            "Successfully formatted the image "
-                            + pool
-                            + "/"
-                            + image_name
-                            + " with encryption type "
-                            + encryption_type
-                        )
-
-                    # Map, mount and run IOs
-                    fio = kw.get("config", {}).get("fio", {})
-                    io_config = {
-                        "rbd_obj": rbd,
-                        "client": c1_client,
-                        "size": fio["size"],
-                        "do_not_create_image": True,
-                        "config": {
-                            "file_size": fio["size"],
-                            "file_path": [f"/mnt/mnt_{random_string(len=3)}/file"],
-                            "get_time_taken": True,
-                            "image_spec": [f"{pool}/{image_name}"],
-                            "operations": {
-                                "fs": "ext4",
-                                "io": True,
-                                "mount": True,
-                                "device_map": True,
-                            },
-                            "cmd_timeout": 2400,
-                            "io_type": "write",
-                        },
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
+    rbd = rbd_obj.get("rbd")
+    for pool, pool_config in multi_pool_config.items():
+        if "data_pool" in pool_config.keys():
+            _ = pool_config.pop("data_pool")
+        multi_image_config = getdict(pool_config)
+        encryption_type = random.choice(kw.get("config", {}).get("encryption_type", {}))
+        log.info("Encryption algorithm choosen randomly is: " + encryption_type)
+        for image_name, image_conf in multi_image_config.items():
+            try:
+                # Format the image with encryption
+                passphrase = (
+                    f"{encryption_type}_passphrase_" + random_string(len=3) + ".bin"
+                )
+                create_passphrase_file(c1_client, passphrase)
+                out, err = rbd.encryption_format(
+                    **{
+                        "image-spec": f"{pool}/{image_name}",
+                        "format": encryption_type,
+                        "passphrase-file": passphrase,
                     }
+                )
+                if err:
+                    raise Exception(
+                        "Encryption format with "
+                        + encryption_type
+                        + " failed on "
+                        + pool
+                        + "/"
+                        + image_name
+                        + " with "
+                        + err
+                    )
+                else:
+                    log.info(
+                        "Successfully formatted the image "
+                        + pool
+                        + "/"
+                        + image_name
+                        + " with encryption type "
+                        + encryption_type
+                    )
 
-                    # Include the encryption details in io config
-                    encryption_config = list()
-                    encryption_config.append({"encryption-format": encryption_type})
-                    encryption_config.append({"encryption-passphrase-file": passphrase})
-                    io_config["config"]["encryption_config"] = encryption_config
-                    out, err = krbd_io_handler(**io_config)
+                # Map, mount and run IOs
+                fio = kw.get("config", {}).get("fio", {})
+                io_config = {
+                    "rbd_obj": rbd,
+                    "client": c1_client,
+                    "size": fio["size"],
+                    "do_not_create_image": True,
+                    "config": {
+                        "file_size": fio["size"],
+                        "file_path": [f"/mnt/mnt_{random_string(len=3)}/file"],
+                        "get_time_taken": True,
+                        "image_spec": [f"{pool}/{image_name}"],
+                        "operations": {
+                            "fs": "ext4",
+                            "io": True,
+                            "mount": True,
+                            "device_map": True,
+                        },
+                        "cmd_timeout": 2400,
+                        "io_type": "write",
+                    },
+                }
+
+                # Include the encryption details in io config
+                encryption_config = list()
+                encryption_config.append({"encryption-format": encryption_type})
+                encryption_config.append({"encryption-passphrase-file": passphrase})
+                io_config["config"]["encryption_config"] = encryption_config
+                out, err = krbd_io_handler(**io_config)
+                if err:
+                    raise Exception(
+                        "Map, mount and run IOs failed for encrypted "
+                        + pool
+                        + "/"
+                        + image_name
+                    )
+                else:
+                    log.info(
+                        "Map, mount and IOs successful for encrypted "
+                        + pool
+                        + "/"
+                        + image_name
+                    )
+
+                # Create snapshot for the image
+                rbd.snap.create(
+                    pool=pool,
+                    image=image_name,
+                    snap=snap_name,
+                )
+
+                # get md5sum of image before migration for data consistency check
+                md5_sum_before_migration = get_md5sum_rbd_image(
+                    image_spec=f"{pool}/{image_name}",
+                    rbd=rbd,
+                    client=c1_client,
+                    file_path=f"/tmp/{random_string(len=3)}",
+                )
+                log.info("md5sum before Migration: " + md5_sum_before_migration)
+
+                # prepare migration source spec
+                source_spec_path = prepare_migration_source_spec(
+                    cluster_name=c1,
+                    client=c1_client,
+                    pool_name=pool,
+                    image_name=image_name,
+                    snap_name=snap_name,
+                )
+
+                # Create a target pool where image needs to be migrated on cluster2
+                is_ec_pool = True if "ec" in pool_type else False
+                config = kw.get("config", {})
+                target_pool = "target_pool_" + random_string(len=5)
+                target_pool_config = {}
+                pools_to_delete = [target_pool]
+                if is_ec_pool:
+                    data_pool_target = "data_pool_new_" + random_string(len=5)
+                    target_pool_config["data_pool"] = data_pool_target
+                    pools_to_delete.append(data_pool_target)
+
+                rc = create_single_pool_and_images(
+                    config=config,
+                    pool=target_pool,
+                    pool_config=target_pool_config,
+                    client=c2_client,
+                    cluster="ceph",
+                    rbd=rbd2,
+                    ceph_version=int(config.get("rhbuild")[0]),
+                    is_ec_pool=is_ec_pool,
+                    is_secondary=False,
+                    do_not_create_image=True,
+                )
+                if rc:
+                    log.error("Creation of target pool " + target_pool + " failed")
+                    return rc
+
+                # Exceute prepare migration for external cluster
+                target_image = "target_image_" + random_string(len=5)
+                rbd.migration.prepare_import(
+                    source_spec_path=source_spec_path,
+                    dest_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                )
+
+                # verify prepare migration status
+                if verify_migration_state(
+                    action="prepare",
+                    image_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                    client=c1_client,
+                    **kw,
+                ):
+                    raise Exception("Failed to prepare migration")
+
+                # execute migration from cluster2
+                rbd.migration.action(
+                    action="execute",
+                    dest_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                )
+
+                # verify execute migration status
+                if verify_migration_state(
+                    action="execute",
+                    image_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                    client=c1_client,
+                    **kw,
+                ):
+                    raise Exception("Failed to execute migration")
+
+                # commit migration for external cluster
+                rbd.migration.action(
+                    action="commit",
+                    dest_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                )
+
+                # verify commit migration status
+                if verify_migration_state(
+                    action="commit",
+                    image_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                    client=c1_client,
+                    **kw,
+                ):
+                    raise Exception("Failed to commit migration")
+
+                # verify checksum post migration
+                md5_sum_after_migration = get_md5sum_rbd_image(
+                    image_spec=f"{target_pool}/{target_image}",
+                    rbd=rbd2,
+                    client=c2_client,
+                    file_path=f"/tmp/{random_string(len=5)}",
+                )
+                log.info("md5sum after migration: " + md5_sum_after_migration)
+
+                if md5_sum_before_migration != md5_sum_after_migration:
+                    raise Exception(
+                        "Data integrity check failed, md5sum checksums are not same"
+                    )
+                log.info("md5sum checksum is same on both clusters after migration")
+
+            except Exception as e:
+                log.error("Error during migration: " + str(e))
+                return 1
+
+            finally:
+                if source_spec_path:
+                    log.info("Cleaning up source spec path: " + source_spec_path)
+                    out, err = c1_client.exec_command(
+                        sudo=True, cmd=f"rm -f {source_spec_path}"
+                    )
                     if err:
-                        raise Exception(
-                            "Map, mount and run IOs failed for encrypted "
-                            + pool
-                            + "/"
-                            + image_name
-                        )
-                    else:
-                        log.info(
-                            "Map, mount and IOs successful for encrypted "
-                            + pool
-                            + "/"
-                            + image_name
-                        )
+                        log.error("Failed to delete file " + source_spec_path)
 
-                    # Create snapshot for the image
-                    rbd.snap.create(
-                        pool=pool,
-                        image=image_name,
-                        snap=snap_name,
-                    )
-
-                    # get md5sum of image before migration for data consistency check
-                    md5_sum_before_migration = get_md5sum_rbd_image(
-                        image_spec=f"{pool}/{image_name}",
-                        rbd=rbd,
-                        client=c1_client,
-                        file_path=f"/tmp/{random_string(len=3)}",
-                    )
-                    log.info("md5sum before Migration: " + md5_sum_before_migration)
-
-                    # prepare migration source spec
-                    source_spec_path = prepare_migration_source_spec(
-                        cluster_name=c1,
-                        client=c1_client,
-                        pool_name=pool,
-                        image_name=image_name,
-                        snap_name=snap_name,
-                    )
-
-                    # Create a target pool where image needs to be migrated on cluster2
-                    is_ec_pool = True if "ec" in pool_type else False
-                    config = kw.get("config", {})
-                    target_pool = "target_pool_" + random_string(len=5)
-                    target_pool_config = {}
-                    pools_to_delete = [target_pool]
-                    if is_ec_pool:
-                        data_pool_target = "data_pool_new_" + random_string(len=5)
-                        target_pool_config["data_pool"] = data_pool_target
-                        pools_to_delete.append(data_pool_target)
-
-                    rc = create_single_pool_and_images(
-                        config=config,
-                        pool=target_pool,
-                        pool_config=target_pool_config,
-                        client=c2_client,
-                        cluster="ceph",
-                        rbd=rbd2,
-                        ceph_version=int(config.get("rhbuild")[0]),
-                        is_ec_pool=is_ec_pool,
-                        is_secondary=False,
-                        do_not_create_image=True,
-                    )
-                    if rc:
-                        log.error("Creation of target pool " + target_pool + " failed")
-                        return rc
-
-                    # Exceute prepare migration for external cluster
-                    target_image = "target_image_" + random_string(len=5)
-                    rbd.migration.prepare_import(
-                        source_spec_path=source_spec_path,
-                        dest_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                    )
-
-                    # verify prepare migration status
-                    if verify_migration_state(
-                        action="prepare",
-                        image_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                        client=c1_client,
-                        **kw,
-                    ):
-                        raise Exception("Failed to prepare migration")
-
-                    # execute migration from cluster2
-                    rbd.migration.action(
-                        action="execute",
-                        dest_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                    )
-
-                    # verify execute migration status
-                    if verify_migration_state(
-                        action="execute",
-                        image_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                        client=c1_client,
-                        **kw,
-                    ):
-                        raise Exception("Failed to execute migration")
-
-                    # commit migration for external cluster
-                    rbd.migration.action(
-                        action="commit",
-                        dest_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                    )
-
-                    # verify commit migration status
-                    if verify_migration_state(
-                        action="commit",
-                        image_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                        client=c1_client,
-                        **kw,
-                    ):
-                        raise Exception("Failed to commit migration")
-
-                    # verify checksum post migration
-                    md5_sum_after_migration = get_md5sum_rbd_image(
-                        image_spec=f"{target_pool}/{target_image}",
-                        rbd=rbd2,
-                        client=c2_client,
-                        file_path=f"/tmp/{random_string(len=5)}",
-                    )
-                    log.info("md5sum after migration: " + md5_sum_after_migration)
-
-                    if md5_sum_before_migration != md5_sum_after_migration:
-                        raise Exception(
-                            "Data integrity check failed, md5sum checksums are not same"
-                        )
-                    log.info("md5sum checksum is same on both clusters after migration")
-
-                except Exception as e:
-                    log.error("Error during migration: " + str(e))
-                    return 1
-
-                finally:
-                    if source_spec_path:
-                        log.info("Cleaning up source spec path: " + source_spec_path)
-                        out, err = c1_client.exec_command(
-                            sudo=True, cmd=f"rm -f {source_spec_path}"
-                        )
-                        if err:
-                            log.error("Failed to delete file " + source_spec_path)
-
-                    pool_cleanup(
-                        client=c2_client,
-                        pools=pools_to_delete,
-                        ceph_version=int(kw["config"].get("rhbuild")[0]),
-                    )
+                pool_cleanup(
+                    client=c2_client,
+                    pools=pools_to_delete,
+                    ceph_version=int(kw["config"].get("rhbuild")[0]),
+                )
 
     return 0
 

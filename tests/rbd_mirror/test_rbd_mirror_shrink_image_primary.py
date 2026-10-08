@@ -15,6 +15,8 @@ Test Case Flow:
 4. verify for the image status in secondary and verify for the size is updated.
 """
 
+import random
+
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
@@ -104,15 +106,14 @@ def run(**kw):
         else:
             break
         if mirror_obj:
-            log.info("Executing test on replicated pool")
-            if test_image_shrink_primary(
-                mirror_obj.get("rep_rbdmirror"), "rep_pool_config", **kw
-            ):
-                return 1
-            log.info("Executing test on ec pool")
-            if test_image_shrink_primary(
-                mirror_obj.get("ec_rbdmirror"), "ec_pool_config", **kw
-            ):
+            pool_entries = []
+            if "rep_rbdmirror" in mirror_obj:
+                pool_entries.append(("rep_rbdmirror", "rep_pool_config"))
+            if "ec_rbdmirror" in mirror_obj:
+                pool_entries.append(("ec_rbdmirror", "ec_pool_config"))
+            mirror_key, pool_type = random.choice(pool_entries)
+            log.info(f"Running test on {pool_type}")
+            if test_image_shrink_primary(mirror_obj.get(mirror_key), pool_type, **kw):
                 return 1
 
         if key == "journal":

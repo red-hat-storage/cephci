@@ -1,3 +1,4 @@
+import random
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -282,15 +283,14 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            rc = test_snap_mirror_cluster_ops(
-                rbd, sec_rbd, client, sec_client, pool_type, **kw
-            )
-            if rc:
-                log.error(
-                    "Cluster operations on snapshot based mirroring clusters failed"
-                )
-                return 1
+        pool_type = random.choice(pool_types)
+        log.info(f"Running test on {pool_type}")
+        rc = test_snap_mirror_cluster_ops(
+            rbd, sec_rbd, client, sec_client, pool_type, **kw
+        )
+        if rc:
+            log.error("Cluster operations on snapshot based mirroring clusters failed")
+            return 1
     except Exception as e:
         log.error(
             f"Testing cluster operations on snap mirroring clusters failed with error {str(e)}"

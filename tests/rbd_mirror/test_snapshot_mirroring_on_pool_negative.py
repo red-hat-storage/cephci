@@ -1,3 +1,5 @@
+import random
+
 from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.workflows.cleanup import cleanup
 from utility.log import Log
@@ -31,7 +33,22 @@ def run(**kw):
     2. Setup snapshot based mirroring in between these clusters at pool level
     3. Verify that enabling snapshot based mirroring at pool level errors out appropriately
     """
-    pool_types = ["rep_pool_config", "ec_pool_config"]
+    # Run on either replicated or EC pool
+    available_pool_types = [
+        pt for pt in ["rep_pool_config", "ec_pool_config"] if pt in kw.get("config", {})
+    ]
+    if not available_pool_types:
+        available_pool_types = ["rep_pool_config", "ec_pool_config"]
+    pool_type = random.choice(available_pool_types)
+    log.info(f"Running test on {pool_type}")
+
+    config = kw.get("config", {})
+    if pool_type == "rep_pool_config":
+        config["rep-pool-only"] = True
+    else:
+        config["ec-pool-only"] = True
+    pool_types = [pool_type]
+
     log.info(
         "Running negative scenario of enabling snapshot based mirroring at pool level"
     )

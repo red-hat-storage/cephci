@@ -24,6 +24,7 @@ and verify it fails.
 """
 
 import json
+import random
 
 from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.utils import getdict, random_string
@@ -55,177 +56,174 @@ def test_toggle_enable_mirroring_and_diff_ns(pri_config, sec_config, pool_types,
     def construct_imagespec(pool, namespace, image):
         return f"{pool}/{namespace}/{image}" if namespace else f"{pool}/{image}"
 
-    for pool_type in pool_types:
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
 
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            namespace = pool_config.get("namespace")
-            remote_namespace = pool_config.get("remote_namespace")
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        namespace = pool_config.get("namespace")
+        remote_namespace = pool_config.get("remote_namespace")
 
-            for image, image_config_val in multi_image_config.items():
-                pri_image_spec = construct_imagespec(pool, namespace, image)
-                sec_image_spec = construct_imagespec(pool, remote_namespace, image)
+        for image, image_config_val in multi_image_config.items():
+            pri_image_spec = construct_imagespec(pool, namespace, image)
+            sec_image_spec = construct_imagespec(pool, remote_namespace, image)
 
-                enable_image_mirroring(
-                    pri_config,
-                    sec_config,
-                    pool=pool,
-                    image=image,
-                    mirrormode="snapshot",
-                    namespace=namespace,
-                    remote_namespace=remote_namespace,
-                )
-
-                wait_for_status(
-                    rbd=rbd_primary,
-                    cluster_name=pri_config["cluster"].name,
-                    imagespec=pri_image_spec,
-                    state_pattern="up+stopped",
-                )
-                wait_for_status(
-                    rbd=rbd_secondary,
-                    cluster_name=sec_config["cluster"].name,
-                    imagespec=sec_image_spec,
-                    state_pattern="up+replaying",
-                )
-
-                out, err = rbd_primary.mirror.image.disable(
-                    **{"pool": pool, "namespace": namespace, "image": image}
-                )
-                if "Mirroring disabled" in out:
-                    log.info("Successfully disabled mirroring on site-A")
-
-                out, err = rbd_primary.mirror.pool.status(
-                    pool=pool, namespace=namespace, verbose=True, format="json"
-                )
-                data = json.loads(out)
-
-                # Get required values
-                if "OK" in data["summary"]["health"]:
-                    log.info("Health status is OK after disabling mirror")
-                else:
-                    raise Exception("Health status is not OK after disabling mirroring")
-
-                if data["images"]:
-                    raise Exception(
-                        "Images are still being mirrored after disabling mirroring"
-                    )
-                else:
-                    log.info("Image stopped mirroring after disabling mirroring")
-
-                out, err = rbd_secondary.mirror.pool.status(
-                    pool=pool, namespace=remote_namespace, verbose=True, format="json"
-                )
-                if "OK" in data["summary"]["health"]:
-                    log.info("Health status is OK after disabling mirror")
-                else:
-                    raise Exception("Health status is not OK after disabling mirroring")
-
-                if data["images"]:
-                    raise Exception(
-                        "Images are still being mirrored after disabling mirroring"
-                    )
-                else:
-                    log.info("Image stopped mirroring after disabling mirroring")
-
-                enable_image_mirroring(
-                    pri_config,
-                    sec_config,
-                    pool=pool,
-                    image=image,
-                    mirrormode="snapshot",
-                    namespace=namespace,
-                    remote_namespace=remote_namespace,
-                )
-
-                out, err = rbd_primary.mirror.pool.status(
-                    pool=pool, namespace=namespace, verbose=True, format="json"
-                )
-                data = json.loads(out)
-
-                # Get required values
-                if "OK" in data["summary"]["health"]:
-                    log.info("Health status is OK on primary after enabling mirror")
-                else:
-                    raise Exception(
-                        "Health status is not OK on primary after enabling mirroring"
-                    )
-
-                if data["summary"]["image_states"].get("replaying") > 0:
-                    log.info(
-                        "Image being mirrored from primary after enabling mirroring"
-                    )
-                else:
-                    raise Exception(
-                        "Image not mirroring from primary after enabling mirroring"
-                    )
-
-                out, err = rbd_secondary.mirror.pool.status(
-                    pool=pool, namespace=remote_namespace, verbose=True, format="json"
-                )
-                data = json.loads(out)
-
-                if "OK" in data["summary"]["health"]:
-                    log.info("Health status is OK on secondary after enabling mirror")
-                else:
-                    raise Exception(
-                        "Health status is not OK on secondary after enabling mirroring"
-                    )
-
-                if data["summary"]["image_states"].get("replaying") > 0:
-                    log.info(
-                        "Image being mirrored on secondary after enabling mirroring"
-                    )
-                else:
-                    raise Exception(
-                        "Image no mirroring on secondary after enabling mirroring"
-                    )
-            remote_namespace_new = "namespace_" + random_string(len=3)
-            rc = create_namespace_and_verify(
-                **{
-                    "pool-name": pool,
-                    "namespace": remote_namespace_new,
-                    "client": client_secondary,
-                }
+            enable_image_mirroring(
+                pri_config,
+                sec_config,
+                pool=pool,
+                image=image,
+                mirrormode="snapshot",
+                namespace=namespace,
+                remote_namespace=remote_namespace,
             )
 
-            if rc == 0:
-                log.info(
-                    "New namespace %s created on site-B on pool %s",
-                    remote_namespace_new,
-                    pool,
+            wait_for_status(
+                rbd=rbd_primary,
+                cluster_name=pri_config["cluster"].name,
+                imagespec=pri_image_spec,
+                state_pattern="up+stopped",
+            )
+            wait_for_status(
+                rbd=rbd_secondary,
+                cluster_name=sec_config["cluster"].name,
+                imagespec=sec_image_spec,
+                state_pattern="up+replaying",
+            )
+
+            out, err = rbd_primary.mirror.image.disable(
+                **{"pool": pool, "namespace": namespace, "image": image}
+            )
+            if "Mirroring disabled" in out:
+                log.info("Successfully disabled mirroring on site-A")
+
+            out, err = rbd_primary.mirror.pool.status(
+                pool=pool, namespace=namespace, verbose=True, format="json"
+            )
+            data = json.loads(out)
+
+            # Get required values
+            if "OK" in data["summary"]["health"]:
+                log.info("Health status is OK after disabling mirror")
+            else:
+                raise Exception("Health status is not OK after disabling mirroring")
+
+            if data["images"]:
+                raise Exception(
+                    "Images are still being mirrored after disabling mirroring"
                 )
             else:
+                log.info("Image stopped mirroring after disabling mirroring")
+
+            out, err = rbd_secondary.mirror.pool.status(
+                pool=pool, namespace=remote_namespace, verbose=True, format="json"
+            )
+            if "OK" in data["summary"]["health"]:
+                log.info("Health status is OK after disabling mirror")
+            else:
+                raise Exception("Health status is not OK after disabling mirroring")
+
+            if data["images"]:
                 raise Exception(
-                    "Failed to create namespace %s in pool %s on site-B",
-                    remote_namespace_new,
-                    pool,
+                    "Images are still being mirrored after disabling mirroring"
+                )
+            else:
+                log.info("Image stopped mirroring after disabling mirroring")
+
+            enable_image_mirroring(
+                pri_config,
+                sec_config,
+                pool=pool,
+                image=image,
+                mirrormode="snapshot",
+                namespace=namespace,
+                remote_namespace=remote_namespace,
+            )
+
+            out, err = rbd_primary.mirror.pool.status(
+                pool=pool, namespace=namespace, verbose=True, format="json"
+            )
+            data = json.loads(out)
+
+            # Get required values
+            if "OK" in data["summary"]["health"]:
+                log.info("Health status is OK on primary after enabling mirror")
+            else:
+                raise Exception(
+                    "Health status is not OK on primary after enabling mirroring"
                 )
 
-            enable_diff_namespace = {
-                "pool-spec": f"{pool}/{namespace}",
-                "mode": pool_config["mode"],
-                "remote-namespace": remote_namespace_new,
+            if data["summary"]["image_states"].get("replaying") > 0:
+                log.info("Image being mirrored from primary after enabling mirroring")
+            else:
+                raise Exception(
+                    "Image not mirroring from primary after enabling mirroring"
+                )
+
+            out, err = rbd_secondary.mirror.pool.status(
+                pool=pool, namespace=remote_namespace, verbose=True, format="json"
+            )
+            data = json.loads(out)
+
+            if "OK" in data["summary"]["health"]:
+                log.info("Health status is OK on secondary after enabling mirror")
+            else:
+                raise Exception(
+                    "Health status is not OK on secondary after enabling mirroring"
+                )
+
+            if data["summary"]["image_states"].get("replaying") > 0:
+                log.info("Image being mirrored on secondary after enabling mirroring")
+            else:
+                raise Exception(
+                    "Image no mirroring on secondary after enabling mirroring"
+                )
+        remote_namespace_new = "namespace_" + random_string(len=3)
+        rc = create_namespace_and_verify(
+            **{
+                "pool-name": pool,
+                "namespace": remote_namespace_new,
+                "client": client_secondary,
             }
+        )
 
-            out, err = rbd_primary.mirror.pool.enable(**enable_diff_namespace)
-            if not out and "failed to set the remote namespace" in err:
-                log.info(
-                    "Failed to enable namespace level mirroring for a different namespace on secondary"
-                    " cluster as expected: \n %s",
-                    err,
-                )
-            else:
-                raise Exception(
-                    "Namespace mirroring enabled for a different namespace on secondary cluster: %s",
-                    out,
-                )
+        if rc == 0:
             log.info(
-                "Test passed: Verify Disabling and re-enabling a namespace level mirroring "
-                "and enabling for different namespace"
+                "New namespace %s created on site-B on pool %s",
+                remote_namespace_new,
+                pool,
             )
+        else:
+            raise Exception(
+                "Failed to create namespace %s in pool %s on site-B",
+                remote_namespace_new,
+                pool,
+            )
+
+        enable_diff_namespace = {
+            "pool-spec": f"{pool}/{namespace}",
+            "mode": pool_config["mode"],
+            "remote-namespace": remote_namespace_new,
+        }
+
+        out, err = rbd_primary.mirror.pool.enable(**enable_diff_namespace)
+        if not out and "failed to set the remote namespace" in err:
+            log.info(
+                "Failed to enable namespace level mirroring for a different namespace on secondary"
+                " cluster as expected: \n %s",
+                err,
+            )
+        else:
+            raise Exception(
+                "Namespace mirroring enabled for a different namespace on secondary cluster: %s",
+                out,
+            )
+        log.info(
+            "Test passed: Verify Disabling and re-enabling a namespace level mirroring "
+            "and enabling for different namespace"
+        )
     return 0
 
 

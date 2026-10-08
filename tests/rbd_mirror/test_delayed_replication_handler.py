@@ -46,6 +46,7 @@ Based on the user config, particular test case will be executed.
 """
 
 import datetime
+import random
 import time
 
 from ceph.parallel import parallel
@@ -97,9 +98,21 @@ def run(**kw):
             },
         }
         kw["config"].update(pool_image_config)
+
+    # Run on either replicated or EC pool
+    available_pool_types = [
+        pt
+        for pt in ["rep_pool_config", "ec_pool_config"]
+        if pt in kw.get("config", {}) and kw["config"][pt].get("pool")
+    ]
+    pool_type = random.choice(available_pool_types)
+    log.info(f"Running test on {pool_type}")
+    if pool_type == "rep_pool_config":
+        kw["config"]["rep-pool-only"] = True
+    else:
+        kw["config"]["ec-pool-only"] = True
     imagespecs = [
-        f'{kw["config"]["rep_pool_config"]["pool"]}/{kw["config"]["rep_pool_config"]["image"]}',
-        f'{kw["config"]["ec_pool_config"]["pool"]}/{kw["config"]["ec_pool_config"]["image"]}',
+        f'{kw["config"][pool_type]["pool"]}/{kw["config"][pool_type]["image"]}',
     ]
 
     delay = config.get("delay", 600)

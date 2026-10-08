@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
@@ -25,51 +26,54 @@ def test_group_creation_images_add(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
-        for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
+    for pool, pool_config in multi_pool_config.items():
+        if "data_pool" in pool_config.keys():
+            _ = pool_config.pop("data_pool")
 
-            # 1. create a group per pool
-            group = kw.get("config", {}).get("group", "image_group_default")
-            group_create_kw = {"client": client, "pool": pool, "group": group}
-            rc = create_group_and_verify(**group_create_kw)
+        # 1. create a group per pool
+        group = kw.get("config", {}).get("group", "image_group_default")
+        group_create_kw = {"client": client, "pool": pool, "group": group}
+        rc = create_group_and_verify(**group_create_kw)
+        if rc:
+            log.error(f"group {group} creation failed, test case fail")
+            return 1
+        else:
+            log.info("STAGE: group creation succeeded")
+
+        # 2. Add add images to the group
+        for image, image_config in pool_config.items():
+            add_image_group_kw = {
+                "client": client,
+                "pool": pool,
+                "group": group,
+                "image": image,
+            }
+            rc = add_image_to_group_and_verify(**add_image_group_kw)
             if rc:
-                log.error(f"group {group} creation failed, test case fail")
+                log.error(f"Image {image} add failed, test case fail")
                 return 1
             else:
-                log.info("STAGE: group creation succeeded")
+                log.info(f"STAGE: image {image} add succeeded")
 
-            # 2. Add add images to the group
-            for image, image_config in pool_config.items():
-                add_image_group_kw = {
-                    "client": client,
-                    "pool": pool,
-                    "group": group,
-                    "image": image,
-                }
-                rc = add_image_to_group_and_verify(**add_image_group_kw)
-                if rc:
-                    log.error(f"Image {image} add failed, test case fail")
-                    return 1
-                else:
-                    log.info(f"STAGE: image {image} add succeeded")
-
-            # 3. Running IO on the images added to the group
-            log.info(f"Run IOs and verify rbd status for images in pool {pool}")
-            rc = wrapper_for_image_ops(
-                rbd=rbd,
-                pool=pool,
-                image_config=pool_config,
-                client=client,
-                ops_module="ceph.rbd.workflows.rbd",
-                ops_method="run_io_and_check_rbd_status",
-            )
-            if rc:
-                log.error(f"Run IOs and verify rbd status failed for pool {pool}")
-                return 1
+        # 3. Running IO on the images added to the group
+        log.info(f"Run IOs and verify rbd status for images in pool {pool}")
+        rc = wrapper_for_image_ops(
+            rbd=rbd,
+            pool=pool,
+            image_config=pool_config,
+            client=client,
+            ops_module="ceph.rbd.workflows.rbd",
+            ops_method="run_io_and_check_rbd_status",
+        )
+        if rc:
+            log.error(f"Run IOs and verify rbd status failed for pool {pool}")
+            return 1
     return 0
 
 

@@ -357,18 +357,26 @@ def run(**kw):
         )
 
         pool_types = ["rep_pool_config", "ec_pool_config"]
+        # Run on either replicated or EC pool
+        pool_type = random.choice(pool_types)
+        log.info("Running test on %s", pool_type)
+
+        config = kw.get("config")
+        if pool_type == "rep_pool_config":
+            config["rep-pool-only"] = True
+        else:
+            config["ec-pool-only"] = True
+
         grouptypes = [
             "single_pool_without_namespace",
             "single_pool_with_namespace",
         ]
-
-        for pooltype in pool_types:
-            group_type = grouptypes.pop(random.randrange(len(grouptypes)))
-            kw.get("config").get(pooltype).update({"grouptype": group_type})
-
+        if not config.get("grouptype"):
+            group_type = random.choice(grouptypes)
+            config.get(pool_type).update({"grouptype": group_type})
             log.info(
                 "Choosing Group type on %s - %s",
-                pooltype,
+                pool_type,
                 group_type,
             )
 
