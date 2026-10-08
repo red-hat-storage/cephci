@@ -20,7 +20,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 8.0
+                    rhcs-version: 8.1
                     release: released
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -86,7 +86,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 8.0
+                    rhcs-version: 8.1
                     release: released
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -152,7 +152,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 8.0
+                    rhcs-version: 8.1
                     release: released
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -380,7 +380,6 @@ tests:
               - "ceph config set client.rgw.shared.pri rgw_verify_ssl False"
               - "ceph orch restart {service_name:shared.pri}"
               - "sleep 120"
-              - "sleep 20"
         ceph-sec:
           config:
             commands:
@@ -394,7 +393,6 @@ tests:
               - "ceph config set client.rgw.shared.sec rgw_zone secondary"
               - "ceph orch restart {service_name:shared.sec}"
               - "sleep 120"
-              - "sleep 20"
         ceph-arc:
           config:
             commands:
@@ -409,7 +407,6 @@ tests:
               - "ceph config set client.rgw.shared.arc rgw_zone archive"
               - "ceph orch restart {service_name:shared.arc}"
               - "sleep 120"
-              - "sleep 20"
       desc: Setting up RGW multisite replication environment with archive zone
       module: exec.py
       name: setup multisite
