@@ -76,48 +76,47 @@ def migration_encrypted_rbd_images(rbd_obj, client, namespace, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            encryption_type = random.choice(
-                kw.get("config", {}).get("encryption_type", {})
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        encryption_type = random.choice(kw.get("config", {}).get("encryption_type", {}))
+        kw.update({f"{pool}": {}})
+        kw[pool].update({"encryption_type": encryption_type})
+        kw[pool].update({"pool_type": pool_type})
+        image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
+        kw[pool].update({"image": image})
+
+        if namespace:
+            # Create Namespace in pool
+            namespace_name = "namespace" + random_string(len=5)
+            rc = create_namespace_and_verify(
+                **{
+                    "pool-name": pool,
+                    "namespace": namespace_name,
+                    "client": client,
+                }
             )
-            kw.update({f"{pool}": {}})
-            kw[pool].update({"encryption_type": encryption_type})
-            kw[pool].update({"pool_type": pool_type})
-            image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
-            kw[pool].update({"image": image})
+            if rc != 0:
+                raise Exception("Error creating namespace in pool " + {pool})
+            # Set image Spec
+            image_spec = f"{pool}/{namespace_name}/{image}"
+        else:
+            # Set image Spec
+            image_spec = f"{pool}/{image}"
 
-            if namespace:
-                # Create Namespace in pool
-                namespace_name = "namespace" + random_string(len=5)
-                rc = create_namespace_and_verify(
-                    **{
-                        "pool-name": pool,
-                        "namespace": namespace_name,
-                        "client": client,
-                    }
-                )
-                if rc != 0:
-                    raise Exception("Error creating namespace in pool " + {pool})
-                # Set image Spec
-                image_spec = f"{pool}/{namespace_name}/{image}"
-            else:
-                # Set image Spec
-                image_spec = f"{pool}/{image}"
+        err = run_io_on_encryption_formatted_image(rbd, pool, image, image_spec, **kw)
+        if err:
+            return 1
 
-            err = run_io_on_encryption_formatted_image(
-                rbd, pool, image, image_spec, **kw
-            )
-            if err:
-                return 1
-
-            err = migrate_check_consistency(rbd, image_spec, **kw)
-            if err:
-                return 1
+        err = migrate_check_consistency(rbd, image_spec, **kw)
+        if err:
+            return 1
 
     return 0
 

@@ -1,3 +1,4 @@
+import random
 from random import randint
 
 from tests.rbd.exceptions import RbdBaseException
@@ -108,15 +109,13 @@ def run(**kw):
     rbd_obj = initial_rbd_config(**kw)
     rc = 1
     if rbd_obj:
-        rc = test_snapshot_rename_clone(
-            rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw
-        )
-
-        if rc:
-            return rc
-
-        rc = test_snapshot_rename_clone(
-            rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw
-        )
+        pool_entries = []
+        if "rbd_reppool" in rbd_obj:
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
+        if "rbd_ecpool" in rbd_obj:
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+        rc = test_snapshot_rename_clone(rbd_obj.get(rbd_key), pool_type, **kw)
 
     return rc

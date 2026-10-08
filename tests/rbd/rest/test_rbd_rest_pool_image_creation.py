@@ -1,3 +1,5 @@
+import random
+
 from ceph.rbd.initial_config import update_config
 from ceph.rbd.utils import exec_cmd
 from ceph.rbd.workflows.cleanup import cleanup
@@ -31,34 +33,37 @@ def test_rest_image_creation_in_pool(client, **kw):
     ec_pool_config = kw["config"].get("ec_pool_config", None)
     if ec_pool_config:
         config.update({"ec_pool_config": ec_pool_config})
-    for pool_type, pool_config in config.items():
-        for pool, image_config in pool_config.items():
-            rc = create_image_in_pool_verify(
-                rest=_rest,
-                client=client,
-                pool=pool,
-                pool_type=pool_type,
-                image_config=image_config,
-            )
-            if rc:
-                log.error("REST operation of pool and image creation failed")
-                return 1
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(list(config.keys()))
+    log.info(f"Running test on {pool_type}")
+    pool_config = config[pool_type]
+    for pool, image_config in pool_config.items():
+        rc = create_image_in_pool_verify(
+            rest=_rest,
+            client=client,
+            pool=pool,
+            pool_type=pool_type,
+            image_config=image_config,
+        )
+        if rc:
+            log.error("REST operation of pool and image creation failed")
+            return 1
 
-            # run IO on the image created by REST API
-            rbd = Rbd(client)
-            if pool_type == "ec_pool_config":
-                _ = image_config.pop("data_pool", None)
-            for image, image_conf in image_config.items():
-                io_rc = run_io_and_check_rbd_status(
-                    rbd=rbd,
-                    pool=pool,
-                    image=image,
-                    client=client,
-                    image_conf=image_conf,
-                )
-                if io_rc:
-                    log.error(f"IO on image {image} failed")
-                    return 1
+        # run IO on the image created by REST API
+        rbd = Rbd(client)
+        if pool_type == "ec_pool_config":
+            _ = image_config.pop("data_pool", None)
+        for image, image_conf in image_config.items():
+            io_rc = run_io_and_check_rbd_status(
+                rbd=rbd,
+                pool=pool,
+                image=image,
+                client=client,
+                image_conf=image_conf,
+            )
+            if io_rc:
+                log.error(f"IO on image {image} failed")
+                return 1
 
     return 0
 

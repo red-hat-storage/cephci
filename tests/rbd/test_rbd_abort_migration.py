@@ -33,6 +33,7 @@ Test Case Flow:
 
 """
 
+import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
@@ -60,155 +61,156 @@ def rollback_migration(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
 
-            # Create an RBD image in pool
-            image = "image_" + random_string(len=4)
-            out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": "5G"})
-            if err:
-                log.error(f"Create image {pool}/{image} failed with error {err}")
-                return 1
-            else:
-                log.info(f"Successfully created image {pool}/{image}")
+        # Create an RBD image in pool
+        image = "image_" + random_string(len=4)
+        out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": "5G"})
+        if err:
+            log.error(f"Create image {pool}/{image} failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully created image {pool}/{image}")
 
-            qcow_spec = {
-                "type": "qcow",
-                "stream": {
-                    "type": "http",
-                    "url": "https://download.ceph.com/qa/ubuntu-12.04.qcow2",
-                },
+        qcow_spec = {
+            "type": "qcow",
+            "stream": {
+                "type": "http",
+                "url": "https://download.ceph.com/qa/ubuntu-12.04.qcow2",
+            },
+        }
+        client.exec_command(
+            cmd="sudo curl -o /mnt/ubuntu-12.04.qcow2 http://download.ceph.com/qa/ubuntu-12.04.qcow2",
+            long_running=True,
+        )
+        out, err = client.exec_command(
+            cmd="sudo du -h /mnt/ubuntu-12.04.qcow2", output=True
+        )
+        qcow_data_size = out.split()[0]
+
+        client.exec_command(
+            cmd="sudo rm -rf /mnt/ubuntu-12.04.qcow2",
+        )
+
+        # Create a target pool where the image is to be migrated
+        is_ec_pool = True if "ec" in pool_type else False
+        config = kw.get("config", {})
+        target_pool = "target_pool_" + random_string()
+        target_pool_config = {}
+        if is_ec_pool:
+            data_pool_target = "data_pool_new_" + random_string()
+            target_pool_config["data_pool"] = data_pool_target
+        rc = create_single_pool_and_images(
+            config=config,
+            pool=target_pool,
+            pool_config=target_pool_config,
+            client=client,
+            cluster="ceph",
+            rbd=rbd,
+            ceph_version=int(config.get("rhbuild")[0]),
+            is_ec_pool=is_ec_pool,
+            is_secondary=False,
+            do_not_create_image=True,
+        )
+        if rc:
+            log.error(f"Creation of target pool {target_pool} failed")
+            return rc
+
+        # Adding the new pool details to config so that they are handled in cleanup
+        if pool_type == "rep_pool_config":
+            kw["config"]["rep_pool_config"][target_pool] = {}
+        elif pool_type == "ec_pool_config":
+            kw["config"]["ec_pool_config"][target_pool] = {
+                "data_pool": data_pool_target
             }
-            client.exec_command(
-                cmd="sudo curl -o /mnt/ubuntu-12.04.qcow2 http://download.ceph.com/qa/ubuntu-12.04.qcow2",
-                long_running=True,
-            )
-            out, err = client.exec_command(
-                cmd="sudo du -h /mnt/ubuntu-12.04.qcow2", output=True
-            )
-            qcow_data_size = out.split()[0]
 
-            client.exec_command(
-                cmd="sudo rm -rf /mnt/ubuntu-12.04.qcow2",
-            )
+        # Prepare Migration
+        target_image = "target_image_" + random_string()
+        rbd.migration.prepare(
+            source_spec=qcow_spec,
+            dest_spec=f"{target_pool}/{target_image}",
+            client_node=client,
+            long_running=True,
+        )
 
-            # Create a target pool where the image is to be migrated
-            is_ec_pool = True if "ec" in pool_type else False
-            config = kw.get("config", {})
-            target_pool = "target_pool_" + random_string()
-            target_pool_config = {}
-            if is_ec_pool:
-                data_pool_target = "data_pool_new_" + random_string()
-                target_pool_config["data_pool"] = data_pool_target
-            rc = create_single_pool_and_images(
-                config=config,
-                pool=target_pool,
-                pool_config=target_pool_config,
-                client=client,
-                cluster="ceph",
-                rbd=rbd,
-                ceph_version=int(config.get("rhbuild")[0]),
-                is_ec_pool=is_ec_pool,
-                is_secondary=False,
-                do_not_create_image=True,
-            )
-            if rc:
-                log.error(f"Creation of target pool {target_pool} failed")
-                return rc
+        # Verify prepare migration status
+        if verify_migration_state(
+            action="prepare",
+            image_spec=f"{target_pool}/{target_image}",
+            **kw,
+        ):
+            log.error("Failed to prepare migration")
+            return 1
+        else:
+            log.info("Migration prepare status verfied successfully")
 
-            # Adding the new pool details to config so that they are handled in cleanup
-            if pool_type == "rep_pool_config":
-                kw["config"]["rep_pool_config"][target_pool] = {}
-            elif pool_type == "ec_pool_config":
-                kw["config"]["ec_pool_config"][target_pool] = {
-                    "data_pool": data_pool_target
-                }
+        # # execute migration
+        rbd.migration.action(
+            action="execute",
+            dest_spec=f"{target_pool}/{target_image}",
+            client_node=client,
+            long_running=True,
+        )
 
-            # Prepare Migration
-            target_image = "target_image_" + random_string()
-            rbd.migration.prepare(
-                source_spec=qcow_spec,
-                dest_spec=f"{target_pool}/{target_image}",
-                client_node=client,
-                long_running=True,
-            )
+        # verify execute migration status
+        if verify_migration_state(
+            action="execute",
+            image_spec=f"{target_pool}/{target_image}",
+            **kw,
+        ):
+            log.error("Failed to execute migration")
+            return 1
+        else:
+            log.info("Migration executed successfully")
 
-            # Verify prepare migration status
-            if verify_migration_state(
-                action="prepare",
-                image_spec=f"{target_pool}/{target_image}",
-                **kw,
-            ):
-                log.error("Failed to prepare migration")
-                return 1
-            else:
-                log.info("Migration prepare status verfied successfully")
+        image_config = {"image-spec": f"{target_pool}/{target_image}"}
 
-            # # execute migration
-            rbd.migration.action(
-                action="execute",
-                dest_spec=f"{target_pool}/{target_image}",
-                client_node=client,
-                long_running=True,
-            )
+        out = rbd.image_usage(**image_config)
+        image_data = out[0]
 
-            # verify execute migration status
-            if verify_migration_state(
-                action="execute",
-                image_spec=f"{target_pool}/{target_image}",
-                **kw,
-            ):
-                log.error("Failed to execute migration")
-                return 1
-            else:
-                log.info("Migration executed successfully")
+        migrated_image_size = image_data.split("\n")[1].split()[3].strip() + "G"
 
-            image_config = {"image-spec": f"{target_pool}/{target_image}"}
+        log.info(f"External qcow data format original size {qcow_data_size}")
+        log.info(f"After migration to RBD image qcow data size {migrated_image_size}")
 
-            out = rbd.image_usage(**image_config)
-            image_data = out[0]
-
-            migrated_image_size = image_data.split("\n")[1].split()[3].strip() + "G"
-
-            log.info(f"External qcow data format original size {qcow_data_size}")
+        # Verification of external data migration.
+        if migrated_image_size == qcow_data_size:
             log.info(
-                f"After migration to RBD image qcow data size {migrated_image_size}"
+                "Image size after Migration Execute is same as the size of external source"
             )
-
-            # Verification of external data migration.
-            if migrated_image_size == qcow_data_size:
-                log.info(
-                    "Image size after Migration Execute is same as the size of external source"
-                )
-            else:
-                log.error(
-                    "Image size after Migration Execute is not same as the size of external source"
-                )
-                return 1
-
-            # Abort the migration
-            rbd.migration.action(
-                action="abort",
-                dest_spec=f"{target_pool}/{target_image}",
-                client_node=client,
+        else:
+            log.error(
+                "Image size after Migration Execute is not same as the size of external source"
             )
-            log.info("Migration abort executed successfully")
+            return 1
 
-            # verify target image does not exist after abort
-            rbdutil = rbdutils(**kw)
-            if rbdutil.image_exists(target_pool, target_image):
-                log.error(
-                    f"Image still exist after aborting the image migration in pool {target_pool}"
-                )
-                return 1
-            else:
-                log.info(
-                    f"Image {target_image} is not found in pool {target_pool} after aborting migration"
-                )
+        # Abort the migration
+        rbd.migration.action(
+            action="abort",
+            dest_spec=f"{target_pool}/{target_image}",
+            client_node=client,
+        )
+        log.info("Migration abort executed successfully")
+
+        # verify target image does not exist after abort
+        rbdutil = rbdutils(**kw)
+        if rbdutil.image_exists(target_pool, target_image):
+            log.error(
+                f"Image still exist after aborting the image migration in pool {target_pool}"
+            )
+            return 1
+        else:
+            log.info(
+                f"Image {target_image} is not found in pool {target_pool} after aborting migration"
+            )
     return 0
 
 

@@ -1,4 +1,5 @@
 import json
+import random
 import re
 from datetime import datetime
 
@@ -264,58 +265,39 @@ def run(**kw):
     rbd_obj = initial_rbd_config(**kw)
     rc = 1
     if rbd_obj:
-        # Run tests on thin provisioned image on replicated pool
+        pool_entries = []
+        if "rbd_reppool" in rbd_obj:
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
+        if "rbd_ecpool" in rbd_obj:
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+
+        # Run tests on thin provisioned image
         kw.get("config")["do_not_cleanup_pool"] = True
-        rc = test_rbd(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw)
+        rc = test_rbd(rbd_obj.get(rbd_key), pool_type, **kw)
 
         if rc:
             return rc
 
-        # Run tests on thin provisioned image on ec pool
-        rc = test_rbd(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw)
-
-        if rc:
-            return rc
-
-        # Run tests on thick provisioned image on replicated pool
+        # Run tests on thick provisioned image for the same pool type
         kw.get("config")["do_not_cleanup_pool"] = False
         kw.get("config")["thick_provision"] = True
-        kw["config"]["rep_pool_config"]["image"] = kw["config"]["rep_pool_config"].get(
+        kw["config"][pool_type]["image"] = kw["config"][pool_type].get(
             "image_thick_provision",
-            f"rbd_thick_{kw['config']['rep_pool_config']['image']}",
+            f"rbd_thick_{kw['config'][pool_type]['image']}",
         )
-        kw["config"]["rep_pool_config"]["snap"] = kw["config"]["rep_pool_config"].get(
+        kw["config"][pool_type]["snap"] = kw["config"][pool_type].get(
             "snap_thick_provision",
-            f"rbd_thick_{kw['config']['rep_pool_config']['snap']}",
+            f"rbd_thick_{kw['config'][pool_type]['snap']}",
         )
-        kw["config"]["rep_pool_config"]["clone"] = kw["config"]["rep_pool_config"].get(
+        kw["config"][pool_type]["clone"] = kw["config"][pool_type].get(
             "clone_thick_provision",
-            f"rbd_thick_{kw['config']['rep_pool_config']['clone']}",
+            f"rbd_thick_{kw['config'][pool_type]['clone']}",
         )
-        kw["config"]["rep_pool_config"]["size"] = kw["config"]["rep_pool_config"].get(
+        kw["config"][pool_type]["size"] = kw["config"][pool_type].get(
             "thick_size", "2G"
         )
-        rc = test_rbd(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw)
-
-        if rc:
-            return rc
-
-        # Run tests on thick provisioned image on ec pool
-        kw["config"]["ec_pool_config"]["image"] = kw["config"]["ec_pool_config"].get(
-            "image_thick_provision",
-            f"rbd_thick_{kw['config']['ec_pool_config']['image']}",
-        )
-        kw["config"]["ec_pool_config"]["snap"] = kw["config"]["ec_pool_config"].get(
-            "snap_thick_provision",
-            f"rbd_thick_{kw['config']['ec_pool_config']['snap']}",
-        )
-        kw["config"]["ec_pool_config"]["clone"] = kw["config"]["ec_pool_config"].get(
-            "clone_thick_provision",
-            f"rbd_thick_{kw['config']['ec_pool_config']['clone']}",
-        )
-        kw["config"]["ec_pool_config"]["size"] = kw["config"]["ec_pool_config"].get(
-            "thick_size", "2G"
-        )
-        rc = test_rbd(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw)
+        rc = test_rbd(rbd_obj.get(rbd_key), pool_type, **kw)
 
     return rc

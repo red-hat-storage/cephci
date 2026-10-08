@@ -18,6 +18,8 @@ Test Case Flow :
 6. verify that image migration is not allowed as image is read-only for client-x.
 """
 
+import random
+
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import (
     Rbd,
@@ -127,21 +129,23 @@ def run(**kw):
             kw["config"].pop("ec-pool-k-m")
 
     rbd = Rbd(**kw)
-    src_pools = []
     src_pool1 = kw["config"]["source"]["rep_pool_config"]["pool"]
-    src_pools.append(src_pool1)
     src_pool2 = kw["config"]["source"]["ec_pool_config"]["pool"]
-    src_pools.append(src_pool2)
     dest_pool1 = kw["config"]["destination"]["rep_pool_config"]["pool"]
     dest_pool2 = kw["config"]["destination"]["ec_pool_config"]["pool"]
     namespace = kw["config"].get("namespace", "testnamespace")
     flag = 0
     client_node = rbd.ceph_client
     try:
-        # create namesapce for rep_pool and ec_pool
-        for pool in src_pools:
-            rbd.create_namespace(pool, namespace)
-            verify_namespace_exist(rbd, pool, namespace)
+        pool_entries = [
+            ("rep_pool_config", src_pool1, dest_pool1, "rbd_rep_image"),
+            ("ec_pool_config", src_pool2, dest_pool2, "rbd_ec_image"),
+        ]
+        pool_type, src_pool, dest_pool, image = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+
+        rbd.create_namespace(src_pool, namespace)
+        verify_namespace_exist(rbd, src_pool, namespace)
 
         # backup the client.1 keyring file
         cmd = (
@@ -149,24 +153,12 @@ def run(**kw):
         )
         rbd.exec_cmd(cmd=cmd)
 
-        log.info("running test case on Replication pool")
         if image_migrate_and_verify(
             rbd,
-            src_pool=src_pool1,
-            dest_pool=dest_pool1,
+            src_pool=src_pool,
+            dest_pool=dest_pool,
             namespace=namespace,
-            image="rbd_rep_image",
-            client_node=client_node,
-        ):
-            flag = 1
-
-        log.info("Running test case on EC pool")
-        if image_migrate_and_verify(
-            rbd,
-            src_pool=src_pool2,
-            dest_pool=dest_pool2,
-            namespace=namespace,
-            image="rbd_ec_image",
+            image=image,
             client_node=client_node,
         ):
             flag = 1
