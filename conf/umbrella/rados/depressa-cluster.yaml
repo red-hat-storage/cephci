@@ -1,0 +1,128 @@
+# 7 node cluster with 1 client
+# baremetal config for depressa Octo lab machines
+---
+globals:
+  - ceph-cluster:
+      name: ceph-depressa
+      networks:
+        public:
+          - 10.1.172.0/23
+        cluster:
+          - 172.20.0.0/16
+      nodes:
+        - hostname: depressa002
+          id: node1
+          ip: 10.1.172.202
+          root_password: passwd
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - rgw
+            - osd
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        - hostname: depressa003
+          id: node2
+          ip: 10.1.172.203
+          root_password: passwd
+          role:
+            - _admin
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+
+        - hostname: depressa004
+          id: node3
+          ip: 10.1.172.204
+          root_password: passwd
+          role:
+            - _admin
+            - mon
+            - mgr
+            - osd
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        - hostname: depressa005
+          id: node4
+          ip: 10.1.172.205
+          root_password: passwd
+          role:
+            - _admin
+            - mds
+            - rgw
+            - osd
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        - hostname: depressa006
+          id: node5
+          ip: 10.1.172.206
+          root_password: passwd
+          role:
+            - nfs
+            - rgw
+            - osd
+            - node-exporter
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        - hostname: depressa011
+          id: node6
+          ip: 10.1.172.211
+          root_password: passwd
+          role:
+            - mds
+            - osd
+            - nfs
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+        - hostname: depressa012
+          id: node7
+          ip: 10.1.172.212
+          root_password: passwd
+          role:
+            - osd
+            - rgw
+            - client
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/nvme0n1
+            - /dev/nvme1n1

@@ -1,0 +1,759 @@
+#===============================================================================================
+#---    Test Suite: NFS State Lifecycle Validation Under Fault Injection   ---
+#===============================================================================================
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+#
+# Purpose:
+#   Validates NFS-Ganesha client state lifecycle — identity management, lease
+#   handling, state table integrity, churn resilience, export reorganization,
+#   admin interleaving, observability, and reconnect storms — across three
+#   injection layers to isolate where state corruption originates.
+#
+# Layout (3 sections after bootstrap):
+#
+#   Section 1 — Layer 1 (injection_layer: nfs_protocol)
+#     Pure NFS protocol-level scenarios with no backend fault injection.
+#     Validates that NFS-Ganesha's own state machine handles lifecycle
+#     transitions correctly in a healthy backend environment.
+#
+#   Section 2 — Layer 2 (injection_layer: mds_backend)
+#     Same 10 scenarios but with Ceph debug fault injection configs targeting
+#     MDS sessions, client caps, socket failures, and network chaos.
+#     Validates NFS-Ganesha state coherence when the CephFS backend is degraded.
+#
+#   Section 3 — Combined (injection_layer: combined)
+#     Same 10 scenarios with both NFS-layer and MDS-backend faults active
+#     simultaneously. Validates end-to-end state resilience under cascading
+#     failures across all layers.
+#
+#===============================================================================================
+tests:
+
+  #---------------------------------------------------------------------------------------------
+  # Bootstrap: Cluster deployment, CephFS, MDS, and client setup
+  # Note: NFS clusters are created per-scenario by the test code (not here).
+  #---------------------------------------------------------------------------------------------
+
+  - test:
+      name: Install ceph pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap Ceph cluster with MON, MGR, OSD, CephFS, and MDS services
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              command: apply
+              service: mds
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  label: mds
+
+  - test:
+      name: Configure client 1
+      desc: Configure NFS client on node5
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+
+  - test:
+      name: Configure client 2
+      desc: Configure NFS client on node6
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+
+  - test:
+      name: Configure client 3
+      desc: Configure NFS client on node7
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+
+  #=============================================================================================
+  #  SECTION 1 — Layer 1: NFS Protocol-Level State Lifecycle (injection_layer: nfs_protocol)
+  #=============================================================================================
+  #
+  #  What this section tests:
+  #    Each scenario exercises a distinct aspect of NFS-Ganesha's client state
+  #    lifecycle — identity, leases, cardinality, churn, export mutations, admin
+  #    operations, observability, and reconnect storms — using ONLY NFS protocol
+  #    layer operations. No backend fault injection is applied.
+  #
+  #  How chaos is induced:
+  #    Purely through NFS client behavior: rapid mount/unmount, concurrent I/O,
+  #    export CRUD during active sessions, randomized operation sequences, and
+  #    burst reconnection patterns. The CephFS/MDS backend remains healthy.
+  #
+  #  What a failure means:
+  #    A failure here indicates a bug in NFS-Ganesha's own state machine —
+  #    incorrect identity handling, lease logic errors, state table corruption,
+  #    or resource leaks — independent of any backend issues.
+  #
+  #  Validation approach:
+  #    NFS client state verification, mount availability checks, export
+  #    accessibility probes, daemon counter assertions, and data integrity
+  #    checksums after each lifecycle transition.
+  #
+  #=============================================================================================
+
+  # Scenario 1: Validate that client identities are created on mount, refreshed
+  # on reconnect, and cleanly torn down on unmount with no residual state.
+  - test:
+      name: "L1 - Client Identity Lifecycle"
+      desc: "Validate client identity creation, credential refresh, and clean teardown through NFS mount lifecycle"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: client_identity_lifecycle
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        num_clients: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 2: Verify lease expiry and renewal correctness when multiple
+  # clients sustain parallel I/O that keeps leases alive under pressure.
+  - test:
+      name: "L1 - Lease Expiry Under Load"
+      desc: "Verify lease expiry and renewal under sustained parallel I/O from multiple clients"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: lease_expiry_under_load
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 3: Push state table cardinality to limits with a high number of
+  # concurrent clients and exports to detect overflow or degradation.
+  - test:
+      name: "L1 - State Cardinality Stress"
+      desc: "Stress NFS state tables with high client and export counts to detect cardinality limits"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: state_cardinality_stress
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 10
+        duration: 300
+        num_clients: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 4: Rapid mount/unmount churn cycles to validate that state cleanup
+  # is complete and resources are reclaimed without leaks.
+  - test:
+      name: "L1 - Client State Churn"
+      desc: "Rapid client mount/unmount cycles to validate state cleanup and resource reclamation"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: client_state_churn
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        churn_rate: 5
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 5: Add, remove, and modify exports while clients hold active state
+  # and I/O, verifying no state corruption or orphaned entries.
+  - test:
+      name: "L1 - Export Reorg State Integrity"
+      desc: "Add, remove, and modify exports while clients hold active state and I/O"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: export_reorg_state_integrity
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 6: Randomized client operation sequences using a seeded generator
+  # to discover unexpected state transitions or crashes.
+  - test:
+      name: "L1 - Generative Client Behavior"
+      desc: "Randomized client operation sequences to discover unexpected state transitions"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: generative_client_behavior
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 7: Interleave admin operations (export create/delete, cluster
+  # reconfiguration) with active client I/O to detect race conditions.
+  - test:
+      name: "L1 - Admin Op Interleave"
+      desc: "Interleave admin operations with active client I/O to detect state races"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: admin_op_interleave
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 8: Verify that NFS daemon metrics, counters, and health check
+  # outputs accurately reflect the current client and export state.
+  # Note: S8 keeps the full 5x60s memory check (default) since it is the
+  # primary leak-detection scenario.
+  - test:
+      name: "L1 - Observability Validation"
+      desc: "Verify NFS metrics, daemon counters, and health checks reflect actual state"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: observability_validation
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+
+  # Scenario 9: Burst reconnection patterns simulating network flap where many
+  # clients disconnect and reconnect simultaneously.
+  - test:
+      name: "L1 - Rapid Reconnect Storms"
+      desc: "Burst reconnection patterns simulating network flap and client migration"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: rapid_reconnect_storms
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  # Scenario 10: Maximum state pressure by combining client churn with export
+  # reorganization and concurrent I/O on all remaining mounts.
+  - test:
+      name: "L1 - Combined Churn Failure"
+      desc: "Combined client churn with export reorganization for maximum state pressure"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: combined_churn_failure
+        injection_layer: nfs_protocol
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        churn_rate: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+
+  #=============================================================================================
+  #  SECTION 2 — Layer 2: MDS Backend Fault Injection (injection_layer: mds_backend)
+  #=============================================================================================
+  #
+  #  What this section tests:
+  #    The same 10 state lifecycle scenarios from Section 1, but now with Ceph
+  #    debug fault injection configs targeting MDS sessions, client caps, socket
+  #    transport, and network paths. This isolates whether NFS-Ganesha can
+  #    maintain state coherence when its CephFS backend is degraded.
+  #
+  #  How chaos is induced:
+  #    Via Ceph config injection parameters: client_inject_fixed_oldest_tid,
+  #    client_inject_release_failure, ms_inject_socket_failures,
+  #    ms_inject_delay_probability, client_debug_inject_tick_delay, and
+  #    objecter_inject_no_watch_ping. Additionally, named profiles
+  #    (client_session_stress, network_chaos, mds_chaos, network_latency,
+  #    multi_layer_chaos) apply coordinated fault sets.
+  #
+  #  What a failure means:
+  #    A failure here indicates NFS-Ganesha cannot maintain client state
+  #    integrity when MDS sessions stall, caps are not released, sockets fail,
+  #    or messages are delayed. The NFS protocol layer itself is correct (proven
+  #    by Section 1), so the root cause is backend fault propagation.
+  #
+  #  Validation approach:
+  #    Data integrity checksums, state recovery verification after fault
+  #    clearance, lease coherence checks, MDS session state cross-referencing
+  #    with NFS client state, and client I/O resumption timing.
+  #
+  #=============================================================================================
+
+  # Scenario 1: Client identity lifecycle under MDS fault injection — oldest TID
+  # is pinned and sockets are intermittently dropped to disrupt cap renewal.
+  - test:
+      name: "L2 - Client Identity Lifecycle"
+      desc: "Client identity lifecycle under MDS backend fault injection with fixed oldest TID and socket failures"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: client_identity_lifecycle
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        num_clients: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          configs:
+            client_inject_fixed_oldest_tid: true
+            ms_inject_socket_failures: 500
+
+  # Scenario 2: Lease expiry under MDS session stress with a reduced lease
+  # lifetime to accelerate expiry/renewal cycles and expose timing bugs.
+  - test:
+      name: "L2 - Lease Expiry Under Load"
+      desc: "Lease expiry under MDS session stress with reduced lease lifetime"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: lease_expiry_under_load
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: client_session_stress
+          lease_lifetime: 15
+
+  # Scenario 3: State cardinality stress with injected client cap release
+  # failures forcing the MDS to accumulate stale capabilities.
+  - test:
+      name: "L2 - State Cardinality Stress"
+      desc: "State cardinality stress with injected client release failures in MDS backend"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: state_cardinality_stress
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 10
+        duration: 300
+        num_clients: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          configs:
+            client_inject_release_failure: true
+
+  # Scenario 4: Client state churn under network chaos affecting MDS
+  # communication paths to simulate unstable datacenter interconnects.
+  - test:
+      name: "L2 - Client State Churn"
+      desc: "Client state churn under network chaos affecting MDS communication"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: client_state_churn
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        churn_rate: 5
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: network_chaos
+
+  # Scenario 5: Export reorganization under MDS daemon chaos — MDS restarts and
+  # failovers during active export mutations to test state recovery.
+  - test:
+      name: "L2 - Export Reorg State Integrity"
+      desc: "Export reorganization integrity with MDS daemon chaos injection"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: export_reorg_state_integrity
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: mds_chaos
+
+  # Scenario 6: Generative client behavior under network latency injection with
+  # tick delay to slow MDS heartbeat processing and expose race windows.
+  - test:
+      name: "L2 - Generative Client Behavior"
+      desc: "Generative client behavior under network latency and tick delay injection"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: generative_client_behavior
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: network_latency
+          configs:
+            client_debug_inject_tick_delay: 5
+
+  # Scenario 7: Admin operations interleaved with MDS chaos and random message
+  # delays to trigger admin/state-machine race conditions.
+  - test:
+      name: "L2 - Admin Op Interleave"
+      desc: "Admin operations interleaved with MDS chaos and message delay injection"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: admin_op_interleave
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: mds_chaos
+          configs:
+            ms_inject_delay_probability: 0.03
+
+  # Scenario 8: Observability validation under client session stress to verify
+  # that metrics remain accurate when backend sessions are disrupted.
+  # Note: S8 keeps the full 5x60s memory check (default) since it is the
+  # primary leak-detection scenario.
+  - test:
+      name: "L2 - Observability Validation"
+      desc: "Observability validation under client session stress in MDS backend"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: observability_validation
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        error_injection:
+          profile: client_session_stress
+
+  # Scenario 9: Rapid reconnect storms with socket failures and suppressed watch
+  # pings to simulate clients losing backend connectivity mid-reconnect.
+  - test:
+      name: "L2 - Rapid Reconnect Storms"
+      desc: "Rapid reconnect storms with socket failures and watch ping suppression"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: rapid_reconnect_storms
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          configs:
+            ms_inject_socket_failures: 200
+            objecter_inject_no_watch_ping: true
+
+  # Scenario 10: Combined churn and failure under multi-layer chaos that
+  # activates all injection profiles simultaneously for worst-case validation.
+  - test:
+      name: "L2 - Combined Churn Failure"
+      desc: "Combined churn and failure under multi-layer chaos affecting all backends"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: combined_churn_failure
+        injection_layer: mds_backend
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        churn_rate: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: multi_layer_chaos
+
+  #=============================================================================================
+  #  SECTION 3 — Combined: NFS Protocol + MDS Backend (injection_layer: combined)
+  #=============================================================================================
+  #
+  #  What this section tests:
+  #    The same 10 state lifecycle scenarios with BOTH NFS protocol-level chaos
+  #    and MDS backend fault injection active simultaneously. This is the most
+  #    aggressive layer — it validates that NFS-Ganesha can maintain end-to-end
+  #    state integrity when faults cascade across all layers concurrently.
+  #
+  #  How chaos is induced:
+  #    The test harness applies NFS client-side chaos (rapid mounts, churn,
+  #    export mutations) at the same time as backend injection configs
+  #    (socket failures, cap release failures, MDS chaos, network latency).
+  #    This creates realistic multi-layer fault scenarios.
+  #
+  #  What a failure means:
+  #    A failure here indicates cascading state corruption — faults at one layer
+  #    amplify into unrecoverable states at another. Section 1 and 2 passing
+  #    while Section 3 fails pinpoints cross-layer interaction bugs that only
+  #    manifest under combined stress.
+  #
+  #  Validation approach:
+  #    End-to-end data integrity (checksum verification), state convergence
+  #    after fault clearance, client transparency timing (I/O resumption
+  #    targets), cross-layer state consistency (NFS client count matches MDS
+  #    session count), and zero resource leaks post-recovery.
+  #
+  #=============================================================================================
+
+  # Scenario 1: Client identity lifecycle under combined NFS and MDS faults —
+  # protocol-level churn plus oldest TID pinning and socket disruption.
+  - test:
+      name: "Combined - Client Identity Lifecycle"
+      desc: "Client identity lifecycle under combined NFS protocol and MDS backend fault injection"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: client_identity_lifecycle
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        num_clients: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          configs:
+            client_inject_fixed_oldest_tid: true
+            ms_inject_socket_failures: 500
+
+  # Scenario 2: Lease expiry under combined NFS load and MDS session stress with
+  # reduced lease lifetime to maximize expiry/renewal contention.
+  - test:
+      name: "Combined - Lease Expiry Under Load"
+      desc: "Lease expiry under combined NFS protocol load and MDS session stress"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: lease_expiry_under_load
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: client_session_stress
+          lease_lifetime: 15
+
+  # Scenario 3: State cardinality stress under combined faults with cap release
+  # failures amplifying the high-cardinality state table pressure.
+  - test:
+      name: "Combined - State Cardinality Stress"
+      desc: "State cardinality stress under combined faults with client release failures"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: state_cardinality_stress
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 10
+        duration: 300
+        num_clients: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          configs:
+            client_inject_release_failure: true
+
+  # Scenario 4: Client state churn under combined NFS reconnect pressure and
+  # MDS network chaos to simulate real-world unstable environments.
+  - test:
+      name: "Combined - Client State Churn"
+      desc: "Client state churn under combined NFS reconnect pressure and network chaos"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: client_state_churn
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        churn_rate: 5
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: network_chaos
+
+  # Scenario 5: Export reorganization under combined NFS export mutations and
+  # MDS daemon chaos to stress state recovery across both layers.
+  - test:
+      name: "Combined - Export Reorg State Integrity"
+      desc: "Export reorganization under combined NFS mutations and MDS daemon chaos"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: export_reorg_state_integrity
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: mds_chaos
+
+  # Scenario 6: Generative client behavior under combined NFS randomization and
+  # MDS network latency with tick delay to widen race windows.
+  - test:
+      name: "Combined - Generative Client Behavior"
+      desc: "Generative client behavior under combined NFS randomization and network latency"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: generative_client_behavior
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: network_latency
+          configs:
+            client_debug_inject_tick_delay: 5
+
+  # Scenario 7: Admin operations under combined NFS interleaving and MDS chaos
+  # with message delays to maximize admin/state-machine race exposure.
+  - test:
+      name: "Combined - Admin Op Interleave"
+      desc: "Admin operations under combined NFS interleaving and MDS chaos with message delays"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: admin_op_interleave
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: mds_chaos
+          configs:
+            ms_inject_delay_probability: 0.03
+
+  # Scenario 8: Observability validation under combined NFS state transitions
+  # and MDS session stress to verify metrics under worst-case conditions.
+  # Note: S8 keeps the full 5x60s memory check (default) since it is the
+  # primary leak-detection scenario.
+  - test:
+      name: "Combined - Observability Validation"
+      desc: "Observability validation under combined NFS state transitions and session stress"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: observability_validation
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        error_injection:
+          profile: client_session_stress
+
+  # Scenario 9: Rapid reconnect storms under combined NFS burst reconnections
+  # and MDS socket failures with suppressed watch pings.
+  - test:
+      name: "Combined - Rapid Reconnect Storms"
+      desc: "Rapid reconnect storms under combined NFS burst reconnections and MDS socket failures"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: rapid_reconnect_storms
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          configs:
+            ms_inject_socket_failures: 200
+            objecter_inject_no_watch_ping: true
+
+  # Scenario 10: Combined churn and failure under multi-layer chaos across both
+  # NFS and MDS layers for ultimate state resilience validation.
+  - test:
+      name: "Combined - Combined Churn Failure"
+      desc: "Combined churn and failure under multi-layer chaos across all layers"
+      module: nfs_state_lifecycle.test_nfs_state_lifecycle.py
+      abort-on-fail: false
+      config:
+        test_scenario: combined_churn_failure
+        injection_layer: combined
+        fs_name: cephfs
+        num_exports: 3
+        duration: 300
+        churn_rate: 3
+        mem_check_samples: 3
+        mem_check_interval: 30
+        error_injection:
+          profile: multi_layer_chaos

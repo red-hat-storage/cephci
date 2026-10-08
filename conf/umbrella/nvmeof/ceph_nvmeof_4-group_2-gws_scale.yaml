@@ -1,0 +1,81 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      vm-size: ci.standard.xl
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+      node2:
+        role:
+          - mon
+          - mgr
+      node3:
+        role:
+          - nvmeof-gw
+      node4:
+        role:
+          - nvmeof-gw
+      node5:
+        role:
+          - mds
+          - osd
+          - rgw
+          - nvmeof-gw
+        no-of-volumes: 4
+        disk-size: 20
+      node6:
+        role:
+          - mon
+          - osd
+          - nvmeof-gw
+        no-of-volumes: 4
+        disk-size: 20
+      node7:
+        role:
+          - osd
+          - nvmeof-gw
+        no-of-volumes: 4
+        disk-size: 20
+      node8:
+        role:
+          - osd
+          - nvmeof-gw
+        no-of-volumes: 4
+        disk-size: 20
+      node9:
+        role:
+          - osd
+          - nvmeof-gw
+        no-of-volumes: 4
+        disk-size: 20
+      node10:
+        role:
+          - osd
+          - nvmeof-gw
+        no-of-volumes: 4
+        disk-size: 20
+      node11:
+        role:
+          - client
+      node12:
+        role:
+          - client
+      node13:
+        role:
+          - client
+      node14:
+        role:
+          - client
+      node15:
+        role:
+          - osd
+        no-of-volumes: 6
+        disk-size: 20
+      node16:
+        role:
+          - osd
+        no-of-volumes: 6
+        disk-size: 20
