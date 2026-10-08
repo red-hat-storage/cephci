@@ -2,6 +2,7 @@
 Contains helper functions that can used across the module.
 """
 
+import ipaddress
 import json
 import os
 import tempfile
@@ -171,6 +172,136 @@ class GenerateServiceSpec:
         gw = node_sub.split("/")[0]
         cidr = node_sub.split("/")[1]
         return gw, cidr
+
+    def _get_cluster_subnets(self):
+        """Return unique node subnets from the cluster."""
+        subnets = []
+        for node in self.cluster.get_nodes():
+            subnet = getattr(node, "subnet", None)
+            if subnet and subnet not in subnets:
+                subnets.append(subnet)
+        return subnets
+
+    def _get_placement_node(self, placement_hosts=None):
+        """
+        Return the first ingress placement node.
+
+        Args:
+            placement_hosts (List): hostnames of the ingress placement nodes
+
+        Returns:
+            CephNode or None
+        """
+        nodes = self.cluster.get_nodes()
+        for node in nodes:
+            if not placement_hosts or node.hostname in placement_hosts:
+                return node
+        return nodes[0] if nodes else None
+
+    @staticmethod
+    def _create_reserved_ip(vm_node):
+        """
+        Reserve an IP on the node's VPC subnet via the IBM Cloud VPC API.
+
+        Args:
+            vm_node: CephVMNodeIBM instance
+
+        Returns:
+            (reserved_ip_id, address, prefix) tuple
+        """
+        subnet_id = vm_node.node["primary_network_interface"]["subnet"]["id"]
+        result = vm_node.service.create_subnet_reserved_ip(
+            subnet_id=subnet_id
+        ).get_result()
+        address = result["address"]
+        LOG.info("Reserved IP %s on subnet %s", address, subnet_id)
+
+        prefix = ipaddress.ip_network(vm_node.subnet, strict=False).prefixlen
+        return result["id"], address, prefix
+
+    def _allocate_ingress_vip(self, placement_hosts=None):
+        """
+        Resolve the keepalived VIP for ingress by reserving a free IP on
+        the placement node's VPC subnet via the IBM Cloud API (IBMC only).
+
+        The allocated VIP is stored on the cluster object so it can be
+        retrieved by get_ingress_vip_details() and freed by
+        release_ingress_vips().
+        """
+        node = self._get_placement_node(placement_hosts)
+        if not node:
+            raise ValueError("virtual_ip: auto set but no placement node found")
+
+        vm_node = getattr(node, "vm_node", None)
+        if not (getattr(vm_node, "service", None) and getattr(vm_node, "node", None)):
+            raise ValueError("virtual_ip: auto requires IBMC nodes with VPC service")
+
+        if node.use_ipv6:
+            raise ValueError("virtual_ip: auto is not supported with IPv6")
+
+        reserved_ip_id, address, prefix = self._create_reserved_ip(vm_node)
+        vip_cidr = f"{address}/{prefix}"
+
+        vip_list = getattr(self.cluster, "_ingress_vips", [])
+        vip_list.append(
+            {
+                "id": reserved_ip_id,
+                "address": address,
+                "prefix": prefix,
+                "cidr": vip_cidr,
+                "subnet_id": vm_node.node["primary_network_interface"]["subnet"][
+                    "id"
+                ],
+            }
+        )
+        self.cluster._ingress_vips = vip_list
+
+        return vip_cidr
+
+    @staticmethod
+    def get_ingress_vip_details(cluster):
+        """
+        Return the list of ingress VIPs allocated during spec generation.
+
+        Each entry is a dict with keys: id, address, prefix, cidr, subnet_id.
+
+        Args:
+            cluster: Ceph cluster object
+
+        Returns:
+            list of VIP detail dicts, or empty list if none allocated
+        """
+        return getattr(cluster, "_ingress_vips", [])
+
+    @staticmethod
+    def release_ingress_vips(cluster):
+        """
+        Delete the reserved IPs allocated by virtual_ip: auto.
+
+        Args:
+            cluster: Ceph cluster object
+        """
+        vips = getattr(cluster, "_ingress_vips", [])
+        if not vips:
+            return
+
+        service = None
+        for node in cluster.get_nodes():
+            service = getattr(getattr(node, "vm_node", None), "service", None)
+            if service:
+                break
+
+        remaining = []
+        for vip in vips:
+            try:
+                service.delete_subnet_reserved_ip(
+                    subnet_id=vip["subnet_id"], id=vip["id"]
+                )
+                LOG.info("Released reserved IP %s", vip["address"])
+            except Exception as err:  # noqa
+                LOG.warning("Failed to release reserved IP %s: %s", vip["address"], err)
+                remaining.append(vip)
+        cluster._ingress_vips = remaining
 
     def get_hostnames(self, node_names):
         """
@@ -782,7 +913,8 @@ class GenerateServiceSpec:
                   label: rgw
                 spec:
                   backend_service: rgw.ceph-scale-test-y7nmci-node2
-                  virtual_ip: 10.0.208.0/22
+                  virtual_ip: auto | <ip>/<prefix>   # auto = reserved IP via IBM Cloud VPC API (IBMC only)
+                  virtual_interface_networks: auto | [<cidr>, ...]
                   frontend_port: 8000
                   monitor_port: 1967
                   ssl_cert: create-cert | <contents of crt>
@@ -795,7 +927,27 @@ class GenerateServiceSpec:
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
-        if spec["spec"].get("ssl_cert") == "create-cert":
+        # Opt-in only: suite must set virtual_ip / virtual_interface_networks: auto
+        ingress_spec = spec.setdefault("spec", {})
+        if ingress_spec.get("virtual_ip") == "auto":
+            ingress_spec["virtual_ip"] = self._allocate_ingress_vip(
+                placement_hosts=spec["placement"].get("hosts")
+            )
+            LOG.info(
+                "Resolved virtual_ip: auto -> %s",
+                ingress_spec["virtual_ip"],
+            )
+
+        if ingress_spec.get("virtual_interface_networks") == "auto":
+            subnets = self._get_cluster_subnets()
+            if not subnets:
+                raise ValueError(
+                    "virtual_interface_networks: auto set but no node subnets found"
+                )
+            ingress_spec["virtual_interface_networks"] = subnets
+            LOG.info("Resolved virtual_interface_networks: auto -> %s", subnets)
+
+        if ingress_spec.get("ssl_cert") == "create-cert":
             subject = {
                 "common_name": spec["placement"]["hosts"][0],
                 "ip_address": self.cluster.get_node_by_hostname(

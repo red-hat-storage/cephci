@@ -167,7 +167,7 @@ tests:
                     frontend_port: 443
                     monitor_port: 1967
                     ssl: true
-                    certificate_source: cephadm-signed
+                    ssl_cert: create-cert
 
   - test:
       name: Deploy RGW Ingress daemon
@@ -192,4 +192,4 @@ tests:
                     backend_service: rgw.rgw.realm2
                     virtual_ip: 10.0.195.111/24 # floating ip2 in rhos-01
                     frontend_port: 8083
-                    monitor_port: 1967
+                    monitor_port: 1968

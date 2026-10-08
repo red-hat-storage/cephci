@@ -19,6 +19,7 @@ from libcloud.common.types import LibcloudError
 
 import init_suite
 from ceph.ceph import Ceph, CephNode
+from ceph.ceph_admin.helper import GenerateServiceSpec
 from ceph.clients import WinNode
 from ceph.utils import (
     cleanup_ceph_nodes,
@@ -449,6 +450,15 @@ def create_nodes(
                 raise
 
     return ceph_cluster_dict, clients
+
+
+def release_ingress_vips(ceph_cluster_dict):
+    """Free reserved IPs allocated by ingress virtual_ip: auto."""
+    for cluster in ceph_cluster_dict.values():
+        try:
+            GenerateServiceSpec.release_ingress_vips(cluster)
+        except Exception as err:  # noqa
+            log.warning(f"Failed to release ingress VIPs: {err}")
 
 
 def print_results(tc):
@@ -1227,6 +1237,7 @@ def run(args):
                 break
 
         if test.get("destroy-cluster") is True:
+            release_ingress_vips(ceph_cluster_dict)
             if cloud_type == "openstack":
                 cleanup_ceph_nodes(osp_cred, instances_name)
             elif cloud_type == "ibmc":
@@ -1255,6 +1266,8 @@ def run(args):
             )
 
         tcs.append(tc)
+
+    release_ingress_vips(ceph_cluster_dict)
 
     url_base = (
         magna_url + run_dir.split("/")[-1]
