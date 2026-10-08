@@ -576,6 +576,62 @@ def check_ceph_status(site):
         )
 
 
+def _wait_for_osd_and_rgw_ready(node, timeout=600, interval=10):
+    """Wait until OSDs and RGW restarted by set_config_param are serving again.
+
+    ``ceph orch restart osd.all-available-devices`` leaves OSDs down on 9.1.
+    The next multisite user-create then hits ``(2200) Unknown error 2200``
+    (failed to fetch master sync status) while those OSDs and PGs are still out.
+    """
+    end = time.time() + timeout
+    last_msg = ""
+    attempts = 0
+    while time.time() < end:
+        attempts += 1
+        try:
+            osd_out, _ = node.exec_command(cmd="ceph osd stat --format json")
+            stats = json.loads(osd_out)
+            up = int(stats.get("num_up_osds", 0))
+            total = int(stats.get("num_osds", 0))
+            rgw_out, _ = node.exec_command(
+                cmd="ceph orch ps --daemon_type rgw --format json"
+            )
+            rgws = json.loads(rgw_out) if str(rgw_out).strip() else []
+            rgw_ready = bool(rgws) and all(
+                d.get("status_desc") == "running" for d in rgws
+            )
+            osd_ps_out, _ = node.exec_command(
+                cmd="ceph orch ps --daemon_type osd --format json"
+            )
+            osds = json.loads(osd_ps_out) if str(osd_ps_out).strip() else []
+            osd_ready = bool(osds) and all(
+                d.get("status_desc") == "running" for d in osds
+            )
+            status_out, _ = node.exec_command(cmd="ceph status")
+            status = status_out or ""
+            pgs_down = any(
+                token in status
+                for token in ("osds down", "osd down", "peering", "inactive")
+            )
+            last_msg = (
+                f"OSDs {up}/{total} up; orch osd running={osd_ready}; "
+                f"RGW running={rgw_ready}; pgs unavailable={pgs_down}"
+            )
+            log.info(last_msg)
+            if total > 0 and up == total and osd_ready and rgw_ready and not pgs_down:
+                if attempts > 1:
+                    time.sleep(15)
+                log.info("OSDs and RGW recovered after config restart")
+                return
+        except Exception as exc:  
+            last_msg = str(exc)
+            log.warning("Waiting for OSD/RGW readiness: %s", exc)
+        time.sleep(interval)
+    raise Exception(
+        f"OSDs/RGW did not recover within {timeout}s after set_config_param: {last_msg}"
+    )
+
+
 def set_config_param(node):
     """
     To set configuration parameters across sites
@@ -611,6 +667,7 @@ def set_config_param(node):
     # restart osd service
     node.exec_command(cmd=f"ceph orch restart {osd_process_name}")
     node.exec_command(cmd="ceph config dump")
+    _wait_for_osd_and_rgw_ready(node)
 
 
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
