@@ -1,0 +1,152 @@
+# Suite: NFS Ganesha conditional logging (Configuration & Management)
+# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client 2
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: TC-CL-CONFIG-01 Static ANY policy
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Part A: no Conditional logging — elevated FSAL:F_DBG / EXPORT|NFS:M_DBG
+        must be absent after IO from two clients. Part B: Match_Policy=ANY with
+        Conditional FSAL=FULL_DEBUG / NFS_V4=MID_DEBUG for client1+export —
+        matching client must produce elevated markers; non-matching must not.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_01
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-02 MATCH_ALL advanced clients
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Part A: baseline without Conditional — no FSAL:F_DBG / EXPORT|NFS:M_DBG.
+        Part B: Match_Policy=ALL with Conditional for client1+export1 —
+        elevate only when both match; client-only, export-only, and neither
+        mismatch cases must stay at global INFO/EVENT.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_02
+        enable_netgroup_tests: false
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-03 malformed config handling
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Graceful malformed Conditional Logging (INVALID_POLICY, INVALID_COMPONENT,
+        SUPER_DEBUG, trailing commas, Match_Policy without Conditional); service stays
+        up, expected WARN tokens, light I/O succeeds.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        min_clients: 1
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_03
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200

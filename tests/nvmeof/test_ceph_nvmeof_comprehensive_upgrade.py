@@ -1115,16 +1115,21 @@ def _comprehensive_upgrade_prerequisites(cluster, orch, **upg_cfg):
     """Upgrade prerequisites with installer-jump registry login for this test only."""
     cdn = upg_cfg.get("cdn", False)
     ibm_build = upg_cfg.get("ibm_build", False)
-    overrides = upg_cfg.get("overrides")
+    overrides = upg_cfg.get("overrides") or {}
     release = upg_cfg.get("release")
     registry = None
 
     if ibm_build:
         get_configs()
-        if not cdn:
-            registry = get_registry_credentials("stage", "ibm")
-        else:
-            registry = get_registry_credentials("cdn", "ibm")
+        from utility.utils import resolve_registry_host
+
+        host = resolve_registry_host(
+            overrides=overrides,
+            image=upg_cfg.get("container_image") or upg_cfg.get("nvmeof_cli_image"),
+            key="upgrade-registry",
+        )
+        if host:
+            registry = get_registry_credentials(host)
     if registry:
         login_timeout = upg_cfg.get(
             "registry_login_timeout", DEFAULT_REGISTRY_LOGIN_TIMEOUT

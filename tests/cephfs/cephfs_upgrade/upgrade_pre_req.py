@@ -458,7 +458,7 @@ def run(ceph_cluster, **kw):
                     % (mds_rank, mnt_pt, dir_name, num),
                 )
             pin_dir_list = [f"{dir_name}_{i}" for i in range(1, 4)]
-            pin_params = {"pinned_dir_list": pin_dir_list, "pin_rank": 0}
+            pin_params = {"pinned_dir_list": pin_dir_list, "pin_rank": mds_rank}
             ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                 sv["subvol_name"]
             ].update(pin_params)

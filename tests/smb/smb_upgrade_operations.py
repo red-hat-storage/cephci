@@ -16,12 +16,40 @@ from cephci.utils.build_info import CephTestManifest
 from cli.exceptions import ConfigError
 from cli.utilities.operations import wait_for_cluster_health
 from utility.log import Log
+from utility.utils import resolve_registry_host, resolve_registry_login
 
 log = Log(__name__)
 
 
 class SmbUpgradeError(Exception):
     pass
+
+
+def _login_upgrade_registry(orch, ceph_cluster, config):
+    """
+    Authenticate against the upgrade target registry before pull/upgrade-check.
+
+    Prefer --custom-config upgrade-registry=<host>; else the container image host.
+    Credentials come from the host-keyed ``registries:`` section in ~/.cephci.yaml.
+    """
+    overrides = config.get("overrides") or {}
+    registry_host = resolve_registry_host(
+        overrides=overrides,
+        image=config.get("container_image"),
+        key="upgrade-registry",
+    )
+    if not registry_host:
+        log.warning("No upgrade registry host resolved; skipping registry login")
+        return
+
+    reg_args = resolve_registry_login(registry_host)
+    log.info(
+        "Logging into upgrade registry %s (image=%s)",
+        registry_host,
+        config.get("container_image"),
+    )
+    for node in ceph_cluster.get_nodes(ignore="client"):
+        orch.registry_login(node=node, args=reg_args)
 
 
 def fetch_build_artifacts(product, release, build_type, platform):
@@ -190,6 +218,8 @@ def monitor_upgrade_with_smb_recovery(installer, orch, smb_cluster_id, timeout=3
 def upgrade(
     installer,
     orch,
+    ceph_cluster,
+    config,
     osd_flags,
     check_cluster_health,
     samba_image,
@@ -201,6 +231,8 @@ def upgrade(
     Args:
         installer (obj): Installer node obj
         orch (obj): Cephadm orch obj
+        ceph_cluster (obj): Ceph cluster obj
+        config (dict): Test config (overrides / container_image for registry login)
         target_image (str): Target upgrade image
         upgrade_target_version (str): Upgrade version
         check_cluster_health (Bool): Cluster health check flag
@@ -231,6 +263,10 @@ def upgrade(
 
         # Configure smb images
         config_smb_images(installer, samba_image, samba_metrics_image)
+
+        # Authenticate against upgrade image registry (host-keyed registries:)
+        config["container_image"] = ceph_image
+        _login_upgrade_registry(orch, ceph_cluster, config)
 
         # Check service versions vs available and target containers
         orch.upgrade_check(image=ceph_image)
@@ -283,6 +319,7 @@ def run(ceph_cluster, **kw):
     """
     # Get config
     config = kw.get("config")
+    config["overrides"] = kw.get("test_data", {}).get("custom_config_dict")
 
     # Get orch obj
     orch = Orch(cluster=ceph_cluster, **config)
@@ -374,6 +411,8 @@ def run(ceph_cluster, **kw):
             upgrade(
                 installer,
                 orch,
+                ceph_cluster,
+                config,
                 osd_flags,
                 check_cluster_health,
                 samba_image,

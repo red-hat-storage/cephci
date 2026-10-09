@@ -1,0 +1,150 @@
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - crash
+      node2:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node3:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node4:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node5:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 20
+      node6:
+        role:
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - crash
+      node2:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node3:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node4:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node5:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 20
+      node6:
+        role:
+          - client
+
+  - ceph-cluster:
+      name: ceph-ter
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - crash
+      node2:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node3:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node4:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 20
+      node5:
+        role:
+          - mon
+          - mgr
+          - crash
+          - rgw
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 20
+      node6:
+        role:
+          - client

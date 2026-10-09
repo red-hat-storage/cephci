@@ -1,0 +1,258 @@
+---
+######################################################################################################################
+# CephFS Regression Suite 3
+#
+# Tests Covered:
+#     - MDS failover while IO
+#     - MDS Configuration Settings
+#     - multiple clients permission in mounted directory
+#     - mds journal value conf verification
+#     - Validate Root Squash operations on Cephfs
+#     - client_caps_update_validation
+#
+# Instrumentation: debug logs, crash module, log rotation, health checks
+######################################################################################################################
+tests:
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-data-ec
+                - "64"
+                - erasure
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-metadata
+                - "64"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs-data-ec
+                - allow_ec_overwrites
+                - "true"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - new
+                - cephfs-ec
+                - cephfs-metadata
+                - cephfs-data-ec
+                - --force
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  label: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  ######################################################################################################################
+  # Instrumentation: Enable debug logs, log rotation, crash module
+  ######################################################################################################################
+  - test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+        ENABLE_LOGS: 1
+        daemon_list: ['mds', 'client', 'osd', 'mgr', 'mon']
+        daemon_dbg_level: {'mds': 20, 'client': 10, 'osd': 5, 'mgr': 5, 'mon': 5}
+  - test:
+      abort-on-fail: false
+      desc: "Set size limit for log rotation"
+      name: size limit for log rotation
+      module: cephfs_logs_util.py
+      config:
+        LOG_ROTATE_SIZE: 1
+        log_size: '200M'
+  - test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+        crash_setup: 1
+  - test:
+      abort-on-fail: false
+      desc: "MDS failover while IO is going on each client"
+      module: clients.MDS_failover_while_client_IO.py
+      polarion-id: CEPH-11242
+      config:
+        num_of_file_dir: 1000
+      name: "MDS failover whi client IO"
+  - test:
+      name: Test important MDS Configuration Settings
+      module: clients.mds_conf_modifying.py
+      polarion-id: CEPH-11329
+      desc: Test important MDS Configuration Settings
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "multiple clients permission in mounted directory"
+      module: clients.multiple_clients_permission_mounted_directories.py
+      name: multiple clients permission in mounted directory
+      polarion-id: "CEPH-11340"
+  - test:
+      abort-on-fail: false
+      desc: "mds journal value conf verification"
+      module: clients.mds_journal_value_conf_verification.py
+      name: mds journal value conf verification
+      polarion-id: "CEPH-11331"
+  - test:
+      abort-on-fail: false
+      desc: "Validate Root Sqaush operations on Cephfs"
+      module: clients.validate_root_squash.py
+      name: Validate Root Sqaush operations on Cephfs
+      comments: "BZ-2293943"
+      polarion-id: "CEPH-83591419"
+  - test:
+      abort-on-fail: false
+      desc: "Client Caps Validation during quiesce,mds failover and evict"
+      module: clients.client_caps_update_validation.py
+      name: client_caps_update_validation
+      polarion-id: "CEPH-83597462"
+  - test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+        DISABLE_LOGS: 1
+        daemon_list: ['mds', 'client', 'osd', 'mgr', 'mon']

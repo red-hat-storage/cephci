@@ -1,0 +1,63 @@
+# Conf: conf/tentacle/common/3node-1client.yaml
+#
+# Post-bootstrap deploy aligned with compact ODF/Rook:
+#   host specs with rack location on OSD roles, mon/mgr by label,
+#   OSDs with crush_device_class ssd (default~ssd), .mgr bound to rack+ssd.
+#
+# Suite YAML is vanilla (no Rook keys on bootstrap args).
+# Rook/ODF Ceph config is opt-in on the run command:
+#
+#   python run.py --suite suites/tentacle/rook/deploy_rook_defaults_ceph.yaml \
+#     --conf conf/tentacle/common/3node-1client.yaml \
+#     -c apply-odf-defaults=true
+#
+# Omit -c apply-odf-defaults for topology-only (stock Ceph config).
+---
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm bootstrap
+      desc: Bootstrap first mon/host only (no add_hosts, no OSDs)
+      module: test_cephadm.py
+      abort-on-fail: true
+      destroy-cluster: false
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+
+  - test:
+      name: Deploy Rook-aligned cephadm cluster
+      desc: Host racks, mon/mgr by label, OSDs class ssd, bind .mgr to rack+ssd
+      module: deploy_rook_defaults_ceph.py
+      abort-on-fail: true
+      destroy-cluster: false
+      config:
+        verify_cluster_health: true
+
+  - test:
+      name: Configure client
+      desc: Install ceph-common and copy admin keyring on the client node
+      module: test_client.py
+      abort-on-fail: true
+      destroy-cluster: false
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
