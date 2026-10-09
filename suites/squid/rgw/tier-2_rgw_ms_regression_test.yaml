@@ -381,6 +381,17 @@ tests:
       clusters:
         ceph-pri:
           config:
+            script-name: test_owner_stats_cache_realm_reload.py
+            config-file-name: ../configs/test_owner_stats_cache_realm_reload.yaml
+      desc: Verify no SIGSEGV in RGWOwnerStatsCache after realm reload
+      module: sanity_rgw_multisite.py
+      name: Owner stats cache realm reload
+      polarion-id: CEPH-83633022
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_zone_deletion.yaml
       desc: Test zone deletion in master
