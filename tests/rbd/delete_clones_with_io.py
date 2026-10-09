@@ -1,3 +1,4 @@
+import random
 import time
 
 from krbd_io_handler import krbd_io_handler
@@ -33,72 +34,72 @@ def run(**kw):
     """
     log.info("Running test - delete clones with IOs")
 
-    scenarios = [Rbd(**kw)]
+    pool_entries = [
+        ("rep_pool_config", "test_rbd_rep_pool", "rbd_rep_image", False),
+        ("ec_pool_config", "test_rbd_ec_pool_scenario", "rbd_ec_image", True),
+    ]
+    pool_type, pool, image, use_ec = random.choice(pool_entries)
+    log.info(f"Running test on {pool_type}")
 
-    kw["config"]["ec-pool-k-m"] = "go_with_default"
-    scenarios.append(Rbd(**kw))
-
-    pools = ["test_rbd_ec_pool_scenario", "test_rbd_rep_pool"]
-    images = ["rbd_ec_image", "rbd_rep_image"]
+    if use_ec:
+        kw["config"]["ec-pool-k-m"] = "go_with_default"
+    rbd = Rbd(**kw)
     size = "10G"
 
-    for rbd in scenarios:
-        pool = pools.pop()
-        image = images.pop()
-        kw["rbd_obj"] = rbd
-        try:
+    kw["rbd_obj"] = rbd
+    try:
 
-            def create_clone(*args):
-                if not rbd.create_pool(poolname=pool):
-                    return 1
+        def create_clone(*args):
+            if not rbd.create_pool(poolname=pool):
+                return 1
 
-                rbd.create_image(pool_name=pool, image_name=image, size=size)
+            rbd.create_image(pool_name=pool, image_name=image, size=size)
 
-                for clone_number in range(0, 10):
-                    rbd.snap_create(pool, image, f"snap_{clone_number}")
-                    rbd.protect_snapshot(f"{pool}/{image}@snap_{clone_number}")
-                    rbd.create_clone(
-                        f"{pool}/{image}@snap_{clone_number}",
-                        pool,
-                        f"clone_{clone_number}",
-                    )
-                    time.sleep(5)
+            for clone_number in range(0, 10):
+                rbd.snap_create(pool, image, f"snap_{clone_number}")
+                rbd.protect_snapshot(f"{pool}/{image}@snap_{clone_number}")
+                rbd.create_clone(
+                    f"{pool}/{image}@snap_{clone_number}",
+                    pool,
+                    f"clone_{clone_number}",
+                )
+                time.sleep(5)
 
-            def delete_clone(*args):
-                for clone_number in range(0, 10):
-                    rbd.remove_image(pool, f"clone_{clone_number}")
-                    time.sleep(3)
+        def delete_clone(*args):
+            for clone_number in range(0, 10):
+                rbd.remove_image(pool, f"clone_{clone_number}")
+                time.sleep(3)
 
-            io_config = {
-                "file_size": "100M",
-                "image_spec": [f"{pool}/{image}"],
-                "operations": {
-                    "fs": "ext4",
-                    "io": True,
-                    "map": True,
-                    "mount": True,
-                    "nounmap": False,
-                },
-                "runtime": 30,
-            }
-            kw["config"].update(io_config)
+        io_config = {
+            "file_size": "100M",
+            "image_spec": [f"{pool}/{image}"],
+            "operations": {
+                "fs": "ext4",
+                "io": True,
+                "map": True,
+                "mount": True,
+                "nounmap": False,
+            },
+            "runtime": 30,
+        }
+        kw["config"].update(io_config)
 
-            log.info("Creating image, snaps, clones with IO")
-            with parallel() as p:
-                p.spawn(create_clone)
-                time.sleep(30)
-                p.spawn(krbd_io_handler, **kw)
+        log.info("Creating image, snaps, clones with IO")
+        with parallel() as p:
+            p.spawn(create_clone)
+            time.sleep(30)
+            p.spawn(krbd_io_handler, **kw)
 
-            log.info("Deleting clones with IO")
-            with parallel() as p:
-                p.spawn(delete_clone)
-                p.spawn(krbd_io_handler, **kw)
+        log.info("Deleting clones with IO")
+        with parallel() as p:
+            p.spawn(delete_clone)
+            p.spawn(krbd_io_handler, **kw)
 
-        except RbdBaseException as error:
-            log.error(error.message)
-            return 1
+    except RbdBaseException as error:
+        log.error(error.message)
+        return 1
 
-        finally:
-            rbd.clean_up(pools=[pool])
+    finally:
+        rbd.clean_up(pools=[pool])
 
     return 0

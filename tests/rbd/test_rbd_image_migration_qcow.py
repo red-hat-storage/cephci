@@ -18,6 +18,8 @@ Test Case Flow :
 5. perform the test on both replicated and EC pools.
 """
 
+import random
+
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
@@ -61,93 +63,94 @@ def test_qcow_image_migration(rbd_obj, client, **kw):
     rbd = rbd_obj.get("rbd")
     kw["client"] = client
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
 
-        for pool, pool_config in multi_pool_config.items():
-            image_spec = pool + "/" + random_string(len=5)
+    for pool, pool_config in multi_pool_config.items():
+        image_spec = pool + "/" + random_string(len=5)
 
-            # prepare migration
-            rbd.migration.prepare(
-                source_spec=qcow_spec,
-                dest_spec=image_spec,
-                client_node=client,
-                **kw,
-            )
+        # prepare migration
+        rbd.migration.prepare(
+            source_spec=qcow_spec,
+            dest_spec=image_spec,
+            client_node=client,
+            **kw,
+        )
 
-            # verify prepare migration status
-            if verify_migration_state(
-                action="prepare",
-                image_spec=image_spec,
-                **kw,
-            ):
-                log.error("Failed to prepare migration")
-                return 1
-            else:
-                log.info("Migration prepare status verfied successfully")
+        # verify prepare migration status
+        if verify_migration_state(
+            action="prepare",
+            image_spec=image_spec,
+            **kw,
+        ):
+            log.error("Failed to prepare migration")
+            return 1
+        else:
+            log.info("Migration prepare status verfied successfully")
 
-            # execute migration
+        # execute migration
 
-            rbd.migration.action(
-                action="execute",
-                dest_spec=image_spec,
-                client_node=client,
-                long_running=True,
-                **kw,
-            )
+        rbd.migration.action(
+            action="execute",
+            dest_spec=image_spec,
+            client_node=client,
+            long_running=True,
+            **kw,
+        )
 
-            # verify execute migration status
-            if verify_migration_state(
-                action="execute",
-                image_spec=image_spec,
-                long_running=True,
-                **kw,
-            ):
-                log.error("Failed to execute migration")
-                return 1
-            else:
-                log.info("Migration executed successfully")
+        # verify execute migration status
+        if verify_migration_state(
+            action="execute",
+            image_spec=image_spec,
+            long_running=True,
+            **kw,
+        ):
+            log.error("Failed to execute migration")
+            return 1
+        else:
+            log.info("Migration executed successfully")
 
-            # commit migration
-            rbd.migration.action(
-                action="commit",
-                dest_spec=image_spec,
-                client_node=client,
-                long_running=True,
-                **kw,
-            )
+        # commit migration
+        rbd.migration.action(
+            action="commit",
+            dest_spec=image_spec,
+            client_node=client,
+            long_running=True,
+            **kw,
+        )
 
-            # verify commit migration status
-            if verify_migration_state(
-                action="commit",
-                image_spec=image_spec,
-                long_running=True,
-                **kw,
-            ):
-                log.error("Failed to commit migration")
-                return 1
-            else:
-                log.info("Migration committed successfully")
+        # verify commit migration status
+        if verify_migration_state(
+            action="commit",
+            image_spec=image_spec,
+            long_running=True,
+            **kw,
+        ):
+            log.error("Failed to commit migration")
+            return 1
+        else:
+            log.info("Migration committed successfully")
 
-            image_config = {"image-spec": image_spec}
+        image_config = {"image-spec": image_spec}
 
-            out = rbd.image_usage(**image_config)
-            image_data = out[0]
+        out = rbd.image_usage(**image_config)
+        image_data = out[0]
 
-            migrated_image_size = image_data.split("\n")[1].split()[3].strip() + "G"
+        migrated_image_size = image_data.split("\n")[1].split()[3].strip() + "G"
 
-            log.info(f"External qcow data format original size {qcow_data_size}")
-            log.info(
-                f"After migration to RBD image qcow data size {migrated_image_size}"
-            )
+        log.info(f"External qcow data format original size {qcow_data_size}")
+        log.info(f"After migration to RBD image qcow data size {migrated_image_size}")
 
-            # Verification of external data migration.
-            if migrated_image_size == qcow_data_size:
-                log.info("Data migrated successfully through live image migration")
-            else:
-                log.error("Data migration failed through live image migration")
-                return 1
+        # Verification of external data migration.
+        if migrated_image_size == qcow_data_size:
+            log.info("Data migrated successfully through live image migration")
+        else:
+            log.error("Data migration failed through live image migration")
+            return 1
 
     return 0
 

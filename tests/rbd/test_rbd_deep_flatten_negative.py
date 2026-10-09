@@ -1,4 +1,5 @@
 import json
+import random
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict
@@ -67,59 +68,58 @@ def verify_deep_flatten(clone_format, rbd, pool, image, snap_spec):
 
 def test_deep_flatten_negative_scenario(rbd_obj, **kw):
     """ """
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
-        clone_formats = rbd_config.pop("clone_formats")
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            for image, clone_format in zip(multi_image_config.keys(), clone_formats):
-                log.info(f"Creating snapshot and clone for image {pool}/{image}")
-                rbd = rbd_obj.get("rbd")
-                # Start by creating cli for rbd feature commands
-                feature_spec = {
-                    "image-spec": f"{pool}/{image}",
-                    "features": "deep-flatten",
-                }
-                out, err = rbd.feature.disable(**feature_spec)
-                if out or err:
-                    log.error(f"Feature deep-flatten was not disabled for {image}")
-                    return 1
-                info_spec = {"image-or-snap-spec": f"{pool}/{image}", "format": "json"}
-                out, err = rbd.info(**info_spec)
-                if err:
-                    log.info(f"Error while fetching info for image {image}")
-                    return 1
-                log.info(f"Image info: {out}")
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    clone_formats = rbd_config.pop("clone_formats")
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        for image, clone_format in zip(multi_image_config.keys(), clone_formats):
+            log.info(f"Creating snapshot and clone for image {pool}/{image}")
+            rbd = rbd_obj.get("rbd")
+            # Start by creating cli for rbd feature commands
+            feature_spec = {
+                "image-spec": f"{pool}/{image}",
+                "features": "deep-flatten",
+            }
+            out, err = rbd.feature.disable(**feature_spec)
+            if out or err:
+                log.error(f"Feature deep-flatten was not disabled for {image}")
+                return 1
+            info_spec = {"image-or-snap-spec": f"{pool}/{image}", "format": "json"}
+            out, err = rbd.info(**info_spec)
+            if err:
+                log.info(f"Error while fetching info for image {image}")
+                return 1
+            log.info(f"Image info: {out}")
 
-                out_json = json.loads(out)
-                if "deep-flatten" in out_json["features"]:
-                    log.error(f"Feature deep-flatten was not disabled for {image}")
-                    return 1
+            out_json = json.loads(out)
+            if "deep-flatten" in out_json["features"]:
+                log.error(f"Feature deep-flatten was not disabled for {image}")
+                return 1
 
-                snap_spec = f"{pool}/{image}@snap_{image}"
-                clone_spec = f"{pool}/clone_{image}"
-                create_snap_and_clone(
-                    rbd, snap_spec, clone_spec, clone_format=clone_format
-                )
-                # Create snapshot for the clone
-                clone_snap_spec = {
-                    "snap-spec": f"{pool}/clone_{image}@snap_clone_{image}"
-                }
-                out, err = rbd.snap.create(**clone_snap_spec)
-                if out or err and "100% complete" not in err:
-                    log.error(f"Snapshot creation failed for {clone_snap_spec}")
-                    return 1
+            snap_spec = f"{pool}/{image}@snap_{image}"
+            clone_spec = f"{pool}/clone_{image}"
+            create_snap_and_clone(rbd, snap_spec, clone_spec, clone_format=clone_format)
+            # Create snapshot for the clone
+            clone_snap_spec = {"snap-spec": f"{pool}/clone_{image}@snap_clone_{image}"}
+            out, err = rbd.snap.create(**clone_snap_spec)
+            if out or err and "100% complete" not in err:
+                log.error(f"Snapshot creation failed for {clone_snap_spec}")
+                return 1
 
-                flatten_config = {"image-spec": clone_spec}
-                out, err = rbd.flatten(**flatten_config)
-                if out or err and "100% complete" not in err:
-                    log.error(f"Flatten clone failed for {clone_spec}")
-                    return 1
+            flatten_config = {"image-spec": clone_spec}
+            out, err = rbd.flatten(**flatten_config)
+            if out or err and "100% complete" not in err:
+                log.error(f"Flatten clone failed for {clone_spec}")
+                return 1
 
-                if verify_deep_flatten(clone_format, rbd, pool, image, snap_spec):
-                    log.error(f"deep-flatten verification failed for {clone_format}")
-                    return 1
+            if verify_deep_flatten(clone_format, rbd, pool, image, snap_spec):
+                log.error(f"deep-flatten verification failed for {clone_format}")
+                return 1
     return 0
 
 

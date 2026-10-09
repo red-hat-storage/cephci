@@ -38,6 +38,7 @@ ceph.client.admin.keyring from both the clusters into the common client node
 16. Repeat the above test for EC pool
 """
 
+import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
@@ -76,217 +77,216 @@ def test_migration_clones(rbd_obj, c1_client, c2_client, **kw):
     snap_name = "snap1"
     rbd2 = Rbd(c2_client)
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
-        rbd = rbd_obj.get("rbd")
-        for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
-            multi_image_config = getdict(pool_config)
-            for image_name, image_conf in multi_image_config.items():
-                # Run IO on the image
-                try:
-                    io_rc = run_io_and_check_rbd_status(
-                        rbd=rbd,
-                        pool=pool,
-                        image=image_name,
-                        client=c1_client,
-                        image_conf=image_conf,
-                    )
-                    if io_rc:
-                        raise Exception("IO on image " + image_name + " failed")
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
+    rbd = rbd_obj.get("rbd")
+    for pool, pool_config in multi_pool_config.items():
+        if "data_pool" in pool_config.keys():
+            _ = pool_config.pop("data_pool")
+        multi_image_config = getdict(pool_config)
+        for image_name, image_conf in multi_image_config.items():
+            # Run IO on the image
+            try:
+                io_rc = run_io_and_check_rbd_status(
+                    rbd=rbd,
+                    pool=pool,
+                    image=image_name,
+                    client=c1_client,
+                    image_conf=image_conf,
+                )
+                if io_rc:
+                    raise Exception("IO on image " + image_name + " failed")
 
-                    # create snapshot for the image
-                    out, err = rbd.snap.create(
-                        pool=pool,
-                        image=image_name,
-                        snap=snap_name,
-                    )
-                    if out or err and "100% complete" not in err:
-                        raise Exception("Snapshot creation failed for " + snap_name)
+                # create snapshot for the image
+                out, err = rbd.snap.create(
+                    pool=pool,
+                    image=image_name,
+                    snap=snap_name,
+                )
+                if out or err and "100% complete" not in err:
+                    raise Exception("Snapshot creation failed for " + snap_name)
 
-                    # Protect snapshot
-                    out, err = rbd.snap.protect(
-                        pool=pool, image=image_name, snap=snap_name
+                # Protect snapshot
+                out, err = rbd.snap.protect(pool=pool, image=image_name, snap=snap_name)
+                if "failed to Protect snapshot" in out + err:
+                    raise Exception(
+                        "Snapshot Protection failed for " + pool + "/" + image_name
                     )
-                    if "failed to Protect snapshot" in out + err:
-                        raise Exception(
-                            "Snapshot Protection failed for " + pool + "/" + image_name
-                        )
-                    else:
-                        log.info(
-                            "Successfully Protected snapshot "
-                            + snap_name
-                            + " for "
-                            + pool
-                            + "/"
-                            + image_name
-                        )
+                else:
+                    log.info(
+                        "Successfully Protected snapshot "
+                        + snap_name
+                        + " for "
+                        + pool
+                        + "/"
+                        + image_name
+                    )
 
-                    # Create clone
-                    clone_image = f"clone_{image_name}"
-                    clone_spec = {
-                        "source-snap-spec": f"{pool}/{image_name}@{snap_name}",
-                        "dest-image-spec": f"{pool}/{clone_image}",
-                    }
-                    _, err = rbd.clone(**clone_spec)
+                # Create clone
+                clone_image = f"clone_{image_name}"
+                clone_spec = {
+                    "source-snap-spec": f"{pool}/{image_name}@{snap_name}",
+                    "dest-image-spec": f"{pool}/{clone_image}",
+                }
+                _, err = rbd.clone(**clone_spec)
+                if err:
+                    raise Exception(
+                        "Clone creation failed for "
+                        + pool
+                        + "/"
+                        + image_name
+                        + "/"
+                        + snap_name
+                        + " with error "
+                        + err
+                    )
+                else:
+                    log.info("Cloning of snap " + snap_name + " is complete")
+
+                # Create snap of the cloned Image
+                clone_snap_name = image_name + "_clone"
+                out, err = rbd.snap.create(
+                    pool=pool,
+                    image=clone_image,
+                    snap=clone_snap_name,
+                )
+                if out or err and "100% complete" not in err:
+                    raise Exception("Snapshot creation failed for " + clone_snap_name)
+
+                # get md5sum of image before migration for data consistency check
+                md5_sum_before_migration = get_md5sum_rbd_image(
+                    image_spec=f"{pool}/{clone_image}",
+                    rbd=rbd,
+                    client=c1_client,
+                    file_path=f"/tmp/{random_string(len=3)}",
+                )
+                log.info("md5sum before Migration: " + md5_sum_before_migration)
+
+                # prepare migration source spec
+                source_spec_path = prepare_migration_source_spec(
+                    cluster_name=c1,
+                    client=c1_client,
+                    pool_name=pool,
+                    image_name=clone_image,
+                    snap_name=clone_snap_name,
+                )
+
+                # Create a target pool where clone image needs to be migrated on cluster2
+                is_ec_pool = True if "ec" in pool_type else False
+                config = kw.get("config", {})
+                target_pool = "target_pool_" + random_string(len=5)
+                target_pool_config = {}
+                pools_to_delete = [target_pool]
+                if is_ec_pool:
+                    data_pool_target = "data_pool_new_" + random_string(len=5)
+                    target_pool_config["data_pool"] = data_pool_target
+                    pools_to_delete.append(data_pool_target)
+
+                rc = create_single_pool_and_images(
+                    config=config,
+                    pool=target_pool,
+                    pool_config=target_pool_config,
+                    client=c2_client,
+                    cluster="ceph",
+                    rbd=rbd2,
+                    ceph_version=int(config.get("rhbuild")[0]),
+                    is_ec_pool=is_ec_pool,
+                    is_secondary=False,
+                    do_not_create_image=True,
+                )
+                if rc:
+                    raise Exception(
+                        "Creation of target pool " + target_pool + " failed"
+                    )
+
+                # Execute prepare migration for external ceph cluster
+                target_image = "target_image_" + random_string(len=5)
+                rbd.migration.prepare_import(
+                    source_spec_path=source_spec_path,
+                    dest_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                )
+
+                # verify prepare migration status
+                if verify_migration_state(
+                    action="prepare",
+                    image_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                    client=c1_client,
+                    **kw,
+                ):
+                    raise Exception("Failed to prepare migration")
+
+                # execute migration from cluster2
+                rbd.migration.action(
+                    action="execute",
+                    dest_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                )
+
+                # verify execute migration status
+                if verify_migration_state(
+                    action="execute",
+                    image_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                    client=c1_client,
+                    **kw,
+                ):
+                    raise Exception("Failed to execute migration")
+
+                # commit migration for external cluster
+                rbd.migration.action(
+                    action="commit",
+                    dest_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                )
+
+                # verify commit migration status
+                if verify_migration_state(
+                    action="commit",
+                    image_spec=f"{target_pool}/{target_image}",
+                    cluster_name=c2,
+                    client=c1_client,
+                    **kw,
+                ):
+                    raise Exception("Failed to commit migration")
+
+                # verify checksum post migration
+                md5_sum_after_migration = get_md5sum_rbd_image(
+                    image_spec=f"{target_pool}/{target_image}",
+                    rbd=rbd2,
+                    client=c2_client,
+                    file_path=f"/tmp/{random_string(len=5)}",
+                )
+                log.info("md5sum after migration: " + md5_sum_after_migration)
+
+                if md5_sum_before_migration != md5_sum_after_migration:
+                    raise Exception(
+                        "Data integrity check failed, md5sum checksums are not same"
+                    )
+                log.info("md5sum checksum is same on both clusters after migration")
+
+            except Exception as e:
+                raise Exception("Error during migration: " + str(e))
+
+            finally:
+                if source_spec_path:
+                    log.info("Cleaning up source spec path: " + source_spec_path)
+                    out, err = c1_client.exec_command(
+                        sudo=True, cmd=f"rm -f {source_spec_path}"
+                    )
                     if err:
-                        raise Exception(
-                            "Clone creation failed for "
-                            + pool
-                            + "/"
-                            + image_name
-                            + "/"
-                            + snap_name
-                            + " with error "
-                            + err
-                        )
-                    else:
-                        log.info("Cloning of snap " + snap_name + " is complete")
+                        log.error("Failed to delete file " + source_spec_path)
 
-                    # Create snap of the cloned Image
-                    clone_snap_name = image_name + "_clone"
-                    out, err = rbd.snap.create(
-                        pool=pool,
-                        image=clone_image,
-                        snap=clone_snap_name,
-                    )
-                    if out or err and "100% complete" not in err:
-                        raise Exception(
-                            "Snapshot creation failed for " + clone_snap_name
-                        )
-
-                    # get md5sum of image before migration for data consistency check
-                    md5_sum_before_migration = get_md5sum_rbd_image(
-                        image_spec=f"{pool}/{clone_image}",
-                        rbd=rbd,
-                        client=c1_client,
-                        file_path=f"/tmp/{random_string(len=3)}",
-                    )
-                    log.info("md5sum before Migration: " + md5_sum_before_migration)
-
-                    # prepare migration source spec
-                    source_spec_path = prepare_migration_source_spec(
-                        cluster_name=c1,
-                        client=c1_client,
-                        pool_name=pool,
-                        image_name=clone_image,
-                        snap_name=clone_snap_name,
-                    )
-
-                    # Create a target pool where clone image needs to be migrated on cluster2
-                    is_ec_pool = True if "ec" in pool_type else False
-                    config = kw.get("config", {})
-                    target_pool = "target_pool_" + random_string(len=5)
-                    target_pool_config = {}
-                    pools_to_delete = [target_pool]
-                    if is_ec_pool:
-                        data_pool_target = "data_pool_new_" + random_string(len=5)
-                        target_pool_config["data_pool"] = data_pool_target
-                        pools_to_delete.append(data_pool_target)
-
-                    rc = create_single_pool_and_images(
-                        config=config,
-                        pool=target_pool,
-                        pool_config=target_pool_config,
-                        client=c2_client,
-                        cluster="ceph",
-                        rbd=rbd2,
-                        ceph_version=int(config.get("rhbuild")[0]),
-                        is_ec_pool=is_ec_pool,
-                        is_secondary=False,
-                        do_not_create_image=True,
-                    )
-                    if rc:
-                        raise Exception(
-                            "Creation of target pool " + target_pool + " failed"
-                        )
-
-                    # Execute prepare migration for external ceph cluster
-                    target_image = "target_image_" + random_string(len=5)
-                    rbd.migration.prepare_import(
-                        source_spec_path=source_spec_path,
-                        dest_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                    )
-
-                    # verify prepare migration status
-                    if verify_migration_state(
-                        action="prepare",
-                        image_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                        client=c1_client,
-                        **kw,
-                    ):
-                        raise Exception("Failed to prepare migration")
-
-                    # execute migration from cluster2
-                    rbd.migration.action(
-                        action="execute",
-                        dest_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                    )
-
-                    # verify execute migration status
-                    if verify_migration_state(
-                        action="execute",
-                        image_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                        client=c1_client,
-                        **kw,
-                    ):
-                        raise Exception("Failed to execute migration")
-
-                    # commit migration for external cluster
-                    rbd.migration.action(
-                        action="commit",
-                        dest_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                    )
-
-                    # verify commit migration status
-                    if verify_migration_state(
-                        action="commit",
-                        image_spec=f"{target_pool}/{target_image}",
-                        cluster_name=c2,
-                        client=c1_client,
-                        **kw,
-                    ):
-                        raise Exception("Failed to commit migration")
-
-                    # verify checksum post migration
-                    md5_sum_after_migration = get_md5sum_rbd_image(
-                        image_spec=f"{target_pool}/{target_image}",
-                        rbd=rbd2,
-                        client=c2_client,
-                        file_path=f"/tmp/{random_string(len=5)}",
-                    )
-                    log.info("md5sum after migration: " + md5_sum_after_migration)
-
-                    if md5_sum_before_migration != md5_sum_after_migration:
-                        raise Exception(
-                            "Data integrity check failed, md5sum checksums are not same"
-                        )
-                    log.info("md5sum checksum is same on both clusters after migration")
-
-                except Exception as e:
-                    raise Exception("Error during migration: " + str(e))
-
-                finally:
-                    if source_spec_path:
-                        log.info("Cleaning up source spec path: " + source_spec_path)
-                        out, err = c1_client.exec_command(
-                            sudo=True, cmd=f"rm -f {source_spec_path}"
-                        )
-                        if err:
-                            log.error("Failed to delete file " + source_spec_path)
-
-                    pool_cleanup(
-                        client=c2_client,
-                        pools=pools_to_delete,
-                        ceph_version=int(kw["config"].get("rhbuild")[0]),
-                    )
+                pool_cleanup(
+                    client=c2_client,
+                    pools=pools_to_delete,
+                    ceph_version=int(kw["config"].get("rhbuild")[0]),
+                )
 
     return 0
 

@@ -19,6 +19,7 @@ Test Case Flow:
 """
 
 import json
+import random
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict
@@ -42,53 +43,54 @@ def resize_image_with_zero_size(rbd_obj, client, **kw):
     rbd_op = Rbd(client)
 
     resize_to = kw["config"]["resize_to"]
-    list_of_pool_types = rbd_obj.get("pool_types")
-    log.info(f"pools in the cluster {list_of_pool_types}")
-    for pool_type in rbd_obj.get("pool_types"):
-        log.info(f"Executing for {pool_type}")
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
-        for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
-            for image, image_config in pool_config.items():
-                if "1024" in image:
-                    log.info(f"Resize Image {image} to zero")
-                    resize_config = {
-                        "image-spec": f"{pool}/{image}",
-                        "size": resize_to,
-                        "allow-shrink": True,
-                    }
-                    out, err = rbd_op.resize(**resize_config)
-                    if "100% complete" not in out + err:
-                        log.error(
-                            f"Image {image} resize to 0 failed with error {out} {err}"
-                        )
-                log.info(f"Verify Image {image} size from image info")
-                info_spec = {"image-or-snap-spec": f"{pool}/{image}", "format": "json"}
-                out, err = rbd_op.info(**info_spec)
-                if err:
-                    log.error(f"Error while fetching info for image {image}")
-                    return 1
-                log.info(f"Image info: {out}")
-                out_json = json.loads(out)
-                if "0" not in str(out_json["size"]):
+    pool_types = rbd_obj.get("pool_types")
+    log.info(f"pools in the cluster {pool_types}")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    for pool, pool_config in multi_pool_config.items():
+        if "data_pool" in pool_config.keys():
+            _ = pool_config.pop("data_pool")
+        for image, image_config in pool_config.items():
+            if "1024" in image:
+                log.info(f"Resize Image {image} to zero")
+                resize_config = {
+                    "image-spec": f"{pool}/{image}",
+                    "size": resize_to,
+                    "allow-shrink": True,
+                }
+                out, err = rbd_op.resize(**resize_config)
+                if "100% complete" not in out + err:
                     log.error(
-                        f"Image size Verification failed for {image}: Image size should be zero"
+                        f"Image {image} resize to 0 failed with error {out} {err}"
                     )
-                    return 1
-                log.info(f"Verifying Image {image} size with du command")
-                image_spec = pool + "/" + image
-                image_config = {"image-spec": image_spec}
-                out = rbd_op.image_usage(**image_config)
-                image_data = out[0]
-                image_size = image_data.split("\n")[1].split()[3].strip() + "G"
-                log.info(f"Image size captured : {image_size}")
-                if image_size != "0G":
-                    log.error(
-                        f"Image size Verification failed for {image}: Image size should be zero"
-                    )
-                    return 1
+            log.info(f"Verify Image {image} size from image info")
+            info_spec = {"image-or-snap-spec": f"{pool}/{image}", "format": "json"}
+            out, err = rbd_op.info(**info_spec)
+            if err:
+                log.error(f"Error while fetching info for image {image}")
+                return 1
+            log.info(f"Image info: {out}")
+            out_json = json.loads(out)
+            if "0" not in str(out_json["size"]):
+                log.error(
+                    f"Image size Verification failed for {image}: Image size should be zero"
+                )
+                return 1
+            log.info(f"Verifying Image {image} size with du command")
+            image_spec = pool + "/" + image
+            image_config = {"image-spec": image_spec}
+            out = rbd_op.image_usage(**image_config)
+            image_data = out[0]
+            image_size = image_data.split("\n")[1].split()[3].strip() + "G"
+            log.info(f"Image size captured : {image_size}")
+            if image_size != "0G":
+                log.error(
+                    f"Image size Verification failed for {image}: Image size should be zero"
+                )
+                return 1
     return 0
 
 

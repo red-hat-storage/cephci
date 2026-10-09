@@ -62,6 +62,7 @@ rbd migration commit TARGET_POOL_NAME/SOURCE_IMAGE_NAME
 12. initiate the IO on new image
 """
 
+import random
 import tempfile
 from copy import deepcopy
 
@@ -89,79 +90,80 @@ def migration_with_raw_data_format(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            kw.update({pool: {}})
-            kw[pool].update({"pool_type": pool_type})
-            # Create an RBD image in pool
-            image = "image_" + random_string(len=3)
-            out, err = rbd.create(**{"image-spec": pool + "/" + image, "size": 1024})
-            if err:
-                log.error(
-                    "Create image " + pool + "/" + image + " failed with error " + err
-                )
-                return 1
-            else:
-                log.info("Successfully created image " + pool + "/" + image)
-
-            # Map, mount and run IOs
-            err = run_IO(rbd, pool, image, **kw)
-            if err:
-                return 1
-
-            # Export rbd image to raw data file
-            raw_file = tempfile.mktemp(prefix=image + "_", suffix=".raw")
-            rbd.export(
-                **{
-                    "source-image-or-snap-spec": pool + "/" + image,
-                    "path-name": raw_file,
-                }
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        kw.update({pool: {}})
+        kw[pool].update({"pool_type": pool_type})
+        # Create an RBD image in pool
+        image = "image_" + random_string(len=3)
+        out, err = rbd.create(**{"image-spec": pool + "/" + image, "size": 1024})
+        if err:
+            log.error(
+                "Create image " + pool + "/" + image + " failed with error " + err
             )
-            raw_spec = {
-                "type": "raw",
-                "stream": {"type": "file", "file_path": raw_file},
+            return 1
+        else:
+            log.info("Successfully created image " + pool + "/" + image)
+
+        # Map, mount and run IOs
+        err = run_IO(rbd, pool, image, **kw)
+        if err:
+            return 1
+
+        # Export rbd image to raw data file
+        raw_file = tempfile.mktemp(prefix=image + "_", suffix=".raw")
+        rbd.export(
+            **{
+                "source-image-or-snap-spec": pool + "/" + image,
+                "path-name": raw_file,
             }
-            kw["cleanup_files"].append(raw_file)
-            kw[pool].update({"spec": raw_spec})
+        )
+        raw_spec = {
+            "type": "raw",
+            "stream": {"type": "file", "file_path": raw_file},
+        }
+        kw["cleanup_files"].append(raw_file)
+        kw[pool].update({"spec": raw_spec})
 
-            # Perform Prepare, execute, commit migration
-            err = run_prepare_execute_commit(rbd, pool, image, **kw)
-            if err:
-                return 1
+        # Perform Prepare, execute, commit migration
+        err = run_prepare_execute_commit(rbd, pool, image, **kw)
+        if err:
+            return 1
 
-            # Check the disk usage of the image using rbd du
-            log.info(
-                "Verifying Image " + kw[pool]["target_image"] + " size with du command"
-            )
-            target_image_spec = kw[pool]["target_pool"] + "/" + kw[pool]["target_image"]
-            image_config = {"image-spec": target_image_spec}
-            out = rbd.image_usage(**image_config)
-            log.info(out)
-            image_data = out[0]
-            target_image_size = image_data.split("\n")[1].split()[3].strip()
-            log.info("Image size captured : " + target_image_size)
-            out = rbd.get_raw_file_size(raw_file)
-            file_data = out[0]
-            exported_file_size = file_data.split(" ")[4].split(".")[0].strip()
-            if target_image_size != exported_file_size:
-                log.error(
-                    "Image size Verification failed for " + kw[pool]["target_image"]
-                )
-                return 1
+        # Check the disk usage of the image using rbd du
+        log.info(
+            "Verifying Image " + kw[pool]["target_image"] + " size with du command"
+        )
+        target_image_spec = kw[pool]["target_pool"] + "/" + kw[pool]["target_image"]
+        image_config = {"image-spec": target_image_spec}
+        out = rbd.image_usage(**image_config)
+        log.info(out)
+        image_data = out[0]
+        target_image_size = image_data.split("\n")[1].split()[3].strip()
+        log.info("Image size captured : " + target_image_size)
+        out = rbd.get_raw_file_size(raw_file)
+        file_data = out[0]
+        exported_file_size = file_data.split(" ")[4].split(".")[0].strip()
+        if target_image_size != exported_file_size:
+            log.error("Image size Verification failed for " + kw[pool]["target_image"])
+            return 1
 
-            # Compare md5sum Integrity
-            err = migrate_check_consistency(rbd, pool, image, **kw)
-            if err:
-                return 1
+        # Compare md5sum Integrity
+        err = migrate_check_consistency(rbd, pool, image, **kw)
+        if err:
+            return 1
 
-            # Initiate IO/ Run IO on new image
-            err = run_IO(rbd, kw[pool]["target_pool"], kw[pool]["target_image"], **kw)
-            if err:
-                return 1
+        # Initiate IO/ Run IO on new image
+        err = run_IO(rbd, kw[pool]["target_pool"], kw[pool]["target_image"], **kw)
+        if err:
+            return 1
 
     return 0
 

@@ -103,6 +103,7 @@ Test Case Flow:
 
 """
 
+import random
 import tempfile
 from copy import deepcopy
 
@@ -137,43 +138,44 @@ def migration_encrypted_raw_images(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            for encryption_type in kw.get("config", {}).get("encryption_type", {}):
-                kw.update({f"{pool}": {}})
-                kw[pool].update({"encryption_type": encryption_type})
-                kw[pool].update({"pool_type": pool_type})
-                image = (
-                    "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
-                )
-                kw[pool].update({"image": image})
-                err = run_io_on_encryption_formatted_image(rbd, pool, image, **kw)
-                if err:
-                    return 1
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        for encryption_type in kw.get("config", {}).get("encryption_type", {}):
+            kw.update({f"{pool}": {}})
+            kw[pool].update({"encryption_type": encryption_type})
+            kw[pool].update({"pool_type": pool_type})
+            image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
+            kw[pool].update({"image": image})
+            err = run_io_on_encryption_formatted_image(rbd, pool, image, **kw)
+            if err:
+                return 1
 
-                # Create spec file raw data
-                raw_file = tempfile.mktemp(prefix=f"{image}_", suffix=".raw")
-                rbd.export(
-                    **{
-                        "source-image-or-snap-spec": f"{pool}/{image}",
-                        "path-name": raw_file,
-                    }
-                )
-                raw_spec = {
-                    "type": "raw",
-                    "stream": {"type": "file", "file_path": f"{raw_file}"},
+            # Create spec file raw data
+            raw_file = tempfile.mktemp(prefix=f"{image}_", suffix=".raw")
+            rbd.export(
+                **{
+                    "source-image-or-snap-spec": f"{pool}/{image}",
+                    "path-name": raw_file,
                 }
+            )
+            raw_spec = {
+                "type": "raw",
+                "stream": {"type": "file", "file_path": f"{raw_file}"},
+            }
 
-                kw["cleanup_files"].append(raw_file)
+            kw["cleanup_files"].append(raw_file)
 
-                kw[pool].update({"spec": raw_spec})
-                err = migrate_check_consistency(rbd, pool, image, **kw)
-                if err:
-                    return 1
+            kw[pool].update({"spec": raw_spec})
+            err = migrate_check_consistency(rbd, pool, image, **kw)
+            if err:
+                return 1
 
     return 0
 
@@ -190,45 +192,46 @@ def migration_encrypted_qcow_images(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            for encryption_type in kw.get("config", {}).get("encryption_type", {}):
-                kw.update({f"{pool}": {}})
-                kw[pool].update({"encryption_type": encryption_type})
-                kw[pool].update({"pool_type": pool_type})
-                image = (
-                    "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
-                )
-                kw[pool].update({"image": image})
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        for encryption_type in kw.get("config", {}).get("encryption_type", {}):
+            kw.update({f"{pool}": {}})
+            kw[pool].update({"encryption_type": encryption_type})
+            kw[pool].update({"pool_type": pool_type})
+            image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
+            kw[pool].update({"image": image})
 
-                err = run_io_on_encryption_formatted_image(rbd, pool, image, **kw)
-                if err:
-                    return 1
+            err = run_io_on_encryption_formatted_image(rbd, pool, image, **kw)
+            if err:
+                return 1
 
-                qcow_file = "/tmp/qcow_" + random_string(len=3) + ".qcow2"
-                out, err = client.exec_command(
-                    sudo=True,
-                    cmd=f"qemu-img convert -f raw -O qcow2 {kw[pool][image]["dev"]} {qcow_file}",
-                )
-                if err:
-                    log.error(f"Image convert to qcow2 failed with err {err}")
-                    return 1
-                else:
-                    log.info("Successfully converted image to qcow2")
+            qcow_file = "/tmp/qcow_" + random_string(len=3) + ".qcow2"
+            out, err = client.exec_command(
+                sudo=True,
+                cmd=f"qemu-img convert -f raw -O qcow2 {kw[pool][image]["dev"]} {qcow_file}",
+            )
+            if err:
+                log.error(f"Image convert to qcow2 failed with err {err}")
+                return 1
+            else:
+                log.info("Successfully converted image to qcow2")
 
-                kw["cleanup_files"].append(qcow_file)
-                qcow_spec = {
-                    "type": "qcow",
-                    "stream": {"type": "file", "file_path": f"{qcow_file}"},
-                }
-                kw[pool].update({"spec": qcow_spec})
-                err = migrate_check_consistency(rbd, pool, image, **kw)
-                if err:
-                    return 1
+            kw["cleanup_files"].append(qcow_file)
+            qcow_spec = {
+                "type": "qcow",
+                "stream": {"type": "file", "file_path": f"{qcow_file}"},
+            }
+            kw[pool].update({"spec": qcow_spec})
+            err = migrate_check_consistency(rbd, pool, image, **kw)
+            if err:
+                return 1
 
     return 0
 

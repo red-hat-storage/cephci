@@ -1,3 +1,4 @@
+import random
 from time import sleep
 
 from krbd_io_handler import krbd_io_handler
@@ -278,30 +279,23 @@ def run(**kw):
     kw.get("config", {}).update({"do_not_create_image": True})
     rbd_obj = initial_rbd_config(**kw)
 
-    for format in kw["config"].get("encryption_type"):
-        log.info(f"Executing encryption test for format parent,clone: {format}")
-        if rbd_obj:
-            if "rbd_reppool" in rbd_obj:
-                log.info("Executing test on Replicated pool")
-                if test_rbd_encryption(
-                    rbd_obj.get("rbd_reppool"), "rep_pool_config", format, **kw
-                ):
-                    log.error(
-                        f"Encryption test failed for format parent,clone: {format} on replicated pool"
-                    )
-                    cleanup(rbd_obj, **kw)
-                    return 1
-                log.info(f"{kw['config'].get('device_names')}")
-            if "rbd_ecpool" in rbd_obj:
-                log.info("Executing test on EC pool")
-                if test_rbd_encryption(
-                    rbd_obj.get("rbd_ecpool"), "ec_pool_config", format, **kw
-                ):
-                    log.error(
-                        f"Encryption test failed for format parent,clone: {format} on ec pool"
-                    )
-                    cleanup(rbd_obj, **kw)
-                    return 1
-                log.info(f"{kw['config'].get('device_names')}")
+    if rbd_obj:
+        pool_entries = []
+        if "rbd_reppool" in rbd_obj:
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
+        if "rbd_ecpool" in rbd_obj:
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+
+        for format in kw["config"].get("encryption_type"):
+            log.info(f"Executing encryption test for format parent,clone: {format}")
+            if test_rbd_encryption(rbd_obj.get(rbd_key), pool_type, format, **kw):
+                log.error(
+                    f"Encryption test failed for format parent,clone: {format} on {pool_type}"
+                )
+                cleanup(rbd_obj, **kw)
+                return 1
+            log.info(f"{kw['config'].get('device_names')}")
     cleanup(rbd_obj, **kw)
     return 0

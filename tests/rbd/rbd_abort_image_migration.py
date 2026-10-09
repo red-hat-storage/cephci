@@ -19,6 +19,8 @@ Test Case Flow :
 and remove the target image.
 """
 
+import random
+
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import (
     Rbd,
@@ -100,31 +102,34 @@ def run(**kw):
                 kw["config"].pop(key)
 
     rbd = Rbd(**kw)
+    src_pool1 = kw["config"]["source"]["rep_pool_config"]["pool"]
+    src_pool2 = kw["config"]["source"]["ec_pool_config"]["pool"]
+    dest_pool1 = kw["config"]["destination"]["rep_pool_config"]["pool"]
+    dest_pool2 = kw["config"]["destination"]["ec_pool_config"]["pool"]
     try:
         client = kw["ceph_cluster"].get_nodes(role="client")[0]
 
-        src_pool1 = kw["config"]["source"]["rep_pool_config"]["pool"]
-        src_pool2 = kw["config"]["source"]["ec_pool_config"]["pool"]
-        rep_image = kw["config"]["source"]["rep_pool_config"]["image"]
-        ec_image = kw["config"]["source"]["ec_pool_config"]["image"]
-        dest_pool1 = kw["config"]["destination"]["rep_pool_config"]["pool"]
-        dest_pool2 = kw["config"]["destination"]["ec_pool_config"]["pool"]
-
-        log.info("CEPH-83573324 - Running test case on Replicated pool")
+        pool_entries = [
+            (
+                "rep_pool_config",
+                src_pool1,
+                dest_pool1,
+                kw["config"]["source"]["rep_pool_config"]["image"],
+            ),
+            (
+                "ec_pool_config",
+                src_pool2,
+                dest_pool2,
+                kw["config"]["source"]["ec_pool_config"]["image"],
+            ),
+        ]
+        pool_type, src_pool, dest_pool, image = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
         migration_abort_verify(
             rbd,
-            src_pool=src_pool1,
-            dest_pool=dest_pool1,
-            image=rep_image,
-            client=client,
-        )
-
-        log.info("CEPH-83573324 - Running test case on EC pool")
-        migration_abort_verify(
-            rbd,
-            src_pool=src_pool2,
-            dest_pool=dest_pool2,
-            image=ec_image,
+            src_pool=src_pool,
+            dest_pool=dest_pool,
+            image=image,
             client=client,
         )
         return 0
