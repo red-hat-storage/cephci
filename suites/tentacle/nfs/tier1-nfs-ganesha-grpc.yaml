@@ -233,6 +233,7 @@ tests:
   # =============================================================================
   # Test Scenario 7: Verify Client and Session IDs for 3 Clients
   # =============================================================================
+  # NOTE: Skipped on AWS at runtime (test_nfs_grpc.py) — ganesha instability on AWS ARM64.
   - test:
       name: NFS gRPC - Verify Client and Session IDs (3 Clients)
       module: test_nfs_grpc.py
