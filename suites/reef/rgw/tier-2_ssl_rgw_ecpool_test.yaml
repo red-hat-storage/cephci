@@ -213,8 +213,8 @@ tests:
       name: test bucket logging info still lists deleted bucket
       desc: Test bucket logging info still lists deleted bucket
       polarion-id: CEPH-83632948
-      module: sanity_rgw_multisite.py
-      known-issue: IBMCEPH-17766, IBMCEPH-17767
+      module: sanity_rgw.py
+      comments: known issue IBMCEPH-17766, IBMCEPH-17767
       config:
         script-name: ../aws/test_aws_bucket_logging.py
         config-file-name: ../../aws/configs/test_aws_bucket_logging.yaml
