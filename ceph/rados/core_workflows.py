@@ -7457,10 +7457,13 @@ EOF"""
         if mount_opts:
             mount_cmd += " -o " + ",".join(mount_opts)
         client_node.exec_command(cmd=mount_cmd, sudo=True)
-        mount_out, mount_rc = client_node.exec_command(
+        mount_out, mount_err = client_node.exec_command(
             cmd=f"findmnt -T {mount_path}", sudo=True, check_ec=False
         )
-        if mount_rc != 0 or mount_path not in (mount_out or ""):
+        log.info(f"mount_out: {mount_out}")
+        log.info(f"mount_err: {mount_err}")
+        log.info(f"mount_path: {mount_path}")
+        if len(mount_err) != 0 or mount_path not in (mount_out or ""):
             raise CommandFailed(f"CephFS mount missing at {mount_path}")
         log.info(f"Mounted CephFS at {mount_path}")
 
