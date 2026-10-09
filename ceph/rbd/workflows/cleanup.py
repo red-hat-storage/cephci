@@ -57,20 +57,25 @@ def pool_cleanup(client, pools, **kw):
 
 
 def unmount(client, mount_point):
-    """ """
-    flag = 0
+    """Unmount a filesystem and remove the mount directory.
+
+    The mount directory is removed only when umount succeeds. Removing a
+    still-mounted path (or unmapping underneath it) can leave a stale
+    filesystem referencing a gone device.
+    """
     umount_cmd = f"umount -f {mount_point}"
-    # if kw.get("read_only"):
-    #     umount_cmd += " -o ro,noload"
     if exec_cmd(cmd=umount_cmd, sudo=True, node=client):
-        log.error(f"Umount failed for {mount_point}")
-        flag = 1
+        log.error(
+            f"Unable to unmount {mount_point}. "
+            "Skipping mount directory removal to avoid operating on a live mount."
+        )
+        return 1
 
     if exec_cmd(cmd=f"rm -rf {mount_point}", sudo=True, node=client):
         log.error(f"Remove dir failed for {mount_point}")
-        flag = 1
+        return 1
 
-    return flag
+    return 0
 
 
 def device_cleanup(rbd, client, **kw):
@@ -86,8 +91,13 @@ def device_cleanup(rbd, client, **kw):
             "device_name": device created for image map without encryption
             "all": if True will unmount and unmap all devices to type specified in device_type
                     (only nbd is supported as of now)
+
+    Note:
+        If unmount fails, device unmap is intentionally skipped so a live
+        filesystem is never left pointing at an unmapped NBD/RBD device.
     """
     flag = 0
+    unmount_failed = False
 
     if kw.get("all"):
         device_type = kw.get("device_type", "nbd")
@@ -95,15 +105,25 @@ def device_cleanup(rbd, client, **kw):
         if device_type == "nbd":
             cmd = "lsblk --include 43 --json"
             out = exec_cmd(cmd=cmd, sudo=True, node=client, output=True)
-            if out:
+            if out and out != 1:
                 nbd_devices = json.loads(out)
 
                 for devices in nbd_devices.get("blockdevices"):
                     device_name = f"/dev/{devices.get('name')}"
-                    mount_point = devices.get("mountpoints")
-                    for mnt_pnt in mount_point:
+                    mount_points = devices.get("mountpoints") or []
+                    device_unmount_failed = False
+                    for mnt_pnt in mount_points:
                         if mnt_pnt is not None:
-                            unmount(mount_point=mnt_pnt, client=client)
+                            if unmount(mount_point=mnt_pnt, client=client):
+                                device_unmount_failed = True
+                                flag = 1
+                    if device_unmount_failed:
+                        log.error(
+                            f"Unable to unmount filesystem(s) for {device_name}. "
+                            f"Skipping unmap of {device_name} to avoid leaving a "
+                            "stale filesystem mount."
+                        )
+                        continue
                     map_config = {
                         "image-snap-or-device-spec": device_name,
                         "device-type": kw.get("device_type", "nbd"),
@@ -115,13 +135,23 @@ def device_cleanup(rbd, client, **kw):
 
     if kw.get("file_name"):
         file_name = kw.get("file_name")
-        unmount(mount_point=file_name, client=client)
+        if unmount(mount_point=file_name, client=client):
+            unmount_failed = True
+            flag = 1
+            log.error(
+                f"Unable to unmount {file_name}. "
+                f"Skipping unmap of {kw.get('device_name') or kw.get('image_spec')} "
+                "to avoid leaving a stale filesystem mount."
+            )
 
     if kw.get("passphrase_file") and exec_cmd(
         cmd=f"rm -rf {kw.get('passphrase_file')}", sudo=True, node=client
     ):
         log.error(f"Remove passphrase file failed for {kw.get('passphrase_file')}")
         flag = 1
+
+    if unmount_failed:
+        return flag
 
     if kw.get("image_spec"):
         pool_name = kw["image_spec"].split("/")[0]
