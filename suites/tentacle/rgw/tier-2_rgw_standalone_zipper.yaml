@@ -1,0 +1,49 @@
+# RHCS 9.x / tentacle — RGW Standalone (Zipper) pytest suite
+# conf: conf/tentacle/rgw/tier-0_rgw_standalone_1node.yaml
+#
+# Deploys the product zipper image on a single node via podman, then runs the
+# ceph-qe-scripts pytest package covering CRUD, multipart, copy, features,
+# user types, BZ regressions, scale, and stability.
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      name: Deploy RGW Standalone (Zipper) image
+      desc: Pull and run rgw-standalone container via podman on client node
+      module: test_rgw_standalone_deploy.py
+      polarion-id: CEPH-RGW-STANDALONE-DEPLOY
+      config:
+        image: cp.stg.icr.io/cp/ibm-ceph/rgw-standalone-rhel10:v9.9.2
+        container-name: rgw-standalone1
+        host-port: 7401
+        product: ibm
+        build_type: stage
+        force-recreate: true
+
+  - test:
+      abort-on-fail: false
+      name: RGW Standalone Zipper Full Suite (pytest)
+      desc: >
+        Pytest suite — CRUD (small/medium/large), multipart (>1000 parts),
+        copy-object, ACL/checksum/policy/PAB, user types, BZ regressions,
+        scale to 10K buckets / 100K objects, zipper health/stability
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-PYTEST
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 14400
+        # Optional filters (env-vars consumed by the pytest runner):
+        # env-vars:
+        #   - RGW_STANDALONE_PYTEST_MARKER=sanity or not slow
+        #   - RGW_STANDALONE_PYTEST_KEYWORD=test_crud

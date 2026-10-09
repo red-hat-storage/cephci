@@ -1,0 +1,12 @@
+# Single-node conf for RGW Standalone (Zipper) testing.
+# No Ceph cluster services are required — podman deploys the zipper image on node1.
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - client
+          - rgw
+        no-of-volumes: 0

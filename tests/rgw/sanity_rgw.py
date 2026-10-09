@@ -194,6 +194,12 @@ DIR = {
         "lib": "/ceph-qe-scripts/rgw/v2/lib/",
         "config": "/ceph-qe-scripts/rgw/v2/tests/s3_swift/configs/",
     },
+    # RGW Standalone (Zipper) pytest suite — dedicated package
+    "standalone": {
+        "script": "/ceph-qe-scripts/rgw/v2/tests/rgw_standalone/",
+        "lib": "/ceph-qe-scripts/rgw/v2/lib/",
+        "config": "/ceph-qe-scripts/rgw/v2/tests/rgw_standalone/configs/",
+    },
 }
 
 
@@ -206,9 +212,15 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     log.info("Running RGW test version: %s", config.get("test-version", "v2"))
 
-    rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
-    rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
+    use_standalone = config.get("use-standalone", False)
     client_ceph_object = ceph_cluster.get_ceph_object("client")
+    rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
+    if use_standalone and not rgw_ceph_object:
+        # Zipper suites may only label client/installer; reuse client as exec host
+        rgw_ceph_object = client_ceph_object
+    if not client_ceph_object:
+        client_ceph_object = rgw_ceph_object
+    rgw_nodes = ceph_cluster.get_ceph_objects("rgw") or [rgw_ceph_object]
     run_io_verify = config.get("run_io_verify", False)
     extra_pkgs = config.get("extra-pkgs")
     git_clone_configs_repo = config.get("git_clone_configs_repo", False)
@@ -245,6 +257,10 @@ def run(ceph_cluster, **kw):
         log.info(f"Using ingress VIP: {ingress_vip}")
         exec_from = client_node
         append_param = " --rgw-node " + ingress_vip
+    elif use_standalone:
+        # Zipper container runs on the client/installer; tests talk to localhost
+        exec_from = client_node
+        append_param = " --rgw-node " + str(client_node.ip_address)
     else:
         exec_from = client_node
         append_param = " --rgw-node " + str(rgw_node.ip_address)
@@ -359,6 +375,50 @@ def run(ceph_cluster, **kw):
         remote_fp.write(yaml.dump(cfg_data, default_flow_style=False))
         log.info(f"Injected ingress endpoint: {ingress_ip}:{ingress_port}")
 
+    if use_standalone:
+        # Inject zipper endpoint/container metadata written by
+        # test_rgw_standalone_deploy.py
+        meta_path = config.get(
+            "standalone-meta-path", "/tmp/rgw_standalone_endpoint.json"
+        )
+        cfg_path = f"/home/cephuser/{test_folder}" + config_dir + config_file_name
+        out, _ = exec_from.exec_command(cmd=f"cat {meta_path}")
+        meta = yaml.safe_load(out) if out else {}
+        # meta is JSON; yaml.safe_load handles it
+        if isinstance(meta, str):
+            import json as _json
+
+            meta = _json.loads(meta)
+        out, _ = exec_from.exec_command(cmd=f"cat {cfg_path}")
+        cfg_data = yaml.safe_load(out) or {"config": {}}
+        cfg_data.setdefault("config", {})
+        endpoint = meta.get("endpoint", "http://127.0.0.1:7401")
+        # Parse host/port for Auth helpers that expect endpoint_ip/port
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(endpoint)
+            cfg_data["config"]["endpoint_ip"] = parsed.hostname or "127.0.0.1"
+            cfg_data["config"]["endpoint_port"] = parsed.port or 7401
+        except Exception:
+            cfg_data["config"]["endpoint_ip"] = "127.0.0.1"
+            cfg_data["config"]["endpoint_port"] = 7401
+        cfg_data["config"]["endpoint_url"] = endpoint
+        cfg_data["config"]["container_name"] = meta.get("container_name")
+        cfg_data["config"]["container_id"] = meta.get("container_id")
+        cfg_data["config"]["admin_bin"] = meta.get(
+            "admin_bin", "rgw-standalone-admin"
+        )
+        if meta.get("image"):
+            cfg_data["config"]["image"] = meta["image"]
+        if meta.get("browser_port"):
+            cfg_data["config"]["browser_port"] = meta["browser_port"]
+        cfg_data["config"]["ssl"] = False
+        cfg_data["config"]["haproxy"] = False
+        remote_fp = exec_from.remote_file(file_name=cfg_path, file_mode="w", sudo=True)
+        remote_fp.write(yaml.dump(cfg_data, default_flow_style=False))
+        log.info(f"Injected zipper endpoint: {endpoint} container={meta.get('container_name')}")
+
     # Build env vars for test execution
     env_vars = list(config.get("env-vars", []))
 
@@ -368,6 +428,8 @@ def run(ceph_cluster, **kw):
         exec_from.exec_command(
             cmd=f"{pip_cmd} install pytest pytest-html", check_ec=False
         )
+        # Generic env (new runners) + legacy dedup env for backward compatibility
+        env_vars.append(f"PYTEST_JUNIT={PYTEST_JUNIT_REMOTE_PATH}")
         env_vars.append(f"DEDUP_PYTEST_JUNIT={PYTEST_JUNIT_REMOTE_PATH}")
         exec_from.exec_command(cmd=f"rm -f {PYTEST_JUNIT_REMOTE_PATH}", check_ec=False)
 

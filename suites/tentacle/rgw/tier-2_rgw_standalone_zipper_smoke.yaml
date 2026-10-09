@@ -1,0 +1,37 @@
+# RHCS 9.x — RGW Standalone (Zipper) smoke suite (skips @slow via marker)
+# conf: conf/tentacle/rgw/tier-0_rgw_standalone_1node.yaml
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      name: Deploy RGW Standalone (Zipper) image
+      desc: Pull and run rgw-standalone container via podman
+      module: test_rgw_standalone_deploy.py
+      config:
+        image: cp.stg.icr.io/cp/ibm-ceph/rgw-standalone-rhel10:v9.9.2
+        container-name: rgw-standalone1
+        host-port: 7401
+        product: ibm
+        build_type: stage
+
+  - test:
+      abort-on-fail: false
+      name: RGW Standalone Zipper Smoke (pytest)
+      desc: Sanity/feature/bug tests excluding slow scale and >1000-part MPU
+      module: sanity_rgw.py
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_smoke.yaml
+        timeout: 7200
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=not slow
