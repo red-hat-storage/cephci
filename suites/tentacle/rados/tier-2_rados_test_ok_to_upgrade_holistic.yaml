@@ -24,6 +24,8 @@ tests:
           mon-ip: node1
           orphan-initial-daemons: true
           ssh-user: cephuser
+          skip-monitoring-stack: true # Skip monitoring until IBMCEPHQE-19638 is fixed
+          skip-dashboard: true # Skip dashboard until IBMCEPHQE-19638 is fixed
           # 6 racks × 2 chassis; each chassis has exactly one host (node1–node12)
           # NOTE: node13,14,15 and 16 are not used in test modules.
           apply-spec:
