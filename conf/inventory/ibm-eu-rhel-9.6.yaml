@@ -56,6 +56,36 @@ instance:
       # (preprod.icr.io, cp.icr.io, quay.io, registry.*.redhat.io).
       # Auth uses bootstrap --registry-url / credentials (see #6124 / #6156).
       - content: |
+          {
+              "default": [
+                  {
+                      "type": "insecureAcceptAnything"
+                  }
+              ],
+              "transports": {
+                  "docker": {
+                      "registry.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "registry.stage.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "quay.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ]
+                  }
+              }
+          }
+        path: /etc/containers/policy.json
+        owner: root:root
+        permissions: '0644'
+      - content: |
           net.core.default_qdisc=netem
         path: /etc/sysctl.d/1000-qdisc.conf
         owner: root:root
