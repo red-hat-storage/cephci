@@ -414,16 +414,47 @@ def enable_rhel_rpms(ceph, distro_ver):
     """
     sm_cmd = "subscription-manager"
 
+    # The latest minor version is available in CDN repos
+    # N-x versions would be available in EUS or AUS repos depending on EOL
+    # EUS when a newer minor version is available else AUS if older.
+    # This would help us avoid the need for --enable-rhel-eus-rpms
     repos = {
-        "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
         "8": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
         "9": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
         "10": ["rhel-10-for-x86_64-appstream-rpms", "rhel-10-for-x86_64-baseos-rpms"],
+        "8.10": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
+        "9.2": [
+            "rhel-9-for-x86_64-appstream-aus-rpms",
+            "rhel-9-for-x86_64-baseos-aus-rpms",
+        ],
+        "9.4": [
+            "rhel-9-for-x86_64-appstream-aus-rpms",
+            "rhel-9-for-x86_64-baseos-aus-rpms",
+        ],
+        "9.6": [
+            "rhel-9-for-x86_64-appstream-eus-rpms",
+            "rhel-9-for-x86_64-baseos-eus-rpms",
+        ],
+        "9.8": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
+        "10.0": [
+            "rhel-10-for-x86_64-appstream-eus-rpms",
+            "rhel-10-for-x86_64-baseos-eus-rpms",
+        ],
+        "10.2": ["rhel-10-for-x86_64-appstream-rpms", "rhel-10-for-x86_64-baseos-rpms"],
     }
 
+    rs = repos.get(distro_ver, repos.get(distro_ver.split(".")[0]))
+    if not rs:
+        log.warning(
+            "No RHEL repository configuration found for OS release: %s", distro_ver
+        )
+        return
+
+    log.info("The provided OS release is %s", distro_ver)
+    log.debug("The retrieve repo details are %s", rs)
     ceph.exec_command(sudo=True, cmd=f"{sm_cmd} release --set {distro_ver}")
 
-    for repo in repos.get(distro_ver.split(".")[0]):
+    for repo in rs:
         ceph.exec_command(
             sudo=True,
             cmd="{sm_cmd} repos --enable={r}".format(sm_cmd=sm_cmd, r=repo),
