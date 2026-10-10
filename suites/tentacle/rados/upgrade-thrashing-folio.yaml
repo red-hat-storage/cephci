@@ -1,0 +1,1409 @@
+# =============================================================================
+# Ceph Upgrade Thrashing Test Suite (Folio baremetal)
+# =============================================================================
+#
+# PURPOSE:
+#   7-phase upgrade test exercising all client types (RGW, RBD, CephFS, NFS,
+#   SMB) with per-component feature toggles (see Hop config features:), live IO
+#   during upgrade, and post-upgrade validation of data integrity, service
+#   health, feature persistence, and 23 known bug regressions.
+#
+# PHASES:
+#   P1   - Client & service setup: create pools, deploy all services, mount
+#          clients, map RBD images, install IO tools
+#   P2   - Feature enablement + integrity baselines: enable all toggled
+#          features, verify they work pre-upgrade, write CRC/MD5 baselines
+#   P2.5 - Cluster pre-fill (logged as Phase 3.5 after baseline): fill cluster
+#          to target % with parallel IO
+#   P3   - Stabilization + pre-flight + baseline stats: wait for HEALTH_OK,
+#          collect 10-minute performance baseline
+#   P4   - N-phase staggered upgrade via upgrade_phases config with cooldown
+#          windows between phases for cache drain, config tuning, etc.
+#          Per-daemon timing, IO drop tracking, abort on stall/timeout.
+#          HEALTH_ERR tracked via bug validators (a3, a21), not a P4 abort.
+#   P5   - Post-upgrade stabilization + stats: 10-minute post-upgrade baseline
+#   P6   - Verification: functional feature tests, CRC/MD5 verify, bug
+#          validator checks
+#   P7   - Report generation: log tables + interactive HTML with charts
+#
+# UPGRADE PATH (folio double-hop):
+#   Bootstrap at 8.1 released -> Hop 1: 8.1 to 9.1 released -> Hop 2: 9.1 to 9.2 stable
+#   Each hop runs the full 7-phase workflow. Hop 2 skips Phase 1 via
+#   skip_service_setup and skips pre-fill via cluster_fill.enabled: false.
+#   Hop 1 uses skip_client_cleanup / skip_cluster_cleanup to preserve resources.
+#
+# STAGGERED UPGRADE:
+#   The upgrade_phases key splits Phase 4 into N sequential sub-phases with
+#   cooldown windows between them. Each phase entry specifies:
+#     - daemon_types: comma-separated list of daemons to upgrade in this phase
+#     - cooldown_sec: seconds to wait after this phase completes
+#     - cooldown_actions: list of actions to run during cooldown:
+#         - type: set_config  (target + configs dict)
+#         - type: rm_config   (target + keys list)
+#         - type: run_command (command string)
+#   An empty dict {} as the last entry means "upgrade all remaining daemons".
+#   If upgrade_phases is not set, the upgrade runs as a single pass (backward
+#   compatible with the original behavior).
+#
+# KEY FEATURES:
+#   - IO tiering (6 tiers: none, low, medium, high, extreme, saturation)
+#   - IO resource partitioning across clients (per-client tool assignment)
+#   - Mount health verification (stale mount detection, timeout-based recovery)
+#   - PG management (pg_num_min/pg_num_max pinning, mon_max_pg_per_osd auto-set)
+#   - Health warning tracking across all phases (not just during upgrade)
+#   - Per-component feature toggles with pre/post-upgrade validation
+#   - 23 bug regression validators
+#   - Interactive HTML report with Gantt charts, IO timelines, phase annotations
+#
+# CONFIG REFERENCE:
+#   Each test entry's config block supports these sections. Defaults shown
+#   in [brackets]. Examples use YAML indentation matching the config block.
+#
+#   ---------------------------------------------------------------------------
+#   io_tier: (none | low | medium | high | extreme | saturation)  [none]
+#     Controls process count and IOPS rate. Provides defaults for io_tools,
+#     bg_params, fill settings, integrity sizing, NFS mount count. Explicit
+#     values in other sections override the tier defaults.
+#       none:       Zero IO -- upgrade orchestration only
+#       low:        Canary IO -- few tools, heavy throttle (safe for any VM)
+#       medium:     Balanced -- moderate tools, s3cmd added (~30 procs)
+#       high:       Full suite -- warp added for concurrent S3 (~46 procs)
+#       extreme:    Maximum stress -- unlimited rates (~80+ procs)
+#       saturation: Cluster saturation -- all services maximized (~120+ procs)
+#     Example:
+#       io_tier: saturation
+#
+#   ---------------------------------------------------------------------------
+#   args: (version targeting)
+#     Specifies the upgrade target. Four methods (in priority order):
+#       1. rhcs-version + release  -> resolve via CephTestManifest
+#       2. custom_image + custom_repo -> use a specific test/CI build
+#       3. container_image -> direct image URL (no repo needed)
+#       4. (omit args entirely) -> auto-resolve to latest available
+#     Options for release:
+#       rc       -> staging registry (registry.stage.redhat.io / cp.stg.icr.io)
+#                   No container signature verification.
+#       released -> CDN registry (registry.redhat.io / cp.icr.io)
+#                   Requires valid image signatures. Set relax_signature_policy
+#                   in upgrade_params if signature hasn't propagated yet.
+#       z1/z2/z3 -> specific GA z-stream builds on CDN, fully signed.
+#     Additional args for staggered upgrades (filter which daemons to upgrade):
+#       daemon_types: "mon,mgr"    # upgrade only these daemon types
+#       hosts: "node3,node4"       # upgrade only daemons on these hosts
+#       services: "mon,mgr"        # upgrade only these services
+#     Example (manifest-based):
+#       args:
+#         rhcs-version: "9.0"
+#         release: released
+#         platform: rhel-9
+#     Example (custom build):
+#       args:
+#         custom_image: cp.stg.icr.io/cp/ibm-ceph/ceph-9-rhel9:9.1-2.TEST.tag
+#         custom_repo: https://public.dhe.ibm.com/.../rhel9/x86_64/
+#         platform: rhel-9
+#
+#   ---------------------------------------------------------------------------
+#   upgrade_params:
+#     relax_signature_policy: (true/false) [false]
+#       Bypass container image signature verification. Required for 'released'
+#       builds whose signature hasn't propagated to Red Hat's sigstore yet.
+#       Not needed for 'rc' builds (staging registry has no signature checks).
+#     Example:
+#       upgrade_params:
+#         relax_signature_policy: true
+#
+#   ---------------------------------------------------------------------------
+#   skip_client_cleanup: (true/false)  [false]
+#     When true, preserve mounts/maps/connections for the next hop (do NOT
+#     unmount CephFS/NFS/SMB or unmap RBD). IO processes and stats threads
+#     are still stopped. Use for intermediate hops in multi-hop upgrades.
+#
+#   skip_cluster_cleanup: (bool) [false]
+#     When false (default), deletes ALL cluster-side resources created by
+#     the test: pools, CephFS filesystems/subvolumes, NFS exports/clusters,
+#     RGW buckets/users/service, RBD images/snaps/groups, SMB shares/cluster,
+#     EC profiles, and CRUSH rules.  Runs after client cleanup.
+#     Set to true on intermediate multi-hop runs to preserve resources.
+#     Example:
+#       skip_cluster_cleanup: true   # multi-hop: keep resources for next hop
+#
+#   skip_service_setup: (true/false)  [false]
+#     When true, skip Phase 1 setup and use _detect_deployed_services()
+#     to discover existing services. Used for hop 2+ in multi-hop upgrades
+#     where services already exist from the previous hop. Does NOT skip
+#     cluster pre-fill; set cluster_fill.enabled: false for that.
+#
+#   ---------------------------------------------------------------------------
+#   mds_config:
+#     fail_fs: (true/false) [false]
+#       Set mgr/orchestrator/fail_fs=true so cephadm takes all CephFS
+#       filesystems offline during MDS upgrade, allowing all MDS daemons
+#       to upgrade simultaneously instead of one-by-one.
+#     mds_cache_memory_limit: (string) [unset]
+#       MDS cache memory limit. Applied as a ceph config set.
+#     Example:
+#       mds_config:
+#         fail_fs: true
+#         mds_cache_memory_limit: "24G"
+#
+#   ---------------------------------------------------------------------------
+#   upgrade_phases: (list of phase dicts)  [unset = single-pass upgrade]
+#     Splits Phase 4 into N sequential sub-phases with cooldown windows.
+#     See STAGGERED UPGRADE section above for full details.
+#     Each phase entry:
+#       daemon_types: (string) comma-separated daemon types for this phase
+#       cooldown_sec: (int) [0] seconds to wait after this phase completes
+#       cooldown_actions: (list) actions to run during cooldown:
+#         - type: set_config   # set ceph config options
+#           target: mds        # daemon type target
+#           configs: {key: val, ...}
+#         - type: rm_config    # remove ceph config options
+#           target: mds
+#           keys: [key1, key2, ...]
+#         - type: run_command  # run arbitrary ceph command
+#           command: "ceph tell mds.* cache status"
+#     Use {} as the last entry to upgrade all remaining daemons.
+#     If upgrade_phases is not set, the upgrade runs as a single pass.
+#     Example (2-phase with MDS cache drain):
+#       upgrade_phases:
+#         - daemon_types: "crash,mgr,mon,osd"
+#           cooldown_sec: 900
+#           cooldown_actions:
+#             - type: set_config
+#               target: mds
+#               configs:
+#                 mds_heartbeat_grace: 300
+#                 mds_cache_reservation: 0.95
+#                 mds_cache_trim_threshold: 524288
+#                 mds_recall_global_max_decay_threshold: 1000000
+#                 mds_recall_max_decay_threshold: 420715
+#                 mds_session_cap_acquisition_throttle: 100
+#                 mds_max_caps_per_client: 10000
+#         - daemon_types: "mds"
+#           cooldown_sec: 300
+#           cooldown_actions:
+#             - type: rm_config
+#               target: mds
+#               keys:
+#                 - mds_heartbeat_grace
+#                 - mds_cache_reservation
+#                 - mds_cache_trim_threshold
+#                 - mds_recall_global_max_decay_threshold
+#                 - mds_recall_max_decay_threshold
+#                 - mds_session_cap_acquisition_throttle
+#                 - mds_max_caps_per_client
+#         - {}  # upgrade all remaining
+#
+#   ---------------------------------------------------------------------------
+#   mon_max_pg_per_osd: (int)  [350]
+#     Auto-set in Phase 1 via "ceph config set global mon_max_pg_per_osd".
+#     Prevents TOO_MANY_PGS health warnings on clusters with many pools.
+#     Example:
+#       mon_max_pg_per_osd: 350
+#
+#   ---------------------------------------------------------------------------
+#   phase_timing:  (all durations in seconds)
+#     pre_upgrade_baseline_sec:       [600]   Pre-upgrade stats collection (P3)
+#     post_upgrade_baseline_sec:      [600]   Post-upgrade stats collection (P5)
+#     upgrade_timeout_sec:            [43200] Max wall-clock for upgrade (P4)
+#     warmup_discard_sec:             [60]    Initial samples to discard
+#     stabilization_timeout_sec:      [600]   Wait for HEALTH_OK before upgrade
+#     post_upgrade_stabilization_sec: [600]   Wait for HEALTH_OK after upgrade
+#     io_quiesce_sec:                 [30]    Quiet period before integrity checks
+#     upgrade_stall_threshold_sec:    [5400]  No-progress timeout (stall detect)
+#     max_pause_retries:              [3]     Max auto-pause episodes before abort
+#     auto_resume_on_pause:           [false] Auto-resume paused upgrades
+#     disk_warning_percent:           [60]    Warn if disk usage exceeds this %
+#     io_kill_timeout_sec:            [30]    SIGTERM-to-SIGKILL grace period
+#     deep_scrub_timeout_sec:         [600]   Deep-scrub timeout in P6
+#     cold_read_test:                 [false] Cold-read verification (unused)
+#     stats_log_max_mb:               [50]    Max in-memory stats log size (MB)
+#     crash_detail_max_chars:         [500]   Crash detail string truncation
+#
+#   ---------------------------------------------------------------------------
+#   performance_regression:  (WARN only, never fails the test)
+#     Compares pre-upgrade vs post-upgrade baselines. If a metric drops by
+#     more than the threshold, a WARNING is logged in the HTML report.
+#     iops_drop_threshold_percent:        [30]
+#     latency_increase_threshold_percent: [50]
+#     throughput_drop_threshold_percent:   [30]
+#
+#   ---------------------------------------------------------------------------
+#   monitoring_intervals:  (PLANNED -- not yet wired in code)
+#     How frequently each metric is collected during all phases.
+#     Currently unused; the stats collector uses only prometheus_step_sec.
+#     stats_sec:                [5]    OSD perf counters (IOPS, latency)
+#     health_sec:               [15]   ceph health detail
+#     daemon_counters_sec:      [10]   Per-daemon BlueStore/RocksDB counters
+#     fs_status_mds_phase_sec:  [5]    ceph fs status during MDS upgrade
+#     fs_status_other_sec:      [60]   ceph fs status during non-MDS phases
+#     osd_tree_sec:             [30]   ceph osd tree (up/down state)
+#     versions_sec:             [60]   ceph versions (version rollout)
+#     system_metrics_sec:       [30]   Host CPU/memory/network
+#     pg_stat_sec:              [30]   PG state distribution
+#     pool_stats_sec:           [30]   Per-pool IOPS/throughput/objects
+#
+#   ---------------------------------------------------------------------------
+#   io_monitoring:  (PLANNED -- not yet wired in code)
+#     Live IOPS drop detection during upgrade. Currently unused; IO drop
+#     analysis is done post-hoc in the HTML report.
+#     sliding_window_sec:       [60]
+#     drop_threshold_percent:   [50]
+#     sustained_drop_sec:       [30]
+#     continuous_loss_sec:      [60]
+#
+#   ---------------------------------------------------------------------------
+#   integrity:
+#     Controls integrity verification data written in Phase 2. FIO writes
+#     files with embedded CRC32c; RADOS objects get MD5 xattrs. Post-upgrade,
+#     the same data is re-read and checksums are compared.
+#     rados_objects_per_pool: [1000]  RADOS objects per integrity pool
+#     fio_baseline_size:      ["1G"] FIO integrity region on block devices
+#
+#   ---------------------------------------------------------------------------
+#   cluster_fill:  (Phase 2.5)
+#     Fills the cluster to a target usage % before upgrade to simulate a
+#     loaded production cluster. Uses weighted multi-tool parallelism
+#     (fio 50%, vdbench/smallfile 20% each, smbclient 10%).
+#     enabled:                [true]  Set false to skip fill entirely
+#     target_percent:         [35]    Target cluster raw usage %
+#     abort_at_percent:       [75]    Safety limit -- abort if exceeded
+#     fill_timeout_sec:       [0]     0 = auto-calculate from capacity
+#     poll_interval_sec:      [30]    How often to poll ceph df
+#     precision_threshold_pct: [5]    Switch to adaptive batches within N%
+#     safety_factor:          [2]     Divisor for adaptive batch sizes
+#     bg_io_max_percent:      [70]    Kill background writes if usage exceeds threshold
+#     bg_io_check_interval_sec: [120] Capacity guard poll interval during upgrade IO
+#     Example:
+#       cluster_fill:
+#         enabled: true
+#         target_percent: 10
+#
+#   ---------------------------------------------------------------------------
+#   io_tools:  (optional when io_tier is set)
+#     Per-service toggles for IO tools. When io_tier is set, the tier selects
+#     defaults; explicit entries here override (true=force-enable, false=skip).
+#     Available tools by service:
+#       rados:  rados_bench (RADOS pool write, bg only)
+#       rbd:    fio (FIO on mapped block devices, CRC integrity)
+#       cephfs: fio, smallfile (metadata), mdtest (metadata stress),
+#               dd (sequential, bg only), fsstress (XFS stress, bg only),
+#               dbench (Samba workload, bg only),
+#               vdbench (Java benchmark, fill + bg)
+#       rgw:    boto3 (Python S3 SDK), s3cmd (S3 CLI), warp (MinIO S3)
+#       nfs:    fio, smallfile, bonnie (benchmark, bg only), cthon (NFS protocol),
+#               dbench (bg only), vdbench (fill + bg)
+#       smb:    smbclient (dd on CIFS mount)
+#       nvmeof: fio
+#     "bg only" = used for background IO during upgrade, NOT for cluster fill.
+#     Example:
+#       io_tools:
+#         cephfs:
+#           fio: true
+#           smallfile: true
+#           mdtest: false    # disable metadata stress
+#         rgw:
+#           boto3: true
+#           warp: false      # disable MinIO benchmark
+#
+#   ---------------------------------------------------------------------------
+#   io_patterns:
+#     rwmixread: [70]  FIO read/write mix (% reads). 70 = 70% reads, 30% writes
+#     include_sequential_read: [true]   Reserved for future use
+#     include_small_write: [true]       Reserved for future use
+#     tail_latency_percentiles: ["50:90:95:99:99.9:99.99"]  FIO percentile buckets
+#
+#   ---------------------------------------------------------------------------
+#   scale:
+#     Per-service resource counts and topology. Defaults from io_tier profile.
+#     Larger values simulate production-scale but increase setup time.
+#     rbd:
+#       image_count: [100]       Number of RBD images to create
+#       image_size:  ["1G"]      Size of each RBD image
+#     rgw:
+#       versioned_buckets:     [50]   Buckets with versioning enabled
+#       non_versioned_buckets: [50]   Buckets without versioning
+#       data_pool_pg_num:      [512]  PG count for default.rgw.buckets.data
+#       daemons_per_service:   [2]    Number of RGW daemons to deploy
+#     cephfs:
+#       filesystems: [cephfs1, cephfs2]  CephFS filesystem names
+#       active_mds:            [6]       max_mds setting
+#       mds_count_per_host:    [2]       MDS daemons per host
+#       pin_policy:            [distributed]  Subvolume pinning policy
+#       data_pool_pg_num_max:  [512]     pg_num_max for data pools
+#     nfs:
+#       cluster_count:         [1]       Number of NFS-Ganesha clusters
+#       daemons_per_cluster:   [1]       Daemons per NFS cluster
+#       base_port:             [2049]    Starting port for NFS clusters; each
+#                                        cluster gets base_port + index (e.g.
+#                                        2049, 2050, ... 2068 for 20 clusters).
+#                                        Required when cluster_count > 1 to
+#                                        enable daemon colocation on the same
+#                                        host with unique ports.
+#       nfs_versions:          ["3", "4.1", "4.2"]  NFS protocol versions
+#     Example:
+#       scale:
+#         rbd:
+#           image_count: 50
+#           image_size: "2G"
+#         cephfs:
+#           active_mds: 3
+#
+#   ---------------------------------------------------------------------------
+#   services:  (toggle which services are deployed in Phase 1)
+#     Options: rgw, rbd, cephfs, nfs, smb, nvmeof  (all true/false)
+#     disable_smb: (true/false) [false]  Hard-disable SMB even on IBM builds
+#       (overrides auto-enable; needed due to CTDB upgrade issues)
+#     Example:
+#       disable_smb: true
+#       services:
+#         rgw: true
+#         rbd: true
+#         cephfs: true
+#         nfs: true
+#         smb: false
+#         nvmeof: false
+#
+#   ---------------------------------------------------------------------------
+#   features:
+#     Per-service feature toggles. Each feature is enabled before upgrade and
+#     verified both pre-upgrade (confirm enablement) and post-upgrade (confirm
+#     persistence). Set false to skip a feature entirely.
+#     Organized by service: rados, cephfs, rbd, rgw, nfs, smb, nvmeof,
+#     mgr_modules. See the Hop 1 config below for the full list of available
+#     feature toggles per service.
+#     Example (disable a specific feature):
+#       features:
+#         rados:
+#           ec_optimizations: false    # requires Ceph 20.x+ (IBM 9.x Tentacle)
+#         nfs:
+#           qos_bandwidth: false       # IBMCEPH-16312: config parsing crash
+#
+#   ---------------------------------------------------------------------------
+#   bug_validations:
+#     23 validators for known upgrade regressions. Each checks for a specific
+#     failure mode using live cluster queries and monitoring data (Phase 6).
+#     Format: <id>: true/false to enable/disable.
+#     Some validators accept <id>_threshold_sec for timing-based checks.
+#     IDs: a1_mds_clientreplay, a2_mds_stopping, a3_health_err,
+#     a4_nfs_crash, a5_require_osd_release, a6_cephadm_refresh_failed,
+#     a7_daemon_old_version, a8_upgrade_stuck, a9_cephfs_client_crash,
+#     a10_osd_activation, a11_mgr_crash, a12_ec_scrub_errors,
+#     a13_nvmeof_gateway_failure, a14_mgr_snaprealm_crash,
+#     a15_mgr_module_import, a16_nfs_redeploy_failure, a17_smb_all_down,
+#     a18_nvmeof_gw_startup, a19_cephadm_grace_tool,
+#     a20_osd_markdown_shutdown, a21_upgrade_health_err,
+#     a22_upgrade_exception, a23_daemon_count_mismatch,
+#     a24_grace_metrics, a27_nfs_client_continuity (opt-in; see _OPT_IN_BUGS)
+#     Example:
+#       bug_validations:
+#         a1_mds_clientreplay: true
+#         a1_threshold_sec: 120
+#         a8_upgrade_stuck: true
+#         a8_stall_threshold_sec: 3600
+#
+# CLUSTER CONFIG:
+#   conf/tentacle/rados/upgrade-thrashing-folio.yaml
+#   (19 nodes: 17 cluster + 5 clients: node1/node6/node7/node9/node10)
+#   Suite sets mon_max_pg_per_osd: 400
+#
+# CUSTOMIZATION:
+#   Every feature, IO tool, service, bug check, and scale parameter is
+#   individually toggleable via this YAML. Set any toggle to false to
+#   skip it. Scale parameters control resource counts (images, exports,
+#   buckets, etc.). Timing parameters control phase durations and
+#   detection thresholds.
+#
+
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Bootstrap cluster at 8.1 released for folio multi-hop upgrade testing.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node2
+                rhcs-version: 9.0
+                release: released
+                platform: rhel-9
+
+  - test:
+      name: Add hosts
+      desc: Add all host nodes with IP address
+      module: test_host.py
+      abort-on-fail: true
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node2
+            - node3
+            - node4
+            - node5
+            - node8
+            - node11
+            - node12
+            - node13
+            - node14
+            - node15
+            - node16
+            - node17
+            - node18
+            - node19
+            - node20
+            - node21
+            - node22
+            - node23
+            - node24
+          attach_ip_address: true
+          labels: apply-all-labels
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  # encrypted: true
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: true
+
+  - test:
+      name: MDS Service deployment with spec
+      # Initial volume only; max_mds / extra MDS placement is test Phase 1
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph fs volume create cephfs1
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs1
+                  placement:
+                    label: mds
+                    count_per_host: 3
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node1
+        install_packages:
+          - ceph-common
+          - ceph-base
+          - ceph-fuse
+          - fio
+          - nfs-utils
+          - samba-client
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node9
+        install_packages:
+          - ceph-common
+          - ceph-base
+          - ceph-fuse
+          - fio
+          - nfs-utils
+          - samba-client
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node10
+        install_packages:
+          - ceph-common
+          - ceph-base
+          - ceph-fuse
+          - fio
+          - nfs-utils
+          - samba-client
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-base
+          - ceph-fuse
+          - fio
+          - nfs-utils
+          - samba-client
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.5
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-base
+          - ceph-fuse
+          - fio
+          - nfs-utils
+          - samba-client
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  # -----------------------------------------------------------------------
+  # Hop 1: Upgrade 9.0 -> 9.1 released
+  #
+  # Full 7-phase workflow. Staggered Phase 4 with MDS cache drain cooldowns.
+  # skip_client_cleanup / skip_cluster_cleanup preserve resources for Hop 2.
+  # Features requiring 9.1+ (NFS delegations, export_default)
+  # stay disabled here; enabled in Hop 2.
+  # -----------------------------------------------------------------------
+  - test:
+      name: "Hop 1: upgrade thrashing 8.1 -> 9.1"
+      desc: >
+        Multi-hop step 1: full 7-phase upgrade from 8.1 to 9.1 released. Sets up services, enables 8.1-available features, fills cluster, upgrades with monitoring, verifies integrity. Preserves mounts/maps for Hop 2.
+      module: upgrade_thrashing.test_upgrade_thrashing.py
+      abort-on-fail: true
+      config:
+        # =================================================================
+        # IO TIER
+        # =================================================================
+        io_tier: saturation
+
+        # =================================================================
+        # UPGRADE TARGET & STAGGERED UPGRADE ARGS
+        # =================================================================
+        args:
+          rhcs-version: "9.1"
+          release: released
+          platform: rhel-9
+
+        # =================================================================
+        # UPGRADE PARAMS
+        # =================================================================
+        upgrade_params:
+          # IBM registry/image signature lag; not because CDN is unsigned
+          relax_signature_policy: true
+
+        skip_client_cleanup: true
+        skip_cluster_cleanup: true
+        mon_max_pg_per_osd: 400
+
+        mds_config:
+          fail_fs: true
+          mds_cache_memory_limit: "24G"
+
+        upgrade_phases:
+          - daemon_types: "mgr,mon,crash,osd"
+            cooldown_sec: 120
+            cooldown_actions:
+              - type: set_config
+                target: mds
+                configs:
+                  mds_heartbeat_grace: 300
+                  mds_cache_reservation: 0.95
+                  mds_cache_trim_threshold: 524288
+                  mds_recall_global_max_decay_threshold: 1000000
+                  mds_recall_max_decay_threshold: 420715
+                  mds_session_cap_acquisition_throttle: 100
+                  mds_max_caps_per_client: 10000
+              - type: run_command
+                command: "sleep 30"
+              - type: run_command
+                command: "ceph tell 'mds.*' flush"
+                ignore_errors: true
+          - daemon_types: "mds"
+            cooldown_sec: 30
+            cooldown_actions:
+              - type: rm_config
+                target: mds
+                keys:
+                  - mds_heartbeat_grace
+                  - mds_cache_reservation
+                  - mds_cache_trim_threshold
+                  - mds_recall_global_max_decay_threshold
+                  - mds_recall_max_decay_threshold
+                  - mds_session_cap_acquisition_throttle
+                  - mds_max_caps_per_client
+          - {}  # upgrade all remaining (rgw, nfs, monitoring, etc.)
+
+        # =================================================================
+        # PHASE TIMING AND THRESHOLDS
+        # =================================================================
+        phase_timing:
+          pre_upgrade_baseline_sec: 1800
+          post_upgrade_baseline_sec: 1800
+          upgrade_timeout_sec: 43200
+          warmup_discard_sec: 60
+          stabilization_timeout_sec: 1200
+          post_upgrade_stabilization_sec: 1800
+          io_quiesce_sec: 30
+          upgrade_stall_threshold_sec: 5400
+          max_pause_retries: 3
+          auto_resume_on_pause: false
+          disk_warning_percent: 60
+          io_kill_timeout_sec: 30
+          deep_scrub_timeout_sec: 600
+          cold_read_test: false
+          stats_log_max_mb: 50
+          crash_detail_max_chars: 500
+
+        cephx_key_rotation:
+          enabled: true
+          key_type: aes256k
+          rotate_admin: true
+          lock_down_ciphers: true
+          wipe_rotating_service_keys: true
+          io_recovery_sec: 300
+          # Warn-only for now (dbench can die across NFS rotate); flip to true later.
+          fail_on_io_continuity: false
+          timeout_sec: 7200
+          wait_upgrade_complete_sec: 1800
+
+        # =================================================================
+        # PERFORMANCE REGRESSION (WARN only, never fails the test)
+        # =================================================================
+        performance_regression:
+          iops_drop_threshold_percent: 35
+          latency_increase_threshold_percent: 75
+          throughput_drop_threshold_percent: 35
+
+        # =================================================================
+        # MONITORING INTERVALS
+        # =================================================================
+        monitoring_intervals:
+          stats_sec: 5
+          health_sec: 15
+          daemon_counters_sec: 10
+          fs_status_mds_phase_sec: 5
+          fs_status_other_sec: 60
+          osd_tree_sec: 30
+          versions_sec: 60
+          system_metrics_sec: 30
+          pg_stat_sec: 30
+          pool_stats_sec: 30
+
+        # =================================================================
+        # IO DROP DETECTION
+        # =================================================================
+        io_monitoring:
+          sliding_window_sec: 60
+          drop_threshold_percent: 50
+          sustained_drop_sec: 30
+          continuous_loss_sec: 60
+
+        # =================================================================
+        # INTEGRITY BASELINE
+        # =================================================================
+        integrity:
+          rados_objects_per_pool: 1000
+          fio_baseline_size: 1G
+          verify_timeout: 1800
+          pool_clean_wait_timeout: 600
+          heavy_ssh_parallel: 4
+
+        # =================================================================
+        # CLUSTER PRE-FILL (Phase 2.5)
+        # =================================================================
+        cluster_fill:
+          enabled: true
+          target_percent: 10
+          abort_at_percent: 65
+          bg_io_max_percent: 65
+          bg_io_check_interval_sec: 120
+          fill_timeout_sec: 0
+          poll_interval_sec: 10
+          precision_threshold_pct: 5
+          safety_factor: 2
+
+        # =================================================================
+        # IO TOOLS (optional when io_tier is set)
+        # =================================================================
+        io_tools:
+          rados:
+            rados_bench: true
+          rbd:
+            fio: true
+          cephfs:
+            fio: true
+            smallfile: true
+            mdtest: true
+            dd: true
+            fsstress: true
+            dbench: true
+            vdbench: true
+          rgw:
+            boto3: true
+            s3cmd: true
+            warp: true
+          nfs:
+            fio: true
+            smallfile: true
+            bonnie: true
+            dbench: true
+            vdbench: true
+            cthon: true
+          smb:
+            smbclient: false
+          nvmeof:
+            fio: false
+
+        # =================================================================
+        # IO PATTERNS
+        # =================================================================
+        io_patterns:
+          rwmixread: 70
+          include_sequential_read: true
+          include_small_write: true
+          tail_latency_percentiles: "50:90:95:99:99.9:99.99"
+
+        # =================================================================
+        # SCALE CONFIGURATION
+        # =================================================================
+        # Resource count defaults come from io_tier profile.
+        # Only topology values are set here; override counts to customize.
+        scale:
+          rbd:
+            image_count: 100
+            image_size: "10G"
+
+          rgw:
+            daemons_per_service: 10
+            versioned_buckets: 50
+            non_versioned_buckets: 50
+            data_pool_pg_num: 512
+
+          cephfs:
+            filesystems:
+              - cephfs1
+              - cephfs2
+            active_mds: 6
+            mds_count_per_host: 3
+            pin_policy: distributed
+
+          nfs:
+            cluster_count: 20
+            daemons_per_cluster: 1
+            base_port: 2049               # cluster 1=2049, then 2050+; no other NFS on these hosts
+            nfs_versions:
+              # - "3"
+              - "4.1"
+              - "4.2"
+            # mounts_per_version: 2       # code default; retains root_squash coverage
+            # Result: 20 clusters, 20 daemons, 80 exports, ~48 mounts/client
+
+        # =================================================================
+        # SERVICES
+        # =================================================================
+        disable_smb: true
+        services:
+          rgw: true
+          rbd: true
+          cephfs: true
+          nfs: true
+          smb: false
+          nvmeof: false
+
+        # =================================================================
+        # FEATURE TOGGLES
+        # =================================================================
+        features:
+          rados:
+            ec_optimizations: true
+            compression_snappy: true
+            compression_zstd: true
+            mclock_balanced: true
+            scrub_auto_repair: true
+            pool_quotas: true
+            crush_device_classes: false
+
+          cephfs:
+            max_mds: true
+            standby_replay: true
+            subvolume_pinning: true
+            quotas: true
+            snapshots: true
+            snap_schedule: true
+            charmap: true
+            dir_fragmentation: true
+
+          rbd:
+            all_image_features: true
+            qos: true
+            snap_clone_tree: true
+            ec_data_pool: true
+            luks2_encryption: true
+            persistent_write_log_cache: true
+            trash_purge_schedule: true
+            group_snapshots: true
+            namespace: true
+
+          rgw:
+            versioning: true
+            lifecycle: true
+            sse_s3: true
+            object_lock: true
+            dynamic_resharding: true
+            multipart: true
+            user_bucket_quotas: true
+            sts_iam: true
+            rate_limiting: true
+            bucket_notifications: true
+            bucket_policy: true
+
+          nfs:
+            qos_bandwidth: false  # IBMCEPH-18028: Cqos_Port conflict crashes co-located daemons
+            qos_iops: false       # IBMCEPH-18028
+            multiple_exports: true
+            root_squash: true
+            delegations: false
+            nfsv3: false
+            export_default: false
+            ingress_ha: false
+            ingress_virtual_ip: ""
+            kerberos: false
+            ldap_identity: false
+
+          smb:
+            multiple_shares: false
+            readonly_share: false
+            login_control_acls: false
+            clustering_ctdb: false
+
+          nvmeof:
+            qos: false
+            namespace_masking: false
+            multi_gateway_ha: false
+            discovery_controller: false
+            auto_resize: false
+
+          mgr_modules:
+            verify_prometheus: true
+            verify_crash: true
+            verify_telemetry: true
+            verify_balancer: true
+            verify_pg_autoscaler: true
+            verify_dashboard: true
+
+        # =================================================================
+        # NFS GRACE VALIDATION (IBMCEPH-17685 prep; baseline=WARN, strict=FAIL)
+        # =================================================================
+        nfs_grace_validation:
+          enabled: true
+          mode: baseline
+          max_observed_grace_sec: 120
+
+        # =================================================================
+        # BUG VALIDATION TOGGLES
+        # =================================================================
+        bug_validations:
+          a1_mds_clientreplay: true
+          a1_threshold_sec: 240
+          a2_mds_stopping: true
+          a2_threshold_sec: 600
+          a3_health_err: true
+          a4_nfs_crash: true
+          a5_require_osd_release: true
+          a6_cephadm_refresh_failed: true
+          a7_daemon_old_version: true
+          a8_upgrade_stuck: true
+          a8_stall_threshold_sec: 5400
+          a9_cephfs_client_crash: true
+          a10_osd_activation: true
+          a11_mgr_crash: true
+          a12_ec_scrub_errors: true
+          a13_nvmeof_gateway_failure: true
+          a14_mgr_snaprealm_crash: true
+          a15_mgr_module_import: true
+          a16_nfs_redeploy_failure: true
+          a17_smb_all_down: false
+          a18_nvmeof_gw_startup: true
+          a19_cephadm_grace_tool: true
+          a20_osd_markdown_shutdown: true
+          a21_upgrade_health_err: true
+          a24_grace_metrics: true
+          a27_nfs_client_continuity: true
+
+  # -----------------------------------------------------------------------
+  # Hop 2: Upgrade 9.1 -> 9.2 stable
+  #
+  # skip_service_setup: services persist from Hop 1.
+  # cluster_fill disabled (cluster already loaded from Hop 1).
+  # Full client + cluster cleanup on this last hop.
+  # -----------------------------------------------------------------------
+  - test:
+      name: "Hop 2: upgrade thrashing 9.1 -> 9.2 stable"
+      desc: >
+        Multi-hop step 2: upgrade from 9.1 to 9.2 stable/released. Skips service setup and cluster fill. Enables 9.1+ features, fresh baselines, upgrade with monitoring, full verification + cleanup.
+      module: upgrade_thrashing.test_upgrade_thrashing.py
+      abort-on-fail: false
+      config:
+        # =================================================================
+        # IO TIER
+        # =================================================================
+        io_tier: saturation
+
+        # =================================================================
+        # UPGRADE TARGET & STAGGERED UPGRADE ARGS
+        # =================================================================
+        args:
+          rhcs-version: "9.2"
+          release: released
+          platform: rhel-9
+
+        # =================================================================
+        # UPGRADE PARAMS
+        # =================================================================
+        upgrade_params:
+          # IBM registry/image signature lag; not because CDN is unsigned
+          relax_signature_policy: true
+
+        skip_service_setup: true
+
+        skip_client_cleanup: false
+        skip_cluster_cleanup: false
+        mon_max_pg_per_osd: 400
+
+        mds_config:
+          fail_fs: true
+          mds_cache_memory_limit: "24G"
+
+        upgrade_phases:
+          - daemon_types: "mgr,mon,crash,osd"
+            cooldown_sec: 120
+            cooldown_actions:
+              - type: set_config
+                target: mds
+                configs:
+                  mds_heartbeat_grace: 300
+                  mds_cache_reservation: 0.95
+                  mds_cache_trim_threshold: 524288
+                  mds_recall_global_max_decay_threshold: 1000000
+                  mds_recall_max_decay_threshold: 420715
+                  mds_session_cap_acquisition_throttle: 100
+                  mds_max_caps_per_client: 10000
+              - type: run_command
+                command: "sleep 30"
+              - type: run_command
+                command: "ceph tell 'mds.*' flush"
+                ignore_errors: true
+          - daemon_types: "mds"
+            cooldown_sec: 30
+            cooldown_actions:
+              - type: rm_config
+                target: mds
+                keys:
+                  - mds_heartbeat_grace
+                  - mds_cache_reservation
+                  - mds_cache_trim_threshold
+                  - mds_recall_global_max_decay_threshold
+                  - mds_recall_max_decay_threshold
+                  - mds_session_cap_acquisition_throttle
+                  - mds_max_caps_per_client
+          - {}  # upgrade all remaining (rgw, nfs, monitoring, etc.)
+
+        # =================================================================
+        # PHASE TIMING AND THRESHOLDS
+        # =================================================================
+        phase_timing:
+          pre_upgrade_baseline_sec: 1800
+          post_upgrade_baseline_sec: 1800
+          upgrade_timeout_sec: 43200
+          warmup_discard_sec: 60
+          stabilization_timeout_sec: 1200
+          post_upgrade_stabilization_sec: 1800
+          io_quiesce_sec: 30
+          upgrade_stall_threshold_sec: 5400
+          max_pause_retries: 3
+          auto_resume_on_pause: false
+          disk_warning_percent: 60
+          io_kill_timeout_sec: 30
+          deep_scrub_timeout_sec: 600
+          cold_read_test: false
+          stats_log_max_mb: 50
+          crash_detail_max_chars: 500
+
+        cephx_key_rotation:
+          enabled: true
+          key_type: aes256k
+          rotate_admin: true
+          lock_down_ciphers: true
+          wipe_rotating_service_keys: true
+          io_recovery_sec: 300
+          # Warn-only for now (dbench can die across NFS rotate); flip to true later.
+          fail_on_io_continuity: false
+          timeout_sec: 7200
+          wait_upgrade_complete_sec: 1800
+
+
+        # =================================================================
+        # PERFORMANCE REGRESSION (WARN only, never fails the test)
+        # =================================================================
+        performance_regression:
+          iops_drop_threshold_percent: 30
+          latency_increase_threshold_percent: 50
+          throughput_drop_threshold_percent: 30
+
+        # =================================================================
+        # MONITORING INTERVALS
+        # =================================================================
+        monitoring_intervals:
+          stats_sec: 5
+          health_sec: 15
+          daemon_counters_sec: 10
+          fs_status_mds_phase_sec: 5
+          fs_status_other_sec: 60
+          osd_tree_sec: 30
+          versions_sec: 60
+          system_metrics_sec: 30
+          pg_stat_sec: 30
+          pool_stats_sec: 30
+
+        # =================================================================
+        # IO DROP DETECTION
+        # =================================================================
+        io_monitoring:
+          sliding_window_sec: 60
+          drop_threshold_percent: 50
+          sustained_drop_sec: 30
+          continuous_loss_sec: 60
+
+        # =================================================================
+        # INTEGRITY BASELINE
+        # =================================================================
+        integrity:
+          rados_objects_per_pool: 1000
+          fio_baseline_size: 1G
+          verify_timeout: 1800
+          pool_clean_wait_timeout: 600
+          heavy_ssh_parallel: 4
+
+        # =================================================================
+        # CLUSTER PRE-FILL (Phase 2.5)
+        # =================================================================
+        cluster_fill:
+          enabled: false
+          target_percent: 10
+          abort_at_percent: 70
+          bg_io_max_percent: 70
+          bg_io_check_interval_sec: 120
+          fill_timeout_sec: 0
+          poll_interval_sec: 10
+          precision_threshold_pct: 5
+          safety_factor: 2
+
+        # =================================================================
+        # IO TOOLS (optional when io_tier is set)
+        # =================================================================
+        io_tools:
+          rados:
+            rados_bench: true
+          rbd:
+            fio: true
+          cephfs:
+            fio: true
+            smallfile: true
+            mdtest: true
+            dd: true
+            fsstress: true
+            dbench: true
+            vdbench: true
+          rgw:
+            boto3: true
+            s3cmd: true
+            warp: true
+          nfs:
+            fio: true
+            smallfile: true
+            bonnie: true
+            dbench: true
+            vdbench: true
+            cthon: true
+          smb:
+            smbclient: false
+          nvmeof:
+            fio: false
+
+        # =================================================================
+        # IO PATTERNS
+        # =================================================================
+        io_patterns:
+          rwmixread: 70
+          include_sequential_read: true
+          include_small_write: true
+          tail_latency_percentiles: "50:90:95:99:99.9:99.99"
+
+        # =================================================================
+        # SCALE CONFIGURATION
+        # =================================================================
+        # Resource count defaults come from io_tier profile.
+        # Only topology values are set here; override counts to customize.
+        scale:
+          rbd:
+            image_count: 100
+            image_size: "10G"
+
+          rgw:
+            daemons_per_service: 10
+            versioned_buckets: 50
+            non_versioned_buckets: 50
+            data_pool_pg_num: 512
+
+          cephfs:
+            filesystems:
+              - cephfs1
+              - cephfs2
+            active_mds: 6
+            mds_count_per_host: 3
+            pin_policy: distributed
+
+          nfs:
+            cluster_count: 20
+            daemons_per_cluster: 1
+            base_port: 2049               # cluster 1=2049, then 2050+; no other NFS on these hosts
+            nfs_versions:
+              # - "3"
+              - "4.1"
+              - "4.2"
+            # mounts_per_version: 2       # code default; retains root_squash coverage
+            # Result: 20 clusters, 20 daemons, 80 exports, ~48 mounts/client
+
+        # =================================================================
+        # SERVICES
+        # =================================================================
+        disable_smb: true
+        services:
+          rgw: true
+          rbd: true
+          cephfs: true
+          nfs: true
+          smb: false
+          nvmeof: false
+
+        # =================================================================
+        # FEATURE TOGGLES
+        # =================================================================
+        features:
+          rados:
+            ec_optimizations: true
+            compression_snappy: true
+            compression_zstd: true
+            mclock_balanced: true
+            scrub_auto_repair: true
+            pool_quotas: true
+            crush_device_classes: false
+
+          cephfs:
+            max_mds: true
+            standby_replay: true
+            subvolume_pinning: true
+            quotas: true
+            snapshots: true
+            snap_schedule: true
+            charmap: true
+            dir_fragmentation: true
+
+          rbd:
+            all_image_features: true
+            qos: true
+            snap_clone_tree: true
+            ec_data_pool: true
+            luks2_encryption: true
+            persistent_write_log_cache: true
+            trash_purge_schedule: true
+            group_snapshots: true
+            namespace: true
+
+          rgw:
+            versioning: true
+            lifecycle: true
+            sse_s3: true
+            object_lock: true
+            dynamic_resharding: true
+            multipart: true
+            user_bucket_quotas: true
+            sts_iam: true
+            rate_limiting: true
+            bucket_notifications: true
+            bucket_policy: true
+
+          nfs:
+            qos_bandwidth: false  # IBMCEPH-18028: Cqos_Port conflict crashes co-located daemons
+            qos_iops: false       # IBMCEPH-18028
+            multiple_exports: true
+            root_squash: true
+            delegations: true
+            nfsv3: false
+            export_default: true
+            ingress_ha: false
+            ingress_virtual_ip: ""
+            kerberos: false
+            ldap_identity: false
+
+          smb:
+            multiple_shares: false
+            readonly_share: false
+            login_control_acls: false
+            clustering_ctdb: false
+
+          nvmeof:
+            qos: false
+            namespace_masking: false
+            multi_gateway_ha: false
+            discovery_controller: false
+            auto_resize: false
+
+          mgr_modules:
+            verify_prometheus: true
+            verify_crash: true
+            verify_telemetry: true
+            verify_balancer: true
+            verify_pg_autoscaler: true
+            verify_dashboard: true
+
+        # =================================================================
+        # NFS GRACE VALIDATION (IBMCEPH-17685 prep; baseline=WARN, strict=FAIL)
+        # =================================================================
+        nfs_grace_validation:
+          enabled: true
+          mode: baseline
+          max_observed_grace_sec: 120
+
+        # =================================================================
+        # BUG VALIDATION TOGGLES
+        # =================================================================
+        bug_validations:
+          a1_mds_clientreplay: true
+          a1_threshold_sec: 240
+          a2_mds_stopping: true
+          a2_threshold_sec: 600
+          a3_health_err: true
+          a4_nfs_crash: true
+          a5_require_osd_release: true
+          a6_cephadm_refresh_failed: true
+          a7_daemon_old_version: true
+          a8_upgrade_stuck: true
+          a8_stall_threshold_sec: 5400
+          a9_cephfs_client_crash: true
+          a10_osd_activation: true
+          a11_mgr_crash: true
+          a12_ec_scrub_errors: true
+          a13_nvmeof_gateway_failure: true
+          a14_mgr_snaprealm_crash: true
+          a15_mgr_module_import: true
+          a16_nfs_redeploy_failure: true
+          a17_smb_all_down: false
+          a18_nvmeof_gw_startup: true
+          a19_cephadm_grace_tool: true
+          a20_osd_markdown_shutdown: true
+          a21_upgrade_health_err: true
+          a24_grace_metrics: true
+          a27_nfs_client_continuity: true

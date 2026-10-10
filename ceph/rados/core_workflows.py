@@ -6285,8 +6285,10 @@ EOF"""
             r"std::terminate",
             r"terminate called",
             r"\(core dumped\)",
-            # Stack traces (indicates crash dump)
-            r"[Bb]acktrace:",
+            # Stack traces (indicates crash dump).
+            # Word-boundary required: MDS debug logs "_store_backtrace:" otherwise
+            # matches and floods the report with false positives.
+            r"\b[Bb]acktrace:",
             r"ceph_stacktrace",
             r"Dumping core",
             # Exception indicators (more specific)
