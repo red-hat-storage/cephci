@@ -152,9 +152,12 @@ def run(ceph_cluster, **kw):
         # Event-driven wait for prior DELEGRETURN (exit_wait is timeout ceiling).
         start_ganesha_delegation_tailf_follow(nfs_node, container_id)
         try:
-            wait_for_delegreturn_in_ganesha_capture(
+            if not wait_for_delegreturn_in_ganesha_capture(
                 nfs_node, container_id, timeout_seconds=exit_wait
-            )
+            ):
+                raise OperationFailedError(
+                    "write_grant: DELEGRETURN not seen after new-file close"
+                )
         finally:
             stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 

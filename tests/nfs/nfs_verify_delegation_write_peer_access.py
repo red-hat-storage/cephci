@@ -28,6 +28,7 @@ from nfs_delegation_operations import (
     wait_for_delegation_grant,
     wait_for_delegation_path,
     wait_for_delegreturn_in_ganesha_capture,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -95,6 +96,7 @@ def run(ceph_cluster, **kw):
     )
     ready_s = timing.hold_ready_seconds
     settle_s = timing.log_settle_seconds
+    exit_wait = timing.exit_wait_seconds
     return_wait = timing.return_wait_seconds
     path_wait_retries = timing.path_wait_retries
 
@@ -146,12 +148,21 @@ def run(ceph_cluster, **kw):
         for client, mp in ((client_a, mount_a), (client_b, mount_b)):
             mount_delegation_export(client, mp, nfs_ver, port, server, export_rw)
 
-        _seed_file(client_a, path_a, path_wait_retries)
-        wait_for_delegation_path(
-            client_b,
-            path_b,
-            "client B sees shared file",
-            retries=path_wait_retries,
+        def _seed_peer_file():
+            _seed_file(client_a, path_a, path_wait_retries)
+            wait_for_delegation_path(
+                client_b,
+                path_b,
+                "client B sees shared file",
+                retries=path_wait_retries,
+            )
+
+        wait_seed_delegreturn_then_truncate(
+            nfs_node,
+            container_id,
+            _seed_peer_file,
+            timeout_seconds=exit_wait,
+            scenario_name="write_peer",
         )
         log.info("Phase A: Client B write while Client A holds WRITE delegation")
         conflict_hits = capture_delegation_ganesha_log_phase(

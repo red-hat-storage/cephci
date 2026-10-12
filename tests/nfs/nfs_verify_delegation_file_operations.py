@@ -30,6 +30,7 @@ from nfs_delegation_operations import (
     wait_for_delegation_grant,
     wait_for_delegation_path,
     wait_for_delegation_recall,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -305,6 +306,7 @@ def run(ceph_cluster, **kw):
     )
     ready_s = timing.hold_ready_seconds
     settle_s = timing.log_settle_seconds
+    exit_wait = timing.exit_wait_seconds
     path_wait_retries = timing.path_wait_retries
     open_close_cycles = int(config.get("open_close_cycles", 5))
     lock_wait_s = int(config.get("lock_wait_seconds", 15))
@@ -371,10 +373,18 @@ def run(ceph_cluster, **kw):
             path_b = "%s/%s" % (mount_b, test_file) if min_clients > 1 else path_a
             log.info("Scenario %s (%s) validator=%s", scenario, test_file, validator)
 
-            _seed_file(client_a, path_a, scenario, path_wait_retries)
-            if min_clients > 1:
-                _seed_file(client_b, path_b, scenario, path_wait_retries)
-            truncate_ganesha_container_log(nfs_node, container_id)
+            def _seed_scenario():
+                _seed_file(client_a, path_a, scenario, path_wait_retries)
+                if min_clients > 1:
+                    _seed_file(client_b, path_b, scenario, path_wait_retries)
+
+            wait_seed_delegreturn_then_truncate(
+                nfs_node,
+                container_id,
+                _seed_scenario,
+                timeout_seconds=exit_wait,
+                scenario_name=scenario,
+            )
 
             start_ganesha_delegation_tailf_follow(nfs_node, container_id)
             try:

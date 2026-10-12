@@ -28,6 +28,7 @@ from nfs_delegation_operations import (
     wait_for_delegation_grant,
     wait_for_delegation_path,
     wait_for_delegation_recall,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -139,6 +140,7 @@ def run(ceph_cluster, **kw):
     )
     ready_s = timing.hold_ready_seconds
     settle_s = timing.log_settle_seconds
+    exit_wait = timing.exit_wait_seconds
     path_wait_retries = timing.path_wait_retries
     redeploy_wait = int(config.get("redeploy_wait", 30))
     service_wait = int(config.get("service_wait_timeout", 300))
@@ -203,11 +205,16 @@ def run(ceph_cluster, **kw):
                 expect_recall,
             )
 
-            # Seed then truncate so the next capture window starts clean (no exit sleep).
-            _seed_clients(
-                client_a, client_b, path_a, path_b, scenario, path_wait_retries
+            # Seed under tailf, wait for DELEGRETURN, then truncate for a clean window.
+            wait_seed_delegreturn_then_truncate(
+                nfs_node,
+                container_id,
+                lambda: _seed_clients(
+                    client_a, client_b, path_a, path_b, scenario, path_wait_retries
+                ),
+                timeout_seconds=exit_wait,
+                scenario_name=scenario,
             )
-            truncate_ganesha_container_log(nfs_node, container_id)
             start_ganesha_delegation_tailf_follow(nfs_node, container_id)
             extra = ()
             hits = []
@@ -232,7 +239,7 @@ def run(ceph_cluster, **kw):
                     hits = assert_no_delegation_recall_for(
                         nfs_node,
                         container_id,
-                        observation_seconds=min(15, settle_s),
+                        observation_seconds=settle_s,
                         scenario_name=scenario,
                     )
                 validate_delegation_recall_ganesha_capture(

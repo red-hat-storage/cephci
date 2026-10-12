@@ -33,6 +33,7 @@ from nfs_delegation_operations import (
     validate_delegation_stress_strict_capture,
     wait_for_delegation_log_events,
     wait_for_delegation_path,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -269,13 +270,28 @@ def run(ceph_cluster, **kw):
         mount_roots = _setup_client_mounts(
             clients, mounts_per_client, nfs_ver, port, server, export_rw
         )
-        workload_specs = _seed_workload_files(mount_roots, timing.path_wait_retries)
-        conflict_paths = _seed_conflict_file(
-            clients, mount_roots, timing.path_wait_retries
-        )
+        exit_wait = timing.exit_wait_seconds
+        workload_specs = []
+        conflict_paths = {}
 
-        # Truncate after seed for a clean capture window (no fixed exit_wait sleep).
-        truncate_ganesha_container_log(nfs_node, container_id)
+        def _seed_stress_files():
+            nonlocal workload_specs, conflict_paths
+            workload_specs = _seed_workload_files(
+                mount_roots, timing.path_wait_retries
+            )
+            conflict_paths = _seed_conflict_file(
+                clients, mount_roots, timing.path_wait_retries
+            )
+
+        # Seed under tailf, wait for DELEGRETURN, truncate so leftover recall
+        # lines cannot satisfy post-workload grant/recall event polls.
+        wait_seed_delegreturn_then_truncate(
+            nfs_node,
+            container_id,
+            _seed_stress_files,
+            timeout_seconds=exit_wait,
+            scenario_name="delegation_stress",
+        )
         start_ganesha_delegation_tailf_follow(nfs_node, container_id)
         hits = []
         try:

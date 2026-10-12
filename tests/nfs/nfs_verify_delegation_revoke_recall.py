@@ -36,6 +36,7 @@ from nfs_delegation_operations import (
     wait_for_delegation_recall,
     wait_for_delegation_revoke,
     wait_for_delegreturn_in_ganesha_capture,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -138,7 +139,7 @@ def _run_revoke_io_completes_before_timeout(
         hits = assert_no_delegation_recall_for(
             nfs_node,
             container_id,
-            observation_seconds=min(15, settle_s),
+            observation_seconds=settle_s,
             scenario_name="revoke_io_completes_before_timeout",
         )
     finally:
@@ -288,6 +289,7 @@ def run(ceph_cluster, **kw):
     ready_s = timing.hold_ready_seconds
     return_wait = timing.return_wait_seconds
     settle_s = timing.log_settle_seconds
+    exit_wait = timing.exit_wait_seconds
     path_wait_retries = timing.path_wait_retries
     redeploy_wait = int(config.get("redeploy_wait", 30))
     service_wait = int(config.get("service_wait_timeout", 300))
@@ -352,10 +354,15 @@ def run(ceph_cluster, **kw):
                 expect_positive,
             )
 
-            _seed_clients(
-                client_a, client_b, path_a, path_b, scenario, path_wait_retries
+            wait_seed_delegreturn_then_truncate(
+                nfs_node,
+                container_id,
+                lambda: _seed_clients(
+                    client_a, client_b, path_a, path_b, scenario, path_wait_retries
+                ),
+                timeout_seconds=exit_wait,
+                scenario_name=scenario,
             )
-            truncate_ganesha_container_log(nfs_node, container_id)
 
             if scenario == "revoke_io_completes_before_timeout":
                 _run_revoke_io_completes_before_timeout(
@@ -403,7 +410,7 @@ def run(ceph_cluster, **kw):
                         hits = assert_no_delegation_recall_for(
                             nfs_node,
                             container_id,
-                            observation_seconds=min(15, settle_s),
+                            observation_seconds=settle_s,
                             scenario_name=scenario,
                         )
                     _validate_scenario_capture(scenario, kind, expect_positive, hits)

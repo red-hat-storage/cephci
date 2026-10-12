@@ -159,8 +159,9 @@ DELEGATION_RETURN_WAIT_SECONDS_DEFAULT = 15
 DELEGATION_LOG_SETTLE_SECONDS_DEFAULT = 90
 # Poll attempts when waiting for a seeded file to appear on an NFS mount.
 DELEGATION_PATH_WAIT_RETRIES_DEFAULT = 40
-# Negative (expect no recall) observation window after peer IO.
-DELEGATION_NO_RECALL_OBSERVE_SECONDS_DEFAULT = 15
+# Negative (expect no recall) observation window after peer IO. Must match the
+# positive settle ceiling so late 60–70s recalls cannot false-pass.
+DELEGATION_NO_RECALL_OBSERVE_SECONDS_DEFAULT = DELEGATION_LOG_SETTLE_SECONDS_DEFAULT
 # Default poll interval for event-driven capture waits.
 DELEGATION_EVENT_POLL_SECONDS_DEFAULT = 2
 
@@ -1032,12 +1033,10 @@ def wait_for_prior_delegation_exit(
     """
     After seed IO, poll for DELEGRETURN so the next hold can grant cleanly.
 
-    If the capture is still empty after a short grace, treat as already clean
-    (seed CLOSE may not emit filtered DELEGRETURN on every path).
+    Empty capture is not treated as success: seed OPEN/CLOSE may still flush
+    DELEGRETURN/recall lines after a short delay. Raises on timeout.
     """
-    grace = min(5, int(timeout_seconds))
     deadline = time.time() + int(timeout_seconds)
-    grace_deadline = time.time() + grace
     hits: List[str] = []
     while time.time() < deadline:
         hits = list(read_ganesha_delegation_tailf_capture(nfs_node, container_id) or [])
@@ -1049,22 +1048,16 @@ def wait_for_prior_delegation_exit(
                 len(hits),
             )
             return hits
-        # Empty / no activity past grace → safe to proceed without sleeping the full ceiling.
-        if time.time() >= grace_deadline and not text.strip():
-            log.info(
-                "%s: empty capture after %ss grace; treating prior delegation as clear",
-                scenario_name,
-                grace,
-            )
-            return hits
         time.sleep(int(poll_seconds))
-    log.info(
-        "%s: no DELEGRETURN within %ss; proceeding with last capture (%d lines)",
-        scenario_name,
-        timeout_seconds,
-        len(hits),
+    raise OperationFailedError(
+        "%s: no DELEGRETURN within %ss after seed; last capture (%d lines):\n%s"
+        % (
+            scenario_name,
+            timeout_seconds,
+            len(hits),
+            "\n".join(hits[-40:]) if hits else "<empty capture>",
+        )
     )
-    return hits
 
 
 def assert_no_delegation_recall_for(
@@ -1119,6 +1112,34 @@ def wait_for_delegreturn_in_ganesha_capture(
         return True
     except OperationFailedError:
         return False
+
+
+def wait_seed_delegreturn_then_truncate(
+    nfs_node: CephNode,
+    container_id: str,
+    seed_callable: Callable[[], None],
+    *,
+    timeout_seconds: int,
+    scenario_name: str,
+) -> None:
+    """
+    Run *seed_callable* under a live tailf, wait for DELEGRETURN, then truncate.
+
+    Ensures leftover seed Recalling/successfully recalled/DELEGRETURN lines cannot
+    satisfy the next scenario's recall/revoke event poll.
+    """
+    start_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    try:
+        seed_callable()
+        if not wait_for_delegreturn_in_ganesha_capture(
+            nfs_node, container_id, timeout_seconds=timeout_seconds
+        ):
+            raise OperationFailedError(
+                "%s: DELEGRETURN not seen after seed" % scenario_name
+            )
+    finally:
+        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    truncate_ganesha_container_log(nfs_node, container_id)
 
 
 def ensure_nfs_cluster_for_delegation_test(
