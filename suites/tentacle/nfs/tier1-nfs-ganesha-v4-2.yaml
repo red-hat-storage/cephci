@@ -352,17 +352,6 @@ tests:
         file_count: 100
 
   - test:
-      name: Verify create file, create soflink and lookups from nfs clients
-      module: nfs_verify_file_ops_soft_links.py
-      desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id: CEPH-83577596
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-
-  - test:
       name: Nfs Verify File Operations
       module: nfs_verify_file_operations.py
       desc: Change the ownership (user and group) of files within the NFS export
@@ -566,6 +555,8 @@ tests:
         nfs_version: 4.2
         clients: 2
 
+  # Delegation settle/exit/ready/return seconds are event-poll timeout ceilings
+  # (grant/recall/revoke/DELEGRETURN), not forced sleep durations.
   - test:
       name: Verify cluster and export level NFSv4 delegations
       module: nfs_verify_cluster_level_delegations.py

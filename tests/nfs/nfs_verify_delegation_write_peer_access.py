@@ -5,8 +5,6 @@ Phase A: Client A holds WRITE delegation; Client B write triggers recall.
 Phase B: Client A returns delegation; Client B obtains WRITE delegation.
 """
 
-import time
-
 from nfs_delegation_operations import (
     capture_delegation_ganesha_log_phase,
     create_delegation_exports,
@@ -20,12 +18,14 @@ from nfs_delegation_operations import (
     release_delegation_hold_gracefully,
     restore_delegation_ganesha_templates,
     skip_delegation_tests_unless_supported,
+    start_ganesha_delegation_tailf_follow,
     stop_ganesha_delegation_tailf_follow,
     teardown_delegation_exports,
     truncate_ganesha_container_log,
     unmount_delegation_export,
     validate_delegation_grant_capture,
     validate_delegation_recall_ganesha_capture,
+    wait_for_delegation_grant,
     wait_for_delegation_path,
     wait_for_delegreturn_in_ganesha_capture,
     write_delegation_file,
@@ -47,11 +47,17 @@ def _seed_file(client, path, path_wait_retries):
     wait_for_delegation_path(client, path, "seed", retries=path_wait_retries)
 
 
-def _hold_write_on_a(client_a, path_a, hold_s, ready_s):
+def _hold_write_on_a(client_a, path_a, hold_s, nfs_node, container_id, ready_s):
     write_delegation_file(client_a, path_a, "hold-write\n")
     wait_for_delegation_path(client_a, path_a, "client A pre write-hold")
     hold_delegation_open(client_a, path_a, "r+b", hold_s)
-    time.sleep(ready_s)
+    wait_for_delegation_grant(
+        nfs_node,
+        container_id,
+        hold_mode="write",
+        timeout_seconds=max(ready_s, 20),
+        scenario_name="write_peer_hold_grant",
+    )
 
 
 def run(ceph_cluster, **kw):
@@ -83,10 +89,12 @@ def run(ceph_cluster, **kw):
     bootstrap_export = config.get("bootstrap_export", "/export_delegation_boot")
 
     timing = delegation_timing_from_config(config)
-    hold_s = timing.hold_seconds
+    hold_s = max(
+        timing.hold_seconds,
+        timing.hold_ready_seconds + timing.log_settle_seconds + 30,
+    )
     ready_s = timing.hold_ready_seconds
     settle_s = timing.log_settle_seconds
-    exit_wait = timing.exit_wait_seconds
     return_wait = timing.return_wait_seconds
     path_wait_retries = timing.path_wait_retries
 
@@ -145,16 +153,15 @@ def run(ceph_cluster, **kw):
             "client B sees shared file",
             retries=path_wait_retries,
         )
-        log.info("Waiting %ss after seed for delegations to exit", exit_wait)
-        time.sleep(exit_wait)
-
         log.info("Phase A: Client B write while Client A holds WRITE delegation")
         conflict_hits = capture_delegation_ganesha_log_phase(
             nfs_node,
             container_id,
             settle_s,
             lambda: (
-                _hold_write_on_a(client_a, path_a, hold_s, ready_s),
+                _hold_write_on_a(
+                    client_a, path_a, hold_s, nfs_node, container_id, ready_s
+                ),
                 wait_for_delegation_path(
                     client_b,
                     path_b,
@@ -165,6 +172,8 @@ def run(ceph_cluster, **kw):
                     client_b, path_b, "client-b-conflict\n", append=True
                 ),
             ),
+            scenario_name="write_peer_conflict_while_a_holds",
+            wait_for_recall=True,
         )
         validate_delegation_recall_ganesha_capture(
             "write_peer_conflict_while_a_holds", conflict_hits, True
@@ -174,13 +183,16 @@ def run(ceph_cluster, **kw):
             "Phase B: Client A returns delegation; Client B obtains WRITE delegation"
         )
         release_delegation_hold_gracefully(client_a, term_wait_seconds=5)
-        if not wait_for_delegreturn_in_ganesha_capture(
-            nfs_node, container_id, timeout_seconds=return_wait + 30
-        ):
-            raise OperationFailedError(
-                "write_peer_after_return: DELEGRETURN not seen after client A close"
-            )
-        time.sleep(2)
+        start_ganesha_delegation_tailf_follow(nfs_node, container_id)
+        try:
+            if not wait_for_delegreturn_in_ganesha_capture(
+                nfs_node, container_id, timeout_seconds=return_wait + 30
+            ):
+                raise OperationFailedError(
+                    "write_peer_after_return: DELEGRETURN not seen after client A close"
+                )
+        finally:
+            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 
         hold_duration = max(int(hold_s), int(ready_s) + int(settle_s) + 30)
         grant_hits = capture_delegation_ganesha_log_phase(
@@ -195,8 +207,9 @@ def run(ceph_cluster, **kw):
                     retries=path_wait_retries,
                 ),
                 hold_delegation_open(client_b, path_b, "r+b", hold_duration),
-                time.sleep(ready_s),
             ),
+            scenario_name="write_peer_grant_after_a_returns",
+            hold_mode="write",
         )
         validate_delegation_grant_capture(
             "write_peer_grant_after_a_returns", grant_hits, "write"

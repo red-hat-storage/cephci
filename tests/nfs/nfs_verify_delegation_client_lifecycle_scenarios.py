@@ -4,8 +4,6 @@ NFSv4 delegation client unmount scenario (single client, rw export).
 Validates DELEGRETURN when a client lazy-unmounts with an active WRITE delegation.
 """
 
-import time
-
 from nfs_delegation_operations import (
     create_delegation_exports,
     delegation_timing_from_config,
@@ -26,7 +24,9 @@ from nfs_delegation_operations import (
     truncate_ganesha_container_log,
     unmount_delegation_export,
     validate_delegation_close_and_return_capture,
+    wait_for_delegation_grant,
     wait_for_delegation_path,
+    wait_for_delegreturn_in_ganesha_capture,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -127,22 +127,33 @@ def run(ceph_cluster, **kw):
 
         truncate_ganesha_container_log(nfs_node, container_id)
         start_ganesha_delegation_tailf_follow(nfs_node, container_id)
+        try:
+            write_delegation_file(client, path, "hold-write\n")
+            wait_for_delegation_path(client, path, "pre write-hold")
+            hold_delegation_open(client, path, "r+b", max(hold_s, settle_s + 30))
+            wait_for_delegation_grant(
+                nfs_node,
+                container_id,
+                hold_mode="write",
+                timeout_seconds=max(ready_s, 20),
+                scenario_name="client_unmount_grant",
+            )
+            write_delegation_file(client, path, "lifecycle-io\n", append=True)
 
-        write_delegation_file(client, path, "hold-write\n")
-        wait_for_delegation_path(client, path, "pre write-hold")
-        hold_delegation_open(client, path, "r+b", hold_s)
-        time.sleep(ready_s)
-        write_delegation_file(client, path, "lifecycle-io\n", append=True)
-
-        lazy_unmount_delegation_export(client, mount_point)
-        release_delegation_hold_gracefully(client, term_wait_seconds=5)
-        time.sleep(settle_s)
-
-        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-        validate_delegation_close_and_return_capture(
-            "client_unmount",
-            read_ganesha_delegation_tailf_capture(nfs_node, container_id),
-        )
+            lazy_unmount_delegation_export(client, mount_point)
+            release_delegation_hold_gracefully(client, term_wait_seconds=5)
+            if not wait_for_delegreturn_in_ganesha_capture(
+                nfs_node, container_id, timeout_seconds=settle_s
+            ):
+                raise OperationFailedError(
+                    "client_unmount: DELEGRETURN not seen after lazy unmount"
+                )
+            validate_delegation_close_and_return_capture(
+                "client_unmount",
+                read_ganesha_delegation_tailf_capture(nfs_node, container_id),
+            )
+        finally:
+            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 
         return 0
 

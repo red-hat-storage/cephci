@@ -6,9 +6,8 @@ Ceph 20.2.1, new-file create may grant WRITE delegation; phase 1 records observe
 types and phase 2 requires WRITE delegation on reopen of the same file.
 """
 
-import time
-
 from nfs_delegation_operations import (
+    NFS4_OP_OPEN_END_MARKER,
     capture_delegation_ganesha_log_phase,
     create_delegation_exports,
     delegation_timing_from_config,
@@ -23,12 +22,14 @@ from nfs_delegation_operations import (
     release_delegation_hold_gracefully,
     restore_delegation_ganesha_templates,
     skip_delegation_tests_unless_supported,
+    start_ganesha_delegation_tailf_follow,
     stop_ganesha_delegation_tailf_follow,
     teardown_delegation_exports,
     truncate_ganesha_container_log,
     unmount_delegation_export,
     validate_delegation_grant_capture,
     wait_for_delegation_path,
+    wait_for_delegreturn_in_ganesha_capture,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
 
@@ -131,6 +132,10 @@ def run(ceph_cluster, **kw):
             container_id,
             settle_s,
             lambda: hold_new_file_write_open(client, new_path, hold_duration),
+            scenario_name="write_grant_new_file_create",
+            predicate=lambda hits: any(
+                NFS4_OP_OPEN_END_MARKER in ln for ln in (hits or [])
+            ),
         )
         create_types = log_delegation_open_types(
             "write_grant_new_file_create", new_file_hits
@@ -144,8 +149,14 @@ def run(ceph_cluster, **kw):
         wait_for_delegation_path(
             client, new_path, "new file after create", retries=path_wait_retries
         )
-        log.info("Waiting %ss between phases for prior delegation to exit", exit_wait)
-        time.sleep(exit_wait)
+        # Event-driven wait for prior DELEGRETURN (exit_wait is timeout ceiling).
+        start_ganesha_delegation_tailf_follow(nfs_node, container_id)
+        try:
+            wait_for_delegreturn_in_ganesha_capture(
+                nfs_node, container_id, timeout_seconds=exit_wait
+            )
+        finally:
+            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 
         log.info("Phase 2: reopen existing file for WRITE (expect WRITE delegation)")
         existing_hits = capture_delegation_ganesha_log_phase(
@@ -160,8 +171,9 @@ def run(ceph_cluster, **kw):
                     retries=path_wait_retries,
                 ),
                 hold_delegation_open(client, new_path, "r+b", hold_duration),
-                time.sleep(ready_s),
             ),
+            scenario_name="write_grant_existing_reopen",
+            hold_mode="write",
         )
         validate_delegation_grant_capture(
             "write_grant_existing_reopen", existing_hits, "write"

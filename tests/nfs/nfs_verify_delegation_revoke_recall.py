@@ -12,6 +12,7 @@ write; it does not simulate a client that ignores DELEGRECALL until lease expiry
 import time
 
 from nfs_delegation_operations import (
+    assert_no_delegation_recall_for,
     create_delegation_exports,
     delegation_timing_from_config,
     enable_cluster_delegation_and_debug_logging,
@@ -20,7 +21,6 @@ from nfs_delegation_operations import (
     hold_delegation_open,
     kill_delegation_holds,
     mount_delegation_export,
-    read_ganesha_delegation_tailf_capture,
     release_delegation_hold_gracefully,
     restore_delegation_ganesha_templates,
     skip_delegation_tests_unless_supported,
@@ -31,7 +31,10 @@ from nfs_delegation_operations import (
     unmount_delegation_export,
     validate_delegation_recall_ganesha_capture,
     validate_delegation_revoke_ganesha_capture,
+    wait_for_delegation_grant,
     wait_for_delegation_path,
+    wait_for_delegation_recall,
+    wait_for_delegation_revoke,
     wait_for_delegreturn_in_ganesha_capture,
     write_delegation_file,
 )
@@ -81,11 +84,19 @@ def _seed_clients(client_a, client_b, path_a, path_b, scenario, path_wait_retrie
         )
 
 
-def _client_a_hold_write_then_return_delegation(client_a, path_a, ready_s, hold_s):
+def _client_a_hold_write_then_return_delegation(
+    client_a, path_a, hold_s, nfs_node, container_id, ready_s
+):
     write_delegation_file(client_a, path_a, "deleg-hold\n")
     hold_duration = max(int(hold_s), int(ready_s) + 20)
     hold_delegation_open(client_a, path_a, "r+b", hold_duration)
-    time.sleep(ready_s)
+    wait_for_delegation_grant(
+        nfs_node,
+        container_id,
+        hold_mode="write",
+        timeout_seconds=max(ready_s, 20),
+        scenario_name="revoke_io_completes_grant",
+    )
     release_delegation_hold_gracefully(client_a, term_wait_seconds=5)
 
 
@@ -103,73 +114,122 @@ def _run_revoke_io_completes_before_timeout(
 ):
     wait_for_delegation_path(client_a, path_a, "client A pre write-hold")
     start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-    _client_a_hold_write_then_return_delegation(client_a, path_a, ready_s, hold_s)
-    if not wait_for_delegreturn_in_ganesha_capture(
-        nfs_node, container_id, timeout_seconds=return_wait + 30
-    ):
-        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-        raise OperationFailedError(
-            "revoke_io_completes_before_timeout: DELEGRETURN not seen after client A close"
+    try:
+        _client_a_hold_write_then_return_delegation(
+            client_a, path_a, hold_s, nfs_node, container_id, ready_s
         )
-    time.sleep(2)
-    stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+        if not wait_for_delegreturn_in_ganesha_capture(
+            nfs_node, container_id, timeout_seconds=return_wait + 30
+        ):
+            raise OperationFailedError(
+                "revoke_io_completes_before_timeout: DELEGRETURN not seen "
+                "after client A close"
+            )
+    finally:
+        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 
     truncate_ganesha_container_log(nfs_node, container_id)
     start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-    time.sleep(return_wait)
-    wait_for_delegation_path(client_b, path_b, "client B pre-conflict write")
-    write_delegation_file(client_b, path_b, "peer-after-deleg-return\n", append=True)
-    time.sleep(settle_s)
-    stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    try:
+        wait_for_delegation_path(client_b, path_b, "client B pre-conflict write")
+        write_delegation_file(
+            client_b, path_b, "peer-after-deleg-return\n", append=True
+        )
+        hits = assert_no_delegation_recall_for(
+            nfs_node,
+            container_id,
+            observation_seconds=min(15, settle_s),
+            scenario_name="revoke_io_completes_before_timeout",
+        )
+    finally:
+        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
     validate_delegation_revoke_ganesha_capture(
         "revoke_io_completes_before_timeout",
-        read_ganesha_delegation_tailf_capture(nfs_node, container_id),
+        hits,
         False,
         require_delegreturn=False,
     )
 
 
-def _hold_write_delegation_on_a(client_a, path_a, hold_s, ready_s, pre_hold_label):
+def _hold_write_delegation_on_a(
+    client_a, path_a, hold_s, nfs_node, container_id, ready_s, pre_hold_label
+):
     wait_for_delegation_path(client_a, path_a, pre_hold_label)
     write_delegation_file(client_a, path_a, "hold-write\n")
     hold_delegation_open(client_a, path_a, "r+b", hold_s)
-    time.sleep(ready_s)
+    wait_for_delegation_grant(
+        nfs_node,
+        container_id,
+        hold_mode="write",
+        timeout_seconds=max(ready_s, 20),
+        scenario_name=pre_hold_label,
+    )
 
 
-def _io_read_read_no_recall(client_a, client_b, path_a, path_b, hold_s, ready_s):
+def _io_read_read_no_recall(
+    client_a, client_b, path_a, path_b, hold_s, nfs_node, container_id, ready_s
+):
     client_a.exec_command(sudo=True, cmd="cat %s" % path_a)
     wait_for_delegation_path(client_a, path_a, "client A pre read-hold")
     hold_delegation_open(client_a, path_a, "rb", hold_s)
-    time.sleep(ready_s)
+    wait_for_delegation_grant(
+        nfs_node,
+        container_id,
+        hold_mode="read",
+        timeout_seconds=max(ready_s, 20),
+        scenario_name="read_read_no_recall_grant",
+    )
     wait_for_delegation_path(client_b, path_b, "client B pre-IO")
     client_b.exec_command(sudo=True, cmd="cat %s && stat %s" % (path_b, path_b))
 
 
-def _io_write_write_recall(client_a, client_b, path_a, path_b, hold_s, ready_s):
+def _io_write_write_recall(
+    client_a, client_b, path_a, path_b, hold_s, nfs_node, container_id, ready_s
+):
     _hold_write_delegation_on_a(
-        client_a, path_a, hold_s, ready_s, "client A pre write-hold"
+        client_a,
+        path_a,
+        hold_s,
+        nfs_node,
+        container_id,
+        ready_s,
+        "client A pre write-hold",
     )
     wait_for_delegation_path(client_b, path_b, "client B pre-IO")
     write_delegation_file(client_b, path_b, "client-b-write\n", append=True)
 
 
-def _io_rw_read_after_write_recall(client_a, client_b, path_a, path_b, hold_s, ready_s):
+def _io_rw_read_after_write_recall(
+    client_a, client_b, path_a, path_b, hold_s, nfs_node, container_id, ready_s
+):
     _hold_write_delegation_on_a(
-        client_a, path_a, hold_s, ready_s, "client A pre write-hold"
+        client_a,
+        path_a,
+        hold_s,
+        nfs_node,
+        container_id,
+        ready_s,
+        "client A pre write-hold",
     )
     wait_for_delegation_path(client_b, path_b, "client B pre-IO")
     client_b.exec_command(sudo=True, cmd="cat %s" % path_b)
 
 
 def _io_revoke_after_recall_on_conflict(
-    client_a, client_b, path_a, path_b, hold_s, ready_s
+    client_a, client_b, path_a, path_b, hold_s, nfs_node, container_id, ready_s
 ):
     wait_for_delegation_path(
         client_a, path_a, "client A pre write-hold (recall on conflict)"
     )
     write_delegation_file(client_a, path_a, "hold-unresponsive\n")
     hold_delegation_open(client_a, path_a, "r+b", hold_s)
-    time.sleep(ready_s)
+    wait_for_delegation_grant(
+        nfs_node,
+        container_id,
+        hold_mode="write",
+        timeout_seconds=max(ready_s, 20),
+        scenario_name="revoke_after_recall_grant",
+    )
     wait_for_delegation_path(client_b, path_b, "client B pre-conflict write")
     write_delegation_file(client_b, path_b, "client-b-write\n", append=True)
 
@@ -182,11 +242,13 @@ SCENARIO_IO_HANDLERS = {
 }
 
 
-def _run_scenario_io(name, client_a, client_b, path_a, path_b, hold_s, ready_s):
+def _run_scenario_io(
+    name, client_a, client_b, path_a, path_b, hold_s, nfs_node, container_id, ready_s
+):
     handler = SCENARIO_IO_HANDLERS.get(name)
     if not handler:
         raise ConfigError("Unknown recall/revoke scenario %r" % name)
-    handler(client_a, client_b, path_a, path_b, hold_s, ready_s)
+    handler(client_a, client_b, path_a, path_b, hold_s, nfs_node, container_id, ready_s)
 
 
 def _validate_scenario_capture(scenario, kind, expect_positive, hits):
@@ -219,10 +281,12 @@ def run(ceph_cluster, **kw):
     mount_a = config.get("client_a_mount", "/mnt/deleg_recall_c0")
     mount_b = config.get("client_b_mount", "/mnt/deleg_recall_c1")
     timing = delegation_timing_from_config(config)
-    hold_s = timing.hold_seconds
+    hold_s = max(
+        timing.hold_seconds,
+        timing.hold_ready_seconds + timing.log_settle_seconds + 30,
+    )
     ready_s = timing.hold_ready_seconds
     return_wait = timing.return_wait_seconds
-    exit_wait = timing.exit_wait_seconds
     settle_s = timing.log_settle_seconds
     path_wait_retries = timing.path_wait_retries
     redeploy_wait = int(config.get("redeploy_wait", 30))
@@ -288,12 +352,10 @@ def run(ceph_cluster, **kw):
                 expect_positive,
             )
 
-            truncate_ganesha_container_log(nfs_node, container_id)
             _seed_clients(
                 client_a, client_b, path_a, path_b, scenario, path_wait_retries
             )
-            log.info("Waiting %s s after seed for delegations to exit", exit_wait)
-            time.sleep(exit_wait)
+            truncate_ganesha_container_log(nfs_node, container_id)
 
             if scenario == "revoke_io_completes_before_timeout":
                 _run_revoke_io_completes_before_timeout(
@@ -310,17 +372,45 @@ def run(ceph_cluster, **kw):
                 )
             else:
                 start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-                _run_scenario_io(
-                    scenario, client_a, client_b, path_a, path_b, hold_s, ready_s
-                )
-                time.sleep(settle_s)
-                stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-                _validate_scenario_capture(
-                    scenario,
-                    kind,
-                    expect_positive,
-                    read_ganesha_delegation_tailf_capture(nfs_node, container_id),
-                )
+                try:
+                    _run_scenario_io(
+                        scenario,
+                        client_a,
+                        client_b,
+                        path_a,
+                        path_b,
+                        hold_s,
+                        nfs_node,
+                        container_id,
+                        ready_s,
+                    )
+                    if expect_positive:
+                        if kind == "revoke":
+                            hits = wait_for_delegation_revoke(
+                                nfs_node,
+                                container_id,
+                                timeout_seconds=settle_s,
+                                scenario_name=scenario,
+                            )
+                        else:
+                            hits = wait_for_delegation_recall(
+                                nfs_node,
+                                container_id,
+                                timeout_seconds=settle_s,
+                                scenario_name=scenario,
+                            )
+                    else:
+                        hits = assert_no_delegation_recall_for(
+                            nfs_node,
+                            container_id,
+                            observation_seconds=min(15, settle_s),
+                            scenario_name=scenario,
+                        )
+                    _validate_scenario_capture(scenario, kind, expect_positive, hits)
+                finally:
+                    kill_delegation_holds(client_a)
+                    kill_delegation_holds(client_b)
+                    stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
             _cleanup_paths(client_a, client_b, path_a, path_b)
 
         return 0

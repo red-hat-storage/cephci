@@ -12,6 +12,8 @@ default is a loose grant/recall activity check only.
 import time
 
 from nfs_delegation_operations import (
+    RE_DELEGATION_STRESS_GRANT_ACTIVITY,
+    RE_DELEGATION_STRESS_RECALL_ACTIVITY,
     create_delegation_exports,
     delegation_timing_from_config,
     enable_cluster_delegation_and_debug_logging,
@@ -29,6 +31,7 @@ from nfs_delegation_operations import (
     unmount_delegation_export,
     validate_delegation_stress_loose_capture,
     validate_delegation_stress_strict_capture,
+    wait_for_delegation_log_events,
     wait_for_delegation_path,
     write_delegation_file,
 )
@@ -271,52 +274,68 @@ def run(ceph_cluster, **kw):
             clients, mount_roots, timing.path_wait_retries
         )
 
-        log.info(
-            "Waiting %s s after seed for delegations to exit", timing.exit_wait_seconds
-        )
-        time.sleep(timing.exit_wait_seconds)
-
+        # Truncate after seed for a clean capture window (no fixed exit_wait sleep).
         truncate_ganesha_container_log(nfs_node, container_id)
         start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-
-        for client, path, kind in workload_specs:
-            log.info(
-                "Starting %s workload on %s path=%s duration=%ss",
-                kind,
-                getattr(client, "hostname", client),
-                path,
-                workload_duration,
-            )
-            _start_mixed_workload(client, path, kind, workload_duration)
-
-        end_at = time.time() + workload_duration
-        next_conflict = time.time() + conflict_interval
-        round_num = 0
-        while time.time() < end_at:
-            if conflict_interval > 0 and time.time() >= next_conflict:
-                writer = clients[round_num % len(clients)]
+        hits = []
+        try:
+            for client, path, kind in workload_specs:
                 log.info(
-                    "Cross-client conflict write round %d from %s",
-                    round_num,
-                    getattr(writer, "hostname", writer),
+                    "Starting %s workload on %s path=%s duration=%ss",
+                    kind,
+                    getattr(client, "hostname", client),
+                    path,
+                    workload_duration,
                 )
-                _cross_client_conflict_write(
-                    writer, conflict_paths[writer], "r%d" % round_num
+                _start_mixed_workload(client, path, kind, workload_duration)
+
+            end_at = time.time() + workload_duration
+            next_conflict = time.time() + conflict_interval
+            round_num = 0
+            while time.time() < end_at:
+                if conflict_interval > 0 and time.time() >= next_conflict:
+                    writer = clients[round_num % len(clients)]
+                    log.info(
+                        "Cross-client conflict write round %d from %s",
+                        round_num,
+                        getattr(writer, "hostname", writer),
+                    )
+                    _cross_client_conflict_write(
+                        writer, conflict_paths[writer], "r%d" % round_num
+                    )
+                    round_num += 1
+                    next_conflict = time.time() + conflict_interval
+                time.sleep(5)
+
+            for client in clients:
+                _kill_workloads(client)
+
+            if strict_validation:
+                hits = wait_for_delegation_log_events(
+                    nfs_node,
+                    container_id,
+                    require_all=(
+                        RE_DELEGATION_STRESS_GRANT_ACTIVITY,
+                        RE_DELEGATION_STRESS_RECALL_ACTIVITY,
+                    ),
+                    timeout_seconds=timing.log_settle_seconds,
+                    scenario_name="delegation_stress_strict",
                 )
-                round_num += 1
-                next_conflict = time.time() + conflict_interval
-            time.sleep(5)
-
-        for client in clients:
-            _kill_workloads(client)
-
-        log.info(
-            "Waiting %s s for delegation log lines to settle",
-            timing.log_settle_seconds,
-        )
-        time.sleep(timing.log_settle_seconds)
-        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-        hits = read_ganesha_delegation_tailf_capture(nfs_node, container_id)
+            else:
+                hits = wait_for_delegation_log_events(
+                    nfs_node,
+                    container_id,
+                    require_all=(
+                        RE_DELEGATION_STRESS_GRANT_ACTIVITY,
+                        RE_DELEGATION_STRESS_RECALL_ACTIVITY,
+                    ),
+                    timeout_seconds=timing.log_settle_seconds,
+                    scenario_name="delegation_stress_loose",
+                )
+        finally:
+            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+        if not hits:
+            hits = read_ganesha_delegation_tailf_capture(nfs_node, container_id)
         _validate_stress_capture(hits, strict_validation, hold_mode)
 
         return 0

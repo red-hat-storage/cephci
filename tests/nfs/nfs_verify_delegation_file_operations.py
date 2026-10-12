@@ -27,7 +27,9 @@ from nfs_delegation_operations import (
     validate_delegation_open_close_cycles_capture,
     validate_delegation_rw_io_recall_capture,
     validate_delegation_setattr_capture,
+    wait_for_delegation_grant,
     wait_for_delegation_path,
+    wait_for_delegation_recall,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -201,6 +203,8 @@ def _run_scenario_io(
     ready_s,
     open_close_cycles,
     lock_wait_s,
+    nfs_node,
+    container_id,
     path_wait_retries=40,
 ):
     open_mode = "r+b" if hold_mode == "write" else "rb"
@@ -209,13 +213,25 @@ def _run_scenario_io(
 
     if name == "open_close_cycles":
         hold_delegation_open(client_a, path_a, open_mode, hold_s)
-        time.sleep(ready_s)
+        wait_for_delegation_grant(
+            nfs_node,
+            container_id,
+            hold_mode=hold_mode,
+            timeout_seconds=max(ready_s, 20),
+            scenario_name="%s_grant" % name,
+        )
         _run_open_close_cycles(client_a, path_a, open_close_cycles)
         return
 
     if name == "read_write_io_recall":
         hold_delegation_open(client_a, path_a, open_mode, hold_s)
-        time.sleep(ready_s)
+        wait_for_delegation_grant(
+            nfs_node,
+            container_id,
+            hold_mode=hold_mode,
+            timeout_seconds=max(ready_s, 20),
+            scenario_name="%s_grant" % name,
+        )
         _run_sequential_random_rw(client_a, path_a, open_close_cycles)
         wait_for_delegation_path(
             client_b, path_b, "client B pre-conflict", retries=path_wait_retries
@@ -227,7 +243,13 @@ def _run_scenario_io(
     if name == "lock_unlock":
         # Delegation hold OPEN, then a second OPEN with an exclusive lock on client A.
         hold_delegation_open(client_a, path_a, open_mode, hold_s)
-        time.sleep(ready_s)
+        wait_for_delegation_grant(
+            nfs_node,
+            container_id,
+            hold_mode=hold_mode,
+            timeout_seconds=max(ready_s, 20),
+            scenario_name="%s_grant" % name,
+        )
         _run_lock_holder(client_a, path_a, hold_s)
         time.sleep(5)
         _expect_peer_lock_blocked(client_b, path_b, lock_wait_s)
@@ -236,7 +258,13 @@ def _run_scenario_io(
 
     if name == "setattr_truncate":
         hold_delegation_open(client_a, path_a, open_mode, hold_s)
-        time.sleep(ready_s)
+        wait_for_delegation_grant(
+            nfs_node,
+            container_id,
+            hold_mode=hold_mode,
+            timeout_seconds=max(ready_s, 20),
+            scenario_name="%s_grant" % name,
+        )
         _run_setattr_truncate_ops(client_a, path_a)
         return
 
@@ -271,9 +299,11 @@ def run(ceph_cluster, **kw):
         raise ConfigError("hold_mode accepts only read or write")
 
     timing = delegation_timing_from_config(config)
-    hold_s = timing.hold_seconds
+    hold_s = max(
+        timing.hold_seconds,
+        timing.hold_ready_seconds + timing.log_settle_seconds + 30,
+    )
     ready_s = timing.hold_ready_seconds
-    exit_wait = timing.exit_wait_seconds
     settle_s = timing.log_settle_seconds
     path_wait_retries = timing.path_wait_retries
     open_close_cycles = int(config.get("open_close_cycles", 5))
@@ -341,39 +371,58 @@ def run(ceph_cluster, **kw):
             path_b = "%s/%s" % (mount_b, test_file) if min_clients > 1 else path_a
             log.info("Scenario %s (%s) validator=%s", scenario, test_file, validator)
 
-            truncate_ganesha_container_log(nfs_node, container_id)
             _seed_file(client_a, path_a, scenario, path_wait_retries)
             if min_clients > 1:
                 _seed_file(client_b, path_b, scenario, path_wait_retries)
-            log.info("Waiting %s s after seed for delegations to exit", exit_wait)
-            time.sleep(exit_wait)
+            truncate_ganesha_container_log(nfs_node, container_id)
 
             start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-            _run_scenario_io(
-                scenario,
-                client_a,
-                client_b,
-                path_a,
-                path_b,
-                hold_mode,
-                hold_s,
-                ready_s,
-                open_close_cycles,
-                lock_wait_s,
-                path_wait_retries,
-            )
-            time.sleep(settle_s)
-            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-            _validate_capture(
-                scenario,
-                validator,
-                read_ganesha_delegation_tailf_capture(nfs_node, container_id),
-                hold_mode,
-                open_close_cycles,
-            )
-            kill_delegation_holds(client_a)
-            if client_b:
-                kill_delegation_holds(client_b)
+            try:
+                _run_scenario_io(
+                    scenario,
+                    client_a,
+                    client_b,
+                    path_a,
+                    path_b,
+                    hold_mode,
+                    hold_s,
+                    ready_s,
+                    open_close_cycles,
+                    lock_wait_s,
+                    nfs_node,
+                    container_id,
+                    path_wait_retries,
+                )
+                if validator == "rw_recall":
+                    hits = wait_for_delegation_recall(
+                        nfs_node,
+                        container_id,
+                        timeout_seconds=settle_s,
+                        scenario_name=scenario,
+                    )
+                else:
+                    # Grant already polled during hold; allow settle ceiling for
+                    # remaining scenario lines then read capture.
+                    hits = wait_for_delegation_grant(
+                        nfs_node,
+                        container_id,
+                        hold_mode=hold_mode,
+                        timeout_seconds=min(settle_s, max(ready_s, 20)),
+                        scenario_name="%s_post" % scenario,
+                    )
+                    hits = read_ganesha_delegation_tailf_capture(nfs_node, container_id)
+                _validate_capture(
+                    scenario,
+                    validator,
+                    hits,
+                    hold_mode,
+                    open_close_cycles,
+                )
+            finally:
+                kill_delegation_holds(client_a)
+                if client_b:
+                    kill_delegation_holds(client_b)
+                stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 
         return 0
     except Exception as err:
