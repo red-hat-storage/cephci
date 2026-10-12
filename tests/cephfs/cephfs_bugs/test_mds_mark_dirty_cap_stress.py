@@ -13,7 +13,8 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    CDir::mark_dirty get_version() < pv under concurrent cap/metadata stress.
+    CEPH-83633041 - CDir::mark_dirty / get_version() < pv under concurrent
+    cap/metadata stress.
 
     Steps:
       1. Fuse-mount FS
@@ -28,7 +29,8 @@ def run(ceph_cluster, **kw):
     fs_util = None
     fuse_mounting_dir = None
     try:
-        log.info("Running mark_dirty / get_version cap-stress test")
+        tc = "CEPH-83633041"
+        log.info("Running cephfs %s mark_dirty / get_version cap-stress test", tc)
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
         erasure = (
@@ -56,9 +58,7 @@ def run(ceph_cluster, **kw):
         dirs = int(config.get("dirs", 24))
 
         log.info("Archiving pre-existing crash records")
-        client1.exec_command(
-            sudo=True, cmd="ceph crash archive-all", check_ec=False
-        )
+        client1.exec_command(sudo=True, cmd="ceph crash archive-all", check_ec=False)
 
         # Keep multi-MDS topology consistent with suite deploy (max_mds=2).
         client1.exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
@@ -103,9 +103,7 @@ def run(ceph_cluster, **kw):
             for line in reversed(out.splitlines()):
                 if line.startswith("DONE"):
                     if "hard_err=0" not in line:
-                        raise CommandFailed(
-                            f"Cap-stress reported hard errors: {line}"
-                        )
+                        raise CommandFailed(f"Cap-stress reported hard errors: {line}")
                     break
 
         log.info("Validating MDS ranks still active")
@@ -126,8 +124,9 @@ def run(ceph_cluster, **kw):
         )
 
         log.info(
-            "TEST PASSED | mark_dirty cap-stress | soak_seconds=%s workers=%s "
-            "dirs=%s no MDS crash",
+            "TEST PASSED | %s | mark_dirty cap-stress | soak_seconds=%s "
+            "workers=%s dirs=%s no MDS crash",
+            tc,
             soak_seconds,
             workers,
             dirs,

@@ -13,7 +13,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    Empty _omap_commit_ops MDS assert under multi-rank pinned metadata soak.
+    CEPH-83633040 - Empty _omap_commit_ops under multi-rank pinned metadata soak.
 
     Steps:
       1. Ensure max_mds=2 with two active ranks
@@ -31,7 +31,8 @@ def run(ceph_cluster, **kw):
     fuse_mounting_dir = None
     base = None
     try:
-        log.info("Running empty _omap_commit_ops multi-rank soak test")
+        tc = "CEPH-83633040"
+        log.info("Running cephfs %s empty _omap_commit_ops multi-rank soak test", tc)
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
         erasure = (
@@ -61,9 +62,7 @@ def run(ceph_cluster, **kw):
         workers_per_rank = int(config.get("workers_per_rank", 2))
 
         log.info("Archiving pre-existing crash records")
-        client1.exec_command(
-            sudo=True, cmd="ceph crash archive-all", check_ec=False
-        )
+        client1.exec_command(sudo=True, cmd="ceph crash archive-all", check_ec=False)
 
         log.info("Setting max_mds=2 for %s", default_fs)
         client1.exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
@@ -166,7 +165,8 @@ def run(ceph_cluster, **kw):
         )
 
         log.info(
-            "TEST PASSED | empty omap soak | soak_seconds=%s no MDS crash",
+            "TEST PASSED | %s | empty omap soak | soak_seconds=%s no MDS crash",
+            tc,
             soak_seconds,
         )
         return 0
