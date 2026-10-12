@@ -115,6 +115,18 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
   # Swift basic operation
 
   - test:
