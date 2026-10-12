@@ -56,9 +56,7 @@ def run(ceph_cluster, **kw):
         dirs = int(config.get("dirs", 24))
 
         log.info("Archiving pre-existing crash records")
-        client1.exec_command(
-            sudo=True, cmd="ceph crash archive-all", check_ec=False
-        )
+        client1.exec_command(sudo=True, cmd="ceph crash archive-all", check_ec=False)
 
         # Keep multi-MDS topology consistent with suite deploy (max_mds=2).
         client1.exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
@@ -103,9 +101,7 @@ def run(ceph_cluster, **kw):
             for line in reversed(out.splitlines()):
                 if line.startswith("DONE"):
                     if "hard_err=0" not in line:
-                        raise CommandFailed(
-                            f"Cap-stress reported hard errors: {line}"
-                        )
+                        raise CommandFailed(f"Cap-stress reported hard errors: {line}")
                     break
 
         log.info("Validating MDS ranks still active")

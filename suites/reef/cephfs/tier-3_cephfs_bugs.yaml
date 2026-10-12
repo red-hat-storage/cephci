@@ -22,6 +22,8 @@
   # CEPH-83583723 - Ensure deletion of clones are allowed when the clones are stuck and in pending state
   # CEPH-83589266 - Validate Ceph commands when ceph file system is in failed state
   # CEPH-83609202 - Verify data scan works on missing non-immediate dir frags and FS recovery suceeds
+  # Empty _omap_commit_ops MDS assert under multi-rank pinned metadata soak
+  # CDir::mark_dirty get_version() < pv under concurrent cap/metadata stress
 #=======================================================================================================================
 ---
 tests:
@@ -276,4 +278,26 @@ tests:
       module: cephfs_bugs.test_fs_recovery_dir_rm.py
       polarion-id: CEPH-83609202
       desc: fs_recovery_dir_rm
+      abort-on-fail: false
+  - test:
+      name: mds_empty_omap_commit
+      module: cephfs_bugs.test_mds_empty_omap_commit.py
+      polarion-id:
+      desc: Empty _omap_commit_ops under multi-rank pinned metadata soak
+      config:
+        soak_seconds: 300
+        sleep_between: 10
+        creates_per_rank: 100
+        renames_per_rank: 30
+        workers_per_rank: 2
+      abort-on-fail: false
+  - test:
+      name: mds_mark_dirty_cap_stress
+      module: cephfs_bugs.test_mds_mark_dirty_cap_stress.py
+      polarion-id:
+      desc: mark_dirty get_version assert under concurrent cap/metadata stress
+      config:
+        soak_seconds: 300
+        workers: 12
+        dirs: 24
       abort-on-fail: false

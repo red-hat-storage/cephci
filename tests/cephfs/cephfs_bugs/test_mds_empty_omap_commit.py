@@ -61,9 +61,7 @@ def run(ceph_cluster, **kw):
         workers_per_rank = int(config.get("workers_per_rank", 2))
 
         log.info("Archiving pre-existing crash records")
-        client1.exec_command(
-            sudo=True, cmd="ceph crash archive-all", check_ec=False
-        )
+        client1.exec_command(sudo=True, cmd="ceph crash archive-all", check_ec=False)
 
         log.info("Setting max_mds=2 for %s", default_fs)
         client1.exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
