@@ -1,13 +1,15 @@
 #===============================================================================================
-#---    Test Suite for NFS Ganesha Object Cache and Per-Export Client   ---
+#--- Test Suite for NFS Ganesha OC, PEC, and pool of libcephfs clients ---
 #===============================================================================================
 # Conf: conf/tentacle/nfs/1admin-12node-4client.yaml
 #    - 8 cluster nodes (node1-node8): OSD, MON/MGR spread, NFS on node2-node8
 #    - Configure clients on node9-node12
 #    - OC/PEC scenarios (test_nfs_oc_pec_basic.py)
+#    - Pool of clients scenarios (test_nfs_pool_clients_basic.py)
 #    - OSD thrash with NFS OC + PEC
 #
-# Requires live Ceph >= 20.2.2 (OC/PEC steps skip with exit 0 otherwise).
+# OC/PEC require live Ceph >= 20.2.2 (skip with exit 0 otherwise).
+# Pool soft-skips when create -h lacks --clients_per_pool.
 #
 #===============================================================================================
 
@@ -199,6 +201,127 @@ tests:
       config:
         scenario: shared_to_pec_via_apply
         port: "2050"
+
+  - test:
+      name: NFS Pool - off control
+      module: test_nfs_pool_clients_basic.py
+      desc: Create without --clients_per_pool; assert single CephFS asok
+      abort-on-fail: false
+      config:
+        scenario: pool_off_control
+        port: "2060"
+        exports: 3
+
+  - test:
+      name: NFS Pool - CEPH_USERS object structure
+      module: test_nfs_pool_clients_basic.py
+      desc: >-
+        After first / export assert CEPH_USERS form; then >=K exports (default 6)
+        for asoks=K, plus CephX pool.* users.
+        Soft-skips if --clients_per_pool absent.
+      abort-on-fail: false
+      config:
+        scenario: pool_ceph_users_object
+        port: "2061"
+        clients_per_pool: 3
+        exports: 6
+
+  - test:
+      name: NFS Pool - clients_per_pool K=3
+      module: test_nfs_pool_clients_basic.py
+      desc: >-
+        Pool only K=3 with six / exports; asoks=3, conf clients_per_pool,
+        residue IO on export i and i+K, remount integrity.
+      abort-on-fail: false
+      config:
+        scenario: pool_k3_proof
+        port: "2062"
+        clients_per_pool: 3
+        exports: 6
+
+  - test:
+      name: NFS Pool - invalid clients_per_pool
+      module: test_nfs_pool_clients_basic.py
+      desc: Reject create with clients_per_pool 0 / -1 / abc; no half-created cluster
+      abort-on-fail: false
+      config:
+        scenario: pool_invalid_k
+        port: "2063"
+
+  - test:
+      name: NFS Pool - immutable clients_per_pool
+      module: test_nfs_pool_clients_basic.py
+      desc: In-place K change via orch apply rejected or ignored; asoks stay K
+      abort-on-fail: false
+      config:
+        scenario: pool_immutable_k
+        port: "2064"
+        clients_per_pool: 3
+        exports: 6
+
+  - test:
+      name: NFS Pool - CEPH_USERS fallback
+      module: test_nfs_pool_clients_basic.py
+      desc: Empty CEPH_USERS then restart; mount works and asoks fall back to 1
+      abort-on-fail: false
+      config:
+        scenario: pool_ceph_users_fallback
+        port: "2065"
+        clients_per_pool: 3
+        exports: 6
+
+  - test:
+      name: NFS Pool - daemon restart keeps pool
+      module: test_nfs_pool_clients_basic.py
+      desc: orch restart nfs service; asoks and USERS form remain K
+      abort-on-fail: false
+      config:
+        scenario: pool_daemon_restart
+        port: "2066"
+        clients_per_pool: 3
+        exports: 6
+
+  - test:
+      name: NFS OC+Pool - pool then enable OC
+      module: test_nfs_pool_clients_basic.py
+      desc: Pool K=3 then orch-enable OC; asoks stay 3 and client_oc=true
+      abort-on-fail: false
+      config:
+        scenario: pool_with_oc
+        port: "2067"
+        clients_per_pool: 3
+        exports: 6
+        oc_size: "200MiB"
+        oc_max_dirty: "100MiB"
+
+  - test:
+      name: NFS Pool+PEC - shared / and cmount_path
+      module: test_nfs_pool_clients_basic.py
+      desc: >-
+        K=3 with six / exports and two same-FS --cmount_path PEC exports;
+        expect K+pec asoks (IBMCEPH-20715).
+      abort-on-fail: false
+      config:
+        scenario: pool_with_pec
+        port: "2068"
+        clients_per_pool: 3
+        pool_exports: 6
+        pec_exports: 2
+
+  - test:
+      name: NFS OC+Pool+PEC - all three
+      module: test_nfs_pool_clients_basic.py
+      desc: >-
+        Pool + same-FS PEC then OC; expect K+pec asoks (IBMCEPH-20715).
+      abort-on-fail: false
+      config:
+        scenario: pool_with_oc_pec
+        port: "2069"
+        clients_per_pool: 3
+        pool_exports: 6
+        pec_exports: 2
+        oc_size: "200MiB"
+        oc_max_dirty: "100MiB"
 
   - test:
       name: OSD thrashing with NFS OC and PEC

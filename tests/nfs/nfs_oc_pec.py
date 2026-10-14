@@ -1,10 +1,12 @@
-"""NFS Ganesha Object Cache (OC) and Per-Export Client (PEC) helpers.
+"""NFS Ganesha Object Cache (OC), Per-Export Client (PEC), and pool helpers.
 
 OC is an NFS orch spec (enable_client_object_cache / size / dirty) that
 renders a CEPH {} block in ganesha.conf. PEC is --cmount_path on export
-create (N CephFS clients / asoks / user_ids).
+create (N CephFS clients / asoks / user_ids). Pool of libcephfs clients is
+``--clients_per_pool K`` at cluster create (K asoks, cmount_path=/, CEPH_USERS).
 
-Both require live cluster Ceph >= 20.2.2. Do not use --rhbuild.
+OC/PEC require live cluster Ceph >= 20.2.2. Pool soft-skips when create -h
+lacks the flag. Do not use --rhbuild.
 """
 
 import json
@@ -34,6 +36,11 @@ _SIZE_RE = re.compile(r"^(\d+)\s*(GiB|MiB|KiB|GB|MB|KB|B)?$", re.I)
 _CLIENT_OC_RE = re.compile(r"client_oc\s*=\s*(true|false)", re.I)
 _CLIENT_OC_SIZE_RE = re.compile(r"client_oc_size\s*=\s*(\d+)", re.I)
 _CLIENT_OC_DIRTY_RE = re.compile(r"client_oc_max_dirty\s*=\s*(\d+)", re.I)
+_CLIENTS_PER_POOL_CONF_RE = re.compile(r"clients_per_pool\s*=\s*(\d+)", re.I)
+_USERS_BLOCK_RE = re.compile(r"\bUSERS\s*\{", re.I)
+_USERIDS_RE = re.compile(r"Userids\s*=\s*([^;]+);", re.I | re.DOTALL)
+_KEYS_RE = re.compile(r"Keys\s*=\s*([^;]+);", re.I | re.DOTALL)
+_FILESYSTEM_RE = re.compile(r'filesystem\s*=\s*"?([^";\s]+)"?\s*;', re.I)
 
 
 def oc_pec_supported(node, prefix_cephadm=False):
@@ -401,3 +408,304 @@ def verify_pec(ceph_cluster, node, cluster_id, expect_clients, asok_timeout=120)
         sorted(distinct),
         asoks,
     )
+
+
+def pool_clients_supported(node):
+    """True when ``ceph nfs cluster create -h`` lists --clients_per_pool.
+
+    Help text may wrap (``--clients_\\n per_pool``); compare whitespace-stripped.
+    """
+    out, err = node.exec_command(
+        sudo=True,
+        cmd="ceph nfs cluster create -h",
+        check_ec=False,
+    )
+    help_text = f"{out or ''}{err or ''}"
+    compact = re.sub(r"\s+", "", help_text)
+    supported = "--clients_per_pool" in compact or "--clients-per-pool" in compact
+    log.info("Pool clients_per_pool flag present=%s", supported)
+    return supported
+
+
+def skip_pool_unless_supported(ceph_cluster):
+    """Return True when pool tests should soft-skip (caller return 0)."""
+    clients = ceph_cluster.get_nodes("client") or []
+    installers = ceph_cluster.get_nodes(role="installer") or []
+    for node in clients[:1] + installers[:1]:
+        try:
+            if pool_clients_supported(node):
+                return False
+        except Exception as err:
+            log.warning("pool flag probe failed on %s: %s", node.hostname, err)
+    log.info("Skipping pool test: --clients_per_pool not in create -h")
+    return True
+
+
+def create_nfs_with_clients_per_pool(
+    client, nfs_name, nfs_server, port, clients_per_pool
+):
+    """Create NFS cluster with --clients_per_pool via CLI kwargs passthrough."""
+    kwargs = {"clients_per_pool": int(clients_per_pool)}
+    if port and str(port) != "2049":
+        kwargs["port"] = port
+    log.info(
+        "Creating nfs.%s clients_per_pool=%s port=%s host=%s",
+        nfs_name,
+        clients_per_pool,
+        port,
+        nfs_server,
+    )
+    return Ceph(client).nfs.cluster.create(
+        name=nfs_name, nfs_server=nfs_server, **kwargs
+    )
+
+
+def ceph_users_object_name(cluster_id):
+    return f"ceph-users-nfs.{cluster_id}"
+
+
+def read_ceph_users(node, cluster_id, check_ec=False):
+    """Return RADOS CEPH_USERS object text (may be empty)."""
+    obj = ceph_users_object_name(cluster_id)
+    cmd = f"rados -N {cluster_id} -p .nfs get {obj} -"
+    out, err = node.exec_command(sudo=True, cmd=cmd, check_ec=check_ec)
+    text = str(out or "")
+    err_s = str(err or "")
+    if "No such file" in text or "does not exist" in err_s or "No such file" in err_s:
+        return ""
+    return text
+
+
+def _split_csv_ids(blob):
+    parts = [
+        p.strip().strip('"').strip("'") for p in blob.replace("\n", " ").split(",")
+    ]
+    return [p for p in parts if p]
+
+
+def redact_ceph_users(text):
+    """Redact Keys= values for safe logging (SEC-02)."""
+    return _KEYS_RE.sub("Keys = <redacted>;", text or "")
+
+
+def verify_ceph_users(node, cluster_id, expect_k, fs_name="cephfs", must_exist=True):
+    """Assert CEPH_USERS uses native USERS{Userids,Keys,filesystem} with length K."""
+    raw = read_ceph_users(node, cluster_id, check_ec=False)
+    if not raw.strip():
+        if must_exist:
+            raise OperationFailedError(
+                f"nfs.{cluster_id} missing CEPH_USERS object "
+                f"{ceph_users_object_name(cluster_id)}"
+            )
+        log.info("nfs.%s CEPH_USERS absent/empty (expected)", cluster_id)
+        return ""
+    log.info(
+        "nfs.%s CEPH_USERS (redacted):\n%s",
+        cluster_id,
+        redact_ceph_users(raw),
+    )
+    if not _USERS_BLOCK_RE.search(raw):
+        raise OperationFailedError(
+            f"nfs.{cluster_id} CEPH_USERS missing USERS {{ }} block "
+            "(IBMCEPH-19374 USER{{}} form?)"
+        )
+    userids_m = _USERIDS_RE.search(raw)
+    keys_m = _KEYS_RE.search(raw)
+    if not userids_m or not keys_m:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} CEPH_USERS missing Userids/Keys lists"
+        )
+    userids = _split_csv_ids(userids_m.group(1))
+    keys = _split_csv_ids(keys_m.group(1))
+    # ponytail: count tokens only; never log key material
+    if len(userids) != int(expect_k):
+        raise OperationFailedError(
+            f"nfs.{cluster_id} Userids length {len(userids)} != K={expect_k}: "
+            f"{userids}"
+        )
+    if len(keys) != int(expect_k):
+        raise OperationFailedError(
+            f"nfs.{cluster_id} Keys length {len(keys)} != K={expect_k}"
+        )
+    fs_match = _FILESYSTEM_RE.search(raw)
+    if not fs_match:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} CEPH_USERS missing filesystem= field"
+        )
+    if fs_name and fs_match.group(1) != fs_name:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} CEPH_USERS filesystem={fs_match.group(1)!r} "
+            f"(expected {fs_name!r})"
+        )
+    return raw
+
+
+def _nfs_auth_ls(node, cluster_id):
+    """Return ceph auth ls lines for client.nfs.<cluster_id>.* (keys redacted)."""
+    out, _ = node.exec_command(
+        sudo=True,
+        cmd=(
+            f"ceph auth ls 2>/dev/null | "
+            f"grep -E 'client\\.nfs\\.{cluster_id}\\.' || true"
+        ),
+        check_ec=False,
+    )
+    text = str(out or "")
+    safe = "\n".join(
+        ln
+        for ln in text.splitlines()
+        if "key:" not in ln.lower() and not ln.strip().startswith("AQ")
+    )
+    return text, safe
+
+
+def verify_pool_auth(node, cluster_id, fs_name="cephfs"):
+    """Assert CephX pool.* entities exist for the NFS cluster FS."""
+    text, safe = _nfs_auth_ls(node, cluster_id)
+    log.info("nfs.%s auth entities:\n%s", cluster_id, safe)
+    if f".{fs_name}.pool." not in text and ".pool." not in text:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} missing CephX pool.* users for {fs_name}"
+        )
+    return text
+
+
+def assert_pool_users_absent(node, cluster_id):
+    """CFG-07: before first / export, no CEPH_USERS content and no pool.* auth."""
+    raw = read_ceph_users(node, cluster_id)
+    if raw.strip():
+        raise OperationFailedError(
+            f"nfs.{cluster_id} CEPH_USERS present before first / export "
+            f"(redacted):\n{redact_ceph_users(raw)}"
+        )
+    text, safe = _nfs_auth_ls(node, cluster_id)
+    log.info("nfs.%s auth before first export:\n%s", cluster_id, safe)
+    if ".pool." in text:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} CephX pool.* users exist before first / export:\n{safe}"
+        )
+
+
+def verify_pool(
+    ceph_cluster,
+    node,
+    cluster_id,
+    expect_clients,
+    asok_timeout=120,
+    check_conf=True,
+    check_ceph_users=True,
+    fs_name="cephfs",
+    min_asoks=None,
+):
+    """Assert pool-of-clients: shared cmount_path=/, asoks, optional conf/USERS.
+
+    Pure pool (no PEC exports): require exactly ``expect_clients`` asoks.
+    Mixed pool+PEC: pass ``min_asoks`` (typically K + pec_count); total asok
+    count alone must not be used as a pool-health signal.
+    """
+    exports = _export_details(node, cluster_id)
+    shared = []
+    pec_count = 0
+    for item in exports:
+        fsal = item.get("fsal") or {}
+        user_id = fsal.get("user_id")
+        cmount = fsal.get("cmount_path") or item.get("cmount_path") or "/"
+        if cmount != "/":
+            pec_count += 1
+            continue
+        if not user_id:
+            raise OperationFailedError(
+                f"nfs.{cluster_id} / export {item.get('pseudo')} missing user_id"
+            )
+        shared.append(user_id)
+    if int(expect_clients) > 1 and not shared:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} expected / exports for pool verify, found none"
+        )
+    if shared and len(set(shared)) != 1:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} / exports must share one user_id, got {set(shared)}"
+        )
+    if check_conf and expect_clients > 1:
+        conf = read_ganesha_conf(ceph_cluster, node, cluster_id)
+        match = _CLIENTS_PER_POOL_CONF_RE.search(conf)
+        if not match or int(match.group(1)) != int(expect_clients):
+            raise OperationFailedError(
+                f"nfs.{cluster_id} ganesha.conf clients_per_pool expected "
+                f"{expect_clients}, got {match.group(0) if match else None}"
+            )
+    if check_ceph_users and expect_clients > 1:
+        verify_ceph_users(node, cluster_id, expect_k=expect_clients, fs_name=fs_name)
+        verify_pool_auth(node, cluster_id, fs_name=fs_name)
+
+    if min_asoks is None:
+        # Pure pool: exact K. Mixed without explicit min: at least K + PEC.
+        need = int(expect_clients) + pec_count if pec_count else int(expect_clients)
+        exact = pec_count == 0
+    else:
+        need = int(min_asoks)
+        exact = False
+
+    asoks = []
+    for _ in WaitUntil(timeout=asok_timeout, interval=5):
+        asoks = list_cephfs_asoks(ceph_cluster, node, cluster_id)
+        if exact and len(asoks) == need:
+            break
+        if not exact and len(asoks) >= need:
+            break
+        log.info(
+            "Waiting for nfs.%s pool asoks: have %s need %s exact=%s (%s)",
+            cluster_id,
+            len(asoks),
+            need,
+            exact,
+            asoks,
+        )
+    else:
+        raise OperationFailedError(
+            f"nfs.{cluster_id} expected {'exactly' if exact else '>='} {need} "
+            f"CephFS asoks, got {len(asoks)}: {asoks}"
+        )
+    log.info(
+        "Pool verify nfs.%s expect=%s need_asoks=%s asoks=%s pec=%s shared_user=%s OK",
+        cluster_id,
+        expect_clients,
+        need,
+        asoks,
+        pec_count,
+        shared[0] if shared else None,
+    )
+    return asoks
+
+
+def verify_pec_exports(node, cluster_id, expect_clients):
+    """Assert PEC exports only (cmount_path != /) have distinct user_ids.
+
+    Use on mixed pool+PEC clusters; do not call verify_pec (rejects /).
+    """
+    exports = _export_details(node, cluster_id)
+    user_ids = []
+    for item in exports:
+        fsal = item.get("fsal") or {}
+        cmount = fsal.get("cmount_path") or item.get("cmount_path")
+        if not cmount or cmount == "/":
+            continue
+        user_id = fsal.get("user_id")
+        if not user_id:
+            raise OperationFailedError(
+                f"nfs.{cluster_id} PEC export {item.get('pseudo')} missing user_id"
+            )
+        user_ids.append(user_id)
+    distinct = set(user_ids)
+    if len(distinct) != int(expect_clients):
+        raise OperationFailedError(
+            f"nfs.{cluster_id} expected {expect_clients} PEC user_ids, "
+            f"got {len(distinct)}: {sorted(distinct)}"
+        )
+    log.info(
+        "PEC-exports verify nfs.%s clients=%s user_ids=%s OK",
+        cluster_id,
+        expect_clients,
+        sorted(distinct),
+    )
+    return sorted(distinct)
