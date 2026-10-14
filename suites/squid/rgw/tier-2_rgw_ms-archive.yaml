@@ -375,6 +375,18 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_broker_archive_delete_replication_from_pri.yaml
+
+  - test:
+      name: Test Archive site bucket modification time for deleted bucket
+      desc: Test Archive site bucket modification time for deleted bucket
+      polarion-id: CEPH-83574668
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_archive_bucket_stats.py
+            config-file-name: test_archive_deleted_bucket_stats.yaml
+
   - test:
       clusters:
         ceph-pri:
