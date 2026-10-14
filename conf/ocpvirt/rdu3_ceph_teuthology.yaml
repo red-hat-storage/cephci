@@ -17,6 +17,8 @@ root_disk_size: 80Gi
 datasources:
   rhel9: datasource://openshift-virtualization-os-images/rhel9
   rhel10: datasource://openshift-virtualization-os-images/rhel10
+  rhel94: datasource://ceph-teuthology--runtime-int/rhel94-iso
+  rhel96: datasource://ceph-teuthology--runtime-int/rhel96-iso
 
 # Optional PVC access modes (default ReadWriteOnce when omitted)
 access_modes:

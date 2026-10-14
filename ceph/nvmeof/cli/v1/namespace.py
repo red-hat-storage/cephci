@@ -1,5 +1,9 @@
 from ceph.nvmeof.cli.v1.execute import ExecuteCommandMixin
 
+from .common import substitute_keys
+
+KEY_MAP = {"rbd-image-size": "size"}
+
 
 class Namespace:
     """NVMeoF Namespace operations."""
@@ -8,6 +12,7 @@ class Namespace:
         self.base = base
         self.name = "namespace"
 
+    @substitute_keys(KEY_MAP)
     def add(self, **kwargs):
         """Adds namespace for subsystem."""
         return self.base.run_nvme_cli(self.name, "add", **kwargs)
@@ -54,6 +59,7 @@ class Namespace:
         """List hosts allowed for a namespace."""
         return self.base.run_nvme_cli(self.name, "list_hosts", **kwargs)
 
+    @substitute_keys(KEY_MAP)
     def resize(self, **kwargs):
         """Resize namespace under subsystem."""
         return self.base.run_nvme_cli(self.name, "resize", **kwargs)
@@ -62,6 +68,7 @@ class Namespace:
         """Set QoS for a namespace."""
         return self.base.run_nvme_cli(self.name, "set_qos", **kwargs)
 
+    @substitute_keys(KEY_MAP)
     def set_auto_resize(self, **kwargs):
         """Set auto-resize for a namespace."""
         return self.base.run_nvme_cli(self.name, "set_auto_resize", **kwargs)

@@ -1,0 +1,520 @@
+# Scale test suite including all new features from 8.1
+# GW group 1 with 8 GWs and 76 subsystems with 1520 namespaces - all new features of 8.1
+# GW group 2 with 8 GWs and 76 subsystems with 1520 namespaces - all new features of 8.1 + set_qos
+# GW group 3 with 8 GWs and 76 subsystems with 1520 namespaces - No Inband , vmware use cases
+# GW group 4 with 8 GWs and 76 subsystems with 1520 namespaces - scale with no huge pages
+# 5 initiator nodes
+# Bare Metal conf TBD
+
+tests:
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                placement:
+                  label: osd
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node41
+          - node42
+          - node43
+          - node44
+          - node45
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - rbd pool init nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd1
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd1
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd2
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd2
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd3
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd3
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd4
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd4
+      desc: create rbd pools for nvmeof service and data
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: create NVMeoF and data pools
+      polarion-id: CEPH-83595696
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                    - node4
+                    - node5
+                    - node6
+                    - node7
+                    - node8
+                    - node9
+                    - node10
+                    - node11
+                    - node12
+              pos_args:
+                - nvmeof_pool
+                - group1
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                    - node13
+                    - node14
+                    - node15
+                    - node16
+                    - node17
+                    - node18
+                    - node19
+                    - node20
+              pos_args:
+                - nvmeof_pool
+                - group2
+          - config:                        # Group 3 with no In band authentication - to be used for vmware testing
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                    - node21
+                    - node22
+                    - node23
+                    - node24
+                    - node25
+                    - node26
+                    - node27
+                    - node28
+              pos_args:
+                - nvmeof_pool
+                - group3
+          - config:                       # Group 4 with no spdk huge pages
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nvmeof
+                  service_id: nvmeof_pool.group4
+                  placement:
+                    nodes:
+                      - node29
+                      - node30
+                      - node31
+                      - node32
+                      - node33
+                      - node34
+                      - node35
+                      - node36
+                  spec:
+                    pool: nvmeof_pool
+                    group: group4
+                    spdk_mem_size: 4096
+      desc: deploy NVMeoF service for 4 GW groups with 8 GWs
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy 4 NVMeoF services
+      polarion-id: CEPH-83595696
+
+# Group 1 configuration  - All 8.1 features
+  - test:
+      abort-on-fail: true
+      config:
+        node: node4
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 76
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 76
+                port: 4420
+                group: group1
+                nodes:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                  - node8
+                  - node9
+                  - node10
+                  - node11
+                  - node12
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 76
+                group: group1
+      desc: GW group with 8 GWs and 76 subsystems
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Configure 76 subsystems on group1
+      polarion-id: CEPH-83595512                     # This shall be replaced with In band authentication functionality at scale
+
+  - test:
+      abort-on-fail: true
+      config:
+        nodes:
+          - node4
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        service: namespace
+        steps:
+          - config:
+              command: add
+              args:
+                subsystems: 76
+                namespaces: 2048
+                pool: rbd1
+                image_size: 1T
+                no-auto-visible: true
+                group: group1
+          - config:
+              command: add_host
+              args:
+                subsystems: 76
+                namespaces: 1520
+                initiators:
+                  - node41
+                  - node42
+                  - node43
+                  - node44
+                  - node45
+                group: group1
+        initiators:
+          - node41
+          - node42
+          - node43
+          - node44
+          - node45
+      desc: NS masking on 1520 namespaces 76 subsystems and 5 initiators
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_masking.py
+      name: Test E2E nvmeof namespace masking at scale
+      polarion-id: CEPH-83609782
+
+# Group 2 configuration  - In band, NS masking, set_QOS
+  - test:
+      abort-on-fail: true
+      config:
+        node: node13
+        rbd_pool: rbd2
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 76
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 76
+                port: 4420
+                group: group2
+                nodes:
+                  - node13
+                  - node14
+                  - node15
+                  - node16
+                  - node17
+                  - node18
+                  - node19
+                  - node20
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 76
+                group: group2
+      desc: GW group with 8 GWs and 76 subsystems
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Configure 76 subsystems on group2
+      polarion-id: CEPH-83595512                     # This shall be replaced with In band authentication functionality at scale
+
+  - test:
+      abort-on-fail: true
+      config:
+        nodes:
+          - node13
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        service: namespace
+        steps:
+          - config:
+              command: add
+              args:
+                subsystems: 76
+                namespaces: 1520
+                pool: rbd2
+                image_size: 1T
+                no-auto-visible: true
+                group: group2
+        initiators:
+          - node41
+          - node42
+          - node43
+          - node44
+          - node45
+      desc: NS masking on 1520 namespaces 76 subsystems and 5 initiators
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_masking.py
+      name: Test E2E nvmeof namespace masking at scale
+      polarion-id: CEPH-83609782             # Set QOS can be added after this test
+
+# Group 3 configuration
+# placeholder for manually running VMware use cases on a set of baremetal nodes assigned to group3
+  - test:
+      abort-on-fail: true
+      config:
+        node: node21
+        rbd_pool: rbd3
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 76
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 76
+                port: 4420
+                group: group3
+                nodes:
+                  - node21
+                  - node22
+                  - node23
+                  - node24
+                  - node25
+                  - node26
+                  - node27
+                  - node28
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 76
+                group: group3
+      desc: GW group with 8 GWs and 76 subsystems
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Configure 76 subsystems on group3
+      polarion-id: CEPH-83595512
+
+  - test:
+      abort-on-fail: true
+      config:
+        nodes:
+          - node21
+        rbd_pool: rbd3
+        do_not_create_image: true
+        rep-pool-only: true
+        service: namespace
+        steps:
+          - config:
+              command: add
+              args:
+                subsystems: 76
+                namespaces: 1520
+                pool: rbd3
+                image_size: 1T
+                no-auto-visible: true
+                group: group3
+        initiators:
+          - node41
+          - node42
+          - node43
+          - node44
+          - node45
+      desc: NS masking on 1520 namespaces 76 subsystems and 5 initiators
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_masking.py
+      name: Test E2E nvmeof namespace masking at scale
+      polarion-id: CEPH-83609782
+
+# Group 4 configuration  - scale with nohugepage support
+  - test:
+      abort-on-fail: true
+      config:
+        node: node29
+        rbd_pool: rbd4
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 76
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 76
+                port: 4420
+                group: group4
+                nodes:
+                  - node29
+                  - node30
+                  - node31
+                  - node32
+                  - node33
+                  - node34
+                  - node35
+                  - node36
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 76
+                group: group4
+      desc: GW group with 8 GWs and 76 subsystems
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Configure 76 subsystems on group4
+      polarion-id: CEPH-83595512
+
+  - test:
+      abort-on-fail: true
+      config:
+        nodes:
+          - node29
+        rbd_pool: rbd4
+        do_not_create_image: true
+        rep-pool-only: true
+        service: namespace
+        steps:
+          - config:
+              command: add
+              args:
+                subsystems: 76
+                namespaces: 1520
+                pool: rbd4
+                image_size: 1T
+                no-auto-visible: true
+                group: group4
+        initiators:
+          - node41
+          - node42
+          - node43
+          - node44
+          - node45
+      desc: NS masking on 1520 namespaces 76 subsystems and 5 initiators
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_masking.py
+      name: Test E2E nvmeof namespace masking at scale
+      polarion-id: CEPH-83609782

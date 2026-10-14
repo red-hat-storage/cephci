@@ -15,7 +15,7 @@ from tests.nfs.lib.multi_active.constants import (
 from tests.nfs.nfs_delegation_operations import (
     LOG_TEMPLATE_BACKUP_PATH,
     _expect_export_delegation,
-    clamp_delegation_log_settle_seconds,
+    delegation_timing_from_config,
     enable_ganesha_debug_logging,
     ensure_ceph_conf_and_admin_keyring_on_hosts,
     hold_delegation_open,
@@ -249,7 +249,7 @@ class NfsMultiActiveDelegation:
         tag,
     ):
         """Validate export-level RW delegation via filtered Ganesha log capture."""
-        settle_seconds = clamp_delegation_log_settle_seconds(config)
+        settle_seconds = delegation_timing_from_config(config or {}).log_settle_seconds
         nfs_node = NfsMultiActiveDelegation._resolve_nfs_node(
             nfs_nodes, backend_hostname
         )

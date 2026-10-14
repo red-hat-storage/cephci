@@ -2,12 +2,40 @@ from ceph.ceph_admin.orch import Orch
 from cli.cephadm.cephadm import CephAdm
 from cli.utilities.operations import wait_for_cluster_health
 from utility.log import Log
+from utility.utils import resolve_registry_host, resolve_registry_login
 
 log = Log(__name__)
 
 
 class StaggeredUpgradeError(Exception):
     pass
+
+
+def _login_upgrade_registry(orch, ceph_cluster, config):
+    """
+    Authenticate against the upgrade target registry before pull/upgrade-check.
+
+    Prefer --custom-config upgrade-registry=<host>; else the container image host.
+    Credentials come from the host-keyed ``registries:`` section in ~/.cephci.yaml.
+    """
+    overrides = config.get("overrides") or {}
+    registry_host = resolve_registry_host(
+        overrides=overrides,
+        image=config.get("container_image"),
+        key="upgrade-registry",
+    )
+    if not registry_host:
+        log.warning("No upgrade registry host resolved; skipping registry login")
+        return
+
+    reg_args = resolve_registry_login(registry_host)
+    log.info(
+        "Logging into upgrade registry %s (image=%s)",
+        registry_host,
+        config.get("container_image"),
+    )
+    for node in ceph_cluster.get_nodes(ignore="client"):
+        orch.registry_login(node=node, args=reg_args)
 
 
 def run(ceph_cluster, **kw):
@@ -30,6 +58,7 @@ def run(ceph_cluster, **kw):
                 daemon_types: mgr,mon
     """
     config = kw.get("config")
+    config["overrides"] = kw.get("test_data", {}).get("custom_config_dict")
     osd_flags = config.get("osd_flags")
     target_image = config.get("container_image")
     action = config.get("action")
@@ -44,6 +73,8 @@ def run(ceph_cluster, **kw):
     for flag in osd_flags:
         if CephAdm(node).ceph.osd.set(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
+    # Authenticate against upgrade image registry (host-keyed registries:)
+    _login_upgrade_registry(orch, ceph_cluster, config)
     # Check target image
     if CephAdm(node).ceph.orch.upgrade.check(image=target_image):
         raise StaggeredUpgradeError("Upgrade image check failed")

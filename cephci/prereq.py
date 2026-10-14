@@ -146,15 +146,22 @@ def setup_local_repos(node, distro):
     return True
 
 
-def registry_login(node, server, build):
-    """Login to container registry"""
+def registry_login(node, registry_host, build=None):
+    """Login to container registry by host name.
+
+    Args:
+        node: node object
+        registry_host (str): Registry hostname from ``registries:`` in ~/.cephci.yaml
+        build: Unused; retained for call-site compatibility.
+    """
+    _ = build
     # Get registry config from cephci config
-    config = get_registry_credentials(server, build)
+    config = get_registry_credentials(registry_host)
 
     # Login to container registry
     Registry(node).login(**config)
 
-    LOG.info(f"Logined to container registry '{server}' successfully")
+    LOG.info(f"Logged into container registry '{registry_host}' successfully")
     return True
 
 

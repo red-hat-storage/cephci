@@ -1,0 +1,282 @@
+#===============================================================================================
+#-------------------------------------
+#--- Test Suite for NFS Multi-Active (Baremetal) ---
+#-------------------------------------
+# Note: NFS Multi-Active is supported on baremetal clusters only
+# **** IMP: To update the VIP accordingly in this suite file *****
+# Conf: conf/baremetal/nfs_grim_multi_active.yaml
+# globals:
+#   - ceph-cluster:
+#       name: ceph
+#       networks:
+#         public: ['10.64.66.192/26']
+#       nodes:
+#         - hostname: grim061
+#           ip: 10.64.66.198
+#           id: node1
+#           root_password: pass123
+#           role:
+#             - _admin
+#             - installer
+#             - mon
+#             - mgr
+#             - osd
+#             - crash
+#             - mds
+#             - nfs
+#           volumes:
+#             - /dev/nvme2n1
+#             - /dev/nvme3n1
+#             - /dev/nvme4n1
+#             - /dev/nvme5n1
+#             - /dev/nvme6n1
+#             - /dev/nvme7n1
+#             - /dev/nvme8n1
+#             - /dev/nvme9n1
+#         - hostname: grim062
+#           ip: 10.64.66.199
+#           id: node2
+#           root_password: pass123
+#           role:
+#             - osd
+#             - mon
+#             - mgr
+#             - mds
+#             - crash
+#             - rgw
+#             - nfs
+#           volumes:
+#             - /dev/nvme2n1
+#             - /dev/nvme3n1
+#             - /dev/nvme4n1
+#             - /dev/nvme5n1
+#             - /dev/nvme6n1
+#             - /dev/nvme7n1
+#             - /dev/nvme8n1
+#             - /dev/nvme9n1
+#         - hostname: grim063
+#           ip: 10.64.66.200
+#           id: node3
+#           root_password: pass123
+#           role:
+#             - mon
+#             - osd
+#             - crash
+#             - rgw
+#             - mds
+#             - nfs
+#           volumes:
+#             - /dev/nvme2n1
+#             - /dev/nvme3n1
+#             - /dev/nvme4n1
+#             - /dev/nvme5n1
+#             - /dev/nvme6n1
+#             - /dev/nvme7n1
+#             - /dev/nvme8n1
+#             - /dev/nvme9n1
+#         - hostname: grim064
+#           ip: 10.64.66.201
+#           id: node4
+#           root_password: pass123
+#           role:
+#             - osd
+#             - mds
+#             - crash
+#             - nfs
+#           volumes:
+#             - /dev/nvme2n1
+#             - /dev/nvme3n1
+#             - /dev/nvme4n1
+#             - /dev/nvme5n1
+#             - /dev/nvme6n1
+#             - /dev/nvme7n1
+#             - /dev/nvme8n1
+#             - /dev/nvme9n1
+#         - hostname: grim065
+#           ip: 10.64.66.202
+#           id: node5
+#           root_password: pass123
+#           role:
+#             - client
+#         - hostname: grim066
+#           ip: 10.64.66.203
+#           id: node6
+#           root_password: pass123
+#           role:
+#             - client
+#         - hostname: grim067
+#           ip: 10.64.66.204
+#           id: node7
+#           root_password: pass123
+#           role:
+#             - client
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      desc: Bootstrap cluster and deploy CephFS with MDS.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client on node5
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client on node6
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client on node7
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Deploy NFS Multi-Active via spec
+      module: multi_active.test_nfs_multi_active_functional.py
+      desc: Functional tests for NFS Multi-Active deployment
+      polarion-id: CEPH-83632226
+      abort-on-fail: false
+      config:
+        skip_health_check: false
+        vips:
+          - 10.64.66.241/26
+          - 10.64.66.242/26
+
+  - test:
+      name: NFS Multi-Active colocation ports via spec
+      module: multi_active.test_nfs_multi_active_colocation_ports.py
+      desc: Colocation port deploy and label failover (TC-A1, TC-C1..C4) with custom ports, VIP mount, backend/ingress drain, and dual-client IO
+      polarion-id: CEPH-83632227
+      abort-on-fail: false
+      config:
+        skip_health_check: false
+        io_tool: fio
+        vips:
+          - 10.64.66.241/26
+          - 10.64.66.242/26
+
+  - test:
+      name: NFS Multi-Active ingress negative via spec
+      module: multi_active.test_nfs_multi_active_negative.py
+      desc: NEG-1..NEG-5 — invalid ingress apply, IP export restrictions with HAProxy failover, and Ganesha SIGKILL recovery with IO continuity
+      polarion-id: CEPH-83632228
+      abort-on-fail: false
+      config:
+        skip_health_check: false
+        io_tool: fio
+        vips:
+          - 10.64.66.241/26
+          - 10.64.66.242/26
+
+  - test:
+      name: NFS Multi-Active daemon disruption via spec
+      module: multi_active.test_nfs_multi_active_daemon_disruption.py
+      desc: Single deploy DR-1..DR-7 — nfs/haproxy/keepalived restart and stop/start with background IO and per-phase validation
+      polarion-id: CEPH-83632229
+      abort-on-fail: false
+      config:
+        skip_health_check: true
+        io_tool: fio
+        vips:
+          - 10.64.66.241/26
+          - 10.64.66.242/26
+
+  - test:
+      name: NFS Multi-Active failover via spec
+      module: multi_active.test_nfs_multi_active_failover.py
+      desc: Label-based failover during background IO — 4 sessions TC-1..TC-6 covering single/dual-client drain, roundtrip, reboot, and dual-cluster VIP failover
+      polarion-id: CEPH-83632862
+      abort-on-fail: false
+      config:
+        skip_health_check: false
+        io_tool: fio
+        vips:
+          - 10.64.66.241/26
+          - 10.64.66.242/26
+
+  - test:
+      name: NFS Multi-Active integration via spec
+      module: multi_active.test_nfs_multi_active_integration.py
+      desc: TC-1..TC-4 shared session — MDS failover, per-share CQoS, RW delegation, per-client colocation CQoS
+      polarion-id: CEPH-83632861
+      abort-on-fail: false
+      comments: Known issue IBMCEPH-16488
+      config:
+        skip_health_check: false
+        io_tool: fio
+        vips:
+          - 10.64.66.241/26
+          - 10.64.66.242/26
+

@@ -68,27 +68,42 @@ def get_subscription_credentials(server):
     return _dict
 
 
-def get_registry_credentials(server, build):
-    """Get container registry credentials from config
+def get_registry_credentials(registry_host, build=None):
+    """Get container registry credentials by host from ``registries:``.
 
     Args:
-        server (str): Container registry server
-        build (str): Build type
+        registry_host (str): Registry hostname (e.g. ``preprod.icr.io``).
+        build: Unused; retained for call-site compatibility.
     """
-    _dict = {}
-    log.info(f"Loading registry credentials for server '{server}' and build '{build}'")
+    _ = build
+    log.info(f"Loading registry credentials for host '{registry_host}'")
+    if not registry_host or registry_host == "skip":
+        raise ConfigError("Registry host is required")
+
+    if not CONFIG:
+        get_configs()
+
     try:
-        _registry = _get_credentials()["registry"]
-        _build = _registry[build]
-        _server = _build[server]
-        _serverurl = _dict["registry"] = _server["registry"]
-        _dict["username"] = _server["username"]
-        _dict["password"] = _server["password"]
+        info = CONFIG["registries"][registry_host]
+    except (KeyError, TypeError):
+        raise ConfigError(
+            f"Insufficient config: registries[{registry_host!r}] is missing from "
+            "~/.cephci.yaml"
+        )
 
-        log.info(f"Loaded registry credentials for server - {_serverurl}")
-    except KeyError:
-        raise ConfigError(f"Insufficient config for '{server}' & '{build}' registry")
+    username = info.get("username") or info.get("user")
+    password = info.get("password")
+    if not username or not password:
+        raise ConfigError(
+            f"registries[{registry_host!r}] must include username/user and password"
+        )
 
+    _dict = {
+        "registry": registry_host,
+        "username": username,
+        "password": password,
+    }
+    log.info(f"Loaded registry credentials for server - {registry_host}")
     return _dict
 
 

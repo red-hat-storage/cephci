@@ -17,26 +17,117 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def _get_quota_and_used_from_metrics(
+# Parent extra is empty-dir metadata on the metrics path (typically ~130–138 bytes).
+_PARENT_EXTRA_MIN = 64
+_PARENT_EXTRA_MAX = 512
+_PARENT_EXTRA_TRIES = 12
+_PARENT_EXTRA_SLEEP = 5
+
+
+def _log_metrics_used_mismatch(
+    step: str,
+    metrics_used: int,
+    expected_metrics_used: int,
+    bytes_used: int,
+    baseline: int,
+    parent_before: int,
+):
+    """Fail path: MDS did not pick up test IO vs other used_bytes mismatch."""
+    if metrics_used == parent_before:
+        log.error(
+            "%s: metrics used_bytes still at pre-IO parent rbytes %s after wait; "
+            "expected %s (bytes_used=%s BASE=%s)",
+            step,
+            parent_before,
+            expected_metrics_used,
+            bytes_used,
+            baseline,
+        )
+        return
+    log.error(
+        "%s: used_bytes mismatch used_bytes=%s, "
+        "expected bytes_used+BASE=%s (bytes_used=%s BASE=%s parent_before=%s)",
+        step,
+        metrics_used,
+        expected_metrics_used,
+        bytes_used,
+        baseline,
+        parent_before,
+    )
+
+
+def _snapshot_parent_extra_baseline(
     helper: MDSMetricsHelper,
+    fs_util,
     client,
     vol_name: str,
     subvol_path: str,
-    ranks: Optional[List[int]] = None,
+    mnt_pt: str,
 ) -> Optional[Tuple[int, int]]:
-    """Return (quota_bytes, used_bytes) for the subvolume from MDS metrics."""
-    results = helper.collect_subvolume_metrics(
-        client=client,
-        fs_name=vol_name,
-        role="active",
-        ranks=ranks or [0],
-        path_prefix=subvol_path,
-    )
-    for _mds_name, items in results.items():
-        for it in items:
-            if "quota_bytes" in it and "used_bytes" in it:
-                return (int(it["quota_bytes"]), int(it["used_bytes"]))
-    return None
+    """
+    Snapshot parent extra for a possibly pre-filled subvolume.
+
+    MDS used_bytes is parent-path rbytes. UUID rbytes is the UUID dir.
+    BASE = parent_rbytes - uuid_rbytes (both ceph.dir.rbytes), not
+    parent_rbytes - subvolume info bytes_used.
+
+    Wait until extra is in the empty-dir band, then freeze BASE and
+    parent_before. Do not use full parent rbytes as BASE.
+    """
+    parent_path = helper.parent_subvol_path(subvol_path)
+    rand_str = "".join(random.choices(string.ascii_letters + string.digits, k=6))
+    parent_mount = f"/mnt/cephfs_fuse_parent_{rand_str}/"
+    extra = None
+    parent_before = None
+    try:
+        fs_util.fuse_mount(
+            [client],
+            parent_mount,
+            extra_params=f" -r {parent_path} --client_fs {vol_name}",
+        )
+        for attempt in range(1, _PARENT_EXTRA_TRIES + 1):
+            parent_before = helper.get_dir_rbytes(client, parent_mount)
+            uuid_rbytes = helper.get_dir_rbytes(client, mnt_pt)
+            extra = parent_before - uuid_rbytes
+            log.info(
+                "parent extra wait %s/%s: extra=%s "
+                "(parent_rbytes=%s uuid_rbytes=%s parent_path=%s)",
+                attempt,
+                _PARENT_EXTRA_TRIES,
+                extra,
+                parent_before,
+                uuid_rbytes,
+                parent_path,
+            )
+            if _PARENT_EXTRA_MIN <= extra <= _PARENT_EXTRA_MAX:
+                return extra, parent_before
+            time.sleep(_PARENT_EXTRA_SLEEP)
+        log.error(
+            "parent extra %s not in [%s, %s] after %ss; "
+            "parent_rbytes=%s (not using full parent size as BASE)",
+            extra,
+            _PARENT_EXTRA_MIN,
+            _PARENT_EXTRA_MAX,
+            _PARENT_EXTRA_TRIES * _PARENT_EXTRA_SLEEP,
+            parent_before,
+        )
+        return None
+    except Exception as e:
+        log.error("Failed to snapshot parent extra baseline: %s", e)
+        return None
+    finally:
+        try:
+            client.exec_command(
+                sudo=True, cmd=f"umount -l {parent_mount}", check_ec=False
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"rm -rf {parent_mount}",
+                check_ec=False,
+                timeout=120,
+            )
+        except Exception as e:
+            log.warning("Parent mount cleanup failed for %s: %s", parent_mount, e)
 
 
 def _get_expected_used_bytes(
@@ -179,12 +270,11 @@ def subvolume_metrics_quota_used_test():
 
     1. Get existing subvolumes from pre_upgrade_config that have fuse mount
        (and optionally quota enabled via get_quota_attrs).
-    2. For those subvolumes: get quota_bytes and used_bytes from subvolume
-       metrics; compare with get_quota_attrs(mnt_pt) and du -sb(mnt_pt).
-       test_status = 0 if match, else 1.
-    3. Create new directory on existing fuse mount, add dataset, set quota
-       via set_quota_attrs; run subvolume metrics and verify quota_bytes and
-       used_bytes with get_quota_attrs and du -sb. test_status = 0 if match, else 1.
+    2. For those subvolumes: snapshot parent extra BASE from rbytes, then the
+       existing small dataset; wait until MDS used_bytes == bytes_used + BASE
+       and quota_bytes matches get_quota_attrs. test_status = 0 if match, else 1.
+    3. On first candidate: existing quota change and dataset; recapture BASE,
+       verify quota_bytes and used_bytes == bytes_used + BASE.
     4. Return 0 on success, 1 on failure.
 
     Uses test_reqs: config, clients, fs_util, helper, vol_name (optional).
@@ -263,6 +353,31 @@ def subvolume_metrics_quota_used_test():
             )
             continue
 
+        def _bytes_used():
+            return int(
+                _get_expected_used_bytes(
+                    mnt_client, entry["vol_name"], entry["sv"], entry["svg"]
+                )
+                or 0
+            )
+
+        snap = _snapshot_parent_extra_baseline(
+            helper,
+            fs_util,
+            mnt_client,
+            entry["vol_name"],
+            subvol_path,
+            mnt_pt,
+        )
+        if snap is None:
+            log.error(
+                "Step 2: failed to snapshot parent extra BASE for %s/%s",
+                entry["svg"],
+                entry["sv"],
+            )
+            return 1
+        baseline, parent_before = snap
+
         rand_str = "".join(random.choices(string.ascii_letters + string.digits, k=3))
         quota_attrs = fs_util.get_quota_attrs(mnt_client, mnt_pt)
         expected_quota = int(quota_attrs.get("bytes", 0))
@@ -270,71 +385,48 @@ def subvolume_metrics_quota_used_test():
         dd_cmd = f"dd if=/dev/urandom of={mnt_pt}/data_{rand_str}.bin bs=1M count=10 conv=fsync 2>/dev/null"
         mnt_client.exec_command(sudo=True, cmd=dd_cmd)
         time.sleep(2)
-        retry_count = 0
-        test_fail = 0
-        while retry_count < 5:
-            test_fail = 0
-            result = _get_quota_and_used_from_metrics(
-                helper, mnt_client, entry["vol_name"], subvol_path, ranks
-            )
-            if result is None:
-                log.error("No subvolume metrics for %s", subvol_path)
-                retry_count += 1
-                test_fail += 1
-                time.sleep(5)
-                continue
-            metrics_quota, metrics_used = result
-
-            expected_used_bytes = _get_expected_used_bytes(
-                mnt_client, entry["vol_name"], entry["sv"], entry["svg"]
-            )
-
-            if metrics_quota != expected_quota:
-                log.error(
-                    "Step 2: quota_bytes mismatch: expected %s got %s",
-                    expected_quota,
-                    metrics_quota,
-                )
-                test_fail += 1
-            else:
-                log.info(
-                    "Step 2: quota_bytes matched: expected %s got %s",
-                    expected_quota,
-                    metrics_quota,
-                )
-
-            if metrics_used != expected_used_bytes:
-                log.error(
-                    "Step 2: used_bytes mismatch: expected %s got %s",
-                    expected_used_bytes,
-                    metrics_used,
-                )
-                test_fail += 1
-            else:
-                log.info(
-                    "Step 2: used_bytes matched: expected %s got %s",
-                    expected_used_bytes,
-                    metrics_used,
-                )
-            if test_fail == 0:
-                log.info(
-                    "Subvolume %s/%s: quota_bytes=%s used_bytes=%s (match get_quota_attrs and expected_used_bytes)",
-                    entry["svg"],
-                    entry["sv"],
-                    metrics_quota,
-                    metrics_used,
-                )
-                break
-            else:
-                retry_count += 1
-                time.sleep(5)
-        if test_fail != 0:
+        waited = helper.wait_for_metrics_used_bytes(
+            mnt_client,
+            entry["vol_name"],
+            subvol_path,
+            baseline,
+            _bytes_used,
+            expected_quota=expected_quota,
+            ranks=ranks,
+        )
+        if waited is None:
+            log.error("No subvolume metrics for %s", subvol_path)
+            return 1
+        metrics_quota, metrics_used, bytes_used = waited
+        expected_metrics_used = helper.expected_metrics_used_bytes(bytes_used, baseline)
+        if metrics_quota != expected_quota:
             log.error(
-                "Failed to validate subvolume metrics for %s/%s",
-                entry["svg"],
-                entry["sv"],
+                "Step 2: quota_bytes mismatch: expected %s got %s",
+                expected_quota,
+                metrics_quota,
             )
             return 1
+        if metrics_used != expected_metrics_used:
+            _log_metrics_used_mismatch(
+                "Step 2",
+                metrics_used,
+                expected_metrics_used,
+                bytes_used,
+                baseline,
+                parent_before,
+            )
+            return 1
+        log.info(
+            "Subvolume %s/%s: quota_bytes=%s used_bytes=%s "
+            "(bytes_used=%s BASE=%s parent_before=%s)",
+            entry["svg"],
+            entry["sv"],
+            metrics_quota,
+            metrics_used,
+            bytes_used,
+            baseline,
+            parent_before,
+        )
 
     # Step 3: On first candidate's mount, add dataset, set quota, verify
 
@@ -356,75 +448,77 @@ def subvolume_metrics_quota_used_test():
     quota_bytes_new = 50 * 1024 * 1024 * 1024  # 50GB
     fs_util.set_quota_attrs(mnt_client, "1000", quota_bytes_new, mnt_pt)
     time.sleep(2)
-    dd_cmd = f"dd if=/dev/urandom of={mnt_pt}/data_{rand_str}.bin bs=1M count=10 conv=fsync 2>/dev/null"
-    mnt_client.exec_command(sudo=True, cmd=dd_cmd)
-    retry_count = 0
-    test_fail = 0
-    while retry_count < 5:
-        test_fail = 0
-        result = _get_quota_and_used_from_metrics(
-            helper, mnt_client, entry["vol_name"], subvol_path, ranks
+
+    def _bytes_used_step3():
+        return int(
+            _get_expected_used_bytes(
+                mnt_client, entry["vol_name"], entry["sv"], entry["svg"]
+            )
+            or 0
         )
-        if result is None:
-            log.error("Step 3: No subvolume metrics after setting new quota")
-            retry_count += 1
-            test_fail += 1
-            time.sleep(5)
-            continue
 
-        metrics_quota, metrics_used = result
-        expected_used_bytes = _get_expected_used_bytes(
-            mnt_client, entry["vol_name"], entry["sv"], entry["svg"]
-        )
-        if metrics_used != expected_used_bytes:
-            log.error(
-                "Step 3: new used_bytes mismatch: expected %s got %s",
-                expected_used_bytes,
-                metrics_used,
-            )
-            test_fail += 1
-        else:
-            log.info(
-                "Step 3: new used_bytes matched: expected %s got %s",
-                expected_used_bytes,
-                metrics_used,
-            )
-
-        # New dir: verify get_quota_attrs
-
-        expected_quota_attrs = fs_util.get_quota_attrs(mnt_client, mnt_pt)
-        expected_quota_bytes = int(expected_quota_attrs.get("bytes", 0))
-
-        if expected_quota_bytes != metrics_quota:
-            log.error(
-                "Step 3: new quota mismatch: expected %s got %s",
-                expected_quota_bytes,
-                metrics_quota,
-            )
-            test_fail += 1
-        else:
-            log.info(
-                "Step 3: new quota matched: expected %s got %s",
-                expected_quota_bytes,
-                metrics_quota,
-            )
-        if test_fail == 0:
-            log.info(
-                "Subvolume %s/%s: quota_bytes=%s used_bytes=%s (match get_quota_attrs and expected_used_bytes)",
-                entry["svg"],
-                entry["sv"],
-                metrics_quota,
-                metrics_used,
-            )
-            break
-        else:
-            retry_count += 1
-            time.sleep(5)
-    if test_fail != 0:
+    snap = _snapshot_parent_extra_baseline(
+        helper,
+        fs_util,
+        mnt_client,
+        entry["vol_name"],
+        subvol_path,
+        mnt_pt,
+    )
+    if snap is None:
         log.error(
-            "Failed to validate subvolume metrics for %s/%s", entry["svg"], entry["sv"]
+            "Step 3: failed to snapshot parent extra BASE for %s/%s",
+            entry["svg"],
+            entry["sv"],
         )
         return 1
+    baseline, parent_before = snap
+    dd_cmd = f"dd if=/dev/urandom of={mnt_pt}/data_{rand_str}.bin bs=1M count=10 conv=fsync 2>/dev/null"
+    mnt_client.exec_command(sudo=True, cmd=dd_cmd)
+    expected_quota_attrs = fs_util.get_quota_attrs(mnt_client, mnt_pt)
+    expected_quota_bytes = int(expected_quota_attrs.get("bytes", 0))
+    waited = helper.wait_for_metrics_used_bytes(
+        mnt_client,
+        entry["vol_name"],
+        subvol_path,
+        baseline,
+        _bytes_used_step3,
+        expected_quota=expected_quota_bytes,
+        ranks=ranks,
+    )
+    if waited is None:
+        log.error("Step 3: No subvolume metrics after setting new quota")
+        return 1
+    metrics_quota, metrics_used, bytes_used = waited
+    expected_metrics_used = helper.expected_metrics_used_bytes(bytes_used, baseline)
+    if expected_quota_bytes != metrics_quota:
+        log.error(
+            "Step 3: new quota mismatch: expected %s got %s",
+            expected_quota_bytes,
+            metrics_quota,
+        )
+        return 1
+    if metrics_used != expected_metrics_used:
+        _log_metrics_used_mismatch(
+            "Step 3",
+            metrics_used,
+            expected_metrics_used,
+            bytes_used,
+            baseline,
+            parent_before,
+        )
+        return 1
+    log.info(
+        "Subvolume %s/%s: quota_bytes=%s used_bytes=%s "
+        "(bytes_used=%s BASE=%s parent_before=%s)",
+        entry["svg"],
+        entry["sv"],
+        metrics_quota,
+        metrics_used,
+        bytes_used,
+        baseline,
+        parent_before,
+    )
     return 0
 
 

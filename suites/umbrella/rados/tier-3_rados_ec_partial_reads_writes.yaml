@@ -1,0 +1,506 @@
+# =============================================================================
+# Suite: EC Partial Write and Read Optimization Tests (Fast EC Feature)
+# =============================================================================
+#
+# This suite tests erasure coded pools with allow_ec_optimizations enabled
+# to verify partial write/read optimization reduces I/O amplification.
+#
+# Prerequisites:
+#   - Configuration: 4-node-ec-cluster-1-client.yaml
+#   - Minimum: 4 OSD nodes + 1 client node
+#
+# =============================================================================
+# TEST CONFIGURATION SUMMARY
+# =============================================================================
+#
+# ┌──────┬────────┬─────┬─────┬─────────────┬──────────────┬───────────────────┐
+# │ Test │ Plugin │  k  │  m  │ stripe_unit │ stripe_width │ CRUSH Domain      │
+# ├──────┼────────┼─────┼─────┼─────────────┼──────────────┼───────────────────┤
+# │  1   │ ISA    │  2  │  2  │    4KB      │     8KB      │ host (default)    │
+# │  2   │ ISA    │  2  │  2  │   16KB      │    32KB      │ host (default)    │
+# │  3   │ ISA    │  4  │  2  │   16KB      │    64KB      │ osd (k+m=6 > 4)   │
+# │  4   │ ISA    │  4  │  3  │   16KB      │    64KB      │ osd (k+m=7 > 4)   │
+# │  5   │ ISA    │  5  │  2  │   16KB      │    80KB      │ osd (k+m=7 > 4)   │
+# │  6   │ ISA    │  6  │  2  │  128KB      │   768KB      │ osd (k+m=8 > 4)   │
+# │  7   │ ISA    │  2  │  1  │    4KB      │     8KB      │ host (default)    │
+# │  8   │ ISA    │  3  │  2  │   16KB      │    48KB      │ osd (k+m=5 > 4)   │
+# │  9   │ ISA    │  2  │  2  │   64KB      │   128KB      │ host (default)    │
+# │ 10   │ ISA    │  2  │  2  │    8KB      │    16KB      │ host (default)    │
+# │ 11   │ ISA    │  2  │  2  │   32KB      │    64KB      │ host (default)    │
+# │ 12   │Jerasure│  2  │  2  │   16KB      │    32KB      │ host (default)    │
+# │ 13   │Jerasure│  4  │  2  │   64KB      │   256KB      │ osd (k+m=6 > 4)   │
+# └──────┴────────┴─────┴─────┴─────────────┴──────────────┴───────────────────┘
+#
+# Key Formulas:
+#   - stripe_width = k × stripe_unit (data bytes per stripe)
+#   - full_stripe  = (k + m) × stripe_unit (total bytes including parity)
+#
+# stripe_unit Coverage:
+#   - 4KB  : Tests 1, 7             (minimum practical size)
+#   - 8KB  : Test 10
+#   - 16KB : Tests 2-5, 8, 12       (recommended default, most tested)
+#   - 32KB : Test 11
+#   - 64KB : Tests 9, 13
+#   - 128KB: Test 6                 (larger stripe for high-throughput)
+#
+# k,m Coverage:
+#   - k=2, m=1 : Test 7          (minimum parity)
+#   - k=2, m=2 : Tests 1,2,9-11  (common config, most tested)
+#   - k=3, m=2 : Test 8
+#   - k=4, m=2 : Tests 3, 13
+#   - k=4, m=3 : Test 4
+#   - k=5, m=2 : Test 5
+#   - k=6, m=2 : Test 6          (high capacity efficiency)
+#
+# Plugin Coverage:
+#   - ISA (Intel Storage Acceleration): Tests 1-11 (primary focus)
+#   - Jerasure: Tests 12-13 (basic coverage)
+#
+# =============================================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                log-to-file: true
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:  CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node6                     # client node
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      desc: Install fio
+      module: exec.py
+      name: Install FIO
+      config:
+        sudo: true
+        commands:
+          - "dnf install fio -y"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Set configs for 4 node cluster
+      desc: Set configs for 4 node cluster
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph
+                - config
+                - set
+                - mon
+                - mon_osd_down_out_subtree_limit
+                - host
+
+  # Test: Stripe unit and Fast EC default verification
+  - test:
+      name: Stripe unit and Fast EC default verification
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83632256
+      abort-on-fail: false
+      config:
+        test_stripe_unit_pool_creation: true
+      desc: Verify stripe_unit and Fast EC defaults for various EC configurations
+
+  # ==========================================================================
+  # ISA Plugin Tests (Default plugin from Tentacle onwards)
+  # ==========================================================================
+
+  # Test 1: ISA Plugin - k=2, m=2, 4KB stripe_unit (stripe_width = 8KB)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m2 4KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m2_4k
+        metadata_pool_name: test_ec_meta_isa_k2m2_4k
+        image_name: test_ec_image_isa_k2m2_4k
+        image_size: 1G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 4096  # 4KB stripe_unit, stripe_width = 8KB
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 4KB stripe_unit.
+
+  # Test 2: ISA Plugin - k=2, m=2, 16KB stripe_unit (stripe_width = 32KB)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m2 16KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m2_16k
+        metadata_pool_name: test_ec_meta_isa_k2m2_16k
+        image_name: test_ec_image_isa_k2m2_16k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 16384  # 16KB stripe_unit, stripe_width = 32KB
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 16KB stripe_unit.
+
+  # Test 3: ISA Plugin - k=4, m=2, 16KB stripe_unit (stripe_width = 64KB)
+  # Note: k+m=6 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k4m2 16KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k4m2_16k
+        metadata_pool_name: test_ec_meta_isa_k4m2_16k
+        image_name: test_ec_image_isa_k4m2_16k
+        image_size: 2G
+        ec_k: 4
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 16384  # 16KB stripe_unit, stripe_width = 64KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=4 m=2 (OSD domain), 16KB stripe_unit.
+
+  # Test 4: ISA Plugin - k=4, m=3, 16KB stripe_unit (stripe_width = 64KB)
+  # Note: k+m=7 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k4m3 16KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k4m3_16k
+        metadata_pool_name: test_ec_meta_isa_k4m3_16k
+        image_name: test_ec_image_isa_k4m3_16k
+        image_size: 2G
+        ec_k: 4
+        ec_m: 3
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 16384  # 16KB stripe_unit, stripe_width = 64KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=4 m=3 (OSD domain), 16KB stripe_unit.
+
+  # Test 5: ISA Plugin - k=5, m=2, 16KB stripe_unit (stripe_width = 80KB)
+  # Note: k+m=7 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k5m2 16KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k5m2_16k
+        metadata_pool_name: test_ec_meta_isa_k5m2_16k
+        image_name: test_ec_image_isa_k5m2_16k
+        image_size: 2G
+        ec_k: 5
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 16384  # 16KB stripe_unit, stripe_width = 80KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=5 m=2 (OSD domain), 16KB stripe_unit.
+
+  # Test 6: ISA Plugin - k=6, m=2, 128KB stripe_unit (stripe_width = 768KB)
+  # Note: k+m=8 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k6m2 128KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83590734
+      config:
+        ec_pool_name: test_ec_isa_k6m2_128k
+        metadata_pool_name: test_ec_meta_isa_k6m2_128k
+        image_name: test_ec_image_isa_k6m2_128k
+        image_size: 2G
+        ec_k: 6
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 131072  # 128KB stripe_unit, stripe_width = 768KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=6 m=2 (OSD domain), 128KB stripe_unit.
+
+  # Test 7: ISA Plugin - k=2, m=1, 4KB stripe_unit (stripe_width = 8KB)
+  # Note: This matches the exact bug scenario from BZ#2419667 (2+1 EC, 4KB stripe_unit)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m1 4KB stripe_unit (Bug scenario)
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m1_4k
+        metadata_pool_name: test_ec_meta_isa_k2m1_4k
+        image_name: test_ec_image_isa_k2m1_4k
+        image_size: 1G
+        ec_k: 2
+        ec_m: 1
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 4096  # 4KB stripe_unit, stripe_width = 8KB
+      desc: Test EC optimization with ISA plugin, k=2 m=1 (bug scenario), 4KB stripe_unit.
+
+  # Test 8: ISA Plugin - k=3, m=2, 16KB stripe_unit (stripe_width = 48KB)
+  # Note: k+m=5 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k3m2 16KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k3m2_16k
+        metadata_pool_name: test_ec_meta_isa_k3m2_16k
+        image_name: test_ec_image_isa_k3m2_16k
+        image_size: 2G
+        ec_k: 3
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 16384  # 16KB stripe_unit, stripe_width = 48KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=3 m=2 (OSD domain), 16KB stripe_unit.
+
+  # Test 9: ISA Plugin - k=2, m=2, 64KB stripe_unit (stripe_width = 128KB)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m2 64KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m2_64k
+        metadata_pool_name: test_ec_meta_isa_k2m2_64k
+        image_name: test_ec_image_isa_k2m2_64k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 65536  # 64KB stripe_unit, stripe_width = 128KB
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 64KB stripe_unit.
+
+  # Test 10: ISA Plugin - k=2, m=2, 8KB stripe_unit (stripe_width = 16KB)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m2 8KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m2_8k
+        metadata_pool_name: test_ec_meta_isa_k2m2_8k
+        image_name: test_ec_image_isa_k2m2_8k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 8192  # 8KB stripe_unit, stripe_width = 16KB
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 8KB stripe_unit.
+
+  # Test 11: ISA Plugin - k=2, m=2, 32KB stripe_unit (stripe_width = 64KB)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m2 32KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m2_32k
+        metadata_pool_name: test_ec_meta_isa_k2m2_32k
+        image_name: test_ec_image_isa_k2m2_32k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        stripe_unit: 32768  # 32KB stripe_unit, stripe_width = 64KB
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 32KB stripe_unit.
+
+  # ==========================================================================
+  # Jerasure Plugin Tests (Basic coverage)
+  # ==========================================================================
+
+  # Test 12: Jerasure Plugin - k=2, m=2, 16KB stripe_unit (stripe_width = 32KB)
+  - test:
+      name: EC Partial Write Optimization - Jerasure k2m2 16KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_jerasure_k2m2_16k
+        metadata_pool_name: test_ec_meta_jerasure_k2m2_16k
+        image_name: test_ec_image_jerasure_k2m2_16k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: jerasure
+        technique: reed_sol_van
+        stripe_unit: 16384  # 16KB stripe_unit, stripe_width = 32KB
+      desc: Test EC optimization with Jerasure plugin, k=2 m=2, 16KB stripe_unit.
+
+  # Test 13: Jerasure Plugin - k=4, m=2, 64KB stripe_unit (stripe_width = 256KB)
+  # Note: k+m=6 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - Jerasure k4m2 64KB stripe_unit
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83590734
+      config:
+        ec_pool_name: test_ec_jerasure_k4m2_64k
+        metadata_pool_name: test_ec_meta_jerasure_k4m2_64k
+        image_name: test_ec_image_jerasure_k4m2_64k
+        image_size: 2G
+        ec_k: 4
+        ec_m: 2
+        plugin: jerasure
+        technique: reed_sol_van
+        stripe_unit: 65536  # 64KB stripe_unit, stripe_width = 256KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with Jerasure plugin, k=4 m=2 (OSD domain), 64KB stripe_unit.
+
+  - test:
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83620448
+      desc: Verify ceph-bluestore-tool functionalities
+
+  - test:
+      name: ceph-objectstore-tool utility
+      module: test_objectstoretool_workflows.py
+      polarion-id: CEPH-83620448
+      desc: Verify ceph-objectstore-tool functionalities

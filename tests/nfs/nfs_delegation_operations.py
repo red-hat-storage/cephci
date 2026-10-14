@@ -942,11 +942,12 @@ def restore_delegation_ganesha_templates(
 
 
 def run_cephadm_shell(
-    node: CephNode, command: str, check_ec: bool = True
+    node: CephNode, command: str, check_ec: bool = True, use_cephadm: bool = True
 ) -> Tuple[str, str]:
+    prefix = "cephadm shell -- " if use_cephadm else ""
     return node.exec_command(
         sudo=True,
-        cmd="cephadm shell -- %s" % command,
+        cmd=prefix + command,
         check_ec=check_ec,
     )
 
@@ -1270,10 +1271,13 @@ def verify_cluster_delegation_on_nfs_nodes(
     )
 
 
-def _expect_export_delegation(cmd_host, nfs_name, export_name, expected):
+def _expect_export_delegation(
+    cmd_host, nfs_name, export_name, expected, use_cephadm=True
+):
     out, _ = run_cephadm_shell(
         cmd_host,
         "ceph nfs export get %s %s --format json" % (nfs_name, export_name),
+        use_cephadm=use_cephadm,
     )
     content = (out or "").strip()
     if not content:
@@ -1293,19 +1297,36 @@ def _expect_export_delegation(cmd_host, nfs_name, export_name, expected):
 
 
 def create_or_replace_export_with_delegation(
-    cmd_host, fs_name, nfs_name, export_name, export_path, delegation
+    cmd_host, fs_name, nfs_name, export_name, export_path, delegation, use_cephadm=True
 ):
+    """Create or replace an NFS export.
+
+    ``delegation=None`` omits ``--delegations`` on create (cluster default).
+    Other values (``none``, ``rw``, ``ro``) set ``--delegations`` explicitly.
+    """
     run_cephadm_shell(
         cmd_host,
         "ceph nfs export delete %s %s" % (nfs_name, export_name),
         check_ec=False,
+        use_cephadm=use_cephadm,
     )
+    if delegation is None:
+        run_cephadm_shell(
+            cmd_host,
+            "ceph nfs export create %s %s %s %s %s"
+            % (fs_name, nfs_name, export_name, fs_name, export_path),
+            use_cephadm=use_cephadm,
+        )
+        return
     run_cephadm_shell(
         cmd_host,
         "ceph nfs export create %s %s %s %s %s --delegations %s"
         % (fs_name, nfs_name, export_name, fs_name, export_path, delegation),
+        use_cephadm=use_cephadm,
     )
-    _expect_export_delegation(cmd_host, nfs_name, export_name, delegation)
+    _expect_export_delegation(
+        cmd_host, nfs_name, export_name, delegation, use_cephadm=use_cephadm
+    )
 
 
 def update_export_delegation(cmd_host, nfs_name, export_name, delegation):

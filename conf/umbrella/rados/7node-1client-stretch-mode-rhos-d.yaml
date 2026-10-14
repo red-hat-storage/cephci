@@ -1,0 +1,92 @@
+# Test Suite for deploying and testing Stretch mode.
+
+# Example of the cluster taken from the MDR deployment guide for ODF.
+# ref: https://access.redhat.com/documentation/en-us/red_hat_openshift_data_foundation/4.12/html/
+# configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads/metro-dr-solution#hardware_requirements
+
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_16
+        role:
+          - _admin
+          - installer
+          - mon
+          - alertmanager
+          - grafana
+          - prometheus
+      node2:
+        networks:
+          - provider_net_cci_15
+        role:
+          - mon
+          - mgr
+          - _admin
+          - osd
+          - osd-bak
+          - alertmanager
+          - grafana
+          - prometheus
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        networks:
+          - provider_net_cci_15
+        role:
+          - mon
+          - mgr
+          - nfs
+          - osd
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        networks:
+          - provider_net_cci_15
+        role:
+          - rgw
+          - osd
+          - mds
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        networks:
+          - provider_net_cci_13
+        role:
+          - mon
+          - _admin
+          - mgr
+          - osd
+          - osd-bak
+          - alertmanager
+          - grafana
+          - prometheus
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        networks:
+          - provider_net_cci_13
+        role:
+          - mon
+          - mgr
+          - osd
+          - nfs
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node7:
+        networks:
+          - provider_net_cci_13
+        role:
+          - osd
+          - rgw
+          - mds
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node8:
+        role:
+          - client

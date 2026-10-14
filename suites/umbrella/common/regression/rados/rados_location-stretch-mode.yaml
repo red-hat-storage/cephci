@@ -1,0 +1,260 @@
+# Stretch mode tests performing site down scenarios
+# Conf: conf/tentacle/common/13node-4client-single-site-regression.yaml
+# Deployment: suites/tentacle/common/regression/single-site-deploy-and-configure.yaml
+# This test case is Openstack only and should be executed an the end in serial single suite
+# execution pipeline
+
+tests:
+
+# serviceability tests to be run at the end of regression run
+# and before stretch mode tests
+  - test:
+      name: Mute ceph health alerts
+      polarion-id: CEPH-83573854
+      module: mute_alerts.py
+      desc: Mute health alerts
+
+  - test:
+      name: Replacement of a failed OSD host
+      module: test_pool_osd_recovery.py
+      polarion-id: CEPH-9408
+      config:
+        osd_host_fail: True
+      desc: Replacement of a failed OSD host with a healthy host
+
+  - test:
+      name: mon replacement test
+      polarion-id: CEPH-9407
+      module: test_mon_addition_removal.py
+      desc: Replace a Healthy Mon with a new MON
+
+  - test:
+      name: mon system tests
+      polarion-id: CEPH-9388
+      module: test_mon_system_operations.py
+      desc: Performing system tests with mon daemons
+
+# beginning of stretch-mode tests
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Deploy stretch Cluster
+      module: test_deploy_stretch_cluster_baremetal.py
+      polarion-id: CEPH-83573621
+      config:
+        stretch_rule_name: "stretch_rule"
+        site1:
+          name: "DC1"
+          hosts: ["node2", "node3", "node4", "node5", "node6"]
+        site2:
+          name: "DC2"
+          hosts: ["node7", "node8", "node9", "node10", "node11"]
+        site3:
+          name: "DC3"
+          hosts: ["node1"]
+      desc: Enables connectivity mode, deploys cluster with Stretch rule with tiebreaker node
+      abort-on-fail: true
+
+  - test:
+      name: Mon election strategies in stretch mode
+      polarion-id: CEPH-83573627
+      module: test_election_strategies.py
+      config:
+        stretch_mode: True
+      desc: Run Mon election strategies workflow for a stretch cluster
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      polarion-id: CEPH-83574972
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: Verify stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573630
+      config:
+        verify_forced_recovery: true
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        max_objs: 1000
+      desc: Verify forced recovery and healthy on a stretch configured cluster
+
+  - test:
+      name: test stretch Cluster site down with delay - Data site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83571705
+      config:
+        pool_name: test_stretch_pool9
+        shutdown_site: DC1
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+        add_network_delay: true
+      desc: Test the cluster when we have only 1 of 2 DC's surviving with network delay
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site down - tiebreaker site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83574974
+      config:
+        pool_name: test_stretch_pool5
+        shutdown_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test the cluster when the tiebreaker site is shut down
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster maintenance mode - tiebreaker site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool2
+        affected_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test the cluster when the tiebreaker site is moved to maintenance mode
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site reboot - Data site
+      module: test_stretch_site_reboot.py
+      polarion-id: CEPH-83574977
+      config:
+        pool_name: test_stretch_pool3
+        affected_site: DC1
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test the cluster when the data site is rebooted
+
+  - test:
+      name: test stretch Cluster site reboot - tiebreaker site
+      module: test_stretch_site_reboot.py
+      polarion-id: CEPH-83574977
+      config:
+        pool_name: test_stretch_pool4
+        affected_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test the cluster when the tiebreaker site is rebooted
+
+  - test:
+      name: Mon replacement on Data site
+      module: test_stretch_mon_replacements.py
+      polarion-id: CEPH-83574971
+      config:
+        pool_name: test_stretch_pool5
+        replacement_site: DC1
+        tiebreaker_mon_site_name: tiebreaker
+        add_mon_without_location: true
+        delete_pool: true
+      desc: Test stretch Cluster mon replacement - Data site
+
+  - test:
+      name: Mon replacement on tiebreaker site
+      module: test_stretch_mon_replacements.py
+      polarion-id: CEPH-83574971
+      config:
+        pool_name: test_stretch_pool6
+        replacement_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test stretch Cluster mon replacement - tiebreaker site
+
+  - test:
+      name: Netsplit Scenarios data-data sites
+      module: test_stretch_netsplit_scenarios.py
+      polarion-id: CEPH-83574979
+      config:
+        pool_name: test_stretch_pool8
+        netsplit_site: DC1
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test stretch Cluster netsplit scenario between data sites
+      comments: Active bug with netsplit scenarios - 2318975
+
+  - test:
+      name: Netsplit Scenarios data-tiebreaker sites
+      module: test_stretch_netsplit_scenarios.py
+      polarion-id: CEPH-83574979
+      config:
+        pool_name: test_stretch_pool7
+        netsplit_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
+
+  - test:
+      name: test stretch Cluster maintenance mode - data site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool1
+        affected_site: DC1
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test the cluster when the Data site is moved to maintenance mode
+
+  - test:
+      name: Negative scenarios - post-deployment
+      module: test_stretch_negative_scenarios.py
+      polarion-id: CEPH-83584499
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+      desc: Perform post-deployment negative tests on stretch mode
+
+  - test:
+      name: OSD and host replacement
+      module: test_stretch_osd_serviceability_scenarios.py
+      polarion-id: CEPH-83575474
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test stretch Cluster osd and Host replacement
+
+# PG log limit parameter cannot be unset,
+# this test should always run at the last
+  - test:
+      name: Limit PG log size
+      polarion-id: CEPH-83573252
+      module: test_pg_log_limit.py
+      desc: Verify PG log growth limit using pglog_hardlimit flag

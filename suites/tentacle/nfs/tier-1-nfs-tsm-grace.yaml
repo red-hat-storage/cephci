@@ -1,0 +1,187 @@
+#===============================================================================================
+#---    Test Suite for NFS-Ganesha TSM — grace / open-conflict   ---
+#===============================================================================================
+# Conf: conf/tentacle/nfs/1admin-12node-4client.yaml (>=4 NFS + >=3 clients)
+#   or baremetal with >=4 NFS roles / equivalent
+#
+# Purpose:
+#   Automate NFS-Ganesha TSM grace-period IO conflict validation.
+#   Extends grace (~90s via iptables -I) and checks open/lock/deleg reclaim
+#   behavior across Ganesha peers with a spare client holding state.
+#
+# Requirements:
+#   - >=4 NFS nodes (nfs_count: 4 — spare NFS + 3-daemon HA)
+#   - >=3 clients (mount clients + spare client open-hold)
+#   - Product build that renders enable_TSM / Tsm_Port in ganesha.conf
+#
+# Layout:
+#   1. Bootstrap + clients
+#   2. Grace IO open-conflict C01–C22 — test_nfs_tsm_grace_io.py
+#      (open/lock/deleg + pre-grace sticky C16–C22; NFSv4.2)
+#   3. Grace recover R01–R06 — test_nfs_tsm_grace_io.py (commented)
+#   4. Grace share-deny Rn4–DB5 — test_nfs_tsm_grace_share_deny.py (commented)
+#
+# Deploy / negative / record / delegation / integration live in
+# tier1-nfs-tsm-basic.yaml
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client.1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client.2
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node8
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client.3
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  #---------------------------------------------------------------------------------------------
+  # TSM feature tests
+  #---------------------------------------------------------------------------------------------
+  - test:
+      name: NFS TSM - Grace IO (open conflict)
+      module: tsm.test_nfs_tsm_grace_io.py
+      desc: TSM grace C01-C22 (open/lock/deleg + pre-grace sticky C16-C22)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+        nfs_count: 4
+        # workflows: ["TC-TSM-G-C01"]
+      comments: |
+        TC-TSM-G-C13 - IBMCEPH-18588
+        TC-TSM-G-C16 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C17 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C18 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C19 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C20 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C21 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C22 - IBMCEPH-19165, IBMCEPH-18586
+
+  - test:
+      name: NFS TSM - Grace recover (primary restart)
+      module: tsm.test_nfs_tsm_grace_io.py
+      desc: Primary restart chain R01–R06; sticky reclaim, grace opens, write-deleg conflict
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+        nfs_count: 4
+        # workflows: ["TC-TSM-G-R01"]
+      comments: |
+        TC-TSM-G-C13 - IBMCEPH-18588
+        TC-TSM-G-C16 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C17 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C18 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C19 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C20 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C21 - IBMCEPH-19165, IBMCEPH-18586
+        TC-TSM-G-C22 - IBMCEPH-19165, IBMCEPH-18586
+
+  - test:
+      name: NFS TSM - Grace share-deny (Rn4-DB5)
+      module: tsm.test_nfs_tsm_grace_share_deny.py
+      desc: Share-deny with-deleg Rn4/Rb4/Rw4 + Wn5..DB5 (delegations=rw)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+        nfs_count: 4
+        # workflows:
+        #   - "TC-TSM-G-SD-Rn4"
+        #   - "TC-TSM-G-SD-Rb4"

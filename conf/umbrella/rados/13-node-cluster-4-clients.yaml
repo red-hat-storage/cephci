@@ -1,0 +1,139 @@
+# Test Suite to test CIDR blocklisting of clients + every other generic rados test suite
+# Deployment for all the ceph daemons , with 5 mon's, 5 mgr's, 36 OSD daemons & 4 Client nodes
+# 12 x OSD hosts: 10 standard, 2 backup
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - shared_net_15
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+      node2:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+          - rgw
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        networks:
+          - shared_net_15
+        role:
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+          - rgw
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        networks:
+          - shared_net_15
+        role:
+          - mon
+          - mgr
+          - osd
+          - nfs
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+          - rgw
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node7:
+        networks:
+          - shared_net_2
+        role:
+          - client
+      node8:
+        networks:
+          - shared_net_15
+        role:
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node9:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+          - mon
+          - mgr
+        no-of-volumes: 4
+        disk-size: 15
+      node10:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+          - nfs
+        no-of-volumes: 4
+        disk-size: 15
+      node11:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node12:
+        networks:
+          - shared_net_15
+        role:
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node13:
+        networks:
+          - shared_net_15
+        role:
+          - osd-bak
+        no-of-volumes: 4
+        disk-size: 15
+      node14:
+        networks:
+          - shared_net_15
+        role:
+          - rgw
+          - mds
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node15:
+        networks:
+          - shared_net_2
+        role:
+          - client
+      node16:
+        networks:
+          - shared_net_5
+        role:
+          - client
+      node17:
+        networks:
+          - shared_net_5
+        role:
+          - client

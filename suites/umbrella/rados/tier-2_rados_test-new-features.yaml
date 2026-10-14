@@ -1,0 +1,598 @@
+# Suite is to be used to verify the 9.0 New features on 4 nodes
+# to be run in regression conf: 4-node-ec-cluster-1-client.yaml
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:  CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node6                     # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Verification of Bluestore Slow Ops params
+      desc: Verification of parameters around BLUESTORE_SLOW_OP_ALERT
+      module: test_health_warns.py
+      config:
+        param-check:
+          slow-ops: true
+      polarion-id: CEPH-83620333
+
+  - test:
+      name: Verification of Bluestore Stalled Reads params
+      desc: Verification of parameters around BLOCK_DEVICE_STALLED_READ_ALERT
+      module: test_health_warns.py
+      config:
+        param-check:
+          stalled-reads: true
+      polarion-id: CEPH-83620336
+
+  - test:
+      name: Track availability -MTBF,MTTR and Score check
+      desc: Verification of MTBF,MTTR and score data in the availability-status output
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case1
+  - test:
+      name: Track availability-multiple pools and logs check
+      desc: Verification of multiple pools  and log messages
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case2
+
+  - test:
+      name: Track availability-Recovery check
+      desc: Verification of track availability tests after recovery
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case3
+  - test:
+      name: Track availability- Backfill check
+      desc: Verification of track availability tests after backfill state
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case4
+  - test:
+      name: Track availability-Scrub operation check
+      desc: Verification of track availability tests after scrub operations
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case5
+
+  - test:
+      name: Track availability- PG split & merge check
+      desc: Verification of track availability tests by pg split & merge
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 128
+        case_to_run:
+          - case6
+  - test:
+      name: Track availability-Balancer check
+      desc: Verification of track availability tests by enabling the balancer
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case7
+  - test:
+      name: Track availability-enable_availability_tracking check
+      desc: Verification enable_availability_tracking parameter
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case8
+  - test:
+      name: Track availability- Mon operation check
+      desc: Verification of track availability tests by performing the mon operations
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case9
+  - test:
+      name: Track availability- clear-availability-status check
+      desc: Verification clear-availability-status command on pool
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case10
+  - test:
+      name: Track availability- Inconsistent object check
+      desc: Verification of track availability tests on inconsistent object pool
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case11
+  - test:
+      name: Track availability- Generating inactive PG
+      desc: Verification of track availability tests by generating inactive PG
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case12
+  - test:
+      name: Track availability- Reboot OSD node check
+      desc: Verification of track availability tests by rebooting the osd node
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case13
+  - test:
+      name: EC pool-Track availability -MTBF,MTTR and Score check
+      desc: Verification of MTBF,MTTR and score data in the availability-status output
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case1
+  - test:
+      name: EC pool-Track availability-multiple pools and logs check
+      desc: Verification of multiple pools  and log messages
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case2
+
+  - test:
+      name: EC pool-Track availability-Recovery check
+      desc: Verification of track availability tests after recovery
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case3
+  - test:
+      name: EC pool-Track availability- Backfill check
+      desc: Verification of track availability tests after backfill state
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case4
+  - test:
+      name: EC pool-Track availability-Scrub operation check
+      desc: Verification of track availability tests after scrub operations
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case5
+
+  - test:
+      name: EC pool-Track availability- PG split & merge check
+      desc: Verification of track availability tests by pg split & merge
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case6
+  - test:
+      name: EC pool-Track availability-Balancer check
+      desc: Verification of track availability tests by enabling the balancer
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case7
+  - test:
+      name: EC pool-Track availability-enable_availability_tracking check
+      desc: Verification enable_availability_tracking parameter
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case8
+  - test:
+      name: EC pool-Track availability- Mon operation check
+      desc: Verification of track availability tests by performing the mon operations
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case9
+  - test:
+      name: EC pool-Track availability- clear-availability-status check
+      desc: Verification clear-availability-status command on pool
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case10
+  - test:
+      name: EC pool-Track availability- Inconsistent object check
+      desc: Verification of track availability tests on inconsistent object pool
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case11
+  - test:
+      name: EC pool-Track availability- Generating inactive PG
+      desc: Verification of track availability tests by generating inactive PG
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case12
+  - test:
+      name: EC pool-Track availability- Reboot OSD node check
+      desc: Verification of track availability tests by rebooting the osd node
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        EC_pool:
+          create: true
+          pool_name: track_data_ec_pool
+          pg_num_max: 1
+          k: 2
+          m: 2
+          crush-failure-domain: osd
+        case_to_run:
+          - case13
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# setup - setup phase for bluestore compression tests
+#     --> Cephfs - replicated & EC
+#     --> RBD - replicated & EC
+#     --> RGW - replicated
+# scenario 12 - data integrity tests with rbd, rgw and cephfs
+# scenario 13 - compression algorithm tests with rbd, rgw and cephfs
+# scenario 14 - compression mode tests with rbd, rgw and cephfs
+
+  - test:
+      name: Bluestore compression v1 - compression mode tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-14
+
+  - test:
+      name: Bluestore compression v1 - data integrity tests
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-12
+
+  - test:
+      name: Bluestore compression v1 - compression algorithm tests
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-13
+
+  - test:
+      name: Bluestore compression v1 - compression required ratio tests
+      module: test_bluestore_comp_enhancements.py
+      desc: Bluestore compression v1 - compression required ratio tests
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-15
+
+  - test:
+      name: Bluestore compression v1 - OSD recovery tests with rbd, rgw and cephfs
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      abort-on-fail: true
+      config:
+        include_erasure_pools: true
+        scenarios_to_run:
+          - scenario-16

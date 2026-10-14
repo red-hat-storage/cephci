@@ -1515,7 +1515,7 @@ def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
     Use prefix_cephadm=True when running on installer (no host ceph binary).
     """
     if not prefix_cephadm:
-        check_nfs_daemons_removed_retry(client)
+        check_nfs_daemons_removed_retry(client, nfs_name)
     if nfs_name:
         ceph_version = get_ceph_version(client, prefix_cephadm=prefix_cephadm)
         if ceph_version and LooseVersion(ceph_version) >= LooseVersion("20.2.2-75"):
@@ -1523,14 +1523,33 @@ def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
 
 
 @retry(OperationFailedError, tries=30, delay=10, backoff=1)
-def check_nfs_daemons_removed_retry(client):
+def check_nfs_daemons_removed_retry(client, nfs_name=None):
     """
     Helper function to check if NFS daemons are removed.
     Raises OperationFailedError if daemons are still present (to trigger retry).
     Returns True if all daemons are removed.
+
+    When nfs_name is set, only that cluster's orch service is checked
+    (``ceph orch ls --service-name nfs.<name>``), so unrelated NFS services
+    do not block cleanup.
     """
     # We are increasing the timeout to 300 seconds to avoid the timeout error
     # with some of the QoS tests which were intermittently failing to cleanup
+    if nfs_name:
+        names = [nfs_name] if isinstance(nfs_name, str) else list(nfs_name)
+        for name in names:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=f"ceph orch ls --service-name nfs.{name}",
+                check_ec=False,
+            )
+            log.info(out)
+            out = (out or "").strip()
+            if out and "No services reported" not in out:
+                raise OperationFailedError(f"NFS service nfs.{name} still present")
+        log.info("NFS service(s) removed: %s", names)
+        return True
+
     out, _ = client.exec_command(sudo=True, cmd="ceph orch ls --service-type=nfs")
     log.info(out)
     out = out.strip()
@@ -1652,6 +1671,8 @@ def create_nfs_via_file_and_verify(
 
     try:
         pos_args = []
+        out, _ = installer_node.exec_command(sudo=True, cmd=f"cat {remote_spec}")
+        log.info("NFS orch spec %s:\n%s", remote_spec, (out or "").strip())
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
             input=remote_spec, check_ec=True, pos_args=pos_args
         )
@@ -1749,7 +1770,7 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
             log.error(
                 "\n \n NFS Ganesha services are still running after deletion trying again...... "
                 "Time remaining : -- %s seconds \n",
-                timeout - (w._attempt * w.interval),
+                int(max(0, timeout - (time() - w._start))),
             )
             log.debug("Current status: %s", result)
     if w.expired:

@@ -1,0 +1,453 @@
+# Suite contains basic Tier-2,Tier-3 and Tier-4 rados tests
+#===============================================================================================
+#------------------------------------------------------------------------------------------
+#----- Tier-2, Tier-3 and Tier-4 tests to verify the trim,PG and compaction verification ------
+#------------------------------------------------------------------------------------------
+# Conf: conf/tentacle/rados/7-node-cluster.yaml
+#
+#===============================================================================================
+# RHOS-d run duration: 120 mins
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Automatic trimming of osdmaps
+      desc: check for periodic trimming of osdmaps
+      module: test_osdmap_trim.py
+      polarion-id: CEPH-10046
+
+  - test:
+      name: Trimming of onodes
+      desc: check for the onode trimming in the cluster
+      module: test_osd_onode_trimming.py
+      polarion-id: CEPH-83575269
+
+  - test:
+      name: Inconsistent object pg check
+      desc: Inconsistent object pg check
+      module: test_osd_inconsistency_pg.py
+      polarion-id: CEPH-9924
+      config:
+        pool_name: Inconsistent_pool
+        pg_num_max: 1
+
+  - test:
+      name: Inconsistent object pg check using pool snapshot for RE pools
+      desc: Inconsistent object pg check using pool snapshot for RE pools
+      module: test_osd_snap_inconsistency_pg.py
+      polarion-id: CEPH-9942
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_snap_pool_re
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: Inconsistent object secondary pg check using pool snapshot
+      desc: Inconsistent object pg check using pool snapshot for RE pools for secondary OSD in PG
+      module: test_osd_snap_inconsistency_pg.py
+      polarion-id: CEPH-83571452
+      config:
+        test_secondary: true
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_snap_pool
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: OSD compaction with failures
+      module: test_osd_compaction.py
+      polarion-id: CEPH-11681
+      config:
+        omap_config:
+          pool_name: re_pool_large_omap
+          large_warn: true
+          obj_start: 0
+          obj_end: 5
+          normal_objs: 400
+          num_keys_obj: 200001
+        bench_config:
+          pool_name: re_pool_bench
+          pg_num: 128
+          pgp_num: 128
+        ceph_client_omap_tests:
+          run_rbd_stress: true
+          run_cephfs_stress: true
+          rbd_config:
+            pool_name: rbd_stress
+            num_pools: 3
+            images_per_pool: 3
+            snaps_per_image: 5
+            parallel_jobs: 3
+            duration: 10
+          cephfs_config:
+            fs_name: cephfs
+            num_subvols: 3
+            files_per_subvol: 5
+            snaps_per_subvol: 5
+            parallel_jobs: 3
+            volume_group: cfsstress
+            duration: 10
+      desc: Perform OSD compaction with & without failures, client stress tests, and OSD restart validation
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario 1 - Validate default compression values
+# scenario 2 - Enables bluestore write v2
+# scenario 3 - Compression mode tests with allocation hints
+
+  - test:
+      name: Bluestore data compression v2 - enable bluestore write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+
+  - test:
+      name: Bluestore data compression v2 - compression mode tests with allocation hints
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-3
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario-1: Validate basic compression workflow
+# scenario-2: uncompressed pool to compressed pool conversion
+# scenario-3: Compressed pool to uncompressed pool conversion
+# scenario-4: Enable compressesion at OSD level and disable compression at pool level
+# scenario-5: Validate pools inherit compression configurations from OSD
+# scenario-6: Validate data migration between compressed pools
+# scenario-7: Validate OSD replacement
+# run duration - 0:01:29
+  - test:
+      name: Bluestore data compression v2 - basic workflow
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-1
+
+# run duration - 0:07:04
+  - test:
+      name: Bluestore data compression - uncompressed pool to compressed pool conversion - write v2
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "snappy"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-2
+
+# run duration - 0:07:19
+  - test:
+      name: Bluestore data compression - compressed pool to uncompressed pool conversion - write v2
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-3
+
+# run duration - 0:03:48
+  - test:
+      name: Bluestore data compression v2 - pool level compression override osd level compression
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "snappy"
+        delete_pool: True
+        scenarios_to_run:
+          - scenario-4
+
+# run duration - 0:04:03
+  - test:
+      name: Bluestore data compression v2 - pools inherit compression settings from OSD
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-5
+
+# run duration - 0:03:07
+  - test:
+      name: Bluestore data compression v2 - Validate data migration between compressed pools
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "snappy"
+        scenarios_to_run:
+          - scenario-6
+
+# run duration - 0:07:54
+  - test:
+      name: Bluestore data compression v2 - Validate OSD replacement
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-7
+
+  # Commenting test case due to BZ :- https://bugzilla.redhat.com/show_bug.cgi?id=2412464
+  #  - test:
+  #        name: Bluestore data recompression - overwrite tests - pool level compression tests
+  #        module: test_bluestore_comp_enhancements.py
+  #        desc: Positive workflows for bluestore data compression enhancements
+  #        polarion-id: CEPH-83620071
+  #        abort-on-fail: true
+  #        config:
+  #          pool_level_compression: True
+  #          scenarios_to_run:
+  #            - scenario-4
+  #          recompression_min_gain_to_test:
+  #            - 0.9
+  #            - 1.2
+  #            - 1.5
+  #          object_sizes_to_test:
+  #            - 750000
+  #            - 92000
+
+# Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
+# Tests:-
+# scenario-5: Test minimum allocation size variations
+# scenario-6: Test blob sizes by writing IO to a compressed pool and validating blob
+#   sizes match configured minimum blob size
+# scenario-7: Test target_blob_size validation based on object allocation hints
+# scenario-8: Disable bluestore_write_v2 and validate
+# scenario-9: Test compression validation when primary OSD is down
+# scenario-10: Test compression validation when primary OSD host is down
+# scenario-11: Test compression validation when primary OSD host is restarted after IO
+#scenario-8: Disable bluestore_write_v2 and validate
+
+# run duration - 0:11:59
+  - test:
+      name: Bluestore data recompression write v2 - min alloc size tests 1
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "snappy"
+        pool_level_compression: True
+        scenarios_to_run:
+          - scenario-5
+        min_alloc_size_to_test:
+          - 4096
+        min_alloc_size_variations:
+          - 2000
+          - -2000
+
+# run duration - 0:10:23
+  - test:
+      name: Bluestore data recompression write v2 - min alloc size tests 2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zlib"
+        pool_level_compression: True
+        scenarios_to_run:
+          - scenario-5
+        min_alloc_size_to_test:
+          - 8192
+        min_alloc_size_variations:
+          - 4000
+          - -4000
+
+# run duration - 0:09:56.
+  - test:
+      name: Bluestore data recompression write v2 - target blob size variation test
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "snappy"
+        scenarios_to_run:
+          - scenario-6
+
+# run duration - 0:11:15
+  - test:
+      name: Bluestore blob size tests - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-7
+
+# run duration - 0:28:05
+  - test:
+      name: Bluestore OSD down during IO scenario - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "snappy"
+        scenarios_to_run:
+          - scenario-9
+
+# run duration - 0:17:50
+  - test:
+      name: Bluestore OSD host down during IO scenario - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zlib"
+        scenarios_to_run:
+          - scenario-10
+
+# run duration - 0:21:47
+  - test:
+      name: Bluestore compression validation post OSD restart - write v2
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        compression_algorithm: "zstd"
+        scenarios_to_run:
+          - scenario-11
+
+# run duration - 0:06:31
+  - test:
+      name: Bluestore disable bluestore_write_v2 and validate
+      module: test_bluestore_comp_enhancements.py
+      desc: Positive workflows for bluestore data compression enhancements
+      polarion-id: CEPH-83620071
+      config:
+        scenarios_to_run:
+          - scenario-8

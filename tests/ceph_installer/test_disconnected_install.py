@@ -48,8 +48,10 @@ def run(ceph_cluster, **kw):
     # Execute cephadm preflight
     exec_cephadm_preflight(installer=installer, build_type="rh")
 
-    # Get registry credentials
-    reg_details = get_registry_details()
+    # Get registry credentials (host from bootstrap image or custom-config)
+    overrides = (kw.get("test_data") or {}).get("custom_config_dict") or {}
+    registry_host = overrides.get("bootstrap-registry")
+    reg_details = get_registry_details(registry=registry_host, image=bootstrap_image)
     registry = reg_details["registry-url"]
     reg_username = reg_details["registry-username"]
     reg_password = reg_details["registry-password"]

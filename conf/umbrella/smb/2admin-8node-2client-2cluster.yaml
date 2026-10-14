@@ -1,0 +1,63 @@
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - mds
+        no-of-volumes: 3
+        disk-size: 15
+      node2:
+        role:
+          - mon
+          - mgr
+          - osd
+          - mds
+        no-of-volumes: 3
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - mgr
+          - osd
+          - mds
+        no-of-volumes: 3
+        disk-size: 15
+      node4:
+        role:
+          - client
+  - ceph-cluster:
+      name: ceph-sec
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - smb
+        no-of-volumes: 3
+        disk-size: 15
+      node2:
+        role:
+          - mon
+          - mgr
+          - osd
+          - smb
+        no-of-volumes: 3
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - mgr
+          - osd
+          - smb
+        no-of-volumes: 3
+        disk-size: 15
+      node4:
+        role:
+          - client
