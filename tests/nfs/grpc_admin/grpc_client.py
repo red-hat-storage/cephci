@@ -16,7 +16,6 @@ from time import sleep
 
 from looseversion import LooseVersion
 
-from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import get_ceph_version
 from utility.log import Log
@@ -157,6 +156,15 @@ def grpcurl_exec(node, cmd):
     out, err = node.exec_command(sudo=True, cmd=cmd, check_ec=False)
     out = out or ""
     err = err or ""
+    if int(getattr(node, "exit_status", 0)) != 0:
+        log.error(
+            "grpcurl failed rc=%s stderr=%r stdout=%r",
+            node.exit_status,
+            err,
+            out,
+        )
+        return out, err, False
+
     err_l = err.lower()
     combined = f"{out}\n{err}".lower()
 
@@ -176,9 +184,7 @@ def grpcurl_exec(node, cmd):
             log.error("grpcurl client failure (%r): %s", marker, err or out)
             return out, err, False
 
-    failed = "rpc error" in combined or (
-        err and "error" in err_l and "desc" in err_l
-    )
+    failed = "rpc error" in combined or (err and "error" in err_l and "desc" in err_l)
     return out, err, not failed
 
 
@@ -256,9 +262,7 @@ GRPCURL_CLIENT_ERROR_MARKERS = (
 )
 
 
-def expect_rpc_error(
-    client_node, target, method, data, plaintext=True, tls_paths=None
-):
+def expect_rpc_error(client_node, target, method, data, plaintext=True, tls_paths=None):
     """
     Return True when grpcurl reports a client or RPC error (negative helper).
 
@@ -274,8 +278,15 @@ def expect_rpc_error(
         tls_paths=tls_paths,
     )
     combined = f"{out}\n{err}".lower()
-    has_error = not ok or any(marker in combined for marker in GRPCURL_CLIENT_ERROR_MARKERS)
-    log.info("RPC negative check ok=%s has_error=%s combined=%s", ok, has_error, combined[:300])
+    has_error = not ok or any(
+        marker in combined for marker in GRPCURL_CLIENT_ERROR_MARKERS
+    )
+    log.info(
+        "RPC negative check ok=%s has_error=%s combined=%s",
+        ok,
+        has_error,
+        combined[:300],
+    )
     return has_error
 
 
@@ -498,9 +509,7 @@ def add_export(
 ):
     """Call ExportService.AddExport; return (ok, raw)."""
     method = "exportService.ExportService/AddExport"
-    data = json.dumps(
-        {"file_path": file_path, "export_expression": export_expression}
-    )
+    data = json.dumps({"file_path": file_path, "export_expression": export_expression})
     ok, out, err = invoke_grpc_method(
         client_node,
         target,
@@ -545,9 +554,7 @@ def update_export(
 ):
     """Call ExportService.UpdateExport; return (ok, raw)."""
     method = "exportService.ExportService/UpdateExport"
-    data = json.dumps(
-        {"file_path": file_path, "export_expression": export_expression}
-    )
+    data = json.dumps({"file_path": file_path, "export_expression": export_expression})
     ok, out, err = invoke_grpc_method(
         client_node,
         target,
@@ -617,7 +624,9 @@ def client_stats(
         plaintext=plaintext,
         tls_paths=tls_paths,
     )
-    log.info("ClientStats.%s(%s) response: %s", rpc_name, ipaddr, out[:500] if out else out)
+    log.info(
+        "ClientStats.%s(%s) response: %s", rpc_name, ipaddr, out[:500] if out else out
+    )
     return ok, out or err
 
 
@@ -829,9 +838,7 @@ def copy_nfs_grpc_certs(
                 cert_fp.flush()
                 cert_fp.close()
 
-            client_node.exec_command(
-                sudo=True, cmd=f"chmod 600 {dest_dir}/client.key"
-            )
+            client_node.exec_command(sudo=True, cmd=f"chmod 600 {dest_dir}/client.key")
             for name in GRPC_CERT_FILES:
                 out, _ = client_node.exec_command(
                     sudo=True,
@@ -843,9 +850,7 @@ def copy_nfs_grpc_certs(
                         f"Cert file missing or empty on client: {dest_dir}/{name}"
                     )
 
-            log.info(
-                "NFS gRPC certs ready on %s:%s", client_node.hostname, dest_dir
-            )
+            log.info("NFS gRPC certs ready on %s:%s", client_node.hostname, dest_dir)
             return dest_dir
         except Exception as exc:
             last_error = exc
@@ -928,7 +933,10 @@ def setup_grpc_transport(config, client_nodes, admin_node, nfs_name):
 
     if "use_tls" in config:
         use_mtls = bool(config["use_tls"])
-        log.info("NFS gRPC transport: %s (use_tls config)", "mTLS" if use_mtls else "plaintext")
+        log.info(
+            "NFS gRPC transport: %s (use_tls config)",
+            "mTLS" if use_mtls else "plaintext",
+        )
     else:
         version = resolve_ceph_version(client_nodes[0], admin_node)
         use_mtls = grpc_requires_mtls(version)
@@ -1030,9 +1038,11 @@ def prepare_cluster_nodes(ceph_cluster, config):
     )
 
 
-def ensure_subvolume_group(client, fs_name, group="ganeshagroup"):
-    """Create NFS subvolume group if needed."""
-    Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=group)
+def ensure_subvolume_group(client, fs_name, group="ganeshagroup", ceph_cluster=None):
+    """Create NFS subvolume group if needed (wraps nfs_operations.ensure_ganeshagroup)."""
+    from tests.nfs.nfs_operations import ensure_ganeshagroup
+
+    ensure_ganeshagroup(client, fs_name=fs_name, group=group, ceph_cluster=ceph_cluster)
 
 
 def first_export_id(exports):

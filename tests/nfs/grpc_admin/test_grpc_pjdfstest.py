@@ -3,11 +3,11 @@ Run pjdfstest POSIX compliance checks on an NFS mount with gRPC-enabled Ganesha.
 """
 
 from cli.exceptions import ConfigError, OperationFailedError
+from tests.nfs.grpc_admin.grpc_client import ensure_subvolume_group, open_grpc_firewall
 from tests.nfs.grpc_admin.grpc_deploy import (
     apply_nfs_container_image,
     resolve_nfs_container_image,
 )
-from tests.nfs.grpc_admin.grpc_client import ensure_subvolume_group, open_grpc_firewall
 from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
 from utility.log import Log
 
@@ -54,7 +54,7 @@ def run(ceph_cluster, **kw):
 
     try:
         open_grpc_firewall(nfs_node)
-        ensure_subvolume_group(client, fs_name)
+        ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
         setup_nfs_cluster(
             clients=[client],
             nfs_server=nfs_node.hostname,
@@ -79,26 +79,27 @@ def run(ceph_cluster, **kw):
             "2>/dev/null | tail -5"
         )
         out, err = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+        rc = int(getattr(client, "exit_status", 1))
         log.info("pjdfstest output:\n%s", out)
         combined = f"{out}\n{err}".lower()
-        if "files=0" in combined or "can't open" in combined:
-            raise OperationFailedError(
-                "pjdfstest not installed or no tests ran — install pjdfstest on client"
-            )
-        if "failed" in combined and "files=" in combined:
-            # Allow some known NFS pjdfstest failures; fail on total test miss.
-            if "ok" not in combined and "passed" not in combined:
-                raise OperationFailedError(f"pjdfstest smoke failed: {out}")
+        if (
+            rc != 0
+            or "result: fail" in combined
+            or ("failed" in combined and "files=" in combined)
+        ):
+            raise OperationFailedError(f"pjdfstest smoke failed rc={rc}: {out}\n{err}")
+        if "files=" not in combined:
+            raise OperationFailedError("pjdfstest produced no TAP summary")
+        log.info("TEST PASSED - pjdfstest smoke")
         return 0
-    except (ConfigError, OperationFailedError):
-        raise
+    except (ConfigError, OperationFailedError) as exc:
+        log.error("pjdfstest failed: %s", exc)
+        return 1
     except Exception as exc:
         log.error("pjdfstest failed: %s", exc)
         return 1
     finally:
         try:
-            cleanup_cluster(
-                client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-            )
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

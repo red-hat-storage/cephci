@@ -6,6 +6,7 @@ Measures latency of gRPC admin/export RPCs under light client load.
 
 import statistics
 import time
+from shlex import quote
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
@@ -15,10 +16,10 @@ from tests.nfs.grpc_admin.grpc_client import (
     first_export_id,
     get_client_ids,
     get_grace_period,
+    grpc_invoke_kwargs,
     install_grpcurl,
     list_grpc_services,
     open_grpc_firewall,
-    grpc_invoke_kwargs,
     prepare_cluster_nodes,
     remove_export,
     resolve_grpc_target,
@@ -48,21 +49,22 @@ def _percentile(samples, pct):
     return ordered[idx]
 
 
-def _mount_extra_clients(clients, nfs_server, nfs_mount, nfs_export, nfs_version, nfs_port):
+def _mount_extra_clients(
+    clients, nfs_server, nfs_mount, nfs_export, nfs_version, nfs_port
+):
     """Mount NFS on additional clients to increase ShowClients cardinality."""
     # setup_nfs_cluster creates exports as ``{export}_0`` (e.g. /export_0).
     export_path = nfs_export if nfs_export.endswith("_0") else f"{nfs_export}_0"
     for client in clients[1:]:
-        client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mount}", check_ec=False)
+        client.exec_command(sudo=True, cmd=f"mkdir -p {quote(nfs_mount)}")
         mount_cmd = (
             f"mount -t nfs -o vers={nfs_version},proto=tcp,port={nfs_port} "
-            f"{nfs_server}:{export_path} {nfs_mount}"
+            f"{nfs_server}:{export_path} {quote(nfs_mount)}"
         )
-        client.exec_command(sudo=True, cmd=mount_cmd, check_ec=False)
+        client.exec_command(sudo=True, cmd=mount_cmd)
         client.exec_command(
             sudo=True,
-            cmd=f"touch {nfs_mount}/perf_client_{client.hostname}",
-            check_ec=False,
+            cmd=f"touch {quote(nfs_mount)}/perf_client_{client.hostname}",
         )
 
 
@@ -101,7 +103,7 @@ def run(ceph_cluster, **kw):
     try:
         install_grpcurl(client)
         open_grpc_firewall(nfs_node, grpc_port)
-        ensure_subvolume_group(client, fs_name)
+        ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
         setup_nfs_cluster(
             clients=clients[:1],
             nfs_server=nfs_server,
@@ -120,21 +122,19 @@ def run(ceph_cluster, **kw):
         if operation == "admin_perf_under_load":
             latencies = []
             for _ in range(samples):
-                ms, (ok, _) = _timed_call(
-                    list_grpc_services, client, target, **kw_tls
-                )
+                ms, (ok, _) = _timed_call(list_grpc_services, client, target, **kw_tls)
                 if ok:
                     latencies.append(ms)
-                ms, (ok, _, _) = _timed_call(
-                    get_grace_period, client, target, **kw_tls
-                )
+                ms, (ok, _, _) = _timed_call(get_grace_period, client, target, **kw_tls)
                 if ok:
                     latencies.append(ms)
             if len(latencies) < samples:
                 raise OperationFailedError("Insufficient successful RPC samples")
             p50 = statistics.median(latencies)
             p99 = _percentile(latencies, 99)
-            log.info("Admin perf: p50=%.1fms p99=%.1fms (n=%s)", p50, p99, len(latencies))
+            log.info(
+                "Admin perf: p50=%.1fms p99=%.1fms (n=%s)", p50, p99, len(latencies)
+            )
             if p99 > p99_max_ms:
                 raise OperationFailedError(
                     f"p99 latency {p99:.1f}ms exceeds threshold {p99_max_ms}ms"
@@ -152,9 +152,7 @@ def run(ceph_cluster, **kw):
                     "oflag=dsync 2>/dev/null",
                     check_ec=False,
                 )
-                ms, (ok, _, _) = _timed_call(
-                    get_client_ids, client, target, **kw_tls
-                )
+                ms, (ok, _, _) = _timed_call(get_client_ids, client, target, **kw_tls)
                 if ok:
                     latencies.append(ms)
             if not latencies:
@@ -213,7 +211,9 @@ def run(ceph_cluster, **kw):
                     show_exports, client, target, **kw_tls
                 )
                 if not ok:
-                    raise OperationFailedError("ShowExports failed during export_ops_perf")
+                    raise OperationFailedError(
+                        "ShowExports failed during export_ops_perf"
+                    )
                 latencies.append(ms_show)
                 # Match the temporary export — never remove an unmatched primary export.
                 export_id = None
@@ -245,6 +245,7 @@ def run(ceph_cluster, **kw):
         else:
             raise ConfigError(f"Unknown perf operation: {operation}")
 
+        log.info("TEST PASSED - gRPC perf operation=%s target=%s", operation, target)
         return 0
 
     except (ConfigError, OperationFailedError) as exc:
@@ -258,8 +259,6 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(
-                client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-            )
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

@@ -11,10 +11,10 @@ from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.grpc_admin.grpc_client import (
     DEFAULT_GRPC_PORT,
     ensure_subvolume_group,
+    grpc_invoke_kwargs,
     install_grpcurl,
     list_grpc_services,
     open_grpc_firewall,
-    grpc_invoke_kwargs,
     prepare_cluster_nodes,
     resolve_grpc_target,
     setup_grpc_transport,
@@ -64,15 +64,10 @@ def _verify_ganesha_grpc_binary(nfs_node, container_id):
         "| grep -i grpc_server | head -3",
     )
     if not out.strip():
-        log.warning(
-            "Could not confirm ganesha.nfsd links gRPC — checking process args"
+        raise OperationFailedError(
+            "Could not confirm ganesha.nfsd gRPC linkage in NFS container"
         )
-        out2, _ = _exec_in_container(
-            nfs_node, container_id, "ps aux | grep ganesha | grep -v grep"
-        )
-        log.info("ganesha process: %s", out2.strip())
-    else:
-        log.info("ganesha gRPC linkage hint:\n%s", out.strip())
+    log.info("ganesha gRPC linkage hint:\n%s", out.strip())
 
 
 def _dbus_show_exports(nfs_node, container_id):
@@ -83,9 +78,7 @@ def _dbus_show_exports(nfs_node, container_id):
 
 
 def _verify_proto_compile(nfs_node, container_id, config):
-    proto_dir = config.get(
-        "proto_dir", "/usr/share/nfs-ganesha/grpc/proto"
-    )
+    proto_dir = config.get("proto_dir", "/usr/share/nfs-ganesha/grpc/proto")
     out, err = _exec_in_container(
         nfs_node,
         container_id,
@@ -111,7 +104,7 @@ def _verify_proto_compile(nfs_node, container_id, config):
             log.info("SKIP: protoc unavailable or proto compile failed in container")
             return -1
         raise OperationFailedError(f"Proto compile failed: {out} {err}")
-    log.info("Proto compile smoke passed")
+    log.info("TEST PASSED - proto compile smoke")
     return 0
 
 
@@ -147,7 +140,7 @@ def run(ceph_cluster, **kw):
     try:
         install_grpcurl(client)
         open_grpc_firewall(nfs_node, grpc_port)
-        ensure_subvolume_group(client, fs_name)
+        ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
         setup_nfs_cluster(
             clients=[client],
             nfs_server=nfs_server,
@@ -178,9 +171,7 @@ def run(ceph_cluster, **kw):
         elif operation == "verify_dual_stack":
             dbus_out, dbus_err = _dbus_show_exports(nfs_node, container_id)
             if not dbus_out and "error" in (dbus_err or "").lower():
-                raise OperationFailedError(
-                    f"D-Bus ShowExports failed: {dbus_err}"
-                )
+                raise OperationFailedError(f"D-Bus ShowExports failed: {dbus_err}")
             log.info("D-Bus ShowExports: %s", dbus_out[:200])
             ok, services = list_grpc_services(client, target, **kw_tls)
             if not ok or not services:
@@ -193,6 +184,7 @@ def run(ceph_cluster, **kw):
         else:
             raise ConfigError(f"Unknown build operation: {operation}")
 
+        log.info("TEST PASSED - gRPC build operation=%s", operation)
         return 0
 
     except (ConfigError, OperationFailedError) as exc:
@@ -206,8 +198,6 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(
-                client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-            )
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

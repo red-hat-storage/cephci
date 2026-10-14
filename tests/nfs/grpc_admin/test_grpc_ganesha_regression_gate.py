@@ -51,9 +51,7 @@ def _run_module_chain(ceph_cluster, modules, suite_config):
         if rc != 0:
             failures.append(f"{mod_name} rc={rc}")
     if failures:
-        raise OperationFailedError(
-            f"Regression gate failed: {', '.join(failures)}"
-        )
+        raise OperationFailedError(f"Regression gate failed: {', '.join(failures)}")
     return 0
 
 

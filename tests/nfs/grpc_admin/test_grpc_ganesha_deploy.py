@@ -12,10 +12,10 @@ Operations:
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.grpc_admin.grpc_client import (
     ensure_subvolume_group,
+    grpc_invoke_kwargs,
     install_grpcurl,
     open_grpc_firewall,
     prepare_cluster_nodes,
-    grpc_invoke_kwargs,
     resolve_grpc_target,
     setup_grpc_transport,
 )
@@ -46,11 +46,10 @@ def run(ceph_cluster, **kw):
     if operation == "set_nfs_image":
         image = resolve_nfs_container_image(config)
         if not image:
-            log.info(
-                "No nfs_container_image in config — using default cephadm NFS image"
-            )
-            return 0
+            log.info("SKIP: no nfs_container_image in config")
+            return -1
         apply_nfs_container_image(installer, image)
+        log.info("TEST PASSED - set nfs_container_image=%s", image)
         return 0
 
     if operation == "deploy_grpc_certs":
@@ -96,7 +95,7 @@ def run(ceph_cluster, **kw):
         try:
             install_grpcurl(client)
             open_grpc_firewall(nfs_node)
-            ensure_subvolume_group(client, fs_name)
+            ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
             setup_nfs_cluster(
                 clients=[client],
                 nfs_server=nfs_server,
@@ -117,7 +116,7 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     f"gRPC bootstrap verification failed on {target}"
                 )
-            log.info("gRPC bootstrap verification passed on %s", target)
+            log.info("TEST PASSED - gRPC bootstrap verification on %s", target)
             return 0
         finally:
             try:

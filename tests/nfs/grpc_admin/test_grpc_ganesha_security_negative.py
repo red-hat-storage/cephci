@@ -11,12 +11,12 @@ from tests.nfs.grpc_admin.grpc_client import (
     DEFAULT_GRPC_UDS_PATH,
     ensure_subvolume_group,
     expect_rpc_error,
+    grpc_invoke_kwargs,
     install_grpcurl,
     invoke_grpc_method,
     list_grpc_services,
     list_grpc_services_uds,
     open_grpc_firewall,
-    grpc_invoke_kwargs,
     prepare_cluster_nodes,
     resolve_grpc_target,
     setup_grpc_transport,
@@ -53,7 +53,11 @@ def run(ceph_cluster, **kw):
 
     tls_blocked = operation in ("verify_tls_required", "verify_tls_bad_cert")
     # Only skip when suite explicitly marks blocked; mTLS tests set skip_if_blocked: false.
-    if tls_blocked and config.get("blocked", False) and config.get("skip_if_blocked", True):
+    if (
+        tls_blocked
+        and config.get("blocked", False)
+        and config.get("skip_if_blocked", True)
+    ):
         log.info(
             "SKIP: %s pending mTLS cert deployment in gRPC admin suite",
             operation,
@@ -80,7 +84,7 @@ def run(ceph_cluster, **kw):
         install_grpcurl(client)
         install_grpcurl(nfs_node)
         open_grpc_firewall(nfs_node, grpc_port)
-        ensure_subvolume_group(client, fs_name)
+        ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
 
         setup_nfs_cluster(
             clients=[client],
@@ -114,9 +118,7 @@ def run(ceph_cluster, **kw):
 
         elif operation == "verify_loopback_discovery":
             loopback_target = f"127.0.0.1:{grpc_port}"
-            ok, services = list_grpc_services(
-                nfs_node, loopback_target, **kw_tls
-            )
+            ok, services = list_grpc_services(nfs_node, loopback_target, **kw_tls)
             if not ok or not services:
                 raise OperationFailedError(
                     "gRPC discovery failed on loopback — "
@@ -187,9 +189,7 @@ def run(ceph_cluster, **kw):
                         uds_path,
                     )
                     return -1
-                raise OperationFailedError(
-                    f"UDS gRPC discovery failed on {uds_path}"
-                )
+                raise OperationFailedError(f"UDS gRPC discovery failed on {uds_path}")
 
         elif operation == "verify_admin_auth_matrix":
             if transport["plaintext"]:
@@ -257,9 +257,7 @@ def run(ceph_cluster, **kw):
                 )
 
         elif operation == "verify_timeout":
-            method = config.get(
-                "rpc_method", "nfsService.GetNfsGrace/GetGracePeriod"
-            )
+            method = config.get("rpc_method", "nfsService.GetNfsGrace/GetGracePeriod")
             max_time = float(config.get("max_time_sec", 0.001))
             ok, out, err = invoke_grpc_method(
                 client,
@@ -269,20 +267,22 @@ def run(ceph_cluster, **kw):
                 **kw_tls,
             )
             combined = f"{out}\n{err}".lower()
-            if ok and "deadline" not in combined:
-                log.info(
-                    "Fast RPC completed within timeout — acceptable for GetGracePeriod"
-                )
-            elif not ok or "deadline" in combined or "timeout" in combined:
+            if "deadline" in combined or "timeout" in combined or not ok:
                 log.info("Timeout behavior observed as expected")
             else:
                 raise OperationFailedError(
-                    f"Unexpected timeout test outcome: {out} {err}"
+                    "Expected DEADLINE_EXCEEDED/timeout with max_time_sec=%s: %s %s"
+                    % (max_time, out, err)
                 )
 
         else:
             raise ConfigError(f"Unknown security operation: {operation}")
 
+        log.info(
+            "TEST PASSED - gRPC security operation=%s target=%s",
+            operation,
+            target,
+        )
         return 0
 
     except (ConfigError, OperationFailedError) as exc:
@@ -296,8 +296,6 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(
-                client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-            )
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

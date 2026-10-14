@@ -8,7 +8,10 @@
 # D-Bus remains the cephadm management path until a later release; this suite
 # only asserts that Ganesha gRPC APIs work as expected.
 #
-# Requires a gRPC-built NFS image — set nfs_container_image in Jenkins/config.
+# Requires a gRPC-built NFS image. Set via Jenkins custom-config, e.g.:
+#   nfs_container_image: <registry>/<path>:<tag>
+# Or uncomment nfs_container_image under "gRPC API - Set NFS Container Image".
+# Without it, set_nfs_image is SKIPPED and later TCs use the default cephadm NFS image.
 #
 # Modules: tests/nfs/grpc_admin/
 # Related smoke: tier1-nfs-ganesha-grpc.yaml (core nfsService RPCs)

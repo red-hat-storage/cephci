@@ -19,9 +19,9 @@ from tests.nfs.grpc_admin.grpc_client import (
     get_client_ids,
     get_grace_period,
     get_session_ids,
+    grpc_invoke_kwargs,
     install_grpcurl,
     open_grpc_firewall,
-    grpc_invoke_kwargs,
     prepare_cluster_nodes,
     resolve_grpc_target,
     setup_grpc_transport,
@@ -67,9 +67,7 @@ def _save_json(path, payload):
 
 
 def _get_nfs_container_id(installer, nfs_name):
-    out = CephAdm(installer).ceph.orch.ps(
-        service_name=f"nfs.{nfs_name}", format="json"
-    )
+    out = CephAdm(installer).ceph.orch.ps(service_name=f"nfs.{nfs_name}", format="json")
     processes = json.loads(out) if out else []
     if not processes:
         return None
@@ -134,7 +132,9 @@ def _compare_snapshots(baseline, current, keys):
             base_val = baseline.get(section, {}).get(key)
             cur_val = current.get(section, {}).get(key)
             if base_val != cur_val:
-                diffs.append(f"{section}.{key}: baseline={base_val!r} current={cur_val!r}")
+                diffs.append(
+                    f"{section}.{key}: baseline={base_val!r} current={cur_val!r}"
+                )
     return diffs
 
 
@@ -182,7 +182,7 @@ def run(ceph_cluster, **kw):
     try:
         install_grpcurl(client)
         open_grpc_firewall(nfs_node)
-        ensure_subvolume_group(client, fs_name)
+        ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
 
         setup_nfs_cluster(
             clients=[client],
@@ -248,9 +248,7 @@ def run(ceph_cluster, **kw):
                 )
             diffs = _compare_snapshots(baseline, current, compare_keys)
             if "show_clients" in dbus_keys or "show_exports" in dbus_keys:
-                diffs.extend(
-                    _compare_snapshots(baseline, current, dbus_keys)
-                )
+                diffs.extend(_compare_snapshots(baseline, current, dbus_keys))
             if diffs:
                 for diff in diffs:
                     log.error("Parity diff: %s", diff)
@@ -262,6 +260,7 @@ def run(ceph_cluster, **kw):
         else:
             raise ConfigError(f"Unknown parity operation: {operation}")
 
+        log.info("TEST PASSED - gRPC parity operation=%s", operation)
         return 0
 
     except (ConfigError, OperationFailedError) as exc:
@@ -275,8 +274,6 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(
-                client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-            )
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

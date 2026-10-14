@@ -11,6 +11,7 @@ cephadm instance path under ``/var/lib/ceph/<fsid>/nfs.<name>.../etc/ganesha/cer
 
 import os
 import time
+from shlex import quote
 
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
@@ -48,21 +49,15 @@ def apply_nfs_container_image(installer, image):
 
     cmd = (
         f"cephadm shell -- ceph config set mgr "
-        f"{NFS_CONTAINER_IMAGE_KEY} {image}"
+        f"{NFS_CONTAINER_IMAGE_KEY} {quote(image)}"
     )
-    out, err = installer.exec_command(sudo=True, cmd=cmd, check_ec=False)
-    if err and "error" in err.lower():
-        raise OperationFailedError(
-            f"Failed to set NFS container image '{image}': {err or out}"
-        )
+    installer.exec_command(sudo=True, cmd=cmd)
     log.info("Set %s to %s", NFS_CONTAINER_IMAGE_KEY, image)
 
 
 def get_nfs_container_id(installer, nfs_name):
     """Return container_id for the first nfs.<nfs_name> daemon."""
-    out = CephAdm(installer).ceph.orch.ps(
-        service_name=f"nfs.{nfs_name}", format="json"
-    )
+    out = CephAdm(installer).ceph.orch.ps(service_name=f"nfs.{nfs_name}", format="json")
     processes = __import__("json").loads(out) if out else []
     if not processes:
         return None
@@ -155,10 +150,11 @@ def copy_grpc_certs_to_nfs_instances(
 
     for inst_dir in instance_dirs:
         dest = os.path.join(inst_dir, NFS_GANESHA_CERTS_REL)
-        nfs_node.exec_command(sudo=True, cmd=f"mkdir -p {dest}", check_ec=False)
-        cmd = f"cp -af {cert_source}/. {dest}/"
-        nfs_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
-        out, _ = nfs_node.exec_command(sudo=True, cmd=f"ls -la {dest}", check_ec=False)
+        nfs_node.exec_command(sudo=True, cmd=f"mkdir -p {quote(dest)}")
+        nfs_node.exec_command(
+            sudo=True, cmd=f"cp -af {quote(cert_source)}/. {quote(dest)}/"
+        )
+        out, _ = nfs_node.exec_command(sudo=True, cmd=f"ls -la {quote(dest)}")
         log.info(
             "Copied certs to %s on %s:\n%s",
             dest,
@@ -171,8 +167,8 @@ def copy_grpc_certs_to_nfs_instances(
             raise OperationFailedError(
                 "installer node required to restart nfs service after cert copy"
             )
-        restart_cmd = f"cephadm shell -- ceph orch restart nfs.{nfs_name}"
-        installer.exec_command(sudo=True, cmd=restart_cmd, check_ec=False)
+        restart_cmd = f"cephadm shell -- ceph orch restart nfs.{quote(nfs_name)}"
+        installer.exec_command(sudo=True, cmd=restart_cmd)
         log.info(
             "Restarted nfs.%s; waiting %ss for ganesha to reload certs",
             nfs_name,

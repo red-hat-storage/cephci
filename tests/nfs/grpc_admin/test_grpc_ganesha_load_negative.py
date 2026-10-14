@@ -11,10 +11,10 @@ from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.grpc_admin.grpc_client import (
     DEFAULT_GRPC_PORT,
     ensure_subvolume_group,
+    grpc_invoke_kwargs,
     install_grpcurl,
     list_grpc_services,
     open_grpc_firewall,
-    grpc_invoke_kwargs,
     prepare_cluster_nodes,
     resolve_grpc_target,
     setup_grpc_transport,
@@ -68,7 +68,7 @@ def run(ceph_cluster, **kw):
     try:
         install_grpcurl(client)
         open_grpc_firewall(nfs_node, grpc_port)
-        ensure_subvolume_group(client, fs_name)
+        ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
         setup_nfs_cluster(
             clients=[client],
             nfs_server=nfs_server,
@@ -88,12 +88,10 @@ def run(ceph_cluster, **kw):
             per_worker = max(1, iterations // workers)
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = [
-                    pool.submit(
-                        _spam_list_services, client, target, per_worker, kw_tls
-                    )
+                    pool.submit(_spam_list_services, client, target, per_worker, kw_tls)
                     for _ in range(workers)
                 ]
-                results = [f.result() for f in futures]
+                results = [f.result(timeout=600) for f in futures]
             total_ok = sum(results)
             log.info(
                 "Load test: %s/%s list calls succeeded across %s workers",
@@ -105,9 +103,11 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     "gRPC port stopped listening after load test"
                 )
-            if total_ok < per_worker * workers * 0.5:
+            min_ok = max(1, int(per_worker * workers * 0.9))
+            if total_ok < min_ok:
                 raise OperationFailedError(
-                    "Too many grpcurl failures under load — daemon may be unstable"
+                    "grpcurl failures under load exceed threshold (%s/%s)"
+                    % (total_ok, per_worker * workers)
                 )
             time.sleep(2)
             ok, services = list_grpc_services(client, target, **kw_tls)
@@ -118,6 +118,7 @@ def run(ceph_cluster, **kw):
         else:
             raise ConfigError(f"Unknown load operation: {operation}")
 
+        log.info("TEST PASSED - gRPC load operation=%s target=%s", operation, target)
         return 0
 
     except (ConfigError, OperationFailedError) as exc:
@@ -131,8 +132,6 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(
-                client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-            )
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

@@ -6,6 +6,7 @@ gRPC interfaces only — D-Bus parity and NFS protocol regression are out of sco
 """
 
 import json
+from shlex import quote
 from time import sleep
 
 from cli.ceph.ceph import Ceph
@@ -26,11 +27,11 @@ from tests.nfs.grpc_admin.grpc_client import (
     get_client_ids,
     get_grace_period,
     get_session_ids,
+    grpc_invoke_kwargs,
     install_grpcurl,
     list_grpc_services,
     open_grpc_firewall,
     prepare_cluster_nodes,
-    grpc_invoke_kwargs,
     remove_client,
     remove_export,
     resolve_grpc_target,
@@ -89,11 +90,17 @@ def _cleanup_additional_mounts(mount_points):
     for client, mount_point in mount_points:
         try:
             client.exec_command(
-                sudo=True, cmd=f"rm -rf {mount_point}/*", check_ec=False
+                sudo=True,
+                cmd=f"rm -rf -- {quote(mount_point)}/*",
+                check_ec=False,
+                timeout=300,
             )
             Unmount(client).unmount(mount_point)
             client.exec_command(
-                sudo=True, cmd=f"rm -rf {mount_point}", check_ec=False
+                sudo=True,
+                cmd=f"rm -rf -- {quote(mount_point)}",
+                check_ec=False,
+                timeout=300,
             )
         except Exception as exc:
             log.warning("Cleanup error on %s: %s", client.hostname, exc)
@@ -201,9 +208,7 @@ def run(ceph_cluster, **kw):
         return skip_rc
 
     if operation == "shutdown" and not config.get("allow_shutdown", False):
-        log.info(
-            "SKIP: shutdown is destructive — set allow_shutdown: true to enable"
-        )
+        log.info("SKIP: shutdown is destructive — set allow_shutdown: true to enable")
         return -1
 
     nfs_name = config.get("nfs_name", "cephfs-nfs")
@@ -231,7 +236,9 @@ def run(ceph_cluster, **kw):
         for c in clients:
             install_grpcurl(c)
         open_grpc_firewall(nfs_node, int(config.get("grpc_port", DEFAULT_GRPC_PORT)))
-        ensure_subvolume_group(client, fs_name, subvolume_group)
+        ensure_subvolume_group(
+            client, fs_name, subvolume_group, ceph_cluster=ceph_cluster
+        )
 
         if setup_cluster:
             setup_nfs_cluster(
@@ -266,13 +273,15 @@ def run(ceph_cluster, **kw):
         elif operation == "list_services":
             ok, services = list_grpc_services(client, target, **kw_tls)
             require_all = bool(config.get("require_all_services", False))
-            if not ok or not verify_expected_services(services, require_all=require_all):
+            if not ok or not verify_expected_services(
+                services, require_all=require_all
+            ):
                 raise OperationFailedError("Expected gRPC services not discovered")
 
         elif operation == "get_grace_period":
-            ok, ingrace, _ = get_grace_period(client, target, **kw_tls)
-            if not ok:
-                raise OperationFailedError("GetGracePeriod RPC failed")
+            ok, ingrace, raw = get_grace_period(client, target, **kw_tls)
+            if not ok or not isinstance(ingrace, bool):
+                raise OperationFailedError(f"GetGracePeriod invalid response: {raw}")
             log.info("Grace period state ingrace=%s", ingrace)
 
         elif operation in GRACE_EVENT_OPS:
@@ -310,14 +319,18 @@ def run(ceph_cluster, **kw):
             sleep(int(config.get("client_settle_sleep", 10)))
 
             ok, client_ids, _ = get_client_ids(client, target, **kw_tls)
-            if not ok:
-                raise OperationFailedError("GetClientIds RPC failed")
+            if not ok or not client_ids:
+                raise OperationFailedError(
+                    "GetClientIds failed or returned empty list with active mounts"
+                )
             log.info("Active client IDs: %s", client_ids)
 
             if operation == "show_clients_and_sessions":
                 ok, session_ids, _ = get_session_ids(client, target, **kw_tls)
-                if not ok:
-                    raise OperationFailedError("GetSessionIds RPC failed")
+                if not ok or not session_ids:
+                    raise OperationFailedError(
+                        "GetSessionIds failed or returned empty list with active mounts"
+                    )
                 log.info("Active session IDs: %s", session_ids)
 
         elif operation == "get_client_ids":
@@ -379,12 +392,8 @@ def run(ceph_cluster, **kw):
                 file_path = config["export_config_path"]
                 _write_export_config(nfs_node, file_path, content)
             else:
-                file_path = _stage_export_config(
-                    nfs_node, nfs_name, filename, content
-                )
-            ok, raw = add_export(
-                client, target, file_path, expression, **kw_tls
-            )
+                file_path = _stage_export_config(nfs_node, nfs_name, filename, content)
+            ok, raw = add_export(client, target, file_path, expression, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"AddExport failed: {raw}")
             ok, exports, _ = show_exports(client, target, **kw_tls)
@@ -426,19 +435,17 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(f"RemoveExport({export_id}) failed: {raw}")
             sleep(2)
             ok, exports, _ = show_exports(client, target, **kw_tls)
-            remaining_ids = [
-                e.get("exportId", e.get("export_id")) for e in exports
-            ]
+            remaining_ids = [e.get("exportId", e.get("export_id")) for e in exports]
             if int(export_id) in [int(i) for i in remaining_ids if i is not None]:
                 raise OperationFailedError(
                     f"Export {export_id} still present after RemoveExport"
                 )
-            log.info("RemoveExport(%s) succeeded; remaining=%s", export_id, remaining_ids)
+            log.info(
+                "RemoveExport(%s) succeeded; remaining=%s", export_id, remaining_ids
+            )
 
         elif operation == "update_export":
-            filename = config.get(
-                "export_config_filename", "grpc_update_export.conf"
-            )
+            filename = config.get("export_config_filename", "grpc_update_export.conf")
             expression = config.get("export_expression", "EXPORT")
             content = config.get("export_config_content")
             export_id = config.get("export_id")
@@ -448,14 +455,12 @@ def run(ceph_cluster, **kw):
                     raise OperationFailedError(
                         f"ShowExports required for update_export: {raw}"
                     )
-                export_id = export_id if export_id is not None else first_export_id(
-                    exports
+                export_id = (
+                    export_id if export_id is not None else first_export_id(exports)
                 )
                 if export_id is None:
                     raise OperationFailedError("No export_id for UpdateExport")
-                ok, payload, raw = display_export(
-                    client, target, export_id, **kw_tls
-                )
+                ok, payload, raw = display_export(client, target, export_id, **kw_tls)
                 if not ok:
                     raise OperationFailedError(
                         f"DisplayExport({export_id}) failed before update: {raw}"
@@ -465,11 +470,7 @@ def run(ceph_cluster, **kw):
                     or payload.get("pseudo_path")
                     or config.get("update_pseudo", export_path)
                 )
-                full_path = (
-                    payload.get("fullPath")
-                    or payload.get("full_path")
-                    or "/"
-                )
+                full_path = payload.get("fullPath") or payload.get("full_path") or "/"
                 user_id = config.get(
                     "fsal_user_id",
                     f"nfs.{nfs_name}.{fs_name}.{subvolume_group}.0",
@@ -490,12 +491,8 @@ def run(ceph_cluster, **kw):
                 file_path = config["export_config_path"]
                 _write_export_config(nfs_node, file_path, content)
             else:
-                file_path = _stage_export_config(
-                    nfs_node, nfs_name, filename, content
-                )
-            ok, raw = update_export(
-                client, target, file_path, expression, **kw_tls
-            )
+                file_path = _stage_export_config(nfs_node, nfs_name, filename, content)
+            ok, raw = update_export(client, target, file_path, expression, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"UpdateExport failed: {raw}")
             # Best-effort verify via DisplayExport
@@ -503,9 +500,7 @@ def run(ceph_cluster, **kw):
             if export_id is None and exports:
                 export_id = first_export_id(exports)
             if export_id is not None:
-                ok, payload, raw = display_export(
-                    client, target, export_id, **kw_tls
-                )
+                ok, payload, raw = display_export(client, target, export_id, **kw_tls)
                 if not ok:
                     raise OperationFailedError(
                         f"DisplayExport after UpdateExport failed: {raw}"
@@ -531,7 +526,9 @@ def run(ceph_cluster, **kw):
             ok, mgr_clients, raw = show_clients(client, target, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"ClientMgr.ShowClients failed: {raw}")
-            log.info("ClientMgr.ShowClients count=%s: %s", len(mgr_clients), mgr_clients)
+            log.info(
+                "ClientMgr.ShowClients count=%s: %s", len(mgr_clients), mgr_clients
+            )
 
         elif operation == "add_client":
             ipaddr = config.get("client_ip", clients[-1].ip_address)
@@ -578,7 +575,9 @@ def run(ceph_cluster, **kw):
                 client, target, "TrimEnableDisable", data=data, **kw_tls
             )
             if not ok:
-                raise OperationFailedError(f"TrimEnableDisable(enable=true) failed: {raw}")
+                raise OperationFailedError(
+                    f"TrimEnableDisable(enable=true) failed: {raw}"
+                )
 
         elif operation == "trim_disable":
             data = json.dumps({"enable": False})
@@ -591,13 +590,9 @@ def run(ceph_cluster, **kw):
                 )
 
         elif operation == "malloc_trace":
-            filename = config.get(
-                "malloc_trace_file", "/tmp/ganesha_malloc_trace.out"
-            )
+            filename = config.get("malloc_trace_file", "/tmp/ganesha_malloc_trace.out")
             data = json.dumps({"filename": filename})
-            ok, raw = admin_rpc(
-                client, target, "MallocTrace", data=data, **kw_tls
-            )
+            ok, raw = admin_rpc(client, target, "MallocTrace", data=data, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"MallocTrace failed: {raw}")
 
@@ -625,9 +620,7 @@ def run(ceph_cluster, **kw):
             if not ok:
                 raise OperationFailedError(f"ShowExports failed: {raw}")
             export_id = config.get("export_id", first_export_id(exports))
-            ok, raw = export_stats(
-                client, target, "StatusStats", **kw_tls
-            )
+            ok, raw = export_stats(client, target, "StatusStats", **kw_tls)
             if not ok:
                 raise OperationFailedError(f"StatusStats failed: {raw}")
             if export_id is not None:
@@ -642,9 +635,7 @@ def run(ceph_cluster, **kw):
                     raise OperationFailedError(
                         f"ExportStats IO RPC failed for export {export_id}: {raw}"
                     )
-            ok, raw = export_stats(
-                client, target, "GetNFSIO", **kw_tls
-            )
+            ok, raw = export_stats(client, target, "GetNFSIO", **kw_tls)
             if not ok:
                 raise OperationFailedError(f"GetNFSIO failed: {raw}")
             log.info("ExportStats smoke passed")
@@ -672,6 +663,7 @@ def run(ceph_cluster, **kw):
         else:
             raise ConfigError(f"Unknown operation: {operation}")
 
+        log.info("TEST PASSED - gRPC API operation=%s target=%s", operation, target)
         return 0
 
     except (ConfigError, OperationFailedError) as exc:
