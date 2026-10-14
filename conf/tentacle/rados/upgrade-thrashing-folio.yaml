@@ -1,0 +1,345 @@
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public: ['10.64.91.0/27']
+      nodes:
+        - hostname: folio01
+          ip: 10.64.91.5
+          id: node1
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - client
+        - hostname: folio02
+          ip: 10.64.91.6
+          id: node2
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - _admin
+            - installer
+            - mon
+            - mgr
+            - mds
+            - nfs
+            - rgw
+            - alertmanager
+            - grafana
+            - prometheus
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: folio03
+          ip: 10.64.91.7
+          id: node3
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mon
+            - mgr
+            - mds
+            - nfs
+            - rgw
+            - _admin
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: folio04
+          ip: 10.64.91.8
+          id: node4
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mon
+            - mgr
+            - mds
+            - nfs
+            - rgw
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: folio05
+          ip: 10.64.91.9
+          id: node5
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mon
+            - mds
+            - nfs
+            - rgw
+            - crash
+            - alertmanager
+            - grafana
+            - prometheus
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: folio06
+          ip: 10.64.91.10
+          id: node6
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - client
+        - hostname: folio07
+          ip: 10.64.91.11
+          id: node7
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - client
+        - hostname: folio08
+          ip: 10.64.91.12
+          id: node8
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mon
+            - mds
+            - nfs
+            - rgw
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+        - hostname: folio09
+          ip: 10.64.91.13
+          id: node9
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - client
+        - hostname: folio10
+          ip: 10.64.91.14
+          id: node10
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - client
+        - hostname: folio11
+          ip: 10.64.91.15
+          id: node11
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mds
+            - nfs
+            - rgw
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        - hostname: folio12
+          ip: 10.64.91.16
+          id: node12
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mds
+            - nfs
+            - rgw
+            - crash
+          volumes:
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        - hostname: folio13
+          ip: 10.64.91.17
+          id: node13
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mds
+            - nfs
+            - rgw
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        - hostname: folio14
+          ip: 10.64.91.18
+          id: node14
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - mds
+            - nfs
+            - rgw
+            - crash
+          volumes:
+            - /dev/sda
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/nvme0n1
+        - hostname: folio15
+          ip: 10.64.91.19
+          id: node15
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio16
+          ip: 10.64.91.20
+          id: node16
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio17
+          ip: 10.64.91.21
+          id: node17
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio18
+          ip: 10.64.91.22
+          id: node18
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio19
+          ip: 10.64.91.23
+          id: node19
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio20
+          ip: 10.64.91.24
+          id: node20
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio21
+          ip: 10.64.91.25
+          id: node21
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio22
+          ip: 10.64.91.26
+          id: node22
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+        - hostname: folio23
+          ip: 10.64.91.27
+          id: node23
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
+        - hostname: folio24
+          ip: 10.64.91.28
+          id: node24
+          root_private_key: ~/.ssh/id_rsa
+          role:
+            - osd
+            - crash
+          volumes:
+            - /dev/nvme0n1
+            - /dev/nvme1n1
+            - /dev/nvme2n1
+            - /dev/nvme3n1
+            - /dev/nvme4n1
+            - /dev/nvme5n1
+            - /dev/nvme6n1
+            - /dev/nvme7n1
