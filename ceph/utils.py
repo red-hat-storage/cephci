@@ -9,6 +9,7 @@ from json import loads
 from pathlib import Path
 from time import mktime, sleep
 from typing import Tuple
+from urllib.parse import parse_qs, urlparse
 
 import requests
 import yaml
@@ -94,9 +95,71 @@ def _create_ocpvirt_non_root_datavolume(pvc_job):
     )
 
 
+def cleanup_ibmc_reserved_ips(ibmc_client, vpc_name, pattern):
+    """
+    Delete the unattached reserved IPs created for a run, in the subnets of the VPC.
+
+    A reserved IP is matched the same way as the instances of the run: its name
+    must contain the pattern. VM names are derived by the pipeline as
+    "<cluster-name>-<instances-name>-<run-id>-<node>" (for example
+    "ceph-pri-rgw-up17-ab12c-node1"), so reserved IPs created by CephCI (for
+    example ingress VIPs) should embed the same name, like
+    "ceph-pri-rgw-up17-ab12c-ingress-vip".
+
+    Args:
+         ibmc_client  authenticated VpcV1 service
+         vpc_name     name of the VPC holding the subnets
+         pattern      instances-name of the run
+
+    Returns:
+         True when all the matching reserved IPs are deleted, else False
+    """
+    if not pattern:
+        log.warning("Empty pattern, skipping the reserved IP cleanup")
+        return False
+
+    def _get_all(call, key, **kwargs):
+        records, start = [], None
+        while True:
+            if start:
+                kwargs["start"] = start
+            result = call(**kwargs).get_result()
+            records += result[key]
+            if "next" not in result:
+                return records
+            query = parse_qs(urlparse(result["next"]["href"]).query)
+            start = query["start"][0]
+
+    matched = deleted = 0
+    for subnet in _get_all(ibmc_client.list_subnets, "subnets"):
+        if subnet["vpc"]["name"] != vpc_name:
+            continue
+
+        for rip in _get_all(
+            ibmc_client.list_subnet_reserved_ips, "reserved_ips", subnet_id=subnet["id"]
+        ):
+            name = rip["name"]
+            if pattern not in name or rip.get("target"):
+                continue
+
+            matched += 1
+            log.info(f"Deleting reserved IP {rip['address']} ({name})")
+            resp = ibmc_client.delete_subnet_reserved_ip(
+                subnet_id=subnet["id"], id=rip["id"]
+            )
+            if resp.get_status_code() != 204:
+                log.warning(f"Failed to delete reserved IP {rip['address']}")
+                continue
+            deleted += 1
+
+    log.info(f"Reserved IPs for '{pattern}': {matched} matched, {deleted} deleted")
+    return matched == deleted
+
+
 def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, custom_config=None):
     """
-    Clean up the DNS records, instance and volumes that matches the given pattern.
+    Clean up the DNS records, instance, volumes and reserved IPs that match the
+    given pattern.
 
     Args:
          ibm_cred     global configuration file(ibm)
@@ -148,6 +211,12 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, custom_config=None):
             )
             p.spawn(vsi.delete, dns_zone_name, ibmc["dns_svc_id"])
             counter += 1
+
+    # Instances are gone by now, so only the VPC level reserved IPs are left
+    try:
+        cleanup_ibmc_reserved_ips(ibmc_client, vpc_name, pattern)
+    except Exception as err:
+        log.warning(f"Failed to cleanup reserved IPs with pattern {pattern}: {err}")
 
     log.info(f"Done cleaning up nodes with pattern {pattern}")
 
