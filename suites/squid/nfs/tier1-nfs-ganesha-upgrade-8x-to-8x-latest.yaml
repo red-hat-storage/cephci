@@ -1,14 +1,14 @@
 ##############################################################################################
 # Tier-Level: 1
 # Test-Suite: tier1-nfs-ganesha-upgrade-8x-to-8x-latest.yaml
-# Scenario: Upgrade IBM 8.1(GA) cluster to IBM 8.1(Latest) with NFS-Ganesha in RHEL9
+# Scenario: Upgrade IBM 8.0(GA/released) cluster to IBM 8.1(Latest) with NFS-Ganesha in RHEL9
 #
-# Cluster Configuration: Conf: conf/reef/nfs/1admin-3client-7node.yaml
+# Cluster Configuration: Conf: conf/squid/nfs/1admin-7node-3client.yaml
 #
 # Test Steps:
-# - Deploy IBM 8.1(latest) cluster in RHEL 9
-# - Deploy IBM 8.1 client
-# - Upgrade cluster along with NFS-Ganesha IOs parllel on IBM 8.1
+# - Deploy IBM 8.0(GA/released) cluster in RHEL 9
+# - Deploy clients on the 8.0 baseline
+# - Upgrade cluster to IBM 8.1(Latest) along with NFS-Ganesha IOs in parallel
 ################################################################################################
 tests:
   - test:
@@ -18,8 +18,8 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Bootstrap Ceph 8.x(latest) cluster and deploy services with label placements.
-      desc: Bootstrap Ceph 8.x(latest) cluster and deploy services with label placements.
+      name: Bootstrap Ceph 8.0(GA) cluster and deploy services with label placements.
+      desc: Bootstrap Ceph 8.0(GA/released) cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -29,7 +29,7 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 8.1
+                rhcs-version: 8.0
                 release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
@@ -236,6 +236,20 @@ tests:
               dd_command_size_in_M: 10
               exports_number: 4
               loop_count: 4
+
+  - test:
+      name: NFS CephX key rotation ceph nfs cluster rotate key
+      module: test_nfs_cephx_key_rotation.py
+      desc: NFS export stays mounted post nfs cluster key rotate
+      polarion-id: CEPH-83633001
+      abort-on-fail: false
+      config:
+        setup: false
+        nfs_version: 4.1
+        clients: 1
+        nfs_name: cephfs-nfs
+        nfs_mount: /mnt/nfs
+        nfs_export: /export_0
 
   - test:
       name: nfs multiple operations - post_upgrade
