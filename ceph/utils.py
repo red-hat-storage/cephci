@@ -1131,16 +1131,24 @@ def create_ocpvirt_ceph_nodes(
         ocp_creds: Auth-only credential file with globals["ocpvirt-credentials"].
         run_id: Unique id for the run.
         instances_name: Optional name prefix for instances.
-        custom_config: CLI overrides (ocpvirt_namespace, ocpvirt_profile, batch sizes).
+        custom_config: CLI overrides (ocpvirt_namespace, ocpvirt_profile /
+            ocpvirt_cpu+ocpvirt_memory, batch sizes).
     """
     batch_cfg = process_ocpvirt_custom_config(custom_config)
     pvc_batch_size = batch_cfg["pvc_batch_size"]
     vm_batch_size = batch_cfg["vm_batch_size"]
     profile = batch_cfg.get("ocpvirt_profile")
+    cpu = batch_cfg.get("ocpvirt_cpu")
+    memory = batch_cfg.get("ocpvirt_memory")
+    sizing = (
+        f", cpu={cpu}, memory={memory}"
+        if cpu is not None and memory is not None
+        else (f", profile={profile}" if profile else "")
+    )
     log.info(
         "Creating OCP Virtualization instances "
         f"(pvc_batch_size={pvc_batch_size}, vm_batch_size={vm_batch_size}"
-        + (f", profile={profile}" if profile else "")
+        + sizing
         + ")"
     )
     ocp_cred = resolve_ocpvirt_credentials(ocp_creds, custom_config)
@@ -1293,7 +1301,9 @@ def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
             storage_class=params.get("storage_class"),
             network=params.get("network"),
             precreated_volume_names=precreated_volume_names,
-            instancetype=params.get("instancetype"),
+            instancetype=params.get("instancetype") or "",
+            cpu=params.get("cpu"),
+            memory=params.get("memory"),
         )
         vm.role = params["role"]
         vm.root_login = params["root-login"]
