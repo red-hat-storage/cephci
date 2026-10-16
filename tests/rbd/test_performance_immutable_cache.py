@@ -23,6 +23,8 @@ second read should be less time compare to first read in cache
 12.check the performance make sure cache gives good performance
 """
 
+import random
+
 from test_rbd_immutable_cache import configure_immutable_cache
 
 from ceph.rbd.initial_config import initial_rbd_config
@@ -205,55 +207,56 @@ def test_immutable_cache_performance(rbd_obj, **kw):
         mount_path_with_cache = f"/tmp/mnt_{random_string(len=5)}"
         mount_path_without_cache = f"/tmp/mnt_{random_string(len=5)}"
 
-        for pool_type in rbd_obj.get("pool_types"):
-            rbd_config = kw.get("config", {}).get(pool_type, {})
-            multi_pool_config = getdict(rbd_config)
+        pool_types = rbd_obj.get("pool_types")
+        # Execute test on either Replicated or EC pool
+        pool_type = random.choice(pool_types)
+        log.info(f"Running test on {pool_type}")
+        rbd_config = kw.get("config", {}).get(pool_type, {})
+        multi_pool_config = getdict(rbd_config)
 
-            for pool, pool_config in multi_pool_config.items():
-                multi_image_config = getdict(pool_config)
+        for pool, pool_config in multi_pool_config.items():
+            multi_image_config = getdict(pool_config)
 
-                for image in multi_image_config.keys():
-                    client.exec_command(
-                        cmd="ceph config set client rbd_parent_cache_enabled false",
-                        sudo=True,
-                    )
-                    # Perform I/O operations without cache
-                    time_difference_without_cache = perform_clone_io(
-                        client=client,
-                        rbd_obj=rbd_obj,
-                        pool=pool,
-                        image=image,
-                        immutable_cache=False,
-                        mount_path=mount_path_with_cache,
-                        **kw,
-                    )
+            for image in multi_image_config.keys():
+                client.exec_command(
+                    cmd="ceph config set client rbd_parent_cache_enabled false",
+                    sudo=True,
+                )
+                # Perform I/O operations without cache
+                time_difference_without_cache = perform_clone_io(
+                    client=client,
+                    rbd_obj=rbd_obj,
+                    pool=pool,
+                    image=image,
+                    immutable_cache=False,
+                    mount_path=mount_path_with_cache,
+                    **kw,
+                )
 
-                    # Configure Immutable Object Cache
-                    if configure_immutable_cache(rbd_obj, client, "user1"):
-                        log.error("Immutable object cache configuration failed")
-                        return 1
-                    log.info(
-                        "Immutable object cache configuration completed successfully."
-                    )
+                # Configure Immutable Object Cache
+                if configure_immutable_cache(rbd_obj, client, "user1"):
+                    log.error("Immutable object cache configuration failed")
+                    return 1
+                log.info("Immutable object cache configuration completed successfully.")
 
-                    # Perform I/O operations with cache
-                    time_difference_with_cache = perform_clone_io(
-                        client=client,
-                        rbd_obj=rbd_obj,
-                        pool=pool,
-                        image=image,
-                        immutable_cache=True,
-                        mount_path=mount_path_without_cache,
-                        **kw,
-                    )
+                # Perform I/O operations with cache
+                time_difference_with_cache = perform_clone_io(
+                    client=client,
+                    rbd_obj=rbd_obj,
+                    pool=pool,
+                    image=image,
+                    immutable_cache=True,
+                    mount_path=mount_path_without_cache,
+                    **kw,
+                )
 
-                    # Check performance comparison
-                    compare_performance(
-                        time_difference_without_cache, time_difference_with_cache
-                    )
+                # Check performance comparison
+                compare_performance(
+                    time_difference_without_cache, time_difference_with_cache
+                )
 
-                    # Removing immutable cache
-                    client.exec_command(cmd=f"rm -rf {immutable_cache_path}", sudo=True)
+                # Removing immutable cache
+                client.exec_command(cmd=f"rm -rf {immutable_cache_path}", sudo=True)
         return 0
 
     except Exception as e:

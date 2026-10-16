@@ -33,6 +33,7 @@ Test Case Flow:
 """
 
 import json
+import random
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict, random_string
@@ -63,190 +64,187 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
 
-        for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
+    for pool, pool_config in multi_pool_config.items():
+        if "data_pool" in pool_config.keys():
+            _ = pool_config.pop("data_pool")
 
-            # 3. write some data to that image using fio or rbd bench
-            fio = kw.get("config", {}).get("fio", {})
-            for image, image_config in pool_config.items():
-                io_config = {
-                    "rbd_obj": rbd,
-                    "client": client,
-                    "size": fio["size"],
-                    "do_not_create_image": True,
-                    "config": {
-                        "file_size": fio["size"],
-                        "file_path": [f"/mnt/mnt_{random_string(len=5)}/file"],
-                        "get_time_taken": True,
-                        "image_spec": [f"{pool}/{image}"],
-                        "operations": {
-                            "fs": "ext4",
-                            "io": True,
-                            "mount": True,
-                            "map": True,
-                        },
-                        "skip_mkfs": False,
-                        "cmd_timeout": 2400,
-                        "io_type": "write",
+        # 3. write some data to that image using fio or rbd bench
+        fio = kw.get("config", {}).get("fio", {})
+        for image, image_config in pool_config.items():
+            io_config = {
+                "rbd_obj": rbd,
+                "client": client,
+                "size": fio["size"],
+                "do_not_create_image": True,
+                "config": {
+                    "file_size": fio["size"],
+                    "file_path": [f"/mnt/mnt_{random_string(len=5)}/file"],
+                    "get_time_taken": True,
+                    "image_spec": [f"{pool}/{image}"],
+                    "operations": {
+                        "fs": "ext4",
+                        "io": True,
+                        "mount": True,
+                        "map": True,
                     },
-                }
-
-                krbd_io_handler(**io_config)
-
-            # 4. Create a group and add the image to an RBD group
-            group = kw.get("config", {}).get("group", "image_group_default")
-            group_create_kw = {"client": client, "pool": pool, "group": group}
-            rc = create_group_and_verify(**group_create_kw)
-            if rc:
-                log.error(f"group {group} creation failed, test case fail")
-                return 1
-            else:
-                log.info("STAGE: group creation succeeded")
-
-            for image, image_config in pool_config.items():
-                # Add images to the group
-                add_image_group_kw = {
-                    "client": client,
-                    "pool": pool,
-                    "group": group,
-                    "image": image,
-                }
-                rc = add_image_to_group_and_verify(**add_image_group_kw)
-                if rc:
-                    log.error(f"Image {image} add failed, test case fail")
-                    return 1
-                else:
-                    log.info(f"STAGE: image {image} add succeeded")
-
-            # Create one user snapshot
-            rc = snap_create_list_and_verify(
-                pool=pool, image=image, rbd=rbd, is_secondary=False
-            )
-            if rc:
-                log.error("Snapshot creation, listing and verification failed")
-                return 1
-
-            snap = kw.get("config", {}).get("snap", "group_snap_default")
-
-            # Create group snapshot
-            rc = create_snap_and_verify(
-                client=client, pool=pool, group=group, snap=snap
-            )
-            if rc:
-                log.error("Group snap creation failed")
-                return 1
-            else:
-                log.info("Group snap creation with validation done")
-            # fetch snap id
-            out = rbd.snap.ls(all=f"{pool}/{image}", format="json")
-            out_json = json.loads(out[0])
-            for entry in out_json:
-                if "namespace" in entry:
-                    if (
-                        entry["namespace"].get("type") == "group"
-                        and entry["namespace"].get("pool") == pool
-                        and entry["namespace"].get("group") == group
-                        and entry["namespace"].get("group snap") == snap
-                    ):
-                        snap_id = int(entry["id"])
-            log.info(f"Snap id is {snap_id} ")
-
-            # Clone the group snapshot with clone_format=1
-            clone = kw.get("config", {}).get("clone", "clone_group_snap_default")
-            clone_spec = {
-                "snap-id": snap_id,
-                "source-snap-spec": f"{pool}/{image}",
-                "dest-image-spec": f"{pool}/{clone}",
+                    "skip_mkfs": False,
+                    "cmd_timeout": 2400,
+                    "io_type": "write",
+                },
             }
-            _, err = rbd.clone(**clone_spec)
-            if err and "parent snapshot must be protected" in err:
+
+            krbd_io_handler(**io_config)
+
+        # 4. Create a group and add the image to an RBD group
+        group = kw.get("config", {}).get("group", "image_group_default")
+        group_create_kw = {"client": client, "pool": pool, "group": group}
+        rc = create_group_and_verify(**group_create_kw)
+        if rc:
+            log.error(f"group {group} creation failed, test case fail")
+            return 1
+        else:
+            log.info("STAGE: group creation succeeded")
+
+        for image, image_config in pool_config.items():
+            # Add images to the group
+            add_image_group_kw = {
+                "client": client,
+                "pool": pool,
+                "group": group,
+                "image": image,
+            }
+            rc = add_image_to_group_and_verify(**add_image_group_kw)
+            if rc:
+                log.error(f"Image {image} add failed, test case fail")
+                return 1
+            else:
+                log.info(f"STAGE: image {image} add succeeded")
+
+        # Create one user snapshot
+        rc = snap_create_list_and_verify(
+            pool=pool, image=image, rbd=rbd, is_secondary=False
+        )
+        if rc:
+            log.error("Snapshot creation, listing and verification failed")
+            return 1
+
+        snap = kw.get("config", {}).get("snap", "group_snap_default")
+
+        # Create group snapshot
+        rc = create_snap_and_verify(client=client, pool=pool, group=group, snap=snap)
+        if rc:
+            log.error("Group snap creation failed")
+            return 1
+        else:
+            log.info("Group snap creation with validation done")
+        # fetch snap id
+        out = rbd.snap.ls(all=f"{pool}/{image}", format="json")
+        out_json = json.loads(out[0])
+        for entry in out_json:
+            if "namespace" in entry:
+                if (
+                    entry["namespace"].get("type") == "group"
+                    and entry["namespace"].get("pool") == pool
+                    and entry["namespace"].get("group") == group
+                    and entry["namespace"].get("group snap") == snap
+                ):
+                    snap_id = int(entry["id"])
+        log.info(f"Snap id is {snap_id} ")
+
+        # Clone the group snapshot with clone_format=1
+        clone = kw.get("config", {}).get("clone", "clone_group_snap_default")
+        clone_spec = {
+            "snap-id": snap_id,
+            "source-snap-spec": f"{pool}/{image}",
+            "dest-image-spec": f"{pool}/{clone}",
+        }
+        _, err = rbd.clone(**clone_spec)
+        if err and "parent snapshot must be protected" in err:
+            log.info(
+                f"Clone creation failed  as expected for {pool}/{image}  for clone format 1 , with error {err}"
+            )
+        else:
+            log.error("Clone creation passed for clone fomrat 1 which is not expected")
+            return 1
+
+        # Clone the group snapshot with clone_format=2
+        clone_spec = {
+            "snap-id": snap_id,
+            "source-snap-spec": f"{pool}/{image}",
+            "dest-image-spec": f"{pool}/{clone}",
+            "rbd-default-clone-format": 2,
+        }
+        _, err = rbd.clone(**clone_spec)
+        if err:
+            log.error(f"Clone creation failed for {pool}/{image} with error {err}")
+            return 1
+        else:
+            log.info(f"Cloning of snap {snap} is complete")
+
+        # Verify the cloned images exist in the mentioned pool along with it’s parent image
+        info_kw = {"image-or-snap-spec": f"{pool}/{clone}", "format": "json"}
+        out = rbd.info(**info_kw)
+        out_json = json.loads(out[0])
+        if "parent" in out_json:
+            if (
+                out_json.get("parent", {}).get("pool") == pool
+                and out_json.get("parent", {}).get("image") == image
+            ):
                 log.info(
-                    f"Clone creation failed  as expected for {pool}/{image}  for clone format 1 , with error {err}"
+                    "Parent details are reflected correctly for the cloned image of the group snapshot."
                 )
             else:
                 log.error(
-                    "Clone creation passed for clone fomrat 1 which is not expected"
+                    "Parent details are not reflected correctly for the cloned image of the group snapshot"
                 )
                 return 1
+        else:
+            log.error("Parent option is not reflected in the clone info output")
+            return 1
 
-            # Clone the group snapshot with clone_format=2
-            clone_spec = {
-                "snap-id": snap_id,
-                "source-snap-spec": f"{pool}/{image}",
-                "dest-image-spec": f"{pool}/{clone}",
-                "rbd-default-clone-format": 2,
-            }
-            _, err = rbd.clone(**clone_spec)
-            if err:
-                log.error(f"Clone creation failed for {pool}/{image} with error {err}")
-                return 1
-            else:
-                log.info(f"Cloning of snap {snap} is complete")
+        # Map the cloned images as a new block disk using rbd map
+        # Mount the directory onto that disk and create some files on that directory and write data to the files
+        io_config["config"]["image_spec"] = [f"{pool}/{clone}"]
 
-            # Verify the cloned images exist in the mentioned pool along with it’s parent image
-            info_kw = {"image-or-snap-spec": f"{pool}/{clone}", "format": "json"}
-            out = rbd.info(**info_kw)
-            out_json = json.loads(out[0])
-            if "parent" in out_json:
-                if (
-                    out_json.get("parent", {}).get("pool") == pool
-                    and out_json.get("parent", {}).get("image") == image
-                ):
-                    log.info(
-                        "Parent details are reflected correctly for the cloned image of the group snapshot."
-                    )
-                else:
-                    log.error(
-                        "Parent details are not reflected correctly for the cloned image of the group snapshot"
-                    )
-                    return 1
-            else:
-                log.error("Parent option is not reflected in the clone info output")
-                return 1
+        krbd_io_handler(**io_config)
 
-            # Map the cloned images as a new block disk using rbd map
-            # Mount the directory onto that disk and create some files on that directory and write data to the files
-            io_config["config"]["image_spec"] = [f"{pool}/{clone}"]
+        # Flatten the cloned image using rbd flatten command.
+        flatten_kw = {"pool": pool, "image": clone}
+        out, err = rbd.flatten(**flatten_kw)
+        if out or err and "100% complete" not in err:
+            log.error(f"Flatten clone failed for {clone_spec}")
+            return 1
+        else:
+            log.info("Flattening clone successful")
 
-            krbd_io_handler(**io_config)
+        # Verify the cloned image’s parent information after flattening using rbd info
+        out = rbd.info(**info_kw)
+        out_json = json.loads(out[0])
 
-            # Flatten the cloned image using rbd flatten command.
-            flatten_kw = {"pool": pool, "image": clone}
-            out, err = rbd.flatten(**flatten_kw)
-            if out or err and "100% complete" not in err:
-                log.error(f"Flatten clone failed for {clone_spec}")
-                return 1
-            else:
-                log.info("Flattening clone successful")
+        if "parent" in out_json:
+            log.error("parent information still exist for flattened clone")
+            return 1
+        else:
+            log.info("Parent details do not exist after flattening clone as expected")
 
-            # Verify the cloned image’s parent information after flattening using rbd info
-            out = rbd.info(**info_kw)
-            out_json = json.loads(out[0])
+        # write data to the flattened cloned image
+        krbd_io_handler(**io_config)
+        rm_kw = {"image-spec": f"{pool}/{clone}"}
 
-            if "parent" in out_json:
-                log.error("parent information still exist for flattened clone")
-                return 1
-            else:
-                log.info(
-                    "Parent details do not exist after flattening clone as expected"
-                )
-
-            # write data to the flattened cloned image
-            krbd_io_handler(**io_config)
-            rm_kw = {"image-spec": f"{pool}/{clone}"}
-
-            # Remove the flattened cloned image using rbd rm command
-            out, err = rbd.rm(**rm_kw)
-            if out or err and "100% complete" not in err:
-                log.error(f"Remove flattened clone failed with error {err}")
-                return 1
-            else:
-                log.info("Flattened clone removed successfully")
+        # Remove the flattened cloned image using rbd rm command
+        out, err = rbd.rm(**rm_kw)
+        if out or err and "100% complete" not in err:
+            log.error(f"Remove flattened clone failed with error {err}")
+            return 1
+        else:
+            log.info("Flattened clone removed successfully")
 
     return 0
 

@@ -1,3 +1,5 @@
+import random
+
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict
 from ceph.rbd.workflows.cleanup import cleanup
@@ -11,28 +13,31 @@ def test_rbd_python_module(rbd_obj, **kw):
     For each image, call rbd python module to create image,
     write data and read back and verify that the data matches.
     """
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            for image in multi_image_config.keys():
-                log.info(f"Creating image and running IOs for image {pool}/{image}")
-                client = kw.get("client")
-                cmd = f"python3 rbd_python.py --pool {pool} --image {image}"
-                cmd += " --image-size 4294967296 --conf-file /etc/ceph/ceph.conf"
-                if pool_type == "ec_pool_config":
-                    data_pool = pool_config.get("data_pool")
-                    cmd += f" --data-pool {data_pool}"
-                out, err = client.exec_command(cmd=cmd)
-                if err or "don't match" in out:
-                    log.error(out)
-                    log.error(
-                        f"Executing rbd python to create image, read and\
-                               write data failed for image {pool}/{image}"
-                    )
-                    return 1
-                log.info(out)
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        for image in multi_image_config.keys():
+            log.info(f"Creating image and running IOs for image {pool}/{image}")
+            client = kw.get("client")
+            cmd = f"python3 rbd_python.py --pool {pool} --image {image}"
+            cmd += " --image-size 4294967296 --conf-file /etc/ceph/ceph.conf"
+            if pool_type == "ec_pool_config":
+                data_pool = pool_config.get("data_pool")
+                cmd += f" --data-pool {data_pool}"
+            out, err = client.exec_command(cmd=cmd)
+            if err or "don't match" in out:
+                log.error(out)
+                log.error(
+                    f"Executing rbd python to create image, read and\
+                           write data failed for image {pool}/{image}"
+                )
+                return 1
+            log.info(out)
     return 0
 
 

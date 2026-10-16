@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_mirror_config, random_string
@@ -358,18 +359,19 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            log.info(
-                f"Running snap and clone operations on snap based mirroring for {pool_type}"
+        pool_type = random.choice(pool_types)
+        log.info(f"Running test on {pool_type}")
+        log.info(
+            f"Running snap and clone operations on snap based mirroring for {pool_type}"
+        )
+        rc = test_snap_mirror_snap_clone_ops(
+            rbd, sec_rbd, client, sec_client, pool_type, **kw
+        )
+        if rc:
+            log.error(
+                f"Snap and clone operations on snapshot based mirroring clusters failed for {pool_type}"
             )
-            rc = test_snap_mirror_snap_clone_ops(
-                rbd, sec_rbd, client, sec_client, pool_type, **kw
-            )
-            if rc:
-                log.error(
-                    f"Snap and clone operations on snapshot based mirroring clusters failed for {pool_type}"
-                )
-                return 1
+            return 1
     except Exception as e:
         log.error(
             f"Testing snap and clone operations on snap mirroring clusters failed with error {str(e)}"

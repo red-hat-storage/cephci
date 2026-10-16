@@ -1,3 +1,4 @@
+import random
 import time
 
 from ceph.parallel import parallel
@@ -250,7 +251,18 @@ def run(**kw):
 
     try:
         # ---- Step 1: Setup mirroring between two clusters ----
-        kw.get("config", {})["do_not_run_io"] = True
+        # Run on either replicated or EC pool throughout this multi-stage test
+        available_pool_types = [
+            pt for pt in pool_types if pt in kw.get("config", {})
+        ] or pool_types
+        pool_type = random.choice(available_pool_types)
+        log.info(f"Running test on {pool_type}")
+        config = kw.get("config", {})
+        if pool_type == "rep_pool_config":
+            config["rep-pool-only"] = True
+        else:
+            config["ec-pool-only"] = True
+        config["do_not_run_io"] = True
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
 

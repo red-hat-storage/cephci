@@ -20,6 +20,8 @@ Test Case Flow -
 9. Cover test case for both pool based and image based journal mirroring
 """
 
+import random
+
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import Rbd, verify_migration_commit, verify_migration_state
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
@@ -146,32 +148,36 @@ def run(**kw):
                 io_total = source_config["rep_pool_config"]["io_total"]
 
                 try:
-                    log.info("Running test on Replicated pool")
-
-                    mirror2.wait_for_replay_complete(src_rep_spec)
-
-                    run_fio_and_migrate_image(
-                        rbd1,
-                        mirror1,
-                        mirror2,
-                        rep_image,
-                        src_rep_spec,
-                        dest_rep_pool,
-                        dest_rep_spec,
-                        io_total,
+                    pool_entries = [
+                        (
+                            "rep_pool_config",
+                            rep_image,
+                            src_rep_spec,
+                            dest_rep_pool,
+                            dest_rep_spec,
+                        ),
+                        (
+                            "ec_pool_config",
+                            ec_image,
+                            src_ec_spec,
+                            dest_ec_pool,
+                            dest_ec_spec,
+                        ),
+                    ]
+                    pool_type, image, src_spec, dest_pool, dest_spec = random.choice(
+                        pool_entries
                     )
+                    log.info(f"Running test on {pool_type}")
 
-                    log.info("Runnng test on EC pool")
-
-                    mirror2.wait_for_replay_complete(src_ec_spec)
+                    mirror2.wait_for_replay_complete(src_spec)
                     run_fio_and_migrate_image(
                         rbd1,
                         mirror1,
                         mirror2,
-                        ec_image,
-                        src_ec_spec,
-                        dest_ec_pool,
-                        dest_ec_spec,
+                        image,
+                        src_spec,
+                        dest_pool,
+                        dest_spec,
                         io_total,
                     )
 

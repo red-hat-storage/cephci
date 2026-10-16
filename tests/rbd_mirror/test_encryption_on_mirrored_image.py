@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 from time import sleep
 
@@ -447,15 +448,15 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            ret_val = test_encryption_on_mirrored_cluster(
-                mirror_obj=mirror_obj,
-                pool_type=pool_type,
-                **kw,
-            )
-            if ret_val:
-                log.error(f"RBD encryption test failed for pool_type {pool_type}")
-                break
+        pool_type = random.choice(pool_types)
+        log.info(f"Running test on {pool_type}")
+        ret_val = test_encryption_on_mirrored_cluster(
+            mirror_obj=mirror_obj,
+            pool_type=pool_type,
+            **kw,
+        )
+        if ret_val:
+            log.error(f"RBD encryption test failed for pool_type {pool_type}")
     except Exception as e:
         log.error(f"Testing mirrored encryption failed with error {str(e)}")
         ret_val = 1

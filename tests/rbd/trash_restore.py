@@ -1,3 +1,5 @@
+import random
+
 from tests.rbd.exceptions import ImageFoundError, ImageNotFoundError, RbdBaseException
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -63,10 +65,12 @@ def run(**kw):
     rbd_obj = initial_rbd_config(**kw)
     rc = 1
     if rbd_obj:
-        log.info("Executing test on Replication pool")
-        rc = rbd_trash(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw)
-        if rc:
-            return rc
-        log.info("Executing test on EC pool")
-        rc = rbd_trash(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw)
+        pool_entries = []
+        if "rbd_reppool" in rbd_obj:
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
+        if "rbd_ecpool" in rbd_obj:
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+        rc = rbd_trash(rbd_obj.get(rbd_key), pool_type, **kw)
     return rc

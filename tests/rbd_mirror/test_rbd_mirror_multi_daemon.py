@@ -1,3 +1,4 @@
+import random
 import time
 
 from ceph.parallel import parallel
@@ -52,50 +53,47 @@ def run(**kw):
         },
     }
     kw["config"].update(config)
+
+    # Run on either replicated or EC pool
+    pool_type = random.choice(["rep_pool_config", "ec_pool_config"])
+    log.info(f"Running test on {pool_type}")
+    if pool_type == "rep_pool_config":
+        kw["config"]["rep-pool-only"] = True
+    else:
+        kw["config"]["ec-pool-only"] = True
+
     mirror_obj = rbd_mirror_config(**kw)
 
     if mirror_obj:
-        mirror1 = mirror_obj["rep_rbdmirror"]["mirror1"]
-        mirror2 = mirror_obj["rep_rbdmirror"]["mirror2"]
-
-        rep_image_spec = (
-            f'{config["rep_pool_config"]["pool"]}/{config["rep_pool_config"]["image"]}'
+        mirror_key = (
+            "rep_rbdmirror" if pool_type == "rep_pool_config" else "ec_rbdmirror"
         )
-        ec_image_spec = (
-            f'{config["ec_pool_config"]["pool"]}/{config["ec_pool_config"]["image"]}'
-        )
-        image_spec_list = [rep_image_spec, ec_image_spec]
+        mirror1 = mirror_obj[mirror_key]["mirror1"]
+        mirror2 = mirror_obj[mirror_key]["mirror2"]
+        image_spec = f'{config[pool_type]["pool"]}/{config[pool_type]["image"]}'
+        image_spec_list = [image_spec]
 
         log.info(
             "Stopping an rbd daemon in cluster 2 and performing relocate operation"
         )
 
         # Gather service name in cluster2 and stop non-leader daemon
-        mirror2.update_ceph_rbdmirror(config["rep_pool_config"]["pool"], leader=False)
+        mirror2.update_ceph_rbdmirror(config[pool_type]["pool"], leader=False)
         service_name_mirror2 = mirror2.get_rbd_service_name("rbd-mirror")
         mirror2.change_service_state(service_name_mirror2, "stop")
 
         # Relocate: Demote image at cluster1
         for imagespec in image_spec_list:
             mirror1.demote(imagespec=imagespec)
-        with parallel() as p:
-            p.spawn(
-                mirror2.wait_for_status,
-                imagespec=rep_image_spec,
-                state_pattern="up+unknown",
-            )
-            p.spawn(
-                mirror2.wait_for_status,
-                imagespec=ec_image_spec,
-                state_pattern="up+unknown",
-            )
+        mirror2.wait_for_status(
+            imagespec=image_spec,
+            state_pattern="up+unknown",
+        )
         # Relocate: promote image at cluster2
         for imagespec in image_spec_list:
             mirror2.promote(imagespec=imagespec)
 
-        with parallel() as p:
-            p.spawn(mirror2.benchwrite, imagespec=rep_image_spec, io="1G")
-            p.spawn(mirror2.benchwrite, imagespec=ec_image_spec, io="1G")
+        mirror2.benchwrite(imagespec=image_spec, io="1G")
         time.sleep(30)
         mirror2.change_service_state(service_name_mirror2, "start")
 
@@ -106,30 +104,21 @@ def run(**kw):
         service_names = []
 
         for cluster in [mirror1, mirror2]:
-            cluster.update_ceph_rbdmirror(config["rep_pool_config"]["pool"], True)
+            cluster.update_ceph_rbdmirror(config[pool_type]["pool"], True)
             service_names.append(cluster.get_rbd_service_name("rbd-mirror"))
             cluster.change_service_state(service_names[-1], "stop")
 
-        # Failover: force promote both images on cluster1
+        # Failover: force promote image on cluster1
         for imagespec in image_spec_list:
             mirror1.promote(imagespec=imagespec, force=True)
 
-        with parallel() as p:
-            p.spawn(
-                mirror1.wait_for_status,
-                imagespec=rep_image_spec,
-                state_pattern="up+stopped",
-            )
-            p.spawn(
-                mirror1.wait_for_status,
-                imagespec=ec_image_spec,
-                state_pattern="up+stopped",
-            )
-        with parallel() as p:
-            p.spawn(mirror1.benchwrite, imagespec=rep_image_spec, io="1G")
-            p.spawn(mirror1.benchwrite, imagespec=ec_image_spec, io="1G")
+        mirror1.wait_for_status(
+            imagespec=image_spec,
+            state_pattern="up+stopped",
+        )
+        mirror1.benchwrite(imagespec=image_spec, io="1G")
 
-        # Failover: demote images at cluster2 and initiate resync
+        # Failover: demote image at cluster2 and initiate resync
         for imagespec in image_spec_list:
             mirror2.demote(imagespec=imagespec)
             time.sleep(10)
@@ -142,17 +131,10 @@ def run(**kw):
         # waiting for the service to start and to mirror the image
         time.sleep(30)
 
-        with parallel() as p:
-            p.spawn(
-                mirror2.wait_for_status,
-                imagespec=rep_image_spec,
-                state_pattern="up+replaying",
-            )
-            p.spawn(
-                mirror2.wait_for_status,
-                imagespec=ec_image_spec,
-                state_pattern="up+replaying",
-            )
+        mirror2.wait_for_status(
+            imagespec=image_spec,
+            state_pattern="up+replaying",
+        )
 
         for imagespec in image_spec_list:
             poolname, imagename = imagespec.split("/", 1)

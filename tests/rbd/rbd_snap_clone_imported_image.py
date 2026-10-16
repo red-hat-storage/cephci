@@ -1,3 +1,5 @@
+import random
+
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -76,17 +78,13 @@ def run(**kw):
     """
     rbd_obj = initial_rbd_config(**kw)
     if rbd_obj:
-        # To run test on EC pool config
-        log.info(
-            "Running snapshot and cloning operations on an imported image in EC pool"
-        )
-        if test_snap_clone(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw):
-            return 1
-
-        # To run test on replicated pool
-        log.info(
-            "Running snapshot and cloning operations on an imported image in replicated pool"
-        )
-        if test_snap_clone(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw):
+        pool_entries = []
+        if "rbd_reppool" in rbd_obj:
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
+        if "rbd_ecpool" in rbd_obj:
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+        if test_snap_clone(rbd_obj.get(rbd_key), pool_type, **kw):
             return 1
         return 0

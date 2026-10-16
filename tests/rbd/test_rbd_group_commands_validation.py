@@ -26,6 +26,7 @@ Test Case Flow:
 15. Delete the group group2 using rbd group remove pool1/group2
 """
 
+import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
@@ -50,252 +51,243 @@ def validate_rbd_group_commands(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
+    for pool, pool_config in multi_pool_config.items():
+        if "data_pool" in pool_config.keys():
+            _ = pool_config.pop("data_pool")
 
-            # Create an RBD group in pool
-            group = "group_" + random_string(len=4)
-            out, err = rbd.group.create(**{"group-spec": f"{pool}/{group}"})
-            if err:
-                log.error(f"Create group {group} failed with error {err}")
-                return 1
-            else:
-                log.info(f"Successfully created group {group} in {pool}")
+        # Create an RBD group in pool
+        group = "group_" + random_string(len=4)
+        out, err = rbd.group.create(**{"group-spec": f"{pool}/{group}"})
+        if err:
+            log.error(f"Create group {group} failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully created group {group} in {pool}")
 
-            # List group
-            out, err = rbd.group.list(**{"pool": pool})
-            if err:
-                log.error(f"Group list failed with error {err}")
-                return 1
-            if group in out:
-                log.info(f"Group {group} listed in pool {pool}")
-            else:
-                log.error(f"Group {group} not listed in pool {pool}")
-                return 1
+        # List group
+        out, err = rbd.group.list(**{"pool": pool})
+        if err:
+            log.error(f"Group list failed with error {err}")
+            return 1
+        if group in out:
+            log.info(f"Group {group} listed in pool {pool}")
+        else:
+            log.error(f"Group {group} not listed in pool {pool}")
+            return 1
 
-            # Create an RBD image in pool1
-            image = "image_" + random_string(len=4)
-            out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": 1024})
-            if err:
-                log.error(f"Create image {pool}/{image} failed with error {err}")
-                return 1
-            else:
-                log.info(f"Successfully created image {pool}/{image}")
+        # Create an RBD image in pool1
+        image = "image_" + random_string(len=4)
+        out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": 1024})
+        if err:
+            log.error(f"Create image {pool}/{image} failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully created image {pool}/{image}")
 
-            # Add image to the group
-            out, err = rbd.group.image.add(
-                **{"group-spec": f"{pool}/{group}", "image-spec": f"{pool}/{image}"}
+        # Add image to the group
+        out, err = rbd.group.image.add(
+            **{"group-spec": f"{pool}/{group}", "image-spec": f"{pool}/{image}"}
+        )
+        if err:
+            log.error(
+                f"Failed to add image {pool}/{image} to the group {pool}/{group} with error {err}"
             )
-            if err:
-                log.error(
-                    f"Failed to add image {pool}/{image} to the group {pool}/{group} with error {err}"
-                )
-                return 1
-            else:
-                log.info(
-                    f"Successfully added image {pool}/{image} to the group {pool}/{group}"
-                )
-
-            # List images in the group
-            out, err = rbd.group.image.list(**{"group-spec": f"{pool}/{group}"})
-            if err:
-                log.error(f"List images in group failed with error {err}")
-                return 1
-            if f"{pool}/{image}" in out:
-                log.info(f"{pool}/{image} listed in group {pool}/{group}")
-            else:
-                log.error(f"{pool}/{image} not listed in the group image list")
-                return 1
-
-            # Remove the image  from the group
-            out, err = rbd.group.image.rm(
-                **{"group-spec": f"{pool}/{group}", "image-spec": f"{pool}/{image}"}
+            return 1
+        else:
+            log.info(
+                f"Successfully added image {pool}/{image} to the group {pool}/{group}"
             )
-            if err:
-                log.error(
-                    f"Remove image {pool}/{image} from group {pool}/{group} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(
-                    f"Successfully removed image {pool}/{image} from group {pool}/{group}"
-                )
 
-            # List images in the group
-            out, err = rbd.group.image.list(**{"group-spec": f"{pool}/{group}"})
+        # List images in the group
+        out, err = rbd.group.image.list(**{"group-spec": f"{pool}/{group}"})
+        if err:
+            log.error(f"List images in group failed with error {err}")
+            return 1
+        if f"{pool}/{image}" in out:
+            log.info(f"{pool}/{image} listed in group {pool}/{group}")
+        else:
+            log.error(f"{pool}/{image} not listed in the group image list")
+            return 1
 
-            if err:
-                log.error(f"List images in group failed with error {err}")
-                return 1
-            if f"{pool}/{image}" not in out:
-                log.info(
-                    f"{pool}/{image} not listed in group after successful image deletion"
-                )
-            else:
-                log.error(
-                    f"{pool}/{image} listed in group after successful image deletion"
-                )
-                return 1
-
-            # Add image back to the group
-            out, err = rbd.group.image.add(
-                **{"group-spec": f"{pool}/{group}", "image-spec": f"{pool}/{image}"}
+        # Remove the image  from the group
+        out, err = rbd.group.image.rm(
+            **{"group-spec": f"{pool}/{group}", "image-spec": f"{pool}/{image}"}
+        )
+        if err:
+            log.error(
+                f"Remove image {pool}/{image} from group {pool}/{group} failed with error {err}"
             )
-            if err:
-                log.error(
-                    f"Adding image {pool}/{image} to group failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(
-                    f"Successfully added image {pool}/{image} to group {pool}/{group}"
-                )
-
-            # Rename the group
-            group_new = "group_new" + random_string(len=4)
-            out, err = rbd.group.rename(
-                **{
-                    "source-group-spec": f"{pool}/{group}",
-                    "dest-group-spec": f"{pool}/{group_new}",
-                }
+            return 1
+        else:
+            log.info(
+                f"Successfully removed image {pool}/{image} from group {pool}/{group}"
             )
-            if err:
-                log.error(f"Rename group {pool}/{group_new} failed with error {err}")
-                return 1
-            else:
-                log.info(f"Successfully renamed group to {pool}/{group_new}")
 
-            # Create group snap
-            snap = "snap_" + random_string(len=4)
-            out, err = rbd.group.snap.create(
-                **{"group-spec": f"{pool}/{group_new}@{snap}"}
+        # List images in the group
+        out, err = rbd.group.image.list(**{"group-spec": f"{pool}/{group}"})
+
+        if err:
+            log.error(f"List images in group failed with error {err}")
+            return 1
+        if f"{pool}/{image}" not in out:
+            log.info(
+                f"{pool}/{image} not listed in group after successful image deletion"
             )
-            if err:
-                log.error(
-                    f"Create snap {pool}/{group_new}@{snap} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(f"Successfully created snap {pool}/{group_new}@{snap}")
+        else:
+            log.error(f"{pool}/{image} listed in group after successful image deletion")
+            return 1
 
-            # list group snap
-            out, err = rbd.group.snap.list(**{"group-spec": f"{pool}/{group_new}"})
-            if err:
-                log.error(f"Group snap list failed with error {err}")
-                return 1
-            if snap in out:
-                log.info(f"Group snap {snap} listed in group")
-            else:
-                log.error(f"Group snap {snap} not listed in group")
-                return 1
+        # Add image back to the group
+        out, err = rbd.group.image.add(
+            **{"group-spec": f"{pool}/{group}", "image-spec": f"{pool}/{image}"}
+        )
+        if err:
+            log.error(f"Adding image {pool}/{image} to group failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully added image {pool}/{image} to group {pool}/{group}")
 
-            # Delete the group snap
-            out, err = rbd.group.snap.rm(**{"group-spec": f"{pool}/{group_new}@{snap}"})
-            if err:
-                log.error(
-                    f"Delete group snap {pool}/{group_new}@{snap} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info("Successfully deleted grop snap {pool}/{group_new}@{snap}")
+        # Rename the group
+        group_new = "group_new" + random_string(len=4)
+        out, err = rbd.group.rename(
+            **{
+                "source-group-spec": f"{pool}/{group}",
+                "dest-group-spec": f"{pool}/{group_new}",
+            }
+        )
+        if err:
+            log.error(f"Rename group {pool}/{group_new} failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully renamed group to {pool}/{group_new}")
 
-            # list group snap
-            out, err = rbd.group.snap.list(**{"group-spec": f"{pool}/{group_new}"})
-            if err:
-                log.error(f"Group snap list failed with error {err}")
-                return 1
-            if snap not in out:
-                log.info(
-                    f"Group snap {snap} not listed in group snap list after successful deletion"
-                )
-            else:
-                log.error(
-                    f"Group snap {snap} listed in group snap list after successful deletion"
-                )
-                return 1
+        # Create group snap
+        snap = "snap_" + random_string(len=4)
+        out, err = rbd.group.snap.create(**{"group-spec": f"{pool}/{group_new}@{snap}"})
+        if err:
+            log.error(f"Create snap {pool}/{group_new}@{snap} failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully created snap {pool}/{group_new}@{snap}")
 
-            # Create group snap back
-            out, err = rbd.group.snap.create(
-                **{"group-spec": f"{pool}/{group_new}@{snap}"}
+        # list group snap
+        out, err = rbd.group.snap.list(**{"group-spec": f"{pool}/{group_new}"})
+        if err:
+            log.error(f"Group snap list failed with error {err}")
+            return 1
+        if snap in out:
+            log.info(f"Group snap {snap} listed in group")
+        else:
+            log.error(f"Group snap {snap} not listed in group")
+            return 1
+
+        # Delete the group snap
+        out, err = rbd.group.snap.rm(**{"group-spec": f"{pool}/{group_new}@{snap}"})
+        if err:
+            log.error(
+                f"Delete group snap {pool}/{group_new}@{snap} failed with error {err}"
             )
-            if err:
-                log.error(
-                    f"Create group snap {pool}/{group_new}@{snap} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(f"Successfully created group snap  {pool}/{group_new}@{snap}")
+            return 1
+        else:
+            log.info("Successfully deleted grop snap {pool}/{group_new}@{snap}")
 
-            # Rename group snap
-            snap_new = "snap_" + random_string(len=4)
-            out, err = rbd.group.snap.rename(
-                **{
-                    "group-snap-spec": f"{pool}/{group_new}@{snap}",
-                    "dest-snap": snap_new,
-                }
+        # list group snap
+        out, err = rbd.group.snap.list(**{"group-spec": f"{pool}/{group_new}"})
+        if err:
+            log.error(f"Group snap list failed with error {err}")
+            return 1
+        if snap not in out:
+            log.info(
+                f"Group snap {snap} not listed in group snap list after successful deletion"
             )
-            if err:
-                log.error(
-                    f"Group snap rename of {pool}/{group_new}@{snap_new} failed with error {err}"
-                )
-                return 1
-            else:
-                log.info(
-                    f"Successfully renamed group snap to {pool}/{group_new}@{snap_new}"
-                )
-
-            # list group snap
-            out, err = rbd.group.snap.list(**{"group-spec": f"{pool}/{group_new}"})
-            if err:
-                log.error(f"Group snap list failed with error {err}")
-                return 1
-            else:
-                if snap_new in out and snap not in out:
-                    log.info(f"Renamed Group snap {snap_new} listed in group snap list")
-                else:
-                    log.error(
-                        f"Renamed Group snap {snap_new} not listed in group snap list"
-                    )
-                    return 1
-
-            # Rollback group snap
-            out, err = rbd.group.snap.rollback(
-                **{"group-snap-spec": f"{pool}/{group_new}@{snap_new}"}
+        else:
+            log.error(
+                f"Group snap {snap} listed in group snap list after successful deletion"
             )
-            if "100% complete" in err:
-                log.info(
-                    f"Successfully rolled back group snap {pool}/{group_new}@{snap_new}"
-                )
+            return 1
+
+        # Create group snap back
+        out, err = rbd.group.snap.create(**{"group-spec": f"{pool}/{group_new}@{snap}"})
+        if err:
+            log.error(
+                f"Create group snap {pool}/{group_new}@{snap} failed with error {err}"
+            )
+            return 1
+        else:
+            log.info(f"Successfully created group snap  {pool}/{group_new}@{snap}")
+
+        # Rename group snap
+        snap_new = "snap_" + random_string(len=4)
+        out, err = rbd.group.snap.rename(
+            **{
+                "group-snap-spec": f"{pool}/{group_new}@{snap}",
+                "dest-snap": snap_new,
+            }
+        )
+        if err:
+            log.error(
+                f"Group snap rename of {pool}/{group_new}@{snap_new} failed with error {err}"
+            )
+            return 1
+        else:
+            log.info(
+                f"Successfully renamed group snap to {pool}/{group_new}@{snap_new}"
+            )
+
+        # list group snap
+        out, err = rbd.group.snap.list(**{"group-spec": f"{pool}/{group_new}"})
+        if err:
+            log.error(f"Group snap list failed with error {err}")
+            return 1
+        else:
+            if snap_new in out and snap not in out:
+                log.info(f"Renamed Group snap {snap_new} listed in group snap list")
             else:
                 log.error(
-                    f"Group snap rollback of {pool}/{group_new}@{snap_new} failed with error {err}"
+                    f"Renamed Group snap {snap_new} not listed in group snap list"
                 )
                 return 1
 
-            # Remove Group
-            out, err = rbd.group.remove(**{"group-spec": f"{pool}/{group_new}"})
-            if err:
-                log.error(f"Deleting group {pool}/{group_new} failed with error {err}")
-                return 1
-            else:
-                log.info(f"Successfully deleted group {pool}/{group_new}")
+        # Rollback group snap
+        out, err = rbd.group.snap.rollback(
+            **{"group-snap-spec": f"{pool}/{group_new}@{snap_new}"}
+        )
+        if "100% complete" in err:
+            log.info(
+                f"Successfully rolled back group snap {pool}/{group_new}@{snap_new}"
+            )
+        else:
+            log.error(
+                f"Group snap rollback of {pool}/{group_new}@{snap_new} failed with error {err}"
+            )
+            return 1
 
-            # List group
-            out, err = rbd.group.list(**{"pool": pool})
-            if err:
-                log.error(f"Group list failed with error {err}")
-                return 1
+        # Remove Group
+        out, err = rbd.group.remove(**{"group-spec": f"{pool}/{group_new}"})
+        if err:
+            log.error(f"Deleting group {pool}/{group_new} failed with error {err}")
+            return 1
+        else:
+            log.info(f"Successfully deleted group {pool}/{group_new}")
+
+        # List group
+        out, err = rbd.group.list(**{"pool": pool})
+        if err:
+            log.error(f"Group list failed with error {err}")
+            return 1
+        else:
+            if group not in out:
+                log.info(f"Group {group} not listed in pool {pool}")
             else:
-                if group not in out:
-                    log.info(f"Group {group} not listed in pool {pool}")
-                else:
-                    log.error(f"Group {group} listed in pool {pool}")
-                    return 1
+                log.error(f"Group {group} listed in pool {pool}")
+                return 1
     return 0
 
 

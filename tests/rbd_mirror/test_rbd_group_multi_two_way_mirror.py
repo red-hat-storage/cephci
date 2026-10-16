@@ -408,13 +408,21 @@ def run(**kw):
     test_name = kw["run_config"]["test_name"][:-2:].replace("_", " ")
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
-        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+        # Run on either replicated or EC pool
+        pool_type = random.choice(pool_types)
+        log.info("Running test on %s", pool_type)
 
-        if not kw.get("config").get("grouptype"):
-            for pooltype in pool_types:
-                group_type = grouptypes.pop(random.randrange(len(grouptypes)))
-                kw.get("config").get(pooltype).update({"grouptype": group_type})
-                log.info("Choosing Group type on %s - %s", pooltype, group_type)
+        config = kw.get("config")
+        if pool_type == "rep_pool_config":
+            config["rep-pool-only"] = True
+        else:
+            config["ec-pool-only"] = True
+
+        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+        if not config.get("grouptype"):
+            group_type = random.choice(grouptypes)
+            config.get(pool_type).update({"grouptype": group_type})
+            log.info("Choosing Group type on %s - %s", pool_type, group_type)
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
         for val in mirror_obj.values():

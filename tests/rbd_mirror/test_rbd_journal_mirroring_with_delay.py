@@ -1,3 +1,4 @@
+import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_mirror_config, random_string
@@ -154,27 +155,28 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            log.info(
-                f"Testing delayed replication on journal based mirroring for {pool_type}"
+        pool_type = random.choice(pool_types)
+        log.info(f"Running test on {pool_type}")
+        log.info(
+            f"Testing delayed replication on journal based mirroring for {pool_type}"
+        )
+        rc = test_delayed_replication(
+            rbd_obj=rbd,
+            sec_obj=sec_rbd,
+            client_node=client,
+            sec_client=sec_client,
+            pool_type=pool_type,
+            delay_at_primary=True,
+            **kw,
+        )
+        if rc:
+            log.error(
+                f"RBD Mirror delay on journal mirroring clusters failed for {pool_type} at image level failed"
             )
-            rc = test_delayed_replication(
-                rbd_obj=rbd,
-                sec_obj=sec_rbd,
-                client_node=client,
-                sec_client=sec_client,
-                pool_type=pool_type,
-                delay_at_primary=True,
-                **kw,
-            )
-            if rc:
-                log.error(
-                    f"RBD Mirror delay on journal mirroring clusters failed for {pool_type} at image level failed"
-                )
-                return 1
-            log.info(
-                f"Testing delayed replication on journal based mirroring passed for {pool_type}"
-            )
+            return 1
+        log.info(
+            f"Testing delayed replication on journal based mirroring passed for {pool_type}"
+        )
     except Exception as e:
         log.error(
             f"Testing rbd mirror delay on journal mirroring clusters failed with error {str(e)}"

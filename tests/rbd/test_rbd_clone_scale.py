@@ -1,3 +1,5 @@
+import random
+
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
@@ -16,58 +18,61 @@ def rbd_clone_scale(rbd_obj, **kw):
         **kw: Key/value pairs of configuration information to be used in the test
     """
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
-        clone_formats = rbd_config.pop("clone_formats")
-        rbd = rbd_obj.get("rbd")
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            for image, clone_format in zip(multi_image_config.keys(), clone_formats):
-                log.info(f"Creating snapshot and clone for image {pool}/{image}")
-                snap_1 = kw["config"][pool_type].get("snap", f"{image}_snap")
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = random.choice(pool_types)
+    log.info(f"Running test on {pool_type}")
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    clone_formats = rbd_config.pop("clone_formats")
+    rbd = rbd_obj.get("rbd")
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        for image, clone_format in zip(multi_image_config.keys(), clone_formats):
+            log.info(f"Creating snapshot and clone for image {pool}/{image}")
+            snap_1 = kw["config"][pool_type].get("snap", f"{image}_snap")
 
-                snap_spec = f"{pool}/{image}@{snap_1}"
-                clone_spec = f"{pool}/clone_{image}"
-                snap_config = {"snap-spec": snap_spec}
+            snap_spec = f"{pool}/{image}@{snap_1}"
+            clone_spec = f"{pool}/clone_{image}"
+            snap_config = {"snap-spec": snap_spec}
 
-                out, err = rbd.snap.create(**snap_config)
-                if out or err and "100% complete" not in err:
-                    log.error(f"Snapshot creation failed for {snap_spec}")
-                    return 1
+            out, err = rbd.snap.create(**snap_config)
+            if out or err and "100% complete" not in err:
+                log.error(f"Snapshot creation failed for {snap_spec}")
+                return 1
 
-                out, err = rbd.snap.protect(**snap_config)
-                if out or err:
-                    log.error(f"Snapshot protect failed for {snap_spec}")
-                    return 1
+            out, err = rbd.snap.protect(**snap_config)
+            if out or err:
+                log.error(f"Snapshot protect failed for {snap_spec}")
+                return 1
 
-                kw["client"] = kw["ceph_cluster"].get_nodes(role="client")[0]
-                err = run_IO(rbd, pool, image, **kw)
-                if err:
-                    return 1
+            kw["client"] = kw["ceph_cluster"].get_nodes(role="client")[0]
+            err = run_IO(rbd, pool, image, **kw)
+            if err:
+                return 1
 
-                create_clone_at_scale(rbd, snap_spec, clone_spec, clone_format, **kw)
+            create_clone_at_scale(rbd, snap_spec, clone_spec, clone_format, **kw)
 
-                # Flatten Clone
-                for i in range(1, 101):
-                    out, err = rbd.flatten(pool=pool, image=clone_spec + str(i))
-                    if "100% complete...done" not in out + err:
-                        log.error(
-                            f"Flatten clone failed for {pool}/{clone_spec + str(i)} with error {err}"
-                        )
+            # Flatten Clone
+            for i in range(1, 101):
+                out, err = rbd.flatten(pool=pool, image=clone_spec + str(i))
+                if "100% complete...done" not in out + err:
+                    log.error(
+                        f"Flatten clone failed for {pool}/{clone_spec + str(i)} with error {err}"
+                    )
 
-                # unprotect and delete the snap and verify snap deletion
-                out, err = rbd.snap.unprotect(**snap_config)
-                if out or err:
-                    log.error(f"Snapshot unprotect failed for {snap_spec}")
-                    return 1
+            # unprotect and delete the snap and verify snap deletion
+            out, err = rbd.snap.unprotect(**snap_config)
+            if out or err:
+                log.error(f"Snapshot unprotect failed for {snap_spec}")
+                return 1
 
-                out, err = rbd.snap.rm(**snap_config)
-                if out or err and "100% complete" not in err:
-                    err_msg = f"Snapshot remove failed for {snap_spec}"
-                    log.info(err_msg)
+            out, err = rbd.snap.rm(**snap_config)
+            if out or err and "100% complete" not in err:
+                err_msg = f"Snapshot remove failed for {snap_spec}"
+                log.info(err_msg)
 
-                log.info("Test clone operations at scale per snap passed Successfully")
+            log.info("Test clone operations at scale per snap passed Successfully")
     return 0
 
 

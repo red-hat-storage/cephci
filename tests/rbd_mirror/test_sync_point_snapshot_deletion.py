@@ -8,6 +8,8 @@ Steps:
 3. While failing back,check snapshot list and make sure that sync point snapshot is deleted.
 """
 
+import random
+
 from ceph.parallel import parallel
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror.rbd_mirror_utils import parallel_bench_on_n_images as write_data
@@ -20,14 +22,25 @@ log = Log(__name__)
 def run(**kw):
     log.info("Starting execution for sync-point snapshot deletion verification")
 
+    # Run on either replicated or EC pool
+    available_pool_types = [
+        pt
+        for pt in ["rep_pool_config", "ec_pool_config"]
+        if pt in kw.get("config", {}) and kw["config"][pt].get("pool")
+    ] or ["rep_pool_config", "ec_pool_config"]
+    pool_type = random.choice(available_pool_types)
+    log.info(f"Running test on {pool_type}")
+    if pool_type == "rep_pool_config":
+        kw["config"]["rep-pool-only"] = True
+    else:
+        kw["config"]["ec-pool-only"] = True
+
     mirror_obj = rbd_mirror_config(**kw)
-
-    mirror1 = mirror_obj["rep_rbdmirror"]["mirror1"]
-    mirror2 = mirror_obj["rep_rbdmirror"]["mirror2"]
-
+    mirror_key = "rep_rbdmirror" if pool_type == "rep_pool_config" else "ec_rbdmirror"
+    mirror1 = mirror_obj[mirror_key]["mirror1"]
+    mirror2 = mirror_obj[mirror_key]["mirror2"]
     imagespecs = [
-        f'{kw["config"]["rep_pool_config"]["pool"]}/{kw["config"]["rep_pool_config"]["image"]}',
-        f'{kw["config"]["ec_pool_config"]["pool"]}/{kw["config"]["ec_pool_config"]["image"]}',
+        f'{kw["config"][pool_type]["pool"]}/{kw["config"][pool_type]["image"]}',
     ]
     rbd1, rbd2 = [
         Rbd(**kw, req_cname=cluster_name)

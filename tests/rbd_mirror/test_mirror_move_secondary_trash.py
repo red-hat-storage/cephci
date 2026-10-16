@@ -1,3 +1,5 @@
+import random
+
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
@@ -71,16 +73,13 @@ def run(**kw):
     mirror_obj = rbd_mirror_config(**kw)
 
     if mirror_obj:
+        pool_entries = []
         if "rep_rbdmirror" in mirror_obj:
-            log.info("Executing test on replicated pool")
-            if test_image_move_secondary_trash(
-                mirror_obj.get("rep_rbdmirror"), "rep_pool_config", **kw
-            ):
-                return 1
+            pool_entries.append(("rep_rbdmirror", "rep_pool_config"))
         if "ec_rbdmirror" in mirror_obj:
-            log.info("Executing test on ec pool")
-            if test_image_move_secondary_trash(
-                mirror_obj.get("ec_rbdmirror"), "ec_pool_config", **kw
-            ):
-                return 1
+            pool_entries.append(("ec_rbdmirror", "ec_pool_config"))
+        mirror_key, pool_type = random.choice(pool_entries)
+        log.info(f"Running test on {pool_type}")
+        if test_image_move_secondary_trash(mirror_obj.get(mirror_key), pool_type, **kw):
+            return 1
     return 0

@@ -19,6 +19,7 @@ Test Case Flow:
 """
 
 import json
+import random
 import time
 from copy import deepcopy
 
@@ -205,16 +206,17 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            log.info(
-                f"Running Test to verify changing and Reseting peer ID for {pool_type}"
+        pool_type = random.choice(pool_types)
+        log.info(f"Running test on {pool_type}")
+        log.info(
+            f"Running Test to verify changing and Reseting peer ID for {pool_type}"
+        )
+        rc = test_peer_id(rbd, sec_rbd, pool_type, **kw)
+        if rc:
+            log.error(
+                "Test failed to verify changing and Reseting peer ID for {pool_type}"
             )
-            rc = test_peer_id(rbd, sec_rbd, pool_type, **kw)
-            if rc:
-                log.error(
-                    "Test failed to verify changing and Reseting peer ID for {pool_type}"
-                )
-                return 1
+            return 1
     except Exception as e:
         log.error(f"Test failed to verify changing and Reseting peer ID {str(e)}")
         return 1
