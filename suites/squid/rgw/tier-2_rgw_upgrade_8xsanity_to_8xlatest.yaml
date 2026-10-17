@@ -19,7 +19,7 @@ tests:
               service: cephadm
               args:
                 release: stable
-                registry-url: registry.redhat.io
+                registry-url: registry.stage.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
