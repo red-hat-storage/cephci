@@ -430,6 +430,8 @@ tests:
       name: get shared realm info on tertiary
       polarion-id: CEPH-83575227
 
+  # Sole set-env for full suite: clones qe-scripts + cluster access + set_config_param.
+  # Later sanity_rgw_multisite steps must not repeat set-env (avoids RGW/OSD restarts).
   - test:
       clusters:
         ceph-pri:
@@ -447,7 +449,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-ter
@@ -477,7 +478,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_buckets_creation.yaml
             run-on-haproxy: true
@@ -508,7 +508,6 @@ tests:
       clusters:
         ceph-ter:
           config:
-            set-env: true
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_buckets_creation.yaml
             run-on-haproxy: true
@@ -608,7 +607,6 @@ tests:
       clusters:
         ceph-ter:
           config:
-            set-env: true
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             run-on-haproxy: true
@@ -641,3 +639,69 @@ tests:
       module: sanity_rgw_multisite.py
       name: test assume role at secondary, with s3 ops
 
+  # CEPH-83633030 / tracker #81763 — sync status false "caught up" across period lag
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-ter:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch stop rgw.shared.ter.io"
+              - "ceph orch stop rgw.shared.ter.sync"
+              - "sleep 10"
+      desc: Stop tertiary RGW before master failover (sync-status epoch lag setup)
+      module: exec.py
+      name: stop tertiary RGW for sync-status epoch lag test
+      polarion-id: CEPH-83633030
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --master"
+              - "radosgw-admin period update --rgw-realm india --commit --yes-i-really-mean-it"
+              - "sleep 10"
+              - "radosgw-admin period get"
+      desc: Promote secondary to master to advance realm epoch while tertiary RGW is down
+      module: exec.py
+      name: promote secondary master for sync-status epoch lag test
+      polarion-id: CEPH-83633030
+
+  - test:
+      name: sync status misleading caught up with different period
+      desc: Verify sync status does not report caught up when zone is on older realm epoch
+      polarion-id: CEPH-83633030
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-ter:
+          config:
+            script-name: test_sync_status_misleading_caught_up.py
+            config-file-name: test_sync_status_misleading_caught_up.yaml
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-ter:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch start rgw.shared.ter.io"
+              - "ceph orch start rgw.shared.ter.sync"
+              - "sleep 30"
+        # Restore master on primary cluster (zone "primary" does not exist on ceph-sec)
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --master"
+              - "radosgw-admin period update --rgw-realm india --commit --yes-i-really-mean-it"
+              - "sleep 30"
+              - "radosgw-admin sync status"
+      desc: Restart tertiary RGW and restore primary as master after sync-status epoch lag test
+      module: exec.py
+      name: cleanup after sync-status epoch lag test
+      polarion-id: CEPH-83633030
