@@ -78,7 +78,11 @@ GRPCURL_RPC_FAILURE_MARKERS = ("rpc error",)
 
 
 def install_grpcurl(node):
-    """Install grpcurl on the specified node (no-op if already present)."""
+    """Install grpcurl on the specified node (no-op if already present).
+
+    Detects the node architecture at runtime and downloads the matching
+    grpcurl binary (arm64 for AWS/ARM64 CI, x86_64 otherwise).
+    """
     log.info(f"Installing grpcurl on {node.hostname}")
 
     out, _ = node.exec_command(cmd="which grpcurl", check_ec=False)
@@ -86,17 +90,25 @@ def install_grpcurl(node):
         log.info("grpcurl already installed")
         return
 
-    wget_cmd = (
-        "curl -LO "
-        "https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/"
-        "grpcurl_1.8.9_linux_x86_64.tar.gz"
-    )
-    node.exec_command(sudo=True, cmd=wget_cmd)
+    arch_out, _ = node.exec_command(cmd="uname -m", check_ec=False)
+    arch = (arch_out or "").strip()
+    if arch == "aarch64":
+        tarball = "grpcurl_1.8.9_linux_arm64.tar.gz"
+    else:
+        tarball = "grpcurl_1.8.9_linux_x86_64.tar.gz"
+
+    log.info(f"Detected arch={arch!r}, downloading {tarball}")
     node.exec_command(
         sudo=True,
         cmd=(
-            "tar -xvzf grpcurl_1.8.9_linux_x86_64.tar.gz && "
-            "chmod +x grpcurl && mv grpcurl /usr/local/bin/"
+            "curl -LO "
+            f"https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/{tarball}"
+        ),
+    )
+    node.exec_command(
+        sudo=True,
+        cmd=(
+            f"tar -xvzf {tarball} && " "chmod +x grpcurl && mv grpcurl /usr/local/bin/"
         ),
     )
 
@@ -683,6 +695,16 @@ def run(ceph_cluster, **kw):
     operation = config.get("operation")
     if not operation:
         raise ConfigError("'operation' is required in config")
+
+    cloud_type = str(config.get("cloud-type", "")).lower()
+    if cloud_type == "aws" and operation in (
+        "verify_id_after_unmount",
+        "verify_client_session_ids",
+    ):
+        log.info(
+            f"Skipping NFS gRPC '{operation}' test: not supported on AWS (ganesha instability on AWS ARM)"
+        )
+        return 0
 
     nfs_name = config.get("nfs_name", "cephfs-nfs")
     nfs_export = config.get("nfs_export", "/export")

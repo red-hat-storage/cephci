@@ -47,9 +47,15 @@ def validate_spam_log_using_cmd(node, installer):
     mgr_ps = loads(CephAdm(node).ceph.orch.ps(daemon_type="mgr", format="json"))
     if not mgr_ps:
         raise OperationFailedError("Failed to get mgr ps")
+    installer_hostname = installer.hostname
     daemon_name = [
-        key["daemon_name"] for key in mgr_ps if "installer" in key["daemon_name"]
+        key["daemon_name"] for key in mgr_ps if installer_hostname in key["daemon_name"]
     ]
+    if not daemon_name:
+        raise OperationFailedError(
+            f"No mgr daemon found matching installer hostname {installer_hostname!r}; "
+            f"available daemons: {[k['daemon_name'] for k in mgr_ps]}"
+        )
 
     # Spam logs had the string "Detected new or changed devices" in them
     # These logs were being over-populated and getting triggered whenever
