@@ -27,6 +27,7 @@ from nfs_delegation_operations import (
     wait_for_delegation_grant,
     wait_for_delegation_path,
     wait_for_delegreturn_in_ganesha_capture,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -67,7 +68,9 @@ def run(ceph_cluster, **kw):
     hold_s = timing.hold_seconds
     ready_s = timing.hold_ready_seconds
     settle_s = timing.log_settle_seconds
+    exit_wait = timing.exit_wait_seconds
     path_wait_retries = timing.path_wait_retries
+    grant_wait = max(ready_s, settle_s)
     redeploy_wait = int(config.get("redeploy_wait", 30))
     service_wait = int(config.get("service_wait_timeout", 300))
     subvol_group = config.get("subvolume_group", "deleglifecyclegrp")
@@ -120,12 +123,22 @@ def run(ceph_cluster, **kw):
 
         mount_delegation_export(client, mount_point, nfs_ver, port, server, export_rw)
 
-        write_delegation_file(client, path, "seed-client_unmount\n")
-        wait_for_delegation_path(
-            client, path, "seed client_unmount", retries=path_wait_retries
+        def _seed_unmount_file():
+            write_delegation_file(client, path, "seed-client_unmount\n")
+            wait_for_delegation_path(
+                client, path, "seed client_unmount", retries=path_wait_retries
+            )
+
+        # Wait for seed DELEGRETURN before truncate so the grant poll cannot miss
+        # OPEN/grant lines (or false-pass on leftover seed return markers).
+        wait_seed_delegreturn_then_truncate(
+            nfs_node,
+            container_id,
+            _seed_unmount_file,
+            timeout_seconds=exit_wait,
+            scenario_name="client_unmount",
         )
 
-        truncate_ganesha_container_log(nfs_node, container_id)
         start_ganesha_delegation_tailf_follow(nfs_node, container_id)
         try:
             write_delegation_file(client, path, "hold-write\n")
@@ -135,7 +148,7 @@ def run(ceph_cluster, **kw):
                 nfs_node,
                 container_id,
                 hold_mode="write",
-                timeout_seconds=max(ready_s, 20),
+                timeout_seconds=grant_wait,
                 scenario_name="client_unmount_grant",
             )
             write_delegation_file(client, path, "lifecycle-io\n", append=True)

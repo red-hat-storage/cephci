@@ -6,6 +6,7 @@ Phase B: Client A returns delegation; Client B obtains WRITE delegation.
 """
 
 from nfs_delegation_operations import (
+    RE_DELEGATION_DELEGRETURN,
     capture_delegation_ganesha_log_phase,
     create_delegation_exports,
     delegation_timing_from_config,
@@ -193,10 +194,21 @@ def run(ceph_cluster, **kw):
         log.info(
             "Phase B: Client A returns delegation; Client B obtains WRITE delegation"
         )
-        release_delegation_hold_gracefully(client_a, term_wait_seconds=5)
+        # Phase A recall often already completes DELEGRETURN while A still holds the FD.
+        # Start capture *before* release so any late return is observed; skip the hard
+        # wait when Phase A capture already showed DELEGRETURN.
+        phase_a_returned = bool(
+            RE_DELEGATION_DELEGRETURN.search("\n".join(conflict_hits or []))
+        )
         start_ganesha_delegation_tailf_follow(nfs_node, container_id)
         try:
-            if not wait_for_delegreturn_in_ganesha_capture(
+            release_delegation_hold_gracefully(client_a, term_wait_seconds=5)
+            if phase_a_returned:
+                log.info(
+                    "Phase A conflict capture already has DELEGRETURN; "
+                    "proceeding to Client B WRITE grant"
+                )
+            elif not wait_for_delegreturn_in_ganesha_capture(
                 nfs_node, container_id, timeout_seconds=return_wait + 30
             ):
                 raise OperationFailedError(

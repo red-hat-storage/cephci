@@ -74,64 +74,60 @@ tests:
       name: Deploy cluster using cephadm
 
   - test:
+      name: configure clients
+      desc: Configure client.1-client.4 in parallel
+      module: test_parallel.py
       abort-on-fail: true
-      config:
-        command: add
-        id: client.1
-        node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.2
-        node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.4
-        node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
+      parallel:
+        - test:
+            name: configure client.1
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.1
+              node: node4
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.2
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.2
+              node: node5
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.3
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.3
+              node: node6
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.4
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.4
+              node: node7
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
 
   - test:
       name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access

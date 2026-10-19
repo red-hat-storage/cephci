@@ -29,13 +29,18 @@ def create_soft_link(client, mount_point, file_count):
 
 
 def perform_lookups(client, mount_point, num_files):
-    for _ in range(1, num_files):
+    """Lookup each file/link by path (avoids repeated full-tree recursive listings).
+
+    Runs concurrently with create/link, so missing paths are tolerated here.
+    Callers must verify all paths exist after threads join.
+    """
+    for i in range(1, num_files + 1):
         try:
-            log.info(
-                client.exec_command(
-                    cmd=f"ls -laRt {mount_point}/",
-                )
+            out, _ = client.exec_command(
+                cmd=f"ls -la {mount_point}/file{i} {mount_point}/link_file{i}",
+                check_ec=False,
             )
+            log.info(out)
         except FileNotFoundError as e:
             error_message = str(e)
             if "No such file or directory" not in error_message:
@@ -43,6 +48,19 @@ def perform_lookups(client, mount_point, num_files):
             log.warning(f"Ignoring error: {error_message}")
         except Exception:
             raise OperationFailedError("failed to perform lookups")
+
+
+def verify_files_and_links(client, mount_point, file_count):
+    """Fail if any created file or soft-link is missing after concurrent IO."""
+    for i in range(1, file_count + 1):
+        try:
+            client.exec_command(
+                cmd=f"test -f {mount_point}/file{i} && test -L {mount_point}/link_file{i}"
+            )
+        except Exception:
+            raise OperationFailedError(
+                f"missing file{i} and/or link_file{i} under {mount_point}"
+            )
 
 
 def run(ceph_cluster, **kw):
@@ -103,10 +121,13 @@ def run(ceph_cluster, **kw):
         # Wait for all operation to finish
         for operation in operations:
             operation.join()
+        # Concurrent lookups tolerate missing paths; assert final state.
+        verify_files_and_links(clients[1], nfs_mount, file_count)
         return 0
 
     except Exception as e:
         log.error(f"Error : {e}")
+        return 1
     finally:
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)

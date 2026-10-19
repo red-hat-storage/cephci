@@ -276,9 +276,7 @@ def run(ceph_cluster, **kw):
 
         def _seed_stress_files():
             nonlocal workload_specs, conflict_paths
-            workload_specs = _seed_workload_files(
-                mount_roots, timing.path_wait_retries
-            )
+            workload_specs = _seed_workload_files(mount_roots, timing.path_wait_retries)
             conflict_paths = _seed_conflict_file(
                 clients, mount_roots, timing.path_wait_retries
             )
