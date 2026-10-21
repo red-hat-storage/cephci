@@ -1,4 +1,5 @@
 from ceph.ceph_admin.common import config_dict_to_string
+from ceph.nvmeof.cli.v2.common import run_with_connect_retry
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -53,13 +54,22 @@ class ExecuteCommandMixin:
                 config_dict_to_string(cmd_args),
             ]
         )
-        err, out = self.node.exec_command(cmd=command, sudo=True, pretty_print=True)
-        LOG.info(f"ERROR - {err or None},\nOUTPUT - {out}")
 
-        if DISCARD_OUTPUT_STR in out:
-            # TODO: This is the workaround to discard unwanted output for NVMe CLI
-            #   commands with mTLS. And this workaround has to discarded once
-            #   this BZ (https://bugzilla.redhat.com/show_bug.cgi?id=2304066) is fixed.
-            out = out.split("\n", 1)[-1]
+        def _exec():
+            err, out = self.node.exec_command(cmd=command, sudo=True, pretty_print=True)
+            LOG.info(f"ERROR - {err or None},\nOUTPUT - {out}")
 
-        return out, err
+            if DISCARD_OUTPUT_STR in out:
+                # TODO: This is the workaround to discard unwanted output for NVMe CLI
+                #   commands with mTLS. And this workaround has to discarded once
+                #   this BZ (https://bugzilla.redhat.com/show_bug.cgi?id=2304066) is fixed.
+                out = out.split("\n", 1)[-1]
+
+            return out, err
+
+        # As a alternative to bug reported https://ibm-ceph.atlassian.net/browse/IBMCEPH-16456,
+        # Which is intermittent and happens when the NVMe CLI is executed on a gateway node.
+        # we are using a retry mechanism to handle the connection error.
+        return run_with_connect_retry(
+            _exec, description=f"NVMe CLI command : {entity} {action}"
+        )
