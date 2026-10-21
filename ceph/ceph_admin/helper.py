@@ -199,9 +199,24 @@ class GenerateServiceSpec:
         return nodes[0] if nodes else None
 
     @staticmethod
+    def _usable_reserved_address(result):
+        """Return a reserved IP address, ignoring IBM's unassigned placeholder."""
+        address = str((result or {}).get("address") or "")
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            return None
+        if ip.is_unspecified or ip.is_loopback or ip.is_multicast:
+            return None
+        return str(ip)
+
+    @staticmethod
     def _create_reserved_ip(vm_node):
         """
         Reserve an IP on the node's VPC subnet via the IBM Cloud VPC API.
+
+        The create call often returns address 0.0.0.0 while lifecycle_state is
+        still pending. Poll until IBM assigns a real address.
 
         Args:
             vm_node: CephVMNodeIBM instance
@@ -210,14 +225,48 @@ class GenerateServiceSpec:
             (reserved_ip_id, address, prefix) tuple
         """
         subnet_id = vm_node.node["primary_network_interface"]["subnet"]["id"]
-        result = vm_node.service.create_subnet_reserved_ip(
-            subnet_id=subnet_id
-        ).get_result()
-        address = result["address"]
-        LOG.info("Reserved IP %s on subnet %s", address, subnet_id)
+        service = vm_node.service
+        result = service.create_subnet_reserved_ip(subnet_id=subnet_id).get_result()
+        reserved_id = result["id"]
+        address = GenerateServiceSpec._usable_reserved_address(result)
 
+        # IBM documents 0.0.0.0 until the reserved IP leaves pending.
+        for _ in range(30):
+            if address:
+                break
+            state = result.get("lifecycle_state")
+            LOG.info(
+                "Waiting for reserved IP %s on subnet %s (state=%s address=%s)",
+                reserved_id,
+                subnet_id,
+                state,
+                result.get("address"),
+            )
+            if state == "failed":
+                break
+            sleep(2)
+            result = service.get_subnet_reserved_ip(subnet_id=subnet_id, id=reserved_id).get_result()
+            address = GenerateServiceSpec._usable_reserved_address(result)
+
+        if not address:
+            try:
+                service.delete_subnet_reserved_ip(subnet_id=subnet_id, id=reserved_id)
+            except Exception as err:  # noqa
+                LOG.warning("Failed to delete unassigned reserved IP %s: %s", reserved_id, err)
+            raise ValueError(
+                "IBM reserved IP %s on subnet %s was not assigned an address "
+                "(lifecycle_state=%s, address=%s)"
+                % (
+                    reserved_id,
+                    subnet_id,
+                    result.get("lifecycle_state"),
+                    result.get("address"),
+                )
+            )
+
+        LOG.info("Reserved IP %s on subnet %s", address, subnet_id)
         prefix = ipaddress.ip_network(vm_node.subnet, strict=False).prefixlen
-        return result["id"], address, prefix
+        return reserved_id, address, prefix
 
     def _used_ingress_addresses(self):
         """Return IP strings already assigned to nodes or earlier auto VIPs."""
