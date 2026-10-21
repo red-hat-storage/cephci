@@ -10,10 +10,13 @@ from datetime import datetime, timedelta
 from os.path import dirname
 from time import sleep
 from typing import Optional
+from uuid import uuid4
 
 from dateutil import parser
+from ibm_cloud_sdk_core.api_exception import ApiException
 from jinja2 import Template
 from looseversion import LooseVersion
+from requests.exceptions import RequestException
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
@@ -211,12 +214,64 @@ class GenerateServiceSpec:
         return str(ip)
 
     @staticmethod
+    def _find_named_reserved_ip(service, subnet_id, name):
+        """Return the reserved IP dict with this name, if the create response was lost."""
+        try:
+            page = service.list_subnet_reserved_ips(
+                subnet_id=subnet_id, sort="-created_at", limit=100
+            ).get_result()
+        except (RequestException, ApiException) as err:
+            LOG.warning("Could not list reserved IPs on subnet %s: %s", subnet_id, err)
+            return None
+        for reserved in page.get("reserved_ips") or []:
+            if reserved.get("name") == name:
+                return reserved
+        return None
+
+    @staticmethod
+    def _create_reserved_ip_once(service, subnet_id, name):
+        """Create a named reserved IP, recovering it if the POST response is lost."""
+        last_err = None
+        for attempt in range(5):
+            try:
+                return service.create_subnet_reserved_ip(
+                    subnet_id=subnet_id, name=name
+                ).get_result()
+            except RequestException as err:
+                last_err = err
+            except ApiException as err:
+                if err.status_code not in (409, 429, 500, 502, 503, 504):
+                    raise
+                last_err = err
+            LOG.warning(
+                "Reserved IP create failed on subnet %s (attempt %s): %s",
+                subnet_id,
+                attempt + 1,
+                last_err,
+            )
+            found = GenerateServiceSpec._find_named_reserved_ip(
+                service, subnet_id, name
+            )
+            if found:
+                LOG.info(
+                    "Found reserved IP %s after a lost create response", found.get("id")
+                )
+                return found
+            sleep(min(2**attempt, 8))
+        raise ValueError(
+            "IBM reserved IP create failed on subnet %s after retries: %s"
+            % (subnet_id, last_err)
+        )
+
+    @staticmethod
     def _create_reserved_ip(vm_node):
         """
         Reserve an IP on the node's VPC subnet via the IBM Cloud VPC API.
 
         The create call often returns address 0.0.0.0 while lifecycle_state is
-        still pending. Poll until IBM assigns a real address.
+        still pending. Poll until IBM assigns a real address. A connection reset
+        on the POST is retried, and the named reservation is reused if IBM
+        created it but the response never came back.
 
         Args:
             vm_node: CephVMNodeIBM instance
@@ -226,7 +281,8 @@ class GenerateServiceSpec:
         """
         subnet_id = vm_node.node["primary_network_interface"]["subnet"]["id"]
         service = vm_node.service
-        result = service.create_subnet_reserved_ip(subnet_id=subnet_id).get_result()
+        name = "cephci-ingress-%s" % uuid4().hex[:12]
+        result = GenerateServiceSpec._create_reserved_ip_once(service, subnet_id, name)
         reserved_id = result["id"]
         address = GenerateServiceSpec._usable_reserved_address(result)
 
@@ -245,14 +301,22 @@ class GenerateServiceSpec:
             if state == "failed":
                 break
             sleep(2)
-            result = service.get_subnet_reserved_ip(subnet_id=subnet_id, id=reserved_id).get_result()
+            try:
+                result = service.get_subnet_reserved_ip(
+                    subnet_id=subnet_id, id=reserved_id
+                ).get_result()
+            except (RequestException, ApiException) as err:
+                LOG.warning("Reserved IP lookup failed for %s: %s", reserved_id, err)
+                continue
             address = GenerateServiceSpec._usable_reserved_address(result)
 
         if not address:
             try:
                 service.delete_subnet_reserved_ip(subnet_id=subnet_id, id=reserved_id)
             except Exception as err:  # noqa
-                LOG.warning("Failed to delete unassigned reserved IP %s: %s", reserved_id, err)
+                LOG.warning(
+                    "Failed to delete unassigned reserved IP %s: %s", reserved_id, err
+                )
             raise ValueError(
                 "IBM reserved IP %s on subnet %s was not assigned an address "
                 "(lifecycle_state=%s, address=%s)"
@@ -350,7 +414,11 @@ class GenerateServiceSpec:
 
         vm_node = getattr(node, "vm_node", None)
         service = getattr(vm_node, "service", None)
-        if service and getattr(vm_node, "node", None) and hasattr(service, "create_subnet_reserved_ip"):
+        if (
+            service
+            and getattr(vm_node, "node", None)
+            and hasattr(service, "create_subnet_reserved_ip")
+        ):
             reserved_ip_id, address, prefix = self._create_reserved_ip(vm_node)
             vip_cidr = f"{address}/{prefix}"
             vip_list = getattr(self.cluster, "_ingress_vips", [])
@@ -360,7 +428,9 @@ class GenerateServiceSpec:
                     "address": address,
                     "prefix": prefix,
                     "cidr": vip_cidr,
-                    "subnet_id": vm_node.node["primary_network_interface"]["subnet"]["id"],
+                    "subnet_id": vm_node.node["primary_network_interface"]["subnet"][
+                        "id"
+                    ],
                 }
             )
             self.cluster._ingress_vips = vip_list
@@ -413,7 +483,9 @@ class GenerateServiceSpec:
                 remaining.append(vip)
                 continue
             try:
-                service.delete_subnet_reserved_ip(subnet_id=vip["subnet_id"], id=vip["id"])
+                service.delete_subnet_reserved_ip(
+                    subnet_id=vip["subnet_id"], id=vip["id"]
+                )
                 LOG.info("Released reserved IP %s", vip["address"])
             except Exception as err:  # noqa
                 LOG.warning("Failed to release reserved IP %s: %s", vip["address"], err)
