@@ -179,10 +179,25 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        if client1:
+            try:
+                client1.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "pkill -f '/root/mds_empty_omap_commit_soak.sh' || true; "
+                        "sleep 2"
+                    ),
+                    check_ec=False,
+                )
+            except Exception:
+                pass
         if client1 and base:
             try:
                 client1.exec_command(
-                    sudo=True, cmd=f"rm -rf {base}", check_ec=False, timeout=600
+                    sudo=True,
+                    cmd=f"rm -rf -- '{base}'",
+                    check_ec=False,
+                    timeout=600,
                 )
             except Exception:
                 pass

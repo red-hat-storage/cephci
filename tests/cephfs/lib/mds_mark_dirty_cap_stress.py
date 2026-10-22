@@ -109,11 +109,20 @@ def main():
                 f"hard_err={err.value} remaining_s={left}",
                 flush=True,
             )
+            # Stop waiting once soak window elapsed; workers should exit on stop_at.
+            if left == 0:
+                break
     except KeyboardInterrupt:
-        print("INTERRUPTED — waiting for workers", flush=True)
+        print("INTERRUPTED — stopping workers", flush=True)
 
     for p in procs:
-        p.join()
+        p.join(timeout=30)
+        if p.is_alive():
+            p.terminate()
+            p.join(timeout=10)
+            if p.is_alive():
+                p.kill()
+                p.join(timeout=5)
     print(f"DONE ops~={counters.value} hard_err={err.value}", flush=True)
     return 0 if err.value == 0 else 1
 

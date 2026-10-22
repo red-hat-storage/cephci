@@ -145,7 +145,16 @@ def run(ceph_cluster, **kw):
             try:
                 client1.exec_command(
                     sudo=True,
-                    cmd=f"rm -rf {fuse_mounting_dir.rstrip('/')}/test_mark_dirty",
+                    cmd="pkill -f '/root/mds_mark_dirty_cap_stress.py' || true; sleep 2",
+                    check_ec=False,
+                )
+            except Exception:
+                pass
+            try:
+                hot_tree = f"{fuse_mounting_dir.rstrip('/')}/test_mark_dirty"
+                client1.exec_command(
+                    sudo=True,
+                    cmd=f"rm -rf -- '{hot_tree}'",
                     check_ec=False,
                     timeout=600,
                 )
