@@ -28,6 +28,59 @@ class BootStrapValidationFailure(Exception):
     pass
 
 
+# Monitoring images are configured only after bootstrap returns. Applying these
+# via --apply-spec during bootstrap pins daemons to default registry images
+# (e.g. cp.icr.io on IBM builds) that CI credentials often cannot pull.
+_DEFERRED_MONITORING_SPEC_TYPES = (
+    "prometheus",
+    "grafana",
+    "alertmanager",
+    "node-exporter",
+)
+
+
+def _split_deferred_monitoring_specs(args):
+    """Remove monitoring entries from apply-spec for post-bootstrap deploy.
+
+    Returns the deferred monitoring specs (may be empty).
+    """
+    specs = args.get("apply-spec")
+    if not specs:
+        return []
+
+    deferred = []
+    remaining = []
+    for spec in specs:
+        if spec.get("service_type") in _DEFERRED_MONITORING_SPEC_TYPES:
+            deferred.append(spec)
+        else:
+            remaining.append(spec)
+
+    if not deferred:
+        return []
+
+    args["apply-spec"] = remaining
+    log.info(
+        "Deferring monitoring apply-spec until after image overrides: %s",
+        [spec.get("service_type") for spec in deferred],
+    )
+    return deferred
+
+
+def _apply_deferred_monitoring_specs(instance, specs):
+    """Apply and validate monitoring specs after custom images are configured."""
+    if not specs:
+        return
+
+    log.info("Applying deferred monitoring specs after bootstrap image overrides")
+    instance.apply_spec(
+        {
+            "specs": specs,
+            "validate-spec-services": True,
+        }
+    )
+
+
 def verify_dashboard_login(url, data):
     """Verify Ceph dashboard login using API call.
 
@@ -592,7 +645,12 @@ def run(ceph_cluster, **kw):
         instance.shell(args=config["args"])
         return 0
 
+    deferred_monitoring = []
     try:
+        args = config.get("args", {})
+        if command == "bootstrap":
+            deferred_monitoring = _split_deferred_monitoring_specs(args)
+
         method = fetch_method(instance, command)
         out, err = method(config)
 
@@ -601,6 +659,10 @@ def run(ceph_cluster, **kw):
         # currently console response coming through stderr.
         args = config.get("args", {})
         verify_bootstrap(instance, args, out + err)
+
+        # Deploy monitoring only after bootstrap has set container_image_* so
+        # IBM/preprod builds do not stick on unauthorized default cp.icr.io tags.
+        _apply_deferred_monitoring_specs(instance, deferred_monitoring)
     finally:
         log.debug("Gathering cluster state after running test_bootstrap")
         get_cluster_state(instance)
