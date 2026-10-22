@@ -14,6 +14,7 @@ from ceph.ceph_admin.helper import (
     get_cluster_state,
     get_hosts_deployed,
 )
+from ceph.ceph_admin.orch import Orch
 from utility.log import Log
 
 log = Log(__name__)
@@ -73,7 +74,9 @@ def _apply_deferred_monitoring_specs(instance, specs):
         return
 
     log.info("Applying deferred monitoring specs after bootstrap image overrides")
-    instance.apply_spec(
+    # CephAdmin has no apply_spec; orch owns post-bootstrap service apply.
+    orch = Orch(cluster=instance.cluster, **instance.config)
+    orch.apply_spec(
         {
             "specs": specs,
             "validate-spec-services": True,
