@@ -1,5 +1,3 @@
-from time import sleep
-
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
 from cli.exceptions import ConfigError
@@ -102,6 +100,5 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Cleaning up")
-        sleep(30)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")

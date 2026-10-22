@@ -2,7 +2,7 @@ import re
 from distutils.version import LooseVersion
 
 from ceph.ceph_admin.common import config_dict_to_string
-from ceph.nvmeof.cli.v2.common import substitute_keys
+from ceph.nvmeof.cli.v2.common import run_with_connect_retry, substitute_keys
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -112,5 +112,10 @@ class BaseCLI:
             config_dict_to_string(cmd_args),
             config_dict_to_string(base_cmd_args),
         ]
-        out, err = self.shell(args=command, pretty_print=True)
-        return out, err
+        # As a alternative to bug reported https://ibm-ceph.atlassian.net/browse/IBMCEPH-16456,
+        # Which is intermittent and happens when the NVMe CLI is executed on a gateway node.
+        # we are using a retry mechanism to handle the connection error.
+        return run_with_connect_retry(
+            lambda: self.shell(args=command, pretty_print=True),
+            description=f"NVMeoF command - {entity} {action}",
+        )

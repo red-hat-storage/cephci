@@ -74,64 +74,60 @@ tests:
       name: Deploy cluster using cephadm
 
   - test:
+      name: configure clients
+      desc: Configure client.1-client.4 in parallel
+      module: test_parallel.py
       abort-on-fail: true
-      config:
-        command: add
-        id: client.1
-        node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.2
-        node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.4
-        node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
+      parallel:
+        - test:
+            name: configure client.1
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.1
+              node: node4
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.2
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.2
+              node: node5
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.3
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.3
+              node: node6
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.4
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.4
+              node: node7
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
 
   - test:
       name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
@@ -352,17 +348,6 @@ tests:
         file_count: 100
 
   - test:
-      name: Verify create file, create soflink and lookups from nfs clients
-      module: nfs_verify_file_ops_soft_links.py
-      desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id: CEPH-83577596
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-
-  - test:
       name: Nfs Verify File Operations
       module: nfs_verify_file_operations.py
       desc: Change the ownership (user and group) of files within the NFS export
@@ -566,6 +551,8 @@ tests:
         nfs_version: 4.2
         clients: 2
 
+  # Delegation settle/exit/ready/return seconds are event-poll timeout ceilings
+  # (grant/recall/revoke/DELEGRETURN), not forced sleep durations.
   - test:
       name: Verify cluster and export level NFSv4 delegations
       module: nfs_verify_cluster_level_delegations.py

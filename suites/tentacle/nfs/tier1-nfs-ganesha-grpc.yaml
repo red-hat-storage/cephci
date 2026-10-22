@@ -1,14 +1,13 @@
 #===============================================================================================
 #-------------------------------------
-#---  NFS Ganesha gRPC Tests Suite ---
+#---  NFS Ganesha gRPC Smoke Suite ---
 #-------------------------------------
 # Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
-# Test cases for NFS Ganesha gRPC service functionality:
-#    - Verify gRPC Service Port Availability (port 50051)
-#    - Verify gRPC Service Discovery
-#    - Grace Period Events (Event IDs 0, 2, 4, 5)
-#    - Client and Session ID verification
-#    - ID Updates After Client Unmount
+# Core nfsService gRPC smoke (port, discovery, grace, client/session IDs).
+# Full Export / ClientMgr / Admin / Stats coverage:
+#   suites/tentacle/nfs/tier1-nfs-ganesha-grpc-admin.yaml
+# Optional RPC perf / build:
+#   suites/tentacle/nfs/tier1-nfs-ganesha-grpc-perf.yaml
 #
 #===============================================================================================
 tests:
