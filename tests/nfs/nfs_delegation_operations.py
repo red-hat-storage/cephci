@@ -142,22 +142,28 @@ def skip_delegation_tests_unless_supported(config: Optional[ConfigDict] = None) 
     return True
 
 
-# Delegation test timing (seconds). Ganesha NFSv4 delegations are lease-driven; many
-# clusters use a ~90s lease. These values add margin for async grant/recall and for
-# FULL_DEBUG lines to reach the in-container tail -f | grep capture.
+# Delegation test timing (seconds). Suite keys below are timeout *ceilings* for
+# event-driven Ganesha log polls (grant/recall/revoke/DELEGRETURN), not forced
+# sleep durations. Recall/revoke can take 60-70s on some clusters; settle default
+# 90s covers that while fast paths return as soon as log events appear.
 #
-# After seed IO (OPEN/CLOSE): let any prior delegation return before the next capture.
+# After seed IO (OPEN/CLOSE): max wait for prior DELEGRETURN before next capture.
 DELEGATION_EXIT_WAIT_SECONDS_DEFAULT = 120
 # Background OPEN hold: keep the delegation active while a peer runs conflicting IO.
 DELEGATION_HOLD_SECONDS_DEFAULT = 120
-# After starting the hold OPEN, before peer IO, so grant can complete asynchronously.
+# After starting the hold OPEN: max wait for grant lines before peer IO.
 DELEGATION_HOLD_READY_SECONDS_DEFAULT = 8
-# After client A returns a delegation, before peer conflict IO (revoke scenarios).
+# After client A returns a delegation: max wait before / for peer conflict path.
 DELEGATION_RETURN_WAIT_SECONDS_DEFAULT = 15
-# After scenario IO: wait for recall/grant lines in the filtered ganesha.log capture.
+# After scenario IO: max wait for recall/grant lines in the filtered capture.
 DELEGATION_LOG_SETTLE_SECONDS_DEFAULT = 90
 # Poll attempts when waiting for a seeded file to appear on an NFS mount.
 DELEGATION_PATH_WAIT_RETRIES_DEFAULT = 40
+# Negative (expect no recall) observation window after peer IO. Must match the
+# positive settle ceiling so late 60–70s recalls cannot false-pass.
+DELEGATION_NO_RECALL_OBSERVE_SECONDS_DEFAULT = DELEGATION_LOG_SETTLE_SECONDS_DEFAULT
+# Default poll interval for event-driven capture waits.
+DELEGATION_EVENT_POLL_SECONDS_DEFAULT = 2
 
 # Loose stress capture: grant-ish and recall/return-ish line patterns.
 RE_DELEGATION_STRESS_GRANT_ACTIVITY = re.compile(
@@ -186,6 +192,9 @@ def delegation_timing_from_config(config: Mapping[str, Any]) -> DelegationTiming
     Keys: ``delegation_exit_wait_seconds``, ``delegation_hold_seconds``,
     ``delegation_hold_ready_seconds``, ``delegation_return_wait_seconds``,
     ``delegation_log_settle_seconds``, ``path_wait_retries``.
+
+    Exit/ready/return/settle values are max wait ceilings for event polls, not
+    blind sleep durations.
     """
     cfg = config or {}
     timing = DelegationTiming(
@@ -219,8 +228,8 @@ def delegation_timing_from_config(config: Mapping[str, Any]) -> DelegationTiming
         ),
     )
     log.info(
-        "delegation timing: exit_wait=%ss hold=%ss ready=%ss return_wait=%ss "
-        "settle=%ss path_retries=%s",
+        "delegation timing (event-poll ceilings): exit_wait=%ss hold=%ss "
+        "ready=%ss return_wait=%ss settle=%ss path_retries=%s",
         timing.exit_wait_seconds,
         timing.hold_seconds,
         timing.hold_ready_seconds,
@@ -413,14 +422,56 @@ def capture_delegation_ganesha_log_phase(
     container_id: str,
     settle_seconds: int,
     phase_action: Callable[[], None],
+    require_all: Optional[Sequence[re.Pattern]] = None,
+    predicate: Optional[Callable[[List[str]], bool]] = None,
+    scenario_name: str = "delegation_phase",
+    hold_mode: Optional[str] = None,
+    wait_for_recall: bool = False,
 ) -> List[str]:
-    """Truncate ganesha.log, run *phase_action*, capture delegation lines for one phase."""
+    """
+    Truncate ganesha.log, run *phase_action*, poll capture until events or timeout.
+
+    *settle_seconds* is the max wait ceiling. When *hold_mode* is set, wait for a
+    matching grant; when *wait_for_recall* is True, wait for recall completion.
+    Explicit *require_all* / *predicate* override those shortcuts.
+    """
     truncate_ganesha_container_log(nfs_node, container_id)
     start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-    phase_action()
-    time.sleep(int(settle_seconds))
-    stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-    return read_ganesha_delegation_tailf_capture(nfs_node, container_id)
+    try:
+        phase_action()
+        if require_all or predicate:
+            return wait_for_delegation_log_events(
+                nfs_node,
+                container_id,
+                require_all=require_all,
+                timeout_seconds=settle_seconds,
+                predicate=predicate,
+                scenario_name=scenario_name,
+            )
+        if wait_for_recall:
+            return wait_for_delegation_recall(
+                nfs_node,
+                container_id,
+                timeout_seconds=settle_seconds,
+                scenario_name=scenario_name,
+            )
+        if hold_mode in ("read", "write"):
+            return wait_for_delegation_grant(
+                nfs_node,
+                container_id,
+                hold_mode=hold_mode,
+                timeout_seconds=settle_seconds,
+                scenario_name=scenario_name,
+            )
+        return wait_for_delegation_log_events(
+            nfs_node,
+            container_id,
+            require_all=(RE_DELEGATION_ATTEMPT_GRANT,),
+            timeout_seconds=settle_seconds,
+            scenario_name=scenario_name,
+        )
+    finally:
+        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
 
 
 def hold_new_file_write_open(client: CephNode, path: str, seconds: int) -> None:
@@ -842,17 +893,253 @@ def release_delegation_hold_gracefully(
     kill_delegation_holds(client)
 
 
+def wait_for_delegation_log_events(
+    nfs_node: CephNode,
+    container_id: str,
+    *,
+    require_all: Optional[Sequence[re.Pattern]] = None,
+    timeout_seconds: int,
+    poll_seconds: int = DELEGATION_EVENT_POLL_SECONDS_DEFAULT,
+    predicate: Optional[Callable[[List[str]], bool]] = None,
+    scenario_name: str = "delegation",
+    raise_on_timeout: bool = True,
+) -> List[str]:
+    """
+    Poll filtered tail -f capture until every regex in *require_all* matches
+    and/or *predicate* returns True.
+
+    Returns the capture lines on success. When *raise_on_timeout* is False,
+    returns the last capture (possibly empty) after timeout without raising.
+    """
+    patterns = list(require_all or [])
+    if not patterns and predicate is None:
+        raise ConfigError(
+            "wait_for_delegation_log_events requires require_all and/or predicate"
+        )
+    deadline = time.time() + int(timeout_seconds)
+    hits: List[str] = []
+    while time.time() < deadline:
+        hits = list(read_ganesha_delegation_tailf_capture(nfs_node, container_id) or [])
+        text = "\n".join(hits)
+        patterns_ok = all(p.search(text) for p in patterns) if patterns else True
+        predicate_ok = predicate(hits) if predicate is not None else True
+        if patterns_ok and predicate_ok:
+            log.info(
+                "%s: delegation log events matched within timeout=%ss (%d capture lines)",
+                scenario_name,
+                timeout_seconds,
+                len(hits),
+            )
+            return hits
+        time.sleep(int(poll_seconds))
+    if not raise_on_timeout:
+        return hits
+    tail = "\n".join(hits[-40:]) if hits else "<empty capture>"
+    raise OperationFailedError(
+        "%s: timed out after %ss waiting for delegation log events "
+        "(patterns=%r); last capture lines:\n%s"
+        % (
+            scenario_name,
+            timeout_seconds,
+            [getattr(p, "pattern", str(p)) for p in patterns],
+            tail,
+        )
+    )
+
+
+def wait_for_delegation_grant(
+    nfs_node: CephNode,
+    container_id: str,
+    *,
+    hold_mode: str = "write",
+    timeout_seconds: int,
+    poll_seconds: int = DELEGATION_EVENT_POLL_SECONDS_DEFAULT,
+    scenario_name: str = "delegation_grant",
+) -> List[str]:
+    """Poll until grant attempt and expected delegation_type (4=read, 5=write)."""
+    expected = 5 if hold_mode == "write" else 4
+
+    def _grant_ready(hits: List[str]) -> bool:
+        text = "\n".join(hits or [])
+        if not RE_DELEGATION_ATTEMPT_GRANT.search(text):
+            return False
+        return expected in parse_nfs4_open_delegation_types(text)
+
+    return wait_for_delegation_log_events(
+        nfs_node,
+        container_id,
+        timeout_seconds=timeout_seconds,
+        poll_seconds=poll_seconds,
+        predicate=_grant_ready,
+        scenario_name=scenario_name,
+    )
+
+
+def wait_for_delegation_recall(
+    nfs_node: CephNode,
+    container_id: str,
+    *,
+    timeout_seconds: int,
+    poll_seconds: int = DELEGATION_EVENT_POLL_SECONDS_DEFAULT,
+    scenario_name: str = "delegation_recall",
+) -> List[str]:
+    """Poll until Recalling and successfully recalled appear in capture."""
+    return wait_for_delegation_log_events(
+        nfs_node,
+        container_id,
+        require_all=(RE_DELEGATION_RECALLING, RE_DELEGATION_RECALLED),
+        timeout_seconds=timeout_seconds,
+        poll_seconds=poll_seconds,
+        scenario_name=scenario_name,
+    )
+
+
+def wait_for_delegation_revoke(
+    nfs_node: CephNode,
+    container_id: str,
+    *,
+    timeout_seconds: int,
+    poll_seconds: int = DELEGATION_EVENT_POLL_SECONDS_DEFAULT,
+    scenario_name: str = "delegation_revoke",
+) -> List[str]:
+    """Poll until Recalling and (Revoking or successfully recalled) appear."""
+
+    def _revoke_ready(hits: List[str]) -> bool:
+        text = "\n".join(hits or [])
+        if not RE_DELEGATION_RECALLING.search(text):
+            return False
+        return bool(
+            RE_DELEGATION_REVOKING.search(text) or RE_DELEGATION_RECALLED.search(text)
+        )
+
+    return wait_for_delegation_log_events(
+        nfs_node,
+        container_id,
+        timeout_seconds=timeout_seconds,
+        poll_seconds=poll_seconds,
+        predicate=_revoke_ready,
+        scenario_name=scenario_name,
+    )
+
+
+def wait_for_prior_delegation_exit(
+    nfs_node: CephNode,
+    container_id: str,
+    *,
+    timeout_seconds: int,
+    poll_seconds: int = DELEGATION_EVENT_POLL_SECONDS_DEFAULT,
+    scenario_name: str = "prior_delegation_exit",
+) -> List[str]:
+    """
+    After seed IO, poll for DELEGRETURN so the next hold can grant cleanly.
+
+    Empty capture is not treated as success: seed OPEN/CLOSE may still flush
+    DELEGRETURN/recall lines after a short delay. Raises on timeout.
+    """
+    deadline = time.time() + int(timeout_seconds)
+    hits: List[str] = []
+    while time.time() < deadline:
+        hits = list(read_ganesha_delegation_tailf_capture(nfs_node, container_id) or [])
+        text = "\n".join(hits)
+        if RE_DELEGATION_DELEGRETURN.search(text):
+            log.info(
+                "%s: DELEGRETURN observed after seed (%d lines)",
+                scenario_name,
+                len(hits),
+            )
+            return hits
+        time.sleep(int(poll_seconds))
+    raise OperationFailedError(
+        "%s: no DELEGRETURN within %ss after seed; last capture (%d lines):\n%s"
+        % (
+            scenario_name,
+            timeout_seconds,
+            len(hits),
+            "\n".join(hits[-40:]) if hits else "<empty capture>",
+        )
+    )
+
+
+def assert_no_delegation_recall_for(
+    nfs_node: CephNode,
+    container_id: str,
+    observation_seconds: int = DELEGATION_NO_RECALL_OBSERVE_SECONDS_DEFAULT,
+    poll_seconds: int = DELEGATION_EVENT_POLL_SECONDS_DEFAULT,
+    scenario_name: str = "no_recall",
+) -> List[str]:
+    """
+    Bounded observation: fail if recall/revoke markers appear within the window.
+
+    Used when expect_recall/expect_revoke is False (cannot wait forever for absence).
+    """
+    deadline = time.time() + int(observation_seconds)
+    hits: List[str] = []
+    while time.time() < deadline:
+        hits = list(read_ganesha_delegation_tailf_capture(nfs_node, container_id) or [])
+        text = "\n".join(hits)
+        if (
+            RE_DELEGATION_RECALLING.search(text)
+            or RE_DELEGATION_RECALLED.search(text)
+            or RE_DELEGATION_REVOKING.search(text)
+        ):
+            raise OperationFailedError(
+                "%s: unexpected recall/revoke during %ss observation; capture:\n%s"
+                % (scenario_name, observation_seconds, "\n".join(hits[-40:]))
+            )
+        time.sleep(int(poll_seconds))
+    log.info(
+        "%s: no recall/revoke in %ss observation (%d capture lines)",
+        scenario_name,
+        observation_seconds,
+        len(hits),
+    )
+    return hits
+
+
 def wait_for_delegreturn_in_ganesha_capture(
     nfs_node, container_id, timeout_seconds: int = 45
 ) -> bool:
     """Poll filtered tail capture until DELEGRETURN appears or *timeout_seconds* elapses."""
-    deadline = time.time() + int(timeout_seconds)
-    while time.time() < deadline:
-        hits = read_ganesha_delegation_tailf_capture(nfs_node, container_id)
-        if RE_DELEGATION_DELEGRETURN.search("\n".join(hits or [])):
-            return True
-        time.sleep(2)
-    return False
+    try:
+        wait_for_delegation_log_events(
+            nfs_node,
+            container_id,
+            require_all=(RE_DELEGATION_DELEGRETURN,),
+            timeout_seconds=timeout_seconds,
+            scenario_name="delegreturn",
+            raise_on_timeout=True,
+        )
+        return True
+    except OperationFailedError:
+        return False
+
+
+def wait_seed_delegreturn_then_truncate(
+    nfs_node: CephNode,
+    container_id: str,
+    seed_callable: Callable[[], None],
+    *,
+    timeout_seconds: int,
+    scenario_name: str,
+) -> None:
+    """
+    Run *seed_callable* under a live tailf, wait for DELEGRETURN, then truncate.
+
+    Ensures leftover seed Recalling/successfully recalled/DELEGRETURN lines cannot
+    satisfy the next scenario's recall/revoke event poll.
+    """
+    start_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    try:
+        seed_callable()
+        if not wait_for_delegreturn_in_ganesha_capture(
+            nfs_node, container_id, timeout_seconds=timeout_seconds
+        ):
+            raise OperationFailedError(
+                "%s: DELEGRETURN not seen after seed" % scenario_name
+            )
+    finally:
+        stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+    truncate_ganesha_container_log(nfs_node, container_id)
 
 
 def ensure_nfs_cluster_for_delegation_test(

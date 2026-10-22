@@ -597,8 +597,17 @@ def cleanup_nfs_cross_cluster_resources(
                 cmd=f"ceph nfs cluster delete {cluster_name}",
                 check_ec=False,
             )
-            cleanup_step = f"wait after deleting NFS cluster {cluster_name}"
-            sleep(20)
+        # Poll once after all deletes; do not raise into the outer handler so
+        # subvolume removal below still runs on wait timeout.
+        if cluster_names:
+            cleanup_step = "wait for NFS daemons removed"
+            try:
+                check_nfs_daemons_removed(client, cluster_names[-1])
+            except Exception as err:
+                log.warning(
+                    "NFS daemon removal wait failed after cluster delete(s): %s",
+                    err,
+                )
 
         if subvol_name:
             cleanup_step = f"remove subvolume {fs_name}/{group}/{subvol_name}"
@@ -971,7 +980,6 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
     for export_name in owned_exports:
         Ceph(clients[0]).nfs.export.delete(nfs_name, export_name)
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
-    sleep(30)
     check_nfs_daemons_removed(clients[0], nfs_name)
 
     # Only remove subvolumes that back this cluster's exports; keep shared
@@ -1251,7 +1259,6 @@ def cleanup_custom_nfs_cluster_multi_export_client(
             Ceph(clients[0]).nfs.export.delete(nfs_name, export_name)
 
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
-    sleep(30)
     check_nfs_daemons_removed(clients[0], nfs_name)
 
     _remove_owned_ganesha_subvolumes(clients[0], owned_exports)
