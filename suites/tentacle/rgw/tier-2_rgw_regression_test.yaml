@@ -225,6 +225,7 @@ tests:
       name: Versioning with copy objects and delete with different user
       desc: Versioning with copy objects and delete with different user
       polarion-id: CEPH-9353 # Also applies for CEPH-10215
+      comments : Known issue IBMCEPH-20676 in 9.2 
       module: sanity_rgw.py
       config:
         script-name: test_versioning_copy_objects.py
@@ -244,6 +245,7 @@ tests:
       desc: copy versioned objects to another versioned bucket
       polarion-id: CEPH-10644
       module: sanity_rgw.py
+      comments : Known issue IBMCEPH-20676 in 9.2 
       config:
         script-name: test_versioning_copy_objects.py
         config-file-name: test_copy_version_object_to_version_bucket.yaml
