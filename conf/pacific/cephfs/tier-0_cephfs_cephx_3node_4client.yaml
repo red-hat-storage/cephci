@@ -1,0 +1,42 @@
+# CephX dedicated upgrade track: 3 cluster nodes + 4 clients (no NFS).
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node2:
+        role:
+          - mon
+          - mgr
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - osd
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - client
+      node5:
+        role:
+          - client
+      node6:
+        role:
+          - client
+      node7:
+        role:
+          - client
+
