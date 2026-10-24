@@ -1188,16 +1188,16 @@ Steps:
         if "scenario-13" in scenarios_to_run:
             log.info(
                 """
-Test compression algorithms across different pools and workload types (cephfs, rbd, rgw).
-Steps:
-1) Iterate through test pools (cephfs, rbd, rgw)
-2) For each pool, test different compression algorithms (snappy, zlib, zstd, lz4)
-3) Enable compression on the pool with specific algorithm
-4) Write IO to the pool with compressible data
-5) Map objects to their primary OSDs
-6) Stop OSDs and fetch blob information from objectstore
-7) Validate compressed_length < compression_percentage * logical_length
-8) Start OSDs and cleanup
+                Test compression algorithms across different pools and workload types (cephfs, rbd, rgw).
+                Steps:
+                1) Iterate through test pools (cephfs, rbd, rgw)
+                2) For each pool, test different compression algorithms (snappy, zlib, zstd, lz4)
+                3) Enable compression on the pool with specific algorithm
+                4) Write IO to the pool with compressible data
+                5) Map objects to their primary OSDs
+                6) Stop OSDs and fetch blob information from objectstore
+                7) Validate compressed_length < compression_percentage * logical_length
+                8) Start OSDs and cleanup
             """
             )
             test_prerequisite_setup(**prereq_kwargs)
@@ -1250,6 +1250,8 @@ Steps:
                             compression_algorithm=algorithm,
                             pool_level_compression=pool_level_compression,
                             pool_name=pool_name,
+                            compression_min_blob_size=1,
+                            compression_required_ratio=1,
                         )
                         log.info(
                             f"Successfully enabled compression on pool {pool_name}"
@@ -1372,11 +1374,14 @@ Steps:
                             log.info(f"Number of extents to validate: {len(extents)}")
                             for idx, blob_detail in enumerate(extents):
                                 blob = blob_detail["blob"]
+                                log.info(f"Blob: {blob}")
                                 logical_length = blob["logical_length"]
                                 compressed_length = blob["compressed_length"]
+                                num_extents = len(blob["extents"])
                                 log.debug(
                                     f"Blob {idx}: logical_length={logical_length},"
-                                    f" compressed_length={compressed_length}"
+                                    f" compressed_length={compressed_length},"
+                                    f" num_extents={num_extents}"
                                 )
 
                                 # Adding 5% buffer. It's observed that when fio writes data and we
@@ -1393,6 +1398,7 @@ Steps:
                                     f"\nObject: {obj_name}, Blob index: {idx}\n"
                                     f"compressed_length -> {compressed_length}\n"
                                     f"logical_length -> {logical_length}\n"
+                                    f"Number of extents -> {num_extents}\n"
                                     f"Compression percentage: {compression_percentage}%\n"
                                     f"Expected max compressed (with 5% buffer): {expected_max_compressed}\n"
                                     f"Pass condition: compressed_length"
@@ -2178,7 +2184,7 @@ def test_prerequisite_setup(
     include_erasure_pools,
 ):
     # Created Erasure and Replicated Ceph file system
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         fs_name, mount_path, created_pools = rados_obj.create_cephfs_filesystem_mount(
             client_node=client_node,
             fs_name="cephfs0",
@@ -2192,7 +2198,7 @@ def test_prerequisite_setup(
     )
 
     # Create EC RBD
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         rbd_pool_name = "rbd-ec-data"
         rbd_ec_metadata = "rbd-ec-metadata"
         rbd_image = "rbd_image"
@@ -2273,7 +2279,7 @@ def test_prerequisite_teardown(
     rbd_images = [
         ("rbd-replicated-data", rbd_image),
     ]
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         rbd_images.append(("rbd-ec-metadata", rbd_image))
 
     for pool_name, image_name in rbd_images:
@@ -2341,7 +2347,7 @@ def test_prerequisite_teardown(
         log.info("All prerequisite pools deleted successfully")
 
     # Remove EC erasure-code profiles created during setup
-    if config.get("include_erasure_pools", False):
+    if include_erasure_pools:
         for profile_name in ("ec_profile_cephfs0", "rbd-ec-profile"):
             log.info(f"Removing EC profile: {profile_name}")
             rados_obj.delete_ec_profile(profile_name)
