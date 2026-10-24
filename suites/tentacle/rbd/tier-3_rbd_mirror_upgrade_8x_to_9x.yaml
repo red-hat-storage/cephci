@@ -163,7 +163,7 @@ tests:
             rep_pool_config:
               num_pools: 1
               num_images: 1
-              size: 10G
+              size: 20G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
@@ -177,7 +177,7 @@ tests:
               ec_profile: "ec_profile"
               num_pools: 1
               num_images: 1
-              size: 10G
+              size: 20G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
@@ -195,7 +195,7 @@ tests:
             rep_pool_config:
               num_pools: 1
               num_images: 1
-              size: 10G
+              size: 20G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
@@ -209,7 +209,7 @@ tests:
               ec_profile: "ec_profile"
               num_pools: 1
               num_images: 1
-              size: 10G
+              size: 20G
               mode: image # compulsory argument if mirroring needs to be setup
               mirrormode: snapshot
               snap_schedule_levels:
