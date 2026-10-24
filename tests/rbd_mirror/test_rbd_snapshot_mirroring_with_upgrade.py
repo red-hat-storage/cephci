@@ -2,6 +2,7 @@ import time
 
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config, random_string
+from ceph.rbd.utils import select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.execute import execute
 from ceph.rbd.workflows.rbd_mirror import check_image_mirror_status
@@ -250,7 +251,17 @@ def run(**kw):
 
     try:
         # ---- Step 1: Setup mirroring between two clusters ----
-        kw.get("config", {})["do_not_run_io"] = True
+        # Run on either replicated or EC pool throughout this multi-stage test
+        available_pool_types = [
+            pt for pt in pool_types if pt in kw.get("config", {})
+        ] or pool_types
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=available_pool_types,
+            apply_pool_only=True,
+        )
+        config = kw.get("config")
+        config["do_not_run_io"] = True
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
 

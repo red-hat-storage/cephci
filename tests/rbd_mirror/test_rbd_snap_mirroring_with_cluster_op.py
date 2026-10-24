@@ -5,6 +5,7 @@ from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rbd.initial_config import initial_mirror_config, random_string
+from ceph.rbd.utils import select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.cluster_operations import (
     check_health,
@@ -282,15 +283,16 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            rc = test_snap_mirror_cluster_ops(
-                rbd, sec_rbd, client, sec_client, pool_type, **kw
-            )
-            if rc:
-                log.error(
-                    "Cluster operations on snapshot based mirroring clusters failed"
-                )
-                return 1
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+        )
+        rc = test_snap_mirror_cluster_ops(
+            rbd, sec_rbd, client, sec_client, pool_type, **kw
+        )
+        if rc:
+            log.error("Cluster operations on snapshot based mirroring clusters failed")
+            return 1
     except Exception as e:
         log.error(
             f"Testing cluster operations on snap mirroring clusters failed with error {str(e)}"

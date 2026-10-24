@@ -44,7 +44,7 @@ from ceph.rbd.mirror_utils import (
     check_mirror_consistency,
     compare_image_size_primary_secondary,
 )
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
     disable_group_mirroring_and_verify_state,
@@ -85,7 +85,11 @@ def test_group_mirroring_with_zero_size(
     for pool_type in pool_types:
         rbd_config = kw.get("config", {}).get(pool_type, {})
         multi_pool_config = deepcopy(getdict(rbd_config))
-        log.info("Running test CEPH-83613272 for %s", pool_type)
+        log.info(
+            "Running test CEPH-83613272: executing on %s pool (%s)",
+            "replicated" if pool_type == "rep_pool_config" else "EC",
+            pool_type,
+        )
 
         for pool, pool_config in multi_pool_config.items():
             group_config = {}
@@ -259,12 +263,19 @@ def run(**kw):
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
         log.info("Running Consistency Group Mirroring with zero size image")
+        # Run on either replicated or EC pool
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+            apply_pool_only=True,
+        )
+        config = kw.get("config")
+
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
-        if not kw.get("config").get("grouptype"):
-            for pooltype in pool_types:
-                group_type = grouptypes.pop(random.randrange(len(grouptypes)))
-                kw.get("config").get(pooltype).update({"grouptype": group_type})
-                log.info("Choosing Group type on %s - %s", pooltype, group_type)
+        if not config.get("grouptype"):
+            group_type = random.choice(grouptypes)
+            config.get(pool_type).update({"grouptype": group_type})
+            log.info("Choosing Group type on %s - %s", pool_type, group_type)
 
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
