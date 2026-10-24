@@ -31,7 +31,13 @@ def configure_gw_entities_with_encryption(gwgroup_config, ceph_cluster, nvme_ser
     hosts = gwgroup_config.get("hosts", [])
     initiators = []
     if gwgroup_config.get("subsystems"):
-        initiators.extend(configure_subsystems(nvme_service, ceph_cluster=ceph_cluster))
+        initiators.extend(
+            configure_subsystems(
+                nvme_service,
+                ceph_cluster=ceph_cluster,
+                subsystem_config=gwgroup_config.get("subsystems"),
+            )
+        )
         # configure_hosts will be called for all subsystems in the loop below
         # to ensure consistent handling
         listeners = [nvme_service.gateways[0].node.id]
@@ -121,7 +127,7 @@ def test_ceph_83595512(ceph_cluster, gwgroup_config, nvme_service, ha):
                 updated_initiators.append(new_initiator)
 
         ha.config["initiators"] = updated_initiators
-        ha.run(iodepth=2)
+        ha.run()
 
 
 testcases = {
@@ -185,7 +191,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 if gwgroup_config.get("fault-injection-methods") or config.get(
                     "fault-injection-methods"
                 ):
-                    ha.run(iodepth=2)
+                    ha.run()
 
                 if "initiators" in config["cleanup"] and gwgroup_config.get(
                     "initiators"
