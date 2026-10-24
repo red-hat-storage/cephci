@@ -121,8 +121,10 @@ tests:
         subsystems: # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 2
+            # Passed as --model_name. Checked under Model in nvme list. Ceph 9.2+.
+            model_name: CephCIModel92
             bdevs:
-              count: 1
+              count: 2
               size: 5G
             listener_port: 5002
             allow_host: "*"
