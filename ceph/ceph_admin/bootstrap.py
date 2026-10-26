@@ -345,16 +345,19 @@ class BootstrapMixin:
         # Suites often hardcode registry-json: registry.redhat.io; using that as the
         # login host would break IBM pulls (e.g. preprod.icr.io image + RH auth).
         #
-        # When podman-auth-file is set (--custom-config), skip YAML registry flags so
-        # cephadm uses /etc/ceph/podman-auth.json (ODF / multi-registry auth file path).
+        # When podman-auth-file is set (--custom-config), pass the distributed auth file
+        # to cephadm via --container-auth-json so authenticated registries (e.g.
+        # cp.icr.io / preprod.icr.io) are usable during bootstrap and later orch pulls.
+        # cephadm does not auto-discover /etc/ceph/podman-auth.json on its own.
         args.pop("registry-url", None)
         registry_json = args.pop("registry-json", None)
         use_podman_auth = self.config.get("podman_auth_file")
 
         if use_podman_auth:
+            cmd += f" --container-auth-json {PODMAN_AUTH_PATH}"
             logger.info(
-                "podman-auth-file is configured, skipping registry credentials "
-                "(cephadm will use %s)",
+                "podman-auth-file configured: passing --container-auth-json %s "
+                "to cephadm bootstrap",
                 PODMAN_AUTH_PATH,
             )
         else:
