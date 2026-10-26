@@ -37,6 +37,7 @@ from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import (
     cleanup_cluster,
+    mount_nfs_export_with_wait,
     setup_nfs_cluster,
     verify_nfs_ganesha_service,
 )
@@ -137,6 +138,250 @@ def _snapshot_keys(installer, nfs_name):
     """Return {entity: key} for all NFS CephX entities."""
     entities = _get_nfs_entities(installer, nfs_name)
     return {e: _get_key_value(installer, e) for e in entities}
+
+
+def _parse_export_paths(raw):
+    """Normalize ``ceph nfs export ls`` output to a list of pseudo paths."""
+    if isinstance(raw, list):
+        items = raw
+    else:
+        text = (raw or "").strip()
+        try:
+            items = json.loads(text)
+        except json.JSONDecodeError:
+            items = [line.strip() for line in text.splitlines() if line.strip()]
+    if isinstance(items, dict):
+        items = items.get("exports") or items.get("paths") or []
+    paths = []
+    for item in items:
+        if isinstance(item, str) and item.startswith("/"):
+            paths.append(item)
+        elif isinstance(item, dict):
+            path = item.get("pseudo") or item.get("path")
+            if path:
+                paths.append(path)
+    return paths
+
+
+def _export_client_entities(installer, nfs_name):
+    """Return CephFS export client entities, one per distinct ``fsal.user_id``.
+
+    These are the client keyrings stored on the export (``client.nfs.<cluster>.<fs>``).
+    Daemon keyrings (``client.nfs.<cluster>.<node>.<host>``) are not included.
+    ``ceph nfs cluster rotate-key`` redeploys Ganesha only when a daemon key
+    is rotated, so rotating these entities leaves the NFS service running.
+    """
+    adm = CephAdm(installer)
+    paths = _parse_export_paths(adm.ceph.nfs.export.ls(nfs_name))
+    if not paths:
+        raise OperationFailedError(
+            f"No exports listed for NFS cluster {nfs_name!r}; cannot rotate client keys"
+        )
+    entities = []
+    seen = set()
+    for path in paths:
+        info = adm.ceph.nfs.export.info(nfs_name, path)
+        if isinstance(info, str):
+            info = json.loads(info)
+        user_id = (info.get("fsal") or {}).get("user_id")
+        if not user_id:
+            raise OperationFailedError(
+                f"Export {path} on {nfs_name} has no fsal.user_id"
+            )
+        entity = user_id if str(user_id).startswith("client.") else f"client.{user_id}"
+        log.info("Export %s client key %s", path, entity)
+        if entity not in seen:
+            seen.add(entity)
+            entities.append(entity)
+    return entities
+
+
+def _server_entities(installer, nfs_name, client_entities):
+    """NFS auth entities that are not export client users.
+
+    These are the Ganesha daemon keyrings. Rotating one redeploys the service.
+    """
+    client_set = set(client_entities)
+    servers = [
+        entity
+        for entity in _get_nfs_entities(installer, nfs_name)
+        if entity not in client_set
+    ]
+    if not servers:
+        raise OperationFailedError(
+            f"No server keys found for NFS cluster {nfs_name!r}. "
+            f"Client keys were {client_entities}"
+        )
+    log.info("Server keys: %s", servers)
+    return servers
+
+
+def _findmnt_field(client, mount_point, field):
+    """Return one findmnt column for *mount_point*, or an empty string."""
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"findmnt -n -o {field} --target {mount_point}",
+        check_ec=False,
+    )
+    lines = (out or "").strip().splitlines()
+    if client.exit_status != 0 or not lines:
+        return ""
+    return lines[0].strip()
+
+
+def _existing_mounts(clients, mount_point, nfs_version, nfs_port):
+    """Record each client that already has *mount_point*, with its vers and port.
+
+    Later upgrade steps reuse these mounts. Server-key rotation redeploys
+    Ganesha, so each recorded client is remounted with the same source.
+    """
+    mounts = []
+    for client in clients:
+        source = _findmnt_field(client, mount_point, "SOURCE")
+        if ":" not in source:
+            log.info("%s has no NFS mount at %s", client.hostname, mount_point)
+            continue
+        version = nfs_version
+        port = str(nfs_port)
+        for part in _findmnt_field(client, mount_point, "OPTIONS").split(","):
+            if part.startswith("vers="):
+                version = part.split("=", 1)[1]
+            elif part.startswith("port="):
+                port = part.split("=", 1)[1]
+        export = source.rsplit(":", 1)[1]
+        server = source.rsplit(":", 1)[0]
+        log.info(
+            "Existing mount on %s: %s vers=%s port=%s",
+            client.hostname,
+            source,
+            version,
+            port,
+        )
+        mounts.append(
+            {
+                "client": client,
+                "server": server,
+                "export": export,
+                "version": version,
+                "port": port,
+                "mount_point": mount_point,
+            }
+        )
+    if not mounts:
+        raise OperationFailedError(
+            f"No client has an NFS mount at {mount_point} to restore after rotation"
+        )
+    return mounts
+
+
+def _unmount_mount_point(client, mount_point):
+    """Unmount *mount_point*. A second lazy unmount covers a busy mount."""
+    client.exec_command(sudo=True, cmd=f"umount {mount_point}", check_ec=False)
+    if _findmnt_field(client, mount_point, "SOURCE"):
+        log.warning("Normal unmount left %s mounted; trying umount -l", mount_point)
+        client.exec_command(sudo=True, cmd=f"umount -l {mount_point}", check_ec=False)
+
+
+def _remount_existing_mounts(mounts, installer, nfs_name):
+    """Remount every client that had the export before key rotation."""
+    errors = []
+    for mount in mounts:
+        client = mount["client"]
+        log.info(
+            "Remounting %s: %s:%s vers=%s",
+            client.hostname,
+            mount["server"],
+            mount["export"],
+            mount["version"],
+        )
+        try:
+            _unmount_mount_point(client, mount["mount_point"])
+            mount_nfs_export_with_wait(
+                client,
+                mount["server"],
+                mount["port"],
+                mount["export"],
+                mount["mount_point"],
+                mount["version"],
+                installer_node=installer,
+                nfs_name=nfs_name,
+                nfs_wait_timeout=300,
+            )
+            log.info(
+                "Remount complete on %s at %s", client.hostname, mount["mount_point"]
+            )
+        except Exception as exc:
+            errors.append(f"{client.hostname}: {exc}")
+            log.error("Remount failed on %s: %s", client.hostname, exc)
+    if errors:
+        raise OperationFailedError(
+            "Remount after key rotation failed:\n" + "\n".join(errors)
+        )
+
+
+def _assert_scoped_rotate_response(result, nfs_name, entity, forbidden):
+    """Fail unless this call rotated *entity* and none of *forbidden*."""
+    errors = []
+    rotated = result.get("rotated") or []
+    if entity not in rotated:
+        errors.append(f"{entity} missing from rotated={rotated}")
+    unexpected = [item for item in rotated if item in forbidden or item != entity]
+    if unexpected:
+        errors.append(f"rotated unexpected entities: {unexpected}")
+    if result.get("cluster_id") not in (None, nfs_name):
+        errors.append(
+            f"cluster_id mismatch: expected {nfs_name!r}, "
+            f"got {result.get('cluster_id')!r}"
+        )
+    if errors:
+        raise OperationFailedError(
+            "rotate-key response validation failed:\n" + "\n".join(errors)
+        )
+    log.info(
+        "rotate-key %s: service_redeployed=%s updated_exports=%s daemon_keys=%s",
+        entity,
+        result.get("service_redeployed"),
+        result.get("updated_exports"),
+        result.get("daemon_keys"),
+    )
+
+
+def _rotate_entities(installer, nfs_name, entities, forbidden, label):
+    """Rotate each entity with ``ceph nfs cluster rotate-key <cluster> <entity>``."""
+    log.info("Rotating %d %s key(s): %s", len(entities), label, entities)
+    for entity in entities:
+        log.info(
+            "Running ceph nfs cluster rotate-key %s %s --key-type %s",
+            nfs_name,
+            entity,
+            KEY_TYPE,
+        )
+        result = CephAdm(installer).ceph.nfs.cluster.rotate_key(
+            nfs_name, entity=entity, key_type=KEY_TYPE
+        )
+        log.info("rotate-key response: %s", json.dumps(result, indent=2))
+        _assert_scoped_rotate_response(result, nfs_name, entity, forbidden)
+
+
+def _assert_named_keys_changed(baseline_keys, after_keys, entities):
+    """Fail unless every listed entity has a new key value."""
+    unchanged = []
+    for entity in entities:
+        before = baseline_keys.get(entity)
+        after = after_keys.get(entity)
+        log.info(
+            "  %-55s  before=[%s] after=[%s]",
+            entity,
+            _mask_key(before) if before else "<missing>",
+            _mask_key(after) if after else "<missing>",
+        )
+        if not before or not after or before == after:
+            unchanged.append(entity)
+    if unchanged:
+        raise OperationFailedError(
+            "Key value did not change after rotate-key for: " + ", ".join(unchanged)
+        )
+    log.info("All requested keys changed.")
 
 
 def _assert_keys_rotated(baseline_keys, after_keys):
@@ -367,44 +612,86 @@ def _run_rotate_key_live_mount(
     nfs_name,
     export,
     mount_point,
+    rotate_scope="all",
+    nfs_version=NFS_VERSION,
+    nfs_port=NFS_PORT,
+    cluster_clients=None,
 ):
-    """Customer path: rotate-key while the export stays mounted."""
-    log.info("=== ceph nfs cluster rotate-key (live mount) ===")
+    """Rotate keys on a mounted export.
+
+    ``rotate_scope=all`` rotates every key in one call and keeps the mount.
+    ``rotate_scope=server_client`` rotates server keys, then client keys,
+    then remounts every client that already had the export. Client rotation
+    is before the remount. The default path does not unmount.
+    """
+    server_then_client = rotate_scope == "server_client"
+    log.info(
+        "=== ceph nfs cluster rotate-key (%s) ===",
+        "server, then client, then remount" if server_then_client else "all keys",
+    )
     client = clients[0]
 
     log.info("Step 1: write baseline file on the existing mount")
     _write_test_file(client, mount_point, filename="pre_rotate_file")
     _verify_test_file(client, mount_point, filename="pre_rotate_file")
+    existing_mounts = (
+        _existing_mounts(cluster_clients or clients, mount_point, nfs_version, nfs_port)
+        if server_then_client
+        else None
+    )
 
     log.info("Step 2: snapshot NFS CephX keys (masked)")
     baseline_keys = _snapshot_keys(installer, nfs_name)
     for entity, key in baseline_keys.items():
         log.info("  baseline  %-55s  key=[%s]", entity, _mask_key(key))
 
-    log.info(
-        "Step 3: running ceph nfs cluster rotate-key %s --key-type %s",
-        nfs_name,
-        KEY_TYPE,
-    )
-    result = CephAdm(installer).ceph.nfs.cluster.rotate_key(nfs_name, key_type=KEY_TYPE)
-    log.info("rotate-key response: %s", json.dumps(result, indent=2))
+    rotated_entities = []
+    if server_then_client:
+        client_entities = _export_client_entities(installer, nfs_name)
+        server_entities = _server_entities(installer, nfs_name, client_entities)
+        log.info("Step 3: rotating server keys")
+        _rotate_entities(
+            installer, nfs_name, server_entities, client_entities, "server"
+        )
+        log.info("Step 4: rotating client keys before remount")
+        _rotate_entities(
+            installer, nfs_name, client_entities, server_entities, "client"
+        )
+        rotated_entities = server_entities + client_entities
+    else:
+        log.info(
+            "Step 3: running ceph nfs cluster rotate-key %s --key-type %s",
+            nfs_name,
+            KEY_TYPE,
+        )
+        result = CephAdm(installer).ceph.nfs.cluster.rotate_key(
+            nfs_name, key_type=KEY_TYPE
+        )
+        log.info("rotate-key response: %s", json.dumps(result, indent=2))
 
-    log.info("Step 4: validating rotate-key JSON response ...")
-    _assert_rotate_key_response(result, nfs_name, [export])
+        log.info("Step 4: validating rotate-key JSON response ...")
+        _assert_rotate_key_response(result, nfs_name, [export])
 
     log.info("Step 5: waiting for NFS daemons to be running ...")
     sleep(10)
     verify_nfs_ganesha_service(installer, timeout=300)
 
-    log.info("Step 6: live-mount IO on the same mount (no remount) ...")
-    _wait_for_live_mount_io(client, mount_point, "pre_rotate_file")
+    if server_then_client:
+        log.info("Step 6: remount every existing client after key rotation ...")
+        _remount_existing_mounts(existing_mounts, installer, nfs_name)
+    else:
+        log.info("Step 6: live-mount IO on the same mount (no remount) ...")
+        _wait_for_live_mount_io(client, mount_point, "pre_rotate_file")
     _verify_test_file(client, mount_point, filename="pre_rotate_file")
     _write_test_file(client, mount_point, filename="post_rotate_file")
     _verify_test_file(client, mount_point, filename="post_rotate_file")
 
     log.info("Step 7: confirming key values changed (masked before/after) ...")
     after_keys = _snapshot_keys(installer, nfs_name)
-    _assert_keys_rotated(baseline_keys, after_keys)
+    if server_then_client:
+        _assert_named_keys_changed(baseline_keys, after_keys, rotated_entities)
+    else:
+        _assert_keys_rotated(baseline_keys, after_keys)
 
     log.info("Step 8: asserting Ganesha logs are clean after rotate-key ...")
     _check_ganesha_logs(
@@ -417,11 +704,17 @@ def _run_rotate_key_live_mount(
     log.info("Step 9: asserting exports are listed ...")
     _assert_exports_listed(installer, nfs_name, [export])
 
-    log.info(
-        "TEST PASSED - ceph nfs cluster rotate-key rotated keys (values changed), "
-        "updated exports, Ganesha logs stayed clean, and IO succeeded on the "
-        "existing mount without unmount/remount"
-    )
+    if server_then_client:
+        log.info(
+            "TEST PASSED - server keys, then client keys, then remount; "
+            "requested keys changed and IO succeeded"
+        )
+    else:
+        log.info(
+            "TEST PASSED - ceph nfs cluster rotate-key rotated keys (values "
+            "changed), updated exports, Ganesha logs stayed clean, and IO "
+            "succeeded on the existing mount without unmount/remount"
+        )
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
@@ -444,6 +737,11 @@ def run(ceph_cluster, **kw):
         fs_name (str): CephFS filesystem name, default "cephfs"
         nfs_mount (str): Client mount point. Default ``/mnt/nfs_cephx``,
             or ``/mnt/nfs`` when setup is false.
+        rotate_scope (str): ``all`` (default) rotates every key in one
+            call and keeps every existing mount. ``server_client`` rotates
+            server keys, then client keys, then remounts each client that
+            already had the export, using that client's vers and port.
+            Upgrade suites use ``server_client``.
 
     Returns:
         0 on success, 1 on failure, -1 if rotate-key is absent (pre-CephX).
@@ -481,6 +779,11 @@ def run(ceph_cluster, **kw):
     # ``/export_0`` subvolume in shared ganeshagroup (RCA #3174).
     nfs_export_base = "/export_cephx"
     export = config.get("nfs_export", "/export_0" if reuse_mount else NFS_EXPORT)
+    rotate_scope = str(config.get("rotate_scope", "all")).lower()
+    if rotate_scope not in ("all", "server_client"):
+        raise ConfigError(
+            "rotate_scope must be 'all' or 'server_client', " f"got {rotate_scope!r}"
+        )
 
     try:
         if reuse_mount:
@@ -513,6 +816,10 @@ def run(ceph_cluster, **kw):
             nfs_name,
             export,
             mount_point,
+            rotate_scope=rotate_scope,
+            nfs_version=nfs_version,
+            nfs_port=nfs_port,
+            cluster_clients=ceph_cluster.get_nodes("client"),
         )
 
         log.info("TEST PASSED - NFS CephX key rotation completed")
