@@ -26,6 +26,7 @@
   # CEPH-83609202 - Verify data scan works on missing non-immediate dir frags and FS recovery suceeds
   # CEPH-83633040 - Empty _omap_commit_ops under multi-rank pinned metadata soak
   # CEPH-83633041 - CDir::mark_dirty / get_version() < pv under concurrent cap/metadata stress
+  # CEPH-83633043 - Multi-client replay cap reconnect (cap_imports assert)
 #=======================================================================================================================
 ---
 tests:
@@ -316,4 +317,13 @@ tests:
         soak_seconds: 300
         workers: 12
         dirs: 24
+      abort-on-fail: false
+  - test:
+      name: mds_replay_cap_reconnect
+      module: cephfs_bugs.test_mds_replay_cap_reconnect.py
+      polarion-id: CEPH-83633043
+      desc: Multi-client MDS replay cap reconnect without cap_imports assert crash
+      config:
+        trim_interval: "3600000"
+        chmod_wait_secs: 10
       abort-on-fail: false
