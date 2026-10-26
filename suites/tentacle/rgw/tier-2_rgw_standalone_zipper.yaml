@@ -22,7 +22,7 @@ tests:
       module: test_rgw_standalone_deploy.py
       polarion-id: CEPH-RGW-STANDALONE-DEPLOY
       config:
-        image: preprod.icr.io/cp/ibm-ceph/rgw-developer-experience-rhel10:v9.9.2-26951
+        # Dynamic: picked from custom_config (manifest)
         container-name: dev-edition1
         zgw-host-port: 7401
         browser-port: 8081

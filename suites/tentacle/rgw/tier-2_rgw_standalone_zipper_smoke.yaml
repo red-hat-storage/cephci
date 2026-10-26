@@ -15,7 +15,7 @@ tests:
       desc: podman login and run developer experience zipper image on client node
       module: test_rgw_standalone_deploy.py
       config:
-        image: preprod.icr.io/cp/ibm-ceph/rgw-developer-experience-rhel10:v9.9.2-26951
+        # Dynamic: picked from custom_config (manifest)
         container-name: dev-edition1
         zgw-host-port: 7411
         browser-port: 8091
