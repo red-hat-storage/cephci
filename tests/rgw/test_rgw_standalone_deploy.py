@@ -91,7 +91,12 @@ def _wait_for_endpoint(node, endpoint, timeout=120):
 
 def run(ceph_cluster, **kw):
     config = kw.get("config", {})
-    image = config.get("image", DEFAULT_IMAGE)
+    # Check if passed dynamically via custom_config from Jenkins/manifest
+    image = (
+        config.get("rgw_developer_experience_image")
+        or config.get("image")
+        or DEFAULT_IMAGE
+    )
     name = config.get("container-name", DEFAULT_NAME)
     # Direct Zipper/RGW S3 host publish of container 7480.
     # Legacy key "host-port" is still accepted.
