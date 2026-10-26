@@ -14,6 +14,7 @@ root_disk_size: 80Gi
 
 # Full datasource URLs for inventory short names (datasource://rhel9, etc.)
 datasources:
+  rhel8: datasource://ceph-sys-test--runtime-int/rhel810-iso
   rhel9: datasource://openshift-virtualization-os-images/rhel9
   rhel10: datasource://openshift-virtualization-os-images/rhel10
   rhel94: datasource://ceph-sys-test--runtime-int/rhel94-iso
