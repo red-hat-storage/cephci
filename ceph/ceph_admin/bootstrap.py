@@ -264,6 +264,10 @@ class BootstrapMixin:
                 f"{_ceph_version!r} from job release for '{_manifest_section}' section."
             )
 
+        # True when suite YAML pins a baseline via rhcs-version + release (upgrade
+        # suites). That pins container_image to the baseline manifest image, which
+        # must be passed as --image so registry login matches the pull host.
+        baseline_pinned = False
         if _ceph_version and _manifest_section:
             manifest_obj = CephTestManifest(
                 product=self.config["product"],
@@ -296,17 +300,30 @@ class BootstrapMixin:
             self.config["container_image"] = manifest_obj.ceph_image
             rhbuild = f"{manifest_obj.ceph_version}-{manifest_obj.platform}"
             base_url = manifest_obj.repository
+            baseline_pinned = True
 
         self.cluster.rhcs_version = manifest_obj.release
 
         if build_type == "upstream" or manifest_obj.product == "community":
             self.setup_upstream_repository()
         elif build_type == "cdn" or custom_repo.lower() == "cdn":
-            custom_image = False
+            # Keep --image when an upgrade suite pinned a baseline image; otherwise
+            # registry login follows the baseline host (e.g. registry.stage.redhat.io)
+            # while cephadm pulls the default CDN image and fails auth (RH 3440).
+            if not baseline_pinned:
+                custom_image = False
             self.cluster.use_cdn = True
             self.set_cdn_tool_repo(_ceph_version, manifest_obj)
         elif build_type == "released" and base_url == manifest_obj.repository:
-            custom_image = False
+            if not baseline_pinned:
+                custom_image = False
+            else:
+                logger.info(
+                    "Baseline pinned via suite (%s/%s); keeping --image %s",
+                    _ceph_version,
+                    _manifest_section,
+                    self.config.get("container_image"),
+                )
             self.cluster.use_cdn = True
             self.set_cdn_tool_repo(manifest_obj)
         elif custom_repo:
