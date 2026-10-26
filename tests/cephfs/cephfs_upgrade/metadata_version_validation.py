@@ -94,8 +94,11 @@ def run(ceph_cluster, **kw):
             out2, err2 = client.exec_command(sudo=True, cmd=f"cat {file_stat_path}")
             cur_stat = out1.split(",")
             pre_stat = out2.split(",")
-            log.info("Current testing file stats: ", cur_stat)
-            log.info("Previous testing file stats: ", pre_stat)
+            log.info(
+                "Current testing file stats: %s",
+                cur_stat,
+            )
+            log.info("Previous testing file stats: %s", pre_stat)
             for idx in range(4):
                 if cur_stat[idx] != pre_stat[idx]:
                     return 1
