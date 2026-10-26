@@ -3141,9 +3141,20 @@ def restart_rgw_and_wait(rgw_node, rgw_service_name):
 
 
 def setup_gklm_prereq(ceph_cluster, cloud_type):
-    """setup GKLM authentication certs on the rgw nodes, redeploy rgw to mounted gklm certs path
-    and set ceph configs for sse-kms-kmip"""
-    log.info("setting up GKLM prerequisites")
+    """Setup GKLM auth certs on RGW nodes, remount, and set sse-kms-kmip ceph config.
+
+    Legacy path for a *pre-existing* lab GKLM (certs + endpoint files from rgw_configs).
+
+    Preferred for new runs: install GKLM as a podman container from
+    ceph-qe-scripts (``reusables/gklm.py`` / ``test_sse_s3_kms_with_vault.py``),
+    which also remounts ``/usr/local/gklm`` into RGW. Suites should set
+    ``git_clone_configs_repo: true`` so ``IGKLM_5.1_F_CNTR_LNX.tar`` is present,
+    and should *not* need this helper when using on-the-fly container install.
+    """
+    log.info(
+        "setting up GKLM prerequisites (legacy external GKLM); "
+        "prefer ceph-qe-scripts GKLM container install when available"
+    )
     rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
     gklm_auth_cert_path_remote = f"{GKLM_HOME}/rgwselfsigned.cert"
     gklm_auth_key_path_remote = f"{GKLM_HOME}/rgwselfsigned.key"
