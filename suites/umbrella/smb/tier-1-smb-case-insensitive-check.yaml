@@ -1,0 +1,658 @@
+tests:
+  - test:
+      name: Setup Pre-Requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy Ceph Cluster
+      desc: Bootstrap Ceph Cluster and Deploy Ceph Services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure Client Sytem
+      desc: Configure Client System
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+          - fio
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Verify the protocols=default option for a CephFS subvolume.
+      desc: Verify default protocol keeps the subvolume case sensitive and without an SMB earmark.
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633071
+      config:
+        deployment_method: declarative
+        file_type: yaml
+        file_mount: /tmp
+        protocols: default
+        cifs_mount_point: /mnt/smb
+        smb_subvolume_mode: "0777"
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Verify the protocols=smb option for a CephFS subvolume.
+      desc: Verify the protocols=smb option for a CephFS subvolume.
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633072
+      config:
+        deployment_method: declarative
+        file_type: yaml
+        file_mount: /tmp
+        protocols: smb
+        cifs_mount_point: /mnt/smb
+        smb_subvolume_mode: "0777"
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: "SMB scenario 1: Default warn policy"
+      desc: "Validate report SMB case-sensitivity scenario 1."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633073
+      config:
+        scenario: 1
+        deployment_method: imperative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: warn
+
+  - test:
+      name: "SMB scenario 2: Ignore case-sensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 2."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633074
+      config:
+        scenario: 2
+        deployment_method: imperative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: ignore
+
+  - test:
+      name: "SMB scenario 3: Require rejects case-sensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 3."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633075
+      config:
+        scenario: 3
+        deployment_method: imperative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: require
+
+  - test:
+      name: "SMB scenario 4: Require accepts case-insensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 4."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633076
+      config:
+        scenario: 4
+        deployment_method: imperative
+        protocols: smb
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: require
+
+  - test:
+      name: "SMB scenario 5: Warn accepts case-insensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 5."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633077
+      config:
+        scenario: 5
+        deployment_method: imperative
+        protocols: smb
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: warn
+
+  - test:
+      name: "SMB scenario 5: Ignore accepts case-insensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 5."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633078
+      config:
+        scenario: 5
+        deployment_method: imperative
+        protocols: smb
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: ignore
+
+  - test:
+      name: "SMB scenario 6: CLI accepts warn"
+      desc: "Validate report SMB case-sensitivity scenario 6."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633079
+      config:
+        scenario: 6
+        deployment_method: imperative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: warn
+
+  - test:
+      name: "SMB scenario 6: CLI accepts ignore"
+      desc: "Validate report SMB case-sensitivity scenario 6."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633080
+      config:
+        scenario: 6
+        deployment_method: imperative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: ignore
+
+  - test:
+      name: "SMB scenario 6: CLI accepts require with case-insensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 6."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633081
+      config:
+        scenario: 6
+        deployment_method: imperative
+        protocols: smb
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: require
+
+  - test:
+      name: "SMB scenario 7: CLI rejects invalid policy"
+      desc: "Validate report SMB case-sensitivity scenario 7."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633082
+      config:
+        scenario: 7
+        deployment_method: imperative
+        protocols: default
+        invalid_value: true
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: test
+
+  - test:
+      name: "SMB scenario 8: Declarative ignore"
+      desc: "Validate report SMB case-sensitivity scenario 8."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633083
+      config:
+        scenario: 8
+        deployment_method: declarative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: ignore
+
+  - test:
+      name: "SMB scenario 9: Declarative warn and warning summary"
+      desc: "Validate report SMB case-sensitivity scenario 9."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633084
+      config:
+        scenario: 9
+        deployment_method: declarative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: warn
+
+  - test:
+      name: "SMB scenario 10: Declarative require rejects case-sensitive subvolume"
+      desc: "Validate report SMB case-sensitivity scenario 10."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633085
+      config:
+        scenario: 10
+        deployment_method: declarative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: require
+
+  - test:
+      name: "SMB scenario 11: Mixed apply rejects all resources atomically"
+      desc: "Validate report SMB case-sensitivity scenario 11."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633086
+      config:
+        scenario: 11
+        deployment_method: declarative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
+              case_insensitive: ignore
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv2
+              path: /
+              case_insensitive: warn
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare3
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv3
+              path: /
+              case_insensitive: require
+
+  - test:
+      name: "SMB scenario 12: Omitted policy retains warning behavior"
+      desc: "Validate report SMB case-sensitivity scenario 12."
+      module: smb_case_sensitivity_check
+      polarion-id: CEPH-83633087
+      config:
+        scenario: 12
+        deployment_method: imperative
+        protocols: default
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smbcase
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: caseug}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: caseug
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smbcase
+            share_id: caseshare1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smbcase
+              subvolume: casesv1
+              path: /
