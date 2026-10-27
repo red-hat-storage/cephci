@@ -19,7 +19,7 @@ from cli.utilities.utils import (
     set_service_state,
 )
 from utility.log import Log
-from utility.registry_auth import write_podman_auth_file
+from utility.registry_auth import CDN_REGISTRY_HOSTS, write_podman_auth_file
 from utility.utils import (
     get_cephci_config,
     is_unsecured_registry,
@@ -500,15 +500,6 @@ def enable_rhel_eus_rpms(ceph, distro_ver):
     )
 
     ceph.exec_command(sudo=True, cmd="yum clean all", long_running=True)
-
-
-# CDN registries logged into on every node during install_prereq (post-reboot).
-# Avoids unauthorized pulls when monitoring defaults still target cp.icr.io while
-# bootstrap authenticates against preprod / stage hosts.
-CDN_REGISTRY_HOSTS = (
-    "registry.redhat.io",
-    "cp.icr.io",
-)
 
 
 def registry_login(

@@ -9,6 +9,35 @@ logger = Log(__name__)
 
 PODMAN_AUTH_PATH = "/etc/ceph/podman-auth.json"
 
+# CDN registries commonly needed for monitoring / sidecar pulls when bootstrap
+# authenticates against stage / preprod hosts instead.
+CDN_REGISTRY_HOSTS = (
+    "registry.redhat.io",
+    "cp.icr.io",
+)
+
+
+def read_podman_auth_file(node) -> dict:
+    """Return the ``auths`` mapping from ``/etc/ceph/podman-auth.json``, or ``{}``."""
+    try:
+        out, _ = node.exec_command(
+            sudo=True,
+            cmd=f"cat {PODMAN_AUTH_PATH}",
+            check_ec=False,
+        )
+        if out and out.strip():
+            parsed = json.loads(out)
+            if isinstance(parsed, dict) and isinstance(parsed.get("auths"), dict):
+                return parsed["auths"]
+    except Exception as err:
+        logger.debug(
+            "Could not read %s on %s: %s",
+            PODMAN_AUTH_PATH,
+            getattr(node, "hostname", node),
+            err,
+        )
+    return {}
+
 
 def write_podman_auth_file(node, auths: dict) -> None:
     """
