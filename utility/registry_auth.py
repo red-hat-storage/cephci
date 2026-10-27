@@ -27,9 +27,7 @@ def write_podman_auth_file(node, auths: dict) -> None:
         return
 
     node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
-    auth_file = node.remote_file(
-        sudo=True, file_name=PODMAN_AUTH_PATH, file_mode="w"
-    )
+    auth_file = node.remote_file(sudo=True, file_name=PODMAN_AUTH_PATH, file_mode="w")
     auth_file.write(json.dumps({"auths": auths}, indent=4))
     auth_file.flush()
     auth_file.close()

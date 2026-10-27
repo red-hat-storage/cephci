@@ -310,9 +310,7 @@ def install_prereq(
     # Login to CDN (+ optional custom-config) registries after any reboot
     # (RHEL-8+ qdisc / FIPS) so docker/podman auth survives restarts and is
     # present on every node before bootstrap / monitoring pulls.
-    registry_login(
-        ceph, distro_ver, test_data, cloud_type=cloud_type, config=config
-    )
+    registry_login(ceph, distro_ver, test_data, cloud_type=cloud_type, config=config)
 
     # Enable coredump collection
     enable_coredump(ceph)

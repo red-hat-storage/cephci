@@ -406,11 +406,7 @@ class BootstrapMixin:
         # via --container-auth-json. Do NOT mutate an explicit podman-auth-file
         # (ODF / multi-registry): that file is the source of truth and may use
         # pull-secret credentials that differ from ~/.cephci.yaml.
-        if (
-            registry_url
-            and not use_podman_auth
-            and _podman_auth_exists(self.installer)
-        ):
+        if registry_url and not use_podman_auth and _podman_auth_exists(self.installer):
             try:
                 reg_args = resolve_registry_login(registry_url)
                 merge_registry_into_podman_auth(
