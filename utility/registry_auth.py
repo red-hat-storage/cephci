@@ -1,5 +1,6 @@
 """Module for handling registry authentication in Ceph clusters."""
 
+import base64
 import json
 
 from utility.log import Log
@@ -7,6 +8,76 @@ from utility.log import Log
 logger = Log(__name__)
 
 PODMAN_AUTH_PATH = "/etc/ceph/podman-auth.json"
+
+
+def write_podman_auth_file(node, auths: dict) -> None:
+    """
+    Write a podman auths mapping to ``/etc/ceph/podman-auth.json`` on ``node``.
+
+    Cephadm orch pulls use ``--authfile=/etc/ceph/podman-auth.json``, which is
+    separate from ``~/.docker/config.json``. Writing here keeps CDN /
+    monitoring registry credentials available for grafana/prometheus pulls
+    when bootstrap authenticated against a different host (e.g. stage).
+
+    Args:
+        node: CephNode to write the file on
+        auths: Mapping of registry host -> ``{"auth": "<base64 user:pass>"}``
+    """
+    if not auths:
+        return
+
+    node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+    auth_file = node.remote_file(
+        sudo=True, file_name=PODMAN_AUTH_PATH, file_mode="w"
+    )
+    auth_file.write(json.dumps({"auths": auths}, indent=4))
+    auth_file.flush()
+    auth_file.close()
+    node.exec_command(sudo=True, cmd=f"chmod 600 {PODMAN_AUTH_PATH}")
+    logger.info(
+        "Wrote %s on %s for: %s",
+        PODMAN_AUTH_PATH,
+        getattr(node, "hostname", node),
+        ", ".join(sorted(auths)),
+    )
+
+
+def merge_registry_into_podman_auth(
+    node, registry_host: str, username: str, password: str
+) -> None:
+    """
+    Merge one registry credential into the node's ``/etc/ceph/podman-auth.json``.
+
+    Preserves existing auths so bootstrap/stage credentials are not wiped when
+    adding CDN hosts (or vice versa).
+    """
+    if not registry_host or not username or not password:
+        return
+
+    existing = {"auths": {}}
+    try:
+        out, _ = node.exec_command(
+            sudo=True,
+            cmd=f"cat {PODMAN_AUTH_PATH}",
+            check_ec=False,
+        )
+        if out and out.strip():
+            parsed = json.loads(out)
+            if isinstance(parsed, dict) and isinstance(parsed.get("auths"), dict):
+                existing = parsed
+    except Exception as err:
+        logger.debug(
+            "No existing %s on %s (%s); creating new file",
+            PODMAN_AUTH_PATH,
+            getattr(node, "hostname", node),
+            err,
+        )
+
+    b64_auth = base64.b64encode(f"{username}:{password}".encode("ascii")).decode(
+        "utf-8"
+    )
+    existing.setdefault("auths", {})[registry_host] = {"auth": b64_auth}
+    write_podman_auth_file(node, existing["auths"])
 
 
 def validate_podman_auth_file(auth_file_path: str) -> str:

@@ -22,7 +22,10 @@ from utility.odf_defaults import (
     apply_v2_only_mon_addrs,
     overrides_enabled,
 )
-from utility.registry_auth import PODMAN_AUTH_PATH
+from utility.registry_auth import (
+    PODMAN_AUTH_PATH,
+    merge_registry_into_podman_auth,
+)
 from utility.utils import resolve_registry_host, resolve_registry_login
 
 from ..ceph import CommandFailed, ResourceNotFoundError
@@ -36,6 +39,19 @@ __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"
 __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
+
+
+def _podman_auth_exists(installer) -> bool:
+    """Return True if /etc/ceph/podman-auth.json exists and is non-empty."""
+    try:
+        out, _ = installer.exec_command(
+            sudo=True,
+            cmd=f"test -s {PODMAN_AUTH_PATH} && echo yes || echo no",
+        )
+        return bool(out) and "yes" in out.strip().lower()
+    except Exception as err:
+        logger.debug("Could not check %s: %s", PODMAN_AUTH_PATH, err)
+        return False
 
 
 def construct_registry(
@@ -345,33 +361,64 @@ class BootstrapMixin:
         # Suites often hardcode registry-json: registry.redhat.io; using that as the
         # login host would break IBM pulls (e.g. preprod.icr.io image + RH auth).
         #
-        # When podman-auth-file is set (--custom-config), pass the distributed auth file
-        # to cephadm via --container-auth-json so authenticated registries (e.g.
-        # cp.icr.io / preprod.icr.io) are usable during bootstrap and later orch pulls.
-        # cephadm does not auto-discover /etc/ceph/podman-auth.json on its own.
+        # Prefer --container-auth-json /etc/ceph/podman-auth.json when present:
+        #   - Explicit podman-auth-file (--custom-config) for ODF / multi-registry
+        #   - Or the multi-host file written by install_prereq (CDN + image host)
+        # Bootstrap --registry-json alone only seeds one registry; orch then fails
+        # pulling grafana/prometheus from registry.redhat.io / cp.icr.io while
+        # using --authfile=/etc/ceph/podman-auth.json (RH sanity 136 / IBM 133).
+        # cephadm does not auto-discover that path without --container-auth-json.
         args.pop("registry-url", None)
         registry_json = args.pop("registry-json", None)
         use_podman_auth = self.config.get("podman_auth_file")
 
-        if use_podman_auth:
+        if custom_image and isinstance(custom_image, str):
+            image_ref = custom_image
+        else:
+            image_ref = self.config.get("container_image")
+
+        overrides = self.config.get("overrides") or {}
+        registry_url = resolve_registry_host(
+            overrides=overrides,
+            image=image_ref,
+            key="bootstrap-registry",
+        )
+
+        # When install_prereq wrote /etc/ceph/podman-auth.json (CDN + image host),
+        # merge the bootstrap registry in case it was missing, then pass the file
+        # via --container-auth-json. Do NOT mutate an explicit podman-auth-file
+        # (ODF / multi-registry): that file is the source of truth and may use
+        # pull-secret credentials that differ from ~/.cephci.yaml.
+        if (
+            registry_url
+            and not use_podman_auth
+            and _podman_auth_exists(self.installer)
+        ):
+            try:
+                reg_args = resolve_registry_login(registry_url)
+                merge_registry_into_podman_auth(
+                    self.installer.node,
+                    registry_url,
+                    reg_args.get("registry-username"),
+                    reg_args.get("registry-password"),
+                )
+            except KeyError as err:
+                logger.warning(
+                    "Could not merge bootstrap registry %s into %s: %s",
+                    registry_url,
+                    PODMAN_AUTH_PATH,
+                    err,
+                )
+
+        if use_podman_auth or _podman_auth_exists(self.installer):
             cmd += f" --container-auth-json {PODMAN_AUTH_PATH}"
             logger.info(
-                "podman-auth-file configured: passing --container-auth-json %s "
-                "to cephadm bootstrap",
+                "Passing --container-auth-json %s to cephadm bootstrap "
+                "(podman-auth-file=%s)",
                 PODMAN_AUTH_PATH,
+                bool(use_podman_auth),
             )
         else:
-            if custom_image and isinstance(custom_image, str):
-                image_ref = custom_image
-            else:
-                image_ref = self.config.get("container_image")
-
-            overrides = self.config.get("overrides") or {}
-            registry_url = resolve_registry_host(
-                overrides=overrides,
-                image=image_ref,
-                key="bootstrap-registry",
-            )
             logger.info(
                 "Using registry host %r for bootstrap login "
                 "(bootstrap-registry / image host)",
