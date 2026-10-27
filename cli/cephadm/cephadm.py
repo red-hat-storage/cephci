@@ -1,7 +1,33 @@
+from shlex import quote
+
 from cli import Cli
 from cli.ceph.ceph import Ceph
 from cli.ceph.ceph_volume.ceph_volume import CephVolume
 from cli.utilities.utils import build_cmd_from_args
+
+CEPH_VOLUME_MOUNTS = (
+    "/dev:/dev",
+    "/run/udev:/run/udev",
+    "/sys:/sys",
+    "/run/lvm:/run/lvm",
+    "/run/lock/lvm:/run/lock/lvm",
+    # Pacific 16.2.0 rewrites any third mount field as :z; never relabel host /.
+    "/:/rootfs",
+)
+
+
+def ceph_volume_shell(base_cmd="cephadm", mounts=(), env=()):
+    """Build the host device/LVM context needed by ceph-volume shell commands.
+
+    Extra mount mappings and environment assignments share the same context.
+    Keep all mounts in one option: cephadm's nargs='+' parser replaces values
+    when --mount is repeated. The host root mount supports run_on_host/nsenter.
+    """
+    mount_args = " ".join(quote(path) for path in (*CEPH_VOLUME_MOUNTS, *mounts))
+    env_args = " ".join(
+        f"--env {quote(value)}" for value in ("CEPH_VOLUME_SKIP_RESTORECON=yes", *env)
+    )
+    return f"{base_cmd} shell --mount {mount_args} {env_args} --"
 
 
 class CephAdm(Cli):
@@ -12,13 +38,18 @@ class CephAdm(Cli):
 
         self.base_cmd = base_cmd
         self.base_shell_cmd = f"{self.base_cmd} shell"
+        volume_mounts = []
         if src_mount:
-            self.base_shell_cmd += f" --mount {src_mount}:{mount} --"
+            volume_mounts.append(f"{src_mount}:{mount}")
         elif mount:
-            self.base_shell_cmd += f" --mount {mount}:{mount} --"
+            volume_mounts.append(f"{mount}:{mount}")
+        if volume_mounts:
+            self.base_shell_cmd += f" --mount {volume_mounts[0]} --"
 
         self.ceph = Ceph(nodes, self.base_shell_cmd)
-        self.ceph_volume = CephVolume(nodes, self.base_shell_cmd)
+        self.ceph_volume = CephVolume(
+            nodes, ceph_volume_shell(self.base_cmd, mounts=volume_mounts)
+        )
 
     def shell(self, cmd):
         """Ceph orchestrator shell interface to run ceph commands.

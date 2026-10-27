@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from cli.exceptions import ConfigError, ResourceNotFoundError
 from cli.ops.cephadm import bootstrap, set_container_image_config
 from cli.utilities.configure import (
@@ -8,7 +10,11 @@ from cli.utilities.configure import (
 
 
 def run(ceph_cluster, **kwargs):
-    """Verify cephadm bootstrap"""
+    """Verify cephadm bootstrap, with optional runtime SSH key-file overrides.
+
+    custom_config_dict keys bootstrap-ssh-private-key and bootstrap-ssh-public-key
+    provide paths on the installer without embedding those paths in a suite.
+    """
     # Get config specs
     config, custom_config = (
         kwargs.get("config"),
@@ -18,6 +24,18 @@ def run(ceph_cluster, **kwargs):
     # Check mandatory parameter bootstrap
     if not config.get("bootstrap"):
         raise ConfigError("Mandatory config 'bootstrap' not provided")
+
+    bootstrap_config = deepcopy(config["bootstrap"])
+    overrides = kwargs.get("test_data", {}).get("custom_config_dict") or {}
+    for option in ("ssh-private-key", "ssh-public-key"):
+        runtime_key = f"bootstrap-{option}"
+        if runtime_key in overrides:
+            value = overrides[runtime_key]
+            if not isinstance(value, str) or not value.strip():
+                raise ConfigError(
+                    f"Runtime config '{runtime_key}' must be a key-file path"
+                )
+            bootstrap_config[option] = value
 
     # Get cluster config
     installer, nodes = (
@@ -45,16 +63,13 @@ def run(ceph_cluster, **kwargs):
         installer, nodes, rhbuild, tools_repo, build_type, ibm_build, ansible_preflight
     )
 
-    # Get bootstrap config
-    bootstrap_config = config.get("bootstrap")
-
     # Bootstrap cluster
     bootstrap(
         installer=installer,
         nodes=nodes,
         ibm_build=ibm_build,
         image=image,
-        **bootstrap_config
+        **bootstrap_config,
     )
 
     # Set container configs

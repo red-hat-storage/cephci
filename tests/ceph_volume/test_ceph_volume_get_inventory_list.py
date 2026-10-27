@@ -1,10 +1,12 @@
-from cli.exceptions import OperationFailedError
+from collections.abc import Mapping
+
+from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.containers import Container
+from tests.ceph_volume.utils import parse_inventory_json
 
 
 def get_inventory_list(node, ceph_image, output_format):
-    # Note: This cmd uses rhceph-5-rhel8:latest, the requirement is just to ensure whether
-    # the ceph inventory is able to list the details and any container image is sufficient
+    """Run inventory using the selected test image and require a successful exit."""
     cmd = f"--cluster ceph inventory --format={output_format}"
     volumes = [
         "/run/lock/lvm:/run/lock/lvm:z",
@@ -24,36 +26,48 @@ def get_inventory_list(node, ceph_image, output_format):
         image=ceph_image,
         long_running=False,
     )
+    status = getattr(node, "exit_status", None)
+    if type(status) is not int or status != 0:
+        raise OperationFailedError(
+            f"ceph-volume inventory --format={output_format} failed on {node.hostname}; "
+            f"exit status: {status}; output: {out}"
+        )
     return out
 
 
 def run(ceph_cluster, **kw):
-    """
-    Verify ceph-ansible fails to get an inventory
-    list with KeyError: 'ceph.cluster_name' in json format
-    but not in plain format
-    """
+    """Verify plain and JSON inventory on bootstrap and non-bootstrap OSD hosts."""
     config = kw.get("config")
+    if not isinstance(config, Mapping):
+        raise ConfigError("Ceph-volume inventory config must be provided")
+    ceph_image = (
+        config.get("ceph_image")
+        or config.get("container_image")
+        or kw.get("container_image")
+    )
+    if not isinstance(ceph_image, str) or not ceph_image.strip():
+        raise ConfigError(
+            "Ceph-volume inventory requires ceph_image or container_image"
+        )
 
-    installer = ceph_cluster.get_nodes(role="installer")[0]
+    installers = ceph_cluster.get_nodes(role="installer")
+    if not installers:
+        raise ConfigError("Ceph-volume inventory requires a bootstrap installer node")
+    installer = installers[0]
 
-    # Non bootstrap osd Node
-    non_bs_node = list(set(ceph_cluster.get_nodes(role="osd")) - {installer})[0]
-    ceph_image = config.get("ceph_image")
-    # Verify whether format as plain is returning an error
-    for node in (installer, non_bs_node):
-        # Get the version using podman command
-        out = get_inventory_list(node, ceph_image, output_format="plain")
-        if not out:
+    non_bs_nodes = [
+        node for node in ceph_cluster.get_nodes(role="osd") if node != installer
+    ]
+    if not non_bs_nodes:
+        raise ConfigError("Ceph-volume inventory requires a non-bootstrap OSD node")
+    for node in (installer, non_bs_nodes[0]):
+        plain_output = get_inventory_list(node, ceph_image, output_format="plain")
+        if not plain_output.strip():
             raise OperationFailedError(
-                "Not able to list the ceph inventory even without json format"
+                f"ceph-volume plain inventory is empty on {node.hostname}"
             )
 
-    # Try to execute the command in both the nodes and make sure no error is seen BZ: #1977888
-    for node in (installer, non_bs_node):
+        # Regression for BZ 1977888: JSON must be valid, including cluster-name tags.
         out = get_inventory_list(node, ceph_image, output_format="json")
-        if "KeyError: 'ceph.cluster_name'" in out:
-            raise OperationFailedError(
-                "Not able to list the ceph inventory with json format"
-            )
+        parse_inventory_json(out, node.hostname)
     return 0

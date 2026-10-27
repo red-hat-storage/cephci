@@ -53,14 +53,12 @@ class Lvm(Cli):
         """
         Deactivate prepared OSD
         Args:
-            bluestore(boolean) : BlueStore is the default backend.
-            Ceph permits changing the backend, which can be done by using the --bluestore flag
+            bluestore(boolean): Retained for compatibility. Deactivate does not
+                accept an objectstore flag.
             osd_id(str): OSD id (an integer unique to each OSD)
             osd_fsid(str): OSD FSID (unique identifier of an OSD)
         """
         cmd = f"{self.base_cmd} deactivate {osd_id} {osd_fsid}"
-        if bluestore:
-            cmd += " --bluestore"
         out = self.execute(cmd=cmd, sudo=True, **kw)
         if isinstance(out, tuple):
             return "\n".join(map(lambda x: x.strip(), out))

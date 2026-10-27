@@ -1,5 +1,3 @@
-from json import loads
-
 from ceph.waiter import WaitUntil
 from cephci.utils.configs import get_cloud_credentials, get_configs
 from cli.cephadm.cephadm import CephAdm
@@ -7,23 +5,30 @@ from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
 from cli.exceptions import OperationFailedError
-from cli.utilities.operations import wait_for_osd_daemon_state
-from cli.utilities.utils import (
-    create_yaml_config,
-    get_lvm_on_osd_container,
-    get_running_containers,
+from cli.utilities.utils import create_yaml_config
+from tests.ceph_volume.test_ceph_volume_non_collocated import (
+    _get_host_lvm_list,
+    _get_osd_fsid,
+    _get_osd_layout,
+    _get_service_lvm_list,
+    _get_spec_osd_nodes,
+    _remove_osd,
+    _resolve_spec_hosts,
+    _reuse_existing_device_selectors,
+    _wait_for_osd_removal,
+    _wait_for_redeployment,
 )
 
 
 def _add_node_volumes(nodes, config, size, count):
-    """Create volume in bulk and attach to node
+    """Create volume in bulk and attach to node.
+
     Args:
         nodes (ceph): nodes on volumes to create
         config (dict): ceph config
         size (str): size of volume
         count (int): number of volume
     """
-    # Get cloud creadentials
     cloud_type = config.get("cloud-type")
     cloud_configs = get_cloud_credentials(cloud_type)
     cloud = CloudProvider(cloud_type, **cloud_configs)
@@ -37,119 +42,100 @@ def _add_node_volumes(nodes, config, size, count):
     return True
 
 
-def _get_osd_db_id(osd_ids, lvm_list):
-    """Get OSD id and associated devices name
-    Args:
-        osd_ids (list): list of osd ids
-        lvm_list (list): list of lvm
-    return (dict): osd id associated with device
-    """
-    osds = {}
-    for id in osd_ids:
-        for item in lvm_list.get(id):
-            if item.get("type") == "db":
-                osds[id] = item["devices"]
-    return osds
-
-
 def run(ceph_cluster, **kw):
-    """Re-deploy non-collocated OSDs with wrong dedicated DB size"""
+    """Re-deploy non-collocated OSDs and verify every dedicated DB mapping.
 
-    # Get configs
+    Set create_volumes=False to reuse the configured service's existing OSDs,
+    or deploy from preattached free devices if that service has no OSDs yet.
+    reuse_existing_devices=True also derives its selectors from the existing
+    service's LVM layout and requires that service to exist before applying.
+    osd_count (default 4) is the required OSD count on the selected target host.
+    """
     get_configs()
     config = kw.get("config")
-
-    # Get the installer and OSD nodes
     installer = ceph_cluster.get_nodes(role="installer")[0]
-    osd_nodes = ceph_cluster.get_nodes(role="osd")
+    specs = _resolve_spec_hosts(ceph_cluster, config["spec"])
+    osd_nodes = _get_spec_osd_nodes(ceph_cluster, specs)
+    osd_node = osd_nodes[0]
+    initial_lvm = _get_host_lvm_list(osd_node)
+    original_ids = set(initial_lvm)
 
-    # Get device spec
-    device_spec = config.get("spec", {}).get("spec", {})
+    volume_count = config.get("osd_count", 4)
+    if (
+        not isinstance(volume_count, int)
+        or isinstance(volume_count, bool)
+        or volume_count < 1
+    ):
+        raise OperationFailedError("osd_count must be a positive integer")
+    reuse_devices = config.get("reuse_existing_devices", False)
+    if not isinstance(reuse_devices, bool):
+        raise OperationFailedError("reuse_existing_devices must be a boolean")
+    create_volumes = config.get("create_volumes", not reuse_devices)
+    if not isinstance(create_volumes, bool):
+        raise OperationFailedError("create_volumes must be a boolean")
+    if reuse_devices and create_volumes:
+        raise OperationFailedError(
+            "reuse_existing_devices requires create_volumes to be false"
+        )
+    existing_service = _get_service_lvm_list(initial_lvm, specs.get("service_id"))
+    if reuse_devices:
+        if not existing_service:
+            raise OperationFailedError(
+                "reuse_existing_devices requires existing OSDs for the configured service"
+            )
+        _reuse_existing_device_selectors(specs, _get_osd_layout(existing_service))
+    if create_volumes:
+        device_spec = specs.get("spec", {})
+        size = device_spec.get("data_devices", {}).get("size", "").replace("GB", "")
+        if not size:
+            raise OperationFailedError(
+                "A data device size is required for redeployment"
+            )
+        _add_node_volumes(nodes=osd_nodes, config=config, size=size, count=volume_count)
+    elif existing_service and len(existing_service) != volume_count:
+        raise OperationFailedError(
+            f"Expected {volume_count} existing service OSDs on {osd_node.hostname}, "
+            f"found {len(existing_service)}"
+        )
 
-    # Create volume for data device
-    size = device_spec.get("data_devices", {}).get("size", {}).replace("GB", "")
-    _add_node_volumes(nodes=osd_nodes, config=config, size=size, count=4)
-
-    # Get required host from config specs
-    nodes = config.get("spec", {}).get("placement", {}).get("hosts")
-    host = [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
-
-    # Create a spec file specific to hostname
-    specs = config.get("spec", {})
-    specs["placement"]["hosts"] = host
-
-    # Refresh ceph orch devices
-    c = {"refresh": True}
-    if not CephAdm(installer).ceph.orch.device.ls(**c):
-        raise OperationFailedError("Devices are not re-freshed")
-
-    # Generate a yaml file
+    if not CephAdm(installer).ceph.orch.device.ls(refresh=True):
+        raise OperationFailedError("Devices are not refreshed")
     file = create_yaml_config(installer, specs)
-
-    # Create OSDs with yaml file
-    c = {"pos_args": [], "input": file}
-    CephAdm(nodes=installer, mount=file).ceph.orch.apply(**c)
-
-    # Wait for OSDs ids
-    timeout, interval = 300, 6
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        if CephAdm(installer).ceph.osd.ls():
-            break
-    if w.expired:
-        raise OperationFailedError("Failed to wait for OSD to generate")
-
-    # Wait for OSDs to be ready and running state
-    out = CephAdm(installer).ceph.osd.ls()
-    for osd in out:
-        wait_for_osd_daemon_state(installer, osd, "up")
-
-    # Get the lvm list before OSD Zap
-    running_containers, _ = get_running_containers(
-        osd_nodes[0], format="json", expr="name=osd", sudo=True
+    CephAdm(nodes=installer, mount=file).ceph.orch.apply(
+        pos_args=[], input=file, check_ec=True
     )
-    container_ids = [item.get("Names")[0] for item in loads(running_containers)]
-    lvm_list = get_lvm_on_osd_container(container_ids[0], osd_nodes[0])
 
-    # Identify an OSD ID to perform
-    osd_ids = list(lvm_list.keys())
+    if not create_volumes and existing_service:
+        lvm_list = existing_service
+    else:
+        # Existing OSDs alone must not satisfy a wait for newly attached disks.
+        for _ in WaitUntil(timeout=300, interval=6):
+            service_osds = _get_service_lvm_list(
+                _get_host_lvm_list(osd_node), specs.get("service_id")
+            )
+            lvm_list = {
+                osd_id: items
+                for osd_id, items in service_osds.items()
+                if osd_id not in original_ids
+            }
+            if len(lvm_list) == volume_count:
+                break
+        else:
+            raise OperationFailedError(
+                f"Timed out waiting for {volume_count} new OSDs on {osd_node.hostname}"
+            )
+    before = _get_osd_layout(lvm_list)
+    original_fsids = {osd_id: _get_osd_fsid(lvm_list, osd_id) for osd_id in before}
+    _wait_for_redeployment(installer, osd_node, before)
 
-    # Get OSD and device before zap
-    osd_db_before = _get_osd_db_id(osd_ids=osd_ids, lvm_list=lvm_list)
-
-    # Perform osd zap
-    conf = {"zap": True, "force": True}
-    for osd_id in osd_ids:
-        osd_rm = CephAdm(installer).ceph.orch.osd.rm(osd_id=osd_id, **conf)
-        if not osd_rm:
-            raise OperationFailedError("Failed to remove osd")
-
-    # Wait until the rm operation is complete
-    timeout, interval = 300, 6
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        conf = {"format": "json"}
-        out = CephAdm(installer).ceph.orch.osd.rm(status=True, **conf)
-        if "No OSD remove/replace operations reported" in out:
-            break
-    if w.expired:
-        raise OperationFailedError("Failed to perform osd rm operation. Timed out!")
-
-    # Get the lvm list after OSD Zap
-    running_containers, _ = get_running_containers(
-        osd_nodes[0], format="json", expr="name=osd", sudo=True
-    )
-    container_ids = [item.get("Names")[0] for item in loads(running_containers)]
-
-    # Get the lvm list afer OSD zap
-    lvm_list = get_lvm_on_osd_container(container_ids[0], osd_nodes[0])
-
-    # Identify an OSD ID to perform
-    osd_ids = list(lvm_list.keys())
-
-    # Get OSD and device after zap
-    osd_db_after = _get_osd_db_id(osd_ids=osd_ids, lvm_list=lvm_list)
-
-    # Validate if db device has changed
-    if osd_db_before != osd_db_after:
-        raise OperationFailedError("Faild to re-deploy non-collocated OSD")
-
+    # Keep this host available to size-three CRUSH rules while replacing all OSDs.
+    replaced_fsids = {}
+    for osd_id, (data, _) in before.items():
+        _remove_osd(installer, osd_id)
+        _wait_for_osd_removal(installer)
+        replaced_fsids = {
+            **replaced_fsids,
+            data: replaced_fsids.get(data, set()) | {original_fsids[osd_id]},
+        }
+        _wait_for_redeployment(installer, osd_node, before, replaced_fsids)
     return 0
