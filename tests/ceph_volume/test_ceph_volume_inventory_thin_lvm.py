@@ -9,9 +9,8 @@ import re
 from collections.abc import Mapping
 from uuid import uuid4
 
-from cli.cephadm.cephadm import ceph_volume_shell
 from cli.exceptions import ConfigError, OperationFailedError
-from tests.ceph_volume.utils import parse_inventory_json
+from tests.ceph_volume.utils import ceph_volume_shell, parse_inventory_json
 from utility.log import Log
 
 log = Log(__name__)

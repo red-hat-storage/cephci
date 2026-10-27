@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 
-from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
+from tests.ceph_volume.utils import get_ceph_volume
 from utility.log import Log
 
 log = Log(__name__)
@@ -68,7 +68,7 @@ def run(ceph_cluster, **kw):
     osd_fsid = configs.get("osd_fsid")
 
     node = ceph_cluster.get_nodes(role="installer")[0]
-    lvm = CephAdm(node).ceph_volume.lvm
+    lvm = get_ceph_volume(node).lvm
     device_errors = (
         f"lsblk: {data}: not a block device",
         f"Unable to proceed with non-existing device: {data}",

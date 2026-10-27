@@ -8,6 +8,7 @@ from cephci.utils.configs import get_configs
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.utils import create_yaml_config
+from tests.ceph_volume.utils import get_ceph_volume
 
 
 def _get_osd_devices(osd_id, lvm_list, device_type):
@@ -122,7 +123,7 @@ def _get_service_lvm_list(lvm_list, service_id):
 
 def _get_host_lvm_list(node):
     """Inspect local LVM without depending on a running OSD container."""
-    lvm_list = loads(CephAdm(node).ceph_volume.lvm.list(data="", check_ec=True))
+    lvm_list = loads(get_ceph_volume(node).lvm.list(data="", check_ec=True))
     if not isinstance(lvm_list, dict):
         raise OperationFailedError(f"Invalid LVM inventory on {node.hostname}")
     return lvm_list

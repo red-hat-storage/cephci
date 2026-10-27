@@ -3,7 +3,6 @@ import json
 import re
 from typing import Any, Tuple
 
-from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, translate_to_ip
 from utility.log import Log
 
@@ -27,16 +26,7 @@ def exec_command(node, **kwargs: Any) -> Tuple:
     Raises:
         CommandFailed   when there is an execution failure
     """
-    result = node.exec_command(**kwargs)
-    # CephNode returns only an exit code for long-running commands.
-    if kwargs.get("long_running") and type(result) is int:
-        if result != 0:
-            message = f"Command {kwargs.get('cmd')!r} exited with status {result}"
-            if kwargs.get("check_ec", True):
-                raise CommandFailed(message)
-            LOG.warning(f"{message}; exit status checking is disabled")
-        return "", ""
-    out, err = result
+    out, err = node.exec_command(**kwargs)
     return out, err
 
 

@@ -1,5 +1,5 @@
 ---
-# Conf: conf/tentacle/ceph_volume/1admin-3osd-1client-ceph-volume-gaps.yaml
+# Conf: conf/tentacle/ceph_volume/1admin-3osd-1client-ceph-volume.yaml
 # Select a release from the official IBM stable manifest, for example:
 # --product ibm --release 9.0 --build stable --custom-config ibm-build=True
 # For 9.0 or 9.2, provide access to the manifest-selected image registry and
@@ -19,7 +19,7 @@ tests:
   - test:
       name: Bootstrap ceph-volume regression cluster
       desc: Deploy monitors and managers without consuming OSD devices
-      module: test_cephadm_bootstrap.py
+      module: test_ceph_volume_bootstrap.py
       abort-on-fail: true
       destroy-cluster: false
       config:
@@ -73,7 +73,8 @@ tests:
         role: osd
         idx: 1
         sudo: true
-        long_running: true
+        long_running: false
+        timeout: 1200
         check_status: true
         commands:
           - dnf install -y --nogpgcheck cephadm

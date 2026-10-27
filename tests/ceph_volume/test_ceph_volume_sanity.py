@@ -5,7 +5,7 @@ from json import loads
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.utils import reboot_node
-from tests.ceph_volume.utils import get_available_devices
+from tests.ceph_volume.utils import get_available_devices, get_ceph_volume
 from tests.cephadm.test_verify_cluster_health_after_reboot import RebootFailed
 
 OSD_KEYRING_PATH = "/var/lib/ceph/bootstrap-osd/ceph.keyring"
@@ -44,9 +44,7 @@ def run(ceph_cluster, **kw):
     keyring_file = create_keyring_file(installer, osd_auth_key)
 
     # Set LVM object
-    lvm = CephAdm(
-        installer, src_mount=keyring_file, mount=OSD_KEYRING_PATH
-    ).ceph_volume.lvm
+    lvm = get_ceph_volume(installer, mounts=(f"{keyring_file}:{OSD_KEYRING_PATH}",)).lvm
 
     # Prepare ceph-volume lvm
     out = lvm.prepare(data=disks[0], check_ec=True)
@@ -76,7 +74,7 @@ def run(ceph_cluster, **kw):
         raise OperationFailedError(f"Failed to activate osd: {osd_id}")
 
     # Deactivate ceph-volume OSD
-    lvm.deactivate(osd_id, osd_fsid, check_ec=True)
+    lvm.deactivate(osd_id, osd_fsid, bluestore=False, check_ec=True)
 
     # Reboot installer node
     status = reboot_node(installer)

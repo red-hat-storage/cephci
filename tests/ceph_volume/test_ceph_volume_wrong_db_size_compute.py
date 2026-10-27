@@ -8,12 +8,13 @@ from decimal import Decimal
 
 from ceph.waiter import WaitUntil
 from cephci.utils.configs import get_cloud_credentials, get_configs
-from cli.cephadm.cephadm import CephAdm, ceph_volume_shell
+from cli.cephadm.cephadm import CephAdm
 from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.utils import create_yaml_config
+from tests.ceph_volume.utils import ceph_volume_shell, get_ceph_volume
 from utility.log import Log
 
 log = Log(__name__)
@@ -89,7 +90,7 @@ def _available_devices(node):
 
 def _get_host_lvm(node):
     """Read all OSD LVs locally, including OSDs not yet running."""
-    return json.loads(CephAdm(node).ceph_volume.lvm.list(data="", check_ec=True))
+    return json.loads(get_ceph_volume(node).lvm.list(data="", check_ec=True))
 
 
 def _get_lv_sizes(node):
