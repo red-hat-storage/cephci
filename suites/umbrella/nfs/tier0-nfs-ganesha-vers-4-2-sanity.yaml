@@ -2,7 +2,7 @@
 #-------------------------------------
 #---    Test Suite for Nfs Ganesha vers 4.2 - Sanity Tests---
 #-------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Sanity test cases for
 #    - Bootstrap
 #    - Host management

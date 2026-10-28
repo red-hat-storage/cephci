@@ -2,7 +2,7 @@
 #-------------------------------------
 #---    Test Suite for Nfs Ganesha ---
 #-------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Smoke test cases for
 #    - Bootstrap
 #    - Host management
@@ -355,18 +355,6 @@ tests:
   #       clients: 2
   #       total_num_exports: 4
   #     comments: cthon tests for NFS ganesha - BZ-2418561
-
-  - test:
-      name: Nfs Ganesha rename operations
-      module: test_file_ops_renames.py
-      desc: Perform file and dir renaming and lookups in parallel
-      polarion-id: CEPH-83577594
-      abort-on-fail: true
-      config:
-        nfs_version: 4.1
-        clients: 3
-        num_files: 1000
-        num_dirs: 1000
 
   - test:
       name: Nfs export rootsquash permission

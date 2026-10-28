@@ -1,6 +1,6 @@
 # ===============================================================================
 # Test Suite: NFS Ganesha v4.2 with BYOK (Bring Your Own Key)
-# Configuration: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Configuration: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # This suite performs end-to-end testing of:
 #   - GKLM integration for key and certificate management (BYOK/KMIP)
