@@ -1,13 +1,17 @@
+import json
 from collections.abc import Mapping
+from shlex import quote
 
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.containers import Container
 from tests.ceph_volume.utils import parse_inventory_json
 
 
-def get_inventory_list(node, ceph_image, output_format):
+def get_inventory_list(node, ceph_image, output_format, device=None):
     """Run inventory using the selected test image and require a successful exit."""
     cmd = f"--cluster ceph inventory --format={output_format}"
+    if device:
+        cmd += f" {quote(device)}"
     volumes = [
         "/run/lock/lvm:/run/lock/lvm:z",
         "/var/run/udev/:/var/run/udev/:z",
@@ -69,5 +73,27 @@ def run(ceph_cluster, **kw):
 
         # Regression for BZ 1977888: JSON must be valid, including cluster-name tags.
         out = get_inventory_list(node, ceph_image, output_format="json")
-        parse_inventory_json(out, node.hostname)
+        devices = parse_inventory_json(out, node.hostname)
+        for device in devices:
+            path = device["path"]
+            if type(device.get("available")) is not bool:
+                raise OperationFailedError(f"Missing availability for {path}")
+            reasons = device.get("rejected_reasons")
+            if not isinstance(reasons, list) or device["available"] == bool(reasons):
+                raise OperationFailedError(f"Inconsistent rejection reasons for {path}")
+            api = device.get("sys_api", {})
+            if not isinstance(api, dict) or api.get("size", 0) <= 0:
+                raise OperationFailedError(f"Missing device size for {path}")
+        # Check the documented device filter against the full JSON report.
+        target = devices[0]
+        single = json.loads(
+            get_inventory_list(node, ceph_image, "json", target["path"])
+        )
+        if isinstance(single, list) and len(single) == 1:
+            single = single[0]
+        fields = ("path", "available", "rejected_reasons", "lvs")
+        if not isinstance(single, dict) or any(
+            single.get(field) != target.get(field) for field in fields
+        ):
+            raise OperationFailedError("Single-device and full inventory disagree")
     return 0

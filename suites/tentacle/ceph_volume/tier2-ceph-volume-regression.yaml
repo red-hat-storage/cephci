@@ -101,10 +101,66 @@ tests:
 
   - test:
       name: Validate ceph-volume lifecycle across reboot
-      desc: Prepare, activate, deactivate, and zap a disposable disk
+      desc: Verify prepare, repeated activation, OSD I/O, reboot recovery and zap
       module: test_ceph_volume_sanity.py
       polarion-id: CEPH-11378
       abort-on-fail: true
+
+  - test:
+      name: Validate successful create
+      desc: Verify OSD identity, device layout, I/O and cleanup
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        operation: create
+        reboot: false
+
+  - test:
+      name: Validate data with a separate DB
+      desc: Verify OSD identity, device layout, I/O and cleanup
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        layout: data-db
+        reboot: false
+
+  - test:
+      name: Validate data with a separate WAL
+      desc: Verify OSD identity, device layout, I/O and cleanup
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        layout: data-wal
+        reboot: false
+
+  - test:
+      name: Validate data with separate DB and WAL
+      desc: Verify OSD identity, device layout, I/O and cleanup
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        layout: data-db-wal
+        reboot: false
+
+  - test:
+      name: Validate encrypted pre-created LVs after reboot
+      desc: Verify OSD identity, device layout, I/O and cleanup
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        layout: data-db-wal
+        precreated_lvs: true
+        encrypted: true
+        reboot: true
+
+  - test:
+      name: Validate batch reports and repeat execution
+      desc: Verify OSD identity, device layout, I/O and cleanup
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        operation: batch
+        reboot: false
 
   - test:
       name: Validate requested DB LV sizes on every data device

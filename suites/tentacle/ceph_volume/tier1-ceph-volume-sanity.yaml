@@ -44,3 +44,19 @@ tests:
       desc: Verify OSD creation using ceph-volume utility
       polarion-id: CEPH-11378
       module: test_ceph_volume_sanity.py
+
+  - test:
+      name: Validate successful ceph-volume create
+      desc: Create an OSD, verify its device mapping and I/O, and reclaim the disk
+      module: test_ceph_volume_sanity.py
+      abort-on-fail: true
+      config:
+        operation: create
+        reboot: false
+
+  - test:
+      name: Validate inventory metadata and device filtering
+      desc: Check plain and JSON inventory on bootstrap and non-bootstrap hosts
+      module: test_ceph_volume_get_inventory_list.py
+      polarion-id: CEPH-83591998
+      config: {}
