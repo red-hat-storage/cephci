@@ -24,8 +24,10 @@ from utility.odf_defaults import (
 )
 from utility.registry_auth import (
     PODMAN_AUTH_PATH,
+    merge_auths,
     merge_registry_into_podman_auth,
     read_podman_auth_file,
+    registry_login_args_from_podman_auths,
     write_podman_auth_file,
 )
 from utility.utils import resolve_registry_host, resolve_registry_login
@@ -41,19 +43,6 @@ __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"
 __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
-
-
-def _podman_auth_exists(installer) -> bool:
-    """Return True if /etc/ceph/podman-auth.json exists and is non-empty."""
-    try:
-        out, _ = installer.exec_command(
-            sudo=True,
-            cmd=f"test -s {PODMAN_AUTH_PATH} && echo yes || echo no",
-        )
-        return bool(out) and "yes" in out.strip().lower()
-    except Exception as err:
-        logger.debug("Could not check %s: %s", PODMAN_AUTH_PATH, err)
-        return False
 
 
 def _cephadm_supports_container_auth_json(installer) -> bool:
@@ -108,18 +97,21 @@ def construct_registry(
     reg_args = resolve_registry_login(registry)
     logger.debug("Registry login args for host %r", registry)
     if json_file:
-        reg = dict((k.lstrip("registry-"), v) for k, v in reg_args.items())
-
-        # Create file and return file_path
-        temp_file = tempfile.NamedTemporaryFile(suffix=".json")
-        reg_args = {"registry-json": temp_file.name}
-        reg_file = cls.installer.node.remote_file(
-            sudo=True, file_name=temp_file.name, file_mode="w"
-        )
-        reg_file.write(json.dumps(reg, indent=4))
-        reg_file.flush()
+        return _registry_json_cli_string(cls, reg_args)
 
     return config_dict_to_string(reg_args)
+
+
+def _registry_json_cli_string(cls, reg_args: dict) -> str:
+    """Write a temp registry JSON file and return the ``--registry-json`` CLI fragment."""
+    reg = dict((k.lstrip("registry-"), v) for k, v in reg_args.items())
+    temp_file = tempfile.NamedTemporaryFile(suffix=".json")
+    reg_file = cls.installer.node.remote_file(
+        sudo=True, file_name=temp_file.name, file_mode="w"
+    )
+    reg_file.write(json.dumps(reg, indent=4))
+    reg_file.flush()
+    return config_dict_to_string({"registry-json": temp_file.name})
 
 
 def copy_ceph_configuration_files(cls, ceph_conf_args):
@@ -429,14 +421,10 @@ class BootstrapMixin:
         )
 
         # When install_prereq wrote /etc/ceph/podman-auth.json (CDN + image host),
-        # merge the bootstrap registry in case it was missing. Do NOT mutate an
-        # explicit podman-auth-file (ODF): that file is the source of truth.
-        if (
-            registry_url
-            and not use_podman_auth
-            and saved_podman_auths
-            and supports_container_auth
-        ):
+        # merge the bootstrap registry in case it was missing — including on the
+        # Reef/Squid fallback path so restore keeps the baseline host. Do NOT
+        # mutate an explicit podman-auth-file (ODF): that file is the source of truth.
+        if registry_url and not use_podman_auth and saved_podman_auths:
             try:
                 reg_args = resolve_registry_login(registry_url)
                 merge_registry_into_podman_auth(
@@ -481,10 +469,29 @@ class BootstrapMixin:
                     "No registry host resolved; "
                     "skipping registry credentials on bootstrap"
                 )
-            elif registry_json is not None:
-                cmd += construct_registry(self, registry_url, json_file=True)
             else:
-                cmd += construct_registry(self, registry_url)
+                # Prefer credentials already present in podman-auth (ODF pull-secret
+                # / multi-registry file) over ~/.cephci.yaml on the fallback path.
+                auths_for_fallback = saved_podman_auths
+                if use_podman_auth and not auths_for_fallback:
+                    auths_for_fallback = read_podman_auth_file(self.installer.node)
+
+                podman_reg_args = registry_login_args_from_podman_auths(
+                    auths_for_fallback, registry_url
+                )
+                if podman_reg_args:
+                    cmd += _registry_json_cli_string(self, podman_reg_args)
+                elif use_podman_auth:
+                    raise RuntimeError(
+                        f"cephadm lacks --container-auth-json and podman-auth-file "
+                        f"has no credentials for bootstrap registry "
+                        f"{registry_url!r}. Add that host to the pull-secret or "
+                        f"use Tentacle/9.x+ cephadm."
+                    )
+                elif registry_json is not None:
+                    cmd += construct_registry(self, registry_url, json_file=True)
+                else:
+                    cmd += construct_registry(self, registry_url)
 
         # Generate dashboard certificate and key if bootstrap cli
         # have this options as dashboard-key and dashboard-crt
@@ -547,39 +554,45 @@ class BootstrapMixin:
             if "automatically-accept-license" not in cmd:
                 cmd += " --automatically-accept-license"
 
-        out, err = self.installer.exec_command(
-            sudo=True,
-            cmd=cmd,
-            timeout=600,
-            check_ec=True,
-        )
+        try:
+            out, err = self.installer.exec_command(
+                sudo=True,
+                cmd=cmd,
+                timeout=600,
+                check_ec=True,
+            )
 
-        # Silence the alerts to prevent downstream tests erroring when
-        # callhome
-        if (
-            manifest_obj.product == "ibm"
-            and LooseVersion(str(manifest_obj.release)) >= LooseVersion("9.1")
-            and "call-home" not in cmd
-        ):
-            self.shell(args=["ceph", "orch", "accept", "call-home-enabled"], timeout=60)
+            # Silence the alerts to prevent downstream tests erroring when
+            # callhome
+            if (
+                manifest_obj.product == "ibm"
+                and LooseVersion(str(manifest_obj.release)) >= LooseVersion("9.1")
+                and "call-home" not in cmd
+            ):
+                self.shell(
+                    args=["ceph", "orch", "accept", "call-home-enabled"], timeout=60
+                )
 
-        logger.info("Bootstrap output : %s", out)
-        logger.error("Bootstrap error: %s", err)
-
-        # Reef/Squid bootstrap --registry-json overwrites podman-auth.json with a
-        # single host. Restore the multi-registry file on all nodes so orch pulls
-        # (grafana/prometheus from CDN) keep working via --authfile.
-        if saved_podman_auths and not use_container_auth_json:
-            for node in self.cluster.get_nodes(ignore="client"):
-                try:
-                    write_podman_auth_file(node, saved_podman_auths)
-                except Exception as restore_err:
-                    logger.warning(
-                        "Failed to restore %s on %s: %s",
-                        PODMAN_AUTH_PATH,
-                        getattr(node, "hostname", node),
-                        restore_err,
-                    )
+            logger.info("Bootstrap output : %s", out)
+            logger.error("Bootstrap error: %s", err)
+        finally:
+            # Reef/Squid bootstrap --registry-json overwrites podman-auth.json with a
+            # single host. Merge the pre-bootstrap multi-registry snapshot with the
+            # post-bootstrap file (current wins) so CDN hosts return and the baseline
+            # host bootstrap just seeded is kept.
+            if saved_podman_auths and not use_container_auth_json:
+                for node in self.cluster.get_nodes(ignore="client"):
+                    try:
+                        current = read_podman_auth_file(node)
+                        merged = merge_auths(saved_podman_auths, current)
+                        write_podman_auth_file(node, merged)
+                    except Exception as restore_err:
+                        logger.warning(
+                            "Failed to restore %s on %s: %s",
+                            PODMAN_AUTH_PATH,
+                            getattr(node, "hostname", node),
+                            restore_err,
+                        )
 
         # The path to ssh public key mentioned in either output-pub-ssh-key or
         # ssh-public-key options will be considered for distributing the ssh public key,
