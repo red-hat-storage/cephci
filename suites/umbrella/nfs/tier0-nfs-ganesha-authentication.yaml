@@ -1,7 +1,7 @@
 #===============================================================================================
 # NFS-Ganesha authentication (LDAP + Kerberos)
 # Suite: suites/tentacle/nfs/tier0-nfs-ganesha-authentication.yaml
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Combined auth suite: LDAP identity mapping tests, then MIT Kerberos (KDC on clients[1])
 # infra, mount/IO, flavors, enforcement, multi-client, wrong SPN, multi-sectype.

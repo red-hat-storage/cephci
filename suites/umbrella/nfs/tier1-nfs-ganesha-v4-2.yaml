@@ -2,7 +2,7 @@
 #-------------------------------------
 #---    Test Suite for Nfs Ganesha vers 4.2---
 #-------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Smoke test cases for
 #    - Bootstrap
 #    - Host management
