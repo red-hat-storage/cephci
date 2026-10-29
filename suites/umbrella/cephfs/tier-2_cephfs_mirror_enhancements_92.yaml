@@ -203,6 +203,7 @@ tests:
             name: Validate mirroring disruptive ops for 9.2
       module: cephfs_mirroring.test_cephfs_mirror_disruptive_ops.py
       name: Validate mirroring disruptive ops for 9.2
+      comments: "IBMCEPH-17374"
       polarion-id: "CEPH-83575002"
 
   - test:
@@ -236,6 +237,7 @@ tests:
             name: Validate mirroring checkpoints for 9.2
       module: cephfs_mirroring.test_cephfs_mirror_checkpoints_92.py
       name: Validate mirroring checkpoints for 9.2
+      comments: "IBMCEPH-17096"
       polarion-id: "CEPH-83632782"
 
   # Table 3: Perf Dumps — 6 functional scenarios
@@ -248,6 +250,7 @@ tests:
             name: Validate enhanced perf dump counters for 9.2
       module: cephfs_mirroring.test_cephfs_mirror_perf_dumps_92.py
       name: Validate enhanced perf dump counters for 9.2
+      comments: "IBMCEPH-17375"
       polarion-id: "CEPH-83632798"
 
   # Table 4: Tri-Interface Consistency — 4 functional scenarios

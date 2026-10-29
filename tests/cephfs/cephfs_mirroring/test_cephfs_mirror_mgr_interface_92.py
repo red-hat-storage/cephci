@@ -144,16 +144,6 @@ def run(ceph_cluster, **kw):
         mount_path1 = f"{kernel_mounting_dir}{subvol_path1}"
         mount_path2 = f"{fuse_mounting_dir}{subvol_path2}"
 
-        log.info("Clean up any leftover snapshots from previous runs")
-        for snap in ["snap_mgr1", "snap_cleanup"]:
-            source_clients[0].exec_command(
-                sudo=True, cmd=f"rmdir {mount_path1}.snap/{snap}", check_ec=False
-            )
-        for snap in ["snap_mgr2"]:
-            source_clients[0].exec_command(
-                sudo=True, cmd=f"rmdir {mount_path2}.snap/{snap}", check_ec=False
-            )
-
         log.info("Write data and create snapshots for initial sync")
         source_clients[0].exec_command(sudo=True, cmd=f"touch {mount_path1}file_mgr1")
         source_clients[0].exec_command(
@@ -1038,7 +1028,7 @@ def run(ceph_cluster, **kw):
 
         log.info("S10 PASSED: CLI sanity validated")
 
-        log.info("All MGR interface scenarios passed")
+        log.info("All MGR interface scenarios (S1–S10) passed")
         return 0
     except Exception as e:
         log.error(e)
@@ -1142,6 +1132,13 @@ def run(ceph_cluster, **kw):
                 source_fs,
                 subvol_group_name,
                 check_ec=False,
+            )
+
+            log.info("Clean up mirrored data and snapshots on target cluster")
+            fs_mirroring_utils.cleanup_target_cluster(
+                target_clients[0],
+                target_fs=target_fs,
+                subvolume_paths=subvolume_paths,
             )
         except Exception as cleanup_err:
             log.warning(f"Cleanup encountered an error: {cleanup_err}")

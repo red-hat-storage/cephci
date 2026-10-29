@@ -225,3 +225,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring_ha_on_4_nodes.py
       name: Validate FS mirroring on ha with 4 nodes
       polarion-id: "CEPH-83575338"
+  - test:
+      abort-on-fail: false
+      desc: "Validate 2-daemon HA mirroring enhancements for 9.2 (stats continuity, multi-FS isolation, perf isolation, tri-interface)"
+      clusters:
+        ceph1:
+          config:
+            name: Validate CephFS Mirroring HA enhancements for 9.2
+      module: cephfs_mirroring.test_cephfs_mirror_ha_92.py
+      name: Validate CephFS Mirroring HA enhancements for 9.2
+      polarion-id: "CEPH-83632850"
