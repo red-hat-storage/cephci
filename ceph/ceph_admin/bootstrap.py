@@ -22,7 +22,14 @@ from utility.odf_defaults import (
     apply_v2_only_mon_addrs,
     overrides_enabled,
 )
-from utility.registry_auth import PODMAN_AUTH_PATH
+from utility.registry_auth import (
+    PODMAN_AUTH_PATH,
+    merge_auths,
+    merge_registry_into_podman_auth,
+    read_podman_auth_file,
+    registry_login_args_from_podman_auths,
+    write_podman_auth_file,
+)
 from utility.utils import resolve_registry_host, resolve_registry_login
 
 from ..ceph import CommandFailed, ResourceNotFoundError
@@ -36,6 +43,26 @@ __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"
 __DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 __DEFAULT_SSH_PATH = "/etc/ceph/ceph.pub"
+
+
+def _cephadm_supports_container_auth_json(installer) -> bool:
+    """
+    Return True if the installed cephadm accepts ``--container-auth-json``.
+
+    Reef/Squid (RH 7.1 / 8.1) cephadm rejects the flag with
+    ``unrecognized arguments: --container-auth-json``. Tentacle/9.x+ support it.
+    """
+    try:
+        out, err = installer.exec_command(
+            sudo=True,
+            cmd="cephadm bootstrap -h",
+            check_ec=False,
+        )
+        help_text = f"{out or ''}{err or ''}"
+        return "--container-auth-json" in help_text
+    except Exception as exc:
+        logger.debug("Could not probe cephadm bootstrap -h: %s", exc)
+        return False
 
 
 def construct_registry(
@@ -70,18 +97,21 @@ def construct_registry(
     reg_args = resolve_registry_login(registry)
     logger.debug("Registry login args for host %r", registry)
     if json_file:
-        reg = dict((k.lstrip("registry-"), v) for k, v in reg_args.items())
-
-        # Create file and return file_path
-        temp_file = tempfile.NamedTemporaryFile(suffix=".json")
-        reg_args = {"registry-json": temp_file.name}
-        reg_file = cls.installer.node.remote_file(
-            sudo=True, file_name=temp_file.name, file_mode="w"
-        )
-        reg_file.write(json.dumps(reg, indent=4))
-        reg_file.flush()
+        return _registry_json_cli_string(cls, reg_args)
 
     return config_dict_to_string(reg_args)
+
+
+def _registry_json_cli_string(cls, reg_args: dict) -> str:
+    """Write a temp registry JSON file and return the ``--registry-json`` CLI fragment."""
+    reg = dict((k.lstrip("registry-"), v) for k, v in reg_args.items())
+    temp_file = tempfile.NamedTemporaryFile(suffix=".json")
+    reg_file = cls.installer.node.remote_file(
+        sudo=True, file_name=temp_file.name, file_mode="w"
+    )
+    reg_file.write(json.dumps(reg, indent=4))
+    reg_file.flush()
+    return config_dict_to_string({"registry-json": temp_file.name})
 
 
 def copy_ceph_configuration_files(cls, ceph_conf_args):
@@ -248,6 +278,10 @@ class BootstrapMixin:
                 f"{_ceph_version!r} from job release for '{_manifest_section}' section."
             )
 
+        # True when suite YAML pins a baseline via rhcs-version + release (upgrade
+        # suites). That pins container_image to the baseline manifest image, which
+        # must be passed as --image so registry login matches the pull host.
+        baseline_pinned = False
         if _ceph_version and _manifest_section:
             manifest_obj = CephTestManifest(
                 product=self.config["product"],
@@ -280,17 +314,30 @@ class BootstrapMixin:
             self.config["container_image"] = manifest_obj.ceph_image
             rhbuild = f"{manifest_obj.ceph_version}-{manifest_obj.platform}"
             base_url = manifest_obj.repository
+            baseline_pinned = True
 
         self.cluster.rhcs_version = manifest_obj.release
 
         if build_type == "upstream" or manifest_obj.product == "community":
             self.setup_upstream_repository()
         elif build_type == "cdn" or custom_repo.lower() == "cdn":
-            custom_image = False
+            # Keep --image when an upgrade suite pinned a baseline image; otherwise
+            # registry login follows the baseline host (e.g. registry.stage.redhat.io)
+            # while cephadm pulls the default CDN image and fails auth (RH 3440).
+            if not baseline_pinned:
+                custom_image = False
             self.cluster.use_cdn = True
             self.set_cdn_tool_repo(_ceph_version, manifest_obj)
         elif build_type == "released" and base_url == manifest_obj.repository:
-            custom_image = False
+            if not baseline_pinned:
+                custom_image = False
+            else:
+                logger.info(
+                    "Baseline pinned via suite (%s/%s); keeping --image %s",
+                    _ceph_version,
+                    _manifest_section,
+                    self.config.get("container_image"),
+                )
             self.cluster.use_cdn = True
             self.set_cdn_tool_repo(manifest_obj)
         elif custom_repo:
@@ -345,30 +392,72 @@ class BootstrapMixin:
         # Suites often hardcode registry-json: registry.redhat.io; using that as the
         # login host would break IBM pulls (e.g. preprod.icr.io image + RH auth).
         #
-        # When podman-auth-file is set (--custom-config), skip YAML registry flags so
-        # cephadm uses /etc/ceph/podman-auth.json (ODF / multi-registry auth file path).
+        # Prefer --container-auth-json /etc/ceph/podman-auth.json when present AND
+        # the installed cephadm supports the flag (Tentacle/9.x+). Reef/Squid
+        # (RH 7.1 / 8.1) reject it: ``unrecognized arguments: --container-auth-json``
+        # (RH sanity 137 / 284). In that case fall back to --registry-json and
+        # restore the multi-registry authfile after bootstrap (which otherwise
+        # seeds only the bootstrap host and breaks CDN monitoring pulls).
         args.pop("registry-url", None)
         registry_json = args.pop("registry-json", None)
         use_podman_auth = self.config.get("podman_auth_file")
+        # Snapshot multi-registry auth before bootstrap may overwrite it.
+        saved_podman_auths = read_podman_auth_file(self.installer.node)
+        supports_container_auth = _cephadm_supports_container_auth_json(self.installer)
+        use_container_auth_json = (use_podman_auth or bool(saved_podman_auths)) and (
+            supports_container_auth
+        )
 
-        if use_podman_auth:
+        if custom_image and isinstance(custom_image, str):
+            image_ref = custom_image
+        else:
+            image_ref = self.config.get("container_image")
+
+        overrides = self.config.get("overrides") or {}
+        registry_url = resolve_registry_host(
+            overrides=overrides,
+            image=image_ref,
+            key="bootstrap-registry",
+        )
+
+        # When install_prereq wrote /etc/ceph/podman-auth.json (CDN + image host),
+        # merge the bootstrap registry in case it was missing — including on the
+        # Reef/Squid fallback path so restore keeps the baseline host. Do NOT
+        # mutate an explicit podman-auth-file (ODF): that file is the source of truth.
+        if registry_url and not use_podman_auth and saved_podman_auths:
+            try:
+                reg_args = resolve_registry_login(registry_url)
+                merge_registry_into_podman_auth(
+                    self.installer.node,
+                    registry_url,
+                    reg_args.get("registry-username"),
+                    reg_args.get("registry-password"),
+                )
+                saved_podman_auths = read_podman_auth_file(self.installer.node)
+            except KeyError as err:
+                logger.warning(
+                    "Could not merge bootstrap registry %s into %s: %s",
+                    registry_url,
+                    PODMAN_AUTH_PATH,
+                    err,
+                )
+
+        if use_container_auth_json:
+            cmd += f" --container-auth-json {PODMAN_AUTH_PATH}"
             logger.info(
-                "podman-auth-file is configured, skipping registry credentials "
-                "(cephadm will use %s)",
+                "Passing --container-auth-json %s to cephadm bootstrap "
+                "(podman-auth-file=%s)",
                 PODMAN_AUTH_PATH,
+                bool(use_podman_auth),
             )
         else:
-            if custom_image and isinstance(custom_image, str):
-                image_ref = custom_image
-            else:
-                image_ref = self.config.get("container_image")
-
-            overrides = self.config.get("overrides") or {}
-            registry_url = resolve_registry_host(
-                overrides=overrides,
-                image=image_ref,
-                key="bootstrap-registry",
-            )
+            if (use_podman_auth or saved_podman_auths) and not supports_container_auth:
+                logger.info(
+                    "cephadm lacks --container-auth-json; falling back to "
+                    "registry-json/url and will restore multi-registry %s "
+                    "after bootstrap",
+                    PODMAN_AUTH_PATH,
+                )
             logger.info(
                 "Using registry host %r for bootstrap login "
                 "(bootstrap-registry / image host)",
@@ -380,10 +469,29 @@ class BootstrapMixin:
                     "No registry host resolved; "
                     "skipping registry credentials on bootstrap"
                 )
-            elif registry_json is not None:
-                cmd += construct_registry(self, registry_url, json_file=True)
             else:
-                cmd += construct_registry(self, registry_url)
+                # Prefer credentials already present in podman-auth (ODF pull-secret
+                # / multi-registry file) over ~/.cephci.yaml on the fallback path.
+                auths_for_fallback = saved_podman_auths
+                if use_podman_auth and not auths_for_fallback:
+                    auths_for_fallback = read_podman_auth_file(self.installer.node)
+
+                podman_reg_args = registry_login_args_from_podman_auths(
+                    auths_for_fallback, registry_url
+                )
+                if podman_reg_args:
+                    cmd += _registry_json_cli_string(self, podman_reg_args)
+                elif use_podman_auth:
+                    raise RuntimeError(
+                        f"cephadm lacks --container-auth-json and podman-auth-file "
+                        f"has no credentials for bootstrap registry "
+                        f"{registry_url!r}. Add that host to the pull-secret or "
+                        f"use Tentacle/9.x+ cephadm."
+                    )
+                elif registry_json is not None:
+                    cmd += construct_registry(self, registry_url, json_file=True)
+                else:
+                    cmd += construct_registry(self, registry_url)
 
         # Generate dashboard certificate and key if bootstrap cli
         # have this options as dashboard-key and dashboard-crt
@@ -446,24 +554,46 @@ class BootstrapMixin:
             if "automatically-accept-license" not in cmd:
                 cmd += " --automatically-accept-license"
 
-        out, err = self.installer.exec_command(
-            sudo=True,
-            cmd=cmd,
-            timeout=600,
-            check_ec=True,
-        )
+        try:
+            out, err = self.installer.exec_command(
+                sudo=True,
+                cmd=cmd,
+                timeout=600,
+                check_ec=True,
+            )
 
-        # Silence the alerts to prevent downstream tests erroring when
-        # callhome
-        if (
-            manifest_obj.product == "ibm"
-            and LooseVersion(str(manifest_obj.release)) >= LooseVersion("9.1")
-            and "call-home" not in cmd
-        ):
-            self.shell(args=["ceph", "orch", "accept", "call-home-enabled"], timeout=60)
+            # Silence the alerts to prevent downstream tests erroring when
+            # callhome
+            if (
+                manifest_obj.product == "ibm"
+                and LooseVersion(str(manifest_obj.release)) >= LooseVersion("9.1")
+                and "call-home" not in cmd
+            ):
+                self.shell(
+                    args=["ceph", "orch", "accept", "call-home-enabled"], timeout=60
+                )
 
-        logger.info("Bootstrap output : %s", out)
-        logger.error("Bootstrap error: %s", err)
+            logger.info("Bootstrap output : %s", out)
+            logger.error("Bootstrap error: %s", err)
+        finally:
+            # Reef/Squid bootstrap --registry-json overwrites podman-auth.json with a
+            # single host. Merge the pre-bootstrap multi-registry snapshot with the
+            # post-bootstrap file (current wins) so CDN hosts return and the baseline
+            # host bootstrap just seeded is kept.
+            if saved_podman_auths and not use_container_auth_json:
+                for node in self.cluster.get_nodes(ignore="client"):
+                    try:
+                        current = read_podman_auth_file(node)
+                        merged = merge_auths(saved_podman_auths, current)
+                        write_podman_auth_file(node, merged)
+                    except Exception as restore_err:
+                        logger.warning(
+                            "Failed to restore %s on %s: %s",
+                            PODMAN_AUTH_PATH,
+                            getattr(node, "hostname", node),
+                            restore_err,
+                        )
+
         # The path to ssh public key mentioned in either output-pub-ssh-key or
         # ssh-public-key options will be considered for distributing the ssh public key,
         # if these are not specified, then the default ssh key path /etc/ceph/ceph.pub

@@ -1,5 +1,6 @@
 """Module for handling registry authentication in Ceph clusters."""
 
+import base64
 import json
 
 from utility.log import Log
@@ -7,6 +8,129 @@ from utility.log import Log
 logger = Log(__name__)
 
 PODMAN_AUTH_PATH = "/etc/ceph/podman-auth.json"
+
+# CDN registries commonly needed for monitoring / sidecar pulls when bootstrap
+# authenticates against stage / preprod hosts instead.
+CDN_REGISTRY_HOSTS = (
+    "registry.redhat.io",
+    "cp.icr.io",
+)
+
+
+def merge_auths(*auth_maps: dict) -> dict:
+    """Union of auths maps; later maps win on host-key collision."""
+    merged = {}
+    for auths in auth_maps:
+        if auths:
+            merged.update(auths)
+    return merged
+
+
+def registry_login_args_from_podman_auths(auths: dict, registry_host: str) -> dict:
+    """
+    Return construct_registry-compatible args from podman auths, or ``{}``.
+
+    podman form: ``auths[host] = {"auth": base64(user:pass)}``
+    """
+    entry = (auths or {}).get(registry_host) or {}
+    b64 = entry.get("auth")
+    if not b64:
+        return {}
+    try:
+        user, _, passwd = base64.b64decode(b64).decode("utf-8").partition(":")
+    except Exception as err:
+        logger.debug(
+            "Could not decode podman auth for %s: %s",
+            registry_host,
+            err,
+        )
+        return {}
+    if not user or not passwd:
+        return {}
+    return {
+        "registry-url": registry_host,
+        "registry-username": user,
+        "registry-password": passwd,
+    }
+
+
+def read_podman_auth_file(node) -> dict:
+    """Return the ``auths`` mapping from ``/etc/ceph/podman-auth.json``, or ``{}``."""
+    try:
+        out, _ = node.exec_command(
+            sudo=True,
+            cmd=f"cat {PODMAN_AUTH_PATH}",
+            check_ec=False,
+        )
+        if out and out.strip():
+            parsed = json.loads(out)
+            if isinstance(parsed, dict) and isinstance(parsed.get("auths"), dict):
+                return parsed["auths"]
+    except Exception as err:
+        logger.debug(
+            "Could not read %s on %s: %s",
+            PODMAN_AUTH_PATH,
+            getattr(node, "hostname", node),
+            err,
+        )
+    return {}
+
+
+def write_podman_auth_file(node, auths: dict) -> None:
+    """
+    Write a podman auths mapping to ``/etc/ceph/podman-auth.json`` on ``node``.
+
+    Cephadm orch pulls use ``--authfile=/etc/ceph/podman-auth.json``, which is
+    separate from ``~/.docker/config.json``. Writing here keeps CDN /
+    monitoring registry credentials available for grafana/prometheus pulls
+    when bootstrap authenticated against a different host (e.g. stage).
+
+    Args:
+        node: CephNode to write the file on
+        auths: Mapping of registry host -> ``{"auth": "<base64 user:pass>"}``
+    """
+    if not auths:
+        return
+
+    payload = json.dumps({"auths": auths}, indent=4)
+    node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
+    # Create/truncate with 0600 before any secret bytes hit disk
+    node.exec_command(
+        sudo=True,
+        cmd=f"install -m 600 /dev/null {PODMAN_AUTH_PATH}",
+    )
+    auth_file = node.remote_file(sudo=True, file_name=PODMAN_AUTH_PATH, file_mode="w")
+    auth_file.write(payload)
+    auth_file.flush()
+    auth_file.close()
+    # Belt-and-suspenders if remote_file recreates attributes
+    node.exec_command(sudo=True, cmd=f"chmod 600 {PODMAN_AUTH_PATH}")
+    logger.info(
+        "Wrote %s on %s for: %s",
+        PODMAN_AUTH_PATH,
+        getattr(node, "hostname", node),
+        ", ".join(sorted(auths)),
+    )
+
+
+def merge_registry_into_podman_auth(
+    node, registry_host: str, username: str, password: str
+) -> None:
+    """
+    Merge one registry credential into the node's ``/etc/ceph/podman-auth.json``.
+
+    Preserves existing auths so bootstrap/stage credentials are not wiped when
+    adding CDN hosts (or vice versa).
+    """
+    if not registry_host or not username or not password:
+        return
+
+    existing = read_podman_auth_file(node)
+    b64_auth = base64.b64encode(f"{username}:{password}".encode("ascii")).decode(
+        "utf-8"
+    )
+    existing[registry_host] = {"auth": b64_auth}
+    write_podman_auth_file(node, existing)
 
 
 def validate_podman_auth_file(auth_file_path: str) -> str:
