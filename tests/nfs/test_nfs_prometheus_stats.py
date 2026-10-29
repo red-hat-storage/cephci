@@ -495,11 +495,13 @@ def test_f_02(ctx):
             )
             ctx.monitoring_port = base_port
             ctx.refresh_container_id()
-            firewall_allow_port(ctx.nfs_node, base_port)
-            ctx.runtime_firewall_ports.add(int(base_port))
             if alt_port != base_port:
                 firewall_remove_port(ctx.nfs_node, alt_port)
                 ctx.runtime_firewall_ports.discard(alt_port)
+            # Remove reloads firewalld and drops runtime-only rules, so
+            # reopen the baseline port after that reload.
+            firewall_allow_port(ctx.nfs_node, base_port)
+            ctx.runtime_firewall_ports.add(int(base_port))
         except Exception as exc:
             log.warning("F-02: failed to restore baseline ganesha config: %s", exc)
     log_test_passed(

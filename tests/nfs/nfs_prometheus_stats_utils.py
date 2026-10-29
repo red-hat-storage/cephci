@@ -2555,6 +2555,7 @@ def firewall_allow_port(node, port):
         node.exec_command(
             sudo=True,
             cmd=f"firewall-cmd --add-port={port}/tcp",
+            timeout=120,
         )
     except CommandFailed as err:
         raise OperationFailedError(
@@ -2563,24 +2564,91 @@ def firewall_allow_port(node, port):
     log.info("Opened runtime firewall port %s/tcp on %s", port, node.hostname)
 
 
+def firewall_allow_port_permanent(node, port):
+    """Open port in the public zone, reload, and log the active rules.
+
+    Used immediately before the F-02B metrics curl. On #151 a runtime-only
+    open of the port under test (9588) was already in place and the scrape
+    still failed. A public-zone permanent rule plus reload made the same
+    curl succeed on executor #3458.
+    """
+    if not _firewalld_is_running(node):
+        log.info(
+            "firewalld not running on %s; port %s assumed reachable",
+            node.hostname,
+            port,
+        )
+        return
+    try:
+        node.exec_command(
+            sudo=True,
+            cmd="firewall-cmd --zone=public --add-port=%s/tcp --permanent" % port,
+            timeout=120,
+        )
+        node.exec_command(sudo=True, cmd="firewall-cmd --reload", timeout=120)
+        out, _ = node.exec_command(
+            sudo=True, cmd="firewall-cmd --list-all", timeout=120
+        )
+    except CommandFailed as err:
+        raise OperationFailedError(
+            "Failed to open permanent firewall port %s/tcp on %s: %s"
+            % (port, node.hostname, err)
+        ) from err
+    log.info(
+        "Opened permanent public-zone port %s/tcp on %s before metrics scrape\n%s",
+        port,
+        node.hostname,
+        (out or "").strip(),
+    )
+
+
 def firewall_remove_port(node, port):
-    """Remove a runtime firewalld TCP port opened by firewall_allow_port()."""
+    """Remove a public-zone metrics port from runtime and permanent config.
+
+    Runtime removal uses the public zone, matching the permanent add. The
+    permanent rule is dropped and firewalld is reloaded so a later reload
+    cannot bring the port back when the default zone is not public.
+    """
     if not _firewalld_is_running(node):
         return
     try:
         node.exec_command(
             sudo=True,
-            cmd=f"firewall-cmd --remove-port={port}/tcp",
+            cmd="firewall-cmd --zone=public --remove-port=%s/tcp" % port,
+            timeout=120,
         )
     except CommandFailed as err:
         log.warning(
-            "Failed to remove firewall port %s/tcp on %s: %s",
+            "Failed to remove runtime public-zone port %s/tcp on %s: %s",
+            port,
+            node.hostname,
+            err,
+        )
+    try:
+        node.exec_command(
+            sudo=True,
+            cmd="firewall-cmd --zone=public --remove-port=%s/tcp --permanent" % port,
+            timeout=120,
+        )
+    except CommandFailed as err:
+        log.info(
+            "No permanent public-zone port %s/tcp to remove on %s: %s",
             port,
             node.hostname,
             err,
         )
         return
-    log.info("Removed runtime firewall port %s/tcp on %s", port, node.hostname)
+    try:
+        node.exec_command(sudo=True, cmd="firewall-cmd --reload", timeout=120)
+    except CommandFailed as err:
+        log.warning(
+            "Removed permanent port %s/tcp on %s but firewall reload failed: %s",
+            port,
+            node.hostname,
+            err,
+        )
+        return
+    log.info("Removed firewall port %s/tcp on %s", port, node.hostname)
 
 
 def run_ganesha_stats(nfs_node, container_id, *args):
@@ -2721,6 +2789,7 @@ def verify_f02_enable_metrics_reload_vs_restart(ctx):
     )
     ctx.refresh_container_id()
     verify_monitoring_port_listening(ctx.nfs_node, port)
+    firewall_allow_port_permanent(ctx.nfs_node, port)
     if not metrics_scrape_ok(ctx.client, ctx.nfs_ip, port):
         raise OperationFailedError(
             "F-02B: metrics not restored after redeploy with enable_metrics=true"
