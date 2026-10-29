@@ -668,8 +668,10 @@ def teardown(nvme_service, rbd_obj, cleanup_config=None):
         rbd_obj: RBD object for pool cleanup
     """
     rc = 0
-    # Disconnect initiators (collects initiator connect-window logs first).
-    if "initiators" in nvme_service.config.get("cleanup", []):
+    # Disconnect initiators ("initiators" and legacy "disconnect_all" aliases).
+    # Collects initiator connect-window logs first.
+    cleanup = nvme_service.config.get("cleanup", [])
+    if "initiators" in cleanup or "disconnect_all" in cleanup:
         disconnect_initiators(nvme_service)
 
     # Collect nvmeof service WARNING/ERROR journals before gateway/service cleanup.

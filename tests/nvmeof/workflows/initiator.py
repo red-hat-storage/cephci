@@ -380,6 +380,10 @@ class NVMeInitiator(Initiator):
         if kwargs.get("rwmixread"):
             io_args.update({"rwmixread": kwargs.get("rwmixread")})
 
+        # Update io_args if block size is provided (e.g. top-connection bucket sweep)
+        if kwargs.get("bs"):
+            io_args.update({"bs": kwargs.get("bs")})
+
         # Update io_args if io_type is provided
         if kwargs.get("io_type"):
             io_args.update({"io_type": kwargs.get("io_type")})

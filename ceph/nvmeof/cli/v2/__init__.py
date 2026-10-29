@@ -8,6 +8,7 @@ from ceph.nvmeof.cli.v2.listener import Listener
 from ceph.nvmeof.cli.v2.log_level import LogLevel
 from ceph.nvmeof.cli.v2.namespace import Namespace
 from ceph.nvmeof.cli.v2.subsystem import Subsystem
+from ceph.nvmeof.cli.v2.top import Top
 from ceph.nvmeof.cli.v2.version import Version
 
 
@@ -39,6 +40,7 @@ class NVMeGWCLIV2(BaseCLI):
         self.listener = Listener(self)
         self.namespace = Namespace(self)
         self.subsystem = Subsystem(self)
+        self.top = Top(self)
         self.version = Version(self)
         self.name = " "
         self.v2 = True
@@ -61,6 +63,7 @@ class NVMeGWCLIV2(BaseCLI):
             self.subsystem,
             self.namespace,
             self.listener,
+            self.top,
         ]:
             setattr(clas, attribute, value)
 
