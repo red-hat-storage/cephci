@@ -82,7 +82,9 @@ def add(cls, config: Dict) -> None:
                     )
                     _os_major = manifest_obj.platform.split("-")[-1]
                     _ceph_version = manifest_obj.ceph_version
-                    _rpm_version = f"2:{_ceph_version}.el{_os_major}cp"
+                    _rpm_version = utils.ibm_ceph_rpm_version_pin(
+                        _ceph_version, _os_major
+                    )
 
             elif use_cdn:
                 rhcs_version = default_version

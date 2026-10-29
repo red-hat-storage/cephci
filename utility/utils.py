@@ -25,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
+from looseversion import LooseVersion
 from packaging.version import InvalidVersion, Version
 
 from cli.exceptions import ConfigError
@@ -67,6 +68,27 @@ class TestSetupFailure(Exception):
 
 class GKLMSetupError(Exception):
     pass
+
+
+def ibm_ceph_rpm_version_pin(ceph_version: str, os_major: str) -> str:
+    """Build yum NEVRA suffix for IBM Storage Ceph RPMs (cephadm, ceph-common, …).
+
+    Tentacle and older builds use epoch ``2`` and the ``.elNcp`` dist tag, e.g.
+    ``2:20.2.2-351.el10cp``. Umbrella / upstream 21.x dropped the epoch and the
+    ``cp`` suffix, e.g. ``21.1.1-1.el10``.
+
+    Args:
+        ceph_version: Version-release without dist tag (e.g. ``21.1.1-1``).
+        os_major: RHEL major from platform (e.g. ``10`` from ``rhel-10``).
+
+    Returns:
+        String suitable for ``yum install <pkg>-<pin>``.
+    """
+    ver = (ceph_version or "").strip()
+    major = (os_major or "").strip()
+    if LooseVersion(ver or "0") >= LooseVersion("21.0"):
+        return f"{ver}.el{major}"
+    return f"2:{ver}.el{major}cp"
 
 
 def config_dict_to_string(data: Dict) -> str:
