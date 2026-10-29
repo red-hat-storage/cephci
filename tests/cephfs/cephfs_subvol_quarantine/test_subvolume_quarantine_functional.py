@@ -1156,7 +1156,10 @@ def f20_no_mquarantine_disable_to_kclient(qtn, fs_util, admin, fuse, vol, config
         try:
             after_n = int(str(after).strip().splitlines()[-1] or "0")
         except ValueError:
-            after_n = before_n
+            log.error(
+                "F-20 FAILED: could not parse after dmesg type-789 count: %s", after
+            )
+            return 1
         delta = max(0, after_n - before_n)
         log.info("F-20 dmesg type-789 delta=%s (threshold=%s)", delta, threshold)
         if delta > threshold:
@@ -1202,23 +1205,44 @@ def f21_clone_deferred_until_disable(qtn, fs_util, admin, fuse, vol, config):
         qtn.quarantine_enable(admin, vol, sub)
 
         # Start clone while source quarantined — must not reach complete
-        admin.exec_command(
+        clone_out, clone_err = admin.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume snapshot clone {vol} {sub} snap1 {clone}",
             check_ec=False,
         )
+        clone_rc = admin.node.exit_status
         time.sleep(hold)
-        st_out, _ = admin.exec_command(
-            sudo=True, cmd=f"ceph fs clone status {vol} {clone} -f json", check_ec=False
-        )
+        # Use --format json (not -f); match FsUtils.get_clone_status
+        st_out, st_err = fs_util.get_clone_status(admin, vol, clone, check_ec=False)
         state = ""
         try:
             state = (json.loads(st_out) or {}).get("status", {}).get("state", "")
         except Exception:
-            state = str(st_out)
-        log.info("F-21 clone state while source quarantined: %s", state)
+            state = str(st_out or st_err or "").strip()
+        log.info(
+            "F-21 clone create rc=%s state while quarantined=%s out=%s err=%s status=%s",
+            clone_rc,
+            state,
+            clone_out,
+            clone_err,
+            st_out,
+        )
         if str(state).lower() == "complete":
             log.error("F-21 FAILED: clone completed while source still quarantined")
+            return 1
+        # Deferred job must be observable, or clone create must clearly reject.
+        deferred = str(state).lower() in (
+            "pending",
+            "in-progress",
+            "in_progress",
+            "deferred",
+            "queued",
+        )
+        if not deferred and clone_rc == 0 and not str(state).strip():
+            log.error(
+                "F-21 FAILED: clone create rc=0 but status empty while quarantined "
+                "(deferral not observed; refusing false pass)"
+            )
             return 1
 
         qtn.quarantine_disable(admin, vol, sub)
@@ -1226,18 +1250,16 @@ def f21_clone_deferred_until_disable(qtn, fs_util, admin, fuse, vol, config):
         deadline = time.time() + resume_timeout
         final = state
         while time.time() < deadline:
-            st_out, _ = admin.exec_command(
-                sudo=True,
-                cmd=f"ceph fs clone status {vol} {clone} -f json",
-                check_ec=False,
-            )
+            st_out, _ = fs_util.get_clone_status(admin, vol, clone, check_ec=False)
             try:
                 final = (json.loads(st_out) or {}).get("status", {}).get("state", "")
             except Exception:
                 final = ""
             # clone entity gone is acceptable (failed+purged)
             ls_out, _ = admin.exec_command(
-                sudo=True, cmd=f"ceph fs subvolume ls {vol} -f json", check_ec=False
+                sudo=True,
+                cmd=f"ceph fs subvolume ls {vol} --format json",
+                check_ec=False,
             )
             names = []
             try:
