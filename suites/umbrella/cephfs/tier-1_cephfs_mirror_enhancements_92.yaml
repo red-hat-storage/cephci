@@ -1,11 +1,13 @@
 #===============================================================================================
-# Tier-level: 2
-# Test-Suite: tier-2_cephfs_mirror_enhancements_92.yaml
+# Tier-level: 1
+# Test-Suite: tier-1_cephfs_mirror_enhancements_92.yaml
 # Test-Case: CephFS Mirroring 9.2 Enhancements — Functional Tests
+#
+
+#===============================================================================================
 #
 # Covers:
 #   - Improved Stats: R1, R2, R5, R7, R12, R16 (dual asok + MGR validation)
-#   - Disruptive Ops: R8 (sync failure, recovery)
 #   - Table 0: Asok Metrics — 12 scenarios (schema, sync-mode, ETA, crawl,
 #                throughput, failure, zero-file, snapdiff, monotonicity)
 #   - Table 1: MGR Interface — 10 scenarios (status, OMAP, cache, stale,
@@ -192,11 +194,13 @@ tests:
             name: Validate improved mirroring stats for 9.2
       module: cephfs_mirroring.test_cephfs_mirror_improved_stats.py
       name: Validate improved mirroring stats for 9.2
-      polarion-id: "CEPH-83575001"
+      polarion-id: "CEPH-83632757"
 
   - test:
       abort-on-fail: false
-      desc: "Validate sync failure does not corrupt metrics (failure injection + recovery)"
+      desc: "Validate metrics resilience under disruptive conditions: sync failure,
+        daemon restart mid-sync, mirror failure + MGR restart, and MGR failover
+        during active sync"
       clusters:
         ceph1:
           config:
@@ -204,7 +208,7 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_disruptive_ops.py
       name: Validate mirroring disruptive ops for 9.2
       comments: "IBMCEPH-17374"
-      polarion-id: "CEPH-83575002"
+      polarion-id: "CEPH-83632752"
 
   - test:
       abort-on-fail: false
@@ -215,7 +219,7 @@ tests:
             name: Validate asok mirroring metrics for 9.2 enhancements
       module: cephfs_mirroring.test_cephfs_mirror_asok_metrics_92.py
       name: Validate asok mirroring metrics for 9.2 enhancements
-      polarion-id: "CEPH-83632744"
+      polarion-id: "CEPH-83632745"
 
   - test:
       abort-on-fail: false
@@ -240,7 +244,6 @@ tests:
       comments: "IBMCEPH-17096"
       polarion-id: "CEPH-83632782"
 
-  # Table 3: Perf Dumps — 6 functional scenarios
   - test:
       abort-on-fail: false
       desc: "Validate enhanced cephfs_mirror_directory perf counters (schema, lifecycle, BPS)"
@@ -251,9 +254,8 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirror_perf_dumps_92.py
       name: Validate enhanced perf dump counters for 9.2
       comments: "IBMCEPH-17375"
-      polarion-id: "CEPH-83632798"
+      polarion-id: "CEPH-83632807"
 
-  # Table 4: Tri-Interface Consistency — 4 functional scenarios
   - test:
       abort-on-fail: false
       desc: "Validate tri-interface consistency (asok vs MGR vs perf counters)"
