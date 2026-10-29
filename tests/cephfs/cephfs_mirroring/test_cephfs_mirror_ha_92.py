@@ -220,14 +220,14 @@ def run(ceph_cluster, **kw):
         )
 
         d1_paths = {
-            e.get("labels", {}).get("source_directory_path")
+            e.get("labels", {}).get("directory")
             for e in d1_counters
-            if e.get("labels", {}).get("source_directory_path") is not None
+            if e.get("labels", {}).get("directory") is not None
         }
         d2_paths = {
-            e.get("labels", {}).get("source_directory_path")
+            e.get("labels", {}).get("directory")
             for e in d2_counters
-            if e.get("labels", {}).get("source_directory_path") is not None
+            if e.get("labels", {}).get("directory") is not None
         }
         log.info(f"Daemon 1 ({daemon1_hostname}) assigned directories: {d1_paths}")
         log.info(f"Daemon 2 ({daemon2_hostname}) assigned directories: {d2_paths}")
@@ -377,7 +377,7 @@ def run(ceph_cluster, **kw):
             [cephfs_mirror_nodes[1]], fsid, d2_asok, fs_name=source_fs
         )
         d2_paths_after = {
-            e.get("labels", {}).get("source_directory_path") for e in d2_counters_after
+            e.get("labels", {}).get("directory") for e in d2_counters_after
         }
         log.info(f"Daemon 2 now tracking directories in perf dump: {d2_paths_after}")
         if len(d2_paths_after) < 4:
