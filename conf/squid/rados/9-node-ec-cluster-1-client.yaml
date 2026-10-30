@@ -21,6 +21,7 @@ globals:
       node2:
         role:
           - osd
+          - osd_encrypt_lv
           - mon
           - mgr
           - mds
@@ -32,6 +33,7 @@ globals:
       node3:
         role:
           - osd
+          - osd_encrypt_raw
           - mon
           - mgr
           - mds
@@ -43,6 +45,7 @@ globals:
       node4:
         role:
           - osd
+          - osd_lv
           - node-exporter
           - crash
         no-of-volumes: 3
@@ -51,6 +54,7 @@ globals:
       node5:
         role:
           - osd
+          - osd_raw
           - node-exporter
           - crash
           - nfs
@@ -60,6 +64,7 @@ globals:
       node6:
         role:
           - osd
+          - osd_encrypt_lv
           - node-exporter
           - crash
           - nfs
@@ -73,6 +78,7 @@ globals:
       node8:
         role:
           - osd
+          - osd_encrypt_raw
           - node-exporter
           - crash
           - nfs
@@ -85,6 +91,7 @@ globals:
           - mgr
           - rgw
           - osd
+          - osd_raw
           - crash
           - smb
         no-of-volumes: 3

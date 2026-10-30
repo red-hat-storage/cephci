@@ -76,28 +76,28 @@ tests:
                     data_devices:
                       size: "'1G:'"
 
-  - test:
-      name: Encrypted OSD deployment on RAW device
-      desc: Deploy encrypted OSDs on RAW devices
-      module: test_cephadm.py
-      polarion-id: CEPH-83573746
-      abort-on-fail: true
-      config:
-        steps:
-          - config:
-              command: apply_spec
-              service: orch
-              validate-spec-services: true
-              specs:
-                - service_type: osd
-                  service_id: osd_encrypted_raw
-                  encrypted: "true"
-                  placement:
-                    label: osd_encrypt_raw
-                  spec:
-                    method: raw
-                    data_devices:
-                      size: "'1G:'"
+#  - test:
+#      name: Encrypted OSD deployment on RAW device
+#      desc: Deploy encrypted OSDs on RAW devices
+#      module: test_cephadm.py
+#      polarion-id: CEPH-83573746
+#      abort-on-fail: true
+#      config:
+#        steps:
+#          - config:
+#              command: apply_spec
+#              service: orch
+#              validate-spec-services: true
+#              specs:
+#                - service_type: osd
+#                  service_id: osd_encrypted_raw
+#                  encrypted: "true" -> not supported
+#                  placement:
+#                    label: osd_encrypt_raw
+#                  spec:
+#                    method: raw
+#                    data_devices:
+#                      size: "'1G:'"
 
   - test:
       name: non-encrypted OSD deployment on LVM

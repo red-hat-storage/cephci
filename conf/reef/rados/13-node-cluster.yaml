@@ -21,21 +21,25 @@ globals:
           - mds
           - nfs
           - osd
+          - osd_encrypt_lv
         no-of-volumes: 4
         disk-size: 15
       node3:
         role:
           - osd
+          - osd_encrypt_lv
         no-of-volumes: 4
         disk-size: 15
       node4:
         role:
           - osd
+          - osd_lv
         no-of-volumes: 4
         disk-size: 15
       node5:
         role:
           - osd
+          - osd_raw
         no-of-volumes: 4
         disk-size: 15
       node6:
@@ -45,6 +49,7 @@ globals:
           - mds
           - nfs
           - osd
+          - osd_lv
         no-of-volumes: 4
         disk-size: 15
       node7:
@@ -55,16 +60,19 @@ globals:
           - mon
           - rgw
           - osd
+          - osd_lv
         no-of-volumes: 4
         disk-size: 15
       node9:
         role:
           - osd
+          - osd_encrypt_lv
         no-of-volumes: 4
         disk-size: 15
       node10:
         role:
           - osd
+          - osd_raw
         no-of-volumes: 4
         disk-size: 15
       node11:
@@ -72,6 +80,7 @@ globals:
           - mon
           - rgw
           - osd
+          - osd_raw
         no-of-volumes: 4
         disk-size: 15
       node12:
