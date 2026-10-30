@@ -3,7 +3,7 @@ import json
 import re
 import tempfile
 
-from ceph.rbd.utils import exec_cmd, random_string
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, exec_cmd, random_string
 from ceph.rbd.workflows.rbd import create_single_pool_and_images
 from cli.rbd.rbd import Rbd
 from utility.log import Log
@@ -109,7 +109,7 @@ def run_prepare_execute_commit(rbd, pool, image, **kw):
         client=kw["client"],
         cluster="ceph",
         rbd=rbd,
-        ceph_version=int(config.get("rhbuild")[0]),
+        ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
         is_ec_pool=is_ec_pool,
         is_secondary=False,
         do_not_create_image=True,

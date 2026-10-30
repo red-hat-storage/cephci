@@ -1,4 +1,4 @@
-from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, getdict, random_string
 from ceph.rbd.workflows.group import create_mirror_group
 from ceph.rbd.workflows.namespace import create_namespace_in_pool
 from ceph.rbd.workflows.rbd import create_pools_and_images
@@ -475,7 +475,7 @@ def initial_rbd_config(ceph_cluster, **kw):
     )
     pool_types = update_config(**kw)
     config = kw.get("config", {})
-    ceph_version = int(config.get("rhbuild")[0])
+    ceph_version = get_ceph_version_from_rhbuild(config.get("rhbuild"))
 
     if kw.get("client_node"):
         client = get_node_by_id(ceph_cluster, kw.get("client_node"))

@@ -46,6 +46,7 @@ from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import (
+    get_ceph_version_from_rhbuild,
     create_map_options,
     get_md5sum_rbd_image,
     getdict,
@@ -246,7 +247,7 @@ def migrate_check_consistency(rbd, image_spec, **kw):
         client=kw["client"],
         cluster="ceph",
         rbd=rbd,
-        ceph_version=int(config.get("rhbuild")[0]),
+        ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
         is_ec_pool=is_ec_pool,
         is_secondary=False,
         do_not_create_image=True,

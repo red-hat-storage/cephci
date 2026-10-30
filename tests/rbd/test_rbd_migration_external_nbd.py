@@ -40,6 +40,7 @@ from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import (
+    get_ceph_version_from_rhbuild,
     configure_common_client_node,
     get_md5sum_rbd_image,
     getdict,
@@ -168,7 +169,7 @@ def test_external_nbd_migration(rbd_obj, c1_client, c2_client, **kw):
                         client=c2_client,
                         cluster="ceph",
                         rbd=rbd2,
-                        ceph_version=int(config.get("rhbuild")[0]),
+                        ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
                         is_ec_pool=is_ec_pool,
                         is_secondary=False,
                         do_not_create_image=True,
@@ -258,7 +259,7 @@ def test_external_nbd_migration(rbd_obj, c1_client, c2_client, **kw):
                     pool_cleanup(
                         client=c2_client,
                         pools=pools_to_delete,
-                        ceph_version=int(kw["config"].get("rhbuild")[0]),
+                        ceph_version=get_ceph_version_from_rhbuild(kw["config"].get("rhbuild")),
                     )
 
     return 0
