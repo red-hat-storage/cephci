@@ -4,13 +4,18 @@ CephFS Subvolume Quarantine — Functional workflows.
 Polarion: CEPH-83632678
 Suite block: Functional
 
-Subtests F-01 .. F-18 map to the Functional test plan.
+Subtests F-01 .. F-21 map to the Functional test plan.
 No workarounds for regressions against the MGR contract:
   - getpath blocked while quarantined
   - ls enabled (names only, no quarantine indication)
   - info: non-quarantined full payload with quarantine="disabled";
          quarantined minimal payload with quarantine="enabled"
 F-18 (encrypted) is N/A until GKLM/fscrypt lab is available.
+
+Additional coverage:
+  F-19 dual-grant remaining q (IBMCEPH-20749 / #72367)
+  F-20 no MQuarantineDisable flood to kclient (IBMCEPH-20751 / #72369)
+  F-21 clone deferred until quarantine disable (IBMCEPH-20752 / #72371)
 """
 
 import json
@@ -1047,6 +1052,256 @@ def f18_encrypted_na(qtn, fs_util, admin, fuse, vol, config):
     return 0
 
 
+def f19_dual_grant_remaining_q(qtn, fs_util, admin, fuse, vol, config):
+    """
+    F-19 Dual MDS caps (allow rw, allow rwq path=SV) allow quarantined I/O.
+
+    IBMCEPH-20749 / #72367: MDSAuthCaps must evaluate remaining grants when the
+    first matching grant lacks q. Requires quarantine-aware fuse client.
+    """
+    sub = _cfg(config, "sub_a", "qtn-sv-a")
+    client_dual = "qtn-f19-dual"
+    client_rwq = "qtn-f19-rwq"
+    mount_dual = "/mnt/qtn-f19-dual"
+    mount_rwq = "/mnt/qtn-f19-rwq"
+    try:
+        if qtn.setup_subvolume(admin, vol, sub):
+            return 1
+        root, data = qtn.get_subvolume_paths(admin, vol, sub)
+        qtn.quarantine_enable(admin, vol, sub)
+
+        # Positive control: path+rwq alone must work
+        qtn.create_rwq_client(admin, vol, root, client_rwq)
+        qtn.mount_fuse(fuse, mount_rwq, data, client_rwq, vol)
+        if qtn.assert_write_ok(fuse, mount_rwq, "rwq-control.txt"):
+            log.error("F-19 FAILED: rwq-only control denied under quarantine")
+            return 1
+
+        # Bug shape: broad rw first, then path rwq
+        qtn.create_dual_grant_client(admin, vol, root, client_dual)
+        qtn.mount_fuse(fuse, mount_dual, data, client_dual, vol)
+        if qtn.assert_write_ok(fuse, mount_dual, "dual-grant.txt"):
+            log.error(
+                "F-19 FAILED: dual grant denied while rwq-only worked "
+                "(remaining-grant short-circuit still present)"
+            )
+            return 1
+        if qtn.assert_read_ok(fuse, mount_dual, "dual-grant.txt"):
+            return 1
+
+        log.info("f19_dual_grant_remaining_q PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        _umount_all(qtn, fuse, [mount_dual, mount_rwq])
+        _del_clients(qtn, admin, [client_dual, client_rwq])
+        _rm_sv(qtn, admin, vol, sub)
+
+
+def f20_no_mquarantine_disable_to_kclient(qtn, fs_util, admin, fuse, vol, config):
+    """
+    F-20 Quarantine disable must not flood unaware kclient with msg type 789.
+
+    IBMCEPH-20751 / #72369: MQuarantineDisable only to quarantine-aware clients.
+    """
+    sub = _cfg(config, "sub_a", "qtn-sv-a")
+    mount = "/mnt/qtn-f20-kern"
+    cycles = int(_cfg(config, "f20_cycles", 2))
+    threshold = int(_cfg(config, "f20_789_threshold", 5))
+    try:
+        if qtn.setup_subvolume(admin, vol, sub):
+            return 1
+        _, data = qtn.get_subvolume_paths(admin, vol, sub)
+
+        # Mount FS root with kernel client (admin) so caps pin on SV path
+        mon_ips = ",".join(fs_util.get_mon_node_ips())
+        fuse.exec_command(sudo=True, cmd=f"mkdir -p {mount}", check_ec=False)
+        fs_util.kernel_mount([fuse], mount, mon_ips, extra_params=f",fs={vol}")
+
+        # Pin some inodes under the SV before enable/disable cycles
+        sv_mnt = f"{mount}{data}"
+        fuse.exec_command(
+            sudo=True,
+            cmd=(
+                f"bash -c 'for i in $(seq 1 20); do "
+                f"echo f20-$i > {shlex.quote(sv_mnt)}/f20_$i.txt; done'"
+            ),
+            check_ec=False,
+        )
+
+        before, _ = fuse.exec_command(
+            sudo=True,
+            cmd="dmesg | grep -c 'unknown.*?type 789\\|msg type 789\\|type 789' || true",
+            check_ec=False,
+        )
+        try:
+            before_n = int(str(before).strip().splitlines()[-1] or "0")
+        except ValueError:
+            before_n = 0
+
+        for i in range(cycles):
+            qtn.quarantine_enable(admin, vol, sub)
+            time.sleep(2)
+            qtn.quarantine_disable(admin, vol, sub)
+            time.sleep(2)
+            log.info("F-20 cycle %d/%d enable/disable done", i + 1, cycles)
+
+        after, _ = fuse.exec_command(
+            sudo=True,
+            cmd="dmesg | grep -c 'unknown.*?type 789\\|msg type 789\\|type 789' || true",
+            check_ec=False,
+        )
+        try:
+            after_n = int(str(after).strip().splitlines()[-1] or "0")
+        except ValueError:
+            log.error(
+                "F-20 FAILED: could not parse after dmesg type-789 count: %s", after
+            )
+            return 1
+        delta = max(0, after_n - before_n)
+        log.info("F-20 dmesg type-789 delta=%s (threshold=%s)", delta, threshold)
+        if delta > threshold:
+            log.error(
+                "F-20 FAILED: kclient saw %s new type-789 messages "
+                "(MQuarantineDisable likely sent to unaware clients)",
+                delta,
+            )
+            return 1
+
+        log.info("f20_no_mquarantine_disable_to_kclient PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        try:
+            qtn.quarantine_disable(admin, vol, sub)
+        except Exception:
+            pass
+        fuse.exec_command(sudo=True, cmd=f"umount {mount}", check_ec=False)
+        fuse.exec_command(sudo=True, cmd=f"umount -l {mount}", check_ec=False)
+        _rm_sv(qtn, admin, vol, sub)
+
+
+def f21_clone_deferred_until_disable(qtn, fs_util, admin, fuse, vol, config):
+    """
+    F-21 Clone/purge jobs for quarantined SVs defer and complete after disable.
+
+    IBMCEPH-20752 / #72371: mgr/volumes must not complete a clone of a
+    quarantined source; after disable, deferred work can finish (or fail cleanly).
+    """
+    sub = _cfg(config, "sub_a", "qtn-sv-a")
+    clone = f"{sub}-f21-clone"
+    hold = int(_cfg(config, "f21_hold_secs", 20))
+    resume_timeout = int(_cfg(config, "f21_resume_timeout", 60))
+    try:
+        if qtn.setup_subvolume(admin, vol, sub):
+            return 1
+        admin.exec_command(
+            sudo=True, cmd=f"ceph fs subvolume snapshot create {vol} {sub} snap1"
+        )
+        qtn.quarantine_enable(admin, vol, sub)
+
+        # Start clone while source quarantined — must not reach complete
+        clone_out, clone_err = admin.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume snapshot clone {vol} {sub} snap1 {clone}",
+            check_ec=False,
+        )
+        clone_rc = admin.node.exit_status
+        time.sleep(hold)
+        # Use --format json (not -f); match FsUtils.get_clone_status
+        st_out, st_err = fs_util.get_clone_status(admin, vol, clone, check_ec=False)
+        state = ""
+        try:
+            state = (json.loads(st_out) or {}).get("status", {}).get("state", "")
+        except Exception:
+            state = str(st_out or st_err or "").strip()
+        log.info(
+            "F-21 clone create rc=%s state while quarantined=%s out=%s err=%s status=%s",
+            clone_rc,
+            state,
+            clone_out,
+            clone_err,
+            st_out,
+        )
+        if str(state).lower() == "complete":
+            log.error("F-21 FAILED: clone completed while source still quarantined")
+            return 1
+        # Deferred job must be observable, or clone create must clearly reject.
+        deferred = str(state).lower() in (
+            "pending",
+            "in-progress",
+            "in_progress",
+            "deferred",
+            "queued",
+        )
+        if not deferred and clone_rc == 0 and not str(state).strip():
+            log.error(
+                "F-21 FAILED: clone create rc=0 but status empty while quarantined "
+                "(deferral not observed; refusing false pass)"
+            )
+            return 1
+
+        qtn.quarantine_disable(admin, vol, sub)
+        # After disable: clone may complete, fail, or be cleaned — not stuck forever
+        deadline = time.time() + resume_timeout
+        final = state
+        while time.time() < deadline:
+            st_out, _ = fs_util.get_clone_status(admin, vol, clone, check_ec=False)
+            try:
+                final = (json.loads(st_out) or {}).get("status", {}).get("state", "")
+            except Exception:
+                final = ""
+            # clone entity gone is acceptable (failed+purged)
+            ls_out, _ = admin.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume ls {vol} --format json",
+                check_ec=False,
+            )
+            names = []
+            try:
+                names = [x.get("name") for x in (json.loads(ls_out) or [])]
+            except Exception:
+                names = []
+            if clone not in names:
+                log.info("F-21 clone entity gone after disable (acceptable)")
+                break
+            if str(final).lower() in ("complete", "failed", "canceled"):
+                log.info("F-21 clone reached terminal state=%s after disable", final)
+                break
+            time.sleep(3)
+        else:
+            log.error(
+                "F-21 FAILED: clone still non-terminal after disable (state=%s)",
+                final,
+            )
+            return 1
+
+        log.info("f21_clone_deferred_until_disable PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        try:
+            qtn.quarantine_disable(admin, vol, sub)
+        except Exception:
+            pass
+        admin.exec_command(
+            sudo=True, cmd=f"ceph fs clone cancel {vol} {clone}", check_ec=False
+        )
+        _rm_sv(qtn, admin, vol, clone)
+        admin.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume snapshot rm {vol} {sub} snap1 --force",
+            check_ec=False,
+        )
+        _rm_sv(qtn, admin, vol, sub)
+
+
 SUBTESTS = {
     "f01_group_quarantine": f01_group_quarantine,
     "f02_clear_quarantine": f02_clear_quarantine,
@@ -1066,6 +1321,9 @@ SUBTESTS = {
     "f16_multiple_quarantined": f16_multiple_quarantined,
     "f17_quarantine_during_heavy_io": f17_quarantine_during_heavy_io,
     "f18_encrypted_na": f18_encrypted_na,
+    "f19_dual_grant_remaining_q": f19_dual_grant_remaining_q,
+    "f20_no_mquarantine_disable_to_kclient": f20_no_mquarantine_disable_to_kclient,
+    "f21_clone_deferred_until_disable": f21_clone_deferred_until_disable,
 }
 
 
