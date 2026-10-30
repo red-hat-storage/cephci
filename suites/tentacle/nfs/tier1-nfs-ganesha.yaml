@@ -304,7 +304,7 @@ tests:
         file_count: 100
 
   - test:
-      name: Nfs Verify File Operations
+      name: Nfs Verify File Ownership
       module: nfs_verify_file_operations.py
       desc: Change the ownership (user and group) of files within the NFS export
       polarion-id: CEPH-83577601
@@ -334,15 +334,15 @@ tests:
           client03 : perform_lookups
 
   # ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
-  # - test:
-  #     name: Nfs access file from  with root-squash enabled
-  #     module: nfs_verify_file_access_with_rootsquash.py
-  #     desc: Test NFS file access with root-squash enabled
-  #     polarion-id: CEPH-83577604
-  #     abort-on-fail: false
-  #     config:
-  #       nfs_version: 4.1
-  #       clients: 4
+  - test:
+      name: Nfs access file from  with root-squash enabled
+      module: nfs_verify_file_access_with_rootsquash.py
+      desc: Test NFS file access with root-squash enabled
+      polarion-id: CEPH-83577604
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 4
 
   # - test:
   #     name: cthon tests for NFS ganesha
@@ -386,6 +386,16 @@ tests:
         nfs_version: 4.1
         clients: 1
 
+
+  - test:
+      name: NFS-Ganesha export config with Access Type as NONE
+      desc: Verify edit export config with access type as NONE
+      module: nfs_edit_export_config_with_access_none.py
+      polarion-id: CEPH-83593466
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
   - test:
       name: NFS-Ganesha export config to mount with 1 client access
       desc: Verify edit the export config to mount with allow access to only 1 client
