@@ -14,6 +14,11 @@ import json
 import time
 
 from looseversion import LooseVersion
+from upgrade_thrashing.upgrade_cephx_rotation import (
+    cephx_remediation_enabled,
+    run_cephx_post_upgrade_steps,
+    snapshot_cephx_keys,
+)
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
@@ -127,6 +132,11 @@ def run(ceph_cluster, **kw):
         f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
     )
     log.info(log_dump)
+
+    pre_cephx_keys = None
+    if cephx_remediation_enabled(config):
+        pre_cephx_keys = snapshot_cephx_keys(rados_obj)
+
     if enable_debug_level:
         log.debug("Setting up debug configs on the cluster for mon & Mgr daemons")
         mon_obj.set_config(section="mon", name="debug_mon", value="30/30")
@@ -399,6 +409,21 @@ def run(ceph_cluster, **kw):
             f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
         )
         log.info(log_dump)
+
+        if cephx_remediation_enabled(config):
+            log.info("CephX post-upgrade key verify + remediation")
+            cephx_out = run_cephx_post_upgrade_steps(
+                cephadm_obj,
+                rados_obj,
+                ceph_cluster,
+                config=config,
+                pre_snapshot=pre_cephx_keys,
+            )
+            if not cephx_out.get("ok"):
+                raise Exception(
+                    "CephX post-upgrade failed: "
+                    + "; ".join(cephx_out.get("errors") or [])
+                )
 
         if verify_warning:
             """

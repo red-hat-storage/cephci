@@ -1,9 +1,13 @@
 """
-Post-upgrade CephX key rotation remediation.
+Post-upgrade CephX key rotation remediation and auto-rotation verification.
 
 When AUTH_INSECURE_* health checks are present after upgrade, rotate insecure
 keys, push keyrings, lock down ciphers, verify health JSON, and confirm IO
 continuity until the cluster returns to HEALTH_OK.
+
+Also provides snapshot_cephx_keys + run_cephx_post_upgrade_steps for
+before/after upgrade key verify (service aes→aes256k; client.* must not
+auto-rotate) then remediation.
 
 Reusable from upgrade thrashing and other suites via remediate_cephx_auth_warnings().
 """
@@ -25,6 +29,9 @@ AUTH_TARGET_CHECKS = (
     "AUTH_INSECURE_KEYS_CREATABLE",
     "AUTH_INSECURE_ROTATING_SERVICE_KEY_TYPE",
 )
+
+_SECURE = "aes256k"
+_SERVICE = ("mon.", "mgr.", "osd.", "mds.")
 
 DEFAULT_CEPHX_CONFIG = {
     "enabled": True,
@@ -56,11 +63,208 @@ def cephx_remediation_enabled(config):
 
 
 def cephx_failure_reasons(cephx_result):
-    """Build failure_reason strings for emergency report when remediation fails."""
-    if not cephx_result or cephx_result.get("status") != "failed":
+    """Build failure_reason strings for emergency report.
+
+    Accepts run_cephx_post_upgrade_steps ({ok, errors}) or
+    remediate_cephx_auth_warnings ({status, errors}).
+    """
+    if not cephx_result:
         return []
-    errors = cephx_result.get("errors") or ["unknown error"]
-    return [f"CephX remediation failed: {err}" for err in errors]
+    if cephx_result.get("ok") is False:
+        prefix = "CephX post-upgrade failed"
+    elif cephx_result.get("status") == "failed":
+        prefix = "CephX remediation failed"
+    else:
+        return []
+    return [
+        f"{prefix}: {err}" for err in (cephx_result.get("errors") or ["unknown error"])
+    ]
+
+
+def snapshot_cephx_keys(rados_obj):
+    """Return {entity: {key, key_type}} from auth ls (+ dump-keys types when present)."""
+    auth_ls = rados_obj.run_ceph_command(cmd="ceph auth ls") or {}
+    entries = (
+        auth_ls.get("auth_dump")
+        if isinstance(auth_ls, dict)
+        else auth_ls if isinstance(auth_ls, list) else []
+    ) or []
+    snap = {
+        e["entity"]: {"key": e.get("key") or "", "key_type": None}
+        for e in entries
+        if isinstance(e, dict) and e.get("entity")
+    }
+    try:
+        dk = rados_obj.run_ceph_command(cmd="ceph auth dump-keys") or {}
+        for secret in (dk.get("data") or {}).get("secrets") or []:
+            ent = secret.get("entity") or {}
+            name = f"{ent.get('type_str') or ''}.{ent.get('id') or ''}"
+            if name in snap:
+                snap[name]["key_type"] = (
+                    (secret.get("auth") or {}).get("key") or {}
+                ).get("type_str")
+    except Exception as exc:
+        log.warning("ceph auth dump-keys unavailable; type asserts skipped: %s", exc)
+    log.info("CephX key snapshot: %s entities", len(snap))
+    return snap
+
+
+def _verify_cephx_auto_rotation(pre, post, upgraded_daemon_types=None):
+    """Compare pre/post snapshots.
+
+    FAIL: client.* value change; insecure service not rotated to aes256k.
+    WARN: aes256k service value churn; key changed but post type unknown.
+    """
+    errors, warnings = [], []
+    shared = set(pre) & set(post)
+    for label, entities in (
+        ("new", set(post) - set(pre)),
+        ("removed", set(pre) - set(post)),
+    ):
+        if entities:
+            log.info(
+                "CephX key verify: %s entities (%s): %s",
+                label,
+                len(entities),
+                sorted(entities)[:20],
+            )
+
+    scope = None
+    if upgraded_daemon_types:
+        scope = {str(t).strip().lower() for t in upgraded_daemon_types if t} or None
+
+    client_changed, not_rotated, regressed, churn, skipped = [], [], [], [], []
+    for entity in sorted(shared):
+        before, after = pre[entity], post[entity]
+        if entity.startswith("client."):
+            if before.get("key") != after.get("key"):
+                client_changed.append(entity)
+            continue
+        if not entity.startswith(_SERVICE):
+            continue
+
+        pre_t, post_t = before.get("key_type"), after.get("key_type")
+        changed = before.get("key") != after.get("key")
+        if pre_t is None and post_t is None:
+            continue
+        if pre_t == _SECURE:
+            if post_t and post_t != _SECURE:
+                regressed.append(entity)
+            elif changed and post_t in (None, _SECURE):
+                churn.append(entity)
+            continue
+        if not pre_t:
+            continue
+        if scope is not None and entity.split(".", 1)[0].lower() not in scope:
+            skipped.append(entity)
+            continue
+        if changed and post_t == _SECURE:
+            continue
+        if changed and post_t is None:
+            warnings.append(
+                f"service {entity} key changed but post key_type unknown "
+                f"(pre_type={pre_t})"
+            )
+            continue
+        not_rotated.append(entity)
+
+    def _join(items):
+        return ", ".join(items[:30]) + ("..." if len(items) > 30 else "")
+
+    if client_changed:
+        errors.append("client keys auto-rotated (must not): " + _join(client_changed))
+    if not_rotated:
+        errors.append("service keys not rotated to aes256k: " + _join(not_rotated))
+    if regressed:
+        errors.append("service key type regressed from aes256k: " + _join(regressed))
+    if churn:
+        warnings.append(f"service aes256k value churn ({len(churn)}): " + _join(churn))
+    if skipped:
+        log.info(
+            "CephX key verify: skipped outside upgrade scope (%s): %s",
+            len(skipped),
+            skipped[:20],
+        )
+
+    result = {
+        "ok": not errors,
+        "errors": errors,
+        "warnings": warnings,
+        "summary": {
+            "shared": len(shared),
+            "client_changed": len(client_changed),
+            "service_not_rotated": len(not_rotated),
+            "service_type_regressed": len(regressed),
+            "service_same_class_churn": len(churn),
+            "skipped_out_of_scope": len(skipped),
+        },
+    }
+    log.info(
+        "CephX key verify: ok=%s errors=%s warnings=%s summary=%s",
+        result["ok"],
+        len(errors),
+        len(warnings),
+        result["summary"],
+    )
+    return result
+
+
+def run_cephx_post_upgrade_steps(
+    cephadm_obj,
+    rados_obj,
+    ceph_cluster,
+    config=None,
+    pre_snapshot=None,
+    io_mgr=None,
+    clients=None,
+    deployed_services=None,
+    stats=None,
+):
+    """Verify auto-rotation (if pre_snapshot) then remediate.
+
+    Returns {ok, errors, verify, remediate}. Skips remediate on verify fail.
+    Selective upgrades: scopes service asserts via config.args.daemon_types.
+    """
+    out = {"ok": True, "errors": [], "verify": None, "remediate": None}
+
+    def _done():
+        if config is not None:
+            config["cephx_post_upgrade_result"] = out
+        return out
+
+    if pre_snapshot is not None:
+        daemon_types = (config or {}).get("args", {}).get("daemon_types")
+        upgraded = None
+        if daemon_types:
+            upgraded = [
+                t.strip() for t in str(daemon_types).split(",") if t.strip()
+            ] or None
+        verify = _verify_cephx_auto_rotation(
+            pre_snapshot, snapshot_cephx_keys(rados_obj), upgraded
+        )
+        out["verify"] = verify
+        for warn_msg in verify.get("warnings") or []:
+            log.warning("CephX key verify: %s", warn_msg)
+        if not verify.get("ok"):
+            log.error("CephX auto-rotation verify failed: %s", verify.get("errors"))
+            out["ok"] = False
+            out["errors"].extend(verify.get("errors") or [])
+            return _done()
+
+    out["remediate"] = remediate_cephx_auth_warnings(
+        cephadm_obj,
+        rados_obj,
+        ceph_cluster,
+        io_mgr=io_mgr,
+        clients=clients,
+        deployed_services=deployed_services,
+        config=config,
+        stats=stats,
+    )
+    if out["remediate"].get("status") == "failed":
+        out["ok"] = False
+        out["errors"].extend(out["remediate"].get("errors") or ["remediation failed"])
+    return _done()
 
 
 def remediate_cephx_auth_warnings(
