@@ -142,14 +142,32 @@ def copy_self_signed_certificate_to_smb_client_node(server_node, client_node):
 
 
 def install_grpcurl(smb_node):
-    """Install grpcurl package"""
+    """Install grpcurl package.
+
+    Detects the node architecture at runtime and downloads the matching
+    grpcurl binary (arm64 for aarch64, x86_64 otherwise).
+    """
     log.info("install grpcurl package")
+
+    out, _ = smb_node.exec_command(cmd="which grpcurl", check_ec=False)
+    if "grpcurl" in (out or ""):
+        log.info("grpcurl already installed")
+        return
+
+    arch_out, _ = smb_node.exec_command(cmd="uname -m", check_ec=False)
+    arch = (arch_out or "").strip()
+    if arch == "aarch64":
+        tarball = "grpcurl_1.8.9_linux_arm64.tar.gz"
+    else:
+        tarball = "grpcurl_1.8.9_linux_x86_64.tar.gz"
+
+    log.info(f"Detected arch={arch!r}, downloading {tarball}")
     wget_cmd = (
         "curl -LO "
-        "https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/grpcurl_1.8.9_linux_x86_64.tar.gz"
+        f"https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/{tarball}"
     )
 
-    tar_cmd = "tar -xvzf grpcurl_1.8.9_linux_x86_64.tar.gz"
+    tar_cmd = f"tar -xvzf {tarball}"
     chmod_cmd = "chmod +x grpcurl"
     rename_cmd = "sudo mv grpcurl /usr/local/bin/"
     version_cmd = "grpcurl --version"
@@ -164,7 +182,7 @@ def install_grpcurl(smb_node):
         cmd=version_cmd,
     )
     log.info(out)
-    if "grpcurl" not in out[1]:
+    if "grpcurl" not in str(out):
         raise Exception("grpcurl not installed")
 
 
