@@ -99,6 +99,7 @@ def execute(test, args, results, parallel_tcs):
         raise CommandFailed(f"Test case is not passed as part of args : {args}")
     tc = copy.deepcopy(args["tc"])
     if test.get("polarion-id"):
+        tc["polarion-id"] = test.get("polarion-id")
         tc["polarion-id-link"] = f"{polarion_default_url}/{test.get('polarion-id')}"
     test_name = test_name.replace(" ", "_")
     _log_matches = glob.glob(os.path.join(run_dir, f"{test_name}.*"))
