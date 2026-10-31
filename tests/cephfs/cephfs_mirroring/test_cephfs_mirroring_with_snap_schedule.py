@@ -4,6 +4,7 @@ import string
 import time
 import traceback
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
     CephfsMirroringUtils,
     _normalize_asok_peer_status,
@@ -459,10 +460,13 @@ def get_snaps_synced(fs_name, fsid, asok_file, filesystem_id, peer_uuid, path):
         int: The 'snaps_synced' value for the specified path if found, or 1 if the path is not found.
     """
     log.info("Get peer mirror status")
-    for node, asok in asok_file.items():
-        asok[0].exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
+    if not asok_file:
+        raise CommandFailed("get_snaps_synced: no asok file available")
+    _node_entry, asok = next(iter(asok_file.items()))
+    asok[0].exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
+    asok_basename = asok[1].rsplit("/", 1)[-1]
     cmd = (
-        f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok[1]} fs mirror peer status "
+        f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_basename} fs mirror peer status "
         f"{fs_name}@{filesystem_id} {peer_uuid} -f json"
     )
     out, _ = asok[0].exec_command(sudo=True, cmd=cmd)
