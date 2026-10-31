@@ -251,3 +251,15 @@ tests:
       name: test admin API bucket operations in multisite
       comments: Known issue IBMCEPH-13141 targeted to 9.2
       polarion-id: CEPH-83623503
+
+  - test:
+      name: sync status local source zone
+      desc: Verify radosgw-admin sync status rejects local/invalid source zone
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83633029
+      Comments: Known issue IBMCEPH-20698
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sync_status_local_source_zone.py
+            config-file-name: test_sync_status_local_source_zone.yaml
