@@ -48,8 +48,11 @@ Daemon Failover Workflows:
     Verifies quorum stability and client reconnection.
   - **MGR thrashing** (``enable_mgr_thrashing``): Failover active MGR,
     rolling restart, random daemon fail.  Validates module continuity.
-  - **MDS thrashing** (``enable_mds_thrashing``): Active MDS failover,
-    rolling restart, random fail.  CephFS I/O must survive rank transitions.
+  - **MDS thrashing** (``enable_mds_thrashing``): Delegates to
+    ``mds_thrash_helpers.thrash_mds`` (failover / restart / random fail by
+    default; optional kill_loop, max_mds_scale, config_storm, fs_fail_scale,
+    colocated_fail, standby_replay_fail, dir_pin, cap_revoke_failover,
+    multi_fs_fail via ``mds_operations``).
 
 I/O Workloads:
   - **CephFS FIO** (``enable_fio_cephfs``): FIO on kernel-mounted CephFS
@@ -138,7 +141,7 @@ TEST WORKFLOW:
     │   ├── thrash_rgw_s3: S3 PUT/GET/DELETE/multipart on RGW [if enabled]
     │   ├── thrash_mon: Leader failover, rolling restart, election strategy, sigkill/sigterm [if enabled]
     │   ├── thrash_mgr: Failover, rolling restart, random fail, sigkill/sigterm [if enabled]
-    │   ├── thrash_mds: Failover, rolling restart, random fail [if enabled]
+    │   ├── thrash_mds: mds_thrash_helpers (default failover/restart/random_fail) [if enabled]
     │   ├── thrash_nfs_fio: Mount/FIO/FS ops/unmount cycles on NFS exports [if enabled]
     │   ├── thrash_nfs_daemon_failover: NFS daemon kill/recovery loops [if enabled]
     │   ├── nfs protocol state threads: client/export/admin churn [if enabled]
@@ -205,6 +208,17 @@ CONFIGURATION OPTIONS:
 - enable_mon_thrashing: Enable MON thrashing - leader failover/restart (default: False)
 - enable_mgr_thrashing: Enable MGR thrashing - failover/restart/random fail (default: False)
 - enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
+- mds_operations: Optional list of MDS ops (default: failover, rolling_restart,
+  random_fail). Extra: colocated_fail, kill_loop, max_mds_scale, config_storm,
+  fs_fail_scale, standby_replay_fail, dir_pin, cap_revoke_failover, multi_fs_fail
+- mds_kill_count / mds_kill_interval: kill_loop params (default: 5 / 5)
+- mds_fail_count: ranks to fail for random_fail (default: 1)
+- mds_scale_path: max_mds walk list e.g. [8, 1, 8] (default: [current, 1, current])
+- mds_scale_wait: seconds to wait per scale step (default: 20)
+- mds_scale_during_promote: nudge max_mds during standby_replay_fail (default: False)
+- mds_recovery_wait: seconds between MDS ops (default: 15)
+- mds_pin_dirs: dirs for dir_pin batches (default: 20)
+- mds_cap_workers: background RW workers for cap_revoke_failover (default: 4)
 - enable_nfs_thrashing: Enable NFS cluster/export setup for thrashing (default: False)
 - nfs_num_clusters: Number of ``ceph nfs cluster create`` instances (default: 3)
 - nfs_exports_per_cluster: Exports per cluster (default: 4)
@@ -246,6 +260,7 @@ CONFIGURATION OPTIONS:
 import concurrent.futures as cf
 import random
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -263,6 +278,11 @@ from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.utils import get_cluster_timestamp
+from tests.rados.mds_thrash_helpers import kwargs_from_config as mds_kwargs_from_config
+from tests.rados.mds_thrash_helpers import (
+    post_duration_slack as mds_post_duration_slack,
+)
+from tests.rados.mds_thrash_helpers import thrash_mds
 from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStrategies
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
@@ -414,7 +434,8 @@ def run(ceph_cluster, **kw):
         enable_scrub_thrashing (bool): Enable independent scrub/deep-scrub cycles (default: True)
         enable_mon_thrashing (bool): Enable MON thrashing - leader failover/restart (default: False)
         enable_mgr_thrashing (bool): Enable MGR thrashing - failover/restart/random fail (default: False)
-        enable_mds_thrashing (bool): Enable MDS thrashing - failover/restart/random fail (default: False)
+        enable_mds_thrashing (bool): Enable MDS thrashing via mds_thrash_helpers (default: False)
+        mds_operations (list): Optional MDS op list; default failover/rolling_restart/random_fail
         enable_nfs_thrashing (bool): Enable NFS cluster/export setup for thrashing (default: False)
         nfs_num_clusters (int): How many NFS clusters to create (default: 3)
         nfs_exports_per_cluster (int): Exports per cluster (default: 4)
@@ -1076,7 +1097,17 @@ def run(ceph_cluster, **kw):
                 )
             log.info("")
 
-        # MDS thrashing filesystem targets
+        # MDS thrashing filesystem targets (include suite-precreated FS e.g. cephfs2)
+        if enable_mds_thrashing:
+            try:
+                existing_fs = rados_obj.run_ceph_command(cmd="ceph fs ls") or []
+                for entry in existing_fs:
+                    name = entry.get("name") if isinstance(entry, dict) else None
+                    if name and name not in fs_names:
+                        fs_names.append(name)
+                        log.info("Added existing filesystem for MDS thrash: %s", name)
+            except Exception as e:
+                log.warning("Could not list existing filesystems for MDS thrash: %s", e)
         if fs_names:
             log.info("Filesystems for MDS thrashing: %s", fs_names)
             log.info("")
@@ -1455,8 +1486,23 @@ def run(ceph_cluster, **kw):
         log.debug("ThreadPoolExecutor max_workers: %s", max_workers)
 
         cluster_fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
-        with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
+
+        # shutdown(wait=False): ThreadPoolExecutor context manager always joins
+        # with wait=True on exit. MDS fair-round drain (or a stuck peer thrash
+        # thread) can outlive drain_timeout and hang the suite forever.
+        @contextmanager
+        def _thrash_executor(workers):
+            pool = cf.ThreadPoolExecutor(max_workers=workers)
+            try:
+                yield pool
+            finally:
+                pool.shutdown(wait=False)
+
+        with _thrash_executor(max_workers) as executor:
             futures = []
+            mds_future = None
+            # Shared with thrash_mds: queue delay must not mint a later end_time.
+            thrash_deadline = time.time() + duration
 
             # I/O workload burst thread (rados bench) - RADOS pools
             futures.append(
@@ -1685,18 +1731,22 @@ def run(ceph_cluster, **kw):
                     )
                 )
 
-            # MDS thrashing (optional: failover, rolling restart, random fail)
+            # MDS thrashing (optional; see mds_thrash_helpers / mds_operations)
             if enable_mds_thrashing and fs_names:
                 log.info(f"MDS thrashing enabled for filesystems: {fs_names}")
-                futures.append(
-                    executor.submit(
-                        thrash_mds,
-                        rados_obj=rados_obj,
-                        fs_names=fs_names,
-                        duration=duration,
-                        stop_flag=stop_flag,
-                    )
+                mds_kw = mds_kwargs_from_config(config, cluster_fsid)
+                mds_kw["client_node"] = client_node
+                mds_kw["cephfs_mount_path"] = cephfs_mount_path
+                mds_future = executor.submit(
+                    thrash_mds,
+                    rados_obj=rados_obj,
+                    fs_names=fs_names,
+                    duration=duration,
+                    stop_flag=stop_flag,
+                    end_time=thrash_deadline,
+                    **mds_kw,
                 )
+                futures.append(mds_future)
             elif enable_mds_thrashing:
                 log.warning("MDS thrashing enabled but no CephFS filesystems available")
 
@@ -1852,9 +1902,14 @@ def run(ceph_cluster, **kw):
             elif enable_smb_thrashing:
                 log.warning("SMB thrashing enabled but no SMB config available")
 
-            log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
+            remaining = max(1, int(thrash_deadline - time.time()))
+            log.info(
+                "Thrashing operations in progress (deadline in %ss, duration=%ss)...",
+                remaining,
+                duration,
+            )
             try:
-                for future in cf.as_completed(futures, timeout=duration):
+                for future in cf.as_completed(futures, timeout=remaining):
                     log.debug("A thrashing thread completed")
 
                 log.info("All thrashing operations completed before timeout")
@@ -1867,19 +1922,39 @@ def run(ceph_cluster, **kw):
             stop_flag["stop"] = True
             log.info("Signaling threads to stop...")
 
-            # Wait for threads to finish (with timeout for I/O completion)
-            done, not_done = cf.wait(futures, timeout=300)
+            # MDS: fair-bag slack after deadline, plus restore_state in finally.
+            drain_timeout = 300
+            if enable_mds_thrashing:
+                n_mds_ops = len(
+                    config.get("mds_operations")
+                    or ["failover", "rolling_restart", "random_fail"]
+                )
+                drain_timeout = mds_post_duration_slack(n_mds_ops) + 120
+            done, not_done = cf.wait(futures, timeout=drain_timeout)
             log.info(
                 f"\nThread completion: {len(done)}/{len(futures)} completed within timeout"
             )
             if not_done:
-                log.warning(f"{len(not_done)} thread(s) did not complete in time")
+                # shutdown(wait=False): peers warn-only; stuck MDS → fail.
+                log.warning(
+                    "%s thread(s) did not complete in time (drain_timeout=%ss) — "
+                    "abandoning (executor shutdown wait=False)",
+                    len(not_done),
+                    drain_timeout,
+                )
+                stop_flag["stop"] = True
+                if mds_future is not None and mds_future in not_done:
+                    log.error(
+                        "mds_thrashing still running after drain_timeout=%ss",
+                        drain_timeout,
+                    )
+                    test_failed = True
 
             # Collect results and check for exceptions
             log.info("Checking thread results...")
             for future in done:
                 try:
-                    result = future.result()
+                    result = future.result(timeout=1)
                     log.debug(f"Thread completed with result: {result}")
                 except Exception as e:
                     log.warning(f"Thread had exception (non-fatal): {e}")
@@ -2180,9 +2255,12 @@ def run(ceph_cluster, **kw):
                 "Recovery will run in cleanup phase."
             )
         else:
-            log.info("Waiting for PGs to reach active+clean state...")
+            log.info(
+                "Waiting for PGs to reach active+clean state "
+                "(boosting osd_max_backfills / osd_recovery_max_active)..."
+            )
             if not wait_for_clean_pg_sets(
-                rados_obj, timeout=1200, recovery_thread=False
+                rados_obj, timeout=1200, recovery_thread=True
             ):
                 log.error("Not all PGs are active+clean")
                 raise Exception("Not all PGs are active+clean")
@@ -5450,202 +5528,6 @@ def _thrash_mgr_random_fail(mgr_workflow_obj: MgrWorkflows) -> bool:
 
     except Exception as e:
         log.error(f"MGR random fail failed: {e}")
-        return False
-
-
-def thrash_mds(
-    rados_obj: RadosOrchestrator,
-    fs_names: List[str],
-    duration: int,
-    stop_flag: Dict,
-) -> int:
-    """
-    Holistic MDS thrashing - randomly picks a filesystem and operation each iteration.
-
-    Operations:
-    1. Failover - Fail active MDS to trigger failover to standby
-    2. Rolling restart - Restart MDS daemons via orchestrator
-    3. Random fail - Fail a random MDS (active or standby)
-
-    Args:
-        rados_obj: RadosOrchestrator instance
-        fs_names: List of CephFS filesystem names to thrash
-        duration: Total duration in seconds
-        stop_flag: Dict with 'stop' key to signal early termination
-
-    Returns:
-        Number of thrash operations completed
-    """
-    ops_completed = 0
-    end_time = time.time() + duration
-    iteration = 0
-
-    operations = ["failover", "rolling_restart", "random_fail"]
-
-    log.info(
-        f"Starting MDS thrashing for filesystems: {fs_names} "
-        f"with operations: {operations} (duration: {duration}s)"
-    )
-
-    while time.time() < end_time and not stop_flag.get("stop"):
-        iteration += 1
-
-        # Randomly select a filesystem and an operation
-        fs_name = random.choice(fs_names)
-        operation = random.choice(operations)
-
-        log.info(
-            f"MDS thrash iteration {iteration}: fs={fs_name}, operation={operation}"
-        )
-
-        try:
-            if operation == "failover":
-                result = _thrash_mds_failover(rados_obj, fs_name)
-            elif operation == "rolling_restart":
-                result = _thrash_mds_rolling_restart(rados_obj, fs_name)
-            elif operation == "random_fail":
-                result = _thrash_mds_random_fail(rados_obj, fs_name)
-            else:
-                result = False
-
-            if result:
-                ops_completed += 1
-                log.info(
-                    f"MDS thrash operation '{operation}' on fs={fs_name} completed successfully"
-                )
-            else:
-                log.warning(
-                    f"MDS thrash operation '{operation}' on fs={fs_name} did not complete"
-                )
-
-        except Exception as e:
-            log.warning(f"MDS thrash iteration {iteration} failed: {e}")
-
-        # Wait between operations to allow cluster stabilization
-        time.sleep(10)
-
-    log.info(
-        f"MDS thrashing completed: {ops_completed} operations in {iteration} iterations "
-        f"across {len(fs_names)} filesystem(s)"
-    )
-    return ops_completed
-
-
-def _get_mds_info(rados_obj: RadosOrchestrator, fs_name: str) -> Dict:
-    """Get MDS active and standby info for a filesystem."""
-    try:
-        fs_status = rados_obj.run_ceph_command(cmd=f"ceph fs status {fs_name}")
-        active_mds = None
-        standby_mds = []
-
-        # Parse MDS info from mdsmap - contains both active and standby entries
-        for mds in fs_status.get("mdsmap", []):
-            mds_name = mds.get("name")
-            mds_state = mds.get("state")
-            if mds_state == "active":
-                active_mds = mds_name
-            elif mds_state == "standby":
-                standby_mds.append(mds_name)
-
-        return {"active": active_mds, "standbys": standby_mds}
-    except Exception as e:
-        log.error(f"Failed to get MDS info for {fs_name}: {e}")
-        return {"active": None, "standbys": []}
-
-
-def _thrash_mds_failover(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
-    """Fail the active MDS to trigger failover to a standby MDS."""
-    try:
-        mds_info = _get_mds_info(rados_obj, fs_name)
-        active_mds = mds_info["active"]
-        standby_mds = mds_info["standbys"]
-
-        if not active_mds:
-            log.warning(f"No active MDS found for {fs_name}")
-            return False
-
-        if not standby_mds:
-            log.warning(f"No standby MDS available for failover on {fs_name}")
-            return False
-
-        log.info(f"Current active MDS for {fs_name}: {active_mds}")
-        log.info(f"Standby MDSs available: {standby_mds}")
-        log.info(f"Failing active MDS: {active_mds}")
-
-        rados_obj.run_ceph_command(cmd=f"ceph mds fail {active_mds}")
-        time.sleep(15)
-
-        # Verify failover occurred
-        new_mds_info = _get_mds_info(rados_obj, fs_name)
-        new_active = new_mds_info["active"]
-
-        if new_active and new_active != active_mds:
-            log.info(f"MDS failover successful. New active MDS: {new_active}")
-            return True
-        else:
-            log.warning(f"MDS failover may not have occurred. Active MDS: {new_active}")
-            return False
-
-    except Exception as e:
-        log.error(f"MDS failover failed: {e}")
-        return False
-
-
-def _thrash_mds_rolling_restart(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
-    """Rolling restart of MDS daemons using orchestrator."""
-    try:
-        log.info(f"Initiating MDS rolling restart for fs={fs_name} via orchestrator")
-
-        if not rados_obj.restart_daemon_services(daemon="mds"):
-            log.warning("MDS orch restart command returned failure")
-            return False
-
-        log.info("MDS rolling restart initiated successfully")
-        time.sleep(30)  # Allow time for restart to complete
-        return True
-
-    except Exception as e:
-        log.error(f"MDS rolling restart failed: {e}")
-        return False
-
-
-def _thrash_mds_random_fail(rados_obj: RadosOrchestrator, fs_name: str) -> bool:
-    """Randomly fail any MDS daemon (active or standby) to test recovery."""
-    try:
-        mds_info = _get_mds_info(rados_obj, fs_name)
-        active_mds = mds_info["active"]
-        standby_mds = mds_info["standbys"]
-
-        all_mds = []
-        if active_mds:
-            all_mds.append(active_mds)
-        all_mds.extend(standby_mds)
-
-        if len(all_mds) < 2:
-            log.warning(f"Need at least 2 MDSs for random fail thrashing on {fs_name}")
-            return False
-
-        # Randomly select an MDS to fail
-        target_mds = random.choice(all_mds)
-        mds_type = "active" if target_mds == active_mds else "standby"
-        log.info(f"Randomly selected {mds_type} MDS to fail: {target_mds}")
-
-        rados_obj.run_ceph_command(cmd=f"ceph mds fail {target_mds}")
-        time.sleep(15)
-
-        # Verify cluster still has an active MDS
-        new_mds_info = _get_mds_info(rados_obj, fs_name)
-        new_active = new_mds_info["active"]
-
-        if new_active:
-            log.info(f"MDS fail successful. Current active MDS: {new_active}")
-            return True
-        else:
-            log.warning(f"No active MDS for {fs_name} after fail operation")
-            return False
-
-    except Exception as e:
-        log.error(f"MDS random fail failed: {e}")
         return False
 
 

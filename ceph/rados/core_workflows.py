@@ -7428,6 +7428,36 @@ EOF"""
             enable_fast_ec_config_params=enable_fast_ec_config_params,
         )
 
+        # New FS needs its own MDS service; standbys for other FS names will not join.
+        log.info("Applying MDS orch placement for filesystem %s", fs_name)
+        # Enough daemons for max_mds scale paths up to 8 (+ standbys)
+        self.client.exec_command(
+            sudo=True,
+            cmd=(
+                f"ceph orch apply mds {fs_name} "
+                f"--placement='count-per-host:2;label:mds'"
+            ),
+        )
+        deadline = time.time() + 180
+        while time.time() < deadline:
+            try:
+                status = self.run_ceph_command(cmd=f"ceph fs status {fs_name}") or {}
+                mdsmap = status.get("mdsmap") or []
+                if any(
+                    (e.get("state") or "").startswith("active")
+                    for e in mdsmap
+                    if isinstance(e, dict)
+                ):
+                    log.info("Filesystem %s has an active MDS", fs_name)
+                    break
+            except Exception as exc:
+                log.debug("Waiting for MDS on %s: %s", fs_name, exc)
+            time.sleep(5)
+        else:
+            raise CommandFailed(
+                f"No active MDS for filesystem {fs_name} within 180s after orch apply"
+            )
+
         log.info(f"Mounting CephFS at {mount_path}")
         client_node.exec_command(
             cmd=f"mkdir -p {mount_path}", sudo=True, check_ec=False
@@ -7459,16 +7489,24 @@ EOF"""
         if mount_opts:
             mount_cmd += " -o " + ",".join(mount_opts)
         client_node.exec_command(cmd=mount_cmd, sudo=True)
-        mount_out, mount_err = client_node.exec_command(
-            cmd=f"findmnt -T {mount_path}", sudo=True, check_ec=False
-        )
-        log.info(f"mount_out: {mount_out}")
-        log.info(f"mount_err: {mount_err}")
-        log.info(f"mount_path: {mount_path}")
-        if len(mount_err) != 0 or mount_path not in (mount_out or ""):
+
+        mount_out = mount_err = ""
+        for attempt in range(1, 7):
+            mount_out, mount_err = client_node.exec_command(
+                cmd=f"findmnt -T {mount_path}", sudo=True, check_ec=False
+            )
+            log.info(
+                "findmnt attempt %s mount_out=%r mount_err=%r",
+                attempt,
+                mount_out,
+                mount_err,
+            )
+            if mount_path in (mount_out or "") and not (mount_err or "").strip():
+                break
+            time.sleep(2)
+        else:
             raise CommandFailed(f"CephFS mount missing at {mount_path}")
         log.info(f"Mounted CephFS at {mount_path}")
-
         # Return created pool names
         created_pools = [
             {
