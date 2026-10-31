@@ -1,6 +1,7 @@
 import time
 
 from ceph.parallel import parallel
+from ceph.rbd.utils import select_pool_type
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
 
@@ -54,18 +55,25 @@ def run(**kw):
                 "io_total": "10M",
             },
         }
-    kw["config"].update(pool_image_config)
+        kw["config"].update(pool_image_config)
+
+    # Run on either replicated or EC pool
+    available_pool_types = [
+        pt
+        for pt in ["rep_pool_config", "ec_pool_config"]
+        if pt in config and config[pt].get("pool")
+    ]
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=available_pool_types,
+        apply_pool_only=True,
+    )
+
     mirror_obj = rbd_mirror_config(**kw)
-
-    mirror1 = mirror_obj["rep_rbdmirror"]["mirror1"]
-    mirror2 = mirror_obj["rep_rbdmirror"]["mirror2"]
-
-    rep_image_spec = (
-        f'{config["rep_pool_config"]["pool"]}/{config["rep_pool_config"]["image"]}'
-    )
-    ec_image_spec = (
-        f'{config["ec_pool_config"]["pool"]}/{config["ec_pool_config"]["image"]}'
-    )
+    mirror_key = "rep_rbdmirror" if pool_type == "rep_pool_config" else "ec_rbdmirror"
+    mirror1 = mirror_obj[mirror_key]["mirror1"]
+    mirror2 = mirror_obj[mirror_key]["mirror2"]
+    image_spec = f'{config[pool_type]["pool"]}/{config[pool_type]["image"]}'
 
     def initiate_resync_and_wait_sync_to_start(img_spec):
         mirror2.resync(img_spec)
@@ -94,14 +102,12 @@ def run(**kw):
         return 0
 
     def restart_daemon_till_sync_completes(img_spec):
-        """Until sync of images in img_spec completes and restart count is less than 11,
+        """Until sync of image completes and restart count is less than 11,
         restart rbd mirror daemon"""
         restart_count = 0
         while (
-            (mirror2.mirror_status("image", img_spec[0], "state") != "up+replaying")
-            and (mirror2.mirror_status("image", img_spec[1], "state") != "up+replaying")
-            and restart_count < 10
-        ):
+            mirror2.mirror_status("image", img_spec, "state") != "up+replaying"
+        ) and restart_count < 10:
             log.info(f"Restarting rbd-mirror daemon {restart_count}st/nd/rd/th time")
             mirror2.change_service_state(None, "restart")
             time.sleep(60)
@@ -112,7 +118,8 @@ def run(**kw):
         )
         return 0
 
-    decoy_imagespec = f'{config["rep_pool_config"]["pool"]}/decoy_'
+    decoy_pool = config[pool_type]["pool"]
+    decoy_imagespec = f"{decoy_pool}/decoy_"
 
     def decoy_setup():
         # Set decoy - increase number of images under mirroring and decrease concurrent imagesyncs
@@ -136,14 +143,12 @@ def run(**kw):
         return 0
 
     with parallel() as p:
-        p.spawn(mirror1.benchwrite, imagespec=rep_image_spec, io="1G")
-        p.spawn(mirror1.benchwrite, imagespec=ec_image_spec, io="1G")
+        p.spawn(mirror1.benchwrite, imagespec=image_spec, io="1G")
         p.spawn(decoy_setup)
 
     with parallel() as p:
-        for img_spec in [rep_image_spec, ec_image_spec]:
-            p.spawn(mirror1.benchwrite, imagespec=img_spec, io="100M")
-            p.spawn(initiate_resync_and_wait_sync_to_start, img_spec)
+        p.spawn(mirror1.benchwrite, imagespec=image_spec, io="100M")
+        p.spawn(initiate_resync_and_wait_sync_to_start, image_spec)
 
         for each_rc in p:
             if each_rc == 1:
@@ -151,10 +156,9 @@ def run(**kw):
                 return 1
 
     with parallel() as p:
-        for img_spec in [rep_image_spec, ec_image_spec]:
-            p.spawn(verify_resync, img_spec)
+        p.spawn(verify_resync, image_spec)
         p.spawn(generate_background_ios)
-        p.spawn(restart_daemon_till_sync_completes, [rep_image_spec, ec_image_spec])
+        p.spawn(restart_daemon_till_sync_completes, image_spec)
 
         for each_rc in p:
             if each_rc == 1:
