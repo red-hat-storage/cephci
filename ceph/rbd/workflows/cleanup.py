@@ -1,7 +1,7 @@
 import json
 from time import sleep
 
-from ceph.rbd.utils import exec_cmd, getdict
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, exec_cmd, getdict
 from utility.log import Log
 
 log = Log(__name__)
@@ -27,7 +27,7 @@ def cleanup(pool_types, multi_cluster_obj, **kw):
         pool_cleanup(
             cluster_config.get("client"),
             pools,
-            ceph_version=int(kw["config"].get("rhbuild")[0]),
+            ceph_version=get_ceph_version_from_rhbuild(kw["config"].get("rhbuild")),
         )
 
 

@@ -10,7 +10,7 @@ from time import sleep
 
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_rbd_config
-from ceph.rbd.utils import exec_cmd, getdict
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, exec_cmd, getdict
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.rbd import (
     create_single_pool_and_images,
@@ -121,7 +121,7 @@ def test_rbd_image_operations_for_pool(
             client=client,
             cluster="ceph",
             rbd=rbd,
-            ceph_version=int(config.get("rhbuild")[0]),
+            ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
             is_ec_pool=is_ec_pool,
             is_secondary=False,
             do_not_create_image=True,

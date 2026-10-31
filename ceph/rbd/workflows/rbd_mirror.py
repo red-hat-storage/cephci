@@ -5,7 +5,7 @@ import time
 from copy import deepcopy
 
 from ceph.parallel import parallel
-from ceph.rbd.utils import copy_file, exec_cmd, getdict, value
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, copy_file, exec_cmd, getdict, value
 from ceph.rbd.workflows.namespace import enable_namespace_mirroring
 from ceph.rbd.workflows.snap_scheduling import add_snapshot_scheduling
 from utility.log import Log
@@ -630,7 +630,7 @@ def config_mirror_multi_pool(
                 primary_cluster=primary_cluster,
                 secondary_cluster=secondary_cluster,
                 build=kw.get("build"),
-                ceph_version=int(config.get("rhbuild")[0]),
+                ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
                 **pool_config,
             )
 

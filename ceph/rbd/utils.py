@@ -8,6 +8,21 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def get_ceph_version_from_rhbuild(rhbuild):
+    """Return major Ceph/RHCS version from an rhbuild string.
+
+    Examples:
+        "10.0-rhel-10" -> 10
+        "5.3" -> 5
+        "4" -> 4
+
+    Note: int(rhbuild[0]) is incorrect for two-digit majors (e.g. 10.x -> 1).
+    """
+    if rhbuild is None:
+        return 0
+    return int(str(rhbuild).split(".")[0])
+
+
 getdict = lambda x: {k: v for (k, v) in x.items() if isinstance(v, dict)}
 
 isdict = lambda x: [isinstance(i, dict) for i in x]

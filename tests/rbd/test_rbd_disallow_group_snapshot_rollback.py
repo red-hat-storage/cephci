@@ -33,7 +33,7 @@ E.g: rbd group snap rollback pool1/new_name --snap snap2
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
-from ceph.rbd.utils import get_md5sum_rbd_image, getdict, random_string
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, get_md5sum_rbd_image, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group import (
     add_image_to_group_and_verify,
@@ -163,7 +163,7 @@ def disallow_group_snapshot_rollback(rbd_obj, client, **kw):
             client=client,
             cluster="ceph",
             rbd=rbd,
-            ceph_version=int(config.get("rhbuild")[0]),
+            ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
             is_ec_pool=is_ec_pool,
             is_secondary=False,
         )
