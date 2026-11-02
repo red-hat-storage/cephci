@@ -309,6 +309,37 @@ tests:
       desc: volume_ops_parallel_to_clone
       abort-on-fail: false
   - test:
+      name: mds_empty_omap_commit
+      module: cephfs_bugs.test_mds_empty_omap_commit.py
+      polarion-id: CEPH-83633040
+      desc: Empty _omap_commit_ops under multi-rank pinned metadata soak
+      config:
+        soak_seconds: 300
+        sleep_between: 10
+        creates_per_rank: 100
+        renames_per_rank: 30
+        workers_per_rank: 2
+      abort-on-fail: false
+  - test:
+      name: mds_mark_dirty_cap_stress
+      module: cephfs_bugs.test_mds_mark_dirty_cap_stress.py
+      polarion-id: CEPH-83633041
+      desc: mark_dirty get_version assert under concurrent cap/metadata stress
+      config:
+        soak_seconds: 300
+        workers: 12
+        dirs: 24
+      abort-on-fail: false
+  - test:
+      name: mds_replay_cap_reconnect
+      module: cephfs_bugs.test_mds_replay_cap_reconnect.py
+      polarion-id: CEPH-83633043
+      desc: Multi-client MDS replay cap reconnect without cap_imports assert crash
+      config:
+        trim_interval: "3600000"
+        chmod_wait_secs: 10
+      abort-on-fail: false
+  - test:
       abort-on-fail: false
       desc: "Check for Crash"
       module: cephfs_crash_util.py

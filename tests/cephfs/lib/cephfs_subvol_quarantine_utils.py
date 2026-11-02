@@ -605,6 +605,31 @@ class SubvolQuarantineUtils:
             mds_caps=f"allow rwq fsname={vol_name} path={subvol_root}",
         )
 
+    def create_dual_grant_client(
+        self,
+        client,
+        vol_name: str,
+        subvol_root: str,
+        client_name: str,
+    ) -> None:
+        """
+        Broad allow rw FIRST (no q), then path-scoped rwq.
+
+        Exercises MDSAuthCaps remaining-grant evaluation under quarantine
+        (IBMCEPH-20749 / #72367). Fuse/libcephfs must advertise
+        CEPHFS_FEATURE_QUARANTINE so MDS evaluates auth instead of parking.
+        """
+        self.fs_util.create_ceph_client(
+            client,
+            client_name,
+            mon_caps="allow r",
+            osd_caps=f"allow rw tag cephfs data={vol_name}",
+            mds_caps=(
+                f"allow rw fsname={vol_name}, "
+                f"allow rwq fsname={vol_name} path={subvol_root}"
+            ),
+        )
+
     def create_rwQ_client(
         self,
         client,

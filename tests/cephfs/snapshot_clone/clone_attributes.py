@@ -30,12 +30,14 @@ def run(ceph_cluster, **kw):
     6. Create snapshot of the subvolume
         Ex: ceph fs subvolume snapshot create cephfs subvol_2 snap_1 --group_name subvolgroup_clone_attr_vol_1
     7. Set file and size xattributes on dir
+    8. Set user xattr on a file (IBMCEPH-21082) and retain across snap/clone
 
     Test Case Flow:
     1. Create Clone out of subvolume.
     2. Mount the cloned volume.
     3. Validate the contents of cloned volume with contents present of subvolume
     4. Validate file and size xattributes on dir in cloned volume
+    5. Validate user xattr on file is preserved on cloned subvolumes
 
     Clean Up:
     1. Delete Cloned volume
@@ -104,6 +106,29 @@ def run(ceph_cluster, **kw):
         )
         fs_util.set_quota_attrs(clients[0], 9999, 99999, kernel_mounting_dir_1)
         quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
+        # IBMCEPH-21082: user xattr must survive snapshot clone
+        user_xattr_file = "snap_perm_file"
+        user_xattr_key = "user.testkey"
+        user_xattr_value = "testvalue"
+        user_xattr_path = f"{kernel_mounting_dir_1}/{user_xattr_file}"
+        client1.exec_command(sudo=True, cmd=f"touch {user_xattr_path}")
+        fs_util.set_xattrs(
+            clients[0], user_xattr_path, user_xattr_key, user_xattr_value
+        )
+        src_xattr, _ = fs_util.get_xattrs(clients[0], user_xattr_path, user_xattr_key)
+        if src_xattr.strip() != user_xattr_value:
+            log.error(
+                "User xattr not set on source file. Expected %s, got %s",
+                user_xattr_value,
+                src_xattr.strip(),
+            )
+            return 1
+        log.info(
+            "User xattr %s=%s set on %s",
+            user_xattr_key,
+            user_xattr_value,
+            user_xattr_path,
+        )
         snapshot_1 = {
             "vol_name": default_fs,
             "subvol_name": "subvol_clone_attr_vol",
@@ -238,7 +263,43 @@ def run(ceph_cluster, **kw):
                 )
                 return 1
             log.info("Validate the subvolume GID and UID attributes")
+            log.info(
+                "IBMCEPH-21082: Validate user xattr is preserved on cloned subvolumes"
+            )
+            for clone_mnt in (fuse_mounting_dir_2, fuse_mounting_dir_3):
+                clone_xattr_path = f"{clone_mnt}/{user_xattr_file}"
+                try:
+                    clone_xattr, _ = fs_util.get_xattrs(
+                        clients[0], clone_xattr_path, user_xattr_key
+                    )
+                except CommandFailed as err:
+                    log.error(
+                        "IBMCEPH-21082: user xattr missing on clone %s: %s",
+                        clone_xattr_path,
+                        err,
+                    )
+                    return 1
+                if clone_xattr.strip() != user_xattr_value:
+                    log.error(
+                        "IBMCEPH-21082: user xattr not preserved on clone %s. "
+                        "Expected %s, got %s",
+                        clone_xattr_path,
+                        user_xattr_value,
+                        clone_xattr.strip(),
+                    )
+                    return 1
+                log.info(
+                    "User xattr preserved on clone: %s %s=%s",
+                    clone_xattr_path,
+                    user_xattr_key,
+                    clone_xattr.strip(),
+                )
 
+        log.info(
+            "TEST PASSED - CEPH-83573524 clone attributes retained; "
+            "IBMCEPH-21082 user xattr %s preserved on clones",
+            user_xattr_key,
+        )
         return 0
     except Exception as e:
         log.info(e)

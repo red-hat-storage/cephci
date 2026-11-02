@@ -183,6 +183,7 @@ tests:
         nfs_version: 4.1
         clients: 4
         setup: false
+        cleanup: false
 
   - test:
       name: Upgrade cluster to latest RHCS 7.x
@@ -195,6 +196,20 @@ tests:
         base_cmd_args:
           verbose: true
         verify_cluster_health: true
+
+  - test:
+      name: NFS CephX key rotation ceph nfs cluster rotate key
+      module: test_nfs_cephx_key_rotation.py
+      desc: NFS export stays mounted post nfs cluster key rotate
+      polarion-id: CEPH-83633001
+      abort-on-fail: false
+      config:
+        setup: false
+        nfs_version: 4.1
+        clients: 1
+        nfs_name: cephfs-nfs
+        nfs_mount: /mnt/nfs
+        nfs_export: /export_0
 
   - test:
       name: Nfs Verify rm write lookups in parellel from multi clients

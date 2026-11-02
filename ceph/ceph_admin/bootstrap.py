@@ -23,7 +23,11 @@ from utility.odf_defaults import (
     overrides_enabled,
 )
 from utility.registry_auth import PODMAN_AUTH_PATH
-from utility.utils import resolve_registry_host, resolve_registry_login
+from utility.utils import (
+    ibm_ceph_rpm_version_pin,
+    resolve_registry_host,
+    resolve_registry_login,
+)
 
 from ..ceph import CommandFailed, ResourceNotFoundError
 from .common import config_dict_to_string
@@ -322,8 +326,8 @@ class BootstrapMixin:
             if build_type == "upstream" or manifest_obj.product == "community":
                 _rpm_version = f"{_ceph_version}*"
             else:
-                # * is to enable any test hotfix provided
-                _rpm_version = f"2:{_ceph_version}.el{_os_major}cp"
+                # Tentacle+: 2:VR.elNcp ; Umbrella 21.x: VR.elN (no epoch/cp)
+                _rpm_version = ibm_ceph_rpm_version_pin(_ceph_version, _os_major)
 
             self.install(**{"rpm_version": _rpm_version})
 

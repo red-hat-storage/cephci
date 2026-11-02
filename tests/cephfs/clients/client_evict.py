@@ -93,7 +93,10 @@ def run(ceph_cluster, **kw):
         rc = fs_util_v1.activate_multiple_mdss(
             client_info["clients"][0:], fs_name=default_fs
         )
-        time.sleep(60)
+        if not fs_util_v1.wait_for_mds_process(
+            client1[0], process_name=default_fs, timeout=120, interval=10
+        ):
+            raise CommandFailed("MDS daemons not active after activate_multiple_mdss")
         if rc == 0:
             log.info("Activate multiple mdss successfully")
         else:
@@ -142,15 +145,23 @@ def run(ceph_cluster, **kw):
             log.info("client process killed successfully for auto eviction")
         else:
             raise CommandFailed("client process killing failed for auto eviction")
-        log.info("Waiting 300 seconds for auto eviction---")
-        time.sleep(300)
-        mds1_after_evict, _, rc = fs_util_v1.get_mds_info(
-            *active_mds_list, info="session ls"
-        )
-        if mds1_before_evict != mds1_after_evict:
-            log.info("Auto eviction Passed")
+        log.info("Waiting for auto eviction (polling MDS sessions)")
+        end_time = time.time() + 300
+        while time.time() < end_time:
+            mds1_after_evict, _, rc = fs_util_v1.get_mds_info(
+                *active_mds_list, info="session ls"
+            )
+            if mds1_before_evict != mds1_after_evict:
+                log.info("Auto eviction Passed")
+                break
+            time.sleep(10)
         else:
-            raise CommandFailed("Auto eviction Failed")
+            mds1_after_evict, _, rc = fs_util_v1.get_mds_info(
+                *active_mds_list, info="session ls"
+            )
+            if mds1_before_evict == mds1_after_evict:
+                raise CommandFailed("Auto eviction Failed")
+            log.info("Auto eviction Passed")
         print("-------------------------------------------------------")
         if client3[0].pkg_type == "deb" and client4[0].pkg_type == "deb":
             for client in client_info["fuse_clients"]:

@@ -2,24 +2,28 @@
 Test: NFS-Ganesha CephX Key Rotation (IBMCEPH-16471)
 
 Verifies ``ceph nfs cluster rotate-key``: keys rotate, export config is
-updated, and a client that stays mounted can still read and write.  No
-manual ``ceph auth rotate``, ``ceph orch redeploy``, ``ceph nfs export
-apply``, or unmount/remount.
+updated, and client IO works after the NFS service redeploy. Full
+rotate-key sets ``service_redeployed=true``, so a client remount is
+required (brief disruption is expected). No manual ``ceph auth rotate``,
+``ceph orch redeploy``, or ``ceph nfs export apply``.
 
 Steps:
     1. If ``ceph nfs cluster --help`` has no rotate-key, skip (pre-CephX).
-    2. Setup NFS cluster and mount (version from suite YAML).
-    3. Write a baseline file on the live mount.
+    2. Default: create ``cephfs-nfs-cephx`` and mount it (tier-1).
+       Upgrade suites set ``setup: false`` and use the existing
+       ``cephfs-nfs`` mount. That path does not create or delete a cluster.
+    3. Write a baseline file on the mount.
     4. Snapshot CephX keys (logged half-masked).
     5. Run ``ceph nfs cluster rotate-key <cluster> --key-type aes256k``.
     6. Assert JSON: rotated non-empty, service_redeployed=true,
        updated_exports includes the export.
     7. Wait for NFS daemons to be running again.
-    8. Same mount (no umount/mount): baseline file readable, new file IO.
+    8. Unmount and remount the same export; verify baseline file and new IO.
     9. Snapshot keys again; log masked before/after; fail if any key is
        unchanged.
     10. Assert Ganesha logs do not contain export-init errors.
-    11. Cleanup (unmount is teardown only).
+    11. Cleanup only the cluster this test created. ``setup: false`` leaves
+        the suite mount in place.
 
 Conf:  conf/tentacle/nfs/1admin-7node-3client.yaml
 Suite: suites/tentacle/nfs/tier1-nfs-ganesha.yaml
@@ -32,8 +36,10 @@ from time import sleep
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
+from cli.utilities.filesys import Unmount
 from tests.nfs.nfs_operations import (
     cleanup_cluster,
+    mount_nfs_export_with_wait,
     setup_nfs_cluster,
     verify_nfs_ganesha_service,
 )
@@ -44,7 +50,9 @@ log = Log(__name__)
 # ── constants ────────────────────────────────────────────────────────────────
 NFS_NAME = "cephfs-nfs-cephx"
 FS_NAME = "cephfs"
-NFS_EXPORT = "/export_0"
+# Unique export prefix so subvol ``export_cephx_0`` does not collide with suite
+# ``cephfs-nfs`` exports ``/export_0`` (shared ganeshagroup). See RCA #3174.
+NFS_EXPORT = "/export_cephx_0"
 NFS_MOUNT = "/mnt/nfs_cephx"
 NFS_VERSION = "4.1"
 NFS_PORT = "2049"
@@ -167,6 +175,23 @@ def _assert_keys_rotated(baseline_keys, after_keys):
     log.info("All overlapping NFS CephX keys changed after rotate-key.")
 
 
+def _assert_existing_nfs_mount(client, mount_point, export):
+    """Fail unless *mount_point* is already an NFS mount of *export*."""
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"findmnt -n -o SOURCE --target {mount_point}",
+        check_ec=False,
+    )
+    source = (out or "").strip().splitlines()
+    source = source[0].strip() if source else ""
+    if client.exit_status != 0 or not source.endswith(f":{export}"):
+        raise OperationFailedError(
+            f"Expected existing NFS mount of {export} at {mount_point}, "
+            f"findmnt returned: {source or '<empty>'}"
+        )
+    log.info("Using existing NFS mount %s at %s", source, mount_point)
+
+
 def _assert_exports_listed(installer, nfs_name, expected):
     """Assert that all expected pseudo-paths are listed by the NFS cluster."""
     all_exports = CephAdm(installer).ceph.nfs.export.ls(nfs_name)
@@ -201,33 +226,56 @@ def _verify_test_file(client, mount_point, filename="cephx_testfile"):
     log.info("Test file verified: %s", out.strip())
 
 
-def _wait_for_live_mount_io(client, mount_point, filename, timeout=180, interval=10):
-    """Retry read on an existing mount after Ganesha redeploy (no remount).
-
-    Full rotate-key sets service_redeployed=true, so the NFS server restarts.
-    The customer path is to keep the mount; poll until IO returns.
-    ``timeout 20`` on the remote command avoids a hard-NFS hang blocking the
-    test for exec_command's default 600s.
-    """
-    path = f"{mount_point}/{filename}"
-    cmd = f"timeout 20 ls -lh {path}"
-    log.info("Waiting for live mount IO on %s (no remount) ...", path)
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        client.exec_command(sudo=True, cmd=cmd, check_ec=False, timeout=30)
-        rc = client.exit_status
-        if rc == 0:
-            log.info("Live mount IO recovered after rotate-key.")
-            return
-        log.info(
-            "Live mount not ready yet (ls %s rc=%s), retrying ...",
-            path,
-            rc,
-        )
-    if w.expired:
+def _mount_source(client, mount_point):
+    """Return findmnt SOURCE for *mount_point* (``host:export``)."""
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"findmnt -n -o SOURCE --target {mount_point}",
+        check_ec=False,
+    )
+    source = (out or "").strip().splitlines()
+    source = source[0].strip() if source else ""
+    if client.exit_status != 0 or ":" not in source:
         raise OperationFailedError(
-            f"Live NFS mount did not recover IO on {path} within {timeout}s "
-            "after rotate-key (no remount)"
+            f"Could not resolve NFS SOURCE for {mount_point}: " f"{source or '<empty>'}"
         )
+    return source
+
+
+def _remount_after_rotate(
+    client,
+    mount_point,
+    export,
+    nfs_version,
+    nfs_port,
+    installer,
+    nfs_name,
+):
+    """Unmount and remount after rotate-key redeploy (expected disruption)."""
+    source = _mount_source(client, mount_point)
+    server = source.rsplit(":", 1)[0]
+    log.info(
+        "Remounting after rotate-key redeploy: umount %s then mount %s:%s",
+        mount_point,
+        server,
+        export,
+    )
+    if Unmount(client).unmount(mount_point):
+        # Stale mounts after redeploy may need a lazy unmount.
+        log.warning("Normal unmount failed on %s; trying umount -l", mount_point)
+        client.exec_command(sudo=True, cmd=f"umount -l {mount_point}", check_ec=False)
+    mount_nfs_export_with_wait(
+        client,
+        server,
+        nfs_port,
+        export,
+        mount_point,
+        nfs_version,
+        installer_node=installer,
+        nfs_name=nfs_name,
+        nfs_wait_timeout=300,
+    )
+    log.info("Remount complete at %s", mount_point)
 
 
 def _list_nfs_daemons(client, nfs_name, nfs_nodes):
@@ -345,9 +393,11 @@ def _run_rotate_key_live_mount(
     nfs_name,
     export,
     mount_point,
+    nfs_version,
+    nfs_port,
 ):
-    """Customer path: rotate-key while the export stays mounted."""
-    log.info("=== ceph nfs cluster rotate-key (live mount) ===")
+    """Rotate-key on a mounted export; remount after service redeploy."""
+    log.info("=== ceph nfs cluster rotate-key (remount after redeploy) ===")
     client = clients[0]
 
     log.info("Step 1: write baseline file on the existing mount")
@@ -374,8 +424,16 @@ def _run_rotate_key_live_mount(
     sleep(10)
     verify_nfs_ganesha_service(installer, timeout=300)
 
-    log.info("Step 6: live-mount IO on the same mount (no remount) ...")
-    _wait_for_live_mount_io(client, mount_point, "pre_rotate_file")
+    log.info("Step 6: remount after rotate-key redeploy, then verify IO ...")
+    _remount_after_rotate(
+        client,
+        mount_point,
+        export,
+        nfs_version,
+        nfs_port,
+        installer,
+        nfs_name,
+    )
     _verify_test_file(client, mount_point, filename="pre_rotate_file")
     _write_test_file(client, mount_point, filename="post_rotate_file")
     _verify_test_file(client, mount_point, filename="post_rotate_file")
@@ -397,8 +455,7 @@ def _run_rotate_key_live_mount(
 
     log.info(
         "TEST PASSED - ceph nfs cluster rotate-key rotated keys (values changed), "
-        "updated exports, Ganesha logs stayed clean, and IO succeeded on the "
-        "existing mount without unmount/remount"
+        "updated exports, Ganesha logs stayed clean, and IO succeeded after remount"
     )
 
 
@@ -413,18 +470,25 @@ def run(ceph_cluster, **kw):
         nfs_version (str): NFS mount version, default "4.1"
         port (str): NFS port, default "2049"
         clients (int): number of client nodes to use, default 1
-        nfs_name (str): NFS cluster name, default "cephfs-nfs-cephx"
+        setup (bool): True (default) creates ``cephfs-nfs-cephx``.
+            False reuses the suite cluster and does not delete it.
+        nfs_name (str): NFS cluster name. Default ``cephfs-nfs-cephx``,
+            or ``cephfs-nfs`` when setup is false.
+        nfs_export (str): Mounted pseudo path when setup is false.
+            Default ``/export_0``.
         fs_name (str): CephFS filesystem name, default "cephfs"
-        nfs_mount (str): client mount point, default "/mnt/nfs_cephx"
+        nfs_mount (str): Client mount point. Default ``/mnt/nfs_cephx``,
+            or ``/mnt/nfs`` when setup is false.
 
     Returns:
         0 on success, 1 on failure, -1 if rotate-key is absent (pre-CephX).
     """
     config = kw.get("config", {})
 
-    nfs_name = config.get("nfs_name", NFS_NAME)
+    reuse_mount = config.get("setup", True) is False
+    nfs_name = config.get("nfs_name", "cephfs-nfs" if reuse_mount else NFS_NAME)
     fs_name = config.get("fs_name", FS_NAME)
-    mount_point = config.get("nfs_mount", NFS_MOUNT)
+    mount_point = config.get("nfs_mount", "/mnt/nfs" if reuse_mount else NFS_MOUNT)
     nfs_version = config.get("nfs_version", NFS_VERSION)
     nfs_port = str(config.get("port", NFS_PORT))
     no_clients = int(config.get("clients", 1))
@@ -448,26 +512,34 @@ def run(ceph_cluster, **kw):
 
     # All NFS hostnames so CephX keys register on every NFS daemon.
     nfs_server_hostnames = [n.hostname for n in nfs_nodes]
-    # setup_nfs_cluster appends _{i} to form the export name, so pass the
-    # base prefix "/export"; the resulting export will be "/export_0"
-    nfs_export_base = "/export"
-    export = NFS_EXPORT
+    # setup_nfs_cluster appends _{i}; unique prefix avoids colliding with suite
+    # ``/export_0`` subvolume in shared ganeshagroup (RCA #3174).
+    nfs_export_base = "/export_cephx"
+    export = config.get("nfs_export", "/export_0" if reuse_mount else NFS_EXPORT)
 
     try:
-        # Framework helper mounts using nfs_version / first NFS host from conf.
-        # skip_mount=False: one mount for the whole test (customer stays mounted).
-        setup_nfs_cluster(
-            clients,
-            nfs_server_hostnames,
-            nfs_port,
-            nfs_version,
-            nfs_name,
-            mount_point,
-            fs_name,
-            nfs_export_base,
-            fs_name,
-            ceph_cluster=ceph_cluster,
-        )
+        if reuse_mount:
+            log.info(
+                "setup=false: rotate-key on existing cluster %s mount %s export %s",
+                nfs_name,
+                mount_point,
+                export,
+            )
+            _assert_existing_nfs_mount(clients[0], mount_point, export)
+        else:
+            # Default path used by tier-1: create cephfs-nfs-cephx and mount it.
+            setup_nfs_cluster(
+                clients,
+                nfs_server_hostnames,
+                nfs_port,
+                nfs_version,
+                nfs_name,
+                mount_point,
+                fs_name,
+                nfs_export_base,
+                fs_name,
+                ceph_cluster=ceph_cluster,
+            )
 
         _run_rotate_key_live_mount(
             installer,
@@ -476,6 +548,8 @@ def run(ceph_cluster, **kw):
             nfs_name,
             export,
             mount_point,
+            nfs_version,
+            nfs_port,
         )
 
         log.info("TEST PASSED - NFS CephX key rotation completed")
@@ -487,6 +561,32 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
-        log.info("Cleaning up NFS cluster %r ...", nfs_name)
-        cleanup_cluster(clients, mount_point, nfs_name, nfs_export_base)
-        log.info("Cleanup done.")
+        if reuse_mount:
+            # Do not unmount or delete cephfs-nfs. Later suite steps still use it.
+            log.info(
+                "Leaving NFS cluster %r and mount %s in place",
+                nfs_name,
+                mount_point,
+            )
+            try:
+                clients[0].exec_command(
+                    sudo=True,
+                    cmd=(
+                        f"rm -f {mount_point}/pre_rotate_file "
+                        f"{mount_point}/post_rotate_file"
+                    ),
+                    check_ec=False,
+                )
+            except Exception as cleanup_exc:
+                log.warning("Could not remove rotate-key probe files: %s", cleanup_exc)
+        else:
+            log.info("Cleaning up NFS cluster %r ...", nfs_name)
+            try:
+                cleanup_cluster(clients, mount_point, nfs_name, nfs_export_base)
+                log.info("Cleanup done.")
+            except Exception as cleanup_exc:
+                log.warning(
+                    "Cleanup of %r raised after test body finished: %s",
+                    nfs_name,
+                    cleanup_exc,
+                )

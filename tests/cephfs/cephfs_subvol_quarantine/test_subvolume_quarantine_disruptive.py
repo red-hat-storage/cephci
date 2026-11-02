@@ -8,11 +8,16 @@ D-01 MDS restart / fail — quarantine retained; rw still blocked; rwq OK
 D-02 FS fail + joinable recover — quarantine retained
 D-03 Active MDS host reboot — quarantine retained
 D-04 MGR then MON orch restart — still blocked; restore after disable
+
+Additional coverage:
+  D-05 park load must not wedge peer SV / CLI (IBMCEPH-20747 / #72365)
+  D-06 concurrent asok quarantine keeps MDS healthy (IBMCEPH-20746 / #72364)
 """
 
 from __future__ import annotations
 
 import json
+import shlex
 import time
 import traceback
 
@@ -438,11 +443,224 @@ def d04_mgr_mon_restart_still_blocked(
         _del_clients(qtn, admin, clients)
 
 
+def d05_park_load_peer_sv_ok(qtn, fs_util, admin, fuse, vol, config, ceph_cluster):
+    """
+    D-05 Unaware kclient park load on quarantined SV must not wedge peer SV / CLI.
+
+    IBMCEPH-20747 / #72365: drop locks before parking so MDS keeps serving.
+    """
+    sub_q = config.get("sub_q", "qtn-d05-q")
+    sub_ok = config.get("sub_ok", "qtn-d05-ok")
+    mount = "/mnt/qtn-d05-kern"
+    hold = int(config.get("d05_hold_secs", 10))
+    parkers = int(config.get("d05_parkers", 4))
+    op_timeout = int(config.get("d05_op_timeout", 30))
+    cli_timeout = int(config.get("d05_cli_timeout", 20))
+    pids = []
+    try:
+        if qtn.setup_subvolume(admin, vol, sub_q) or qtn.setup_subvolume(
+            admin, vol, sub_ok
+        ):
+            return 1
+        _, data_q = qtn.get_subvolume_paths(admin, vol, sub_q)
+        _, data_ok = qtn.get_subvolume_paths(admin, vol, sub_ok)
+
+        mon_ips = ",".join(fs_util.get_mon_node_ips())
+        fuse.exec_command(sudo=True, cmd=f"mkdir -p {mount}", check_ec=False)
+        fs_util.kernel_mount([fuse], mount, mon_ips, extra_params=f",fs={vol}")
+        path_q = f"{mount}{data_q}"
+        path_ok = f"{mount}{data_ok}"
+
+        fuse.exec_command(
+            sudo=True,
+            cmd=(
+                f"bash -c 'echo seed-q > {shlex.quote(path_q)}/seed.txt; "
+                f"echo seed-ok > {shlex.quote(path_ok)}/seed.txt'"
+            ),
+        )
+
+        qtn.quarantine_enable(admin, vol, sub_q)
+        # Background parkers against quarantined path
+        for i in range(parkers):
+            cmd = (
+                f"bash -c 'while true; do "
+                f"echo p-$i-$(date +%s) > {shlex.quote(path_q)}/park_$i.txt 2>/dev/null || true; "
+                f"sleep 0.05; done' >/dev/null 2>&1 & echo $!"
+            )
+            out, _ = fuse.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            try:
+                pids.append(str(out).strip().splitlines()[-1])
+            except Exception:
+                pass
+        log.info("D-05 parkers started: %s; holding %ss", pids, hold)
+        time.sleep(hold)
+
+        # Peer SV I/O must complete
+        out, err = fuse.exec_command(
+            sudo=True,
+            cmd=(
+                f"timeout {op_timeout} bash -c "
+                f"'echo ok-live > {shlex.quote(path_ok)}/live.txt && "
+                f"cat {shlex.quote(path_ok)}/live.txt >/dev/null'"
+            ),
+            check_ec=False,
+        )
+        if fuse.node.exit_status != 0:
+            log.error(
+                "D-05 FAILED: peer SV I/O timed out under park load (%s %s)",
+                out,
+                err,
+            )
+            return 1
+
+        # Control plane
+        out, err = admin.exec_command(
+            sudo=True, cmd=f"timeout {cli_timeout} ceph -s", check_ec=False
+        )
+        if admin.node.exit_status != 0:
+            log.error("D-05 FAILED: ceph -s timed out under park load")
+            return 1
+        out, err = admin.exec_command(
+            sudo=True, cmd=f"timeout {cli_timeout} ceph fs status", check_ec=False
+        )
+        if admin.node.exit_status != 0:
+            log.error("D-05 FAILED: ceph fs status timed out under park load")
+            return 1
+
+        log.info("d05_park_load_peer_sv_ok PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        for pid in pids:
+            fuse.exec_command(sudo=True, cmd=f"kill {pid}", check_ec=False)
+        fuse.exec_command(
+            sudo=True,
+            cmd="pkill -f '/mnt/qtn-d05-kern/.*/park_' || true",
+            check_ec=False,
+        )
+        try:
+            qtn.quarantine_disable(admin, vol, sub_q)
+        except Exception:
+            pass
+        fuse.exec_command(sudo=True, cmd=f"umount {mount}", check_ec=False)
+        fuse.exec_command(sudo=True, cmd=f"umount -l {mount}", check_ec=False)
+        qtn.cleanup_subvolume(admin, vol, sub_q)
+        qtn.cleanup_subvolume(admin, vol, sub_ok)
+
+
+def d06_concurrent_asok_mds_lock(qtn, fs_util, admin, fuse, vol, config, ceph_cluster):
+    """
+    D-06 Concurrent quarantine enable/disable under client I/O keeps MDS healthy.
+
+    IBMCEPH-20746 / #72364: asok command_quarantine_dir must hold mds_lock
+    before request_start_internal (mgr path + tell hammers).
+    """
+    sub_a = config.get("sub_a", "qtn-d06-a")
+    sub_b = config.get("sub_b", "qtn-d06-b")
+    cycles = int(config.get("d06_cycles", 10))
+    client = "qtn-d06-rw"
+    mount = "/mnt/qtn-d06"
+    try:
+        if qtn.setup_subvolume(admin, vol, sub_a) or qtn.setup_subvolume(
+            admin, vol, sub_b
+        ):
+            return 1
+        root_b, data_b = qtn.get_subvolume_paths(admin, vol, sub_b)
+        qtn.create_rw_client(admin, vol, root_b, client)
+        qtn.mount_fuse(fuse, mount, data_b, client, vol)
+        if qtn.write_baseline_file(fuse, mount, "seed.txt", "d06-seed"):
+            return 1
+
+        # Background I/O on B while A is enable/disable cycled via mgr
+        fuse.exec_command(
+            sudo=True,
+            cmd=(
+                f"bash -c 'while true; do echo io-$(date +%s) > "
+                f"{shlex.quote(mount)}/io.txt; sleep 0.05; done' "
+                f">/dev/null 2>&1 & echo $!"
+            ),
+            check_ec=False,
+        )
+
+        for i in range(cycles):
+            r1 = qtn.quarantine_enable(admin, vol, sub_a)
+            r2 = qtn.quarantine_disable(admin, vol, sub_a)
+            log.info("D-06 cycle %s/%s enable=%s disable=%s", i + 1, cycles, r1, r2)
+
+        # Mid/after control plane + peer I/O
+        out, err = admin.exec_command(
+            sudo=True, cmd="timeout 20 ceph -s", check_ec=False
+        )
+        if admin.node.exit_status != 0:
+            log.error("D-06 FAILED: ceph -s timed out after concurrent quarantine")
+            return 1
+        if qtn.assert_write_ok(fuse, mount, "after-cycles.txt"):
+            log.error("D-06 FAILED: peer SV I/O failed after concurrent quarantine")
+            return 1
+
+        # Parallel tell hammers if MDS name resolvable (best-effort)
+        try:
+            active = FsUtils.get_active_mdss(admin, vol) or []
+            mds_name = active[0] if active else None
+        except Exception:
+            mds_name = None
+        if mds_name:
+            path_a = f"/volumes/_nogroup/{sub_a}"
+            admin.exec_command(
+                sudo=True,
+                cmd=(
+                    f"timeout 30 ceph tell mds.{mds_name} quarantine enable "
+                    f"path={path_a}"
+                ),
+                check_ec=False,
+            )
+            admin.exec_command(
+                sudo=True,
+                cmd=(
+                    f"timeout 30 ceph tell mds.{mds_name} quarantine disable "
+                    f"path={path_a}"
+                ),
+                check_ec=False,
+            )
+            out, err = admin.exec_command(
+                sudo=True, cmd="timeout 20 ceph fs status", check_ec=False
+            )
+            if admin.node.exit_status != 0:
+                log.error("D-06 FAILED: fs status timed out after asok tell hammers")
+                return 1
+        else:
+            log.warning(
+                "D-06: could not resolve active MDS for tell hammer; mgr path covered"
+            )
+
+        log.info("d06_concurrent_asok_mds_lock PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        fuse.exec_command(
+            sudo=True, cmd=f"pkill -f '{mount}/io.txt' || true", check_ec=False
+        )
+        _umount(qtn, fuse, [mount])
+        try:
+            qtn.quarantine_disable(admin, vol, sub_a)
+        except Exception:
+            pass
+        qtn.cleanup_subvolume(admin, vol, sub_a)
+        qtn.cleanup_subvolume(admin, vol, sub_b)
+        _del_clients(qtn, admin, [client])
+
+
 SUBTESTS = {
     "d01_mds_restart_retains": d01_mds_restart_retains,
     "d02_fs_fail_recover_retains": d02_fs_fail_recover_retains,
     "d03_mds_host_reboot_retains": d03_mds_host_reboot_retains,
     "d04_mgr_mon_restart_still_blocked": d04_mgr_mon_restart_still_blocked,
+    "d05_park_load_peer_sv_ok": d05_park_load_peer_sv_ok,
+    "d06_concurrent_asok_mds_lock": d06_concurrent_asok_mds_lock,
 }
 
 

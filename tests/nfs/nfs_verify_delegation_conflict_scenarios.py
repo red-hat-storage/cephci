@@ -8,6 +8,7 @@ conflicting NFS operations (SETATTR, REMOVE, RENAME, WRITE).
 import time
 
 from nfs_delegation_operations import (
+    assert_no_delegation_recall_for,
     create_delegation_exports,
     delegation_timing_from_config,
     enable_cluster_delegation_and_debug_logging,
@@ -16,7 +17,6 @@ from nfs_delegation_operations import (
     hold_delegation_open,
     kill_delegation_holds,
     mount_delegation_export,
-    read_ganesha_delegation_tailf_capture,
     restore_delegation_ganesha_templates,
     skip_delegation_tests_unless_supported,
     start_ganesha_delegation_tailf_follow,
@@ -25,7 +25,10 @@ from nfs_delegation_operations import (
     truncate_ganesha_container_log,
     unmount_delegation_export,
     validate_delegation_recall_ganesha_capture,
+    wait_for_delegation_grant,
     wait_for_delegation_path,
+    wait_for_delegation_recall,
+    wait_seed_delegreturn_then_truncate,
     write_delegation_file,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
@@ -67,7 +70,8 @@ def _seed_clients(client_a, client_b, path_a, path_b, scenario, path_wait_retrie
         )
 
 
-def _establish_delegation_hold(client_a, path_a, hold_mode, hold_s, ready_s):
+def _establish_delegation_hold(client_a, path_a, hold_mode, hold_s):
+    """Start background OPEN hold; caller polls for grant in the Ganesha capture."""
     if hold_mode == "read":
         client_a.exec_command(sudo=True, cmd="cat %s" % path_a)
         wait_for_delegation_path(client_a, path_a, "client A pre read-hold")
@@ -78,7 +82,6 @@ def _establish_delegation_hold(client_a, path_a, hold_mode, hold_s, ready_s):
         hold_delegation_open(client_a, path_a, "r+b", hold_s)
     else:
         raise ConfigError("Unknown hold_mode %r" % hold_mode)
-    time.sleep(ready_s)
 
 
 def _run_conflict_io(name, client_b, path_b):
@@ -130,10 +133,14 @@ def run(ceph_cluster, **kw):
     mount_a = config.get("client_a_mount", "/mnt/deleg_conflict_c0")
     mount_b = config.get("client_b_mount", "/mnt/deleg_conflict_c1")
     timing = delegation_timing_from_config(config)
-    hold_s = timing.hold_seconds
+    # hold must outlive grant+recall event waits
+    hold_s = max(
+        timing.hold_seconds,
+        timing.hold_ready_seconds + timing.log_settle_seconds + 30,
+    )
     ready_s = timing.hold_ready_seconds
-    exit_wait = timing.exit_wait_seconds
     settle_s = timing.log_settle_seconds
+    exit_wait = timing.exit_wait_seconds
     path_wait_retries = timing.path_wait_retries
     redeploy_wait = int(config.get("redeploy_wait", 30))
     service_wait = int(config.get("service_wait_timeout", 300))
@@ -198,23 +205,49 @@ def run(ceph_cluster, **kw):
                 expect_recall,
             )
 
-            truncate_ganesha_container_log(nfs_node, container_id)
-            _seed_clients(
-                client_a, client_b, path_a, path_b, scenario, path_wait_retries
+            # Seed under tailf, wait for DELEGRETURN, then truncate for a clean window.
+            wait_seed_delegreturn_then_truncate(
+                nfs_node,
+                container_id,
+                lambda: _seed_clients(
+                    client_a, client_b, path_a, path_b, scenario, path_wait_retries
+                ),
+                timeout_seconds=exit_wait,
+                scenario_name=scenario,
             )
-            log.info("Waiting %s s after seed for delegations to exit", exit_wait)
-            time.sleep(exit_wait)
-
             start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-            _establish_delegation_hold(client_a, path_a, hold_mode, hold_s, ready_s)
-            extra = _run_conflict_io(scenario, client_b, path_b)
-            time.sleep(settle_s)
-            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-            validate_delegation_recall_ganesha_capture(
-                scenario,
-                read_ganesha_delegation_tailf_capture(nfs_node, container_id),
-                expect_recall,
-            )
+            extra = ()
+            hits = []
+            try:
+                _establish_delegation_hold(client_a, path_a, hold_mode, hold_s)
+                wait_for_delegation_grant(
+                    nfs_node,
+                    container_id,
+                    hold_mode=hold_mode,
+                    timeout_seconds=max(ready_s, 20),
+                    scenario_name="%s_grant" % scenario,
+                )
+                extra = _run_conflict_io(scenario, client_b, path_b)
+                if expect_recall:
+                    hits = wait_for_delegation_recall(
+                        nfs_node,
+                        container_id,
+                        timeout_seconds=settle_s,
+                        scenario_name=scenario,
+                    )
+                else:
+                    hits = assert_no_delegation_recall_for(
+                        nfs_node,
+                        container_id,
+                        observation_seconds=settle_s,
+                        scenario_name=scenario,
+                    )
+                validate_delegation_recall_ganesha_capture(
+                    scenario, hits, expect_recall
+                )
+            finally:
+                kill_delegation_holds(client_a)
+                stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
             _cleanup_paths(client_a, client_b, path_a, path_b, extra)
 
         return 0
