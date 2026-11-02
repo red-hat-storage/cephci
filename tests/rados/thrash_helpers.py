@@ -496,7 +496,7 @@ class NfsThrashWorkflows:
         """
         result = {"valid": False, "error": None, "size": 0}
         try:
-            out = self.installer.exec_command(
+            out = self.rados_obj.client.exec_command(
                 sudo=True,
                 cmd=f"rados get -p .nfs -N {cluster_id} "
                 f"conf-nfs.{cluster_id} /dev/stdout 2>/dev/null",
@@ -844,7 +844,7 @@ class SmbThrashWorkflows:
         result = {"valid": [], "corrupted": [], "details": {}}
         for cid in cluster_ids:
             try:
-                out = self.installer.exec_command(
+                out = self.rados_obj.client.exec_command(
                     sudo=True,
                     cmd=f"rados --pool=.smb -N {cid} get cluster.meta.json /dev/stdout",
                     timeout=15,

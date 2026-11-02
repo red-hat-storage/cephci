@@ -2,7 +2,7 @@
 #-------------------------------------
 #---    Test Suite for Nfs Ganesha v3 ---
 #-------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Smoke test cases for
 #    - Bootstrap
 #    - Host management
@@ -249,7 +249,7 @@ tests:
           client03 : perform_lookups
 
   - test:
-      name: Nfs Verify File Operations
+      name: Nfs Verify File Ownership
       module: nfs_verify_file_operations.py
       desc: Change the ownership (user and group) of files within the NFS export
       polarion-id: CEPH-83577601

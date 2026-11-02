@@ -1,7 +1,7 @@
 #===============================================================================================
 #---    Test Suite for NFS Ganesha over RDMA Transport   ---
 #===============================================================================================
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Pre-requisites (run before this suite or chain after a deploy suite):
 #   1. install_prereq.py          — install software pre-requisites

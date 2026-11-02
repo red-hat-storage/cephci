@@ -8,6 +8,8 @@ This module tests the behavior of OSD deployment with various configurations inc
 - OSD deployment using spec file with lvm data,db and wal device
 - OSD deployment using spec file with raw data and db device
 - OSD deployment using spec file with raw data,db and wal device
+- OSD redeployment workflow with lvm data and db device (remove + zap + redeploy)
+- OSD redeployment workflow with lvm data, db and wal device (remove + zap + redeploy)
 - Verification of OSD deployment using bluestore tool (show-label)
 - Verification using ceph-volume lvm list
 - Validation of spec attributes in ceph orch ls output
@@ -45,7 +47,9 @@ def run(ceph_cluster, **kw):
     log.debug(f"Test workflow started. Start time: {start_time}")
     deployment_type = config.get("deployment_type", "spec")
 
-    # Get list of OSD IDs already used by previous test runs
+    pool_name = None
+    target_hostname = None
+    initial_osd_list = []
 
     try:
 
@@ -74,6 +78,15 @@ def run(ceph_cluster, **kw):
             1. Verify cluster is active+clean post OSD deployment
             2. Write IOs post OSD addition (10K objects, 64KB)
             3. Verify new OSDs are part of PGs using ceph pg dump
+
+        Redeployment Steps (scenario7, scenario8):
+            1. Deploy OSD with lvm data/db or data/db/wal devices
+            2. Perform all validation steps (bluestore-tool, orch ls, metadata, lvm list)
+            3. Remove OSD using ceph orch osd rm <id> --zap
+            4. Wait for OSD removal to complete
+            5. Wait for OSD auto-redeployment (service remains managed)
+            6. Perform all validation steps again on redeployed OSD
+            7. Verify device configuration is preserved after redeployment
 
         Cleanup Steps:
             1. Delete the created test pool
@@ -817,6 +830,602 @@ def run(ceph_cluster, **kw):
                 log.error("LVM list validation failed")
                 return 1
 
+        if "scenario7" in config.get("test_scenarios", []):
+
+            log.info(
+                "\n =========================================== \n"
+                "   Scenario 7 : OSD redeployment workflow - lvm data and db device"
+                "\n =========================================== \n"
+            )
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 1: Create PV, VG and LVs for data and db device"
+                "\n ------------------------------------------- \n"
+            )
+
+            data_device_path = device_paths[0]
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario7",
+                vg_prefix="scenario7",
+                db_device=True,
+            )
+            data_lv_path = lv_paths["block"]
+            db_lv_path = lv_paths["db"]
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 2: Deploy OSD with lvm data and db device"
+                "\n ------------------------------------------- \n"
+            )
+            service_id = "osd_scenario_7" if deployment_type == "spec" else "default"
+            new_osds = deploy_osd(
+                rados_obj=rados_obj,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=data_lv_path,
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="lvm",
+                service_id=service_id,
+                db_device_path=db_lv_path,
+                db=True,
+                encrypted=encrypted,
+            )
+
+            test_osd_id = new_osds[0]
+            log.info(f"Selected OSD {test_osd_id} for verification")
+
+            osd_host = rados_obj.fetch_host_node(
+                daemon_type="osd", daemon_id=str(test_osd_id)
+            )
+            log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 3: Pre-removal validation - ceph-bluestore-tool show-label"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_bluestore_label(
+                cbt_obj=cbt_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=False,
+            ):
+                log.error("Pre-removal bluestore label validation failed")
+                return 1
+
+            if deployment_type == "cli":
+                log.info("db devices are not added to OSD spec for CLI method")
+            else:
+                log.info(
+                    "\n ------------------------------------------- \n"
+                    "Step 4: Pre-removal validation - OSD spec in 'ceph orch ls'"
+                    "\n ------------------------------------------- \n"
+                )
+                if not validate_orch_ls_spec(
+                    rados_obj=rados_obj,
+                    service_id=service_id,
+                    method="lvm",
+                    data_devices=True,
+                    db_device=True,
+                    wal_device=False,
+                ):
+                    log.error("Pre-removal orch ls spec validation failed")
+                    return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 5: Pre-removal validation - OSD metadata"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_osd_metadata(
+                rados_obj=rados_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                db_device=True,
+                wal_device=False,
+            ):
+                log.error("Pre-removal OSD metadata validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 6: Pre-removal validation - ceph-volume lvm list"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_lvm_list(
+                cv_obj=cv_obj,
+                osd_host=osd_host,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=False,
+            ):
+                log.error("Pre-removal LVM list validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 7: Capture device details before OSD removal"
+                "\n ------------------------------------------- \n"
+            )
+            pre_removal_details = get_osd_device_details(rados_obj, test_osd_id)
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 8: Remove OSD using ceph orch osd rm --zap"
+                "\n ------------------------------------------- \n"
+            )
+            rm_cmd = f"ceph orch osd rm {test_osd_id} --zap"
+            log.info(f"Executing: {rm_cmd}")
+            rados_obj.client.exec_command(sudo=True, cmd=rm_cmd)
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 9: Wait for OSD removal to complete"
+                "\n ------------------------------------------- \n"
+            )
+            if not wait_for_osd_removal(rados_obj, test_osd_id):
+                raise Exception(f"OSD {test_osd_id} removal timed out")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 9.5: Recreate LVM structures after zap for auto-redeployment"
+                "\n ------------------------------------------- \n"
+            )
+            time.sleep(15)
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario7",
+                vg_prefix="scenario7",
+                db_device=True,
+            )
+            log.info(f"Recreated LVM paths for redeployment: {lv_paths}")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 10: Wait for OSD redeployment"
+                "\n ------------------------------------------- \n"
+            )
+            osd_list_after_removal = rados_obj.get_osd_list(status="up")
+            log.info(f"OSD list after removal: {osd_list_after_removal}")
+
+            log.info("Service is managed - waiting for cephadm to auto-redeploy OSD")
+            redeployed_osds = wait_for_osd_deployment(
+                rados_obj=rados_obj,
+                osd_list_before=osd_list_after_removal,
+            )
+            if redeployed_osds is None:
+                raise Exception("OSD automatic redeployment timed out")
+
+            new_osds = redeployed_osds
+            test_osd_id = redeployed_osds[0]
+            log.info(f"Redeployed OSD {test_osd_id} for post-redeployment verification")
+
+            osd_host = rados_obj.fetch_host_node(
+                daemon_type="osd", daemon_id=str(test_osd_id)
+            )
+            log.info(f"Redeployed OSD {test_osd_id} is on host: {osd_host.hostname}")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 11: Post-redeployment validation - ceph-bluestore-tool show-label"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_bluestore_label(
+                cbt_obj=cbt_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=False,
+            ):
+                log.error("Post-redeployment bluestore label validation failed")
+                return 1
+
+            if deployment_type == "cli":
+                log.info("db devices are not added to OSD spec for CLI method")
+            else:
+                log.info(
+                    "\n ------------------------------------------- \n"
+                    "Step 12: Post-redeployment validation - OSD spec in 'ceph orch ls'"
+                    "\n ------------------------------------------- \n"
+                )
+                if not validate_orch_ls_spec(
+                    rados_obj=rados_obj,
+                    service_id=service_id,
+                    method="lvm",
+                    data_devices=True,
+                    db_device=True,
+                    wal_device=False,
+                ):
+                    log.error("Post-redeployment orch ls spec validation failed")
+                    return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 13: Post-redeployment validation - OSD metadata"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_osd_metadata(
+                rados_obj=rados_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                db_device=True,
+                wal_device=False,
+            ):
+                log.error("Post-redeployment OSD metadata validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 14: Post-redeployment validation - ceph-volume lvm list"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_lvm_list(
+                cv_obj=cv_obj,
+                osd_host=osd_host,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=False,
+            ):
+                log.error("Post-redeployment LVM list validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 15: Verify device configuration preserved after redeployment"
+                "\n ------------------------------------------- \n"
+            )
+            post_redeploy_details = get_osd_device_details(rados_obj, test_osd_id)
+
+            if (
+                pre_removal_details["bluefs_dedicated_db"]
+                != post_redeploy_details["bluefs_dedicated_db"]
+            ):
+                log.error(
+                    f"bluefs_dedicated_db mismatch: "
+                    f"pre={pre_removal_details['bluefs_dedicated_db']}, "
+                    f"post={post_redeploy_details['bluefs_dedicated_db']}"
+                )
+                return 1
+
+            if (
+                pre_removal_details["bluefs_dedicated_wal"]
+                != post_redeploy_details["bluefs_dedicated_wal"]
+            ):
+                log.error(
+                    f"bluefs_dedicated_wal mismatch: "
+                    f"pre={pre_removal_details['bluefs_dedicated_wal']}, "
+                    f"post={post_redeploy_details['bluefs_dedicated_wal']}"
+                )
+                return 1
+
+            if (
+                pre_removal_details["bluefs_single_shared_device"]
+                != post_redeploy_details["bluefs_single_shared_device"]
+            ):
+                log.error(
+                    f"bluefs_single_shared_device mismatch: "
+                    f"pre={pre_removal_details['bluefs_single_shared_device']}, "
+                    f"post={post_redeploy_details['bluefs_single_shared_device']}"
+                )
+                return 1
+
+            log.info("Verified: Device configuration preserved after redeployment")
+
+        if "scenario8" in config.get("test_scenarios", []):
+
+            log.info(
+                "\n =========================================== \n"
+                "   Scenario 8 : OSD redeployment workflow - lvm data, db and wal device"
+                "\n =========================================== \n"
+            )
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 1: Create PV, VG and LVs for data, db and wal device"
+                "\n ------------------------------------------- \n"
+            )
+
+            data_device_path = device_paths[0]
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario8",
+                vg_prefix="scenario8",
+                db_device=True,
+                wal_device=True,
+            )
+
+            service_id = "osd_scenario_8" if deployment_type == "spec" else "default"
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 2: Deploy OSD with lvm data, db and wal device"
+                "\n ------------------------------------------- \n"
+            )
+
+            new_osds = deploy_osd(
+                rados_obj=rados_obj,
+                client_node=client_node,
+                target_hostname=target_hostname,
+                data_device_path=lv_paths["block"],
+                initial_osd_list=initial_osd_list,
+                rhbuild=rhbuild,
+                deployment_type=deployment_type,
+                method="lvm",
+                service_id=service_id,
+                db_device_path=lv_paths["db"],
+                wal_device_path=lv_paths["wal"],
+                db=True,
+                wal=True,
+                encrypted=encrypted,
+            )
+
+            test_osd_id = new_osds[0]
+            log.info(f"Selected OSD {test_osd_id} for verification")
+
+            osd_host = rados_obj.fetch_host_node(
+                daemon_type="osd", daemon_id=str(test_osd_id)
+            )
+            log.info(f"OSD {test_osd_id} is on host: {osd_host.hostname}")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 3: Pre-removal validation - ceph-bluestore-tool show-label"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_bluestore_label(
+                cbt_obj=cbt_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=True,
+            ):
+                log.error("Pre-removal bluestore label validation failed")
+                return 1
+
+            if deployment_type == "cli":
+                log.info(
+                    "db devices and wal devices are not added to OSD spec for CLI method"
+                )
+            else:
+                log.info(
+                    "\n ------------------------------------------- \n"
+                    "Step 4: Pre-removal validation - OSD spec in 'ceph orch ls'"
+                    "\n ------------------------------------------- \n"
+                )
+                if not validate_orch_ls_spec(
+                    rados_obj=rados_obj,
+                    service_id=service_id,
+                    method="lvm",
+                    data_devices=True,
+                    db_device=True,
+                    wal_device=True,
+                ):
+                    log.error("Pre-removal orch ls spec validation failed")
+                    return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 5: Pre-removal validation - OSD metadata"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_osd_metadata(
+                rados_obj=rados_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                db_device=True,
+                wal_device=True,
+            ):
+                log.error("Pre-removal OSD metadata validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 6: Pre-removal validation - ceph-volume lvm list"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_lvm_list(
+                cv_obj=cv_obj,
+                osd_host=osd_host,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=True,
+            ):
+                log.error("Pre-removal LVM list validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 7: Capture device details before OSD removal"
+                "\n ------------------------------------------- \n"
+            )
+            pre_removal_details = get_osd_device_details(rados_obj, test_osd_id)
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 8: Remove OSD using ceph orch osd rm --zap"
+                "\n ------------------------------------------- \n"
+            )
+            rm_cmd = f"ceph orch osd rm {test_osd_id} --zap"
+            log.info(f"Executing: {rm_cmd}")
+            rados_obj.client.exec_command(sudo=True, cmd=rm_cmd)
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 9: Wait for OSD removal to complete"
+                "\n ------------------------------------------- \n"
+            )
+            if not wait_for_osd_removal(rados_obj, test_osd_id):
+                raise Exception(f"OSD {test_osd_id} removal timed out")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 9.5: Recreate LVM structures after zap for auto-redeployment"
+                "\n ------------------------------------------- \n"
+            )
+            time.sleep(15)
+            lv_paths = create_lvm_on_device(
+                host_node=host_node,
+                device_path=data_device_path,
+                lv_prefix="scenario8",
+                vg_prefix="scenario8",
+                db_device=True,
+                wal_device=True,
+            )
+            log.info(f"Recreated LVM paths for redeployment: {lv_paths}")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 10: Wait for OSD redeployment"
+                "\n ------------------------------------------- \n"
+            )
+            osd_list_after_removal = rados_obj.get_osd_list(status="up")
+            log.info(f"OSD list after removal: {osd_list_after_removal}")
+
+            log.info("Service is managed - waiting for cephadm to auto-redeploy OSD")
+            redeployed_osds = wait_for_osd_deployment(
+                rados_obj=rados_obj,
+                osd_list_before=osd_list_after_removal,
+            )
+            if redeployed_osds is None:
+                raise Exception("OSD automatic redeployment timed out")
+
+            new_osds = redeployed_osds
+            test_osd_id = redeployed_osds[0]
+            log.info(f"Redeployed OSD {test_osd_id} for post-redeployment verification")
+
+            osd_host = rados_obj.fetch_host_node(
+                daemon_type="osd", daemon_id=str(test_osd_id)
+            )
+            log.info(f"Redeployed OSD {test_osd_id} is on host: {osd_host.hostname}")
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 11: Post-redeployment validation - ceph-bluestore-tool show-label"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_bluestore_label(
+                cbt_obj=cbt_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=True,
+            ):
+                log.error("Post-redeployment bluestore label validation failed")
+                return 1
+
+            if deployment_type == "cli":
+                log.info(
+                    "db devices and wal devices are not added to OSD spec for CLI method"
+                )
+            else:
+                log.info(
+                    "\n ------------------------------------------- \n"
+                    "Step 12: Post-redeployment validation - OSD spec in 'ceph orch ls'"
+                    "\n ------------------------------------------- \n"
+                )
+                if not validate_orch_ls_spec(
+                    rados_obj=rados_obj,
+                    service_id=service_id,
+                    method="lvm",
+                    data_devices=True,
+                    db_device=True,
+                    wal_device=True,
+                ):
+                    log.error("Post-redeployment orch ls spec validation failed")
+                    return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 13: Post-redeployment validation - OSD metadata"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_osd_metadata(
+                rados_obj=rados_obj,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                db_device=True,
+                wal_device=True,
+            ):
+                log.error("Post-redeployment OSD metadata validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 14: Post-redeployment validation - ceph-volume lvm list"
+                "\n ------------------------------------------- \n"
+            )
+            if not validate_lvm_list(
+                cv_obj=cv_obj,
+                osd_host=osd_host,
+                osd_id=test_osd_id,
+                service_id=service_id,
+                data_devices=True,
+                db_device=True,
+                wal_device=True,
+            ):
+                log.error("Post-redeployment LVM list validation failed")
+                return 1
+
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Step 15: Verify device configuration preserved after redeployment"
+                "\n ------------------------------------------- \n"
+            )
+            post_redeploy_details = get_osd_device_details(rados_obj, test_osd_id)
+
+            if (
+                pre_removal_details["bluefs_dedicated_db"]
+                != post_redeploy_details["bluefs_dedicated_db"]
+            ):
+                log.error(
+                    f"bluefs_dedicated_db mismatch: "
+                    f"pre={pre_removal_details['bluefs_dedicated_db']}, "
+                    f"post={post_redeploy_details['bluefs_dedicated_db']}"
+                )
+                return 1
+
+            if (
+                pre_removal_details["bluefs_dedicated_wal"]
+                != post_redeploy_details["bluefs_dedicated_wal"]
+            ):
+                log.error(
+                    f"bluefs_dedicated_wal mismatch: "
+                    f"pre={pre_removal_details['bluefs_dedicated_wal']}, "
+                    f"post={post_redeploy_details['bluefs_dedicated_wal']}"
+                )
+                return 1
+
+            if (
+                pre_removal_details["bluefs_single_shared_device"]
+                != post_redeploy_details["bluefs_single_shared_device"]
+            ):
+                log.error(
+                    f"bluefs_single_shared_device mismatch: "
+                    f"pre={pre_removal_details['bluefs_single_shared_device']}, "
+                    f"post={post_redeploy_details['bluefs_single_shared_device']}"
+                )
+                return 1
+
+            log.info("Verified: Device configuration preserved after redeployment")
+
         if compressed:
             log.info(
                 "\n =========================================== \n"
@@ -990,64 +1599,80 @@ def run(ceph_cluster, **kw):
             "Cleanup Step 1: Deleting test pool"
             "\n ------------------------------------------- \n"
         )
-        if rados_obj.delete_pool(pool=pool_name):
-            log.info(f"Successfully deleted pool: {pool_name}")
-        else:
-            log.warning(f"Failed to delete pool: {pool_name}")
-
-        # Drain the host to remove OSDs
-        log.info(
-            "\n ------------------------------------------- \n"
-            "Cleanup Step 3: Draining OSD host to remove deployed OSDs"
-            "\n ------------------------------------------- \n"
-        )
-        drain_cmd = f"ceph orch host drain {target_hostname} --force --zap-osd-devices"
-        rados_obj.client.exec_command(sudo=True, cmd=drain_cmd)
-        log.info(f"Initiated drain on host: {target_hostname}")
-
-        # Wait for drain to complete by checking osd rm status
-        import datetime
-
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-        log.info(f"Waiting up to 600s for drain to complete on {target_hostname}")
-        while datetime.datetime.now() < end_time:
-            status_cmd = "ceph orch osd rm status -f json"
-            out, _ = rados_obj.client.exec_command(sudo=True, cmd=status_cmd)
-            try:
-                status = json.loads(out)
-                log.debug(f"OSD removal still in progress: {status}")
-            except json.JSONDecodeError:
-                log.debug("No OSDs in removal queue, drain may be complete")
-                break
-            time.sleep(10)
-        else:
-            log.warning(f"Drain operation timed out for host: {target_hostname}")
-
-        out = rados_obj.run_ceph_command(cmd="ceph osd tree", print_output=True)
-        log.info(out)
-
-        out = rados_obj.run_ceph_command(cmd="ceph orch ps", print_output=True)
-        log.info(out)
-
-        # Before removing drain related labels drain the host
-        rados_obj.remove_empty_service_spec(service_type="osd")
-
-        # Remove the drain related labels which are added to the host during drain
-        log.info(
-            "\n ------------------------------------------- \n"
-            "Cleanup Step 4: Removing drain-related labels from host"
-            "\n ------------------------------------------- \n"
-        )
-        host_labels = rados_obj.get_host_label(host_name=target_hostname)
-        log.info(f"Current labels on {target_hostname}: {host_labels}")
-
-        drain_labels = ["_no_schedule", "_no_conf_keyring"]
-        for label in drain_labels:
-            if label in host_labels:
-                rados_obj.remove_host_label(host_name=target_hostname, label=label)
-                log.info(f"Removed label '{label}' from host: {target_hostname}")
+        if pool_name:
+            if rados_obj.delete_pool(pool=pool_name):
+                log.info(f"Successfully deleted pool: {pool_name}")
             else:
-                log.debug(f"Label '{label}' not present on host: {target_hostname}")
+                log.warning(f"Failed to delete pool: {pool_name}")
+        else:
+            log.debug("Pool was never created, skipping pool deletion")
+
+        if target_hostname:
+            # Drain the host to remove OSDs
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Cleanup Step 3: Draining OSD host to remove deployed OSDs"
+                "\n ------------------------------------------- \n"
+            )
+            drain_cmd = (
+                f"ceph orch host drain {target_hostname} --force --zap-osd-devices"
+            )
+            rados_obj.client.exec_command(sudo=True, cmd=drain_cmd)
+            log.info(f"Initiated drain on host: {target_hostname}")
+
+            # Wait for drain to complete by checking osd rm status
+            import datetime
+
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+            log.info(f"Waiting up to 600s for drain to complete on {target_hostname}")
+            while datetime.datetime.now() < end_time:
+                status_cmd = "ceph orch osd rm status -f json"
+                out, _ = rados_obj.client.exec_command(sudo=True, cmd=status_cmd)
+                try:
+                    status = json.loads(out)
+                    if not status:
+                        log.debug("OSD removal queue is empty, drain complete")
+                        break
+                    log.debug(f"OSD removal still in progress: {status}")
+                except json.JSONDecodeError:
+                    log.debug("No OSDs in removal queue, drain may be complete")
+                    break
+                time.sleep(10)
+            else:
+                log.warning(f"Drain operation timed out for host: {target_hostname}")
+
+            out = rados_obj.run_ceph_command(cmd="ceph osd tree", print_output=True)
+            log.info(out)
+
+            out = rados_obj.run_ceph_command(cmd="ceph orch ps", print_output=True)
+            log.info(out)
+
+            # Before removing drain related labels, remove empty OSD service specs
+            try:
+                rados_obj.remove_empty_service_spec(service_type="osd")
+            except Exception as cleanup_err:
+                log.warning(f"Failed to remove empty service specs: {cleanup_err}")
+
+            # Remove the drain related labels which are added to the host during drain
+            log.info(
+                "\n ------------------------------------------- \n"
+                "Cleanup Step 4: Removing drain-related labels from host"
+                "\n ------------------------------------------- \n"
+            )
+            host_labels = rados_obj.get_host_label(host_name=target_hostname)
+            log.info(f"Current labels on {target_hostname}: {host_labels}")
+
+            drain_labels = ["_no_schedule", "_no_conf_keyring"]
+            for label in drain_labels:
+                if label in host_labels:
+                    rados_obj.remove_host_label(host_name=target_hostname, label=label)
+                    log.info(f"Removed label '{label}' from host: {target_hostname}")
+                else:
+                    log.debug(f"Label '{label}' not present on host: {target_hostname}")
+        else:
+            log.debug(
+                "Target hostname was never set, skipping host drain and label cleanup"
+            )
 
         # Remove compression config if it was enabled
         if compressed:
@@ -1151,8 +1776,24 @@ def create_lvm_on_device(
     db_lv_name = f"{lv_prefix}_db_lv"
     wal_lv_name = f"{lv_prefix}_wal_lv"
 
+    log.info(f"Cleaning up pre-existing LVM structures for VG '{vg_name}'")
+    for cleanup_cmd in [
+        f"lvchange -an {vg_name} 2>/dev/null || true",
+        f"lvremove -f {vg_name} 2>/dev/null || true",
+        f"vgchange -an {vg_name} 2>/dev/null || true",
+        f"vgremove -f {vg_name} 2>/dev/null || true",
+        f"pvremove -ff {device_path} 2>/dev/null || true",
+        f"dmsetup ls | grep '{vg_name}' | awk '{{print $1}}' "
+        f"| xargs -r -I{{}} dmsetup remove -f {{}} 2>/dev/null || true",
+        "udevadm settle 2>/dev/null || true",
+        f"rm -rf /dev/{vg_name}",
+        f"wipefs -a {device_path}",
+        f"dd if=/dev/zero of={device_path} bs=1M count=10 2>/dev/null || true",
+    ]:
+        host_node.exec_command(sudo=True, cmd=cleanup_cmd)
+
     log.info(f"Creating PV on {device_path}")
-    host_node.exec_command(sudo=True, cmd=f"pvcreate -f {device_path}")
+    host_node.exec_command(sudo=True, cmd=f"pvcreate -ff --yes {device_path}")
 
     log.info(f"Creating VG '{vg_name}' on {device_path}")
     host_node.exec_command(sudo=True, cmd=f"vgcreate {vg_name} {device_path}")
@@ -1730,3 +2371,82 @@ def deploy_osd(
         raise Exception("OSD deployment failed or timed out")
 
     return new_osds
+
+
+def wait_for_osd_removal(rados_obj, osd_id, timeout=600, interval=10):
+    """
+    Wait for OSD removal (via ceph orch osd rm --zap) to complete.
+
+    Polls 'ceph orch osd rm status' until the given OSD is no longer
+    in the removal queue or the queue is empty.
+
+    Args:
+        rados_obj: RadosOrchestrator object for executing ceph commands
+        osd_id: The OSD ID being removed
+        timeout: Maximum seconds to wait (default: 600)
+        interval: Seconds between polls (default: 10)
+
+    Returns:
+        bool: True if removal completed, False if timed out
+    """
+    log.info(f"Waiting for OSD {osd_id} removal to complete (timeout={timeout}s)...")
+    end_time = time.time() + timeout
+
+    while time.time() < end_time:
+        status_cmd = "ceph orch osd rm status -f json"
+        out, _ = rados_obj.client.exec_command(sudo=True, cmd=status_cmd)
+
+        if "No OSD remove/replace operations reported" in out:
+            log.info(f"OSD {osd_id} removal completed (no operations reported)")
+            return True
+
+        try:
+            status = json.loads(out)
+            if not status:
+                log.info(f"OSD {osd_id} removal completed (empty status)")
+                return True
+
+            osd_in_queue = any(entry.get("osd_id") == osd_id for entry in status)
+            if not osd_in_queue:
+                log.info(f"OSD {osd_id} no longer in removal queue")
+                return True
+
+            log.debug(f"OSD {osd_id} removal still in progress: {status}")
+        except json.JSONDecodeError:
+            log.info(f"OSD {osd_id} removal completed")
+            return True
+
+        time.sleep(interval)
+
+    log.error(f"OSD {osd_id} removal timed out after {timeout}s")
+    return False
+
+
+def get_osd_device_details(rados_obj, osd_id):
+    """
+    Get device configuration details from OSD metadata for pre/post
+    redeployment comparison.
+
+    Captures bluefs flags that indicate the device layout (dedicated DB,
+    dedicated WAL, single shared device) so the caller can verify the
+    layout is preserved across an OSD remove-and-redeploy cycle.
+
+    Args:
+        rados_obj: RadosOrchestrator object for running ceph commands
+        osd_id: The OSD ID to query
+
+    Returns:
+        dict with keys: bluefs_dedicated_db, bluefs_dedicated_wal,
+        bluefs_single_shared_device, bluestore_bdev_devices
+    """
+    osd_metadata = rados_obj.get_daemon_metadata(
+        daemon_type="osd", daemon_id=str(osd_id)
+    )
+    details = {
+        "bluefs_dedicated_db": osd_metadata.get("bluefs_dedicated_db"),
+        "bluefs_dedicated_wal": osd_metadata.get("bluefs_dedicated_wal"),
+        "bluefs_single_shared_device": osd_metadata.get("bluefs_single_shared_device"),
+        "bluestore_bdev_devices": osd_metadata.get("bluestore_bdev_devices"),
+    }
+    log.info(f"OSD {osd_id} device details: {json.dumps(details, indent=2)}")
+    return details

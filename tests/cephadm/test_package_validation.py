@@ -146,13 +146,17 @@ def run(ceph_cluster, **kwargs):
         if not Package(node).add_repo(base_url):
             raise ReposError(f"Failed to enable {base_url} repo")
 
-    # Get the Tools repo file name
+    # Get the Tools repo file name.
+    # yum-config-manager names the .repo file from the URL (e.g. .../ibm/.../Tools/
+    # → ..._ibm_..._Tools_.repo), so IBM matching must be case-insensitive.
     out = installer.get_dir_list(dir_path=YUM_REPO_DIR)
     build_type = "ibm" if config.get("ibm_build") else "rh"
     if build_type == "rh":
-        _files = [repo for repo in out if "Tools" in repo or "RHCEPH" in repo]
+        _files = [
+            repo for repo in out if "tools" in repo.lower() or "rhceph" in repo.lower()
+        ]
     elif build_type == "ibm":
-        _files = [repo for repo in out if "IBM" in repo]
+        _files = [repo for repo in out if "ibm" in repo.lower()]
     # Raise error if expected repository is not added
     if not _files:
         raise ResourceNotFoundError("Expected repository not added to node")

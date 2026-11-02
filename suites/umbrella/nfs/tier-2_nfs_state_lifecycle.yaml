@@ -1,7 +1,7 @@
 #===============================================================================================
 #---    Test Suite: NFS State Lifecycle Validation Under Fault Injection   ---
 #===============================================================================================
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Purpose:
 #   Validates NFS-Ganesha client state lifecycle — identity management, lease

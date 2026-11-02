@@ -181,26 +181,42 @@ def build_virtualmachine_cr(
     storage_class: str,
     network: str,
     root_disk_size: str,
-    instancetype_name: str,
+    instancetype_name: str = "",
     cloud_data: str = "",
     access_modes: Optional[List[str]] = None,
     cloudinit_secret_name: Optional[str] = None,
     precreated_volume_names: Optional[List[str]] = None,
+    cpu: Optional[int] = None,
+    memory: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Build a simple KubeVirt VirtualMachine CR with embedded DataVolume templates.
 
-    Compute sizing comes exclusively from ``instancetype_name``
-    (``VirtualMachineClusterInstancetype``). Non-root volumes must be pre-created;
-    ``precreated_volume_names`` is required (use an empty list when the VM has no
-    extra disks).
+    Compute sizing comes from either ``instancetype_name``
+    (``VirtualMachineClusterInstancetype``) or explicit ``cpu`` + ``memory``
+    (inline ``domain.cpu`` / ``domain.memory``). These modes are mutually
+    exclusive. Non-root volumes must be pre-created; ``precreated_volume_names``
+    is required (use an empty list when the VM has no extra disks).
 
     Prefer ``cloudinit_secret_name`` (cloudInitNoCloud.secretRef). Inline
     ``userData`` is capped at 2048 bytes by the KubeVirt admission webhook.
     """
-    if not instancetype_name:
+    has_custom = cpu is not None or memory is not None
+    if instancetype_name and has_custom:
         raise NodeError(
-            "instancetype_name is required; set --custom-config ocpvirt_profile=<name>"
+            "instancetype_name is mutually exclusive with cpu/memory; "
+            "use ocpvirt_profile or ocpvirt_cpu+ocpvirt_memory, not both"
+        )
+    if not instancetype_name and not has_custom:
+        raise NodeError(
+            "Either instancetype_name or both cpu and memory are required; "
+            "set --custom-config ocpvirt_profile=<name> or "
+            "ocpvirt_cpu=<cores> and ocpvirt_memory=<quantity>"
+        )
+    if has_custom and (cpu is None or memory is None):
+        raise NodeError(
+            "Both cpu and memory are required for custom OCP Virt sizing; "
+            "set --custom-config ocpvirt_cpu=<cores> and ocpvirt_memory=<quantity>"
         )
     precreated_volume_names = validate_precreated_volume_names(precreated_volume_names)
 
@@ -261,13 +277,12 @@ def build_virtualmachine_cr(
         "features": {"smm": {"enabled": True}},
         "firmware": {"bootloader": {"efi": {}}},
     }
+    if has_custom:
+        domain["cpu"] = {"cores": int(cpu)}
+        domain["memory"] = {"guest": memory}
 
     vm_spec: Dict[str, Any] = {
         "running": True,
-        "instancetype": {
-            "kind": KUBEVIRT_CLUSTER_INSTANCETYPE_KIND,
-            "name": instancetype_name,
-        },
         "dataVolumeTemplates": data_volume_templates,
         "template": {
             "metadata": {
@@ -283,6 +298,11 @@ def build_virtualmachine_cr(
             },
         },
     }
+    if instancetype_name:
+        vm_spec["instancetype"] = {
+            "kind": KUBEVIRT_CLUSTER_INSTANCETYPE_KIND,
+            "name": instancetype_name,
+        }
 
     return {
         "apiVersion": f"{KUBEVIRT_GROUP}/{KUBEVIRT_VERSION}",
@@ -557,18 +577,37 @@ def resolve_ocpvirt_instancetype(custom_api, profile_name: str) -> str:
 
 def apply_ocpvirt_vm_profile(params: dict, ocp_cred: dict, custom_config=None) -> dict:
     """
-    Apply ``--custom-config ocpvirt_profile=<name>`` using cluster instance types.
+    Apply OCP Virt compute sizing from ``--custom-config``.
 
-    Defaults to ``o1.large`` when no profile is given.
+    Prefer explicit ``ocpvirt_cpu`` + ``ocpvirt_memory`` when both are set.
+    Otherwise resolve ``ocpvirt_profile`` against cluster instance types
+    (default ``o1.large``).
     """
-    profile_name = process_ocpvirt_custom_config(custom_config)["ocpvirt_profile"]
+    cfg = process_ocpvirt_custom_config(custom_config)
+    updated = dict(params)
+    cpu = cfg.get("ocpvirt_cpu")
+    memory = cfg.get("ocpvirt_memory")
+    if cpu is not None and memory is not None:
+        updated["cpu"] = cpu
+        updated["memory"] = memory
+        updated.pop("instancetype", None)
+        LOG.info(
+            "Using OCP Virt custom resources: cpu=%s cores, memory=%s",
+            cpu,
+            memory,
+        )
+        return updated
+
+    profile_name = cfg["ocpvirt_profile"]
     custom_api, _ = get_k8s_clients(ocp_cred)
     instancetype_name = resolve_ocpvirt_instancetype(custom_api, profile_name)
-    updated = dict(params)
     updated["instancetype"] = instancetype_name
+    updated.pop("cpu", None)
+    updated.pop("memory", None)
     LOG.info(
-        f"Using OCP Virt cluster instance type {instancetype_name} "
-        f"(VirtualMachineClusterInstancetype)"
+        "Using OCP Virt cluster instance type %s "
+        "(VirtualMachineClusterInstancetype)",
+        instancetype_name,
     )
     return updated
 
@@ -677,15 +716,63 @@ def validate_ocpvirt_node_params(params: dict) -> None:
             raise NodeError(f"{key} is required for OCP Virt node setup")
 
 
+def _ocpvirt_custom_config_get(overrides: dict, *keys):
+    """Return the first non-empty value among *keys* from a custom-config dict."""
+    for key in keys:
+        value = overrides.get(key)
+        if value is not None and value != "":
+            return value
+    return None
+
+
+def _normalize_ocpvirt_cpu(value) -> int:
+    """Validate and return OCP Virt CPU cores as a positive int."""
+    try:
+        cores = int(value)
+    except (TypeError, ValueError) as exc:
+        raise NodeError(
+            f"Invalid ocpvirt_cpu {value!r}; expected a positive integer (vCPU cores)"
+        ) from exc
+    if cores < 1:
+        raise NodeError(
+            f"Invalid ocpvirt_cpu {value!r}; expected a positive integer (vCPU cores)"
+        )
+    return cores
+
+
+def _normalize_ocpvirt_memory(value) -> str:
+    """Validate and return OCP Virt memory as a Kubernetes quantity string."""
+    if value is None or value == "":
+        raise NodeError(
+            "Invalid ocpvirt_memory; expected a Kubernetes quantity "
+            "(e.g. 16Gi) or an integer GiB value"
+        )
+    if isinstance(value, str) and value.endswith(("Gi", "G", "Mi", "M", "Ti", "T")):
+        return value
+    try:
+        return f"{int(value)}Gi"
+    except (TypeError, ValueError) as exc:
+        raise NodeError(
+            f"Invalid ocpvirt_memory {value!r}; expected a Kubernetes quantity "
+            "(e.g. 16Gi) or an integer GiB value"
+        ) from exc
+
+
 def process_ocpvirt_custom_config(custom_config):
     """
-    Parse OCP Virt batch settings from --custom-config.
+    Parse OCP Virt batch and sizing settings from --custom-config.
 
     Supported keys:
         ocpvirt_namespace: Name of conf/ocpvirt/<name>.yaml (required for create/cleanup).
         ocpvirt_profile: VirtualMachineClusterInstancetype name (default o1.large).
+        ocpvirt_cpu / ocpvirt-cpu: vCPU cores for inline domain sizing.
+        ocpvirt_memory / ocpvirt-memory: Memory quantity (e.g. 16Gi) for inline sizing.
         pvc_batch_size (default 3): non-root DataVolumes created per batch.
         vm_batch_size (default 1): VirtualMachines created per batch.
+
+    ``ocpvirt_profile`` is mutually exclusive with ``ocpvirt_cpu`` +
+    ``ocpvirt_memory``. When custom CPU/memory are set, both are required and
+    no default profile is applied.
     """
     from utility.utils import parse_custom_config_list
 
@@ -698,10 +785,41 @@ def process_ocpvirt_custom_config(custom_config):
         vm_batch_size = int(overrides.get("vm_batch_size", 1))
     except (TypeError, ValueError):
         vm_batch_size = 1
+
+    profile = _ocpvirt_custom_config_get(
+        overrides, "ocpvirt_profile", "ocpvirt-profile"
+    )
+    cpu_raw = _ocpvirt_custom_config_get(overrides, "ocpvirt_cpu", "ocpvirt-cpu")
+    memory_raw = _ocpvirt_custom_config_get(
+        overrides, "ocpvirt_memory", "ocpvirt-memory"
+    )
+
+    if (cpu_raw is None) ^ (memory_raw is None):
+        raise NodeError(
+            "ocpvirt_cpu and ocpvirt_memory must both be set for custom sizing "
+            "(e.g. --custom-config ocpvirt_cpu=4 --custom-config ocpvirt_memory=16Gi)"
+        )
+
+    if cpu_raw is not None:
+        if profile:
+            raise NodeError(
+                "ocpvirt_profile is mutually exclusive with ocpvirt_cpu/"
+                "ocpvirt_memory; omit the profile when using custom resources"
+            )
+        return {
+            "pvc_batch_size": max(1, pvc_batch_size),
+            "vm_batch_size": max(1, vm_batch_size),
+            "ocpvirt_profile": None,
+            "ocpvirt_cpu": _normalize_ocpvirt_cpu(cpu_raw),
+            "ocpvirt_memory": _normalize_ocpvirt_memory(memory_raw),
+        }
+
     return {
         "pvc_batch_size": max(1, pvc_batch_size),
         "vm_batch_size": max(1, vm_batch_size),
-        "ocpvirt_profile": overrides.get("ocpvirt_profile") or DEFAULT_OCPVIRT_PROFILE,
+        "ocpvirt_profile": profile or DEFAULT_OCPVIRT_PROFILE,
+        "ocpvirt_cpu": None,
+        "ocpvirt_memory": None,
     }
 
 
@@ -1101,6 +1219,8 @@ class CephVMNodeOCP:
         network: Optional[str] = None,
         precreated_volume_names: Optional[List[str]] = None,
         instancetype: str = "",
+        cpu: Optional[int] = None,
+        memory: Optional[str] = None,
     ) -> None:
         """
         Create a VirtualMachine (and DataVolumes) on OCP Virtualization.
@@ -1118,12 +1238,24 @@ class CephVMNodeOCP:
                 Pass an empty list when the VM has no extra volumes.
             instancetype:
                 ``VirtualMachineClusterInstancetype`` name from
-                ``--custom-config ocpvirt_profile=<name>`` (required).
+                ``--custom-config ocpvirt_profile=<name>``. Mutually exclusive
+                with ``cpu`` / ``memory``.
+            cpu:
+                vCPU cores for inline ``domain.cpu`` (requires ``memory``).
+            memory:
+                Memory quantity for inline ``domain.memory.guest``
+                (e.g. ``16Gi``; requires ``cpu``).
         """
-        if not instancetype:
+        if not instancetype and (cpu is None or memory is None):
             raise NodeError(
-                "instancetype is required for OCP Virt VM create; "
-                "set --custom-config ocpvirt_profile=<name>"
+                "OCP Virt VM create requires either instancetype "
+                "(--custom-config ocpvirt_profile=<name>) or both cpu and memory "
+                "(--custom-config ocpvirt_cpu=<cores> "
+                "--custom-config ocpvirt_memory=<quantity>)"
+            )
+        if instancetype and (cpu is not None or memory is not None):
+            raise NodeError(
+                "instancetype is mutually exclusive with cpu/memory for OCP Virt VM create"
             )
         precreated = validate_precreated_volume_names(precreated_volume_names)
         self._precreated_volumes = precreated
@@ -1154,7 +1286,9 @@ class CephVMNodeOCP:
             access_modes=access_modes,
             cloudinit_secret_name=secret_name,
             precreated_volume_names=precreated,
-            instancetype_name=instancetype,
+            instancetype_name=instancetype or "",
+            cpu=cpu,
+            memory=memory,
         )
         LOG.info(f"Creating VirtualMachine {vm_name} in namespace {self.namespace}")
 

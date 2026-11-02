@@ -2,7 +2,7 @@
 #-------------------------------------
 #---  NFS Ganesha gRPC Tests Suite ---
 #-------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Test cases for NFS Ganesha gRPC service functionality:
 #    - Verify gRPC Service Port Availability (port 50051)
 #    - Verify gRPC Service Discovery

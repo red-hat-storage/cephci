@@ -1,0 +1,4556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ceph Upgrade Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --ibm-blue: #0f62fe;
+  --ibm-dark: #001d6c;
+  --ibm-darker: #000a3d;
+  --ibm-teal: #009d9a;
+  --ibm-green: #198038;
+  --ibm-green-light: #42be65;
+  --ibm-red: #da1e28;
+  --ibm-red-light: #ff8389;
+  --ibm-orange: #ff832b;
+  --ibm-yellow: #f1c21b;
+  --ibm-purple: #8a3ffc;
+  --ibm-light-blue: #e8f0fe;
+  --ibm-gray-10: #f4f4f4;
+  --ibm-gray-20: #e0e0e0;
+  --ibm-gray-30: #c6c6c6;
+  --ibm-gray-50: #8d8d8d;
+  --ibm-gray-70: #525252;
+  --ibm-gray-80: #393939;
+  --ibm-gray-90: #262626;
+  --ibm-gray-100: #161616;
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --sidebar-width: 250px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ibm-gray-90);
+  background: #fff;
+}
+
+/* Header */
+.site-header {
+  background: var(--ibm-dark);
+  color: #fff;
+  padding: 0 2rem;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  height: 48px;
+  display: flex;
+  align-items: center;
+}
+
+.site-header .logo {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.site-header .logo span { font-weight: 300; opacity: 0.8; margin-left: 0.5rem; }
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  top: 48px; left: 0;
+  width: var(--sidebar-width);
+  height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--ibm-gray-10);
+  border-right: 1px solid var(--ibm-gray-20);
+  padding: 1.5rem 0;
+  z-index: 900;
+}
+
+.sidebar nav a {
+  display: block;
+  padding: 0.45rem 1.5rem;
+  color: var(--ibm-gray-70);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.4;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+
+.sidebar nav a:hover {
+  color: var(--ibm-blue);
+  background: rgba(15, 98, 254, 0.05);
+}
+
+.sidebar nav a.active {
+  color: var(--ibm-blue);
+  border-left-color: var(--ibm-blue);
+  font-weight: 500;
+  background: rgba(15, 98, 254, 0.06);
+}
+
+/* Main content */
+.main-content {
+  margin-left: var(--sidebar-width);
+  margin-top: 48px;
+  padding: 2.5rem 3rem 4rem;
+  max-width: calc(960px + 6rem);
+}
+
+section {
+  margin-bottom: 2.5rem;
+  scroll-margin-top: 64px;
+}
+
+h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--ibm-dark);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--ibm-blue);
+}
+
+h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ibm-gray-90);
+  margin: 1.5rem 0 0.75rem;
+}
+
+h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ibm-gray-70);
+  margin: 1rem 0 0.5rem;
+}
+
+/* Metric Cards */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+
+.metric-card {
+  background: var(--ibm-light-blue);
+  border-left: 4px solid var(--ibm-blue);
+  padding: 1rem 1.25rem;
+  border-radius: 4px;
+}
+
+.metric-card.pass { border-left-color: var(--ibm-green); background: #defbe6; }
+.metric-card.fail { border-left-color: var(--ibm-red); background: #fff1f1; }
+.metric-card.warn { border-left-color: var(--ibm-orange); background: #fff8e1; }
+
+.metric-card .metric-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--ibm-dark);
+  margin-bottom: 0.15rem;
+  line-height: 1.2;
+}
+
+.metric-card .metric-label {
+  font-size: 0.75rem;
+  color: var(--ibm-gray-70);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metric-card .metric-detail {
+  font-size: 0.75rem;
+  color: var(--ibm-gray-50);
+  margin-top: 0.2rem;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.badge-pass { background: #defbe6; color: var(--ibm-green); }
+.badge-fail { background: #fff1f1; color: var(--ibm-red); }
+.badge-warn { background: #fff8e1; color: #b28600; }
+.badge-skip { background: var(--ibm-gray-20); color: var(--ibm-gray-70); }
+
+/* Pill badges for daemon order */
+.pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; align-items: center; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--ibm-blue);
+  color: #fff;
+}
+
+.pill .order-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pill-arrow {
+  color: var(--ibm-gray-50);
+  font-size: 16px;
+  font-weight: 300;
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 1rem 0;
+}
+
+.data-table th {
+  background: var(--ibm-dark);
+  color: #fff;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.data-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--ibm-gray-20);
+  vertical-align: top;
+}
+
+.data-table tbody tr:nth-child(even) { background: var(--ibm-gray-10); }
+.data-table tbody tr:hover { background: rgba(15, 98, 254, 0.04); }
+
+.data-table .result-pass { color: var(--ibm-green); font-weight: 600; }
+.data-table .result-fail { color: var(--ibm-red); font-weight: 600; }
+.data-table .result-warn { color: var(--ibm-orange); font-weight: 600; }
+.data-table .result-skip { color: var(--ibm-gray-50); }
+
+/* Chart containers */
+.chart-container {
+  position: relative;
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  background: #fff;
+  border: 1px solid var(--ibm-gray-20);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.chart-container h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ibm-gray-80);
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.chart-container canvas { max-height: 340px; }
+
+/* Evidence toggle */
+.evidence-toggle {
+  font-size: 12px;
+  color: var(--ibm-blue);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.evidence-block {
+  display: none;
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--ibm-gray-10);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.evidence-block.open { display: block; }
+
+/* Config dump */
+.config-dump {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 1.25rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Observations */
+.observation-item {
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--ibm-blue);
+  background: var(--ibm-light-blue);
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+}
+
+.observation-item.warning { border-left-color: var(--ibm-orange); background: #fff8e1; }
+.observation-item.error { border-left-color: var(--ibm-red); background: #fff1f1; }
+
+/* Key findings */
+.key-findings {
+  background: var(--ibm-gray-10);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+}
+
+.key-findings ol { margin-left: 1.25rem; }
+.key-findings li { margin-bottom: 0.6rem; font-size: 13px; }
+
+/* Crash details */
+.crash-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.25rem;
+}
+.crash-summary-card {
+  background: #fff1f1;
+  border: 1px solid rgba(218, 30, 40, 0.25);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+  text-align: center;
+}
+.crash-summary-card .value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ibm-red);
+}
+.crash-summary-card .label {
+  font-size: 0.75rem;
+  color: var(--ibm-gray-70);
+  margin-top: 0.25rem;
+}
+.crash-card {
+  border: 1px solid var(--ibm-gray-20);
+  border-left: 4px solid var(--ibm-red);
+  border-radius: 0 6px 6px 0;
+  margin: 1rem 0;
+  background: #fff;
+}
+.crash-card-header {
+  padding: 0.85rem 1rem;
+  background: #fff1f1;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+.crash-card-header:hover { background: #ffe3e3; }
+.crash-card-body {
+  display: none;
+  padding: 1rem;
+  border-top: 1px solid var(--ibm-gray-20);
+}
+.crash-card.open .crash-card-body { display: block; }
+.crash-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+.crash-meta dt { color: var(--ibm-gray-50); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.crash-meta dd { margin: 0.1rem 0 0; font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; word-break: break-all; }
+.crash-assert {
+  background: #fff8e1;
+  border-left: 3px solid #ff832b;
+  padding: 0.75rem 1rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+}
+.crash-stack {
+  background: var(--ibm-gray-100);
+  color: #f4f4f4;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  max-height: 420px;
+  white-space: pre;
+}
+.crash-stack-note {
+  font-size: 0.75rem;
+  color: var(--ibm-gray-50);
+  margin-top: 0.4rem;
+}
+
+/* Info columns */
+.info-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin: 1.25rem 0;
+}
+
+.info-col h4 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ibm-gray-70);
+  border-bottom: 1px solid var(--ibm-gray-20);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.info-col table { font-size: 12.5px; width: 100%; border-collapse: collapse; }
+.info-col table td { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--ibm-gray-20); }
+.info-col table td:first-child { color: var(--ibm-gray-50); font-weight: 600; white-space: nowrap; width: 40%; }
+.info-col table tr:last-child td { border-bottom: none; }
+
+.info-table { font-size: 12.5px; width: 100%; border-collapse: collapse; }
+.info-table td, .info-table th { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--ibm-gray-20); }
+.info-table td:first-child { color: var(--ibm-gray-50); font-weight: 600; white-space: nowrap; }
+.info-table th { text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ibm-gray-70); background: var(--ibm-gray-10); }
+.info-table tr:last-child td { border-bottom: none; }
+
+/* Collapsible sections */
+.collapsible-section { margin-bottom: 20px; }
+.collapsible-header {
+  cursor: pointer;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  margin: 0;
+  font-size: 1rem;
+  color: #1a237e;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.collapsible-header:hover { background: #e9ecef; }
+.collapse-icon { font-size: 0.8rem; transition: transform 0.2s; }
+.collapsible-header.active .collapse-icon { transform: rotate(90deg); }
+.collapsible-content {
+  padding: 16px;
+  border: 1px solid #dee2e6;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+}
+
+/* Footer */
+.site-footer {
+  margin-left: var(--sidebar-width);
+  padding: 2rem 3rem;
+  border-top: 1px solid var(--ibm-gray-20);
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--ibm-gray-50);
+}
+
+/* Daemon Impact Cards */
+.daemon-impact-card {
+  border: 1px solid var(--ibm-gray-20);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.daemon-impact-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--ibm-gray-10);
+  border-bottom: 1px solid var(--ibm-gray-20);
+}
+
+.daemon-impact-card .card-header .daemon-accent {
+  width: 4px;
+  height: 40px;
+  border-radius: 2px;
+}
+
+.daemon-impact-card .card-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ibm-gray-90);
+}
+
+.daemon-impact-card .card-header .card-meta {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--ibm-gray-50);
+  text-align: right;
+}
+
+.daemon-impact-card .card-body {
+  padding: 1.25rem;
+}
+
+.daemon-impact-card .card-body .card-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.daemon-impact-card .card-body .card-metrics .cm-item {
+  padding: 0.5rem 0.75rem;
+  background: var(--ibm-gray-10);
+  border-radius: 4px;
+}
+
+.daemon-impact-card .card-body .card-metrics .cm-item .cm-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ibm-dark);
+}
+
+.daemon-impact-card .card-body .card-metrics .cm-item .cm-label {
+  font-size: 0.7rem;
+  color: var(--ibm-gray-50);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.daemon-impact-card .card-body .io-description {
+  font-size: 0.85rem;
+  color: var(--ibm-gray-70);
+  font-style: italic;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--ibm-teal);
+  background: rgba(0,157,154,0.04);
+}
+
+.daemon-impact-card .card-body canvas {
+  max-height: 200px;
+}
+
+/* Daemon list within a card */
+.daemon-list-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.75rem;
+}
+
+.daemon-list-compact .daemon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: var(--ibm-gray-10);
+  border: 1px solid var(--ibm-gray-20);
+  color: var(--ibm-gray-70);
+}
+
+.daemon-list-compact .daemon-chip .chip-time {
+  font-size: 10px;
+  color: var(--ibm-gray-50);
+}
+
+/* Print */
+@media print {
+  .site-header { position: static; background: #fff; color: #000; border-bottom: 2px solid #000; }
+  .sidebar { display: none; }
+  .main-content { margin-left: 0; padding: 1rem; max-width: 100%; }
+  .site-footer { margin-left: 0; }
+  .chart-container { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+  table { break-inside: avoid; }
+  section { break-inside: avoid; }
+  h2 { break-after: avoid; }
+  .metrics-grid { break-inside: avoid; }
+  body { font-size: 11pt; }
+  a { color: inherit; text-decoration: none; }
+}
+
+/* Health pill interactivity */
+.health-pill {
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.health-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.health-pill-active {
+  box-shadow: 0 0 0 2px currentColor, 0 2px 8px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
+}
+
+/* Daemon instance pill interactivity */
+.daemon-pill {
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+}
+.daemon-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  border-color: var(--ibm-gray-50);
+}
+.daemon-pill-active {
+  box-shadow: 0 0 0 2px var(--ibm-blue), 0 2px 8px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
+  border-color: var(--ibm-blue);
+}
+
+/* Section descriptions */
+.section-desc {
+  background: #f8f9fa;
+  border-left: 3px solid #dee2e6;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  color: #495057;
+}
+.section-desc p {
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+.section-desc ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.section-desc li {
+  margin-bottom: 4px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .sidebar { display: none; }
+  .main-content { margin-left: 0; padding: 1.5rem; }
+  .site-footer { margin-left: 0; }
+  .metrics-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* Chart Modal */
+.chart-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.chart-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.chart-modal-header {
+  width: 92vw;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 12px;
+}
+.chart-modal-title {
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+.chart-modal-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.8;
+  transition: opacity 0.15s, background 0.15s;
+}
+.chart-modal-close:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.1);
+}
+.chart-modal-body {
+  width: 92vw;
+  height: 85vh;
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  position: relative;
+}
+.chart-modal-body canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.chart-modal-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ibm-gray-50);
+  font-size: 1rem;
+}
+
+/* Chart expand icon */
+.chart-expand-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  font-size: 16px;
+  color: var(--ibm-gray-70);
+  opacity: 0.4;
+  transition: opacity 0.15s, transform 0.15s;
+  border-radius: 4px;
+}
+.chart-expand-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  background: rgba(0,0,0,0.04);
+}
+
+/* Vertical Alternating Timeline */
+.vt-container { position: relative; padding: 20px 0; max-width: 860px; margin: 0 auto; }
+.vt-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; background: var(--ibm-gray-20); transform: translateX(-50%); }
+.vt-item { position: relative; width: 50%; padding: 0 30px 24px; box-sizing: border-box; }
+.vt-item.left { left: 0; text-align: right; }
+.vt-item.right { left: 50%; }
+.vt-item::before { content: ''; position: absolute; top: 12px; width: 14px; height: 14px; border-radius: 50%; border: 3px solid white; z-index: 2; }
+.vt-item.left::before { right: -8px; }
+.vt-item.right::before { left: -8px; }
+.vt-card { background: var(--ibm-gray-10); border-radius: 8px; padding: 14px 18px; border: 1px solid var(--ibm-gray-20); position: relative; }
+.vt-item-redeploy::before { opacity: 0.5; }
+.vt-item-redeploy .vt-card { background: #fef5f5; }
+.vt-card::after { content: ''; position: absolute; top: 10px; width: 12px; height: 12px; background: var(--ibm-gray-10); border: 1px solid var(--ibm-gray-20); transform: rotate(45deg); }
+.vt-item.left .vt-card::after { right: -7px; border-left: none; border-bottom: none; }
+.vt-item.right .vt-card::after { left: -7px; border-right: none; border-top: none; }
+.vt-type { font-weight: 700; font-size: 0.95rem; }
+.vt-time { font-size: 0.75rem; color: var(--ibm-gray-50); font-family: var(--font-mono); margin-top: 2px; }
+.vt-duration { font-size: 0.85rem; font-weight: 600; margin-top: 4px; }
+.vt-events { margin-top: 8px; }
+.vt-milestone { position: relative; width: 100%; text-align: center; padding: 8px 0; z-index: 2; clear: both; }
+.vt-milestone-dot { display: inline-block; width: 20px; height: 20px; border-radius: 50%; border: 3px solid; position: relative; z-index: 2; background: white; }
+.vt-milestone-label { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.7rem; font-family: var(--font-mono); font-weight: 500; background: white; border: 1px solid var(--ibm-gray-20); }
+.vt-phase-header { position: relative; width: 100%; text-align: center; padding: 16px 0 8px; z-index: 2; clear: both; }
+.vt-phase-pill { display: inline-block; padding: 6px 20px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; }
+.vt-cooldown { position: relative; width: 100%; text-align: center; padding: 8px 0; z-index: 2; clear: both; }
+.vt-empty { padding: 2rem; text-align: center; color: var(--ibm-gray-50); font-style: italic; }
+.event-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  margin-top: 6px;
+  margin-right: 4px;
+}
+.event-badge.key-rotation {
+  background: rgba(255, 160, 0, 0.12);
+  border: 1px solid rgba(255, 160, 0, 0.3);
+  color: #b28600;
+}
+.event-badge.osd-flag {
+  background: rgba(218, 30, 40, 0.08);
+  border: 1px solid rgba(218, 30, 40, 0.25);
+  color: var(--ibm-red);
+}
+.event-badge.fs-event {
+  background: rgba(36, 161, 72, 0.08);
+  border: 1px solid rgba(36, 161, 72, 0.25);
+  color: #198038;
+}
+.event-badge.safety-check {
+  background: rgba(0, 67, 206, 0.06);
+  border: 1px solid rgba(0, 67, 206, 0.2);
+  color: var(--ibm-blue);
+}
+.event-badge.lifecycle {
+  background: rgba(138, 63, 252, 0.08);
+  border: 1px solid rgba(138, 63, 252, 0.25);
+  color: var(--ibm-purple);
+}
+.event-badge.image-pull {
+  background: rgba(0, 157, 154, 0.08);
+  border: 1px solid rgba(0, 157, 154, 0.25);
+  color: var(--ibm-teal);
+}
+.vt-cooldown-box {
+  display: inline-block;
+  padding: 8px 20px;
+  border-radius: 8px;
+  background: rgba(138, 63, 252, 0.06);
+  border: 2px dashed rgba(138, 63, 252, 0.3);
+  color: var(--ibm-purple);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">IBM Storage<span>Ceph Upgrade Report</span></div>
+</header>
+
+<aside class="sidebar">
+  <nav>
+    <a href="#executive-summary">Executive Summary</a>
+    <a href="#report-guide">How to Read This Report</a>
+    <a href="#test-environment">Test Environment</a>
+    <a href="#key-findings">Key Findings</a>
+    <a href="#crash-details" id="nav-crash-details" style="display:none;">Crash Details</a>
+    <a href="#upgrade-execution">Upgrade Execution</a>
+    <a href="#daemon-waterfall">Daemon Upgrade Waterfall</a>
+    <a href="#version-convergence">Version Convergence</a>
+    <a href="#health-timeline">Health Timeline</a>
+    <a href="#io-impact">IO Impact</a>
+    <a href="#latency-breakdown">Latency Percentiles</a>
+    <a href="#resource-utilization">Resource Utilization</a>
+    <a href="#pool-iops">Per-Pool IOPS</a>
+    <a href="#io-tools-used">IO Tools Used</a>
+    <a href="#post-upgrade-comparison">Post-Upgrade Comparison</a>
+    <a href="#feature-verification">Feature Verification</a>
+    <a href="#bug-validations">Bug Validations</a>
+    <a href="#data-integrity">Data Integrity</a>
+    <a href="#test-config">Configuration</a>
+    <a href="#data-sources">Data Sources</a>
+  </nav>
+</aside>
+
+<main class="main-content">
+
+  <!-- Executive Summary -->
+  <section id="executive-summary">
+    <h2>Executive Summary</h2>
+    <div id="exec-banner"></div>
+    <div class="metrics-grid" id="exec-cards"></div>
+    <h4 style="margin-top:1.25rem;">Upgrade Sequence</h4>
+    <div class="pill-row" id="daemon-order-pills"></div>
+    <div id="exec-result-badges" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- How to Read This Report -->
+  <section id="report-guide">
+    <h2>How to Read This Report</h2>
+    <details>
+      <summary style="cursor:pointer;font-weight:500;color:var(--ibm-blue,#0f62fe);margin-bottom:1rem;">
+        Expand guide to chart terminology and interpretation
+      </summary>
+      <div class="section-desc" style="font-family:'IBM Plex Sans',sans-serif;line-height:1.7;color:#525252;">
+        <h4 style="margin-top:0.5rem;">Daemon Upgrade Waterfall</h4>
+        <p>A Gantt-style chart showing when each daemon type was upgraded. Each colored band represents one daemon type's total upgrade window. Hover over bands for details.</p>
+
+        <h4>Orch Window vs Redeploy Window</h4>
+        <p><strong>Orch Window</strong> (dashed border): The full orchestrator operation time, from when <code>ceph orch upgrade</code> begins scheduling the daemon type until all instances report the new version. This is the period during which IO impact is expected.</p>
+        <p><strong>Redeploy Window</strong> (solid border): The narrower container redeploy phase within the orch window, when daemon containers are actually stopped and restarted with the new image.</p>
+
+        <h4>Lifecycle Events</h4>
+        <p>Vertical dashed lines within per-daemon IO charts mark key moments:</p>
+        <ul style="margin:0.5rem 0;padding-left:1.5rem;">
+          <li><strong>Upgrade Start</strong> (orange): When the orchestrator begins the upgrade for this daemon type</li>
+          <li><strong>Upgrade Complete</strong> (green): When all instances of this daemon type are running the new version</li>
+          <li><strong>Individual daemon markers</strong> (faint lines): Per-instance redeploy timestamps</li>
+        </ul>
+
+        <h4>IO Impact Analysis</h4>
+        <p><strong>IOPS</strong>: Input/Output Operations Per Second across all pools. <strong>Throughput</strong>: Aggregate cluster MB/s (all pools).</p>
+        <p>Each per-daemon card shows <strong>cluster-wide</strong> all-pool IOPS and throughput during a ±2 minute window around that daemon type's upgrade (not per-daemon IO). Look for dips during the upgrade window and recovery afterward.</p>
+        <p><strong>IOPS Impact %</strong>: Percentage change in average IOPS during a daemon's upgrade window compared to the pre-upgrade baseline. A positive value (shown as "+X% rise") means IOPS increased during that window, typically because the daemon type has minimal IO impact. A negative value (shown as "X% drop") means IOPS decreased during the upgrade -- larger absolute values indicate greater IO impact. Color coding: green = minimal impact (&lt;=10% drop or any rise), amber = moderate impact (10-30% drop), red = significant impact (&gt;30% drop).</p>
+
+        <h4>Version Convergence</h4>
+        <p>Shows how quickly daemons converge to the target version over time. A steep curve indicates fast, parallel upgrades; a staircase pattern shows sequential daemon-type upgrades.</p>
+
+        <h4>Health Timeline</h4>
+        <p>Horizontal bar chart showing all Ceph health warnings observed during the upgrade. Each bar spans from when the warning first appeared to when it was last seen. Color-coded by severity: <span style="color:#da1e28;">blocking</span> (red) = errors that stopped the upgrade, <span style="color:#ff832b;">concerning</span> (orange) = warnings not expected during normal upgrades, <span style="color:#0f62fe;">expected</span> (blue) = transient warnings normal during rolling upgrades. Use the toggle to show/hide expected and informational warnings.</p>
+
+        <h4>Crash Details</h4>
+        <p>Appears only when daemon crashes were detected. Lists affected daemons, assert messages, and backtraces from <code>ceph crash info</code>, plus matching events from daemon log scans when crash dumps were not archived.</p>
+
+        <h4>Feature Verification</h4>
+        <p>Post-upgrade feature checks. <span style="color:#198038;">PASS</span> = feature enabled and verified. <span style="color:#da1e28;">FAIL</span> = feature could not be enabled or verification failed. <span style="color:#8d8d8d;">SKIP</span> = feature not applicable to this configuration or version.</p>
+
+        <h4>IO Tools Used</h4>
+        <p>Matrix showing which IO tools actually ran on each client node during the upgrade, grouped by storage service. The YAML config defines which tools are enabled; this table confirms what was launched at runtime.</p>
+
+        <h4>Per-Daemon Cards</h4>
+        <p>Each daemon type has a dedicated card with version info, duration, count, and an embedded IO chart. Click the card header to expand/collapse the IO chart.</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- Test Environment -->
+  <section id="test-environment">
+    <h2>Test Environment</h2>
+    <div class="info-columns" id="env-body"></div>
+    <div class="collapsible-section" id="cluster-details-section" style="margin-top:1.25rem;display:none;">
+      <h3 class="collapsible-header" onclick="toggleSection(this)">
+        <span class="collapse-icon">&#9654;</span> Cluster Hardware &amp; Daemon Placement
+      </h3>
+      <div class="collapsible-content" style="display:none;">
+        <h4 style="margin-top:0;">Node Hardware</h4>
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>HOST</th>
+              <th>ROLES</th>
+              <th>CPU</th>
+              <th>RAM</th>
+              <th>DISKS</th>
+              <th>NETWORK</th>
+            </tr>
+          </thead>
+          <tbody id="host-hardware-body"></tbody>
+        </table>
+        <h4 style="margin-top:1.25rem;">Daemon Placement</h4>
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>DAEMON TYPE</th>
+              <th>COUNT</th>
+              <th>PLACEMENT</th>
+            </tr>
+          </thead>
+          <tbody id="daemon-placement-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Key Findings / Observations -->
+  <section id="key-findings">
+    <h2>Key Findings</h2>
+    <div id="observations-body">
+      <p style="color:var(--ibm-gray-50);">No observations recorded.</p>
+    </div>
+  </section>
+
+  <!-- Crash Details (shown only when crashes were detected) -->
+  <section id="crash-details" style="display:none;">
+    <h2>Crash Details</h2>
+    <div class="section-desc">
+      <p>Daemon crashes captured during the upgrade window via <code>ceph crash</code> dumps and daemon log scans.</p>
+      <ul>
+        <li><strong>Ceph crash dumps</strong>: structured reports from the crash module (entity, assert, backtrace)</li>
+        <li><strong>Log-scan events</strong>: SIGSEGV/assert/abort patterns found in daemon logs when dumps were missing</li>
+      </ul>
+    </div>
+    <div id="crash-details-body"></div>
+  </section>
+
+  <!-- Upgrade Execution -->
+  <section id="upgrade-execution">
+    <h2>Upgrade Execution</h2>
+    <div id="upgrade-timeline"></div>
+    <div id="daemon-impact-container" style="margin-top:1.5rem;"></div>
+    <div class="chart-container">
+      <h4>Per-Daemon-Type Upgrade Duration</h4>
+      <canvas id="chart-daemon-histogram"></canvas>
+    </div>
+  </section>
+
+  <!-- Daemon Upgrade Waterfall -->
+  <section id="daemon-waterfall">
+    <h2>Daemon Upgrade Waterfall</h2>
+    <div class="section-desc">
+      <p>Timeline of each daemon type's redeployment during the rolling upgrade, parsed from cephadm logs on every cluster node.</p>
+      <ul>
+        <li>Solid bars = image upgrade (orch Setting container_image, or pre-upgrade monitoring manifest apply); bar color = daemon type</li>
+        <li>Amber dots = individual key-rotation events (same image; not a continuous window)</li>
+        <li>Dashed / light bars = redeploy/refresh without an image-upgrade marker for that type</li>
+      </ul>
+    </div>
+    <div class="chart-container">
+      <h4>Per-Service Upgrade Timeline (Gantt)</h4>
+      <canvas id="chart-daemon-gantt"></canvas>
+    </div>
+    <div id="daemon-impact-cards"></div>
+  </section>
+
+  <!-- Version Convergence -->
+  <section id="version-convergence">
+    <h2>Version Convergence</h2>
+    <div class="section-desc">
+      <p>Tracks daemon version distribution across the cluster as the rolling upgrade progresses.</p>
+      <ul>
+        <li>Each daemon type shifts from the old version to the target version as it's upgraded</li>
+        <li>Full convergence means all daemons report the target version</li>
+        <li>Slow convergence may indicate stuck or failed daemon upgrades</li>
+      </ul>
+    </div>
+    <div class="chart-container">
+      <h4>Version Convergence Over Time</h4>
+      <canvas id="chart-version-convergence"></canvas>
+    </div>
+  </section>
+
+  <!-- Health Timeline -->
+  <section id="health-timeline">
+    <h2>Upgrade Health Timeline</h2>
+    <div class="section-desc">
+      <p>Cluster health warnings during the rolling upgrade, classified by severity.</p>
+      <ul>
+        <li><strong>Blocking</strong> (red): Errors that paused or stopped the upgrade</li>
+        <li><strong>Concerning</strong> (orange): Warnings not expected during normal upgrades</li>
+        <li><strong>Expected</strong> (blue): Normal transient warnings during rolling upgrades</li>
+      </ul>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label><input type="checkbox" id="toggle-expected-health" checked> Show expected/informational warnings</label>
+    </div>
+    <div class="chart-container">
+      <h4>Health Warnings Over Time</h4>
+      <canvas id="chart-health-timeline" style="min-height:200px"></canvas>
+    </div>
+  </section>
+
+  <!-- IO Impact -->
+  <section id="io-impact">
+    <h2>IO Impact During Upgrade</h2>
+    <div class="section-desc">
+      <p>Cluster-wide IO metrics queried from Prometheus (10s resolution), with CLI fallback at phase boundaries.</p>
+      <ul>
+        <li>IOPS, latency, and throughput are derived from Prometheus ceph_pool_rd/wr metrics aggregated across all pools</li>
+        <li>Colored bands overlay daemon upgrade windows to correlate IO impact with specific daemon restarts</li>
+        <li>Baseline phases (pre/post upgrade) provide steady-state reference for regression analysis</li>
+      </ul>
+    </div>
+    <div class="chart-container">
+      <h4>IOPS Over Time</h4>
+      <canvas id="chart-iops"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>Latency Over Time</h4>
+      <canvas id="chart-latency"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>Throughput Over Time</h4>
+      <canvas id="chart-throughput"></canvas>
+    </div>
+  </section>
+
+  <!-- Latency Percentiles -->
+  <section id="latency-breakdown">
+    <h2>Latency Percentile Breakdown</h2>
+    <div class="chart-container">
+      <h4>Pre vs Post Latency Percentiles</h4>
+      <canvas id="chart-latency-percentiles"></canvas>
+    </div>
+  </section>
+
+  <!-- Resource Utilization -->
+  <section id="resource-utilization">
+    <h2>Resource Utilization</h2>
+    <div class="chart-container">
+      <h4>OSD Commit Latency Over Time</h4>
+      <canvas id="chart-osd-latency"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>PG State Over Time</h4>
+      <canvas id="chart-pg-state"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>OSD State Over Time</h4>
+      <canvas id="chart-osd-state"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>Cluster Disk Usage Over Time</h4>
+      <canvas id="chart-cluster-usage"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>Individual OSD Utilization Over Time <button id="btn-osd-util-toggle" style="margin-left:12px;padding:3px 12px;font-size:12px;border:1px solid #6c757d;border-radius:4px;background:#f8f9fa;cursor:pointer;" onclick="window._toggleOsdView && window._toggleOsdView()">Show Individual OSDs</button></h4>
+      <canvas id="chart-osd-utilization"></canvas>
+    </div>
+    <div id="mds-status-charts">
+      <div class="section-desc" style="margin-bottom:1rem;">
+        <p>Per-filesystem MDS daemon state counts and active-rank workload from <code>ceph fs status</code>.</p>
+        <ul>
+          <li><strong>MDS Status</strong> — active, standby, and standby-replay daemon counts over time</li>
+          <li><strong>Active MDS Activity</strong> — summed requests/s and metadata counters (DNS, inodes, dirs, caps) across all active ranks for that filesystem</li>
+        </ul>
+      </div>
+      <div class="chart-container">
+        <h4>MDS Status Over Time</h4>
+        <canvas id="chart-mds-status"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Per-Pool IOPS -->
+  <section id="pool-iops">
+    <h2>Per-Pool IOPS Breakdown</h2>
+    <div class="section-desc">
+      <p>IOPS contribution from the busiest pools over time during the upgrade.</p>
+      <ul>
+        <li>Helps identify which storage pools (CephFS data, RBD, RGW buckets) were most affected by daemon restarts</li>
+        <li>Only the top pools by IOPS are shown to keep the chart readable</li>
+        <li>Pool-level data comes from Prometheus per-pool metrics collected during the upgrade window</li>
+      </ul>
+    </div>
+    <div class="chart-container">
+      <h4>Top Pools IOPS Over Time</h4>
+      <canvas id="chart-pool-iops"></canvas>
+    </div>
+  </section>
+
+  <!-- IO Tools Used -->
+  <section id="io-tools-used">
+    <h2>IO Tools Used</h2>
+    <div class="section-desc">
+      <p>Matrix of background IO tools that ran on each client during the upgrade, grouped by storage service.</p>
+    </div>
+    <div id="io-tools-used-container"></div>
+  </section>
+
+  <!-- Post-Upgrade Comparison -->
+  <section id="post-upgrade-comparison">
+    <h2>Post-Upgrade Comparison</h2>
+    <div class="section-desc">
+      <p>Side-by-side visualization of pre-upgrade vs post-upgrade performance under identical IO workloads.</p>
+      <ul>
+        <li>Pre-upgrade baseline is collected during Phase 3 (10-minute steady state before upgrade starts)</li>
+        <li>Post-upgrade baseline is collected during Phase 5 (10-minute steady state after upgrade completes and PGs stabilize)</li>
+        <li>Helps quantify whether the upgrade introduced measurable performance changes</li>
+      </ul>
+    </div>
+    <div class="chart-container">
+      <h4>Pre vs Post: IOPS</h4>
+      <canvas id="chart-pre-post-iops"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>Pre vs Post: Throughput</h4>
+      <canvas id="chart-pre-post-throughput"></canvas>
+    </div>
+    <div class="chart-container">
+      <h4>Pre vs Post: Latency Percentiles</h4>
+      <canvas id="chart-pre-post-latency"></canvas>
+    </div>
+    <div id="regression-result" style="margin-top:1rem;"></div>
+  </section>
+
+  <!-- Feature Verification -->
+  <section id="feature-verification">
+    <h2>Feature Verification</h2>
+    <div class="section-desc">
+      <p>Features enabled before the upgrade and re-verified after completion to detect regressions.</p>
+      <ul>
+        <li>'pass' means the feature persisted through the rolling upgrade without loss of functionality</li>
+        <li>'fail (regression)' means a feature that worked pre-upgrade broke post-upgrade</li>
+        <li>Features span RADOS, CephFS, RBD, RGW, NFS, SMB, and MGR modules</li>
+      </ul>
+    </div>
+    <table class="data-table" id="feature-table">
+      <thead><tr><th>Service</th><th>Feature</th><th>Pre-Upgrade</th><th>Post-Upgrade</th><th>Regression</th><th>Details</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- Bug Validations -->
+  <section id="bug-validations">
+    <h2>Bug Validations</h2>
+    <div class="section-desc">
+      <p>Automated checks for 21 known upgrade regression patterns discovered in previous Ceph releases.</p>
+      <ul>
+        <li>Each validator queries live cluster state and monitoring data collected during the upgrade window</li>
+        <li>Checks include MDS stuck states, daemon crashes, health errors, stale versions, and service failures</li>
+        <li>'Show evidence' links to the raw data used for each check</li>
+      </ul>
+    </div>
+    <table class="data-table" id="bug-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Result</th><th>Evidence</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- Data Integrity -->
+  <section id="data-integrity">
+    <h2>Data Integrity</h2>
+    <div class="section-desc">
+      <p>End-to-end data integrity verification using checksums written before the upgrade and re-verified after.</p>
+      <ul>
+        <li>CRC32c checksums are embedded in files across CephFS (kernel/FUSE), NFS (v3/v4.x), and RBD block devices</li>
+        <li>MD5 hashes are stored as RADOS object xattrs for pool-level integrity checking</li>
+        <li><strong>Mismatch</strong> = checksum disagreement (possible data corruption) — fails the hop</li>
+        <li><strong>Verify warn</strong> = mount skipped / unverifiable (stale, hung, no output) — not corruption; does not fail the hop</li>
+      </ul>
+    </div>
+    <div class="metrics-grid" id="integrity-cards"></div>
+    <table class="data-table" id="integrity-table">
+      <thead><tr><th>Entry</th><th>Type</th><th>Details</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h3 style="margin-top:2rem;">Mount Health</h3>
+    <div class="metrics-grid" id="mount-health-cards"></div>
+    <table class="data-table" id="mount-health-table" style="display:none;">
+      <thead><tr><th>Service</th><th>Mount Point</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h3 style="margin-top:2rem;">NFS Grace Analysis</h3>
+    <div class="metrics-grid" id="nfs-grace-cards"></div>
+    <table class="data-table" id="nfs-grace-table" style="display:none;">
+      <thead><tr><th>Daemon</th><th>Start</th><th>End</th><th>Observed (s)</th><th>Configured (s)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- Test Configuration -->
+  <section id="test-config">
+    <h2>Test Configuration</h2>
+    <pre class="config-dump" id="config-dump"></pre>
+  </section>
+
+  <section id="data-sources">
+    <h2>Data Collection Methodology</h2>
+    <div class="section-desc">
+      <p>Timeseries data in this report is collected from the cluster's built-in Prometheus monitoring stack, with CLI fallback at phase boundaries.</p>
+      <ul>
+        <li><strong>Primary source:</strong> Prometheus HTTP Query API (<code>query_range</code>) -- queried once at report generation time for the entire test window</li>
+        <li><strong>Resolution:</strong> 10-second scrape interval (matching cephadm default Prometheus configuration)</li>
+        <li><strong>Fallback source:</strong> Direct CLI commands (<code>ceph health detail</code>, <code>ceph versions</code>, <code>ceph fs status</code>) captured at phase boundaries for metrics without Prometheus equivalents</li>
+        <li><strong>Daemon lifecycle events:</strong> Parsed from host daemon logs under <code>/var/log/ceph/{fsid}/</code>, merged with cephadm deploy events (<code>deploying</code>, <code>scheduled_upgrade</code>). Cards marked orch-only lacked logfile data.</li>
+      </ul>
+    </div>
+
+    <h3>Prometheus Metrics Reference</h3>
+    <table class="data-table" style="font-size:13px;">
+      <thead>
+        <tr><th>Report Chart</th><th>Prometheus Metric(s)</th><th>Query Pattern</th><th>Source</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>IOPS Over Time</td><td><code>ceph_pool_rd</code>, <code>ceph_pool_wr</code></td><td><code>rate(ceph_pool_rd[30s])</code></td><td>MGR prometheus module</td></tr>
+        <tr><td>Throughput Over Time</td><td><code>ceph_pool_rd_bytes</code>, <code>ceph_pool_wr_bytes</code></td><td><code>rate(ceph_pool_rd_bytes[30s])</code></td><td>MGR prometheus module</td></tr>
+        <tr><td>Per-Pool IOPS</td><td><code>ceph_pool_rd</code>, <code>ceph_pool_wr</code>, <code>ceph_pool_metadata</code></td><td>Per pool_id label + name resolution</td><td>MGR prometheus module</td></tr>
+        <tr><td>Latency Over Time</td><td><code>ceph_osd_commit_latency_ms</code></td><td><code>avg(ceph_osd_commit_latency_ms)</code></td><td>MGR prometheus module</td></tr>
+        <tr><td>OSD Latency (per-OSD)</td><td><code>ceph_osd_commit_latency_ms</code>, <code>ceph_osd_apply_latency_ms</code></td><td>Per <code>ceph_daemon</code> label</td><td>MGR prometheus module</td></tr>
+        <tr><td>PG State</td><td><code>ceph_pg_total</code>, <code>ceph_pg_active</code>, <code>ceph_pg_clean</code>, <code>ceph_pg_degraded</code>, <code>ceph_pg_recovering</code></td><td>Direct gauge queries</td><td>MGR prometheus module</td></tr>
+        <tr><td>OSD State (Up/Down)</td><td><code>ceph_osd_up</code></td><td>Count where value == 1 vs 0</td><td>MGR prometheus module</td></tr>
+        <tr><td>Cluster Usage</td><td><code>ceph_cluster_total_bytes</code>, <code>ceph_cluster_total_used_raw_bytes</code></td><td>Direct gauge queries</td><td>MGR prometheus module</td></tr>
+        <tr><td>MDS Status</td><td><code>ceph fs status</code></td><td>CLI samples (~15s during upgrade via io_stats_snapshot)</td><td>ceph CLI</td></tr>
+        <tr><td>Active MDS Activity</td><td><code>ceph fs status</code> mdsmap rate, dns, inos, dirs, caps</td><td>Summed across active ranks per filesystem</td><td>ceph CLI</td></tr>
+        <tr><td>Version Convergence</td><td colspan="2"><em>CLI fallback:</em> <code>ceph versions -f json</code></td><td>Checkpoint at phase boundaries</td></tr>
+        <tr><td>Health Timeline</td><td colspan="2"><em>CLI fallback:</em> <code>ceph health detail -f json</code></td><td>Checkpoint at phase boundaries</td></tr>
+        <tr><td>Upgrade Status</td><td colspan="2"><em>Recorded from:</em> <code>ceph orch upgrade status</code></td><td>Every 3s during upgrade</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div>IBM Storage Ceph | Upgrade Thrash Report</div>
+  <div id="footer-timestamp"></div>
+</footer>
+
+<script>
+const REPORT_DATA = DATA_PLACEHOLDER;
+
+/* ---- Helpers ---- */
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  var d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function toggleSection(header) {
+  header.classList.toggle('active');
+  var content = header.nextElementSibling;
+  content.style.display = content.style.display === 'none' ? 'block' : 'none';
+}
+
+function resultClass(r) {
+  if (!r) return '';
+  var v = String(r).toLowerCase();
+  if (v === 'pass') return 'result-pass';
+  if (v === 'fail') return 'result-fail';
+  if (v === 'warn') return 'result-warn';
+  return 'result-skip';
+}
+
+function badgeHtml(r) {
+  if (!r) return '';
+  var v = String(r).toLowerCase();
+  var cls = 'badge-skip';
+  if (v === 'pass') cls = 'badge-pass';
+  else if (v === 'fail') cls = 'badge-fail';
+  else if (v === 'warn') cls = 'badge-warn';
+  return '<span class="badge ' + cls + '">' + esc(r) + '</span>';
+}
+
+function fmtNum(v, decimals) {
+  if (v === null || v === undefined) return 'N/A';
+  return Number(v).toFixed(decimals !== undefined ? decimals : 1);
+}
+
+function fmtTime(iso) {
+  if (!iso) return 'N/A';
+  try { return new Date(iso).toLocaleString(); }
+  catch(e) { return iso; }
+}
+
+function shortTime(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleTimeString(); }
+  catch(e) { return iso; }
+}
+
+function fmtDuration(sec) {
+  if (!sec || sec <= 0) return 'N/A';
+  var min = Math.floor(sec / 60);
+  var s = Math.round(sec % 60);
+  if (min > 0) return min + 'm ' + s + 's';
+  return s + 's';
+}
+
+function cleanVersion(ver) {
+  if (!ver) return 'N/A';
+  var s = String(ver);
+  s = s.replace(/^ceph\s+version\s+/i, '');
+  s = s.replace(/\(?[a-f0-9]{7,}\)?/g, '');
+  s = s.replace(/\.el\d+cp/g, '');
+  s = s.replace(/\(\s*stable\b[^)]*\)/gi, '');
+  s = s.replace(/\(\s*development\b[^)]*\)/gi, '');
+  s = s.replace(/\(\s*rc\b[^)]*\)/gi, '');
+  s = s.replace(/\s{2,}/g, ' ').trim();
+  s = s.replace(/\(\s*\)/g, '').trim();
+  return s;
+}
+
+function timeXAxis(labelText) {
+  return {
+    type: 'time',
+    time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm' } },
+    title: { display: true, text: labelText || 'Time' },
+    ticks: { maxTicksLimit: 20 },
+    min: _chartTimeMin,
+    max: _chartTimeMax
+  };
+}
+
+var chartColors = {
+  blue: 'rgba(15,98,254,0.85)',
+  teal: 'rgba(0,157,154,0.85)',
+  green: 'rgba(25,128,56,0.85)',
+  red: 'rgba(218,30,40,0.85)',
+  orange: 'rgba(255,131,43,0.85)',
+  purple: 'rgba(138,63,252,0.85)',
+  gray: 'rgba(82,82,82,0.6)',
+  blueFill: 'rgba(15,98,254,0.12)',
+  tealFill: 'rgba(0,157,154,0.12)',
+  greenFill: 'rgba(25,128,56,0.12)',
+  redFill: 'rgba(218,30,40,0.12)',
+};
+
+var DAEMON_COLORS = {
+  mgr: 'rgba(0,157,154,0.85)', mon: 'rgba(15,98,254,0.85)',
+  crash: 'rgba(82,82,82,0.6)', osd: 'rgba(255,131,43,0.85)',
+  mds: 'rgba(138,63,252,0.85)', rgw: 'rgba(25,128,56,0.85)',
+  'ceph-exporter': 'rgba(200,100,50,0.85)', nfs: 'rgba(218,30,40,0.85)',
+  'node-exporter': 'rgba(100,150,200,0.7)', alertmanager: 'rgba(180,80,180,0.7)',
+  grafana: 'rgba(60,180,80,0.7)', prometheus: 'rgba(200,150,40,0.7)',
+  smb: 'rgba(80,80,200,0.7)', nvmeof: 'rgba(40,140,140,0.7)',
+  'rbd-mirror': 'rgba(120,60,160,0.7)', 'cephfs-mirror': 'rgba(90,120,180,0.7)',
+  iscsi: 'rgba(160,100,60,0.7)', loki: 'rgba(50,160,120,0.7)',
+  promtail: 'rgba(140,140,60,0.7)', alloy: 'rgba(100,80,160,0.7)',
+  'mgmt-gateway': 'rgba(60,120,100,0.7)', 'oauth2-proxy': 'rgba(160,60,100,0.7)'
+};
+
+/* Global hover enhancement: bold + highlight in-place on all charts */
+Chart.defaults.elements.point.hoverRadius = 6;
+Chart.defaults.elements.point.hoverBorderWidth = 3;
+Chart.defaults.elements.line.hoverBorderWidth = 4;
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(22,22,22,0.92)';
+Chart.defaults.plugins.tooltip.titleFont = { weight: '600', size: 13 };
+Chart.defaults.plugins.tooltip.bodyFont = { size: 12 };
+Chart.defaults.plugins.tooltip.cornerRadius = 6;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.usePointStyle = true;
+
+/* ---- Reusable time-series line chart factory ---- */
+function fmtThroughput(mbps) {
+  if (mbps === null || mbps === undefined) return 'N/A';
+  var v = Number(mbps);
+  if (isNaN(v)) return 'N/A';
+  if (v >= 1024) return (v / 1024).toFixed(2) + ' GB/s';
+  return v.toFixed(1) + ' MB/s';
+}
+
+function throughputChartScale(series) {
+  if (!series || !series.length) return { label: 'MB/s', div: 1 };
+  var maxVal = 0;
+  series.forEach(function(d) {
+    ['read_mbps', 'write_mbps', 'total_mbps'].forEach(function(k) {
+      if (d[k] !== undefined && d[k] > maxVal) maxVal = d[k];
+    });
+  });
+  return maxVal >= 1024 ? { label: 'GB/s', div: 1024 } : { label: 'MB/s', div: 1 };
+}
+
+function createTimeChart(canvasId, datasets, yLabel, annotations) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  return new Chart(canvas, {
+    type: 'line',
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 12 } } }, annotation: { annotations: annotations || _cachedPhaseAnnotations } },
+      scales: { x: timeXAxis('Time'), y: { title: { display: true, text: yLabel || '' }, beginAtZero: true } }
+    }
+  });
+}
+
+function tsDataset(label, data, color, opts) {
+  var d = { label: label, data: data, borderColor: color, fill: false, pointRadius: 0, borderWidth: 2, tension: 0.3 };
+  if (opts) { for (var k in opts) d[k] = opts[k]; }
+  return d;
+}
+
+/* ---- Compute chart time window: 20min before upgrade, 15min after ---- */
+var _chartTimeMin = null;
+var _chartTimeMax = null;
+(function computeChartWindow() {
+  try {
+    var phases = REPORT_DATA.phases || {};
+    var p4 = phases.phase_4_upgrade || {};
+    if (p4.start) {
+      try {
+        var startMs = new Date(p4.start).getTime();
+        _chartTimeMin = new Date(startMs - 20 * 60 * 1000).toISOString();
+      } catch(e) {}
+    }
+    if (p4.end) {
+      try {
+        var endMs = new Date(p4.end).getTime();
+        _chartTimeMax = new Date(endMs + 15 * 60 * 1000).toISOString();
+      } catch(e) {}
+    }
+  } catch(e) { console.error('computeChartWindow failed:', e); }
+})();
+
+/* ---- Sidebar scroll-spy ---- */
+(function initSidebar() {
+  try {
+    var links = document.querySelectorAll('.sidebar nav a');
+    var sections = [];
+    links.forEach(function(a) {
+      var id = a.getAttribute('href').replace('#','');
+      var el = document.getElementById(id);
+      if (el) sections.push({link: a, el: el});
+    });
+
+    window.addEventListener('scroll', function() {
+      var scrollY = window.scrollY + 100;
+      var active = null;
+      for (var i = sections.length - 1; i >= 0; i--) {
+        if (sections[i].el.offsetTop <= scrollY) { active = sections[i]; break; }
+      }
+      links.forEach(function(a) { a.classList.remove('active'); });
+      if (active) active.link.classList.add('active');
+    });
+  } catch(e) { console.error('initSidebar failed:', e); }
+})();
+
+/* ---- Executive Summary ---- */
+(function renderExecSummary() {
+  try {
+    var meta = REPORT_DATA.meta || {};
+    var cfg = REPORT_DATA.config || {};
+    var results = REPORT_DATA.results || {};
+    var regression = results.performance_regression || {};
+    var integrity = results.data_integrity || {};
+    var phases = REPORT_DATA.phases || {};
+    var p4 = phases.phase_4_upgrade || {};
+    var ioToolsUsed = results.io_tools_used || {};
+    var ioToolsList = ioToolsUsed.tools_used || [];
+    var features = results.features || [];
+
+    var upgradeDuration = 'N/A';
+    var upgradeSec = 0;
+    if (meta.upgrade_duration_sec) {
+      upgradeSec = meta.upgrade_duration_sec;
+      upgradeDuration = fmtDuration(upgradeSec);
+    } else if (p4.start && p4.end) {
+      try {
+        upgradeSec = (new Date(p4.end) - new Date(p4.start)) / 1000;
+        upgradeDuration = fmtDuration(upgradeSec);
+      } catch(e) {}
+    }
+
+    var totalTestDuration = 'N/A';
+    if (meta.total_test_duration_sec) {
+      totalTestDuration = fmtDuration(meta.total_test_duration_sec);
+    }
+
+    var preVer = cleanVersion(meta.pre_version);
+    var postVer = cleanVersion(meta.post_version);
+    var upgradePath = preVer + ' \u2192 ' + postVer;
+
+    /* Compute feature counts before use in banner */
+    var featureCount = features.length;
+    var featurePassCount = features.filter(function(f) { return String(f.verified).toLowerCase() === 'pass'; }).length;
+    var featureEnabledCount = features.filter(function(f) { var v = String(f.verified).toLowerCase(); return v !== 'skip' && v !== 'n/a' && v !== ''; }).length;
+    var featureEnabledPassCount = featurePassCount;
+    var featureRegs = features.filter(function(f) { return f.regression; }).length;
+
+    /* Gradient banner -- color and title driven by test_outcome */
+    var outcome = REPORT_DATA.test_outcome;
+    var bannerBg, bannerTitle;
+    if (outcome && outcome.result === 'FAIL') {
+      bannerBg = 'linear-gradient(135deg, #750e13 0%, #a2191f 100%)';
+      bannerTitle = 'Test Failed';
+    } else if (outcome && outcome.result === 'ABORT') {
+      bannerBg = 'linear-gradient(135deg, #6e3206 0%, #b28600 100%)';
+      bannerTitle = 'Upgrade Aborted';
+    } else {
+      bannerBg = 'linear-gradient(135deg, var(--ibm-dark) 0%, #002d9c 100%)';
+      bannerTitle = 'Upgrade Thrash Test Result';
+    }
+
+    var bannerHtml = '<div style="background: ' + bannerBg + '; color: #fff; border-radius: 8px; padding: 2rem 2.5rem; margin-bottom: 1.5rem;">';
+    bannerHtml += '<div style="font-size: 1.1rem; font-weight: 300; margin-bottom: 0.4rem; opacity: 0.85;">' + esc(bannerTitle) + '</div>';
+    bannerHtml += '<div style="font-size: 1.4rem; font-weight: 600; line-height: 1.3;">' + esc(upgradePath) + ' upgraded in <span style="color: #78a9ff;">' + upgradeDuration + '</span></div>';
+    var bulletParts = [];
+    if (meta.total_daemons) bulletParts.push(meta.total_daemons + ' daemons across ' + (meta.cluster_nodes || '?') + ' nodes');
+    if (integrity.result === 'pass') bulletParts.push('Zero data loss');
+    else if (integrity.result === 'fail') bulletParts.push('Data integrity issues detected');
+    if (featureRegs === 0 && featureEnabledCount > 0) bulletParts.push(featureEnabledPassCount + '/' + featureEnabledCount + ' enabled features pass');
+    else if (featureRegs === 0) bulletParts.push('No feature regressions');
+    else bulletParts.push(featureRegs + ' feature regression(s)');
+    bannerHtml += '<div style="margin-top: 0.75rem; font-size: 0.9rem; opacity: 0.9; line-height: 1.6;">' + bulletParts.join(' &bull; ') + '</div>';
+
+    if (outcome && outcome.failure_reasons && outcome.failure_reasons.length > 0) {
+      bannerHtml += '<div style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(255,255,255,0.1); border-radius: 4px; font-size: 0.85rem;">';
+      bannerHtml += '<div style="font-weight: 600; margin-bottom: 0.4rem;">Failure Reasons:</div><ul style="margin: 0; padding-left: 1.2rem;">';
+      outcome.failure_reasons.forEach(function(r) { bannerHtml += '<li>' + esc(r) + '</li>'; });
+      bannerHtml += '</ul></div>';
+    }
+    if (outcome && outcome.abort_reason) {
+      bannerHtml += '<div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.9;">Abort reason: ' + esc(outcome.abort_reason) + '</div>';
+    }
+    if (outcome && outcome.crash_detected) {
+      bannerHtml += '<div style="margin-top: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(218,30,40,0.2); border-radius: 4px; font-weight: 600;"><a href="#crash-details" style="color:#fff;text-decoration:underline;">Daemon crash(es) detected — view Crash Details</a></div>';
+    }
+    if (outcome && outcome.emergency_report) {
+      bannerHtml += '<div style="margin-top: 0.5rem; font-size: 0.85rem; font-style: italic; opacity: 0.8;">This is an emergency report -- test did not complete normally.</div>';
+    }
+
+    bannerHtml += '</div>';
+    document.getElementById('exec-banner').innerHTML = bannerHtml;
+
+    /* No-op warning banner */
+    if (meta.noop_warning) {
+      var warnDiv = document.createElement('div');
+      warnDiv.style.cssText = 'background: #fff3cd; border: 1px solid #ffc107; padding: 12px 20px; border-radius: 4px; margin: 16px 0; font-weight: 600;';
+      warnDiv.textContent = 'WARNING: ' + meta.noop_warning;
+      document.getElementById('exec-banner').after(warnDiv);
+    }
+
+    /* Metric cards */
+    var iopsDelta = regression.iops_delta_pct;
+    var perfStr = iopsDelta !== null && iopsDelta !== undefined ? (iopsDelta >= 0 ? '+' : '') + fmtNum(iopsDelta) + '%' : 'N/A';
+    var perfClass = regression.gate === 'warn' ? 'warn' : '';
+
+    var intResult = integrity.result || 'N/A';
+    var intClass = intResult === 'pass' ? 'pass' : intResult === 'fail' ? 'fail' : '';
+
+    var ioToolUniqueNames = {};
+    ioToolsList.forEach(function(e) { if (e.tool) ioToolUniqueNames[e.tool] = true; });
+    var ioToolCount = Object.keys(ioToolUniqueNames).length;
+
+    /* Performance comparison tile data */
+    var perfComp = meta.performance_comparison || {};
+    var perfCompValue = 'N/A';
+    var perfCompDetail = '';
+    var perfCompClass = '';
+    if (perfComp.iops_change_pct !== null && perfComp.iops_change_pct !== undefined) {
+      var pctVal = perfComp.iops_change_pct;
+      perfCompValue = (pctVal >= 0 ? '+' : '') + fmtNum(pctVal) + '% IOPS';
+      perfCompClass = pctVal < -30 ? 'fail' : (pctVal < -10 ? 'warn' : 'pass');
+      var parts = [];
+      if (perfComp.pre_iops) parts.push('Pre: ' + fmtNum(perfComp.pre_iops, 0) + ' IOPS');
+      if (perfComp.post_iops) parts.push('Post: ' + fmtNum(perfComp.post_iops, 0) + ' IOPS');
+      if (typeof perfComp.pre_latency_p95 === 'number' || typeof perfComp.post_latency_p95 === 'number') {
+        parts.push('p95 lat: ' + fmtNum(perfComp.pre_latency_p95, 2) + ' \u2192 ' + fmtNum(perfComp.post_latency_p95, 2) + 'ms');
+      }
+      perfCompDetail = parts.join(' | ');
+    } else if (perfComp.pre_iops || perfComp.post_iops) {
+      perfCompValue = fmtNum(perfComp.post_iops || perfComp.pre_iops, 0) + ' IOPS';
+      perfCompDetail = 'Pre/post comparison incomplete';
+    }
+
+    var cephx = meta.cephx_remediation || {};
+    var cephxValue = cephx.status ? cephx.status.toUpperCase() : 'N/A';
+    var cephxClass = cephx.status === 'success' ? 'pass' : (cephx.status === 'failed' ? 'fail' : (cephx.status === 'skipped' ? 'pass' : ''));
+    var cephxDetail = !cephx.status ? 'Not run'
+      : cephx.status === 'skipped' ? 'No AUTH warnings'
+      : ((cephx.entities_rotated || []).length + ' rotated, ' + (cephx.duration_sec || 0) + 's');
+
+    var cards = [
+      {label: 'Upgrade Path', value: esc(upgradePath), cls: '', detail: (cfg.product || cfg.build_type || '').toUpperCase() + ' ' + (cfg.release || cfg.rhbuild || '') + ' / ' + (cfg.platform || '')},
+      {label: 'Upgrade Duration', value: upgradeDuration, cls: '', detail: 'Actual upgrade time'},
+      {label: 'Total Test Duration', value: totalTestDuration, cls: '', detail: 'End-to-end test time'},
+      {label: 'Cluster', value: (meta.cluster_nodes || 'N/A') + ' nodes / ' + (meta.total_daemons || 'N/A') + ' daemons', cls: '', detail: meta.total_daemons ? meta.total_daemons + ' daemons upgraded across ' + (meta.cluster_nodes || '?') + ' nodes' : ''},
+      {label: 'Data Integrity', value: intResult.toUpperCase(), cls: intClass, detail: (integrity.total_checked || 0) + ' objects checked'},
+      {label: 'IOPS Delta', value: perfStr, cls: perfClass, detail: regression.gate === 'warn' ? 'Regression detected' : 'Within thresholds'},
+      {label: 'Performance Comparison', value: perfCompValue, cls: perfCompClass, detail: perfCompDetail},
+      {label: 'IO Tools Active', value: ioToolCount > 0 ? String(ioToolCount) : 'N/A', cls: '', detail: ioToolCount > 0 ? ioToolsList.length + ' instances across ' + Object.keys(ioToolUniqueNames).join(', ').substring(0, 40) : ''},
+      {label: 'Features Tested', value: featureEnabledCount > 0 ? featureEnabledPassCount + '/' + featureEnabledCount + ' pass' : 'N/A', cls: featureRegs > 0 ? 'fail' : (featureEnabledCount > 0 ? 'pass' : ''), detail: featureEnabledCount > 0 ? featureEnabledCount + ' of ' + featureCount + ' features enabled' : (featureRegs > 0 ? featureRegs + ' regression(s)' : '')},
+      {label: 'Max IO Disruption', value: (function() { var v = meta.max_iops_drop_pct; if (v === undefined || v === null) return 'N/A'; return v >= 0 ? 'None (IOPS rose)' : fmtNum(v) + '%'; })(), cls: (function() { var v = meta.max_iops_drop_pct; if (v === undefined || v === null) return ''; if (v >= 0) return 'pass'; var a = Math.abs(v); return a > 30 ? 'fail' : (a > 10 ? 'warn' : 'pass'); })(), detail: meta.max_io_disruption_sec !== undefined && meta.max_io_disruption_sec !== null ? fmtNum(meta.max_io_disruption_sec) + 's max disruption' : 'No IO data collected'},
+      {label: 'CephX Remediation', value: cephxValue, cls: cephxClass, detail: cephxDetail},
+    ];
+
+    var html = '';
+    cards.forEach(function(c) {
+      html += '<div class="metric-card ' + c.cls + '"><div class="metric-value">' + c.value + '</div><div class="metric-label">' + c.label + '</div>';
+      if (c.detail) html += '<div class="metric-detail">' + esc(c.detail) + '</div>';
+      html += '</div>';
+    });
+    document.getElementById('exec-cards').innerHTML = html;
+
+    /* Daemon order pills */
+    var order = (p4.daemon_order || []);
+    var pillHtml = '';
+    var staggeredPills = (REPORT_DATA.meta || {}).staggered_upgrade;
+    if (staggeredPills && staggeredPills.staggered) {
+      var boundaries = REPORT_DATA.phase_boundaries || [];
+      var phaseEnds = {};
+      boundaries.forEach(function(b) {
+        var m = b.name.match(/^upgrade_phase_(\d+)_end$/);
+        if (m) phaseEnds[m[1]] = new Date(b.timestamp).getTime();
+      });
+      var waterfall = REPORT_DATA.daemon_upgrade_waterfall || [];
+      var phaseGroups = staggeredPills.phases.map(function() { return []; });
+      var daemonStartTimes = {};
+      waterfall.forEach(function(w) {
+        if (w.daemon_type && w.start_time) {
+          daemonStartTimes[w.daemon_type] = new Date(w.start_time).getTime();
+        }
+      });
+      var sortedEnds = Object.keys(phaseEnds).sort().map(function(k) {
+        return { idx: parseInt(k), ts: phaseEnds[k] };
+      });
+      order.forEach(function(d) {
+        var dStart = daemonStartTimes[d] || Infinity;
+        var assigned = false;
+        for (var i = 0; i < sortedEnds.length; i++) {
+          if (dStart <= sortedEnds[i].ts + 60000) {
+            phaseGroups[sortedEnds[i].idx - 1].push(d);
+            assigned = true;
+            break;
+          }
+        }
+        if (!assigned && phaseGroups.length > 0) {
+          phaseGroups[phaseGroups.length - 1].push(d);
+        }
+      });
+      var globalIdx = 1;
+      phaseGroups.forEach(function(group, phaseIdx) {
+        var phaseInfo = staggeredPills.phases[phaseIdx] || {};
+        var phaseLabel = 'Phase 4.' + (phaseIdx + 1) + ': ' + (phaseInfo.daemon_types || 'all remaining');
+        pillHtml += '<div style="margin-bottom:6px;width:100%;">';
+        pillHtml += '<div style="font-size:12px;font-weight:600;color:var(--ibm-gray-70);margin-bottom:4px;">' + esc(phaseLabel) + '</div>';
+        pillHtml += '<div class="pill-row" style="margin:0;">';
+        group.forEach(function(d, i) {
+          if (i > 0) pillHtml += '<span class="pill-arrow">\u2192</span>';
+          pillHtml += '<span class="pill"><span class="order-num">' + globalIdx + '</span>' + esc(d) + '</span>';
+          globalIdx++;
+        });
+        pillHtml += '</div>';
+        if (phaseInfo.cooldown_sec) {
+          pillHtml += '<div style="margin:4px 0 0 0;"><span style="display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:500;background:rgba(120,80,200,0.10);color:var(--ibm-purple);border:1px solid rgba(120,80,200,0.20);">Cooldown (' + phaseInfo.cooldown_sec + 's)</span></div>';
+        }
+        pillHtml += '</div>';
+      });
+    } else {
+      order.forEach(function(d, i) {
+        if (i > 0) pillHtml += '<span class="pill-arrow">\u2192</span>';
+        pillHtml += '<span class="pill"><span class="order-num">' + (i+1) + '</span>' + esc(d) + '</span>';
+      });
+    }
+    var pillContainer = document.getElementById('daemon-order-pills');
+    pillContainer.innerHTML = pillHtml || '<span style="color:var(--ibm-gray-50)">No daemon order data</span>';
+    if (staggeredPills && staggeredPills.staggered) {
+      pillContainer.style.display = 'block';
+    }
+
+    /* Result badges */
+    var resultHtml = '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">';
+    resultHtml += '<div>Integrity: ' + badgeHtml(intResult) + '</div>';
+    resultHtml += '<div>Performance: ' + badgeHtml(regression.gate || 'N/A') + '</div>';
+    var featureBadge = featureRegs > 0 ? 'fail' : (featureCount > 0 ? 'pass' : 'skip');
+    resultHtml += '<div>Features: ' + badgeHtml(featureBadge) + '</div>';
+    var bugList = results.bug_validations || [];
+    var bugFails = bugList.filter(function(b) { return String(b.result).toLowerCase() === 'fail'; }).length;
+    var bugWarns = bugList.filter(function(b) { return String(b.result).toLowerCase() === 'warn'; }).length;
+    var bugBadge = bugFails > 0 ? 'fail' : (bugWarns > 0 ? 'warn' : 'pass');
+    resultHtml += '<div>Bug Validations: ' + badgeHtml(bugBadge) + '</div>';
+    resultHtml += '</div>';
+    document.getElementById('exec-result-badges').innerHTML = resultHtml;
+
+    /* Page title and footer */
+    document.title = 'Ceph Upgrade Report - ' + preVer + ' \u2192 ' + postVer;
+    document.getElementById('footer-timestamp').textContent = 'Generated: ' + fmtTime(meta.timestamp);
+  } catch(e) { console.error('renderExecSummary failed:', e); }
+})();
+
+/* ---- Test Environment ---- */
+(function renderEnvironment() {
+  try {
+    var meta = REPORT_DATA.meta || {};
+    var config = REPORT_DATA.config || {};
+    var pt = config.phase_timing || {};
+    var services = config.services || {};
+
+    var clusterRows = [
+      ['Nodes', meta.cluster_nodes || 'N/A'],
+      ['Daemons', meta.total_daemons || 'N/A'],
+      ['Pre Version', cleanVersion(meta.pre_version)],
+      ['Post Version', cleanVersion(meta.post_version)],
+    ];
+    if (config.container_image) clusterRows.push(['Target Image', config.container_image]);
+
+    // Scale / resource summary — grouped layout
+    var sc = meta.scale || {};
+
+    var scaleGroups = [];
+    var currentGroup = null;
+
+    function scaleGroup(title) {
+      currentGroup = {title: title, rows: []};
+      scaleGroups.push(currentGroup);
+    }
+    function scaleRow(label, value) {
+      if (value === undefined || value === null || value === '' || value === 0 || value === false) return;
+      if (currentGroup) currentGroup.rows.push([label, value]);
+    }
+
+    scaleGroup('Cluster');
+    if (meta.cluster_nodes) scaleRow('Total Nodes', meta.cluster_nodes);
+    if (sc.client_count) scaleRow('Client Nodes', sc.client_count);
+    if (sc.services_enabled && sc.services_enabled.length) scaleRow('Services Enabled', sc.services_enabled.join(', '));
+
+    if (sc.cephfs_filesystems) {
+      scaleGroup('CephFS');
+      scaleRow('Filesystems', sc.cephfs_filesystems + (sc.cephfs_active_mds ? ' (active MDS: ' + sc.cephfs_active_mds + ')' : ''));
+      scaleRow('Subvolume Groups', sc.cephfs_subvolume_groups);
+      scaleRow('Subvolumes', sc.cephfs_subvolumes);
+      scaleRow('Kernel Mounts', sc.cephfs_kernel_mounts);
+      scaleRow('FUSE Mounts', sc.cephfs_fuse_mounts);
+      scaleRow('Total Mounts', sc.cephfs_total_mounts);
+      if (sc.cephfs_pin_policy) scaleRow('Pin Policy', sc.cephfs_pin_policy);
+    }
+
+    if (sc.rbd_images) {
+      scaleGroup('RBD');
+      scaleRow('Images Created', sc.rbd_images + (sc.rbd_image_size ? ' &times; ' + sc.rbd_image_size : ''));
+      scaleRow('Devices Mapped', sc.rbd_mapped_devices ? sc.rbd_mapped_devices + ' (on client.1)' : '');
+    }
+
+    if (sc.rgw_total_buckets) {
+      scaleGroup('RGW');
+      scaleRow('Buckets', sc.rgw_total_buckets + ' (' + (sc.rgw_versioned_buckets || 0) + ' versioned, ' + (sc.rgw_non_versioned_buckets || 0) + ' standard)');
+    }
+
+    if (sc.nfs_clusters) {
+      scaleGroup('NFS');
+      scaleRow('Clusters', sc.nfs_clusters + (sc.nfs_total_daemons ? ' (' + sc.nfs_total_daemons + ' daemons)' : ''));
+      if (sc.nfs_version_list && sc.nfs_version_list.length) scaleRow('Versions', sc.nfs_version_list.map(function(v){return 'v'+v;}).join(', '));
+      scaleRow('Exports', sc.nfs_exports);
+      scaleRow('Mounts / Client', sc.nfs_mounts_per_client);
+      scaleRow('Total Mounts', sc.nfs_total_mounts);
+    }
+
+    if (sc.smb_shares) {
+      scaleGroup('SMB');
+      var smbLabel = sc.smb_shares.toString();
+      var svcList = sc.services_enabled || [];
+      if (svcList.indexOf('smb') < 0) smbLabel += ' (service disabled)';
+      scaleRow('Shares', smbLabel);
+      if (sc.smb_mounts_per_client) scaleRow('Mounts / Client', sc.smb_mounts_per_client);
+    }
+
+    if (sc.io_tools_by_service && Object.keys(sc.io_tools_by_service).length) {
+      scaleGroup('IO Tools');
+      var svcOrder = ['cephfs', 'nfs', 'rbd', 'rados', 'rgw', 'smb', 'nvmeof'];
+      svcOrder.forEach(function(svc) {
+        var tools = sc.io_tools_by_service[svc];
+        if (tools && tools.length) {
+          scaleRow(svc.toUpperCase(), tools.join(', '));
+        }
+      });
+    }
+
+    var mdsStrat = meta.mds_upgrade_strategy || {};
+    if (mdsStrat.strategy) {
+      scaleGroup('MDS Upgrade');
+      scaleRow('Strategy', mdsStrat.strategy);
+      if (mdsStrat.mds_cache_memory_limit) scaleRow('Cache Memory Limit', mdsStrat.mds_cache_memory_limit);
+    }
+
+    var staggeredMeta = meta.staggered_upgrade;
+    if (staggeredMeta && staggeredMeta.staggered) {
+      scaleGroup('Staggered Upgrade');
+      scaleRow('Upgrade Mode', 'Staggered (' + staggeredMeta.num_phases + ' phases)');
+      staggeredMeta.phases.forEach(function(p) {
+        var label = 'Phase ' + p.phase;
+        var detail = p.daemon_types;
+        if (p.cooldown_sec) detail += ' + ' + p.cooldown_sec + 's cooldown';
+        scaleRow(label, detail);
+      });
+    }
+
+    var scaleTable = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;">';
+    scaleGroups.forEach(function(g) {
+      if (!g.rows.length) return;
+      scaleTable += '<div>';
+      scaleTable += '<div style="font-weight:700;font-size:0.85rem;letter-spacing:0.02em;color:var(--ibm-gray-70);padding-bottom:0.4rem;border-bottom:1px solid var(--ibm-gray-30);margin-bottom:0.4rem;">' + g.title + '</div>';
+      scaleTable += '<table class="info-table">';
+      g.rows.forEach(function(r) {
+        scaleTable += '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>';
+      });
+      scaleTable += '</table></div>';
+    });
+    scaleTable += '</div>';
+
+    var activeServices = Object.keys(services).filter(function(k) { return services[k]; });
+    var configRows = [
+      ['Active Services', activeServices.join(', ') || 'N/A'],
+      ['Skip Setup', config.skip_service_setup ? 'Yes (multi-hop)' : 'No'],
+      ['Skip Client Cleanup', config.skip_client_cleanup ? 'Yes' : 'No'],
+      ['Skip Cluster Cleanup', config.skip_cluster_cleanup ? 'Yes' : 'No'],
+    ];
+
+    function buildTable(rows) {
+      var h = '<table>';
+      rows.forEach(function(r) { h += '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>'; });
+      h += '</table>';
+      return h;
+    }
+
+    var html = '';
+    html += '<div class="info-col"><h4>Cluster</h4>' + buildTable(clusterRows) + '</div>';
+    html += '<div class="info-col"><h4>Configuration</h4>' + buildTable(configRows) + '</div>';
+
+    var envBody = document.getElementById('env-body');
+    envBody.innerHTML = html;
+
+    if (scaleGroups.length > 0) {
+      var scaleSection = document.createElement('div');
+      scaleSection.style.cssText = 'margin-top: 1.5rem; background: var(--ibm-gray-10); border-radius: 8px; padding: 1.25rem 1.5rem;';
+      scaleSection.innerHTML = '<h4 style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ibm-gray-70);border-bottom:1px solid var(--ibm-gray-20);padding-bottom:0.4rem;margin-bottom:0.75rem;">Scale / Resources</h4>' + scaleTable;
+      envBody.parentNode.insertBefore(scaleSection, envBody.nextSibling);
+    }
+
+    // Cluster Details (collapsible)
+    var cd = REPORT_DATA.cluster_details;
+    if (cd && cd.hosts && cd.hosts.length) {
+      document.getElementById('cluster-details-section').style.display = '';
+      var hostBody = document.getElementById('host-hardware-body');
+      cd.hosts.forEach(function(h) {
+        var row = document.createElement('tr');
+        row.innerHTML =
+          '<td><strong>' + esc(h.short_name || h.hostname || 'N/A') + '</strong></td>' +
+          '<td>' + esc((h.roles || []).join(', ') || 'N/A') + '</td>' +
+          '<td>' + esc((h.cpu_count || 'N/A') + ' vCPU') + '</td>' +
+          '<td>' + esc(h.ram_total || 'N/A') + '</td>' +
+          '<td>' + esc(h.disk_summary || 'N/A') + '</td>' +
+          '<td><code>' + (h.network || 'N/A').split('; ').map(function(s){return esc(s);}).join('<br>') + '</code></td>';
+        hostBody.appendChild(row);
+      });
+    }
+    if (cd && cd.daemon_placement && cd.daemon_placement.length) {
+      document.getElementById('cluster-details-section').style.display = '';
+      var dpBody = document.getElementById('daemon-placement-body');
+      cd.daemon_placement.forEach(function(d) {
+        var row = document.createElement('tr');
+        row.innerHTML =
+          '<td><strong>' + esc(d.daemon_type ? d.daemon_type.toUpperCase() : 'N/A') + '</strong></td>' +
+          '<td>' + esc(String(d.count || 0)) + '</td>' +
+          '<td>' + esc((d.hosts || []).join(', ') || 'N/A') + '</td>';
+        dpBody.appendChild(row);
+      });
+    }
+  } catch(e) { console.error('renderEnvironment failed:', e); }
+})();
+
+/* ---- Key Findings / Observations ---- */
+(function renderObservations() {
+  try {
+    var results = REPORT_DATA.results || {};
+    var regression = results.performance_regression || {};
+    var integrity = results.data_integrity || {};
+    var bugs = results.bug_validations || [];
+    var features = results.features || [];
+    var phases = REPORT_DATA.phases || {};
+    var p4 = phases.phase_4_upgrade || {};
+    var meta = REPORT_DATA.meta || {};
+
+    var obs = [];
+
+    var outcome = REPORT_DATA.test_outcome;
+    if (outcome && outcome.upgrade_aborted) {
+      obs.push({level: 'error', text: 'Upgrade was aborted: ' + (outcome.abort_reason || 'reason unknown')});
+    }
+    if (outcome && outcome.crash_detected) {
+      obs.push({
+        level: 'error',
+        text: 'Daemon crashes detected during test execution. See Crash Details for stacks and daemon names.',
+        href: '#crash-details'
+      });
+    }
+
+    var kfPath = cleanVersion(meta.pre_version) + ' \u2192 ' + cleanVersion(meta.post_version);
+    if (kfPath && kfPath !== 'N/A \u2192 N/A') obs.push({level: 'info', text: 'This report covers: ' + kfPath});
+
+    if (p4.start && p4.end) {
+      try {
+        var sec = (new Date(p4.end) - new Date(p4.start)) / 1000;
+        if (sec > 3600) obs.push({level: 'warning', text: 'Upgrade took over 1 hour (' + Math.round(sec / 60) + ' minutes). Review daemon timing for bottlenecks.'});
+      } catch(e) {}
+    }
+
+    if (regression.gate === 'warn') {
+      (regression.warnings || []).forEach(function(w) {
+        obs.push({level: 'warning', text: 'Performance regression: ' + w});
+      });
+    }
+
+    if (integrity.result === 'fail') {
+      obs.push({level: 'error', text: 'Data integrity check FAILED: ' + (integrity.mismatches || 0) + ' mismatch(es) detected.'});
+    }
+
+    var bugFails = bugs.filter(function(b) { return String(b.result).toLowerCase() === 'fail'; });
+    bugFails.forEach(function(b) { obs.push({level: 'error', text: 'Bug validation failed: ' + (b.id || '') + ' - ' + (b.name || '')}); });
+    var bugWarns = bugs.filter(function(b) { return String(b.result).toLowerCase() === 'warn'; });
+    bugWarns.forEach(function(b) { obs.push({level: 'warning', text: 'Bug validation warn: ' + (b.id || '') + ' - ' + (b.name || '')}); });
+
+    var featureRegs = features.filter(function(f) { return f.regression; });
+    featureRegs.forEach(function(f) { obs.push({level: 'error', text: 'Feature regression: ' + f.service + '/' + f.name + ' passed pre-upgrade but failed post-upgrade.'}); });
+
+    // Enrich FAIL story from data already on REPORT_DATA.
+    var isFail = outcome && (
+      String(outcome.result || '').toUpperCase() === 'FAIL' ||
+      outcome.crash_detected ||
+      outcome.upgrade_aborted
+    );
+    if (isFail) {
+      var drop = meta.max_iops_drop_pct;
+      if (drop !== undefined && drop !== null && drop < 0) {
+        var absDrop = Math.abs(drop);
+        obs.push({
+          level: absDrop > 30 ? 'error' : (absDrop > 10 ? 'warning' : 'info'),
+          text: 'Max IOPS drop during upgrade: ' + absDrop.toFixed(1) + '%' +
+            (meta.max_io_disruption_sec != null ? ' (max disruption ' + Math.round(meta.max_io_disruption_sec) + 's)' : '')
+        });
+      }
+      var timeline = REPORT_DATA.upgrade_timeline || [];
+      timeline.forEach(function(t) {
+        (t.events || []).forEach(function(evt) {
+          if (evt.category === 'fs_event' && String(evt.summary || '').indexOf('FS joinable') >= 0) {
+            obs.push({level: 'info', text: 'MDS: ' + evt.summary + (evt.range ? ' (' + evt.range + ')' : '')});
+          }
+        });
+      });
+      // phase_boundaries are {name, timestamp} markers, not {start,end}.
+      var phasePairs = {};
+      (REPORT_DATA.phase_boundaries || []).forEach(function(b) {
+        var m = String(b.name || '').match(/^upgrade_phase_(\d+)_(start|end)$/);
+        if (!m) return;
+        phasePairs[m[1]] = phasePairs[m[1]] || {};
+        phasePairs[m[1]][m[2]] = b.timestamp;
+      });
+      Object.keys(phasePairs).sort().forEach(function(idx) {
+        var p = phasePairs[idx];
+        if (!p.start || !p.end) return;
+        try {
+          var secs = (new Date(p.end) - new Date(p.start)) / 1000;
+          obs.push({level: 'info', text: 'Upgrade phase ' + idx + ' duration: ' + Math.round(secs / 60) + ' min'});
+        } catch (e) {}
+      });
+    }
+
+    var body = document.getElementById('observations-body');
+    if (obs.length === 0) {
+      body.innerHTML = '<div class="key-findings"><ol><li>All checks passed. No issues detected during upgrade.</li></ol></div>';
+      return;
+    }
+
+    var html = '<div class="key-findings"><ol>';
+    obs.forEach(function(o) {
+      var style = '';
+      if (o.level === 'error') style = ' style="color:var(--ibm-red);font-weight:500;"';
+      else if (o.level === 'warning') style = ' style="color:#b28600;font-weight:500;"';
+      var text = esc(o.text);
+      if (o.href) {
+        text = '<a href="' + esc(o.href) + '" style="color:inherit;text-decoration:underline;">' + text + '</a>';
+      }
+      html += '<li' + style + '>' + text + '</li>';
+    });
+    html += '</ol></div>';
+    body.innerHTML = html;
+  } catch(e) { console.error('renderObservations failed:', e); }
+})();
+
+/* ---- Crash Details ---- */
+(function renderCrashDetails() {
+  try {
+    var outcome = REPORT_DATA.test_outcome || {};
+    var details = REPORT_DATA.crash_details || {};
+    var cephCrashes = details.ceph_crashes || [];
+    var logScan = details.log_scan || {};
+    // Flatten native scan_daemon_logs_for_crashes shape (or legacy .daemons).
+    var logDaemons = logScan.daemons || [];
+    if (!logDaemons.length && logScan.daemon_crashes) {
+      Object.keys(logScan.daemon_crashes).forEach(function(dtype) {
+        var dmap = logScan.daemon_crashes[dtype] || {};
+        Object.keys(dmap).forEach(function(did) {
+          var info = dmap[did] || {};
+          logDaemons.push({
+            daemon: dtype + '.' + did,
+            host: info.host,
+            crash_count: info.crash_count,
+            events: info.crash_events || info.events || []
+          });
+        });
+      });
+    }
+    var hasCeph = cephCrashes.length > 0;
+    var hasLog = !!logScan.crashes_found && logDaemons.length > 0;
+    var show = !!outcome.crash_detected || hasCeph || hasLog;
+
+    var section = document.getElementById('crash-details');
+    var nav = document.getElementById('nav-crash-details');
+    if (!show) {
+      if (section) section.style.display = 'none';
+      if (nav) nav.style.display = 'none';
+      return;
+    }
+    if (section) section.style.display = '';
+    if (nav) nav.style.display = '';
+
+    var uniqueEntities = {};
+    cephCrashes.forEach(function(c) {
+      if (c.entity_name) uniqueEntities[c.entity_name] = true;
+    });
+    logDaemons.forEach(function(d) {
+      if (d.daemon) uniqueEntities[d.daemon] = true;
+    });
+
+    var html = '';
+    html += '<div class="crash-summary-grid">';
+    html += '<div class="crash-summary-card"><div class="value">' + cephCrashes.length + '</div><div class="label">Ceph crash dumps</div></div>';
+    html += '<div class="crash-summary-card"><div class="value">' + (logScan.total_crash_events || 0) + '</div><div class="label">Log-scan events</div></div>';
+    html += '<div class="crash-summary-card"><div class="value">' + Object.keys(uniqueEntities).length + '</div><div class="label">Affected daemons</div></div>';
+    html += '</div>';
+
+    if (Object.keys(uniqueEntities).length) {
+      html += '<p style="font-size:0.85rem;margin:0 0 1rem;"><strong>Affected:</strong> ' +
+        esc(Object.keys(uniqueEntities).sort().join(', ')) + '</p>';
+    }
+
+    if (hasCeph) {
+      html += '<h3 style="margin-top:1.25rem;">Ceph Crash Dumps</h3>';
+      cephCrashes.forEach(function(c, idx) {
+        var title = (c.entity_name || c.process_name || 'unknown') +
+          (c.crash_id ? ' — ' + c.crash_id : '');
+        var host = c.hostname || c.utsname_hostname;
+        var assertMsg = c.assert_msg || c.assert_condition;
+        var bt = c.backtrace || [];
+        if (typeof bt === 'string') bt = bt.split('\n').filter(Boolean);
+        html += '<div class="crash-card" id="crash-dump-' + idx + '">';
+        html += '<div class="crash-card-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+        html += '<div><strong>' + esc(title) + '</strong>';
+        if (c.timestamp) html += '<div style="font-size:0.75rem;color:var(--ibm-gray-50);margin-top:0.2rem;">' + esc(c.timestamp) + '</div>';
+        html += '</div><span style="font-size:0.75rem;color:var(--ibm-gray-50);">click to expand</span></div>';
+        html += '<div class="crash-card-body"><dl class="crash-meta">';
+        [
+          ['Entity', c.entity_name],
+          ['Crash ID', c.crash_id],
+          ['Host', host],
+          ['Process', c.process_name],
+          ['Ceph version', c.ceph_version],
+          ['OS', c.os_name],
+          ['Kernel', c.utsname_release],
+          ['Assert file', c.assert_file],
+          ['Assert line', c.assert_line],
+          ['Assert func', c.assert_func]
+        ].forEach(function(pair) {
+          if (pair[1] === null || pair[1] === undefined || pair[1] === '') return;
+          html += '<div><dt>' + esc(pair[0]) + '</dt><dd>' + esc(pair[1]) + '</dd></div>';
+        });
+        html += '</dl>';
+        if (assertMsg) {
+          html += '<div class="crash-assert"><strong>Assert / condition</strong><div style="margin-top:0.35rem;font-family:\'IBM Plex Mono\',monospace;font-size:0.8rem;white-space:pre-wrap;">' +
+            esc(assertMsg) + '</div></div>';
+        }
+        if (bt.length) {
+          html += '<div style="font-size:0.8rem;font-weight:600;margin:0.5rem 0 0.35rem;">Backtrace (' +
+            (c.backtrace_total_frames || bt.length) + ' frames)</div>';
+          html += '<pre class="crash-stack">' + esc(bt.join('\n')) + '</pre>';
+          if (c.backtrace_truncated) {
+            html += '<div class="crash-stack-note">Stack truncated in report; full backtrace is in the test log / crash dump.</div>';
+          }
+        } else {
+          html += '<p style="color:var(--ibm-gray-50);font-size:0.85rem;">No backtrace available in this crash dump.</p>';
+        }
+        html += '</div></div>';
+      });
+    }
+
+    if (hasLog) {
+      html += '<h3 style="margin-top:1.75rem;">Daemon Log Scan</h3>';
+      if (logScan.summary) {
+        html += '<p style="font-size:0.85rem;color:var(--ibm-gray-70);">' + esc(logScan.summary) + '</p>';
+      }
+      logDaemons.forEach(function(d, idx) {
+        html += '<div class="crash-card" id="crash-log-' + idx + '">';
+        html += '<div class="crash-card-header" onclick="this.parentElement.classList.toggle(\'open\')">';
+        html += '<div><strong>' + esc(d.daemon || '?') + '</strong>';
+        html += '<div style="font-size:0.75rem;color:var(--ibm-gray-50);margin-top:0.2rem;">' +
+          esc((d.host || 'unknown host') + ' · ' + (d.crash_count || 0) + ' event(s)') + '</div></div>';
+        html += '<span style="font-size:0.75rem;color:var(--ibm-gray-50);">click to expand</span></div>';
+        html += '<div class="crash-card-body">';
+        (d.events || []).forEach(function(ev, eidx) {
+          html += '<div style="margin:' + (eidx ? '1rem' : '0') + ' 0 0;">';
+          html += '<div style="font-size:0.8rem;font-weight:600;">Event ' + (eidx + 1) +
+            (ev.keyword ? ' — ' + esc(ev.keyword) : '') +
+            (ev.line_number ? ' (line ' + esc(String(ev.line_number)) + ')' : '') + '</div>';
+          if (ev.line) {
+            html += '<div style="font-size:0.8rem;margin:0.35rem 0;font-family:\'IBM Plex Mono\',monospace;">' + esc(ev.line) + '</div>';
+          }
+          var ctx = ev.context || [];
+          if (ctx.length) {
+            html += '<pre class="crash-stack">' + esc(ctx.join('\n')) + '</pre>';
+          }
+          html += '</div>';
+        });
+        html += '</div></div>';
+      });
+    }
+
+    if (!hasCeph && !hasLog) {
+      html += '<div class="crash-assert"><strong>Crash flag set, but no dump/log details were captured.</strong>' +
+        '<div style="margin-top:0.35rem;">Check the cephci test log for the full DAEMON CRASH REPORT.</div></div>';
+    }
+
+    document.getElementById('crash-details-body').innerHTML = html;
+  } catch(e) { console.error('renderCrashDetails failed:', e); }
+})();
+
+/* ---- Upgrade Execution (Vertical Alternating Timeline) ---- */
+(function renderUpgradeExecution() {
+  try {
+    var timeline = REPORT_DATA.upgrade_timeline || [];
+    var container = document.getElementById('upgrade-timeline');
+
+    if (timeline.length === 0) {
+      container.innerHTML = '<div class="vt-empty">No upgrade timeline data available</div>';
+      return;
+    }
+
+    var staggered = (REPORT_DATA.meta || {}).staggered_upgrade;
+    var milestones = REPORT_DATA.upgrade_milestones || [];
+
+    function badgeCls(category) {
+      if (category === 'key_rotation') return 'key-rotation';
+      if (category === 'osd_flag') return 'osd-flag';
+      if (category === 'fs_event') return 'fs-event';
+      if (category === 'safety_check') return 'safety-check';
+      if (category === 'image_pull') return 'image-pull';
+      return 'lifecycle';
+    }
+
+    function humanDur(secs) {
+      if (!secs && secs !== 0) return 'N/A';
+      secs = Math.round(secs);
+      if (secs < 60) return secs + 's';
+      var m = Math.floor(secs / 60), s = secs % 60;
+      if (m < 60) return m + 'm ' + s + 's';
+      var h = Math.floor(m / 60); m = m % 60;
+      return h + 'h ' + m + 'm';
+    }
+
+    function buildCard(t) {
+      var dur = '';
+      if (t.start && t.end) {
+        try { dur = humanDur((new Date(t.end) - new Date(t.start)) / 1000); } catch(e) {}
+      }
+      var color = DAEMON_COLORS[t.type] || 'rgba(82,82,82,0.85)';
+      var count = t.count || '?';
+      var isRedeploy = t.is_redeploy || false;
+      var borderStyle = isRedeploy ? 'border-left:4px dashed ' + color.replace(/[\d.]+\)$/, '0.5)') + ';background:' + color.replace(/[\d.]+\)$/, '0.04)') + ';' : 'border-left:4px solid ' + color + ';';
+      var h = '<div class="vt-card" style="' + borderStyle + '">';
+      var label = esc(t.type) + ' \u00d7' + count + (isRedeploy ? ' \u2014 redeploy' : '');
+      var labelColor = isRedeploy ? color.replace(/[\d.]+\)$/, '0.55)') : color;
+      h += '<div class="vt-type" style="color:' + labelColor + ';">' + label + '</div>';
+      h += '<div class="vt-time">' + shortTime(t.start) + ' \u2192 ' + shortTime(t.end) + '</div>';
+      h += '<div class="vt-duration" style="color:' + (isRedeploy ? labelColor : color) + ';">' + (dur || 'N/A') + '</div>';
+      if (isRedeploy) {
+        h += '<div style="font-size:0.7rem;color:#888;text-align:center;margin-top:4px;font-style:italic;">Same image \u2022 redeploy (dependency change)</div>';
+      }
+      var events = t.events || [];
+      if (events.length > 0) {
+        h += '<div class="vt-events">';
+        events.forEach(function(evt) {
+          h += '<div class="event-badge ' + badgeCls(evt.category) + '">';
+          h += esc(evt.summary || '');
+          if (evt.range) h += ' <span style="opacity:0.7;">' + esc(evt.range) + '</span>';
+          h += '</div>';
+        });
+        h += '</div>';
+      }
+      h += '</div>';
+      return h;
+    }
+
+    function buildItem(t, side) {
+      var color = DAEMON_COLORS[t.type] || 'rgba(82,82,82,0.85)';
+      var cls = 'vt-dot-' + t.type.replace(/[^a-z0-9]/g, '-');
+      var redeployCls = t.is_redeploy ? ' vt-item-redeploy' : '';
+      var h = '<div class="vt-item ' + side + ' ' + cls + redeployCls + '">';
+      h += buildCard(t);
+      h += '</div>';
+      return h;
+    }
+
+    function buildDotStyles(entries) {
+      var seen = {};
+      var css = '<style>';
+      entries.forEach(function(t) {
+        if (seen[t.type]) return;
+        seen[t.type] = true;
+        var color = DAEMON_COLORS[t.type] || 'rgba(82,82,82,0.85)';
+        var cls = 'vt-dot-' + t.type.replace(/[^a-z0-9]/g, '-');
+        css += '.' + cls + '::before{background:' + color + ';}';
+      });
+      css += '</style>';
+      return css;
+    }
+
+    function insertMilestones(html, milestoneSubset) {
+      milestoneSubset.forEach(function(ms) {
+        html += '<div class="vt-milestone">';
+        html += '<span class="vt-milestone-dot" style="border-color:var(--ibm-blue);background:var(--ibm-blue);"></span> ';
+        html += '<span class="vt-milestone-label">' + shortTime(ms.ts) + ' ' + esc(ms.label) + '</span>';
+        html += '</div>';
+      });
+      return html;
+    }
+
+    function buildTimeline(entries, milestoneList) {
+      milestoneList.sort(function(a, b) { return new Date(a.ts).getTime() - new Date(b.ts).getTime(); });
+      var html = '';
+      var sideIdx = 0;
+      var msIdx = 0;
+      entries.forEach(function(t) {
+        var tStart = t.start ? new Date(t.start).getTime() : Infinity;
+        while (msIdx < milestoneList.length) {
+          var msTs = new Date(milestoneList[msIdx].ts).getTime();
+          if (msTs <= tStart) {
+            html = insertMilestones(html, [milestoneList[msIdx]]);
+            msIdx++;
+          } else break;
+        }
+        var side = (sideIdx % 2 === 0) ? 'left' : 'right';
+        html += buildItem(t, side);
+        sideIdx++;
+      });
+      while (msIdx < milestoneList.length) {
+        html = insertMilestones(html, [milestoneList[msIdx]]);
+        msIdx++;
+      }
+      return html;
+    }
+
+    var html = '<div class="vt-container">' + buildDotStyles(timeline) + '<div class="vt-line"></div>';
+
+    if (staggered && staggered.staggered) {
+      var boundaries = REPORT_DATA.phase_boundaries || [];
+      var cooldowns = {};
+      boundaries.forEach(function(b) {
+        var mc = b.name.match(/^upgrade_cooldown_(\d+)_(start|end)$/);
+        if (mc) {
+          cooldowns[mc[1]] = cooldowns[mc[1]] || {};
+          cooldowns[mc[1]][mc[2]] = b.timestamp;
+        }
+      });
+
+      var phases = staggered.phases || [];
+      var phaseEnds = {};
+      boundaries.forEach(function(b) {
+        var m = b.name.match(/^upgrade_phase_(\d+)_end$/);
+        if (m) phaseEnds[m[1]] = new Date(b.timestamp).getTime();
+      });
+
+      var phaseGroups = phases.map(function() { return []; });
+      var hasPhaseField = timeline.length > 0 && timeline[0].phase;
+      if (hasPhaseField) {
+        timeline.forEach(function(t) {
+          var phase = t.phase || '';
+          var m = phase.match(/^4\.(\d+)$/);
+          var idx = m ? parseInt(m[1]) - 1 : phaseGroups.length - 1;
+          if (idx >= 0 && idx < phaseGroups.length) phaseGroups[idx].push(t);
+          else if (phaseGroups.length > 0) phaseGroups[phaseGroups.length - 1].push(t);
+        });
+      } else {
+        var sortedEnds = Object.keys(phaseEnds).sort().map(function(k) {
+          return { idx: parseInt(k), ts: phaseEnds[k] };
+        });
+        timeline.forEach(function(t) {
+          var tEnd = t.end ? new Date(t.end).getTime() : Infinity;
+          var assigned = false;
+          for (var pi = 0; pi < sortedEnds.length; pi++) {
+            if (tEnd <= sortedEnds[pi].ts + 60000) {
+              phaseGroups[sortedEnds[pi].idx - 1].push(t);
+              assigned = true;
+              break;
+            }
+          }
+          if (!assigned && phaseGroups.length > 0) {
+            phaseGroups[phaseGroups.length - 1].push(t);
+          }
+        });
+      }
+
+      var phaseMilestones = phases.map(function() { return []; });
+      var phaseWindows = REPORT_DATA.phase_windows || [];
+      milestones.forEach(function(ms) {
+        var msTs = new Date(ms.ts).getTime();
+        if (isNaN(msTs)) return;
+        var placed = false;
+
+        // Prefer orch Started→Complete windows so milestones land in the
+        // correct phase even when card end times are inflated or the event
+        // falls in a cooldown gap between card groups.
+        if (phaseWindows.length > 0) {
+          var firstWinStart = new Date(phaseWindows[0].start).getTime();
+          if (msTs < firstWinStart) {
+            phaseMilestones[0].push(ms);
+            placed = true;
+          } else {
+            for (var wi = 0; wi < phaseWindows.length; wi++) {
+              var w = phaseWindows[wi];
+              var wIdx = (typeof w.idx === 'number') ? w.idx : wi;
+              if (wIdx < 0 || wIdx >= phaseMilestones.length) continue;
+              var wStart = new Date(w.start).getTime();
+              var wEnd = new Date(w.end).getTime();
+              if (msTs >= wStart && msTs <= wEnd) {
+                phaseMilestones[wIdx].push(ms);
+                placed = true;
+                break;
+              }
+            }
+          }
+        }
+
+        // Fallback: card group ranges (non-staggered / missing windows)
+        if (!placed) {
+          for (var pi = 0; pi < phaseGroups.length; pi++) {
+            var grp = phaseGroups[pi];
+            if (grp.length === 0) continue;
+            var grpStart = new Date(grp[0].start).getTime();
+            var grpEnd = new Date(grp[grp.length - 1].end).getTime();
+            if (msTs >= grpStart && msTs <= grpEnd + 60000) {
+              phaseMilestones[pi].push(ms);
+              placed = true;
+              break;
+            }
+          }
+        }
+        // Last resort: phase 0 (not last phase — avoids dumping early
+        // Started/Target markers at the bottom of the timeline).
+        if (!placed && phaseMilestones.length > 0) {
+          phaseMilestones[0].push(ms);
+        }
+      });
+
+      phaseGroups.forEach(function(group, i) {
+        var phaseInfo = phases[i] || {};
+        var label = 'Phase 4.' + (i + 1) + ': ' + (phaseInfo.daemon_types || 'all remaining');
+        html += '<div class="vt-phase-header">';
+        html += '<span class="vt-phase-pill" style="background:rgba(255,131,43,0.12);color:var(--ibm-orange);border:1px solid rgba(255,131,43,0.3);">' + esc(label) + '</span>';
+        html += '</div>';
+        if (group.length > 0) {
+          html += buildTimeline(group, phaseMilestones[i] || []);
+        }
+        var cdKey = String(i + 1);
+        if (cooldowns[cdKey] && cooldowns[cdKey].start && cooldowns[cdKey].end) {
+          var cdSecs = Math.round((new Date(cooldowns[cdKey].end) - new Date(cooldowns[cdKey].start)) / 1000);
+          html += '<div class="vt-cooldown">';
+          html += '<div class="vt-cooldown-box">Cooldown ' + humanDur(cdSecs);
+          html += '<div style="font-size:0.7rem;color:var(--ibm-gray-50);margin-top:2px;">';
+          html += shortTime(cooldowns[cdKey].start) + ' \u2013 ' + shortTime(cooldowns[cdKey].end);
+          html += '</div></div></div>';
+        }
+      });
+    } else {
+      html += buildTimeline(timeline, milestones);
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+  } catch(e) { console.error('renderUpgradeExecution failed:', e); }
+})();
+
+/* ---- Empty-state helper ---- */
+function showEmpty(canvasId, msg) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var container = canvas.closest('.chart-container');
+  if (container) {
+    canvas.style.display = 'none';
+    var p = document.createElement('p');
+    p.style.cssText = 'color:var(--ibm-gray-50);text-align:center;padding:32px 0;';
+    p.textContent = msg || 'No data available';
+    container.appendChild(p);
+  }
+}
+
+/* 0.0 ms is valid — only treat missing (null/undefined) as absent. */
+function hasLatencyStats(stats) {
+  if (!stats) return false;
+  return ['latency_p50', 'latency_p95', 'latency_p99', 'latency_p99_9'].some(function(k) {
+    return typeof stats[k] === 'number';
+  });
+}
+
+function latBarValue(v) {
+  return (typeof v === 'number' && isFinite(v)) ? v : 0;
+}
+
+/* Pre-compute chart annotations */
+var _cachedPhaseAnnotations = buildPhaseAnnotations();
+var _cachedDaemonBands = buildDaemonBands();
+
+/* ---- IO Impact Charts ---- */
+(function renderIOImpact() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+
+    var iopsSeries = ts.iops || [];
+    if (iopsSeries.length === 0) { showEmpty('chart-iops', 'No IOPS timeseries data collected'); }
+    if (iopsSeries.length > 0) {
+      createTimeChart('chart-iops', [
+        tsDataset('Read IOPS', iopsSeries.map(function(d) { return {x: d.t, y: d.read_iops}; }), chartColors.blue),
+        tsDataset('Write IOPS', iopsSeries.map(function(d) { return {x: d.t, y: d.write_iops}; }), chartColors.teal),
+        tsDataset('Total IOPS', iopsSeries.map(function(d) { return {x: d.t, y: d.total_iops}; }), chartColors.green, { fill: true, backgroundColor: chartColors.greenFill }),
+      ], 'IOPS');
+    }
+
+    var latSeries = ts.latency || [];
+    if (latSeries.length === 0) { showEmpty('chart-latency', 'No latency timeseries data collected'); }
+    if (latSeries.length > 0) {
+      createTimeChart('chart-latency', [
+        tsDataset('Avg Commit Latency (ms)', latSeries.map(function(d) { return {x: d.t, y: d.avg_commit_lat_ms}; }), chartColors.red, { fill: true, backgroundColor: chartColors.redFill }),
+      ], 'Latency (ms)');
+    }
+
+    var tpSeries = ts.throughput || [];
+    if (tpSeries.length === 0) { showEmpty('chart-throughput', 'No throughput timeseries data collected'); }
+    if (tpSeries.length > 0) {
+      var tpScale = throughputChartScale(tpSeries);
+      var tpUnit = tpScale.label;
+      createTimeChart('chart-throughput', [
+        tsDataset('Read ' + tpUnit, tpSeries.map(function(d) { return {x: d.t, y: d.read_mbps / tpScale.div}; }), chartColors.blue),
+        tsDataset('Write ' + tpUnit, tpSeries.map(function(d) { return {x: d.t, y: d.write_mbps / tpScale.div}; }), chartColors.teal),
+        tsDataset('Total ' + tpUnit, tpSeries.map(function(d) { return {x: d.t, y: d.total_mbps / tpScale.div}; }), chartColors.green, { fill: true, backgroundColor: chartColors.greenFill }),
+      ], tpUnit);
+    }
+  } catch(e) { console.error('renderIOImpact failed:', e); }
+})();
+
+/* ---- Latency Percentile Breakdown ---- */
+(function renderLatencyPercentiles() {
+  try {
+    var phases = REPORT_DATA.phases || {};
+    var pre = (phases.phase_3_baseline || {}).stats || {};
+    var post = (phases.phase_5_post || {}).stats || {};
+
+    var labels = ['p50', 'p95', 'p99', 'p99.9'];
+    var preData = [pre.latency_p50, pre.latency_p95, pre.latency_p99, pre.latency_p99_9].map(latBarValue);
+    var postData = [post.latency_p50, post.latency_p95, post.latency_p99, post.latency_p99_9].map(latBarValue);
+
+    if (!hasLatencyStats(pre) && !hasLatencyStats(post)) {
+      showEmpty('chart-latency-percentiles', 'No latency percentile data collected');
+      return;
+    }
+
+    new Chart(document.getElementById('chart-latency-percentiles'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Pre-Upgrade', data: preData, backgroundColor: chartColors.blue, borderRadius: 3 },
+          { label: 'Post-Upgrade', data: postData, backgroundColor: chartColors.teal, borderRadius: 3 },
+        ]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { title: { display: true, text: 'Latency (ms)' }, beginAtZero: true } } }
+    });
+  } catch(e) { console.error('renderLatencyPercentiles failed:', e); }
+})();
+
+/* ---- Resource Utilization ---- */
+(function renderResourceUtil() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+
+    var rssSeries = ts.osd_latency || [];
+    if (rssSeries.length === 0) { showEmpty('chart-osd-latency', 'No OSD latency data collected'); }
+    if (rssSeries.length > 0) {
+      var commitData = [];
+      var applyData = [];
+      rssSeries.forEach(function(d) {
+        var osds = d.osds || {};
+        var cVals = [], aVals = [];
+        Object.values(osds).forEach(function(o) {
+          if (o && o.commit_latency_ms !== undefined) cVals.push(o.commit_latency_ms);
+          if (o && o.apply_latency_ms !== undefined) aVals.push(o.apply_latency_ms);
+        });
+        commitData.push({x: d.t, y: cVals.length ? cVals.reduce(function(a,b){return a+b;},0) / cVals.length : 0});
+        applyData.push({x: d.t, y: aVals.length ? aVals.reduce(function(a,b){return a+b;},0) / aVals.length : 0});
+      });
+      createTimeChart('chart-osd-latency', [
+        tsDataset('Avg Commit Latency (ms)', commitData, chartColors.blue),
+        tsDataset('Avg Apply Latency (ms)', applyData, chartColors.teal),
+      ], 'ms');
+    }
+
+    var pgSeries = ts.pg_state || [];
+    if (pgSeries.length === 0) { showEmpty('chart-pg-state', 'No PG state data collected'); }
+    if (pgSeries.length > 0) {
+      var pgStateKeys = {};
+      pgSeries.forEach(function(d) {
+        Object.keys(d).forEach(function(k) {
+          if (k !== 't' && k !== 'num_pgs') pgStateKeys[k] = true;
+        });
+      });
+      var pgColorMap = {
+        active_clean: chartColors.green,
+        degraded: chartColors.orange,
+        recovering: chartColors.red,
+        undersized: 'rgba(255,198,88,0.85)',
+        remapped: 'rgba(100,150,200,0.85)',
+        backfilling: 'rgba(180,80,180,0.85)',
+        backfill_wait: 'rgba(200,150,40,0.85)',
+        peering: chartColors.teal,
+        stale: 'rgba(82,82,82,0.85)',
+        down: 'rgba(180,0,0,0.85)',
+        creating: 'rgba(60,180,80,0.85)',
+        recovery_wait: 'rgba(200,100,50,0.85)',
+        scrubbing: 'rgba(100,100,200,0.85)',
+        deep: 'rgba(120,80,220,0.85)',
+        incomplete: 'rgba(220,50,50,0.85)',
+        inconsistent: 'rgba(220,50,100,0.85)',
+        failed_repair: 'rgba(180,0,40,0.85)',
+        unknown: 'rgba(128,128,128,0.85)'
+      };
+      var pgFallbackColors = [
+        'rgba(200,100,50,0.85)', 'rgba(100,200,50,0.85)',
+        'rgba(50,100,200,0.85)', 'rgba(200,50,150,0.85)',
+        'rgba(150,200,50,0.85)', 'rgba(50,200,150,0.85)',
+        'rgba(180,120,60,0.85)', 'rgba(60,120,180,0.85)'
+      ];
+      var pgFbIdx = 0;
+      var pgSortedKeys = Object.keys(pgStateKeys).sort(function(a, b) {
+        if (a === 'active_clean') return -1;
+        if (b === 'active_clean') return 1;
+        return a.localeCompare(b);
+      });
+      var pgDatasets = [];
+      pgSortedKeys.forEach(function(key) {
+        var hasNonZero = pgSeries.some(function(d) { return (d[key] || 0) > 0; });
+        if (!hasNonZero) return;
+        var color = pgColorMap[key] || pgFallbackColors[pgFbIdx++ % pgFallbackColors.length];
+        var label = key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        var opts = {};
+        if (key === 'active_clean') { opts = { fill: true, backgroundColor: chartColors.greenFill }; }
+        pgDatasets.push(tsDataset(label, pgSeries.map(function(d) {
+          return {x: d.t, y: d[key] || 0};
+        }), color, opts));
+      });
+      createTimeChart('chart-pg-state', pgDatasets, 'PG Count');
+    }
+  } catch(e) { console.error('renderResourceUtil failed:', e); }
+})();
+
+/* ---- OSD State Chart ---- */
+(function renderOsdState() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var osdSeries = ts.osd_state || [];
+    if (osdSeries.length === 0) { showEmpty('chart-osd-state', 'No OSD state data collected'); return; }
+    createTimeChart('chart-osd-state', [
+      tsDataset('Up', osdSeries.map(function(d) { return {x: d.t, y: d.up}; }), chartColors.green),
+      tsDataset('Down', osdSeries.map(function(d) { return {x: d.t, y: d.down}; }), chartColors.red),
+    ], 'OSD Count');
+  } catch(e) { console.error('renderOsdState failed:', e); }
+})();
+
+/* ---- Cluster Usage Chart ---- */
+(function renderClusterUsage() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var usageSeries = ts.cluster_usage || [];
+    if (usageSeries.length === 0) { showEmpty('chart-cluster-usage', 'No cluster usage data collected'); return; }
+    var config = REPORT_DATA.config || {};
+    var pt = config.phase_timing || {};
+    var warnThreshold = pt.disk_warning_percent || 60;
+    var totalTb = usageSeries.length > 0 ? usageSeries[usageSeries.length - 1].total_tb || 0 : 0;
+    var datasets = [
+      { label: 'Used %', data: usageSeries.map(function(d) { return {x: d.t, y: d.used_pct}; }), borderColor: chartColors.blue, backgroundColor: chartColors.blueFill, fill: true, pointRadius: 0, borderWidth: 2, tension: 0.3, yAxisID: 'y' },
+      { label: 'Used TB', data: usageSeries.map(function(d) { return {x: d.t, y: d.used_tb}; }), borderColor: chartColors.green, backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
+      { label: 'Total Capacity', data: usageSeries.map(function(d) { return {x: d.t, y: d.total_tb}; }), borderColor: chartColors.gray, backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 2, borderDash: [8, 4], tension: 0, yAxisID: 'y1' }
+    ];
+    new Chart(document.getElementById('chart-cluster-usage'), {
+      type: 'line',
+      data: { datasets: datasets },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top' }, annotation: { annotations: Object.assign({}, _cachedPhaseAnnotations, { diskWarnLine: { type: 'line', yMin: warnThreshold, yMax: warnThreshold, borderColor: chartColors.orange, borderWidth: 2, borderDash: [8, 4], label: { display: true, content: 'Warning (' + warnThreshold + '%)', position: 'end', backgroundColor: chartColors.orange, color: '#fff', font: { size: 11 }, padding: { top: 2, bottom: 2, left: 6, right: 6 } } } }) } },
+        scales: {
+          x: timeXAxis('Time'),
+          y: { position: 'left', title: { display: true, text: 'Usage %' }, beginAtZero: true, max: 100 },
+          y1: { position: 'right', title: { display: true, text: 'TB' }, beginAtZero: true, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  } catch(e) { console.error('renderClusterUsage failed:', e); }
+})();
+
+/* ---- OSD Utilization Chart ---- */
+(function renderOsdUtilization() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var osdSeries = ts.osd_utilization || [];
+    if (osdSeries.length === 0) { showEmpty('chart-osd-utilization', 'No per-OSD utilization data collected'); return; }
+
+    var allOsds = {};
+    osdSeries.forEach(function(d) {
+      Object.keys(d).forEach(function(k) { if (k !== 't') allOsds[k] = true; });
+    });
+    var osdNames = Object.keys(allOsds).sort(function(a, b) {
+      var na = parseInt(a.replace('osd.', ''), 10);
+      var nb = parseInt(b.replace('osd.', ''), 10);
+      return na - nb;
+    });
+
+    var summaryData = osdSeries.map(function(d) {
+      var vals = [];
+      osdNames.forEach(function(name) {
+        var v = d[name];
+        if (typeof v === 'number') vals.push(v);
+      });
+      if (vals.length === 0) return { t: d.t, min: 0, max: 0, avg: 0 };
+      vals.sort(function(a, b) { return a - b; });
+      var sum = vals.reduce(function(s, v) { return s + v; }, 0);
+      return { t: d.t, min: vals[0], max: vals[vals.length - 1], avg: sum / vals.length };
+    });
+
+    var SUMMARY_COUNT = 3;
+    var summaryDatasets = [
+      { label: 'Max OSD', data: summaryData.map(function(d) { return {x: d.t, y: d.max}; }), borderColor: chartColors.red, backgroundColor: 'rgba(220,53,69,0.08)', fill: '+1', pointRadius: 0, borderWidth: 2, tension: 0.3, _isSummary: true },
+      { label: 'Avg OSD', data: summaryData.map(function(d) { return {x: d.t, y: d.avg}; }), borderColor: chartColors.blue, backgroundColor: 'rgba(54,162,235,0.08)', fill: '+1', pointRadius: 0, borderWidth: 2, tension: 0.3, _isSummary: true },
+      { label: 'Min OSD', data: summaryData.map(function(d) { return {x: d.t, y: d.min}; }), borderColor: chartColors.green, backgroundColor: 'transparent', fill: false, pointRadius: 0, borderWidth: 2, tension: 0.3, _isSummary: true }
+    ];
+
+    var osdHues = osdNames.map(function(_, i) { return Math.round((i * 360) / osdNames.length); });
+    var individualDatasets = osdNames.map(function(name, i) {
+      var h = osdHues[i];
+      return {
+        label: name,
+        data: osdSeries.map(function(d) { return {x: d.t, y: d[name] || 0}; }),
+        borderColor: 'hsla(' + h + ',70%,50%,0.35)',
+        backgroundColor: 'transparent',
+        fill: false,
+        pointRadius: 0,
+        borderWidth: 1,
+        tension: 0.3,
+        hidden: true,
+        _isSummary: false,
+        _baseColor: 'hsla(' + h + ',70%,50%,',
+        _osdIndex: i
+      };
+    });
+
+    var allDatasets = summaryDatasets.concat(individualDatasets);
+    var showingIndividual = false;
+
+    var osdChart = new Chart(document.getElementById('chart-osd-utilization'), {
+      type: 'line',
+      data: { datasets: allDatasets },
+      options: {
+        responsive: true,
+        interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              filter: function(item) {
+                if (showingIndividual) return !allDatasets[item.datasetIndex]._isSummary;
+                return allDatasets[item.datasetIndex]._isSummary;
+              }
+            }
+          },
+          annotation: { annotations: _cachedPhaseAnnotations },
+          tooltip: {
+            callbacks: {
+              afterBody: function(items) {
+                if (!items.length) return '';
+                var idx = items[0].dataIndex;
+                var d = summaryData[idx];
+                if (!showingIndividual) return 'Spread: ' + (d.max - d.min).toFixed(1) + '% (' + osdNames.length + ' OSDs)';
+                return '';
+              }
+            }
+          }
+        },
+        scales: {
+          x: timeXAxis('Time'),
+          y: { title: { display: true, text: 'Utilization %' }, beginAtZero: true, max: 100 }
+        },
+        onHover: function(evt, elements) {
+          if (!showingIndividual) return;
+          var dsIndex = elements.length > 0 ? elements[0].datasetIndex : -1;
+          allDatasets.forEach(function(ds, i) {
+            if (ds._isSummary || ds.hidden) return;
+            if (dsIndex >= 0 && i === dsIndex) {
+              ds.borderWidth = 3;
+              ds.borderColor = ds._baseColor + '1)';
+            } else if (dsIndex >= 0) {
+              ds.borderWidth = 1;
+              ds.borderColor = ds._baseColor + '0.15)';
+            } else {
+              ds.borderWidth = 1;
+              ds.borderColor = ds._baseColor + '0.35)';
+            }
+          });
+          osdChart.update('none');
+        }
+      }
+    });
+
+    var btn = document.getElementById('btn-osd-util-toggle');
+    window._toggleOsdView = function() {
+      showingIndividual = !showingIndividual;
+      allDatasets.forEach(function(ds) {
+        if (ds._isSummary) {
+          ds.hidden = showingIndividual;
+        } else {
+          ds.hidden = !showingIndividual;
+          if (showingIndividual) {
+            ds.borderWidth = 1;
+            ds.borderColor = ds._baseColor + '0.35)';
+          }
+        }
+      });
+      if (btn) btn.textContent = showingIndividual ? 'Show Summary' : 'Show Individual OSDs';
+      osdChart.update();
+    };
+
+  } catch(e) { console.error('renderOsdUtilization failed:', e); }
+})();
+
+/* ---- MDS Status Chart (one chart per filesystem) ---- */
+(function renderMdsStatus() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var mdsSeries = ts.mds_status || [];
+    var wrap = document.getElementById('mds-status-charts');
+    if (!wrap) return;
+    if (mdsSeries.length === 0) {
+      showEmpty('chart-mds-status', 'No MDS status data collected');
+      return;
+    }
+    var fsNames = {};
+    mdsSeries.forEach(function(d) {
+      if (d.per_fs) {
+        Object.keys(d.per_fs).forEach(function(f) {
+          if (f && f !== 'mds' && f !== 'unknown') fsNames[f] = true;
+        });
+      }
+    });
+    var fsList = Object.keys(fsNames).sort();
+    if (fsList.length === 0) {
+      showEmpty('chart-mds-status', 'No per-filesystem MDS status data');
+      return;
+    }
+    wrap.innerHTML = '';
+    fsList.forEach(function(fs, i) {
+      var box = document.createElement('div');
+      box.className = 'chart-container';
+      box.innerHTML = '<h4>MDS Status — ' + esc(fs) + '</h4><canvas id="chart-mds-status-' + i + '"></canvas>';
+      wrap.appendChild(box);
+      new Chart(document.getElementById('chart-mds-status-' + i), {
+        type: 'line',
+        data: {
+          datasets: [
+            { label: 'Active', data: mdsSeries.map(function(d) { var c = (d.per_fs || {})[fs] || {}; return {x: d.t, y: c.active || 0}; }), borderColor: chartColors.green, backgroundColor: chartColors.greenFill, fill: false, pointRadius: 0, borderWidth: 2, stepped: 'before', tension: 0 },
+            { label: 'Standby', data: mdsSeries.map(function(d) { var c = (d.per_fs || {})[fs] || {}; return {x: d.t, y: c.standby || 0}; }), borderColor: chartColors.blue, backgroundColor: chartColors.blueFill, fill: false, pointRadius: 0, borderWidth: 2, stepped: 'before', tension: 0 },
+            { label: 'Standby-Replay', data: mdsSeries.map(function(d) { var c = (d.per_fs || {})[fs] || {}; return {x: d.t, y: c.standby_replay || 0}; }), borderColor: chartColors.teal, backgroundColor: chartColors.tealFill, fill: false, pointRadius: 0, borderWidth: 2, stepped: 'before', tension: 0 }
+          ]
+        },
+        options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'top' }, annotation: { annotations: _cachedPhaseAnnotations } }, scales: { x: timeXAxis('Time'), y: { title: { display: true, text: 'MDS Count' }, beginAtZero: true, ticks: { stepSize: 1 } } } }
+      });
+
+      function mdsActSeries(key) {
+        return mdsSeries.map(function(d) {
+          var act = ((d.per_fs || {})[fs] || {}).activity || {};
+          return {x: d.t, y: act[key] || 0};
+        });
+      }
+
+      var actBox = document.createElement('div');
+      actBox.className = 'chart-container';
+      actBox.innerHTML = '<h4>Active MDS Activity — ' + esc(fs) + '</h4><canvas id="chart-mds-activity-' + i + '"></canvas>';
+      wrap.appendChild(actBox);
+      new Chart(document.getElementById('chart-mds-activity-' + i), {
+        type: 'line',
+        data: {
+          datasets: [
+            { label: 'Requests/s (sum)', data: mdsActSeries('rate'), borderColor: chartColors.green, fill: false, pointRadius: 0, borderWidth: 2, tension: 0.3, yAxisID: 'y' },
+            { label: 'DNS (sum)', data: mdsActSeries('dns'), borderColor: chartColors.blue, borderDash: [5, 3], fill: false, pointRadius: 0, borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
+            { label: 'Inodes (sum)', data: mdsActSeries('inos'), borderColor: chartColors.teal, borderDash: [5, 3], fill: false, pointRadius: 0, borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
+            { label: 'Dirs (sum)', data: mdsActSeries('dirs'), borderColor: chartColors.orange, borderDash: [5, 3], fill: false, pointRadius: 0, borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
+            { label: 'Caps (sum)', data: mdsActSeries('caps'), borderColor: chartColors.purple, borderDash: [5, 3], fill: false, pointRadius: 0, borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'top' }, annotation: { annotations: _cachedPhaseAnnotations } },
+          scales: {
+            x: timeXAxis('Time'),
+            y: { title: { display: true, text: 'Requests/s' }, beginAtZero: true, position: 'left' },
+            y1: { title: { display: true, text: 'Cache / metadata counts' }, beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+    });
+  } catch(e) { console.error('renderMdsStatus failed:', e); }
+})();
+
+/* ---- Per-Pool IOPS Chart ---- */
+(function renderPoolIops() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var poolSeries = ts.pool_iops || [];
+    if (poolSeries.length === 0) { showEmpty('chart-pool-iops', 'No per-pool IOPS data collected'); return; }
+
+    var poolTotals = {};
+    poolSeries.forEach(function(d) {
+      var pools = d.pools || {};
+      Object.keys(pools).forEach(function(pname) {
+        var p = pools[pname];
+        if (!poolTotals[pname]) poolTotals[pname] = 0;
+        poolTotals[pname] += (p.read_iops || 0) + (p.write_iops || 0);
+      });
+    });
+    var sortedPools = Object.keys(poolTotals).sort(function(a, b) { return poolTotals[b] - poolTotals[a]; });
+    var topPools = sortedPools.slice(0, 8);
+    var poolColors = [chartColors.blue, chartColors.teal, chartColors.green, chartColors.red, chartColors.orange, chartColors.purple, chartColors.gray, 'rgba(200,100,50,0.85)'];
+    var datasets = topPools.map(function(pname, i) {
+      return { label: pname, data: poolSeries.map(function(d) { var p = (d.pools || {})[pname]; return {x: d.t, y: p ? (p.read_iops || 0) + (p.write_iops || 0) : 0}; }), borderColor: poolColors[i % poolColors.length], fill: false, pointRadius: 0, borderWidth: 2, tension: 0.3 };
+    });
+    new Chart(document.getElementById('chart-pool-iops'), {
+      type: 'line',
+      data: { datasets: datasets },
+      options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'top' }, annotation: { annotations: _cachedPhaseAnnotations } }, scales: { x: timeXAxis('Time'), y: { title: { display: true, text: 'Total IOPS' }, beginAtZero: true } } }
+    });
+  } catch(e) { console.error('renderPoolIops failed:', e); }
+})();
+
+/* ---- Version Convergence Chart ---- */
+(function renderVersionConvergence() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var vSeries = ts.versions || [];
+    if (vSeries.length === 0) { showEmpty('chart-version-convergence', 'No version convergence data collected'); return; }
+    createTimeChart('chart-version-convergence', [
+      tsDataset('Old Version', vSeries.map(function(d) { return {x: d.t, y: d.old_version_count}; }), chartColors.red, { fill: 'origin', backgroundColor: chartColors.redFill }),
+      tsDataset('New Version', vSeries.map(function(d) { return {x: d.t, y: d.new_version_count}; }), chartColors.green, { fill: '-1', backgroundColor: chartColors.greenFill }),
+    ], 'Daemon Count');
+  } catch(e) { console.error('renderVersionConvergence failed:', e); }
+})();
+
+/* ---- Upgrade Health Timeline (Warning Bars) ---- */
+var _healthTimelineListenerAdded = false;
+(function renderHealthTimeline2() {
+  try {
+      var hw = REPORT_DATA.health_warnings || {};
+      var allSeen = hw.all_health_checks_seen || {};
+      if (Object.keys(allSeen).length === 0) {
+          showEmpty('chart-health-timeline', 'No health warnings detected during upgrade');
+          return;
+      }
+      var severityOrder = {blocking: 0, concerning: 1, expected: 2, informational: 3};
+      var severityColors = {
+          blocking: 'rgba(218,30,40,0.7)',
+          concerning: 'rgba(255,131,43,0.7)',
+          expected: 'rgba(15,98,254,0.3)',
+          informational: 'rgba(82,82,82,0.15)'
+      };
+
+      var codes = Object.keys(allSeen).sort(function(a, b) {
+          var sa = severityOrder[allSeen[a].severity] || 3;
+          var sb = severityOrder[allSeen[b].severity] || 3;
+          return sa !== sb ? sa - sb : a.localeCompare(b);
+      });
+
+      var showExpected = document.getElementById('toggle-expected-health');
+      if (showExpected && !showExpected.checked) {
+          codes = codes.filter(function(c) {
+              return allSeen[c].severity === 'blocking' || allSeen[c].severity === 'concerning';
+          });
+      }
+      if (codes.length === 0) {
+          showEmpty('chart-health-timeline', 'No blocking/concerning warnings detected');
+          return;
+      }
+
+      var barData = codes.map(function(c) {
+          var info = allSeen[c];
+          var startMs = new Date(info.first_seen).getTime();
+          var endMs = new Date(info.last_seen).getTime();
+          if (endMs - startMs < 30000) endMs = startMs + 30000;
+          return { startMs: startMs, endMs: endMs, severity: info.severity, description: info.description, count: info.count };
+      });
+
+      var datasets = [{
+          data: barData.map(function(b) { return [b.startMs, b.endMs]; }),
+          backgroundColor: codes.map(function(c) {
+              return severityColors[allSeen[c].severity] || severityColors.informational;
+          }),
+          borderWidth: 0,
+          barPercentage: 0.4,
+          categoryPercentage: 0.8,
+          maxBarThickness: 24
+      }];
+
+      new Chart('chart-health-timeline', {
+          type: 'bar',
+          data: { labels: codes, datasets: datasets },
+          options: {
+              indexAxis: 'y',
+              responsive: true,
+              scales: {
+                  x: {
+                      type: 'time',
+                      time: { unit: 'minute', tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm' } },
+                      min: Math.min.apply(null, barData.map(function(b) { return b.startMs; }).concat(
+                          (REPORT_DATA.upgrade_timeline || []).filter(function(t) { return t.start; }).map(function(t) { return new Date(t.start).getTime(); })
+                      )),
+                      max: Math.max.apply(null, barData.map(function(b) { return b.endMs; }).concat(
+                          (REPORT_DATA.upgrade_timeline || []).filter(function(t) { return t.end; }).map(function(t) { return new Date(t.end).getTime(); })
+                      ))
+                  },
+                  y: { ticks: { font: { size: 11 } } }
+              },
+              plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                      callbacks: {
+                          label: function(ctx) {
+                              var idx = ctx.dataIndex;
+                              var b = barData[idx];
+                              return codes[idx] + ' (' + b.severity + '): ' + b.description
+                                  + ' | count: ' + b.count;
+                          }
+                      }
+                  },
+                  annotation: { annotations: _cachedDaemonBands }
+              }
+          }
+      });
+
+      if (!_healthTimelineListenerAdded && showExpected) {
+          _healthTimelineListenerAdded = true;
+          showExpected.addEventListener('change', function() {
+              var old = Chart.getChart('chart-health-timeline');
+              if (old) old.destroy();
+              var oldTable = document.getElementById('health-summary-table');
+              if (oldTable) oldTable.remove();
+              renderHealthTimeline2();
+          });
+      }
+
+      var allCodes = Object.keys(allSeen).sort(function(a, b) {
+          var sa = severityOrder[allSeen[a].severity] || 3;
+          var sb = severityOrder[allSeen[b].severity] || 3;
+          return sa !== sb ? sa - sb : a.localeCompare(b);
+      });
+      var htSection = document.getElementById('health-timeline');
+      if (htSection && allCodes.length > 0) {
+          var tHtml = '<div id="health-summary-table"><h4 style="margin-top:1.5rem;">Health Check Summary</h4>';
+          tHtml += '<table class="data-table"><thead><tr>';
+          tHtml += '<th>Code</th><th>Severity</th><th>Description</th>';
+          tHtml += '<th>First Seen</th><th>Last Seen</th><th>Poll Count</th>';
+          tHtml += '</tr></thead><tbody>';
+          allCodes.forEach(function(c) {
+              var info = allSeen[c];
+              var cls = info.severity === 'blocking' ? 'fail'
+                      : info.severity === 'concerning' ? 'warn' : '';
+              tHtml += '<tr class="' + cls + '">';
+              tHtml += '<td><code>' + esc(c) + '</code></td>';
+              tHtml += '<td>' + esc(info.severity) + '</td>';
+              tHtml += '<td>' + esc(info.description) + '</td>';
+              tHtml += '<td>' + fmtTime(info.first_seen) + '</td>';
+              tHtml += '<td>' + fmtTime(info.last_seen) + '</td>';
+              tHtml += '<td>' + info.count + '</td>';
+              tHtml += '</tr>';
+          });
+          tHtml += '</tbody></table></div>';
+          htSection.insertAdjacentHTML('beforeend', tHtml);
+      }
+  } catch(e) { console.error('renderHealthTimeline2 failed:', e); }
+})();
+
+/* ---- Health Timeline Chart ---- */
+(function renderHealthTimeline() {
+  try {
+    var ts = REPORT_DATA.timeseries || {};
+    var hSeries = ts.health || [];
+    if (hSeries.length === 0) return;
+
+    var statusColorMap = { 'HEALTH_OK': chartColors.green, 'HEALTH_WARN': chartColors.orange, 'HEALTH_ERR': chartColors.red };
+    var segColors = hSeries.map(function(d) { return statusColorMap[d.status] || chartColors.gray; });
+
+    var events = [];
+    for (var i = 1; i < hSeries.length; i++) {
+      if (hSeries[i].status !== hSeries[i - 1].status) {
+        events.push({ t: hSeries[i].t, from: hSeries[i - 1].status, to: hSeries[i].status, summary: hSeries[i].checks_summary || '' });
+      }
+    }
+
+    if (events.length > 0) {
+      var section = document.getElementById('resource-utilization');
+      var tableHtml = '<h3 style="margin-top:1.5rem;">Health Status Changes</h3>';
+      tableHtml += '<table class="data-table"><thead><tr><th>Time</th><th>From</th><th>To</th><th>Summary</th></tr></thead><tbody>';
+      events.forEach(function(e) { tableHtml += '<tr><td>' + fmtTime(e.t) + '</td><td>' + esc(e.from) + '</td><td>' + esc(e.to) + '</td><td>' + esc(e.summary) + '</td></tr>'; });
+      tableHtml += '</tbody></table>';
+      section.insertAdjacentHTML('beforeend', tableHtml);
+    }
+  } catch(e) { console.error('renderHealthTimeline failed:', e); }
+})();
+
+/* ---- IO Tools Used ---- */
+(function renderIOToolsUsed() {
+  try {
+    var results = REPORT_DATA.results || {};
+    var ioData = results.io_tools_used || {};
+    var toolsList = ioData.tools_used || [];
+    var container = document.getElementById('io-tools-used-container');
+    if (!container) return;
+
+    if (!toolsList.length) {
+      container.innerHTML = '<p style="color:#8d8d8d;">No IO tool usage data collected.</p>';
+      return;
+    }
+
+    var byClient = {};
+    var allServices = {};
+    toolsList.forEach(function(e) {
+      var host = e.hostname || '?';
+      var svc = e.service || '?';
+      var tool = e.tool || '?';
+      allServices[svc] = true;
+      if (!byClient[host]) byClient[host] = {};
+      if (!byClient[host][svc]) byClient[host][svc] = {};
+      byClient[host][svc][tool] = true;
+    });
+
+    var svcOrder = ['cephfs', 'nfs', 'rbd', 'rados', 'rgw', 'smb', 'nvmeof'];
+    var services = svcOrder.filter(function(s) { return allServices[s]; });
+    Object.keys(allServices).sort().forEach(function(s) {
+      if (services.indexOf(s) < 0) services.push(s);
+    });
+
+    var html = '<table class="data-table"><thead><tr><th>Client</th>';
+    services.forEach(function(svc) {
+      html += '<th>' + esc(svc.toUpperCase()) + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+
+    Object.keys(byClient).sort().forEach(function(host) {
+      html += '<tr><td style="font-weight:600;">' + esc(host) + '</td>';
+      services.forEach(function(svc) {
+        var tools = byClient[host][svc];
+        if (tools) {
+          var names = Object.keys(tools).sort().join(', ');
+          html += '<td>' + esc(names) + '</td>';
+        } else {
+          html += '<td style="color:#c6c6c6;">\u2014</td>';
+        }
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch(e) { console.error('renderIOToolsUsed failed:', e); }
+})();
+
+/* ---- Daemon Impact Table ---- */
+(function renderDaemonImpact() {
+  try {
+    var impact = REPORT_DATA.daemon_impact || [];
+    var container = document.getElementById('daemon-impact-container');
+    if (!container || impact.length === 0) return;
+
+    var html = '<h4>Daemon Upgrade Impact</h4>';
+    html += '<table class="data-table"><thead><tr><th>Daemon Type</th><th>Type</th><th>Count</th><th>Avg Duration (s)</th><th>Max Duration (s)</th><th>IOPS Impact %</th><th>Latency Spike (ms)</th></tr></thead><tbody>';
+    impact.forEach(function(d) {
+      var dv = d.iops_drop_pct;
+      var dropCls, dropLabel;
+      if (dv >= 0) {
+        dropCls = 'result-pass';
+        dropLabel = '+' + fmtNum(dv) + '% rise';
+      } else {
+        var absDv = Math.abs(dv);
+        dropCls = absDv > 30 ? 'result-fail' : (absDv > 10 ? 'result-warn' : 'result-pass');
+        dropLabel = fmtNum(dv) + '% drop';
+      }
+      var typeBadge = d.is_redeploy
+        ? '<span style="background:#fff0f0;color:#da1e28;padding:2px 6px;border-radius:3px;font-size:0.7rem;">redeploy</span>'
+        : '<span style="background:#f0fff0;color:#198038;padding:2px 6px;border-radius:3px;font-size:0.7rem;">upgrade</span>';
+      html += '<tr>';
+      html += '<td>' + esc(d.daemon_type) + '</td>';
+      html += '<td>' + typeBadge + '</td>';
+      html += '<td>' + (d.count || 0) + '</td>';
+      html += '<td>' + fmtNum(d.avg_duration_sec) + '</td>';
+      html += '<td>' + fmtNum(d.max_duration_sec) + '</td>';
+      html += '<td class="' + dropCls + '">' + dropLabel + '</td>';
+      html += '<td>' + fmtNum(d.max_latency_spike_ms) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch(e) { console.error('renderDaemonImpact failed:', e); }
+})();
+
+/* ---- Daemon Upgrade Waterfall (Gantt) ---- */
+(function renderDaemonWaterfall() {
+  try {
+    var waterfallAll = REPORT_DATA.daemon_upgrade_waterfall || [];
+    if (waterfallAll.length === 0) {
+      showEmpty('chart-daemon-gantt', 'No per-daemon redeployment timeline data available');
+      return;
+    }
+
+    var MIN_VISIBLE_SEC = 45;
+    var daemonColors = DAEMON_COLORS;
+
+    /* Drop blank tracks: no upgrade/redeploy duration and no KR events. */
+    var waterfall = waterfallAll.filter(function(d) {
+      var dur = d.duration_sec || 0;
+      var kr = d.key_rotation || {};
+      var evts = kr.events || [];
+      return dur > 0 || evts.length > 0 || (kr.start_time && kr.end_time);
+    });
+    if (waterfall.length === 0) {
+      showEmpty('chart-daemon-gantt', 'No per-daemon redeployment timeline data available');
+      return;
+    }
+
+    var labels = waterfall.map(function(d) {
+      var suffix = d.is_redeploy ? ' (redeploy)' : '';
+      return d.daemon_type.toUpperCase() + ' (' + d.count + ')' + suffix;
+    });
+
+    /* Axis origin: earliest of image-upgrade / KR events / phase markers / upgrade_start */
+    var globalStart = null;
+    function considerTs(iso) {
+      if (!iso) return;
+      var t = new Date(iso).getTime();
+      if (isNaN(t)) return;
+      if (globalStart === null || t < globalStart) globalStart = t;
+    }
+    waterfall.forEach(function(d) {
+      considerTs(d.start_time);
+      considerTs(d.end_time);
+      var kr = d.key_rotation;
+      if (kr) {
+        considerTs(kr.start_time);
+        considerTs(kr.end_time);
+        (kr.events || []).forEach(function(ev) { considerTs(ev.timestamp); });
+      }
+    });
+    (REPORT_DATA.phase_boundaries || []).forEach(function(b) {
+      if (b.name === 'upgrade_start' || b.name === 'upgrade') considerTs(b.timestamp);
+      if (/^upgrade_phase_\d+_(start|end)$/.test(b.name)) considerTs(b.timestamp);
+    });
+
+    /* Image-upgrade / redeploy bars (min visible width for short redeploys) */
+    var redeployOffsets = [], redeployDurations = [], actualDurations = [];
+    var redeployColors = [], redeployBorders = [], redeployBorderWidths = [], redeployBorderDashes = [];
+    var hasKeyRot = false;
+    var hasRedeploy = false;
+
+    waterfall.forEach(function(d) {
+      var color = daemonColors[d.daemon_type] || 'rgba(82,82,82,0.85)';
+      var actual = d.duration_sec || 0;
+      var display = actual > 0 ? Math.max(actual, MIN_VISIBLE_SEC) : 0;
+      actualDurations.push(actual);
+
+      if (d.is_redeploy) {
+        hasRedeploy = true;
+        redeployColors.push(color.replace(/[\d.]+\)$/, '0.40)'));
+        redeployBorders.push(color.replace(/[\d.]+\)$/, '0.7)'));
+        redeployBorderWidths.push(2);
+        redeployBorderDashes.push([6, 3]);
+      } else {
+        redeployColors.push(color);
+        redeployBorders.push(color);
+        redeployBorderWidths.push(0);
+        redeployBorderDashes.push([]);
+      }
+
+      var rdSt = d.start_time ? new Date(d.start_time).getTime() : 0;
+      var rdOffset = globalStart ? (rdSt - globalStart) / 1000 : 0;
+      redeployOffsets.push(rdOffset);
+      redeployDurations.push(display);
+
+      var kr = d.key_rotation;
+      if (kr && ((kr.events && kr.events.length) || (kr.start_time && kr.end_time))) {
+        hasKeyRot = true;
+      }
+    });
+
+    /* Cooldown / phase / KR-tick annotations */
+    var boundaries = REPORT_DATA.phase_boundaries || [];
+    var ganttAnnotations = {};
+    var cooldowns = {};
+    boundaries.forEach(function(b) {
+        var m = b.name.match(/^upgrade_cooldown_(\d+)_(start|end)$/);
+        if (m) {
+            var idx = m[1];
+            cooldowns[idx] = cooldowns[idx] || {};
+            cooldowns[idx][m[2]] = b.timestamp;
+        }
+        var pm = b.name.match(/^upgrade_phase_(\d+)_(start|end)$/);
+        if (pm && globalStart) {
+            var offset = (new Date(b.timestamp).getTime() - globalStart) / 1000;
+            ganttAnnotations['phase_' + pm[1] + '_' + pm[2]] = {
+                type: 'line',
+                xMin: offset, xMax: offset,
+                borderColor: 'rgba(255,131,43,0.5)',
+                borderWidth: 2,
+                borderDash: [6, 4],
+                label: {
+                    display: true,
+                    content: 'Phase ' + pm[1] + ' ' + pm[2],
+                    position: 'start',
+                    color: 'rgba(255,131,43,0.8)',
+                    font: { size: 10 }
+                }
+            };
+        }
+    });
+    Object.keys(cooldowns).forEach(function(idx) {
+        var cd = cooldowns[idx];
+        if (cd.start && cd.end && globalStart) {
+            var cdStartOff = (new Date(cd.start).getTime() - globalStart) / 1000;
+            var cdEndOff = (new Date(cd.end).getTime() - globalStart) / 1000;
+            var durMin = Math.round((cdEndOff - cdStartOff) / 60);
+            ganttAnnotations['cooldown_band_' + idx] = {
+                type: 'box',
+                xMin: cdStartOff, xMax: cdEndOff,
+                backgroundColor: 'rgba(138,63,252,0.08)',
+                borderColor: 'rgba(138,63,252,0.3)',
+                borderWidth: 1,
+                label: {
+                    display: true,
+                    content: 'Cooldown (' + durMin + ' min)',
+                    position: 'center',
+                    color: 'rgba(138,63,252,0.7)',
+                    font: { size: 11, style: 'italic' }
+                }
+            };
+        }
+    });
+
+    /* KR as discrete point ticks per event (fallback: start+end only). */
+    waterfall.forEach(function(d, rowIdx) {
+      var kr = d.key_rotation;
+      if (!kr || !globalStart) return;
+      var evts = kr.events || [];
+      if (!evts.length && kr.start_time && kr.end_time) {
+        evts = [
+          { timestamp: kr.start_time, action: 'rotate', daemon: '' },
+          { timestamp: kr.end_time, action: 'rotate', daemon: '' }
+        ];
+      }
+      evts.forEach(function(ev, evIdx) {
+        if (!ev.timestamp) return;
+        var x = (new Date(ev.timestamp).getTime() - globalStart) / 1000;
+        if (isNaN(x)) return;
+        ganttAnnotations['kr_' + rowIdx + '_' + evIdx] = {
+          type: 'point',
+          xValue: x,
+          yValue: labels[rowIdx],
+          radius: 3.5,
+          backgroundColor: 'rgba(196, 120, 0, 0.9)',
+          borderColor: 'rgba(140, 80, 0, 1)',
+          borderWidth: 1
+        };
+      });
+    });
+
+    function fmtAxisSec(sec) {
+      sec = Math.max(0, Math.round(sec));
+      var h = Math.floor(sec / 3600);
+      var m = Math.floor((sec % 3600) / 60);
+      return h + ':' + String(m).padStart(2, '0');
+    }
+
+    var ganttDatasets = [
+      { label: 'Offset (hidden)', data: redeployOffsets, backgroundColor: 'rgba(0,0,0,0)', borderWidth: 0, baseSkipped: false, stack: 'deploy', barPercentage: 0.7 },
+      { label: 'Deploy Duration', data: redeployDurations, backgroundColor: redeployColors, borderColor: redeployBorders, borderWidth: redeployBorderWidths, borderDash: redeployBorderDashes, borderRadius: 3, baseSkipped: false, stack: 'deploy', barPercentage: 0.7 }
+    ];
+
+    new Chart(document.getElementById('chart-daemon-gantt'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: ganttDatasets
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+          annotation: { annotations: ganttAnnotations },
+          legend: {
+            display: true, position: 'bottom',
+            labels: {
+              filter: function(item) { return item.text.indexOf('hidden') === -1; },
+              generateLabels: function(chart) {
+                var legendItems = [
+                  { text: 'Upgrade (new image; bar color = daemon type)', fillStyle: 'rgba(52,152,219,0.85)', strokeStyle: 'rgba(52,152,219,0.85)', lineWidth: 0, pointStyle: 'rectRounded' }
+                ];
+                if (hasKeyRot) {
+                  legendItems.push({ text: 'Key rotation event (same image)', fillStyle: 'rgba(196,120,0,0.9)', strokeStyle: 'rgba(140,80,0,1)', lineWidth: 1, pointStyle: 'circle' });
+                }
+                if (hasRedeploy) {
+                  legendItems.push({ text: 'Redeploy (no image-upgrade marker for type)', fillStyle: 'rgba(231,76,60,0.40)', strokeStyle: 'rgba(231,76,60,0.7)', lineWidth: 2, lineDash: [6, 3], pointStyle: 'rectRounded' });
+                }
+                return legendItems;
+              },
+              usePointStyle: true, pointStyle: 'rectRounded', padding: 16,
+              font: { size: 11 }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                if (ctx.dataset.label.indexOf('hidden') !== -1) return '';
+                var entry = waterfall[ctx.dataIndex];
+                var dur = actualDurations[ctx.dataIndex] || 0;
+                var min = Math.floor(dur / 60);
+                var sec = Math.round(dur % 60);
+                var kind = entry.is_redeploy ? 'Redeploy' : 'Upgrade';
+                var lines = [kind + ': ' + min + 'm ' + sec + 's (' + entry.count + ' daemons)'];
+                if (entry.is_redeploy) {
+                  lines.push('Redeploy: no orch/manifest image-upgrade marker for this type');
+                }
+                var kr = entry.key_rotation || {};
+                var nEv = (kr.events && kr.events.length) || kr.count || 0;
+                if (nEv) {
+                  lines.push('Key rotation: ' + nEv + ' event(s)');
+                  var names = kr.daemons || [];
+                  if (names.length) {
+                    var shown = names.slice(0, 8).join(', ');
+                    if (names.length > 8) shown += ', +' + (names.length - 8) + ' more';
+                    lines.push(shown);
+                  }
+                }
+                return lines;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            title: { display: true, text: 'Time from upgrade start (H:MM)' },
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) { return fmtAxisSec(value); }
+            }
+          },
+          y: { stacked: true, grid: { display: false } }
+        }
+      }
+    });
+
+    /* Per-daemon-type impact cards */
+    var cardsContainer = document.getElementById('daemon-impact-cards');
+    if (!cardsContainer) return;
+    var html = '';
+
+    waterfall.forEach(function(entry, idx) {
+      var dtype = entry.daemon_type;
+      var color = daemonColors[dtype] || 'rgba(82,82,82,0.85)';
+      var dur = entry.duration_sec || 0;
+      var durStr = Math.floor(dur / 60) + 'm ' + Math.round(dur % 60) + 's';
+      var io = entry.io_impact || {};
+      var iopsDuring = io.iops_during || {};
+      var tpDuring = io.throughput_during || {};
+      var lifecycle = entry.lifecycle_events || [];
+
+      html += '<div class="daemon-impact-card">';
+      html += '<div class="card-header">';
+      html += '<div class="daemon-accent" style="background:' + color + ';"></div>';
+      html += '<h4>' + esc(dtype.toUpperCase()) + ' Upgrade: Cluster I/O Impact & Recovery</h4>';
+      html += '<div class="card-meta">' + entry.count + ' daemon(s)<br>';
+      html += '<span title="Deploy duration from MGR logs">Duration: ' + durStr + '</span>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="card-body">';
+
+      if (io.description) {
+        html += '<div class="io-description">' + esc(io.description) + '</div>';
+      }
+      if (entry.lifecycle_source === 'orch_only') {
+        html += '<div style="font-size:0.75rem;color:var(--ibm-gray-50);margin-bottom:0.5rem;">Logfile lifecycle data unavailable; showing orch events only.</div>';
+      }
+
+      /* Lifecycle event chain */
+      if (lifecycle.length > 0) {
+        html += '<div style="margin-bottom:1rem;">';
+        html += '<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ibm-gray-50);margin-bottom:6px;">Lifecycle Events</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;">';
+        lifecycle.forEach(function(evt, i) {
+          if (i > 0) html += '<span style="color:var(--ibm-gray-30);font-size:12px;">\u2192</span>';
+          var evtName = typeof evt === 'object' ? (evt.event || '') : evt;
+          var evtTs = typeof evt === 'object' ? (evt.timestamp || '') : '';
+          var dName = typeof evt === 'object' ? (evt.daemon_name || '') : '';
+          var dShortParts = dName.split('.'); var dShortLabel = '';
+          if (dShortParts.length > 1) { var hostPart = dShortParts[dShortParts.length - 1]; var hostShort = hostPart.length > 12 ? hostPart.replace(/.*-(node\d+).*/, '$1') : hostPart; dShortLabel = ' <span style="font-size:9px;color:var(--ibm-gray-40);">[' + esc(dShortParts[0] + '.' + hostShort) + ']</span>'; }
+          var tsLabel = evtTs ? ' <span style="font-size:10px;color:var(--ibm-gray-50);">' + shortTime(evtTs) + '</span>' : '';
+          html += '<span style="display:inline-block;padding:3px 8px;border-radius:3px;font-size:11px;font-family:var(--font-mono);background:' + color.replace(/[\d.]+\)$/, '0.1)') + ';border:1px solid ' + color.replace(/[\d.]+\)$/, '0.3)') + ';color:var(--ibm-gray-80);">' + esc(evtName) + tsLabel + dShortLabel + '</span>';
+        });
+        html += '</div></div>';
+      }
+
+      html += '<div class="card-metrics">';
+      html += '<div class="cm-item"><div class="cm-value">' + durStr + '</div><div class="cm-label">Deploy Time</div></div>';
+      html += '<div class="cm-item"><div class="cm-value">' + (entry.count || 0) + '</div><div class="cm-label">Daemons</div></div>';
+      if (iopsDuring.avg !== undefined) {
+        html += '<div class="cm-item"><div class="cm-value">' + fmtNum(iopsDuring.avg, 0) + '</div><div class="cm-label">Avg IOPS</div></div>';
+        html += '<div class="cm-item"><div class="cm-value">' + fmtNum(iopsDuring.min, 0) + '</div><div class="cm-label">Min IOPS</div></div>';
+      }
+      if (io.iops_drop_pct !== undefined) {
+        var dv = io.iops_drop_pct;
+        var dropCls, dropLbl, dropTxt;
+        if (dv >= 0) {
+          dropCls = 'color:var(--ibm-green)';
+          dropLbl = '+' + fmtNum(dv) + '%';
+          dropTxt = 'IOPS Rise';
+        } else {
+          var absDv = Math.abs(dv);
+          dropCls = absDv > 30 ? 'color:var(--ibm-red)' : (absDv > 10 ? 'color:#b28600' : 'color:var(--ibm-green)');
+          dropLbl = fmtNum(dv) + '%';
+          dropTxt = 'IOPS Drop';
+        }
+        html += '<div class="cm-item"><div class="cm-value" style="' + dropCls + '">' + dropLbl + '</div><div class="cm-label">' + dropTxt + '</div></div>';
+      }
+      if (tpDuring.avg_mbps !== undefined) {
+        html += '<div class="cm-item"><div class="cm-value">' + fmtNum(tpDuring.avg_mbps, 1) + '</div><div class="cm-label">Avg MB/s</div></div>';
+      }
+      html += '</div>';
+
+      /* Individual daemons chip list with per-daemon lifecycle pills */
+      var indiv = entry.individual_daemons || [];
+      if (indiv.length > 0) {
+        if (indiv.length > 40) {
+          html += '<details><summary style="cursor:pointer;font-size:12px;color:var(--ibm-blue);margin-top:0.25rem;">' + indiv.length + ' individual daemons (click to expand)</summary>';
+          html += '<div class="daemon-list-compact" style="max-height:500px;overflow-y:auto;">';
+        } else if (indiv.length > 10) {
+          html += '<div class="daemon-list-compact" style="max-height:400px;overflow-y:auto;">';
+        } else {
+          html += '<div class="daemon-list-compact">';
+        }
+        indiv.forEach(function(d) {
+          var name = d.name || d.daemon_name || '';
+          var shortName = name.length > 30 ? name.substring(0, 30) + '...' : name;
+          var timeStr = d.redeploy_time ? shortTime(d.redeploy_time) : '';
+          html += '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;width:100%;">';
+          html += '<span class="daemon-chip daemon-pill" data-ts="' + esc(d.redeploy_time || '') + '" data-event="' + esc(name) + '" data-card-idx="' + idx + '" data-daemon-type="' + esc(dtype) + '">' + esc(shortName);
+          if (timeStr) html += ' <span class="chip-time">' + timeStr + '</span>';
+          html += '</span>';
+          var dLc = d.lifecycle_events || [];
+          if (dLc.length > 0) {
+            dLc.forEach(function(le) {
+              var evtLabel = (typeof le === 'object' ? le.event : le) || '';
+              var evtTs = (typeof le === 'object' ? le.timestamp : '') || '';
+              var evtTime = evtTs ? shortTime(evtTs) : '';
+              html += '<span class="daemon-pill" data-ts="' + esc(evtTs) + '" data-event="' + esc(evtLabel) + '" data-card-idx="' + idx + '" data-daemon-type="' + esc(dtype) + '" style="font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(15,98,254,0.10);color:var(--ibm-blue);white-space:nowrap;">' + esc(evtLabel);
+              if (evtTime) html += ' <span style="opacity:0.6">' + evtTime + '</span>';
+              html += '</span>';
+            });
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+        if (indiv.length > 40) {
+          html += '</details>';
+        }
+      }
+
+      /* Per-daemon-type IO chart with health event annotations */
+      if (entry.start_time && entry.end_time && (REPORT_DATA.timeseries || {}).iops) {
+        var canvasId = 'chart-daemon-io-' + idx;
+        html += '<div style="margin-top:1rem;"><canvas id="' + canvasId + '" height="180"></canvas></div>';
+      }
+
+      html += '</div></div>';
+    });
+
+    cardsContainer.innerHTML = html;
+
+    /* Render per-daemon-type IO overlay charts with health event annotations */
+    var iopsSeries = (REPORT_DATA.timeseries || {}).iops || [];
+    var tpSeries = (REPORT_DATA.timeseries || {}).throughput || [];
+    if (iopsSeries.length === 0) return;
+
+    waterfall.forEach(function(entry, idx) {
+      if (!entry.start_time || !entry.end_time) return;
+      var canvasId = 'chart-daemon-io-' + idx;
+      var canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      var redeployStart = new Date(entry.start_time).getTime();
+      var redeployEnd = new Date(entry.end_time).getTime();
+      var wStart = redeployStart;
+      var wEnd = redeployEnd;
+      var margin = 120000;
+      var windowStart = new Date(wStart - margin).toISOString();
+      var windowEnd = new Date(wEnd + margin).toISOString();
+
+      var filteredIops = iopsSeries.filter(function(d) {
+        var t = new Date(d.t).getTime();
+        return t >= (wStart - margin) && t <= (wEnd + margin);
+      });
+
+      if (filteredIops.length === 0) { canvas.style.display = 'none'; return; }
+
+      var filteredTp = tpSeries.filter(function(d) {
+        var t = new Date(d.t).getTime();
+        return t >= (wStart - margin) && t <= (wEnd + margin);
+      });
+
+      var color = daemonColors[entry.daemon_type] || chartColors.blue;
+
+      /* Add individual daemon redeploy markers */
+      var indivAnnotations = {};
+      var indiv = entry.individual_daemons || [];
+      var manyDaemons = indiv.length > 40;
+      indiv.forEach(function(d, di) {
+        if (!d.redeploy_time) return;
+        indivAnnotations['daemon_' + di] = {
+          type: 'line',
+          xMin: d.redeploy_time, xMax: d.redeploy_time,
+          borderColor: color.replace(/[\d.]+\)$/, manyDaemons ? '0.15)' : '0.35)'),
+          borderWidth: manyDaemons ? 0.5 : 1,
+          borderDash: manyDaemons ? [1, 3] : [2, 2]
+        };
+      });
+
+      var baseAnnotations = {};
+
+      baseAnnotations.redeployWindow = {
+        type: 'box',
+        xMin: entry.start_time, xMax: entry.end_time,
+        backgroundColor: color.replace(/[\d.]+\)$/, '0.08)'),
+        borderColor: color.replace(/[\d.]+\)$/, '0.4)'),
+        borderWidth: 1,
+        label: { display: true,
+          content: entry.daemon_type + ' upgrade window',
+          position: { x: 'center', y: 'start' },
+          color: 'rgba(0,0,0,0.5)', font: { size: 10 } }
+      };
+
+      baseAnnotations.upgradeStartLine = {
+        type: 'line',
+        xMin: entry.start_time, xMax: entry.start_time,
+        borderColor: chartColors.orange, borderWidth: 2, borderDash: [6, 4],
+        label: { display: true, content: 'Upgrade Start', position: 'start',
+          backgroundColor: chartColors.orange, color: '#fff',
+          font: { size: 10, weight: '500' },
+          padding: { top: 2, bottom: 2, left: 5, right: 5 } }
+      };
+
+      baseAnnotations.upgradeEndLine = {
+        type: 'line',
+        xMin: entry.end_time, xMax: entry.end_time,
+        borderColor: chartColors.green, borderWidth: 2, borderDash: [6, 4],
+        label: { display: true, content: 'Upgrade Complete', position: 'start',
+          backgroundColor: chartColors.green, color: '#fff',
+          font: { size: 10, weight: '500' },
+          padding: { top: 2, bottom: 2, left: 5, right: 5 } }
+      };
+
+      var allAnnotations = Object.assign(baseAnnotations, indivAnnotations);
+
+      var datasets = [{
+        label: 'Total IOPS',
+        data: filteredIops.map(function(d) { return {x: d.t, y: d.total_iops}; }),
+        borderColor: chartColors.blue,
+        backgroundColor: chartColors.blueFill,
+        fill: true,
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.3,
+        yAxisID: 'y'
+      }];
+
+      /* Add throughput on secondary axis if available */
+      var scales = {
+        x: { type: 'time', time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm' } }, min: windowStart, max: windowEnd, ticks: { maxTicksLimit: 8 } },
+        y: { title: { display: true, text: 'IOPS' }, beginAtZero: true, position: 'left' }
+      };
+
+      if (filteredTp.length > 0) {
+        var wfTpScale = throughputChartScale(filteredTp);
+        datasets.push({
+          label: 'Cluster total ' + wfTpScale.label + ' (all pools)',
+          data: filteredTp.map(function(d) { return {x: d.t, y: d.total_mbps / wfTpScale.div}; }),
+          borderColor: chartColors.teal,
+          borderDash: [5, 3],
+          fill: false,
+          pointRadius: 0,
+          borderWidth: 1.5,
+          tension: 0.3,
+          yAxisID: 'y1'
+        });
+        scales.y1 = { title: { display: true, text: wfTpScale.label }, beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } };
+      }
+
+      new Chart(canvas, {
+        type: 'line',
+        data: { datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { usePointStyle: true, boxWidth: 12, padding: 14, font: { size: 11 } } },
+            annotation: { annotations: allAnnotations }
+          },
+          scales: scales
+        }
+      });
+    });
+  } catch(e) { console.error('renderDaemonWaterfall failed:', e); }
+})();
+
+/* ---- Per-Daemon-Type Upgrade Duration Bar Chart ---- */
+(function renderDaemonDurationBars() {
+  try {
+    var timeline = REPORT_DATA.upgrade_timeline || [];
+    if (timeline.length === 0) { showEmpty('chart-daemon-histogram', 'No upgrade timeline data available'); return; }
+
+    var daemonTypes = [];
+    var durations = [];
+    var barColors = [];
+    var colorMap = {
+      mgr: 'rgba(0,157,154,0.85)', mon: 'rgba(15,98,254,0.85)',
+      crash: 'rgba(82,82,82,0.6)', osd: 'rgba(255,131,43,0.85)',
+      mds: 'rgba(138,63,252,0.85)', rgw: 'rgba(25,128,56,0.85)',
+      nfs: 'rgba(218,30,40,0.85)', smb: 'rgba(80,80,200,0.7)',
+      'ceph-exporter': 'rgba(200,100,50,0.85)', 'node-exporter': 'rgba(100,150,200,0.7)',
+      alertmanager: 'rgba(180,80,180,0.7)', grafana: 'rgba(60,180,80,0.7)',
+      prometheus: 'rgba(200,150,40,0.7)', nvmeof: 'rgba(40,140,140,0.7)'
+    };
+
+    timeline.forEach(function(t) {
+      if (t.start && t.end) {
+        try {
+          var dur = Math.round((new Date(t.end) - new Date(t.start)) / 1000);
+          var label = t.type.toUpperCase();
+          var color = colorMap[t.type] || chartColors.blue;
+          if (t.is_redeploy) {
+            label += ' (redeploy)';
+            color = color.replace(/[\d.]+\)$/, '0.35)');
+          }
+          daemonTypes.push(label);
+          durations.push(dur);
+          barColors.push(color);
+        } catch(e) {}
+      }
+    });
+
+    if (daemonTypes.length === 0) { showEmpty('chart-daemon-histogram', 'No valid duration data available'); return; }
+
+    new Chart(document.getElementById('chart-daemon-histogram'), {
+      type: 'bar',
+      data: {
+        labels: daemonTypes,
+        datasets: [{
+          label: 'Duration (seconds)',
+          data: durations,
+          backgroundColor: barColors,
+          borderRadius: 4,
+          barPercentage: 0.7
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var sec = ctx.raw || 0;
+                var min = Math.floor(sec / 60);
+                var s = Math.round(sec % 60);
+                return (min > 0 ? min + 'm ' + s + 's' : s + 's') + ' (' + sec + 's)';
+              }
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Duration (seconds)' }, beginAtZero: true },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+  } catch(e) { console.error('renderDaemonDurationBars failed:', e); }
+})();
+
+/* ---- Post-Upgrade Comparison ---- */
+(function renderPostComparison() {
+  try {
+    var phases = REPORT_DATA.phases || {};
+    var pre = (phases.phase_3_baseline || {}).stats || {};
+    var post = (phases.phase_5_post || {}).stats || {};
+    var regression = (REPORT_DATA.results || {}).performance_regression || {};
+
+    if (!pre.iops && !post.iops) {
+      showEmpty('chart-pre-post-iops', 'No pre/post IOPS data collected');
+    } else {
+      new Chart(document.getElementById('chart-pre-post-iops'), {
+        type: 'bar',
+        data: { labels: ['IOPS'], datasets: [
+          { label: 'Pre-Upgrade', data: [pre.iops || 0], backgroundColor: chartColors.blue, borderRadius: 3 },
+          { label: 'Post-Upgrade', data: [post.iops || 0], backgroundColor: chartColors.teal, borderRadius: 3 },
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'IOPS' } } } }
+      });
+    }
+
+    if (!pre.throughput && !post.throughput) {
+      showEmpty('chart-pre-post-throughput', 'No pre/post throughput data collected');
+    } else {
+      var tpMax = Math.max(pre.throughput || 0, post.throughput || 0);
+      var tpUnit = tpMax >= 1024 ? 'GB/s' : 'MB/s';
+      var tpScale = tpMax >= 1024 ? 1024 : 1;
+      new Chart(document.getElementById('chart-pre-post-throughput'), {
+        type: 'bar',
+        data: { labels: ['Throughput (' + tpUnit + ')'], datasets: [
+          { label: 'Pre-Upgrade', data: [(pre.throughput || 0) / tpScale], backgroundColor: chartColors.blue, borderRadius: 3 },
+          { label: 'Post-Upgrade', data: [(post.throughput || 0) / tpScale], backgroundColor: chartColors.teal, borderRadius: 3 },
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, title: { display: true, text: tpUnit } } } }
+      });
+    }
+
+    if (!hasLatencyStats(pre) && !hasLatencyStats(post)) {
+      showEmpty('chart-pre-post-latency', 'No pre/post latency data collected');
+    } else {
+      new Chart(document.getElementById('chart-pre-post-latency'), {
+        type: 'bar',
+        data: { labels: ['p50', 'p95', 'p99', 'p99.9'], datasets: [
+          { label: 'Pre-Upgrade', data: [latBarValue(pre.latency_p50), latBarValue(pre.latency_p95), latBarValue(pre.latency_p99), latBarValue(pre.latency_p99_9)], backgroundColor: chartColors.blue, borderRadius: 3 },
+          { label: 'Post-Upgrade', data: [latBarValue(post.latency_p50), latBarValue(post.latency_p95), latBarValue(post.latency_p99), latBarValue(post.latency_p99_9)], backgroundColor: chartColors.teal, borderRadius: 3 },
+        ] },
+        options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Latency (ms)' } } } }
+      });
+    }
+
+    var gate = regression.gate || 'pass';
+    var regHtml = '<div class="section-desc">';
+    regHtml += '<p>Quantitative comparison of pre-upgrade vs post-upgrade performance baselines with pass/fail thresholds.</p>';
+    regHtml += '<ul>';
+    regHtml += '<li>IOPS, throughput, and tail latency percentiles (p50/p95/p99/p99.9) are compared between Phase 3 and Phase 5</li>';
+    regHtml += '<li>A delta exceeding the configured threshold triggers a warning but does not fail the test</li>';
+    regHtml += "<li>'PASS' means no metric regressed beyond its threshold; 'WARN' flags metrics that did</li>";
+    regHtml += '</ul></div>';
+
+    regHtml += '<div style="display:flex;align-items:center;gap:12px;">';
+    regHtml += '<span style="font-weight:600;font-size:14px;">Regression Gate:</span>';
+    regHtml += badgeHtml(gate);
+    regHtml += '</div>';
+
+    if (regression.warnings && regression.warnings.length > 0) {
+      regHtml += '<div style="margin-top:10px;">';
+      regression.warnings.forEach(function(w) { regHtml += '<div class="observation-item warning">' + esc(w) + '</div>'; });
+      regHtml += '</div>';
+    }
+
+    var perfComp = (REPORT_DATA.meta || {}).performance_comparison || {};
+
+    function fmtIops(v) { return (v !== null && v !== undefined) ? Math.round(v).toLocaleString() : 'N/A'; }
+    function fmtLat(v) { return (v !== null && v !== undefined) ? Number(v).toFixed(2) + ' ms' : 'N/A'; }
+    function fmtDelta(v) {
+      if (v === null || v === undefined) return '<span style="color:var(--ibm-gray-50);">N/A</span>';
+      var pct = Number(v);
+      var prefix = pct >= 0 ? '+' : '';
+      var color = pct > 0 ? 'var(--ibm-green)' : (pct < 0 ? 'var(--ibm-red)' : 'var(--ibm-gray-50)');
+      return '<span style="color:' + color + ';font-weight:600;">' + prefix + pct.toFixed(1) + '%</span>';
+    }
+    function fmtLatDelta(v) {
+      if (v === null || v === undefined) return '<span style="color:var(--ibm-gray-50);">N/A</span>';
+      var pct = Number(v);
+      var prefix = pct >= 0 ? '+' : '';
+      var color = pct < 0 ? 'var(--ibm-green)' : (pct > 0 ? 'var(--ibm-red)' : 'var(--ibm-gray-50)');
+      return '<span style="color:' + color + ';font-weight:600;">' + prefix + pct.toFixed(1) + '%</span>';
+    }
+
+    var deltaHtml = '<table class="data-table" style="margin-top:10px;"><thead><tr><th>Metric</th><th>Pre-Upgrade</th><th>Post-Upgrade</th><th>Delta</th></tr></thead><tbody>';
+    var rows = [
+      ['IOPS', fmtIops(perfComp.pre_iops), fmtIops(perfComp.post_iops), fmtDelta(regression.iops_delta_pct !== undefined ? regression.iops_delta_pct : perfComp.iops_change_pct)],
+      ['Throughput', fmtThroughput(perfComp.pre_throughput), fmtThroughput(perfComp.post_throughput), fmtDelta(regression.throughput_delta_pct !== undefined ? regression.throughput_delta_pct : perfComp.throughput_change_pct)],
+      ['Latency p50', fmtLat(pre.latency_p50), fmtLat(post.latency_p50), fmtLatDelta(regression.latency_p50_delta_pct)],
+      ['Latency p95', fmtLat(perfComp.pre_latency_p95 !== undefined ? perfComp.pre_latency_p95 : pre.latency_p95), fmtLat(perfComp.post_latency_p95 !== undefined ? perfComp.post_latency_p95 : post.latency_p95), fmtLatDelta(regression.latency_p95_delta_pct)],
+      ['Latency p99', fmtLat(perfComp.pre_latency_p99 !== undefined ? perfComp.pre_latency_p99 : pre.latency_p99), fmtLat(perfComp.post_latency_p99 !== undefined ? perfComp.post_latency_p99 : post.latency_p99), fmtLatDelta(regression.latency_p99_delta_pct)],
+      ['Latency p99.9', fmtLat(pre.latency_p99_9), fmtLat(post.latency_p99_9), fmtLatDelta(regression.latency_p99_9_delta_pct)]
+    ];
+    rows.forEach(function(r) {
+      deltaHtml += '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>';
+    });
+    deltaHtml += '</tbody></table>';
+    document.getElementById('regression-result').innerHTML = regHtml + deltaHtml;
+  } catch(e) { console.error('renderPostComparison failed:', e); }
+})();
+
+/* ---- Feature Verification ---- */
+(function renderFeatures() {
+  try {
+    var features = (REPORT_DATA.results || {}).features || [];
+    var tbody = document.querySelector('#feature-table tbody');
+    if (features.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ibm-gray-50);">No feature data available</td></tr>'; return; }
+    var html = '';
+    features.forEach(function(f) {
+      var rowStyle = f.regression ? ' style="background-color:#fff1f0;"' : '';
+      html += '<tr' + rowStyle + '>';
+      html += '<td>' + esc(f.service) + '</td>';
+      html += '<td>' + esc(f.name) + '</td>';
+      html += '<td class="' + resultClass(f.pre_upgrade || 'n/a') + '">' + esc(f.pre_upgrade || 'n/a') + '</td>';
+      html += '<td class="' + resultClass(f.verified) + '">' + esc(f.verified) + '</td>';
+      html += '<td>' + (f.regression ? '<span style="color:#da1e28;font-weight:600;">REGRESSION</span>' : '') + '</td>';
+      html += '<td>' + esc(f.details || '') + '</td>';
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  } catch(e) { console.error('renderFeatures failed:', e); }
+})();
+
+/* ---- Bug Validations ---- */
+(function renderBugs() {
+  try {
+    var bugs = (REPORT_DATA.results || {}).bug_validations || [];
+    var tbody = document.querySelector('#bug-table tbody');
+    if (bugs.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ibm-gray-50);">No bug validation data available</td></tr>'; return; }
+    var html = '';
+    bugs.forEach(function(b, idx) {
+      html += '<tr>';
+      html += '<td>' + esc(b.id) + '</td>';
+      html += '<td>' + esc(b.name || '') + '</td>';
+      html += '<td class="' + resultClass(b.result) + '">' + esc(b.result) + '</td>';
+      html += '<td>';
+      if (b.evidence) {
+        var toggleId = 'ev-' + idx;
+        html += '<span class="evidence-toggle" onclick="toggleEvidence(\'' + toggleId + '\')">Show evidence</span>';
+        html += '<div class="evidence-block" id="' + toggleId + '">' + esc(b.evidence) + '</div>';
+      } else { html += '--'; }
+      html += '</td></tr>';
+    });
+    tbody.innerHTML = html;
+  } catch(e) { console.error('renderBugs failed:', e); }
+})();
+
+function toggleEvidence(id) { var el = document.getElementById(id); if (el) el.classList.toggle('open'); }
+
+/* ---- Data Integrity ---- */
+(function renderIntegrity() {
+  try {
+    var integrity = (REPORT_DATA.results || {}).data_integrity || {};
+    var cardHtml = '';
+    var overallCls = integrity.result === 'pass' ? 'pass' : integrity.result === 'fail' ? 'fail' : '';
+    var verifyWarns = integrity.errors || [];
+    cardHtml += '<div class="metric-card ' + overallCls + '"><div class="metric-value">' + (integrity.result || 'N/A').toUpperCase() + '</div><div class="metric-label">Overall Result</div></div>';
+    cardHtml += '<div class="metric-card"><div class="metric-value">' + (integrity.total_checked || 0) + '</div><div class="metric-label">Objects Checked</div></div>';
+    cardHtml += '<div class="metric-card ' + (integrity.mismatches > 0 ? 'fail' : 'pass') + '"><div class="metric-value">' + (integrity.mismatches || 0) + '</div><div class="metric-label">Mismatches</div></div>';
+    cardHtml += '<div class="metric-card ' + (verifyWarns.length > 0 ? 'warn' : 'pass') + '"><div class="metric-value">' + verifyWarns.length + '</div><div class="metric-label">Verify Warns</div></div>';
+    document.getElementById('integrity-cards').innerHTML = cardHtml;
+
+    var tbody = document.querySelector('#integrity-table tbody');
+    var details = integrity.mismatch_details || [];
+    if (details.length === 0 && verifyWarns.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--ibm-gray-50);">No mismatches or verify warnings</td></tr>'; return; }
+    var html = '';
+    details.forEach(function(d, i) { html += '<tr><td>Mismatch #' + (i + 1) + '</td><td class="result-fail">MISMATCH</td><td>' + esc(d) + '</td></tr>'; });
+    verifyWarns.forEach(function(e, i) { html += '<tr><td>Warn #' + (i + 1) + '</td><td class="result-warn">VERIFY WARN</td><td>' + esc(e) + '</td></tr>'; });
+    tbody.innerHTML = html;
+  } catch(e) { console.error('renderIntegrity failed:', e); }
+})();
+
+/* ---- Mount Health ---- */
+(function renderMountHealth() {
+  try {
+    var mh = ((REPORT_DATA.results || {}).data_integrity || {}).mount_health || {};
+    var total = mh.total || 0;
+    var healthy = mh.healthy || 0;
+    var recovered = mh.recovered || 0;
+    var unrecoverable = mh.unrecoverable || 0;
+    var stale = mh.stale || 0;
+    var details = mh.details || [];
+    var cardsEl = document.getElementById('mount-health-cards');
+    var tableEl = document.getElementById('mount-health-table');
+    if (!cardsEl) return;
+
+    if (total === 0) {
+      cardsEl.innerHTML = '<div class="metric-card pass"><div class="metric-value">N/A</div><div class="metric-label">No mount data</div></div>';
+      return;
+    }
+
+    var allHealthy = (healthy === total);
+    var cardHtml = '';
+    if (allHealthy) {
+      cardHtml += '<div class="metric-card pass"><div class="metric-value">ALL HEALTHY</div><div class="metric-label">' + total + ' mount(s)</div></div>';
+    } else {
+      cardHtml += '<div class="metric-card pass"><div class="metric-value">' + healthy + '</div><div class="metric-label">Healthy</div></div>';
+      if (recovered > 0) cardHtml += '<div class="metric-card" style="border-left:4px solid var(--ibm-yellow);"><div class="metric-value">' + recovered + '</div><div class="metric-label">Recovered</div></div>';
+      if (unrecoverable > 0) cardHtml += '<div class="metric-card fail"><div class="metric-value">' + unrecoverable + '</div><div class="metric-label">Unrecoverable</div></div>';
+      if (stale > 0) cardHtml += '<div class="metric-card fail"><div class="metric-value">' + stale + '</div><div class="metric-label">Stale</div></div>';
+    }
+    cardsEl.innerHTML = cardHtml;
+
+    if (details.length > 0 && tableEl) {
+      tableEl.style.display = '';
+      var tbody = tableEl.querySelector('tbody');
+      var html = '';
+      details.forEach(function(d) {
+        var cls = (d.status === 'recovered') ? 'result-warn' : 'result-fail';
+        html += '<tr><td>' + esc(d.service) + '</td><td>' + esc(d.mount) + '</td><td class="' + cls + '">' + esc(d.status).toUpperCase() + '</td></tr>';
+      });
+      tbody.innerHTML = html;
+    }
+  } catch(e) { console.error('renderMountHealth failed:', e); }
+})();
+
+/* ---- NFS Grace Analysis ---- */
+(function renderNfsGrace() {
+  try {
+    var ng = ((REPORT_DATA.results || {}).nfs_grace_analysis || {});
+    var metrics = ng.metrics || {};
+    var cycles = ng.cycles || [];
+    var cardsEl = document.getElementById('nfs-grace-cards');
+    var tableEl = document.getElementById('nfs-grace-table');
+    if (!cardsEl) return;
+    if (!metrics.cycle_count) {
+      cardsEl.innerHTML = '<div class="metric-card pass"><div class="metric-value">N/A</div><div class="metric-label">No grace data</div></div>';
+      return;
+    }
+    var missingEnd = (metrics.missing_grace_end || []).length;
+    var maxObs = metrics.max_observed_sec || 0;
+    var threshold = metrics.threshold_sec || 120;
+    var cardClass = (missingEnd > 0 || maxObs > threshold) ? 'fail' : 'pass';
+    cardsEl.innerHTML =
+      '<div class="metric-card ' + cardClass + '"><div class="metric-value">' + maxObs + 's</div><div class="metric-label">Max observed (thr ' + threshold + 's)</div></div>' +
+      '<div class="metric-card pass"><div class="metric-value">' + metrics.cycle_count + '</div><div class="metric-label">Grace cycles / ' + metrics.daemon_count + ' daemons</div></div>' +
+      (ng.stagger_sec != null ? '<div class="metric-card pass"><div class="metric-value">' + ng.stagger_sec + 's</div><div class="metric-label">Stagger (median)</div></div>' : '') +
+      '<div class="metric-card pass"><div class="metric-value">' + esc((ng.mode || 'baseline').toUpperCase()) + '</div><div class="metric-label">Mode</div></div>';
+    if (!cycles.length || !tableEl) return;
+    tableEl.style.display = '';
+    tableEl.querySelector('tbody').innerHTML = cycles.map(function(c) {
+      return '<tr><td>' + esc(c.daemon) + '</td><td>' + esc(c.start) + '</td><td>' + esc(c.end || 'missing') + '</td><td>' + esc(c.observed_sec != null ? c.observed_sec : 'n/a') + '</td><td>' + esc(c.configured_sec != null ? c.configured_sec : 'n/a') + '</td></tr>';
+    }).join('');
+  } catch(e) { console.error('renderNfsGrace failed:', e); }
+})();
+
+/* ---- Test Configuration ---- */
+(function renderConfig() {
+  try {
+    var config = REPORT_DATA.config || {};
+    var el = document.getElementById('config-dump');
+    if (el) { try { el.textContent = JSON.stringify(config, null, 2); } catch(e) { el.textContent = 'Unable to render configuration'; } }
+  } catch(e) { console.error('renderConfig failed:', e); }
+})();
+
+/* ---- Chart annotation helpers ---- */
+function buildDaemonBands() {
+  var timeline = REPORT_DATA.upgrade_timeline || [];
+  var annotations = {};
+  var bandColors = { mon: 'rgba(15,98,254,0.12)', mgr: 'rgba(0,157,154,0.12)', osd: 'rgba(255,131,43,0.12)', mds: 'rgba(138,63,252,0.12)', rgw: 'rgba(25,128,56,0.12)', nfs: 'rgba(218,30,40,0.12)', smb: 'rgba(80,80,200,0.12)', nvmeof: 'rgba(40,140,140,0.12)' };
+  var borderColors = { mon: 'rgba(15,98,254,0.4)', mgr: 'rgba(0,157,154,0.4)', osd: 'rgba(255,131,43,0.4)', mds: 'rgba(138,63,252,0.4)', rgw: 'rgba(25,128,56,0.4)', nfs: 'rgba(218,30,40,0.4)', smb: 'rgba(80,80,200,0.4)', nvmeof: 'rgba(40,140,140,0.4)' };
+  var shortNames = { 'node-exporter': 'NODE-EXP', 'ceph-exporter': 'CEPH-EXP', 'crash': 'CRASH', 'alertmanager': 'ALERT-MGR', 'prometheus': 'PROM', 'grafana': 'GRAFANA' };
+
+  var allStarts = [], allEnds = [];
+  timeline.forEach(function(t) {
+    if (t.start && t.end) {
+      allStarts.push(new Date(t.start).getTime());
+      allEnds.push(new Date(t.end).getTime());
+    }
+  });
+  if (allStarts.length === 0) return annotations;
+  var chartSpan = Math.max.apply(null, allEnds) - Math.min.apply(null, allStarts);
+
+  var tiers = [];
+  var TIER_HEIGHT = 18;
+  var MAX_TIERS = 4;
+
+  timeline.forEach(function(t, i) {
+    if (!t.start || !t.end) return;
+    var tStart = new Date(t.start).getTime();
+    var tEnd = new Date(t.end).getTime();
+
+    var usedTiers = {};
+    tiers.forEach(function(prev) {
+      if (tStart < prev.end && tEnd > prev.start) {
+        usedTiers[prev.tier] = true;
+      }
+    });
+    var tier = 0;
+    while (usedTiers[tier] && tier < MAX_TIERS) tier++;
+    tiers.push({start: tStart, end: tEnd, tier: tier});
+
+    var yAdjust = tier * TIER_HEIGHT;
+    var bandWidthPct = chartSpan > 0 ? (tEnd - tStart) / chartSpan * 100 : 100;
+    var isNarrow = bandWidthPct < 2;
+
+    var dtype = String(t.type || '').toLowerCase();
+    var label = shortNames[dtype] || t.type.toUpperCase();
+
+    annotations['band_' + i] = (function(narrowFlag) {
+      return {
+        type: 'box', xMin: t.start, xMax: t.end,
+        backgroundColor: bandColors[dtype] || 'rgba(82,82,82,0.08)',
+        borderColor: borderColors[dtype] || 'rgba(82,82,82,0.2)',
+        borderWidth: 1,
+        enter: function(ctx) {
+          ctx.element.options.borderWidth = 2;
+          var lb = ctx.element.label.options;
+          lb.display = true;
+          lb.font.size = 13;
+          lb.font.weight = '700';
+          lb.padding = {top:5, bottom:5, left:12, right:12};
+          ctx.chart.update('none');
+        },
+        leave: function(ctx) {
+          ctx.element.options.borderWidth = 1;
+          var lb = ctx.element.label.options;
+          lb.display = !narrowFlag;
+          lb.font.size = 11;
+          lb.font.weight = '600';
+          lb.padding = {top:3, bottom:3, left:8, right:8};
+          ctx.chart.update('none');
+        },
+        label: {
+          display: !narrowFlag,
+          content: label,
+          position: { x: 'center', y: 'start' },
+          yAdjust: yAdjust,
+          backgroundColor: 'rgba(220,220,220,0.95)',
+          color: borderColors[dtype] ? borderColors[dtype].replace(/[\d.]+\)$/, '1)') : '#393939',
+          font: { size: 11, weight: '600', family: 'IBM Plex Sans' },
+          padding: { top: 3, bottom: 3, left: 8, right: 8 },
+          borderRadius: 3
+        }
+      };
+    })(isNarrow);
+  });
+  return annotations;
+}
+
+/* ---- Health pill hover/click interactivity ---- */
+(function initHealthPillInteractivity() {
+  var pills = document.querySelectorAll('.health-pill');
+  if (pills.length === 0) return;
+  var persistedSet = {};
+
+  pills.forEach(function(pill, pillIdx) {
+    var cardIdx = pill.getAttribute('data-card-idx');
+    var ts = pill.getAttribute('data-ts');
+    var eventName = pill.getAttribute('data-event');
+    if (!ts || !eventName) return;
+    var canvasId = 'chart-daemon-io-' + cardIdx;
+    var isAddition = eventName.charAt(0) === '+';
+    var lineColor = isAddition ? 'rgba(218,30,40,0.8)' : 'rgba(25,128,56,0.8)';
+    var hoverKey = 'health-hover-' + cardIdx + '-' + pillIdx;
+    var clickKey = 'health-click-' + cardIdx + '-' + pillIdx;
+    var persistKey = cardIdx + '-' + pillIdx;
+
+    function makeAnnotation() {
+      return {
+        type: 'line',
+        xMin: ts, xMax: ts,
+        borderColor: lineColor,
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: {
+          display: true,
+          content: eventName,
+          position: 'start',
+          backgroundColor: lineColor,
+          color: '#fff',
+          font: { size: 10, family: 'IBM Plex Mono' },
+          padding: { top: 2, bottom: 2, left: 6, right: 6 }
+        }
+      };
+    }
+
+    pill.addEventListener('mouseenter', function() {
+      if (persistedSet[persistKey]) return;
+      var chart = Chart.getChart(canvasId);
+      if (!chart) return;
+      chart.options.plugins.annotation.annotations[hoverKey] = makeAnnotation();
+      chart.update('none');
+    });
+
+    pill.addEventListener('mouseleave', function() {
+      if (persistedSet[persistKey]) return;
+      var chart = Chart.getChart(canvasId);
+      if (!chart) return;
+      delete chart.options.plugins.annotation.annotations[hoverKey];
+      chart.update('none');
+    });
+
+    pill.addEventListener('click', function() {
+      var chart = Chart.getChart(canvasId);
+      if (!chart) return;
+      if (persistedSet[persistKey]) {
+        delete persistedSet[persistKey];
+        delete chart.options.plugins.annotation.annotations[clickKey];
+        pill.classList.remove('health-pill-active');
+      } else {
+        persistedSet[persistKey] = true;
+        delete chart.options.plugins.annotation.annotations[hoverKey];
+        chart.options.plugins.annotation.annotations[clickKey] = makeAnnotation();
+        pill.classList.add('health-pill-active');
+      }
+      chart.update('none');
+    });
+  });
+})();
+
+/* ---- Daemon instance pill hover/click interactivity ---- */
+(function initDaemonPillInteractivity() {
+  var pills = document.querySelectorAll('.daemon-pill');
+  if (pills.length === 0) return;
+
+  var daemonColorMap = DAEMON_COLORS;
+
+  var persistedSet = {};
+
+  pills.forEach(function(pill, pillIdx) {
+    var cardIdx = pill.getAttribute('data-card-idx');
+    var ts = pill.getAttribute('data-ts');
+    var eventName = pill.getAttribute('data-event');
+    var daemonType = pill.getAttribute('data-daemon-type');
+    if (!ts || !eventName) return;
+    var canvasId = 'chart-daemon-io-' + cardIdx;
+    var lineColor = daemonColorMap[daemonType] || 'rgba(15,98,254,0.85)';
+    var hoverKey = 'daemon-hover-' + cardIdx + '-' + pillIdx;
+    var clickKey = 'daemon-click-' + cardIdx + '-' + pillIdx;
+    var persistKey = 'dp-' + cardIdx + '-' + pillIdx;
+
+    function makeAnnotation() {
+      return {
+        type: 'line',
+        xMin: ts, xMax: ts,
+        borderColor: lineColor,
+        borderWidth: 2,
+        borderDash: [6, 3],
+        label: {
+          display: true,
+          content: eventName,
+          position: 'end',
+          backgroundColor: lineColor,
+          color: '#fff',
+          font: { size: 9, family: 'IBM Plex Mono' },
+          padding: { top: 2, bottom: 2, left: 5, right: 5 }
+        }
+      };
+    }
+
+    pill.addEventListener('mouseenter', function() {
+      if (persistedSet[persistKey]) return;
+      var chart = Chart.getChart(canvasId);
+      if (!chart) return;
+      chart.options.plugins.annotation.annotations[hoverKey] = makeAnnotation();
+      chart.update('none');
+    });
+
+    pill.addEventListener('mouseleave', function() {
+      if (persistedSet[persistKey]) return;
+      var chart = Chart.getChart(canvasId);
+      if (!chart) return;
+      delete chart.options.plugins.annotation.annotations[hoverKey];
+      chart.update('none');
+    });
+
+    pill.addEventListener('click', function() {
+      var chart = Chart.getChart(canvasId);
+      if (!chart) return;
+      if (persistedSet[persistKey]) {
+        delete persistedSet[persistKey];
+        delete chart.options.plugins.annotation.annotations[clickKey];
+        pill.classList.remove('daemon-pill-active');
+      } else {
+        persistedSet[persistKey] = true;
+        delete chart.options.plugins.annotation.annotations[hoverKey];
+        chart.options.plugins.annotation.annotations[clickKey] = makeAnnotation();
+        pill.classList.add('daemon-pill-active');
+      }
+      chart.update('none');
+    });
+  });
+})();
+
+function buildPhaseAnnotations() {
+  var phases = REPORT_DATA.phases || {};
+  var annotations = {};
+  var colorMap = {
+    'phase_3_baseline': { color: chartColors.green, label: 'Baseline' },
+    'phase_4_upgrade':  { color: chartColors.orange, label: 'Upgrade Start' },
+    'phase_5_post':     { color: chartColors.blue, label: 'Post-Upgrade' }
+  };
+  Object.keys(colorMap).forEach(function(key) {
+    var phase = phases[key];
+    if (phase && phase.start) {
+      annotations['line_' + key] = {
+        type: 'line',
+        xMin: phase.start,
+        xMax: phase.start,
+        borderColor: colorMap[key].color,
+        borderWidth: 2,
+        borderDash: [6, 4],
+        enter: function(ctx) {
+          ctx.element.options.borderWidth = 4;
+          var lb = ctx.element.label.options;
+          lb.font.size = 13;
+          lb.font.weight = '700';
+          lb.padding = { top: 5, bottom: 5, left: 10, right: 10 };
+          ctx.chart.update('none');
+        },
+        leave: function(ctx) {
+          ctx.element.options.borderWidth = 2;
+          var lb = ctx.element.label.options;
+          lb.font.size = 11;
+          lb.font.weight = '500';
+          lb.padding = { top: 3, bottom: 3, left: 6, right: 6 };
+          ctx.chart.update('none');
+        },
+        label: {
+          display: true,
+          content: colorMap[key].label,
+          position: 'start',
+          backgroundColor: colorMap[key].color,
+          color: '#fff',
+          font: { size: 11, weight: '500' },
+          padding: { top: 3, bottom: 3, left: 6, right: 6 }
+        }
+      };
+    }
+  });
+
+  /* Cooldown bands for IO charts */
+  var boundaries = REPORT_DATA.phase_boundaries || [];
+  var cooldowns = {};
+  boundaries.forEach(function(b) {
+    var m = b.name.match(/^upgrade_cooldown_(\d+)_(start|end)$/);
+    if (m) {
+      cooldowns[m[1]] = cooldowns[m[1]] || {};
+      cooldowns[m[1]][m[2]] = b.timestamp;
+    }
+  });
+  Object.keys(cooldowns).forEach(function(idx) {
+    var cd = cooldowns[idx];
+    if (cd.start && cd.end) {
+      var durMin = Math.round((new Date(cd.end) - new Date(cd.start)) / 60000);
+      annotations['cooldown_band_' + idx] = {
+        type: 'box',
+        xMin: cd.start, xMax: cd.end,
+        backgroundColor: 'rgba(138,63,252,0.06)',
+        borderColor: 'rgba(138,63,252,0.25)',
+        borderWidth: 1,
+        label: {
+          display: true,
+          content: 'Cooldown (' + durMin + ' min)',
+          position: { x: 'center', y: 'start' },
+          color: 'rgba(138,63,252,0.6)',
+          font: { size: 10, style: 'italic' },
+          padding: 3
+        }
+      };
+    }
+  });
+
+  return annotations;
+}
+
+/* ---- Fullscreen Chart Modal ---- */
+var _modalChartInstance = null;
+
+function openChartModal(sourceCanvasId, title) {
+  var overlay = document.getElementById('chart-modal-overlay');
+  var modalCanvas = document.getElementById('chart-modal-canvas');
+  var titleEl = document.getElementById('chart-modal-title');
+  var bodyEl = document.querySelector('.chart-modal-body');
+
+  var sourceChart = Chart.getChart(sourceCanvasId);
+  if (!sourceChart) {
+    titleEl.textContent = title || 'Chart';
+    bodyEl.innerHTML = '<div class="chart-modal-empty">No chart data available</div>';
+    overlay.classList.add('visible');
+    return;
+  }
+
+  if (!bodyEl.querySelector('canvas')) {
+    bodyEl.innerHTML = '<canvas id="chart-modal-canvas"></canvas>';
+    modalCanvas = document.getElementById('chart-modal-canvas');
+  }
+
+  titleEl.textContent = title || 'Chart';
+
+  var srcConfig = sourceChart.config;
+  var clonedData, clonedOptions;
+  try {
+    clonedData = JSON.parse(JSON.stringify(srcConfig.data));
+  } catch(e) {
+    clonedData = { datasets: [] };
+  }
+  try {
+    clonedOptions = JSON.parse(JSON.stringify(srcConfig.options || {}));
+  } catch(e) {
+    clonedOptions = {};
+  }
+
+  /* Restore annotation arrays — JSON.parse strips functions, replace display callbacks with true */
+  var srcAnnotations = (srcConfig.options && srcConfig.options.plugins && srcConfig.options.plugins.annotation) ? srcConfig.options.plugins.annotation.annotations : null;
+  if (srcAnnotations) {
+    if (!clonedOptions.plugins) clonedOptions.plugins = {};
+    if (!clonedOptions.plugins.annotation) clonedOptions.plugins.annotation = {};
+    var restoredAnnotations = {};
+    Object.keys(srcAnnotations).forEach(function(key) {
+      var orig = srcAnnotations[key];
+      if (!orig || typeof orig !== 'object') return;
+      var clone = {};
+      Object.keys(orig).forEach(function(prop) {
+        if (typeof orig[prop] === 'function') {
+          if (prop === 'display') clone[prop] = true;
+        } else if (orig[prop] !== null && typeof orig[prop] === 'object' && !Array.isArray(orig[prop])) {
+          var sub = {};
+          Object.keys(orig[prop]).forEach(function(sp) {
+            if (typeof orig[prop][sp] !== 'function') sub[sp] = orig[prop][sp];
+            else if (sp === 'display') sub[sp] = true;
+          });
+          clone[prop] = sub;
+        } else {
+          clone[prop] = orig[prop];
+        }
+      });
+      restoredAnnotations[key] = clone;
+    });
+    clonedOptions.plugins.annotation.annotations = restoredAnnotations;
+  }
+
+  /* Override sizing for fullscreen */
+  clonedOptions.responsive = true;
+  clonedOptions.maintainAspectRatio = false;
+
+  /* Increase font sizes for readability */
+  if (clonedOptions.plugins && clonedOptions.plugins.legend && clonedOptions.plugins.legend.labels) {
+    if (clonedOptions.plugins.legend.labels.font) clonedOptions.plugins.legend.labels.font.size = 13;
+    else clonedOptions.plugins.legend.labels.font = { size: 13 };
+  }
+  if (clonedOptions.scales) {
+    Object.keys(clonedOptions.scales).forEach(function(axisKey) {
+      var axis = clonedOptions.scales[axisKey];
+      if (axis && axis.title && axis.title.font) axis.title.font.size = 13;
+      else if (axis && axis.title) axis.title.font = { size: 13 };
+      if (axis && axis.ticks && axis.ticks.font) axis.ticks.font.size = 12;
+      else if (axis && axis.ticks) axis.ticks.font = { size: 12 };
+    });
+  }
+
+  /* Remove tooltip filter/callbacks that might reference closed-over state */
+  if (clonedOptions.plugins && clonedOptions.plugins.tooltip && clonedOptions.plugins.tooltip.callbacks) {
+    delete clonedOptions.plugins.tooltip.callbacks;
+  }
+
+  /* Preserve legend filter from source if it's a function (e.g. hiding offset bars) */
+  var srcLegendFilter = srcConfig.options && srcConfig.options.plugins && srcConfig.options.plugins.legend && srcConfig.options.plugins.legend.labels && srcConfig.options.plugins.legend.labels.filter;
+  if (typeof srcLegendFilter === 'function') {
+    if (!clonedOptions.plugins) clonedOptions.plugins = {};
+    if (!clonedOptions.plugins.legend) clonedOptions.plugins.legend = {};
+    if (!clonedOptions.plugins.legend.labels) clonedOptions.plugins.legend.labels = {};
+    clonedOptions.plugins.legend.labels.filter = srcLegendFilter;
+  }
+
+  /* Preserve tooltip callbacks from source if they're functions */
+  var srcTooltipCb = srcConfig.options && srcConfig.options.plugins && srcConfig.options.plugins.tooltip && srcConfig.options.plugins.tooltip.callbacks;
+  if (srcTooltipCb && typeof srcTooltipCb.label === 'function') {
+    if (!clonedOptions.plugins) clonedOptions.plugins = {};
+    if (!clonedOptions.plugins.tooltip) clonedOptions.plugins.tooltip = {};
+    clonedOptions.plugins.tooltip.callbacks = { label: srcTooltipCb.label };
+  }
+
+  if (_modalChartInstance) {
+    _modalChartInstance.destroy();
+    _modalChartInstance = null;
+  }
+
+  modalCanvas.style.width = '100%';
+  modalCanvas.style.height = '100%';
+
+  _modalChartInstance = new Chart(modalCanvas, {
+    type: srcConfig.type,
+    data: clonedData,
+    options: clonedOptions
+  });
+
+  overlay.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeChartModal() {
+  var overlay = document.getElementById('chart-modal-overlay');
+  overlay.classList.remove('visible');
+  document.body.style.overflow = '';
+  if (_modalChartInstance) {
+    _modalChartInstance.destroy();
+    _modalChartInstance = null;
+  }
+  var bodyEl = document.querySelector('.chart-modal-body');
+  bodyEl.innerHTML = '<canvas id="chart-modal-canvas"></canvas>';
+}
+
+/* Close on Escape */
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var overlay = document.getElementById('chart-modal-overlay');
+    if (overlay && overlay.classList.contains('visible')) closeChartModal();
+  }
+});
+
+/* ---- Attach expand icons to all charts ---- */
+(function attachChartExpandIcons() {
+  function createExpandBtn(canvasId, title) {
+    var btn = document.createElement('button');
+    btn.className = 'chart-expand-btn';
+    btn.setAttribute('aria-label', 'Expand chart');
+    btn.setAttribute('title', 'View fullscreen');
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2h4v4M6 14H2v-4M14 2L9.5 6.5M2 14l4.5-4.5"/></svg>';
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openChartModal(canvasId, title);
+    });
+    return btn;
+  }
+
+  /* Static charts inside .chart-container */
+  var containers = document.querySelectorAll('.chart-container');
+  containers.forEach(function(container) {
+    var canvas = container.querySelector('canvas');
+    if (!canvas || !canvas.id) return;
+    container.style.position = 'relative';
+    var h4 = container.querySelector('h4');
+    var title = h4 ? h4.textContent : '';
+    container.appendChild(createExpandBtn(canvas.id, title));
+  });
+
+  /* Dynamic daemon IO charts inside .daemon-impact-card */
+  var cards = document.querySelectorAll('.daemon-impact-card');
+  cards.forEach(function(card) {
+    var canvas = card.querySelector('canvas');
+    if (!canvas || !canvas.id) return;
+    var wrapper = canvas.parentElement;
+    if (wrapper) {
+      wrapper.style.position = 'relative';
+      var headerEl = card.querySelector('.card-header h4');
+      var title = headerEl ? headerEl.textContent : '';
+      wrapper.appendChild(createExpandBtn(canvas.id, title));
+    }
+  });
+})();
+</script>
+
+<!-- Fullscreen Chart Modal -->
+<div class="chart-modal-overlay" id="chart-modal-overlay" onclick="if(event.target===this)closeChartModal()">
+  <div class="chart-modal-header">
+    <span class="chart-modal-title" id="chart-modal-title"></span>
+    <button class="chart-modal-close" onclick="closeChartModal()" aria-label="Close">&times;</button>
+  </div>
+  <div class="chart-modal-body">
+    <canvas id="chart-modal-canvas"></canvas>
+  </div>
+</div>
+
+</body>
+</html>

@@ -8,6 +8,8 @@
 # Polarion  : CEPH-83632677 (Sanity) | CEPH-83632678 (Functional) | CEPH-83632679 (Negative)
 #             CEPH-83632682 (Disruptive) | CEPH-83632684 (Interop)
 # Structure : 5 suite blocks — each module runs all scenarios as subtests
+# Additional: IBMCEPH-20746..20752 → Functional F-19..F-21, Negative N-05..N-06,
+#             Disruptive D-05..D-06 (append to existing Polarion TCs)
 #===============================================================================================
 tests:
   # ---------------------------------------------------------------------------
@@ -142,7 +144,7 @@ tests:
     test:
       abort-on-fail: false
       name: "qtn_functional"
-      desc: "CephFS subvolume quarantine — Functional F-01..F-18"
+      desc: "CephFS subvolume quarantine — Functional F-01..F-21 (incl. dual-grant / kclient 789 / clone defer)"
       module: cephfs_subvol_quarantine.test_subvolume_quarantine_functional.py
       polarion-id: CEPH-83632678
       config:
@@ -155,7 +157,7 @@ tests:
     test:
       abort-on-fail: false
       name: "qtn_negative"
-      desc: "CephFS subvolume quarantine — Negative N-01..N-04"
+      desc: "CephFS subvolume quarantine — Negative N-01..N-06 (incl. unaware snap block / no sticky mark)"
       module: cephfs_subvol_quarantine.test_subvolume_quarantine_negative.py
       polarion-id: CEPH-83632679
       config:
@@ -186,7 +188,7 @@ tests:
     test:
       abort-on-fail: false
       name: "qtn_disruptive"
-      desc: "CephFS subvolume quarantine — Disruptive D-01..D-04"
+      desc: "CephFS subvolume quarantine — Disruptive D-01..D-06 (incl. park-load / concurrent asok mds_lock)"
       module: cephfs_subvol_quarantine.test_subvolume_quarantine_disruptive.py
       polarion-id: CEPH-83632682
       config:

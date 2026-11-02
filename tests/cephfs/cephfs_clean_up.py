@@ -12,6 +12,45 @@ from utility.retry import retry
 log = Log(__name__)
 
 
+def _list_filesystem_names(client):
+    out, _ = client.exec_command(sudo=True, cmd="ceph fs ls --format json-pretty")
+    return [fs["name"] for fs in json.loads(out)]
+
+
+def wait_for_no_mds_daemons(client, timeout=180, interval=10):
+    """Poll until no MDS daemons remain in ceph orch ps."""
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph orch ps --daemon_type=mds --format json",
+            check_ec=False,
+        )
+        mds_hosts = json.loads(out)
+        if not mds_hosts:
+            log.info("No MDS daemons reported by ceph orch ps")
+            return True
+        log.info("Waiting for MDS daemons to stop, still present: %s", mds_hosts)
+        time.sleep(interval)
+    log.warning("MDS daemons still present after %ss", timeout)
+    return False
+
+
+def wait_for_filesystems_removed(client, fs_names, timeout=300, interval=10):
+    """Poll until none of the given filesystems remain in `ceph fs ls`."""
+    if not fs_names:
+        return
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        remaining = set(_list_filesystem_names(client)) & set(fs_names)
+        if not remaining:
+            log.info("Filesystems removed: %s", fs_names)
+            return
+        log.info("Waiting for filesystem removal, remaining: %s", remaining)
+        time.sleep(interval)
+    raise CommandFailed(f"Filesystems still present after {timeout}s: {remaining}")
+
+
 def run(ceph_cluster, **kw):
     """
     Post-suite cleanup and CephFS environment reinitialization.
@@ -87,16 +126,18 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
         )
-        for fs in result:
-            fs_name = fs["name"]
+        fs_names = [fs["name"] for fs in result]
+        for fs_name in fs_names:
             clients[0].exec_command(
                 sudo=True, cmd=f"ceph fs volume rm {fs_name} --yes-i-really-mean-it"
             )
-        time.sleep(30)
+        wait_for_filesystems_removed(clients[0], fs_names, timeout=300, interval=10)
 
         log.info("Cleaning UP NFS clusters")
         try:
-            out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            out, rc = clients[0].exec_command(
+                sudo=True, cmd="ceph nfs cluster ls -f json"
+            )
             output = json.loads(out)
         except JSONDecodeError:
             output = json.dumps([out])
@@ -108,11 +149,11 @@ def run(ceph_cluster, **kw):
             log.error("Cluster health is not OK even after waiting for 20 mins.")
             return 1
         out, _ = clients[0].exec_command(sudo=True, cmd="ceph health detail")
-        log.info("Ceph health details After 3 min sleep:\n%s", out)
-        time.sleep(180)  # Waiting to remove all stale entries for cephfs
+        log.info("Ceph health details before MDS cleanup wait:\n%s", out)
+        log.info("Waiting for stale MDS daemons to stop after filesystem removal")
+        wait_for_no_mds_daemons(clients[0], timeout=180, interval=10)
         out, _ = clients[0].exec_command(sudo=True, cmd="ceph health detail")
         log.info("Ceph health details:\n%s", out)
-        fs_util.wait_for_mds_process(clients[0], process_name="", ispresent=False)
         default_fs = "cephfs"
         fs_details = fs_util.get_fs_info(clients[0], default_fs)
         retry_create_fs = retry(CommandFailed, tries=3, delay=30)(fs_util.create_fs)
