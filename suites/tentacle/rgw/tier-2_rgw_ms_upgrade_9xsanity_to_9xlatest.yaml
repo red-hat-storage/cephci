@@ -6,7 +6,8 @@
 # and secondary (sec) zones within this group. The master zone is part of the pri
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 # platform : RHEL-9
-# conf : conf/tentacle/rgw/rgw_multisite.yaml
+# The data bucket is configured to use EC 2+2 on a 4-node cluster.
+# conf : conf/tentacle/rgw/rgw_multisite_ec2+2.yaml
 tests:
 
   - test:
@@ -59,6 +60,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "primary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -66,7 +82,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node3
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -108,6 +124,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -115,73 +146,12 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node3
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - node1
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - node1
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - node1
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - node1
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-      name: Monitoring Services deployment
-      desc: Add monitoring services using spec file.
-      module: test_cephadm.py
-      polarion-id: CEPH-83574727
 
   - test:
       abort-on-fail: true
@@ -190,7 +160,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -198,7 +168,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -208,22 +178,22 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
-# configuring HAproxy on the client node 'node6' and port '5000'
+# configuring HAproxy on the client node 'node4' and port '5000'
   - test:
       abort-on-fail: true
       clusters:
         ceph-pri:
           config:
             haproxy_clients:
-              - node6
+              - node4
             rgw_endpoints:
-              - node5:80
+              - node3:80
         ceph-sec:
           config:
             haproxy_clients:
-              - node6
+              - node4
             rgw_endpoints:
-              - node5:80
+              - node3:80
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
@@ -236,8 +206,8 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node3}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node3}:80 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
@@ -251,8 +221,8 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node3}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node3}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
@@ -313,18 +283,30 @@ tests:
       polarion-id: CEPH-83575199
 
   # Baseline tests before upgrade
+  - test:
+      abort-on-fail: true
+      name: download objects pre upgrade
+      desc: test to create "M" no of buckets and "N" no of objects with download pre upgrade
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+            verify-io-on-site: ["ceph-pri"]
+      polarion-id: CEPH-14237
 
   - test:
-      name: Test LC Expiration on multisite
-      desc: Test LC Expiration on multisite
-      polarion-id: CEPH-10737
+      name: versioning objects enable pre upgrade
+      desc: test_versioning_objects_enable on primary pre upgrade
+      polarion-id: CEPH-14261
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_bucket_lifecycle_object_expiration_transition.py
-            config-file-name: test_lc_rule_prefix_and_tag.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_enable.yaml
+            verify-io-on-site: ["ceph-sec"]
 
   # Performing cluster upgrade
 
@@ -350,14 +332,27 @@ tests:
   - test:
       abort-on-fail: true
       name: download objects post upgrade
-      desc: test to create "M" no of buckets and "N" no of objects with download
+      desc: test to create "M" no of buckets and "N" no of objects with download post upgrade
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+            verify-io-on-site: ["ceph-pri"]
+      polarion-id: CEPH-14237
+
+  - test:
+      name: versioning objects enable post upgrade
+      desc: test_versioning_objects_enable on primary post upgrade
+      polarion-id: CEPH-14261
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-      polarion-id: CEPH-14237
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_enable.yaml
+            verify-io-on-site: ["ceph-sec"]
 
   - test:
       name: Retrieve the versions of the cluster parallelly
