@@ -475,3 +475,15 @@ tests:
             script-name: ../aws/test_lua_postauth_cache.py
             config-file-name: ../../aws/configs/test_aws_lua_postauth_cache.yaml
             verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua postrequest access log test
+      desc: Test Lua postrequest access-log via unix socket (tracker #81310)
+      polarion-id: CEPH-83633031
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_postauth_cache.py
+            config-file-name: ../../aws/configs/test_aws_lua_postrequest_access_log.yaml
+            verify-io-on-site: ["ceph-sec"]
