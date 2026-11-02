@@ -406,6 +406,47 @@ tests:
         nfs_version: 4.1
         clients: 2
 
+
+  - test:
+      name: Edit NFS export and enable rootsquash
+      module: nfs_edit_export_enable_rootsquash.py
+      desc: Edit an existing export from squash none to rootsquash
+      polarion-id: CEPH-83578396
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Root and nobody edit a file with rootsquash
+      module: nfs_rootsquash_root_nobody_edit.py
+      desc: Root and nobody edit one file after rootsquash is enabled
+      polarion-id: CEPH-83578385
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Export several volumes and mount them on several clients
+      module: nfs_export_several_volumes_multi_client.py
+      desc: Create one export per client and mount it
+      polarion-id: CEPH-83578389
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 3
+
+  - test:
+      name: Export and unexport several volumes in a loop
+      module: nfs_export_unexport_volume_loop.py
+      desc: Create and delete several exports in a loop with no client mount
+      polarion-id: CEPH-83578391
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
   - test:
       name: Nfs Verify setuid bit set on a file
       module: nfs_verify_setuid_bit.py
