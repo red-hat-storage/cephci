@@ -468,7 +468,7 @@ tests:
       desc: Test Lua postAuth bytecode cache test with awscli
       polarion-id: CEPH-83633003
       module: sanity_rgw_multisite.py
-      comments: known-issues IBMCEPH-18046
+      comments: Known issue IBMCEPH-18046 on 9.2
       clusters:
         ceph-pri:
           config:
@@ -481,7 +481,6 @@ tests:
       desc: Test Lua prerequest script A warm-up then script B runs after rm+put (stale bytecode)
       polarion-id: CEPH-83633020
       module: sanity_rgw_multisite.py
-      comments: known-issues IBMCEPH-19435
       clusters:
         ceph-pri:
           config:
@@ -494,7 +493,6 @@ tests:
       desc: Test Lua prerequest blocking script takes effect immediately on put_object
       polarion-id: CEPH-83633021
       module: sanity_rgw_multisite.py
-      comments: known-issues IBMCEPH-19436
       clusters:
         ceph-pri:
           config:
