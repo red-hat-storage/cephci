@@ -7,7 +7,7 @@
 # master zone - pri
 # secondary zone - sec
 # archive zone - arc
-# global-conf: conf/tentacle/rgw/tier-3_archive_zone_colocate_data_zone_conf.yaml
+# global-conf: conf/tentacle/rgw/tier-3_archive_zone_colocate_data_zone_ec2+2.yaml
 
 ---
 
@@ -170,6 +170,9 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2 crush-failure-domain=host crush-device-class=hdd"
+              - "ceph osd pool create primary.rgw.buckets.data 32 32 erasure rgwec22_4"
+              - "ceph osd pool application enable primary.rgw.buckets.data rgw"
               - "ceph orch restart {service_name:shared.pri}"
         ceph-sec:
           config:
@@ -183,6 +186,9 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
+              - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2 crush-failure-domain=host crush-device-class=hdd"
+              - "ceph osd pool create secondary.rgw.buckets.data 32 32 erasure rgwec22_4"
+              - "ceph osd pool application enable secondary.rgw.buckets.data rgw"
               - "ceph orch restart {service_name:shared.sec}"
       desc: Setting up 3-way RGW multisite replication environment
       module: exec.py
@@ -239,6 +245,9 @@ tests:
               - "ceph config set client.rgw.shared.arc rgw_realm india"
               - "ceph config set client.rgw.shared.arc rgw_zonegroup shared"
               - "ceph config set client.rgw.shared.arc rgw_zone archive"
+              - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2 crush-failure-domain=host crush-device-class=hdd"
+              - "ceph osd pool create archive.rgw.buckets.data 32 32 erasure rgwec22_4"
+              - "ceph osd pool application enable archive.rgw.buckets.data rgw"
               - "ceph orch restart rgw.shared.arc"
       desc: Colocate the archive zone with primary sone cluster
       module: exec.py

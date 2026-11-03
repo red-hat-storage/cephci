@@ -1,6 +1,6 @@
 # Test suite for cloud transition workflow
 
-# global-conf: conf/tentacle/rgw/cloud_transition.yaml
+# global-conf: conf/tentacle/rgw/cloud_transition_ec2+2.yaml
 
 tests:
 
@@ -52,6 +52,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create default.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "default.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -59,7 +74,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node3
         cloud:
           config:
             verify_cluster_health: true
@@ -97,6 +112,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create default.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "default.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -104,7 +134,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node3
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -118,7 +148,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -126,7 +156,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -150,7 +180,7 @@ tests:
             commands:
               - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_lc_debug_interval 20"
               - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3"
-              - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node5}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=true"
+              - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node3}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=true"
               - "ceph orch restart {service_name:rgw.1}"
       desc: Setting up cloud transition environment
       module: exec.py
@@ -175,7 +205,7 @@ tests:
           config:
             cephadm: true
             commands:
-              - "radosgw-admin zonegroup placement modify --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node5}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=false"
+              - "radosgw-admin zonegroup placement modify --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node3}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=false"
               - "ceph orch restart {service_name:rgw.1}"
       desc: Setting "retain_head_object" to false
       module: exec.py
