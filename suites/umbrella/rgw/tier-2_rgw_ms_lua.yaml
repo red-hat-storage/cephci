@@ -468,10 +468,48 @@ tests:
       desc: Test Lua postAuth bytecode cache test with awscli
       polarion-id: CEPH-83633003
       module: sanity_rgw_multisite.py
-      known-issues: IBMCEPH-18046
+      comments: Known issue IBMCEPH-18046 targeted to 10.0
       clusters:
         ceph-pri:
           config:
             script-name: ../aws/test_lua_postauth_cache.py
             config-file-name: ../../aws/configs/test_aws_lua_postauth_cache.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua prerequest stale bytecode cache test
+      desc: Test Lua prerequest script A warm-up then script B runs after rm+put (stale bytecode)
+      polarion-id: CEPH-83633020
+      module: sanity_rgw_multisite.py
+      comments: Known issue IBMCEPH-19435 targeted to 10.0
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_postauth_cache.py
+            config-file-name: ../../aws/configs/test_aws_lua_prerequest_stale_bytecode_cache.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua prerequest cache invalidation test
+      desc: Test Lua prerequest blocking script takes effect immediately on put_object
+      polarion-id: CEPH-83633021
+      module: sanity_rgw_multisite.py
+      comments: Known issue IBMCEPH-19436 targeted to 10.0
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_postauth_cache.py
+            config-file-name: ../../aws/configs/test_aws_lua_prerequest_cache_invalidation.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: Lua postrequest access log test
+      desc: Test Lua postrequest access-log via unix socket (tracker #81310)
+      polarion-id: CEPH-83633031
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_lua_postauth_cache.py
+            config-file-name: ../../aws/configs/test_aws_lua_postrequest_access_log.yaml
             verify-io-on-site: ["ceph-sec"]
