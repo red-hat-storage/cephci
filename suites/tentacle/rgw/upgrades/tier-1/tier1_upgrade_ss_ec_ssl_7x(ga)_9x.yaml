@@ -23,6 +23,7 @@ tests:
               args:
                 rhcs-version: 7.1
                 release: released
+                platform: rhel-9
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true

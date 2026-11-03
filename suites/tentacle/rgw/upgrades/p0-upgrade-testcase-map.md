@@ -14,7 +14,7 @@ Setup only. No functional testcases. Single site is tier-1. Multisite + archive 
 Each suite runs, in order:
 
 1. Prereq
-2. Deploy (EC 2+2, SSL, 3 RGW on single site, 6 RGW per site on multisite: 3 `rgw_io` + 3 `rgw_sync`)
+2. Deploy the same way as the other upgrade suites: `cephadm bootstrap` with `rhcs-version`, `release: released`, and `platform: rhel-9`, then hosts, mgr, mon, osd, the EC 2+2 pools, and the SSL RGW spec. Single site has 3 RGW daemons. Multisite has 6 per site (3 `rgw_io` + 3 `rgw_sync`).
 3. Monitoring stack (prometheus, grafana, alertmanager, node-exporter, crash). Bootstrap still uses `skip-monitoring-stack: true`, then this step applies the spec. On tier-2 it is applied on primary, secondary, and archive.
 4. Client, then the SSL CA copy and HAProxy in front of the RGW port
 5. Multisite, tier-2 only: realm and zone setup, realm info, non-tenanted user create
