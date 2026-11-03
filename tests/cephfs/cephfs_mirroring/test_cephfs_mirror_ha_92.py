@@ -232,17 +232,32 @@ def run(ceph_cluster, **kw):
         log.info(f"Daemon 1 ({daemon1_hostname}) assigned directories: {d1_paths}")
         log.info(f"Daemon 2 ({daemon2_hostname}) assigned directories: {d2_paths}")
 
+        # Scope assertions to directories this test registered. Prior suite tests
+        # (e.g. configure HA with cleanup:false) can leave stale
+        # cephfs_mirror_directory counter labels on the long-lived daemons.
+        expected_paths = {p.rstrip("/") for p in sv_paths}
+        d1_ours = {p for p in d1_paths if p and p.rstrip("/") in expected_paths}
+        d2_ours = {p for p in d2_paths if p and p.rstrip("/") in expected_paths}
+
         # Assert no overlapping active directory assignments across daemons
-        common_paths = d1_paths.intersection(d2_paths)
+        common_paths = d1_ours.intersection(d2_ours)
         if common_paths:
             raise AssertionError(
                 f"Directories overlapped across mirror daemons unexpectedly: {common_paths}"
             )
-        total_tracked = len(d1_paths.union(d2_paths))
-        if total_tracked != 4:
+        tracked_ours = {p.rstrip("/") for p in d1_ours.union(d2_ours)}
+        missing = expected_paths - tracked_ours
+        if missing:
             raise AssertionError(
-                "Scenario 5 FAILED: expected 4 tracked directories across both daemons, "
-                "found %d (d1=%s d2=%s)" % (total_tracked, d1_paths, d2_paths)
+                "Scenario 5 FAILED: expected dirs missing from perf dump: %s "
+                "(d1=%s d2=%s all_d1=%s all_d2=%s)"
+                % (missing, d1_ours, d2_ours, d1_paths, d2_paths)
+            )
+        if len(tracked_ours) != 4:
+            raise AssertionError(
+                "Scenario 5 FAILED: expected 4 of this test's directories tracked, "
+                "found %d (ours=%s d1=%s d2=%s)"
+                % (len(tracked_ours), tracked_ours, d1_ours, d2_ours)
             )
 
         # --------------------------------------------------------------------------
@@ -380,10 +395,17 @@ def run(ceph_cluster, **kw):
             e.get("labels", {}).get("directory") for e in d2_counters_after
         }
         log.info(f"Daemon 2 now tracking directories in perf dump: {d2_paths_after}")
-        if len(d2_paths_after) < 4:
+        expected_paths = {p.rstrip("/") for p in sv_paths}
+        d2_ours_after = {
+            p.rstrip("/")
+            for p in d2_paths_after
+            if p and p.rstrip("/") in expected_paths
+        }
+        missing_after = expected_paths - d2_ours_after
+        if missing_after:
             raise AssertionError(
-                "Scenario 6 FAILED: surviving daemon tracks %d dirs, expected >= 4: %s"
-                % (len(d2_paths_after), d2_paths_after)
+                "Scenario 6 FAILED: surviving daemon missing dirs %s "
+                "(ours=%s all=%s)" % (missing_after, d2_ours_after, d2_paths_after)
             )
 
         # --------------------------------------------------------------------------
