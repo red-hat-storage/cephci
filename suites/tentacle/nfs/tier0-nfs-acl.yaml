@@ -13,6 +13,8 @@
 #      scale limit, persistence after remount
 #    - Hotfix coverage: named-group inherit (existing vs new children),
 #      multi-group file w/a loss, special-identity access ACE retention
+#    - Extended coverage: inherited GROUP@ write rule vs. client umask on
+#      new dirs/files (IBMCEPH-21565)
 #
 #===============================================================================================
 tests:
@@ -200,3 +202,25 @@ tests:
         clients: 1
         mount_type: nfs
       comments: "IBMCEPH-19501, IBMCEPH-19502"
+
+  - test:
+      name: NFS ACL - Extended Coverage (NFS mount)
+      module: acl.extended_coverage.py
+      desc: >
+        Extended coverage for a directory carrying an inherited GROUP@
+        access rule (A:fdi:GROUP@:rwaDxtcy): newly created subdirectories
+        and files under the suite's restrictive umask (0027) must retain
+        the inherited write/append/delete-child permission instead of
+        having it silently clipped by the umask. Verified both via
+        nfs4_getfacl and an actual non-owner group-member write attempt.
+        # Bug: IBMCEPH-21565 - inherited GROUP@ write bits are lost on both
+        # new subdirectories (A::GROUP@:rxtcy instead of rwaDxtcy) and new
+        # files (explicit D::GROUP@:wax Deny instead of the inherited
+        # Allow); resulting mode bits match plain umask-only behaviour as
+        # if the inherited ACL rule were never applied.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        mount_type: nfs
+      comments: "IBMCEPH-21565"
