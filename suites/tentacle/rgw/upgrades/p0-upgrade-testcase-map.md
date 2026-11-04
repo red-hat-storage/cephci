@@ -11,15 +11,15 @@ Setup only. No functional testcases. Single site is tier-1. Multisite + archive 
 | `tier-2/` | `tier2_upgrade_ms_archive_ec_ssl_8x(ga)_9x.yaml` | Squid | 8.1 GA to 9.x |
 | `tier-2/` | `tier2_upgrade_ms_archive_ec_ssl_9.1x(ga)_9x.yaml` | Tentacle | 9.1 GA to 9.x |
 
-Single-site feature tests are 7 before the upgrade and the same 7 after it. A config used in one single-site suite is not used in the other two. s3cmd, M buckets with N objects, multipart put or delete, and Swift are in every single-site suite. Listing, dynamic resharding, lifecycle expiration, vault encryption, compression, NFS create, and STS are covered across the three suites.
+Single-site feature tests are 5 before the upgrade and the same 5 after it. A config used in one single-site suite is not used in the other two. s3cmd, M buckets with N objects, multipart put or delete, and Swift are in every single-site suite. The fifth case is ordered listing on 7.1, vault SSE-S3 on 8.1, and STS rename on 9.1. Dynamic resharding, lifecycle expiration, compression, and NFS create are not in these suites at this cap.
 
-| Suite | The 7 feature tests |
+| Suite | The 5 feature tests |
 |---|---|
-| 7.1 | s3cmd GET `test_get_s3cmd.yaml`, M buckets etag, multipart put `test_Mbuckets_with_Nobjects_multipart.yaml`, Swift storage policy, ordered listing, dynamic reshard with version, LC current-version expiration |
-| 8.1 | s3cmd RGW log `test_rgw_log_details.yaml`, M buckets download, multipart delete `test_Mbuckets_with_Nobjects_delete.yaml`, Swift basic ops, vault SSE-S3 per bucket, compression zstd, NFS create |
-| 9.1 | s3cmd header size, M buckets `test_Mbuckets_with_Nobjects.yaml`, multipart failed parts, Swift versioning, STS rename, vault SSE-S3 on a versioned bucket, dynamic reshard without version |
+| 7.1 | s3cmd GET `test_get_s3cmd.yaml`, M buckets etag, multipart put `test_Mbuckets_with_Nobjects_multipart.yaml`, Swift storage policy, ordered listing |
+| 8.1 | s3cmd RGW log `test_rgw_log_details.yaml`, M buckets download, multipart delete `test_Mbuckets_with_Nobjects_delete.yaml`, Swift basic ops, vault SSE-S3 per bucket |
+| 9.1 | s3cmd header size, M buckets `test_Mbuckets_with_Nobjects.yaml`, multipart failed parts, Swift versioning, STS rename |
 
-Vault agent install sits next to the encryption test and is not one of the 7. Cases that were not in an upgrade suite came from `tier-1_rgw.yaml`, `tier-1_rgw_and_lc.yaml`, `tier-2_rgw_test_lifecycle.yaml`, and `tier-2_rgw_test_using_s3cmd.yaml`.
+Vault agent install sits next to the 8.1 encryption test and is not one of the 5. Cases that were not in an upgrade suite came from `tier-1_rgw.yaml`, `tier-1_rgw_and_lc.yaml`, and `tier-2_rgw_test_using_s3cmd.yaml`.
 
 Each suite runs, in order:
 

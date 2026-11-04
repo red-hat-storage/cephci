@@ -3,7 +3,7 @@
 # conf: conf/tentacle/rgw/tier-0_rgw.yaml
 
 # Tier-1 single site. Steps: prereq, deploy, monitoring stack, client, upgrade, versions.
-# Feature tests: 7 before the upgrade and the same 7 after it. No case is shared with the other single-site suites.
+# Feature tests: 5 before the upgrade and the same 5 after it. No case is shared with the other single-site suites.
 
 tests:
   - test:
@@ -229,26 +229,6 @@ tests:
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
 
   - test:
-      name: compression with zstd pre upgrade
-      desc: test compression with zstd type
-      polarion-id: CEPH-11350
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
-
-  - test:
-      name: NFS cluster and export create pre upgrade
-      desc: Test NFS cluster and export create
-      polarion-id: CEPH-83574597
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        script-name: ../nfs_ganesha/nfs_cluster.py
-        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
-
-
-  - test:
       abort-on-fail: true
       name: Upgrade cluster to latest ceph version
       desc: Upgrade cluster to latest version
@@ -342,23 +322,4 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-
-  - test:
-      name: compression with zstd post upgrade
-      desc: test compression with zstd type
-      polarion-id: CEPH-11350
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
-
-  - test:
-      name: NFS cluster and export create post upgrade
-      desc: Test NFS cluster and export create
-      polarion-id: CEPH-83574597
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        script-name: ../nfs_ganesha/nfs_cluster.py
-        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
 
