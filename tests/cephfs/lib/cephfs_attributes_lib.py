@@ -885,6 +885,7 @@ class CephFSAttributeUtilities(object):
             "for c in A a B b C c; do "
             'touch "$d/${{c}}_$i" 2>/dev/null || true; '
             "done; "
+            'echo x >"$d/Foo_$i" 2>/dev/null || true; '
             'rm -f "$d/Foo_$i" 2>/dev/null || true; '
             'echo y >"$d/FOO_$i" 2>/dev/null || true; '
             "done"

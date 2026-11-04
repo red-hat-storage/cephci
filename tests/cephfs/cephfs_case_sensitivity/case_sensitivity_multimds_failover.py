@@ -191,13 +191,47 @@ def _mds_fail_rank(client, rank):
 
 
 def _flush_mds_journals(client, fs_name, max_mds):
-    """Best-effort journal flush on every active rank to age segments."""
+    """Flush journal on every active rank; return False if any flush fails."""
     for rank in range(int(max_mds)):
-        client.exec_command(
+        out, err, exit_code, _ = client.exec_command(
             sudo=True,
             cmd="ceph tell mds.{}:{} flush journal".format(fs_name, rank),
             check_ec=False,
+            verbose=True,
+            timeout=600,
         )
+        if exit_code != 0:
+            log.error(
+                "flush journal failed rank=%s exit_code=%s stdout=%r stderr=%r",
+                rank,
+                exit_code,
+                out,
+                err,
+            )
+            return False
+    return True
+
+
+def _fail_all_ranks_and_assert(
+    client, attr_util, fs_name, max_mds, post_fail_sleep_sec, oracle_prefix
+):
+    """
+    Fail every active rank after a focused mutation so the auth MDS for the
+    work directory is always forced through journal replay.
+    """
+    for rank in range(int(max_mds)):
+        log.info("%s: failing rank %s", oracle_prefix, rank)
+        if not _mds_fail_rank(client, rank):
+            return False
+        time.sleep(post_fail_sleep_sec)
+        if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
+            log.error("%s: ranks not active after fail rank %s", oracle_prefix, rank)
+            return False
+        if not _assert_post_fail_oracles(
+            client, attr_util, fs_name, "{}-r{}".format(oracle_prefix, rank)
+        ):
+            return False
+    return True
 
 
 def _usecase_multimds_failover(
@@ -359,7 +393,6 @@ def _usecase_rm_foo_create_foo_failover(
     carries ``FOO``, hitting ``journal.cc`` alternate_name assert on replay.
     """
     max_mds = int(config.get("max_mds", 4))
-    fail_ranks = _resolve_fail_ranks(config, max_mds)
     post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
     iterations = int(config.get("foo_flip_iterations", 5))
     work_dir = os.path.join(mounting_dir.rstrip("/"), "casefold_foo_flip")
@@ -381,22 +414,18 @@ def _usecase_rm_foo_create_foo_failover(
         client.exec_command(sudo=True, cmd="rm -f {!r}".format(foo_path))
         client.exec_command(sudo=True, cmd="echo flip2 > {!r}".format(foo_upper))
 
-        rank_to_fail = fail_ranks[(iteration - 1) % len(fail_ranks)]
         log.info(
-            "Usecase 3 iteration %s/%s: failing rank %s after Foo→FOO",
+            "Usecase 3 iteration %s/%s: failing all ranks after Foo→FOO",
             iteration,
             iterations,
-            rank_to_fail,
         )
-        if not _mds_fail_rank(client, rank_to_fail):
-            return 1
-        time.sleep(post_fail_sleep_sec)
-
-        if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
-            log.error("Usecase 3: ranks not active after fail iteration %s", iteration)
-            return 1
-        if not _assert_post_fail_oracles(
-            client, attr_util, fs_name, "foo-flip-{}".format(iteration)
+        if not _fail_all_ranks_and_assert(
+            client,
+            attr_util,
+            fs_name,
+            max_mds,
+            post_fail_sleep_sec,
+            "foo-flip-{}".format(iteration),
         ):
             return 1
 
@@ -415,7 +444,6 @@ def _usecase_journal_trim_recreate_failover(
     replay asserts if the cached dentry is not updated.
     """
     max_mds = int(config.get("max_mds", 4))
-    fail_ranks = _resolve_fail_ranks(config, max_mds)
     post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
     iterations = int(config.get("trim_recreate_iterations", 3))
     flush_rounds = int(config.get("journal_flush_rounds", 8))
@@ -455,7 +483,8 @@ def _usecase_journal_trim_recreate_failover(
                     t=target, f=target_flip
                 ),
             )
-            _flush_mds_journals(client, fs_name, max_mds)
+            if not _flush_mds_journals(client, fs_name, max_mds):
+                return 1
 
             # Generate journal pressure then flush repeatedly so the create
             # event is trimmed before the unlink is journaled alone.
@@ -469,33 +498,29 @@ def _usecase_journal_trim_recreate_failover(
                 ).format(d=filler, n=filler_files),
             )
             for _ in range(flush_rounds):
-                _flush_mds_journals(client, fs_name, max_mds)
+                if not _flush_mds_journals(client, fs_name, max_mds):
+                    return 1
                 time.sleep(1)
 
             client.exec_command(sudo=True, cmd="rm -f {!r}".format(target))
-            _flush_mds_journals(client, fs_name, max_mds)
+            # Do not flush after unlink — keep the nullbit in the journal for
+            # recreate + failover (empty alternate_name vs later fullbit).
             client.exec_command(
                 sudo=True, cmd="echo recreated > {!r}".format(target_flip)
             )
 
-            rank_to_fail = fail_ranks[(iteration - 1) % len(fail_ranks)]
             log.info(
-                "Usecase 4 iteration %s/%s: failing rank %s after trim/recreate",
+                "Usecase 4 iteration %s/%s: failing all ranks after trim/recreate",
                 iteration,
                 iterations,
-                rank_to_fail,
             )
-            if not _mds_fail_rank(client, rank_to_fail):
-                return 1
-            time.sleep(post_fail_sleep_sec)
-
-            if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
-                log.error(
-                    "Usecase 4: ranks not active after fail iteration %s", iteration
-                )
-                return 1
-            if not _assert_post_fail_oracles(
-                client, attr_util, fs_name, "trim-recreate-{}".format(iteration)
+            if not _fail_all_ranks_and_assert(
+                client,
+                attr_util,
+                fs_name,
+                max_mds,
+                post_fail_sleep_sec,
+                "trim-recreate-{}".format(iteration),
             ):
                 return 1
     finally:
