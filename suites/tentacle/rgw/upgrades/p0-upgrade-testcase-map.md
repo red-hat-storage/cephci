@@ -1,6 +1,6 @@
 # P0 RGW upgrade suites
 
-Setup only. No functional testcases. Single site is tier-1. Multisite + archive is tier-2.
+Single site is tier-1. Two-site multisite is tier-2.
 
 | Folder | Suite | Release | Path |
 |---|---|---|---|
@@ -19,19 +19,28 @@ Single-site feature tests are 5 before the upgrade and the same 5 after it. A co
 | 8.1 | M buckets AWS4 `test_Mbuckets_with_Nobjects_aws4.yaml`, M buckets download, multipart delete `test_Mbuckets_with_Nobjects_delete.yaml`, Swift basic ops, vault SSE-S3 per bucket |
 | 9.1 | s3cmd delete marker `test_multiple_delete_marker_check.yaml`, M buckets `test_Mbuckets_with_Nobjects.yaml`, GetObjectAttributes multipart, Swift versioning, STS rename |
 
-Vault agent install sits next to the 8.1 encryption test and is not one of the 5. Multisite user create SSHes to the first zone endpoint, node2. That node has the rgw role so `ceph-common` and the admin keyring are present for `radosgw-admin sync status`.
+Vault agent install sits next to the 8.1 single-site encryption test and is not one of the 5. Two-site user create copies the user file to secondary. Node2 is the first zone endpoint and has the rgw role, so `ceph-common` and the admin keyring are present for `radosgw-admin sync status`.
+
+Tier-2 is two-site multisite, primary and secondary. Swift is not required. Each suite has 5 feature tests before the upgrade and the same 5 after it, taken from the upgrade canvas where that case can run twice on SSL. A config used in one tier-2 suite is not used in the other two. Object tests check IO on secondary.
+
+| Suite | The 5 feature tests |
+|---|---|
+| 7.1 | s3cmd delete lifecycle, M buckets `test_Mbuckets_with_Nobjects.yaml`, multipart put, ordered listing, compression |
+| 8.1 | M buckets `test_Mbuckets.yaml`, object delete, unordered listing, bucket versioning, M buckets download |
+| 9.1 | s3cmd delete marker, M buckets AWS4, GetObjectAttributes multipart, ordered listing of versioned buckets, M buckets etag |
 
 Each suite runs, in order:
 
 1. Prereq
-2. Deploy the same way as the other upgrade suites: `cephadm bootstrap` with `rhcs-version`, `release: released`, and `platform: rhel-9`, then hosts, mgr, mon, osd, the EC 2+2 pools, and the SSL RGW spec. Single site has 3 RGW daemons. Multisite has 6 per site (3 `rgw_io` + 3 `rgw_sync`).
-3. Monitoring stack (prometheus, grafana, alertmanager, node-exporter, crash). Bootstrap still uses `skip-monitoring-stack: true`, then this step applies the spec. On tier-2 it is applied on primary, secondary, and archive.
+2. Deploy the same way as the other upgrade suites: `cephadm bootstrap` with `rhcs-version`, `release: released`, and `platform: rhel-9`, then hosts, mgr, mon, osd, the EC 2+2 pools, and the SSL RGW spec. Single site has 3 RGW daemons. Two-site multisite has 6 per site (3 `rgw_io` + 3 `rgw_sync`).
+3. Monitoring stack (prometheus, grafana, alertmanager, node-exporter, crash). Bootstrap still uses `skip-monitoring-stack: true`, then this step applies the spec. On tier-2 it is applied on primary and secondary.
 4. Client, then the SSL CA copy and HAProxy in front of the RGW port
-5. Multisite, tier-2 only: realm and zone setup, realm info, non-tenanted user create
-6. Upgrade
-7. CA copy again, then `ceph versions`
+5. Multisite, tier-2 only: realm and zone setup for primary and secondary, realm info, non-tenanted user create with the user file copied to secondary
+6. The 5 feature tests
+7. Upgrade
+8. CA copy again, then `ceph versions`, then the same 5 feature tests
 
 Cluster conf:
 
 - Tier-1: `conf/tentacle/rgw/tier-0_rgw.yaml`
-- Tier-2: `conf/tentacle/rgw/3-way-archive-ec-profile-2+2@4nodes.yaml`
+- Tier-2: `conf/tentacle/rgw/2-site-ec-profile-2+2@4nodes.yaml`
