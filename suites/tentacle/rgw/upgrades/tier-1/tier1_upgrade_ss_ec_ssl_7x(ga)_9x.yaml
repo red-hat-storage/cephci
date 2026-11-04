@@ -172,13 +172,13 @@ tests:
   # Pre upgrade feature tests
 
   - test:
-      name: S3CMD small and multipart object download pre upgrade
-      desc: S3CMD small and multipart object download or GET
-      polarion-id: CEPH-83575477
+      name: S3CMD delete lifecycle rule pre upgrade
+      desc: Delete a bucket lifecycle rule with s3cmd
+      polarion-id: CEPH-83580364
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
 
   - test:
       name: Mbuckets with N objects etag verification pre upgrade
@@ -255,13 +255,13 @@ tests:
   # Post upgrade feature tests
 
   - test:
-      name: S3CMD small and multipart object download post upgrade
-      desc: S3CMD small and multipart object download or GET
-      polarion-id: CEPH-83575477
+      name: S3CMD delete lifecycle rule post upgrade
+      desc: Delete a bucket lifecycle rule with s3cmd
+      polarion-id: CEPH-83580364
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
 
   - test:
       name: Mbuckets with N objects etag verification post upgrade

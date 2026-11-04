@@ -172,13 +172,13 @@ tests:
   # Pre upgrade feature tests
 
   - test:
-      name: S3CMD object header size check pre upgrade
-      desc: S3CMD object header size check
-      polarion-id: CEPH-83574691
+      name: S3CMD versioned object delete marker pre upgrade
+      desc: One delete marker when a versioned object is deleted several times with s3cmd
+      polarion-id: CEPH-83574806
       module: sanity_rgw.py
       config:
-        script-name: ../s3cmd/test_header_size.py
-        config-file-name: ../../s3cmd/configs/test_header_size.yaml
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
 
   - test:
       name: M buckets with N objects pre upgrade
@@ -190,13 +190,13 @@ tests:
         config-file-name: test_Mbuckets_with_Nobjects.yaml
 
   - test:
-      name: Multipart upload with failed parts pre upgrade
-      desc: Test multipart upload with failed upload parts using s3cmd and boto3
-      polarion-id: CEPH-83589550
+      name: GetObjectAttributes with multipart objects pre upgrade
+      desc: Upload multipart objects and read their attributes
+      polarion-id: CEPH-83595849
       module: sanity_rgw.py
       config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
 
   - test:
       name: Swift versioning pre upgrade
@@ -255,13 +255,13 @@ tests:
   # Post upgrade feature tests
 
   - test:
-      name: S3CMD object header size check post upgrade
-      desc: S3CMD object header size check
-      polarion-id: CEPH-83574691
+      name: S3CMD versioned object delete marker post upgrade
+      desc: One delete marker when a versioned object is deleted several times with s3cmd
+      polarion-id: CEPH-83574806
       module: sanity_rgw.py
       config:
-        script-name: ../s3cmd/test_header_size.py
-        config-file-name: ../../s3cmd/configs/test_header_size.yaml
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
 
   - test:
       name: M buckets with N objects post upgrade
@@ -273,13 +273,13 @@ tests:
         config-file-name: test_Mbuckets_with_Nobjects.yaml
 
   - test:
-      name: Multipart upload with failed parts post upgrade
-      desc: Test multipart upload with failed upload parts using s3cmd and boto3
-      polarion-id: CEPH-83589550
+      name: GetObjectAttributes with multipart objects post upgrade
+      desc: Upload multipart objects and read their attributes
+      polarion-id: CEPH-83595849
       module: sanity_rgw.py
       config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
 
   - test:
       name: Swift versioning post upgrade
