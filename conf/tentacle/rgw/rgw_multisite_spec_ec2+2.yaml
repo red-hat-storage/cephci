@@ -1,0 +1,80 @@
+# Conf for 2+2 EC profile on 4 nodes for RGW multisite with two RGWs.
+# Same roles as rgw_multisite_spec.yaml: RGW on two nodes, three mons, three mgrs.
+# crush-failure-domain=host requires k+m (4) OSD hosts per cluster.
+---
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
