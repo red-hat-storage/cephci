@@ -1,4 +1,4 @@
-from time import sleep
+from time import sleep, time
 
 from nfs_operations import cleanup_cluster, open_mandatory_v3_ports, setup_nfs_cluster
 
@@ -9,6 +9,27 @@ from cli.utilities.windows_utils import setup_windows_clients
 from utility.log import Log
 
 log = Log(__name__)
+
+
+def _nfs_rpc_state(nfs_node):
+    """Return whether nfs is registered, and the current TCP mountd port."""
+    out, _ = nfs_node.exec_command(sudo=True, cmd="sudo rpcinfo -p", check_ec=False)
+    nfs_up = False
+    mountd_port = None
+    for line in (out or "").splitlines():
+        columns = line.split()
+        if len(columns) < 5:
+            continue
+        proto, port, service = columns[2], columns[3], columns[4]
+        if service == "nfs":
+            nfs_up = True
+        elif service == "mountd" and (mountd_port is None or proto == "tcp"):
+            mountd_port = port
+    return nfs_up, mountd_port
+
+
+def _lazy_unmount(client, mountpoint):
+    client.exec_command(cmd="umount -l %s" % mountpoint, sudo=True, check_ec=False)
 
 
 def update_export_conf(
@@ -118,7 +139,6 @@ def run(ceph_cluster, **kw):
             original_clients_value,
             new_clients_values,
         )
-        sleep(10)
 
         nfs_version = None
         if version:
@@ -131,60 +151,150 @@ def run(ceph_cluster, **kw):
                 if version_str.startswith("3") or version_str == "3":
                     nfs_version = 3
 
-        if nfs_version == 3:
-            open_mandatory_v3_ports(nfs_node, ["portmapper", "mountd"])
-
-        # Mount the export on client1 which is unauthorized.Mount should fail
-        clients[1].create_dirs(dir_path=nfs_client_mount, sudo=True)
-        cmd = (
-            f"mount -t nfs -o vers={version},port={port} "
-            f"{nfs_server_name[0]}:{nfs_export_client} {nfs_client_mount}"
-        )
-        out, err = clients[1].exec_command(cmd=cmd, sudo=True, check_ec=False)
-        result = "%s\n%s" % (out or "", err or "")
-        unauthorized = clients[1].hostname
-        if "access denied by server" in result:
-            log.info(
-                "As expected, mount on unauthorized client %s failed", unauthorized
-            )
-        elif clients[1].exit_status == 0:
-            raise OperationFailedError(
-                "Mount passed on unauthorized client: %s" % unauthorized
-            )
-        else:
-            raise OperationFailedError(
-                "Unauthorized client %s mount failed unexpectedly: %s"
-                % (unauthorized, result.strip())
-            )
-
-        sleep(15)
-
-        # Mount the export on client0 which is authorized.Mount should pass
         if is_windows:
-            cmd = f"mount {nfs_nodes[0].ip_address}:/export_1 {window_nfs_mount}"
+            sleep(10)
+            if nfs_version == 3:
+                open_mandatory_v3_ports(nfs_node, ["portmapper", "mountd"])
+            clients[1].create_dirs(dir_path=nfs_client_mount, sudo=True)
+            cmd = "mount -t nfs -o vers=%s,port=%s %s:%s %s" % (
+                version,
+                port,
+                nfs_server_name[0],
+                nfs_export_client,
+                nfs_client_mount,
+            )
+            out, err = clients[1].exec_command(cmd=cmd, sudo=True, check_ec=False)
+            result = "%s\n%s" % (out or "", err or "")
+            unauthorized = clients[1].hostname
+            if "access denied by server" in result:
+                log.info(
+                    "As expected, mount on unauthorized client %s failed", unauthorized
+                )
+            elif clients[1].exit_status == 0:
+                raise OperationFailedError(
+                    "Mount passed on unauthorized client: %s" % unauthorized
+                )
+            else:
+                raise OperationFailedError(
+                    "Unauthorized client %s mount failed unexpectedly: %s"
+                    % (unauthorized, result.strip())
+                )
+            sleep(15)
+            cmd = "mount %s:/export_1 %s" % (nfs_nodes[0].ip_address, window_nfs_mount)
             out = windows_clients[0].exec_command(cmd=cmd)
             if "is now successfully connected" not in out[0]:
                 raise OperationFailedError(
-                    f"Failed to mount nfs on {clients[0].ip_address}"
+                    "Failed to mount nfs on %s" % clients[0].ip_address
                 )
             sleep(3)
+            log.info(
+                "TEST PASSED - windows nfs_version=%s export=%s mounted on %s",
+                version,
+                nfs_export_client,
+                clients[0].hostname,
+            )
         else:
-            clients[0].create_dirs(dir_path=nfs_client_mount, sudo=True)
-            if isinstance(nfs_server_name, list):
-                nfs_server_name = nfs_server_name[0]
+            # Export apply restarts Ganesha. Mount the authorized client first
+            # so the export is loaded, then probe the unauthorized client once.
+            # Re-open the NFSv3 firewall ports when mountd moves to a new port.
+            # retry=0 keeps a closed mountd port from blocking for 2 minutes.
+            # NFSv4 reports a hidden export as "No such file or directory".
+            mount_server = nfs_server_name[0]
             if ha:
-                nfs_server_name = vip.split("/")[0]  # Remove the port
-            if Mount(clients[0]).nfs(
-                mount=nfs_client_mount,
-                version=version,
-                port=port,
-                server=nfs_server_name,
-                export=nfs_export_client,
+                mount_server = vip.split("/")[0]
+            clients[1].create_dirs(dir_path=nfs_client_mount, sudo=True)
+            clients[0].create_dirs(dir_path=nfs_client_mount, sudo=True)
+            unauth_cmd = "mount -t nfs -o vers=%s,port=%s,retry=0 %s:%s %s" % (
+                version,
+                port,
+                mount_server,
+                nfs_export_client,
+                nfs_client_mount,
+            )
+            unauthorized = clients[1].hostname
+            deadline = time() + 180
+            opened_mountd_port = None
+            authorized_ok = False
+            while time() < deadline:
+                nfs_up, mountd_port = _nfs_rpc_state(nfs_node)
+                if not nfs_up or (nfs_version == 3 and not mountd_port):
+                    log.info(
+                        "Polling NFS %s until rpcinfo shows the server",
+                        nfs_node.hostname,
+                    )
+                    sleep(2)
+                    continue
+                # Export apply restarts Ganesha and mountd takes a new port.
+                # Open that port once, then again only when the port changes.
+                if nfs_version == 3 and mountd_port != opened_mountd_port:
+                    try:
+                        open_mandatory_v3_ports(nfs_node, ["portmapper", "mountd"])
+                    except OperationFailedError as port_err:
+                        log.info(
+                            "NFSv3 ports are not ready on %s: %s",
+                            nfs_node.hostname,
+                            port_err,
+                        )
+                        sleep(2)
+                        continue
+                    opened_mountd_port = mountd_port
+                    sleep(2)
+                    continue
+                try:
+                    Mount(clients[0]).nfs(
+                        mount=nfs_client_mount,
+                        version=version,
+                        port=port,
+                        server=mount_server,
+                        export=nfs_export_client,
+                        extra_mount_options="retry=0",
+                        timeout=120,
+                    )
+                except Exception as mount_err:
+                    log.info(
+                        "Authorized mount of %s is not ready: %s",
+                        nfs_export_client,
+                        mount_err,
+                    )
+                    _lazy_unmount(clients[0], nfs_client_mount)
+                    sleep(5)
+                    continue
+                authorized_ok = True
+                break
+            if not authorized_ok:
+                raise OperationFailedError(
+                    "Authorized client %s did not mount %s within 180s"
+                    % (clients[0].hostname, nfs_export_client)
+                )
+            out, err = clients[1].exec_command(
+                cmd=unauth_cmd, sudo=True, check_ec=False, timeout=120
+            )
+            last_unauth = ("%s\n%s" % (out or "", err or "")).strip().lower()
+            unauth_status = clients[1].exit_status
+            _lazy_unmount(clients[1], nfs_client_mount)
+            if unauth_status == 0:
+                raise OperationFailedError(
+                    "Mount passed on unauthorized client: %s" % unauthorized
+                )
+            if (
+                "access denied by server" not in last_unauth
+                and "no such file or directory" not in last_unauth
             ):
                 raise OperationFailedError(
-                    f"Failed to mount nfs on {clients[0].hostname}"
+                    "Unauthorized client %s failed unexpectedly: %s"
+                    % (unauthorized, last_unauth)
                 )
-        log.info("Mount succeeded on client0")
+            log.info(
+                "As expected, mount on unauthorized client %s failed", unauthorized
+            )
+            log.info(
+                "TEST PASSED - nfs_version=%s export=%s: "
+                "unauthorized client %s denied, authorized client %s mounted",
+                version,
+                nfs_export_client,
+                clients[1].hostname,
+                clients[0].hostname,
+            )
         return 0
     except Exception as e:
         log.error(f"Error : {e}")
