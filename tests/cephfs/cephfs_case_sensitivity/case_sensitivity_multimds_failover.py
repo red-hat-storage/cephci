@@ -81,9 +81,19 @@ def _parse_fs_status_rank(rank):
         return None
 
 
-def _wait_for_fs_ranks_active(client, fs_name, max_mds, timeout=600, interval=10):
+def _wait_for_fs_ranks_active(
+    client, fs_name, max_mds, timeout=600, interval=10, laggy_fail_sec=180
+):
+    """
+    Wait until all ranks are active.
+
+    If any rank stays in ``replay(laggy)`` for ``laggy_fail_sec`` consecutive
+    seconds, return False early — that is the IBMCEPH-21205 / #72399 hang shape
+    and waiting the full timeout only delays crash-oracle attribution.
+    """
     max_mds = int(max_mds)
     end = time.time() + timeout
+    laggy_since = None
     while time.time() < end:
         out, _ = client.exec_command(
             sudo=True,
@@ -117,8 +127,34 @@ def _wait_for_fs_ranks_active(client, fs_name, max_mds, timeout=600, interval=10
                 log.info("All %s MDS ranks active for %s", max_mds, fs_name)
                 return True
 
+        laggy = [r for r, s in rank_states.items() if "laggy" in (s or "")]
+        if laggy:
+            if laggy_since is None:
+                laggy_since = time.time()
+            elif time.time() - laggy_since >= laggy_fail_sec:
+                log.error(
+                    "Rank(s) stuck laggy for >=%ss on %s (states=%s)",
+                    laggy_fail_sec,
+                    fs_name,
+                    rank_states,
+                )
+                return False
+        else:
+            laggy_since = None
+
         log.info("Waiting for ranks active on %s (states=%s)", fs_name, rank_states)
         time.sleep(interval)
+    return False
+
+
+def _fail_on_inactive_ranks(client, attr_util, fs_name, context):
+    """
+    When ranks never return active, still run crash/damage oracles so an
+    alternate_name replay crash is attributed instead of only a generic timeout.
+    """
+    log.error("Ranks did not return active (%s)", context)
+    # Oracles intentionally run even after timeout — return False either way.
+    _assert_post_fail_oracles(client, attr_util, fs_name, context)
     return False
 
 
@@ -225,8 +261,12 @@ def _fail_all_ranks_and_assert(
             return False
         time.sleep(post_fail_sleep_sec)
         if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
-            log.error("%s: ranks not active after fail rank %s", oracle_prefix, rank)
-            return False
+            return _fail_on_inactive_ranks(
+                client,
+                attr_util,
+                fs_name,
+                "{}-r{}".format(oracle_prefix, rank),
+            )
         if not _assert_post_fail_oracles(
             client, attr_util, fs_name, "{}-r{}".format(oracle_prefix, rank)
         ):
@@ -343,7 +383,9 @@ def _usecase_multimds_failover(
         time.sleep(post_fail_sleep_sec)
 
         if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
-            log.error("Ranks did not return active after fail iteration %s", iteration)
+            _fail_on_inactive_ranks(
+                client, attr_util, fs_name, "iteration-{}".format(iteration)
+            )
             return 1, fs_name, mounting_dir, stop_flag, subvol_group, subvol_name
 
         if not _assert_post_fail_oracles(
@@ -373,7 +415,7 @@ def _usecase_max_mds_scaleup(client, fs_util, attr_util, fs_name, max_mds):
         return 1
 
     if not _wait_for_fs_ranks_active(client, fs_name, max_mds, timeout=900):
-        log.error("Ranks not active after max_mds scale-up to %s", max_mds)
+        _fail_on_inactive_ranks(client, attr_util, fs_name, "post-scale-up")
         return 1
 
     if not _assert_post_fail_oracles(client, attr_util, fs_name, "post-scale-up"):
@@ -645,12 +687,20 @@ def run(ceph_cluster, **kw):
             except Exception as exc:
                 log.warning("Unmount cleanup: %s", exc)
 
-        if client and fs_name and subvol_name and subvol_group and fs_util:
+        if client and fs_name and subvol_name and subvol_group:
+            # Bound cleanup: a stuck MDS (replay/laggy) can hang subvolume rm
+            # for the default 3600s and waste the suite (seen on 20.2.2-367).
+            cleanup_timeout = 120
             try:
-                Ceph(client).fs.sub_volume.rm(
-                    fs_name, subvol_name, group=subvol_group, force=True
+                client.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "ceph fs subvolume rm {fs} {sv} {grp} --force || true; "
+                        "ceph fs subvolumegroup rm {fs} {grp} --force || true; "
+                        "ceph fs volume rm {fs} --yes-i-really-mean-it || true"
+                    ).format(fs=fs_name, sv=subvol_name, grp=subvol_group),
+                    check_ec=False,
+                    timeout=cleanup_timeout,
                 )
-                Ceph(client).fs.sub_volume_group.rm(fs_name, subvol_group)
-                fs_util.remove_fs(client, fs_name, validate=False)
             except Exception as exc:
                 log.warning("FS/subvolume cleanup: %s", exc)
