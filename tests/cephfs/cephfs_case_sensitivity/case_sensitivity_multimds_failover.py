@@ -1,9 +1,18 @@
 """
-IBMCEPH-16942 / tracker #72399 — casefold subvolume under multi-active MDS.
+IBMCEPH-16942 / IBMCEPH-21205 / tracker #72399 — casefold subvolume under
+multi-active MDS.
 
 Regression coverage for MDS journal replay and rejoin failures involving
 ``alternate_name`` and subtree authority after failover during case-insensitive
 metadata workloads.
+
+Polarion: CEPH-83632953
+
+Usecase 1: rename-heavy casefold storm + rotating ``ceph mds fail``.
+Usecase 2: ``max_mds`` scale-down/scale-up under load.
+Usecase 3 (P0 / Venky #72399 note-7): ``rm Foo`` then ``create FOO`` + MDS fail.
+Usecase 4 (P0 / Venky #72399 note-7): create → journal flush/trim → unlink →
+recreate → MDS fail (empty cached alternate_name vs journaled fullbit).
 """
 
 import json
@@ -162,6 +171,35 @@ def _resolve_fail_ranks(config, max_mds):
     return list(range(max_mds))
 
 
+def _mds_fail_rank(client, rank):
+    out, err, exit_code, _ = client.exec_command(
+        sudo=True,
+        cmd="ceph mds fail {}".format(rank),
+        check_ec=False,
+        verbose=True,
+    )
+    if exit_code != 0:
+        log.error(
+            "ceph mds fail rank %s failed exit_code=%s stdout=%r stderr=%r",
+            rank,
+            exit_code,
+            out,
+            err,
+        )
+        return False
+    return True
+
+
+def _flush_mds_journals(client, fs_name, max_mds):
+    """Best-effort journal flush on every active rank to age segments."""
+    for rank in range(int(max_mds)):
+        client.exec_command(
+            sudo=True,
+            cmd="ceph tell mds.{}:{} flush journal".format(fs_name, rank),
+            check_ec=False,
+        )
+
+
 def _usecase_multimds_failover(
     ceph_cluster, client, fs_util, attr_util, common_util, config
 ):
@@ -266,20 +304,7 @@ def _usecase_multimds_failover(
             fail_iterations,
             rank_to_fail,
         )
-        out, err, exit_code, _ = client.exec_command(
-            sudo=True,
-            cmd="ceph mds fail {}".format(rank_to_fail),
-            check_ec=False,
-            verbose=True,
-        )
-        if exit_code != 0:
-            log.error(
-                "ceph mds fail rank %s failed exit_code=%s stdout=%r stderr=%r",
-                rank_to_fail,
-                exit_code,
-                out,
-                err,
-            )
+        if not _mds_fail_rank(client, rank_to_fail):
             return 1, fs_name, mounting_dir, stop_flag, subvol_group, subvol_name
         time.sleep(post_fail_sleep_sec)
 
@@ -324,6 +349,173 @@ def _usecase_max_mds_scaleup(client, fs_util, attr_util, fs_name, max_mds):
     return 0
 
 
+def _usecase_rm_foo_create_foo_failover(
+    client, attr_util, fs_name, mounting_dir, config
+):
+    """
+    P0 Venky scenario: casefold ``rm Foo`` then ``create FOO``, then MDS fail.
+
+    Cached null dentry may retain alternate_name ``Foo`` while the fullbit
+    carries ``FOO``, hitting ``journal.cc`` alternate_name assert on replay.
+    """
+    max_mds = int(config.get("max_mds", 4))
+    fail_ranks = _resolve_fail_ranks(config, max_mds)
+    post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
+    iterations = int(config.get("foo_flip_iterations", 5))
+    work_dir = os.path.join(mounting_dir.rstrip("/"), "venky_foo_flip")
+
+    log.info(
+        "Usecase 3 (P0): rm Foo / create FOO + MDS fail (%s iterations)",
+        iterations,
+    )
+    attr_util.archive_mds_crashes(client)
+    client.exec_command(sudo=True, cmd="mkdir -p {!r}".format(work_dir))
+
+    for iteration in range(1, iterations + 1):
+        foo_path = os.path.join(work_dir, "Foo")
+        foo_upper = os.path.join(work_dir, "FOO")
+        client.exec_command(
+            sudo=True,
+            cmd="rm -f {f!r} {u!r}; echo flip > {f!r}".format(f=foo_path, u=foo_upper),
+        )
+        client.exec_command(sudo=True, cmd="rm -f {!r}".format(foo_path))
+        client.exec_command(sudo=True, cmd="echo flip2 > {!r}".format(foo_upper))
+
+        rank_to_fail = fail_ranks[(iteration - 1) % len(fail_ranks)]
+        log.info(
+            "Usecase 3 iteration %s/%s: failing rank %s after Foo→FOO",
+            iteration,
+            iterations,
+            rank_to_fail,
+        )
+        if not _mds_fail_rank(client, rank_to_fail):
+            return 1
+        time.sleep(post_fail_sleep_sec)
+
+        if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
+            log.error("Usecase 3: ranks not active after fail iteration %s", iteration)
+            return 1
+        if not _assert_post_fail_oracles(
+            client, attr_util, fs_name, "foo-flip-{}".format(iteration)
+        ):
+            return 1
+
+    log.info("Passed Usecase 3: Foo→FOO casefold flip + MDS fail")
+    return 0
+
+
+def _usecase_journal_trim_recreate_failover(
+    client, attr_util, fs_name, mounting_dir, config
+):
+    """
+    P0 Venky scenario: create → flush/trim journal → unlink → recreate → MDS fail.
+
+    After the create event is aged out of the journal, unlink leaves a nullbit
+    with empty alternate_name; recreate journals a non-empty alternate_name and
+    replay asserts if the cached dentry is not updated.
+    """
+    max_mds = int(config.get("max_mds", 4))
+    fail_ranks = _resolve_fail_ranks(config, max_mds)
+    post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
+    iterations = int(config.get("trim_recreate_iterations", 3))
+    flush_rounds = int(config.get("journal_flush_rounds", 8))
+    filler_files = int(config.get("journal_filler_files", 200))
+    work_dir = os.path.join(mounting_dir.rstrip("/"), "venky_trim_recreate")
+    prev_segments = None
+
+    log.info(
+        "Usecase 4 (P0): journal-trim recreate + MDS fail (%s iterations)",
+        iterations,
+    )
+    attr_util.archive_mds_crashes(client)
+    client.exec_command(sudo=True, cmd="mkdir -p {!r}".format(work_dir))
+
+    # Shrink MDS log so flushes age create events out of the journal.
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd="ceph config get mds mds_log_max_segments",
+        check_ec=False,
+    )
+    prev_segments = (out or "").strip() or None
+    client.exec_command(
+        sudo=True,
+        cmd="ceph config set mds mds_log_max_segments 2",
+        check_ec=False,
+    )
+
+    try:
+        for iteration in range(1, iterations + 1):
+            target = os.path.join(work_dir, "TrimName_{}".format(iteration))
+            target_flip = os.path.join(work_dir, "trimname_{}".format(iteration))
+            filler = os.path.join(work_dir, "filler_{}".format(iteration))
+
+            client.exec_command(
+                sudo=True,
+                cmd="rm -f {t!r} {f!r}; echo orig > {t!r}".format(
+                    t=target, f=target_flip
+                ),
+            )
+            _flush_mds_journals(client, fs_name, max_mds)
+
+            # Generate journal pressure then flush repeatedly so the create
+            # event is trimmed before the unlink is journaled alone.
+            client.exec_command(
+                sudo=True,
+                cmd=(
+                    "mkdir -p {d!r}; "
+                    "for i in $(seq 1 {n}); do "
+                    "echo z > {d!r}/f_$i; "
+                    "done"
+                ).format(d=filler, n=filler_files),
+            )
+            for _ in range(flush_rounds):
+                _flush_mds_journals(client, fs_name, max_mds)
+                time.sleep(1)
+
+            client.exec_command(sudo=True, cmd="rm -f {!r}".format(target))
+            _flush_mds_journals(client, fs_name, max_mds)
+            client.exec_command(
+                sudo=True, cmd="echo recreated > {!r}".format(target_flip)
+            )
+
+            rank_to_fail = fail_ranks[(iteration - 1) % len(fail_ranks)]
+            log.info(
+                "Usecase 4 iteration %s/%s: failing rank %s after trim/recreate",
+                iteration,
+                iterations,
+                rank_to_fail,
+            )
+            if not _mds_fail_rank(client, rank_to_fail):
+                return 1
+            time.sleep(post_fail_sleep_sec)
+
+            if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
+                log.error(
+                    "Usecase 4: ranks not active after fail iteration %s", iteration
+                )
+                return 1
+            if not _assert_post_fail_oracles(
+                client, attr_util, fs_name, "trim-recreate-{}".format(iteration)
+            ):
+                return 1
+    finally:
+        if prev_segments:
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config set mds mds_log_max_segments {}".format(prev_segments),
+                check_ec=False,
+            )
+        else:
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config rm mds mds_log_max_segments",
+                check_ec=False,
+            )
+
+    log.info("Passed Usecase 4: journal-trim recreate + MDS fail")
+    return 0
+
+
 def run(ceph_cluster, **kw):
     config = kw.get("config") or {}
     fs_name = "case-sensitivity-mm-failover"
@@ -339,6 +531,7 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         max_mds = int(config.get("max_mds", 4))
         run_scaleup = config.get("run_max_mds_scaleup", True)
+        run_p0_repros = config.get("run_venky_p0_repros", True)
 
         fs_util = FsUtils(ceph_cluster, test_data=kw.get("test_data"))
         attr_util = CephFSAttributeUtilities(ceph_cluster)
@@ -361,17 +554,40 @@ def run(ceph_cluster, **kw):
         if rc != 0:
             return rc
 
+        # Focused P0 paths need a quiet mount (no racing storm).
+        if run_p0_repros:
+            attr_util.stop_casefold_metadata_storm(client, stop_flag)
+            time.sleep(2)
+
+            rc = _usecase_rm_foo_create_foo_failover(
+                client, attr_util, fs_name, mounting_dir, config
+            )
+            if rc != 0:
+                return rc
+
+            rc = _usecase_journal_trim_recreate_failover(
+                client, attr_util, fs_name, mounting_dir, config
+            )
+            if rc != 0:
+                return rc
+
+            if run_scaleup:
+                attr_util.start_casefold_metadata_storm(client, mounting_dir, stop_flag)
+                time.sleep(int(config.get("storm_restart_warmup_sec", 30)))
+
         if run_scaleup:
             rc = _usecase_max_mds_scaleup(client, fs_util, attr_util, fs_name, max_mds)
             if rc != 0:
                 return rc
 
         log.info(
-            "TEST PASSED | max_mds=%s | fail_iterations=%s | ranks=%s | scaleup=%s",
+            "TEST PASSED | max_mds=%s | fail_iterations=%s | ranks=%s | "
+            "scaleup=%s | venky_p0=%s",
             max_mds,
             config.get("fail_iterations", 10),
             _resolve_fail_ranks(config, max_mds),
             run_scaleup,
+            run_p0_repros,
         )
         return 0
 
