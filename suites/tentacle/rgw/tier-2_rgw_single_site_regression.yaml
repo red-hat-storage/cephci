@@ -265,7 +265,7 @@ tests:
       polarion-id: CEPH-83572907
       module: sanity_rgw.py
       config:
-        install_keystone_ldap: true
+        install_keystone: true
         script-name: ../aws/test_unified_namespace.py
         config-file-name: ../../aws/configs/test_unified_namespace.yaml
 

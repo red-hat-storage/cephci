@@ -1,0 +1,343 @@
+# Suite is to be used to verify the scrub tests  on 4 nodes
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:  CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node6                     # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Set configs for 4 node cluster
+      desc: Set configs for 4 node cluster
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph
+                - config
+                - set
+                - mon
+                - mon_osd_down_out_subtree_limit
+                - host
+
+  - test:
+      name: Inconsistent objects in  EC pool functionality check
+      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          pool_name: ecpool
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          crush-failure-domain: host
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        debug_enable: False
+        delete_pool:
+          - ecpool
+      comments: Intermittent active bug 2277111, 2299659
+
+  - test:
+      name: Case 1-Inconsistent objects  verification
+      desc: Scrub:Inconsistent objects>auto repair errors count & auto_repair is true
+      module: test_osd_replicated_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        pool_name: replicated_pool
+        pg_num_max: 1
+        inconsistent_obj_count: 4
+        debug_enable: False
+        case_to_run:
+          - case1
+
+  - test:
+      name: Case 2-Inconsistent objects  verification
+      desc: Scrub:Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_replicated_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        pool_name: replicated_pool
+        pg_num_max: 1
+        inconsistent_obj_count: 4
+        debug_enable: False
+        case_to_run:
+          - case2
+
+  - test:
+      name: Case 3-Inconsistent objects verification
+      desc: Scrub:Inconsistent objects<auto repair errors count & auto_repair is true
+      module: test_osd_replicated_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        pool_name: replicated_pool
+        pg_num_max: 1
+        inconsistent_obj_count: 4
+        debug_enable: False
+        case_to_run:
+          - case3
+
+  - test:
+      name: Case1-Verification of osd_scrub_load_threshold
+      desc: Verification of osd_scrub_load_threshold parameter=0
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case1
+  - test:
+      name: Case2-Verification of osd_scrub_load_threshold
+      desc: Repair inconsistent object when threshold parameter is 0
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case2
+  - test:
+      name: Case3-Verification of osd_scrub_load_threshold
+      desc: Repair inconsistent object when threshold parameter is 10
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case3
+  - test:
+      name: Case4-Verification of osd_scrub_load_threshold
+      desc: Functionality check below and above the node load average
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case4
+  - test:
+      name: Case5-Verification of osd_scrub_load_threshold
+      desc: User initiated VS scheduled scrub
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case5
+  - test:
+      name: Case6-Verification of osd_scrub_load_threshold
+      desc: Verification of scrub by high CPU load using stress-ng
+      module: test_osd_scrub_load_threshold_parameter.py
+      polarion-id: CEPH-83620201
+      config:
+        replicated_pool:
+          create: true
+          pool_name: replicated_pool
+          pg_num: 1
+        debug_enable: False
+        case_to_run:
+          - case6
+
+  - test:
+      name: Verification of the scrub store replicated pool
+      desc: Verification of scrub and deep-scrub msgs in scrub store on replicated pool
+      module: test_scrub_store_errors.py
+      polarion-id: CEPH-83620444
+      config:
+        create: true
+        pool_name: scrub_pool
+        pg_num_max: 1
+        is_ecpool: False
+
+  - test:
+      name: Verification of the scrub queue
+      desc: Verification of scrub queue in scheduled scrubs
+      module: test_scrub_queue_timing.py
+      polarion-id: CEPH-83620445
+      config:
+        create: true
+        pool_name: scrub_pool
+        pg_num_max: 8
+        operation: "scrub"
+  - test:
+      name: Verification of the scrub queue
+      desc: Verification of scrub queue in scheduled scrubs
+      module: test_scrub_queue_timing.py
+      polarion-id: CEPH-83620445
+      config:
+        create: true
+        pool_name: scrub_pool
+        pg_num_max: 8
+        operation: "deep-scrub"

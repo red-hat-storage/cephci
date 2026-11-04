@@ -30,6 +30,79 @@ setup_start_time = None
 GANESHA_SUBVOL_GROUP = "ganeshagroup"
 
 
+def _export_path_to_subvol_name(export_path):
+    """Map NFS export pseudo path to CephFS subvolume name (export.create convention)."""
+    return (export_path or "").replace("/", "")
+
+
+def _remove_owned_ganesha_subvolumes(client, export_paths, fs_name="cephfs"):
+    """
+    Remove only subvolumes that back the given export paths.
+
+    Do not wipe the entire ganeshagroup — other NFS clusters in the same suite
+    (e.g. ``cephfs-nfs`` still used after a mid-suite ``cephfs-nfs-cephx``
+    cleanup) share that group. See RCA tentacle-test-executor#3174.
+    """
+    owned = []
+    for path in export_paths:
+        name = _export_path_to_subvol_name(path)
+        if name and name not in owned:
+            owned.append(name)
+    for subvol in owned:
+        cmd = (
+            f"ceph fs subvolume rm {fs_name} {subvol} "
+            f"--group_name {GANESHA_SUBVOL_GROUP}"
+        )
+        try:
+            client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            log.info("Removed ganeshagroup subvolume %s (export cleanup)", subvol)
+        except Exception as exc:
+            log.warning("Subvolume rm %s failed (continuing): %s", subvol, exc)
+
+
+def _maybe_remove_ganeshagroup(client, fs_name="cephfs"):
+    """
+    Remove ganeshagroup only when no NFS clusters remain and the group is empty.
+
+    Mid-suite cleanups must leave the group intact for sibling clusters.
+    """
+    try:
+        remaining = Ceph(client).nfs.cluster.ls() or []
+    except Exception as exc:
+        log.warning(
+            "Could not list NFS clusters before ganeshagroup rm; leaving group: %s",
+            exc,
+        )
+        return
+    if remaining:
+        log.info(
+            "Leaving ganeshagroup in place; NFS cluster(s) still present: %s",
+            remaining,
+        )
+        return
+    cmd = f"ceph fs subvolume ls {fs_name} --group_name {GANESHA_SUBVOL_GROUP}"
+    try:
+        out = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+        raw = out[0] if isinstance(out, tuple) else out
+        data = json.loads(raw or "[]")
+    except Exception as exc:
+        log.warning("Could not list ganeshagroup subvolumes; leaving group: %s", exc)
+        return
+    if data:
+        names = [item.get("name") for item in data if isinstance(item, dict)]
+        log.info(
+            "Leaving ganeshagroup; leftover subvolume(s) after scoped cleanup: %s",
+            names,
+        )
+        return
+    cmd = f"ceph fs subvolumegroup rm {fs_name} {GANESHA_SUBVOL_GROUP} --force"
+    try:
+        client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+        log.info("Removed empty ganeshagroup (no NFS clusters remain)")
+    except Exception as exc:
+        log.warning("ganeshagroup rm failed (continuing): %s", exc)
+
+
 def _redact_kmip_key_for_log(obj):
     """Deep-copy NFS spec(s) with kmip_key private key material removed."""
     redacted = deepcopy(obj)
@@ -524,8 +597,17 @@ def cleanup_nfs_cross_cluster_resources(
                 cmd=f"ceph nfs cluster delete {cluster_name}",
                 check_ec=False,
             )
-            cleanup_step = f"wait after deleting NFS cluster {cluster_name}"
-            sleep(20)
+        # Poll once after all deletes; do not raise into the outer handler so
+        # subvolume removal below still runs on wait timeout.
+        if cluster_names:
+            cleanup_step = "wait for NFS daemons removed"
+            try:
+                check_nfs_daemons_removed(client, cluster_names[-1])
+            except Exception as err:
+                log.warning(
+                    "NFS daemon removal wait failed after cluster delete(s): %s",
+                    err,
+                )
 
         if subvol_name:
             cleanup_step = f"remove subvolume {fs_name}/{group}/{subvol_name}"
@@ -893,28 +975,17 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
         client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}")
         sleep(3)
 
-    # Delete all exports
-    for i in range(len(clients)):
-        Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
+    # Delete exports created for this cluster only
+    owned_exports = [f"{nfs_export}_{i}" for i in range(len(clients))]
+    for export_name in owned_exports:
+        Ceph(clients[0]).nfs.export.delete(nfs_name, export_name)
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
-    sleep(30)
     check_nfs_daemons_removed(clients[0], nfs_name)
 
-    # Delete the subvolume
-    for i in range(len(clients)):
-        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
-        out = client.exec_command(sudo=True, cmd=cmd)
-        json_string, _ = out
-        data = json.loads(json_string)
-        # Extract names of subvolume
-        for item in data:
-            subvol = item["name"]
-            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
-            client.exec_command(sudo=True, cmd=cmd)
-
-    # Delete the subvolume group
-    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
-    client.exec_command(sudo=True, cmd=cmd)
+    # Only remove subvolumes that back this cluster's exports; keep shared
+    # ganeshagroup contents used by other NFS clusters in the same suite.
+    _remove_owned_ganesha_subvolumes(clients[0], owned_exports)
+    _maybe_remove_ganeshagroup(clients[0])
 
 
 def setup_custom_nfs_cluster_multi_export_client(
@@ -1154,18 +1225,18 @@ def cleanup_custom_nfs_cluster_multi_export_client(
     client_export_mount_dict = exports_mounts_perclient(
         clients, nfs_export, nfs_mount, export_num
     )
+    owned_exports = []
 
     for client_num in range(len(clients)):
-        for export_num in range(
+        for exp_idx in range(
             len(client_export_mount_dict[clients[client_num]]["export"])
         ):
             export_name = client_export_mount_dict[clients[client_num]]["export"][
-                export_num
+                exp_idx
             ]
-            mount_name = client_export_mount_dict[clients[client_num]]["mount"][
-                export_num
-            ]
+            mount_name = client_export_mount_dict[clients[client_num]]["mount"][exp_idx]
             client = list(client_export_mount_dict.keys())[client_num]
+            owned_exports.append(export_name)
             # Clear the nfs_mount, at times rm operation can fail
             # as the dir is not empty, this being an expected behaviour,
             # the solution is to repeat the rm operation.
@@ -1188,24 +1259,10 @@ def cleanup_custom_nfs_cluster_multi_export_client(
             Ceph(clients[0]).nfs.export.delete(nfs_name, export_name)
 
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
-    sleep(30)
     check_nfs_daemons_removed(clients[0], nfs_name)
 
-    # Delete the subvolume
-    for i in range(len(clients)):
-        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
-        out = client.exec_command(sudo=True, cmd=cmd)
-        json_string, _ = out
-        data = json.loads(json_string)
-        # Extract names of subvolume
-        for item in data:
-            subvol = item["name"]
-            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
-            client.exec_command(sudo=True, cmd=cmd)
-
-    # Delete the subvolume group
-    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
-    client.exec_command(sudo=True, cmd=cmd)
+    _remove_owned_ganesha_subvolumes(clients[0], owned_exports)
+    _maybe_remove_ganeshagroup(clients[0])
 
 
 def _nfs_mount_version_key_is_v3(key):
@@ -1513,9 +1570,11 @@ def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
     """Check NFS daemons are removed; verify deleted cluster deps are cleared.
 
     Use prefix_cephadm=True when running on installer (no host ceph binary).
+    When ``nfs_name`` is set, only that cluster must be gone — other NFS
+    services may remain (e.g. suite cluster during upgrade + rotate-key).
     """
     if not prefix_cephadm:
-        check_nfs_daemons_removed_retry(client)
+        check_nfs_daemons_removed_retry(client, nfs_name)
     if nfs_name:
         ceph_version = get_ceph_version(client, prefix_cephadm=prefix_cephadm)
         if ceph_version and LooseVersion(ceph_version) >= LooseVersion("20.2.2-75"):
@@ -1523,22 +1582,40 @@ def check_nfs_daemons_removed(client, nfs_name=None, prefix_cephadm=False):
 
 
 @retry(OperationFailedError, tries=30, delay=10, backoff=1)
-def check_nfs_daemons_removed_retry(client):
+def check_nfs_daemons_removed_retry(client, nfs_name=None):
     """
     Helper function to check if NFS daemons are removed.
     Raises OperationFailedError if daemons are still present (to trigger retry).
     Returns True if all daemons are removed.
+
+    When nfs_name is set, only that cluster's orch service is checked
+    (``ceph orch ls --service-name nfs.<name>``), so unrelated NFS services
+    do not block cleanup (e.g. suite cluster during upgrade + rotate-key).
     """
     # We are increasing the timeout to 300 seconds to avoid the timeout error
     # with some of the QoS tests which were intermittently failing to cleanup
+    if nfs_name:
+        names = [nfs_name] if isinstance(nfs_name, str) else list(nfs_name)
+        for name in names:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=f"ceph orch ls --service-name nfs.{name}",
+                check_ec=False,
+            )
+            log.info(out)
+            out = (out or "").strip()
+            if out and "No services reported" not in out:
+                raise OperationFailedError(f"NFS service nfs.{name} still present")
+        log.info("NFS service(s) removed: %s", names)
+        return True
+
     out, _ = client.exec_command(sudo=True, cmd="ceph orch ls --service-type=nfs")
     log.info(out)
     out = out.strip()
     if "No services reported" in out:
         log.info("All NFS daemons have been removed.")
         return True
-    else:
-        raise OperationFailedError("NFS daemons still present")
+    raise OperationFailedError("NFS daemons still present")
 
 
 def _orch_ps_json_stdout(installer_node, cmd):
@@ -1618,7 +1695,8 @@ def create_nfs_via_file_and_verify(
         service_id (str, optional): Passed to ``verify_nfs_ganesha_service`` so
             only the newly applied NFS cluster must be healthy.
         **kwargs: Optional ``timings`` dict and ``timings_key`` str to record when
-            ``ceph orch apply`` completes.
+            ``ceph orch apply`` completes. Optional ``nfs_name`` is an alias for
+            ``service_id`` (OC/PEC helpers).
     Returns:
         bool: True if apply and verification succeeded, else False.
     """
@@ -1651,6 +1729,8 @@ def create_nfs_via_file_and_verify(
 
     try:
         pos_args = []
+        out, _ = installer_node.exec_command(sudo=True, cmd=f"cat {remote_spec}")
+        log.info("NFS orch spec %s:\n%s", remote_spec, (out or "").strip())
         CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
             input=remote_spec, check_ec=True, pos_args=pos_args
         )
@@ -1666,8 +1746,9 @@ def create_nfs_via_file_and_verify(
                 triggered_at,
                 timings_key,
             )
+        scoped_id = service_id or kwargs.get("nfs_name")
         verify_nfs_ganesha_service(
-            node=installer_node, timeout=timeout, service_id=service_id
+            node=installer_node, timeout=timeout, service_id=scoped_id
         )
         log.info("NFS Ganesha spec file applied successfully.")
         nodes_for_coredump = None
@@ -1747,7 +1828,7 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
             log.error(
                 "\n \n NFS Ganesha services are still running after deletion trying again...... "
                 "Time remaining : -- %s seconds \n",
-                timeout - (w._attempt * w.interval),
+                int(max(0, timeout - (time() - w._start))),
             )
             log.debug("Current status: %s", result)
     if w.expired:
@@ -1757,11 +1838,52 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
         )
 
 
+def _add_firewalld_tcp_port(nfs_node, port):
+    """Open a public-zone TCP port in the runtime and permanent rulesets.
+
+    Do not reload firewalld. ``firewall-cmd --reload`` replaces the runtime
+    ruleset with the permanent one and drops ports cephadm opened only at
+    runtime, including NFS 2049. The client then gets firewalld REJECT, which
+    ``mount.nfs`` reports as ``No route to host`` for the whole retry window.
+    """
+    for permanent in (False, True):
+        cmd = "sudo firewall-cmd --zone=public --add-port=%s/tcp" % port
+        if permanent:
+            cmd += " --permanent"
+        out, err, exit_code, _ = nfs_node.exec_command(
+            sudo=True, cmd=cmd, verbose=True, check_ec=False
+        )
+        text = "%s\n%s" % (out or "", err or "")
+        if exit_code == 0 or "ALREADY_ENABLED" in text:
+            log.info(
+                "Opened firewall port %s/tcp (%s) on %s",
+                port,
+                "permanent" if permanent else "runtime",
+                nfs_node.hostname,
+            )
+            continue
+        raise OperationFailedError(
+            "Failed to open firewall port %s/tcp on %s: %s"
+            % (port, nfs_node.hostname, text.strip())
+        )
+
+
+def _remember_rpc_port(service_ports, service, proto, port):
+    """Keep the TCP port when rpcinfo lists both TCP and UDP."""
+    current = service_ports.get(service)
+    if current is None or proto == "tcp":
+        service_ports[service] = port
+
+
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
 def open_mandatory_v3_ports(nfs_node, ports_to_open):
     """
     Open the required ports for NFSv3 mount based on rpcinfo output.
     (portmapper, mountd, nlockmgr) and opens them in the firewall.
+
+    Also opens TCP 2049. Mounts use that port, and cephadm's runtime rule for
+    it must stay in place. Ports are added to the runtime and permanent
+    rulesets without ``firewall-cmd --reload``.
 
     Args:
         nfs_node: NFS server node where ports need to be opened
@@ -1773,10 +1895,13 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
     log.info(f"Opening NFSv3 ports on node: {nfs_node.hostname}")
     log.info(f"Services to open: {ports_to_open}")
 
-    # Initialize the service_ports_mapping dictionary to store the port lists
-    service_ports_mapping = {"portmapper": None, "mountd": None, "nlockmgr": None}
+    service_ports_mapping = {
+        "portmapper": None,
+        "mountd": None,
+        "nlockmgr": None,
+        "nfs": None,
+    }
 
-    # Execute rpcinfo command to get the port information
     log.info("Querying rpcinfo for service ports")
     cmd = "sudo rpcinfo -p"
     out, _ = nfs_node.exec_command(sudo=True, cmd=cmd)
@@ -1788,51 +1913,43 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
             f"rpcinfo -p returned empty output on {nfs_node.hostname}"
         )
 
-    # Split the output into lines and iterate over them
-    lines = out.splitlines()
-    port_mapper_found = False  # Have the first portmapper port
-
-    for line in lines:
-        # Skip header and empty lines
+    for line in out.splitlines():
         if "program vers proto port service" in line or not line.strip():
             continue
-
-        # Split line into columns
         columns = line.split()
-        port, service = columns[3], columns[4]
-
-        # Check for relevant services
-        if service == "portmapper" and not port_mapper_found:
-            service_ports_mapping["portmapper"] = port
-            port_mapper_found = True
-        elif service == "mountd":
-            service_ports_mapping["mountd"] = port
-        elif service == "nlockmgr":
-            service_ports_mapping["nlockmgr"] = port
+        if len(columns) < 5:
+            continue
+        proto, port, service = columns[2], columns[3], columns[4]
+        if service in service_ports_mapping:
+            _remember_rpc_port(service_ports_mapping, service, proto, port)
 
     log.debug(f"Discovered service ports: {service_ports_mapping}")
 
-    # Open firewall ports based on services in ports_to_open
+    ports = []
     for service in ports_to_open:
         port_to_open = service_ports_mapping.get(service)
-
-        if port_to_open:
-            # Open the port using the firewall command
-            log.info(f"Opening firewall port {port_to_open}/tcp for {service}")
-            nfs_node.exec_command(
-                sudo=True,
-                cmd=f"sudo firewall-cmd --zone=public --add-port={port_to_open}/tcp --permanent",
-            )
-            log.info(f"Successfully opened {service} port: {port_to_open}")
-        else:
+        if not port_to_open:
             log.error(f"{service} port not found in rpcinfo output")
             log.error(f"Available services: {service_ports_mapping}")
             raise OperationFailedError(f"{service} port not found in rpcinfo output")
+        if port_to_open not in ports:
+            ports.append(port_to_open)
 
-    # Reload the firewall to apply the changes
-    log.info("Reloading firewall to apply changes")
-    nfs_node.exec_command(sudo=True, cmd="sudo firewall-cmd --reload")
-    log.info("Firewall rules reloaded successfully")
+    nfs_port = service_ports_mapping.get("nfs") or "2049"
+    if nfs_port not in ports:
+        ports.append(nfs_port)
+
+    for port_to_open in ports:
+        _add_firewalld_tcp_port(nfs_node, port_to_open)
+
+    listed, _ = nfs_node.exec_command(
+        sudo=True, cmd="sudo firewall-cmd --list-ports", check_ec=False
+    )
+    log.info(
+        "Active firewall ports on %s: %s",
+        nfs_node.hostname,
+        (listed or "").strip(),
+    )
 
 
 def chown_mount_for_cephuser(client, mount_name):

@@ -27,9 +27,10 @@ _ACL_TOOLS_PKG = "nfs4-acl-tools"
 class NfsAcl:
     """Helper class for NFSv4 ACL operations on a remote client node."""
 
-    def __init__(self, client, mount_point):
+    def __init__(self, client, mount_point, umask="0022"):
         self.client = client
         self.mount = mount_point
+        self.umask = umask
 
     # -- package management ---------------------------------------------------
 
@@ -40,10 +41,23 @@ class NfsAcl:
             sudo=True, cmd=f"yum install -y {_ACL_TOOLS_PKG}", long_running=True
         )
 
+    def set_umask(self, umask="0027"):
+        """
+        Set umask used for subsequent file/dir creation.
+
+        Applied per create/write command (each remote exec is a fresh shell).
+        umask 0027 avoids world-readable mode bits that map to EVERYONE@:r.
+        """
+        log.info("Setting file creation umask to %s", umask)
+        self.umask = umask
+
     # -- path helpers ---------------------------------------------------------
 
     def _full_path(self, relative_path):
         return f"{self.mount}/{relative_path}"
+
+    def _with_umask(self, cmd):
+        return f"umask {self.umask}; {cmd}"
 
     # -- file / directory creation --------------------------------------------
 
@@ -51,19 +65,23 @@ class NfsAcl:
         """Create (or recreate) a regular file under the mount point."""
         path = self._full_path(name)
         log.info("Creating file %s", path)
-        self.client.exec_command(sudo=True, cmd=f"rm -f {path} && touch {path}")
+        self.client.exec_command(
+            sudo=True, cmd=self._with_umask(f"rm -f {path} && touch {path}")
+        )
 
     def create_dir(self, name):
         """Create a directory under the mount point (with -p)."""
         path = self._full_path(name)
         log.info("Creating directory %s", path)
-        self.client.exec_command(sudo=True, cmd=f"mkdir -p {path}")
+        self.client.exec_command(sudo=True, cmd=self._with_umask(f"mkdir -p {path}"))
 
     def write_file(self, name, content="hello"):
         """Write *content* into a file (creates it if absent)."""
         path = self._full_path(name)
         log.info("Writing to %s", path)
-        self.client.exec_command(sudo=True, cmd=f"echo '{content}' > {path}")
+        self.client.exec_command(
+            sudo=True, cmd=self._with_umask(f"echo '{content}' > {path}")
+        )
 
     def remove(self, name, recursive=False):
         """Remove a file or directory."""
@@ -189,21 +207,39 @@ class NfsAcl:
     # -- user / group management ----------------------------------------------
 
     @staticmethod
-    def create_user(client, username, uid):
-        """Create a local user with the given UID; no-op if exists."""
-        log.info("Creating user %s (uid=%s) on %s", username, uid, client.hostname)
+    def create_user(client, username, uid, gid=None):
+        """Create a local user with the given UID; no-op if exists.
+
+        If *gid* is provided, it is set as the user's primary group (``-g``)
+        and the account is created without a home directory.
+        """
+        log.info(
+            "Creating user %s (uid=%s, gid=%s) on %s",
+            username,
+            uid,
+            gid,
+            client.hostname,
+        )
+        if gid is not None:
+            create_cmd = f"useradd -u {uid} -g {gid} -M -s /bin/bash {username}"
+        else:
+            create_cmd = f"useradd -u {uid} {username}"
         client.exec_command(
             sudo=True,
-            cmd=f"id -u {username} &>/dev/null || useradd -u {uid} {username}",
+            cmd=f"id -u {username} &>/dev/null || {create_cmd}",
         )
 
     @staticmethod
     def create_group(client, groupname, gid):
-        """Create a local group with the given GID; no-op if exists."""
+        """Create a local group with the given GID; no-op if name or GID exists."""
         log.info("Creating group %s (gid=%s) on %s", groupname, gid, client.hostname)
         client.exec_command(
             sudo=True,
-            cmd=f"getent group {groupname} &>/dev/null || groupadd -g {gid} {groupname}",
+            cmd=(
+                f"getent group {groupname} &>/dev/null || "
+                f"getent group {gid} &>/dev/null || "
+                f"groupadd -g {gid} {groupname}"
+            ),
         )
 
     @staticmethod
@@ -229,14 +265,41 @@ class NfsAcl:
     # -- command execution as a specific user ---------------------------------
 
     def run_as_user(self, username, cmd, check_ec=True):
-        """Execute *cmd* as *username* via ``su - <user> -c '...'``."""
+        """Execute *cmd* as *username* via non-login ``su``.
+
+        Uses ``su -s /bin/bash <user> -c '...'`` (no ``-``) so a missing
+        home directory does not emit warnings that look like I/O failures.
+        """
         log.info("Running as %s: %s", username, cmd)
         out, err = self.client.exec_command(
             sudo=True,
-            cmd=f'su - {username} -c "{cmd}"',
+            cmd=f'su -s /bin/bash {username} -c "{cmd}"',
             check_ec=check_ec,
         )
         return out, err
+
+    @staticmethod
+    def _is_permission_failure(err):
+        """Return True if *err* indicates a permission/access failure.
+
+        Ignores ``su`` noise about missing home directories.
+        """
+        if not err:
+            return False
+        filtered = "\n".join(
+            line
+            for line in err.splitlines()
+            if "cannot change directory" not in line.lower()
+        )
+        text = filtered.lower()
+        return any(
+            token in text
+            for token in (
+                "permission denied",
+                "operation not permitted",
+                "not permitted",
+            )
+        )
 
     # -- verification helpers -------------------------------------------------
 
@@ -334,17 +397,7 @@ class NfsAcl:
             raise ValueError(f"Unsupported operation: {operation}")
 
         out, err = self.run_as_user(username, cmd, check_ec=False)
-        # If err contains "Permission denied" or similar, the operation failed
-        operation_succeeded = not (
-            err
-            and (
-                "denied" in err.lower()
-                or "permission" in err.lower()
-                or "not permitted" in err.lower()
-                or "cannot" in err.lower()
-                or "no such" in err.lower()
-            )
-        )
+        operation_succeeded = not self._is_permission_failure(err)
         if expect_success and operation_succeeded:
             log.info(
                 "User %s successfully performed '%s' on %s (as expected)",

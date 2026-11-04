@@ -118,6 +118,8 @@ def run(ceph_cluster, **kw):
 
         acl = NfsAcl(client, nfs_mount)
         acl.install_acl_tools()
+        # Avoid world-readable defaults (EVERYONE@:r) that mask ACL denial checks
+        acl.set_umask("0027")
 
         NfsAcl.create_user(client, TEST_USER_1, TEST_UID_1)
         NfsAcl.create_user(client, TEST_USER_2, TEST_UID_2)

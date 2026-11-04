@@ -58,6 +58,8 @@ def test_process_ocpvirt_custom_config_defaults():
         "pvc_batch_size": 3,
         "vm_batch_size": 1,
         "ocpvirt_profile": DEFAULT_OCPVIRT_PROFILE,
+        "ocpvirt_cpu": None,
+        "ocpvirt_memory": None,
     }
     assert DEFAULT_OCPVIRT_PROFILE == "o1.large"
 
@@ -76,7 +78,43 @@ def test_process_ocpvirt_custom_config_overrides():
         "pvc_batch_size": 5,
         "vm_batch_size": 2,
         "ocpvirt_profile": "cx1.2xlarge",
+        "ocpvirt_cpu": None,
+        "ocpvirt_memory": None,
     }
+
+
+def test_process_ocpvirt_custom_config_custom_resources():
+    cfg = process_ocpvirt_custom_config(
+        ["ocpvirt_cpu=4", "ocpvirt_memory=16Gi", "pvc_batch_size=2"]
+    )
+    assert cfg == {
+        "pvc_batch_size": 2,
+        "vm_batch_size": 1,
+        "ocpvirt_profile": None,
+        "ocpvirt_cpu": 4,
+        "ocpvirt_memory": "16Gi",
+    }
+
+
+def test_process_ocpvirt_custom_config_hyphen_aliases():
+    cfg = process_ocpvirt_custom_config(["ocpvirt-cpu=8", "ocpvirt-memory=32"])
+    assert cfg["ocpvirt_cpu"] == 8
+    assert cfg["ocpvirt_memory"] == "32Gi"
+    assert cfg["ocpvirt_profile"] is None
+
+
+def test_process_ocpvirt_custom_config_cpu_memory_require_both():
+    with pytest.raises(NodeError, match="must both be set"):
+        process_ocpvirt_custom_config(["ocpvirt_cpu=4"])
+    with pytest.raises(NodeError, match="must both be set"):
+        process_ocpvirt_custom_config(["ocpvirt_memory=16Gi"])
+
+
+def test_process_ocpvirt_custom_config_profile_mutually_exclusive():
+    with pytest.raises(NodeError, match="mutually exclusive"):
+        process_ocpvirt_custom_config(
+            ["ocpvirt_profile=o1.large", "ocpvirt_cpu=4", "ocpvirt_memory=16Gi"]
+        )
 
 
 @patch("compute.openshift.get_k8s_clients")
@@ -89,6 +127,8 @@ def test_apply_ocpvirt_vm_profile_uses_cluster_instancetype(mock_clients):
     )
     assert params["instancetype"] == "cx1.2xlarge"
     assert params["image-name"] == "datasource://rhel9"
+    assert "cpu" not in params
+    assert "memory" not in params
 
 
 @patch("compute.openshift.get_k8s_clients")
@@ -100,6 +140,17 @@ def test_apply_ocpvirt_vm_profile_defaults_to_o1_large(mock_clients):
         None,
     )
     assert params["instancetype"] == "o1.large"
+
+
+def test_apply_ocpvirt_vm_profile_uses_custom_resources():
+    params = apply_ocpvirt_vm_profile(
+        {"image-name": "datasource://rhel9", "instancetype": "o1.large"},
+        OCP_CRED,
+        ["ocpvirt_cpu=4", "ocpvirt_memory=16Gi"],
+    )
+    assert params["cpu"] == 4
+    assert params["memory"] == "16Gi"
+    assert "instancetype" not in params
 
 
 @patch(
@@ -127,11 +178,30 @@ def test_build_virtualmachine_cr_with_instancetype():
     }
     domain = vm["spec"]["template"]["spec"]["domain"]
     assert "cpu" not in domain
+    assert "memory" not in domain
     assert "resources" not in domain
 
 
-def test_build_virtualmachine_cr_requires_instancetype():
-    with pytest.raises(NodeError, match="instancetype_name is required"):
+def test_build_virtualmachine_cr_with_custom_resources():
+    vm = build_virtualmachine_cr(
+        node_name="ceph-test-node",
+        namespace="test-ns",
+        image_name="https://example.com/disk.qcow2",
+        storage_class="nfs",
+        network="bridge-504",
+        root_disk_size="80Gi",
+        precreated_volume_names=[],
+        cpu=4,
+        memory="16Gi",
+    )
+    assert "instancetype" not in vm["spec"]
+    domain = vm["spec"]["template"]["spec"]["domain"]
+    assert domain["cpu"] == {"cores": 4}
+    assert domain["memory"] == {"guest": "16Gi"}
+
+
+def test_build_virtualmachine_cr_requires_sizing():
+    with pytest.raises(NodeError, match="Either instancetype_name or both cpu"):
         build_virtualmachine_cr(
             node_name="ceph-test-node",
             namespace="test-ns",
@@ -141,6 +211,22 @@ def test_build_virtualmachine_cr_requires_instancetype():
             root_disk_size="80Gi",
             instancetype_name="",
             precreated_volume_names=[],
+        )
+
+
+def test_build_virtualmachine_cr_rejects_profile_and_custom():
+    with pytest.raises(NodeError, match="mutually exclusive"):
+        build_virtualmachine_cr(
+            node_name="ceph-test-node",
+            namespace="test-ns",
+            image_name="https://example.com/disk.qcow2",
+            storage_class="nfs",
+            network="bridge-504",
+            root_disk_size="80Gi",
+            instancetype_name="o1.large",
+            precreated_volume_names=[],
+            cpu=4,
+            memory="16Gi",
         )
 
 

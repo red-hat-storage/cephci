@@ -8,8 +8,13 @@ N-01 Non-existent / clear when not set
 N-02 rw / r (no q) denied on quarantined SV
 N-03 Quarantine on live mounted SV — enable OK; new IO blocked
 N-04 rwq write semantics (authorization, not write-lock) — plan v1 outdated
+
+Additional coverage:
+  N-05 unaware kclient snap ops blocked (IBMCEPH-20750 / #72368)
+  N-06 failed quarantine op leaves no sticky client block (IBMCEPH-20748 / #72366)
 """
 
+import shlex
 import time
 import traceback
 
@@ -41,7 +46,7 @@ def _prepare(ceph_cluster, config):
         log.error("Subvolume quarantine CLI not available — mark NA")
         return None
 
-    return qtn, admin, fuse, config.get("fs_name", "cephfs")
+    return qtn, fs_util, admin, fuse, config.get("fs_name", "cephfs")
 
 
 def _umount(qtn, client, mounts):
@@ -311,11 +316,146 @@ def n04_rwq_write_semantics(qtn, admin, fuse, vol, config):
         qtn.cleanup_subvolume(admin, vol, sub)
 
 
+def n05_unaware_snap_ops_blocked(qtn, fs_util, admin, fuse, vol, config):
+    """
+    N-05 Unaware kernel client must not create/list snaps on quarantined SV.
+
+    IBMCEPH-20750 / #72368: ino-based snap ops blocked for non-aware clients.
+    """
+    sub = config.get("subvol", "qtn-neg-sv")
+    mount = "/mnt/qtn-n05-kern"
+    try:
+        if qtn.setup_subvolume(admin, vol, sub):
+            return 1
+        _, data = qtn.get_subvolume_paths(admin, vol, sub)
+        # Pre-create one snap before quarantine (may be used for list/rm attempts)
+        admin.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume snapshot create {vol} {sub} pre_q",
+            check_ec=False,
+        )
+
+        mon_ips = ",".join(fs_util.get_mon_node_ips())
+        fuse.exec_command(sudo=True, cmd=f"mkdir -p {mount}", check_ec=False)
+        fs_util.kernel_mount([fuse], mount, mon_ips, extra_params=f",fs={vol}")
+        sv = f"{mount}{data}"
+        snapdir = f"{sv}/.snap"
+
+        qtn.quarantine_enable(admin, vol, sub)
+        time.sleep(2)
+
+        # mksnap via mkdir under .snap should fail/timeout for unaware client
+        out, err = fuse.exec_command(
+            sudo=True,
+            cmd=(f"timeout 20 bash -c 'mkdir {shlex.quote(snapdir)}/n05_should_fail'"),
+            check_ec=False,
+        )
+        rc = fuse.node.exit_status
+        if rc == 0:
+            log.error("N-05 FAILED: unaware kclient created snap under quarantined SV")
+            return 1
+        log.info("mksnap blocked as expected (rc=%s out=%s err=%s)", rc, out, err)
+
+        # Listing .snap should not expose new recovery-destroying ops succeeding
+        out, err = fuse.exec_command(
+            sudo=True,
+            cmd=f"timeout 20 ls {shlex.quote(snapdir)}",
+            check_ec=False,
+        )
+        log.info("lssnap under quarantine: rc=%s out=%s", fuse.node.exit_status, out)
+
+        log.info("n05_unaware_snap_ops_blocked PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        try:
+            qtn.quarantine_disable(admin, vol, sub)
+        except Exception:
+            pass
+        fuse.exec_command(sudo=True, cmd=f"umount {mount}", check_ec=False)
+        fuse.exec_command(sudo=True, cmd=f"umount -l {mount}", check_ec=False)
+        admin.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume snapshot rm {vol} {sub} pre_q --force",
+            check_ec=False,
+        )
+        admin.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume snapshot rm {vol} {sub} n05_should_fail --force",
+            check_ec=False,
+        )
+        qtn.cleanup_subvolume(admin, vol, sub)
+
+
+def n06_failed_qtn_no_sticky_block(qtn, fs_util, admin, fuse, vol, config):
+    """
+    N-06 Failed quarantine enable/disable must not leave sticky client block.
+
+    IBMCEPH-20748 / #72366: undo in-progress mark on failure so peer SV I/O works.
+    """
+    sub = config.get("subvol", "qtn-neg-sv")
+    missing = config.get("missing_subvol", "qtn-neg-missing")
+    client = "qtn-n06-rw"
+    mount = "/mnt/qtn-n06"
+    try:
+        if qtn.setup_subvolume(admin, vol, sub):
+            return 1
+        root, data = qtn.get_subvolume_paths(admin, vol, sub)
+        qtn.create_rw_client(admin, vol, root, client)
+        qtn.mount_fuse(fuse, mount, data, client, vol)
+        if qtn.write_baseline_file(fuse, mount, "seed.txt", "n06-seed"):
+            return 1
+
+        # Failed enable on missing SV — real SV must remain writable
+        result = qtn._quarantine_cmd(
+            admin, "enable", vol, missing, expect_success=False
+        )
+        log.info("enable missing result: %s", result)
+        if not _failed_quarantine_result(result):
+            log.error("N-06: expected enable on missing SV to fail")
+            return 1
+        if qtn.assert_write_ok(fuse, mount, "after-missing-enable.txt"):
+            log.error("N-06 FAILED: sticky block after failed enable on missing SV")
+            return 1
+
+        # Real enable then disable; failed second enable while already q'd
+        # (may be idempotent success — still require I/O after disable)
+        qtn.quarantine_enable(admin, vol, sub)
+        result2 = qtn._quarantine_cmd(admin, "enable", vol, sub, expect_success=False)
+        log.info("second enable while quarantined: %s", result2)
+        qtn.quarantine_disable(admin, vol, sub)
+        time.sleep(2)
+        # Remount after quarantine window
+        qtn.umount_fuse(fuse, mount)
+        qtn.mount_fuse(fuse, mount, data, client, vol)
+        if qtn.assert_write_ok(fuse, mount, "after-disable.txt"):
+            log.error("N-06 FAILED: I/O stuck after quarantine disable path")
+            return 1
+
+        log.info("n06_failed_qtn_no_sticky_block PASSED")
+        return 0
+    except Exception:
+        qtn.log_exception()
+        return 1
+    finally:
+        _umount(qtn, fuse, [mount])
+        try:
+            qtn.quarantine_disable(admin, vol, sub)
+        except Exception:
+            pass
+        _del_clients(qtn, admin, [client])
+        qtn.cleanup_subvolume(admin, vol, sub)
+
+
 SUBTESTS = {
     "n01_nonexistent_and_clear_unset": n01_nonexistent_and_clear_unset,
     "n02_rw_without_q_denied": n02_rw_without_q_denied,
     "n03_quarantine_live_mount": n03_quarantine_live_mount,
     "n04_rwq_write_semantics": n04_rwq_write_semantics,
+    "n05_unaware_snap_ops_blocked": n05_unaware_snap_ops_blocked,
+    "n06_failed_qtn_no_sticky_block": n06_failed_qtn_no_sticky_block,
 }
 
 
@@ -334,7 +474,7 @@ def run(ceph_cluster, **kw):
     prepared = _prepare(ceph_cluster, config)
     if prepared is None:
         return 1
-    qtn, admin, fuse, vol = prepared
+    qtn, fs_util, admin, fuse, vol = prepared
 
     requested = config.get("subtests")
     test_list = requested if requested else list(SUBTESTS.keys())
@@ -353,7 +493,15 @@ def run(ceph_cluster, **kw):
         log.info("=" * 80)
 
         try:
-            rc = SUBTESTS[name](qtn, admin, fuse, vol, config)
+            # Legacy N-01..N-04 take (qtn, admin, fuse, vol, config)
+            # New N-05/N-06 also need fs_util for kernel mount helpers.
+            if name in (
+                "n05_unaware_snap_ops_blocked",
+                "n06_failed_qtn_no_sticky_block",
+            ):
+                rc = SUBTESTS[name](qtn, fs_util, admin, fuse, vol, config)
+            else:
+                rc = SUBTESTS[name](qtn, admin, fuse, vol, config)
         except Exception:
             log.error("SUBTEST EXCEPTION : [Negative] %s", name)
             log.error(traceback.format_exc())

@@ -1,0 +1,19 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - mkasturi18
+  - TejasC88
+  - ckulal
+
+reviewers:
+  - anrao19
+  - hmaheswa
+  - manisha-reddem
+  - Sohan-Singh
+  - viduship
+  - yuva-gayam
+
+labels:
+  - RGW

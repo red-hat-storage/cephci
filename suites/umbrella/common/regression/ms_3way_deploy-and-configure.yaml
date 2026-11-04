@@ -1,0 +1,370 @@
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "primary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri.sync
+                  args:
+                    placement:
+                      count-per-host: 1
+                      nodes:
+                        - node4
+                        - node5
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri.io
+                  args:
+                    placement:
+                      count-per-host: 1
+                      nodes:
+                        - node2
+                        - node3
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec.sync
+                  args:
+                    placement:
+                      count-per-host: 1
+                      nodes:
+                        - node4
+                        - node5
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec.io
+                  args:
+                    placement:
+                      count-per-host: 1
+                      nodes:
+                        - node2
+                        - node3
+        ceph-ter:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create tertiary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "tertiary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.ter.sync
+                  args:
+                    placement:
+                      count-per-host: 1
+                      nodes:
+                        - node4
+                        - node5
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.ter.io
+                  args:
+                    placement:
+                      count-per-host: 1
+                      nodes:
+                        - node2
+                        - node3
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-10117
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+        ceph-ter:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-ter:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node4}:80,http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node4}:80,http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 3way123 --secret 3way123 --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 3way123 --secret 3way123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.pri.sync rgw_realm india"
+              - "ceph config set client.rgw.shared.pri.sync rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri.sync rgw_zone primary"
+              - "ceph config set client.rgw.shared.pri.io rgw_realm india"
+              - "ceph config set client.rgw.shared.pri.io rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri.io rgw_zone primary"
+              - "ceph config set client.rgw.shared.pri.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node4}:80,http://{node_ip:node5}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.sec.sync rgw_realm india"
+              - "ceph config set client.rgw.shared.sec.sync rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec.sync rgw_zone secondary"
+              - "ceph config set client.rgw.shared.sec.io rgw_realm india"
+              - "ceph config set client.rgw.shared.sec.io rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec.io rgw_zone secondary"
+              - "ceph config set client.rgw.shared.sec.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
+        ceph-ter:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node4}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone tertiary --endpoints http://{node_ip:node4}:80,http://{node_ip:node5}:80 --access-key 3way123 --secret 3way123"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.ter.sync rgw_realm india"
+              - "ceph config set client.rgw.shared.ter.sync rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.ter.sync rgw_zone tertiary"
+              - "ceph config set client.rgw.shared.ter.io rgw_realm india"
+              - "ceph config set client.rgw.shared.ter.io rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.ter.io rgw_zone tertiary"
+              - "ceph config set client.rgw.shared.ter.io rgw_run_sync_thread false"
+              - "ceph orch restart {service_name:shared.ter.io}"
+              - "ceph orch restart {service_name:shared.ter.sync}"
+      desc: Setting up 3-way RGW multisite replication environment
+      module: exec.py
+      name: setup 3-way multisite
+      polarion-id: CEPH-10704
+

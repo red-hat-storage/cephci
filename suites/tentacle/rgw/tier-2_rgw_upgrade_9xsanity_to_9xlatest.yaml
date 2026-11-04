@@ -1,4 +1,4 @@
-#Objective: Testing single site upgrade from RHCS 9.1 sanity latest to 9.x latest build
+#Objective: Testing single site upgrade from RHCS 9.x sanity latest to 9.x latest build
 #platform : RHEL-9
 #conf: conf/tentacle/rgw/tier-0_rgw.yaml
 
@@ -18,7 +18,6 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 9.1
                 release: stable
                 registry-url: registry.redhat.io
                 mon-ip: node1
@@ -109,8 +108,8 @@ tests:
         run-on-haproxy: true
 
   - test:
-      name: S3CMD small and multipart object download
-      desc: S3CMD small and multipart object download or GET
+      name: S3CMD small and multipart object download pre upgrade
+      desc: S3CMD small and multipart object download or GET pre upgrade
       polarion-id: CEPH-83575477
       module: sanity_rgw.py
       config:
@@ -141,16 +140,24 @@ tests:
         commands:
           - "ceph versions"
 
-# Post upgrade tests
+  - test:
+      name: Mbuckets_with_Nobjects with etag verification post upgrade
+      desc: test etag verification post upgrade
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574871
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
-      name: Bucket Lifecycle Object_transition_tests multiple rules and different storage class
-      desc: Test Object_transition_tests multiple rules and different storage class
-      polarion-id: CEPH-83574052 # also CEPH-83573372
+      name: S3CMD small and multipart object download post upgrade
+      desc: S3CMD small and multipart object download or GET post upgrade
+      polarion-id: CEPH-83575477
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_lc_transition_multiple_rules.yaml
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
         run-on-haproxy: true
 
   # - test:

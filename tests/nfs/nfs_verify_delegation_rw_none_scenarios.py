@@ -1,5 +1,3 @@
-import time
-
 from nfs_delegation_operations import (
     DELEGATION_LOG_SETTLE_SECONDS_DEFAULT,
     create_delegation_exports,
@@ -8,7 +6,6 @@ from nfs_delegation_operations import (
     ensure_nfs_cluster_for_delegation_test,
     mount_delegation_export,
     parse_nfs4_open_delegation_types,
-    read_ganesha_delegation_tailf_capture,
     restore_delegation_ganesha_templates,
     skip_delegation_tests_unless_supported,
     start_ganesha_delegation_tailf_follow,
@@ -17,6 +14,7 @@ from nfs_delegation_operations import (
     truncate_ganesha_container_log,
     unmount_delegation_export,
     validate_delegation_ganesha_window,
+    wait_for_delegation_log_events,
 )
 from nfs_operations import cleanup_cluster, get_ganesha_info_from_container
 
@@ -164,17 +162,27 @@ def run(ceph_cluster, **kw):
             )
 
             start_ganesha_delegation_tailf_follow(nfs_node, container_id)
-            _run_delegation_export_client_io(
-                client, "%s/deleg_scen_io.txt" % mount_point, delegation_mode
-            )
-            log.info(
-                "Waiting %s s after IO on %s for delegation lines in ganesha.log",
-                settle_seconds,
-                pseudo,
-            )
-            time.sleep(settle_seconds)
-            stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
-            hits = read_ganesha_delegation_tailf_capture(nfs_node, container_id)
+            try:
+                _run_delegation_export_client_io(
+                    client, "%s/deleg_scen_io.txt" % mount_point, delegation_mode
+                )
+
+                def _window_ready(capture_hits):
+                    ok, _reason = validate_delegation_ganesha_window(
+                        delegation_mode, "\n".join(capture_hits or [])
+                    )
+                    return ok
+
+                hits = wait_for_delegation_log_events(
+                    nfs_node,
+                    container_id,
+                    timeout_seconds=settle_seconds,
+                    predicate=_window_ready,
+                    scenario_name="%s_%s" % (pseudo, delegation_mode),
+                )
+            finally:
+                stop_ganesha_delegation_tailf_follow(nfs_node, container_id)
+
             if not hits:
                 raise OperationFailedError(
                     "Empty ganesha.log tail capture for %s (delegations=%s)"

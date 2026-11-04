@@ -1,0 +1,16 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - neha-gangadhar
+  - pdhiran
+
+reviewers:
+  - SrinivasaBharath
+  - harshkumarRH
+  - Divya-78
+  - s-vipin
+
+labels:
+  - RADOS

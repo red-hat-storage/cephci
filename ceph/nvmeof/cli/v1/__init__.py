@@ -45,9 +45,10 @@ class NVMeGWCLI(ExecuteCommandMixin):
 
         if "icr.io" in self.NVMEOF_CLI_IMAGE:
             get_configs()
-            registry = get_registry_credentials("cdn", "ibm")
-            if "stg" in self.NVMEOF_CLI_IMAGE:
-                registry = get_registry_credentials("stage", "ibm")
+            from utility.utils import registry_host_from_image
+
+            host = registry_host_from_image(self.NVMEOF_CLI_IMAGE)
+            registry = get_registry_credentials(host)
             url = registry["registry"]
             username = registry["username"]
             password = registry["password"]

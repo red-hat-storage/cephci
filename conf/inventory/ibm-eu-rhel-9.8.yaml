@@ -13,73 +13,48 @@ instance:
     ssh_pwauth: true
     timezone: Etc/UTC
 
+    # Derive repos/<major>/<minor>/ from guest VERSION_ID so mix-os
+    # (e.g. rhel-100 on a 9.8 default inventory) hits the matching mirror.
+    # RHEL 9 uses dnf vars under /etc/dnf/vars (yum is dnf-compatible).
+    bootcmd:
+      - |
+        set -e
+        . /etc/os-release
+        major=${VERSION_ID%%.*}
+        minor=${VERSION_ID#*.}
+        minor=${minor%%.*}
+        mkdir -p /etc/dnf/vars
+        printf '%s\n' "$major" > /etc/dnf/vars/releasever_major
+        printf '%s\n' "$minor" > /etc/dnf/vars/releasever_minor
+
     # We are forcing an update of the packages
     package_update: true
 
-    # Create the base repositories
+    # Create the base repositories (dnf vars from bootcmd above)
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/BaseOS/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/BaseOS/
         gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/CRB/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/CRB/
         gpgcheck: false
         enabled: true
 
-    # write the mirror registry details
+    # write_files: sysctl/sshd/policy only (no Frankfurt registry mirror)
     write_files:
-      - content: |
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/rh-stage"
-          prefix = "registry-proxy.engineering.redhat.com"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/rh-stage"
-          prefix = "quay.io"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/rh-stage"
-          prefix = "registry.stage.redhat.io"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/rh-prod"
-          prefix = "registry.redhat.io"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/ibm-stage"
-          prefix = "cp.stg.icr.io"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/ibm-stage"
-          prefix = "preprod.icr.io"
-          insecure = true
-
-          [[registry]]
-          location = "nginx-vm-01.qe.ceph.lab:5000/ibm-prod"
-          prefix = "cp.icr.io"
-          insecure = true
-        path: /etc/containers/registries.conf.d/nginx-vm-01.conf
-        owner: root:root
-        permissions: '0644'
-        defer: true
+      # Container registries: do NOT mirror via nginx-vm-01 (Frankfurt).
+      # Shared by Dallas, London, and Madrid. VMs pull upstream hosts directly
+      # (preprod.icr.io, cp.icr.io, quay.io, registry.*.redhat.io).
+      # Auth uses bootstrap --registry-url / credentials (see #6124 / #6156).
       - content: |
           net.core.default_qdisc=netem
         path: /etc/sysctl.d/1000-qdisc.conf
@@ -155,6 +130,8 @@ instance:
       - wget
 
     package_upgrade: true
+    # Reboot when a kernel (or other package) marks the system reboot-required
+    package_reboot_if_required: true
 
     runcmd:
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf

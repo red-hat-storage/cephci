@@ -1,0 +1,65 @@
+
+# CephAdm tier-1 test configuration
+# Admin node in RHEL 9 and other host in RHEL 8
+# Deployment for all the ceph daemons , with 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+          - rgw
+        no-of-volumes: 6
+        disk-size: 15
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - node-exporter
+          - alertmanager
+          - crash
+        no-of-volumes: 6
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 6
+        disk-size: 15
+      node4:
+        role:
+          - mds
+          - rgw
+      node5:
+        image-name:
+          openstack: RHEL-9.2.0-x86_64-ga-latest
+        role:
+          - client
+      node6:
+        image-name:
+          openstack: RHEL-9.2.0-x86_64-ga-latest
+        role:
+          - client
+      node7:
+        image-name:
+          openstack: RHEL-8.7.0-x86_64-ga-latest
+        role:
+          - client
+      node8:
+        image-name:
+          openstack: RHEL-8.7.0-x86_64-ga-latest
+        role:
+          - client

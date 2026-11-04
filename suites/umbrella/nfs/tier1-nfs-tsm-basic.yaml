@@ -1,0 +1,230 @@
+#===============================================================================================
+#---    Test Suite for NFS-Ganesha TSM (Transparent State Migration) — basic / feature   ---
+#===============================================================================================
+# Conf: conf/tentacle/nfs/1admin-12node-4client.yaml (>=4 NFS + >=3 clients)
+#   or baremetal with >=4 NFS roles / equivalent
+#
+# Purpose:
+#   Automate NFS-Ganesha Transparent State Migration (TSM) validation.
+#   TSM syncs NFSv4 client state (opens/locks/delegations) across Ganesha peers
+#   via enable_TSM / Tsm_Port so HA/failover can reclaim state.
+#
+# Requirements:
+#   - >=3 NFS nodes in conf for deploy / negative / record / delegation (count=3)
+#   - >=4 NFS nodes when integration TC-10 is selected (4-host pool, count=3)
+#   - >=3 clients for integration (3 exports × 3 clients; deleg off/none/rw)
+#   - TC-08/10 reboot the mount server where clients are connected
+#   - Product build that renders enable_TSM / Tsm_Port in ganesha.conf
+#
+# Layout:
+#   1. Bootstrap + clients
+#   2. Deployment workflows — test_nfs_tsm_basic.py (enable, ports, placement, scale, colocate)
+#   3. Negative workflows — test_nfs_tsm_negative.py (single-daemon reject, disable paths)
+#   4. Record validation — test_nfs_tsm_record_validation.py (open/lock peer counters)
+#   5. Delegation lifecycle — test_nfs_tsm_delegation.py (open/lock/deleg; NFSv4.2)
+#   6. Integration TC-01..TC-10 — test_nfs_tsm_integration.py (NFSv4.2)
+#   Versions: deploy / negative / record also run for NFSv4.1 and NFSv4.0
+#
+# Grace IO / grace recover / share-deny live in tier-1-nfs-tsm-grace.yaml
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client.1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client.2
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node8
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure client.3
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  #---------------------------------------------------------------------------------------------
+  # TSM feature tests
+  #---------------------------------------------------------------------------------------------
+  - test:
+      name: NFS TSM - Deployment workflows
+      module: tsm.test_nfs_tsm_basic.py
+      desc: TSM deploy workflows (enable, ports, placement, scale, colocate)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+      comments: "colocation - IBMCEPH-17473"
+
+  - test:
+      name: NFS TSM - Negative workflows
+      module: tsm.test_nfs_tsm_negative.py
+      desc: Negative TSM (single-daemon reject, disable paths)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+
+  - test:
+      name: NFS TSM - Record validation
+      module: tsm.test_nfs_tsm_record_validation.py
+      desc: Peer TSM open/lock record counts across hold workflows
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+
+  - test:
+      name: NFS TSM - Delegation lifecycle - NFSv4.2
+      module: tsm.test_nfs_tsm_delegation.py
+      desc: Peer TSM open/lock/deleg + Ganesha grant/recall/CLOSE across hold lifecycle / none
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+
+  - test:
+      name: NFS TSM - Integration
+      module: tsm.test_nfs_tsm_integration.py
+      desc: TSM integration TC-01..TC-10 (single cluster, 3 exports, 3 clients, deleg off/none/rw)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.2"
+        mds_fail_delay_sec: 5
+        # workflows: ["TC-01", "TC-02"]  # optional subset
+  - test:
+      name: NFS TSM - Deployment workflows - NFSv4.1
+      module: tsm.test_nfs_tsm_basic.py
+      desc: TSM deploy workflows (enable, ports, placement, scale, colocate)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.1"
+
+  - test:
+      name: NFS TSM - Negative workflows - NFSv4.1
+      module: tsm.test_nfs_tsm_negative.py
+      desc: Negative TSM (single-daemon reject, disable paths)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.1"
+
+  - test:
+      name: NFS TSM - Record validation - NFSv4.1
+      module: tsm.test_nfs_tsm_record_validation.py
+      desc: Peer TSM open/lock record counts across hold workflows
+      abort-on-fail: false
+      config:
+        nfs_version: "4.1"
+
+  - test:
+      name: NFS TSM - Deployment workflows - NFSv4.0
+      module: tsm.test_nfs_tsm_basic.py
+      desc: TSM deploy workflows (enable, ports, placement, scale, colocate)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.0"
+
+  - test:
+      name: NFS TSM - Negative workflows - NFSv4.0
+      module: tsm.test_nfs_tsm_negative.py
+      desc: Negative TSM (single-daemon reject, disable paths)
+      abort-on-fail: false
+      config:
+        nfs_version: "4.0"
+
+  - test:
+      name: NFS TSM - Record validation - NFSv4.0
+      module: tsm.test_nfs_tsm_record_validation.py
+      desc: Peer TSM open/lock record counts across hold workflows
+      abort-on-fail: false
+      config:
+        nfs_version: "4.0"

@@ -19,7 +19,12 @@ from cli.utilities.utils import (
     set_service_state,
 )
 from utility.log import Log
-from utility.utils import get_cephci_config, is_unsecured_registry
+from utility.utils import (
+    get_cephci_config,
+    is_unsecured_registry,
+    parse_custom_config_list,
+    resolve_registry_login,
+)
 
 log = Log(__name__)
 
@@ -273,7 +278,6 @@ def install_prereq(
         ceph.exec_command(cmd="sudo yum clean all")
         config_ntp(ceph, cloud_type)
 
-    registry_login(ceph, distro_ver, test_data, cloud_type=cloud_type)
     update_iptables(ceph)
 
     if fips_mode:
@@ -300,6 +304,11 @@ def install_prereq(
         if get_service_state(ceph, "firewalld").strip() != "active":
             raise ConfigError("Firewall not active")
         log.info("Firewall is active")
+
+    # Login to CDN (+ optional custom-config) registries after any reboot
+    # (RHEL-8+ qdisc / FIPS) so docker/podman auth survives restarts and is
+    # present on every node before bootstrap / monitoring pulls.
+    registry_login(ceph, distro_ver, test_data, cloud_type=cloud_type)
 
     # Enable coredump collection
     enable_coredump(ceph)
@@ -405,16 +414,47 @@ def enable_rhel_rpms(ceph, distro_ver):
     """
     sm_cmd = "subscription-manager"
 
+    # The latest minor version is available in CDN repos
+    # N-x versions would be available in EUS or AUS repos depending on EOL
+    # EUS when a newer minor version is available else AUS if older.
+    # This would help us avoid the need for --enable-rhel-eus-rpms
     repos = {
-        "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
         "8": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
         "9": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
         "10": ["rhel-10-for-x86_64-appstream-rpms", "rhel-10-for-x86_64-baseos-rpms"],
+        "8.10": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
+        "9.2": [
+            "rhel-9-for-x86_64-appstream-aus-rpms",
+            "rhel-9-for-x86_64-baseos-aus-rpms",
+        ],
+        "9.4": [
+            "rhel-9-for-x86_64-appstream-aus-rpms",
+            "rhel-9-for-x86_64-baseos-aus-rpms",
+        ],
+        "9.6": [
+            "rhel-9-for-x86_64-appstream-eus-rpms",
+            "rhel-9-for-x86_64-baseos-eus-rpms",
+        ],
+        "9.8": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
+        "10.0": [
+            "rhel-10-for-x86_64-appstream-eus-rpms",
+            "rhel-10-for-x86_64-baseos-eus-rpms",
+        ],
+        "10.2": ["rhel-10-for-x86_64-appstream-rpms", "rhel-10-for-x86_64-baseos-rpms"],
     }
 
+    rs = repos.get(distro_ver, repos.get(distro_ver.split(".")[0]))
+    if not rs:
+        log.warning(
+            "No RHEL repository configuration found for OS release: %s", distro_ver
+        )
+        return
+
+    log.info("The provided OS release is %s", distro_ver)
+    log.debug("The retrieve repo details are %s", rs)
     ceph.exec_command(sudo=True, cmd=f"{sm_cmd} release --set {distro_ver}")
 
-    for repo in repos.get(distro_ver.split(".")[0]):
+    for repo in rs:
         ceph.exec_command(
             sudo=True,
             cmd="{sm_cmd} repos --enable={r}".format(sm_cmd=sm_cmd, r=repo),
@@ -460,12 +500,31 @@ def enable_rhel_eus_rpms(ceph, distro_ver):
     ceph.exec_command(sudo=True, cmd="yum clean all", long_running=True)
 
 
+# CDN registries logged into on every node during install_prereq (post-reboot).
+# Avoids unauthorized pulls when monitoring defaults still target cp.icr.io while
+# bootstrap authenticates against preprod / stage hosts.
+CDN_REGISTRY_HOSTS = (
+    "registry.redhat.io",
+    "cp.icr.io",
+)
+
+
 def registry_login(ceph, distro_ver, test_data=None, cloud_type="openstack"):
     """
-    Login to the given Container registries provided in the configuration.
+    Login to CDN (+ optional run-specific) container registries on this node.
 
-    In this method, docker or podman is installed based on OS.
+    Always attempts CDN hosts (``registry.redhat.io``, ``cp.icr.io``) so auth is
+    present before bootstrap / monitoring pulls. Additional hosts come from
+    --custom-config keys:
+      - bootstrap-registry
+      - upgrade-registry
+      - registries (comma-separated list)
+
+    Credentials are loaded from the host-keyed ``registries:`` section in
+    ~/.cephci.yaml. Called after any install_prereq reboot so credentials
+    survive qdisc / FIPS restarts.
     """
+    _ = cloud_type  # retained for call-site compatibility
     container = "podman"
     if distro_ver.startswith("7"):
         container = "docker"
@@ -477,30 +536,65 @@ def registry_login(ceph, distro_ver, test_data=None, cloud_type="openstack"):
     if container == "docker":
         ceph.exec_command(cmd="sudo systemctl restart docker", long_running=True)
 
-    config = get_cephci_config()
-    registries = [
-        {
-            "registry": "registry.redhat.io",
-            "user": config["cdn_credentials"]["username"],
-            "passwd": config["cdn_credentials"]["password"],
-        }
-    ]
+    custom_dict = {}
+    if test_data:
+        custom_dict = test_data.get("custom_config_dict") or {}
+        if not custom_dict and test_data.get("custom-config"):
+            custom_dict = parse_custom_config_list(test_data.get("custom-config"))
 
-    if (
-        config.get("registry_credentials")
-        and config["registry_credentials"]["registry"] != "registry.redhat.io"
-    ):
-        registries.append(
-            {
-                "registry": config["registry_credentials"]["registry"],
-                "user": config["registry_credentials"]["username"],
-                "passwd": config["registry_credentials"]["password"],
-            }
-        )
+    # Explicit custom-config hosts (fail hard if credentials missing).
+    explicit_hosts = set()
+    for key in ("bootstrap-registry", "upgrade-registry"):
+        if custom_dict.get(key):
+            explicit_hosts.add(custom_dict[key].strip())
+    if custom_dict.get("registries"):
+        for host in str(custom_dict["registries"]).split(","):
+            host = host.strip()
+            if host:
+                explicit_hosts.add(host)
+
     auths = {}
-    for r in registries:
-        b64_auth = base64.b64encode(f"{r['user']}:{r['passwd']}".encode("ascii"))
-        auths[r["registry"]] = {"auth": b64_auth.decode("utf-8")}
+
+    # CDN hosts: best-effort so missing YAML keys do not abort prereq.
+    for host in CDN_REGISTRY_HOSTS:
+        try:
+            reg_args = resolve_registry_login(host)
+        except KeyError as err:
+            log.warning("Skipping CDN registry %s: %s", host, err)
+            continue
+        user = reg_args.get("registry-username")
+        passwd = reg_args.get("registry-password")
+        if not user or not passwd:
+            log.warning(
+                "Skipping CDN registry %s: username/password missing in cephci config",
+                host,
+            )
+            continue
+        b64_auth = base64.b64encode(f"{user}:{passwd}".encode("ascii"))
+        auths[host] = {"auth": b64_auth.decode("utf-8")}
+        log.info("Prepared CDN registry auth for %s", host)
+
+    # Explicit hosts from custom-config (required when requested).
+    for host in sorted(explicit_hosts):
+        if host in auths:
+            continue
+        try:
+            reg_args = resolve_registry_login(host)
+        except KeyError as err:
+            raise ConfigError(str(err)) from err
+        user = reg_args["registry-username"]
+        passwd = reg_args["registry-password"]
+        b64_auth = base64.b64encode(f"{user}:{passwd}".encode("ascii"))
+        auths[host] = {"auth": b64_auth.decode("utf-8")}
+        log.info("Prepared auth for registry host %s", host)
+
+    if not auths:
+        log.warning(
+            "No registry credentials resolved; skipping registry login on %s",
+            ceph.hostname,
+        )
+        return
+
     auths_dict = {"auths": auths}
     ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
     ceph.exec_command(cmd="mkdir -p ~/.docker")
@@ -526,6 +620,12 @@ def registry_login(ceph, distro_ver, test_data=None, cloud_type="openstack"):
         file.write(json.dumps(auths_dict, indent=4))
         file.flush()
         file.close()
+
+    log.info(
+        "Registry login written on %s for: %s",
+        ceph.hostname,
+        ", ".join(sorted(auths)),
+    )
 
 
 def update_iptables(node):

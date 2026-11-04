@@ -1,0 +1,569 @@
+# Suite contains tests to verify and test ceph pools
+# Conf: conf/tentacle/common/13node-4client-single-site-regression.yaml
+# Deployment: suites/tentacle/common/regression/single-site-deploy-and-configure.yaml
+tests:
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Verify pool behaviour at min_size
+      module: pool_tests.py
+      polarion-id: CEPH-9167
+      config:
+        Verify_pool_min_size_behaviour:
+          pool_name: test-pool-3
+      desc: Verify that Clients can read and write data into pools with min_size OSDs
+
+  - test:
+      name: Replicated pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        replicated_pool:
+          pool_name: test_re_pool
+          pg_num: 32
+          byte_size: 200KB
+          max_objs: 1000
+          rados_read_duration: 100
+      desc: Create replicated pools and run IO
+
+  - test:
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      desc: Create EC pools and run IO
+      config:
+        ec_pool:
+          pool_name: test_ec_pool
+          pg_num: 32
+          k: 8
+          byte_size: 200KB
+          m: 3
+          plugin: jerasure
+          max_objs: 1000
+          rados_read_duration: 100
+        replicated_pool:
+          pool_name: delete_pool
+          pg_num: 32
+          byte_size: 1024
+          max_objs: 2000
+          rados_read_duration: 10
+
+  - test:
+      name: Autoscaler test - pool target size ratio
+      module: pool_tests.py
+      polarion-id: CEPH-83573424
+      config:
+        verify_pool_target_ratio:
+          configurations:
+            pool-1:
+              pool_name: ec_pool_1
+              pool_type: erasure
+              pg_num: 32
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+              target_size_ratio: 0.8
+              max_objs: 500
+              rados_read_duration: 50
+              delete_pool: true
+            pool-2:
+              pool_type: replicated
+              pool_name: re_pool_1
+              pg_num: 32
+              target_size_ratio: 0.8
+              max_objs: 500
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
+
+  - test:
+      name: Verify Ceph df stats
+      desc: Verify Ceph df stats after creating and deleting objects from a pool
+      module: test_cephdf.py
+      polarion-id: CEPH-83571666
+      config:
+        verify_cephdf_stats:
+          create_pool: true
+          pool_name: test-ceph-df
+          obj_nums:
+            - 5
+            - 20
+            - 50
+          delete_pool: true
+      destroy-cluster: false
+
+  - test:
+      name: Mon target for PG num
+      module: pool_tests.py
+      polarion-id: CEPH-83573423
+      desc: Verification of mon_target_pg_per_osd option globally
+      config:
+        verify_mon_target_pg_per_osd:
+          section: "global"
+          name: "mon_target_pg_per_osd"
+          value: "150"
+
+  - test:
+      name: Autoscaler test - pool pg_num_min
+      module: pool_tests.py
+      polarion-id: CEPH-83573425
+      config:
+        verify_pg_num_min:
+          configurations:
+            pool-1:
+              pool_name: ec_pool_2
+              pool_type: erasure
+              pg_num: 32
+              k: 8
+              m: 3
+              plugin: jerasure
+              crush-failure-domain: host
+              pg_num_min: 16
+              max_objs: 500
+              rados_read_duration: 50
+              delete_pool: true
+            pool-2:
+              pool_type: replicated
+              pool_name: re_pool_2
+              pg_num: 64
+              pg_num_min: 32
+              max_objs: 500
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-2
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-1. RE -> RE
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-2. RE -> EC
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-3
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-3. EC -> RE
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-2
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-4. Ec -> EC
+
+  - test:
+      name: Pg autoscaler bulk flag
+      module: pool_tests.py
+      polarion-id: CEPH-83573412
+      desc: Ceph PG autoscaler bulk flag tests
+      config:
+        test_autoscaler_bulk_feature: true
+        pool_name: test_bulk_features
+        delete_pool: true
+
+  - test:
+      name: PG number maximum limit check
+      module: pool_tests.py
+      desc: Check the pg_num maximut limit is <=128
+      polarion-id: CEPH-83574909
+      config:
+        verify_pg_num_limit:
+          pool_name: pool_num_chk
+          delete_pool: true
+
+  - test:
+      name: OSD min-alloc size and fragmentation checks
+      module: rados_prep.py
+      polarion-id: CEPH-83573808
+      config:
+        Verify_osd_alloc_size:
+          allocation_size: 4096
+      desc: Verify the minimum allocation size for OSDs along with fragmentation scores.
+
+  - test:
+      name: Compression test - replicated pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571673
+      config:
+        Compression_tests:
+          verify_compression_ratio_set: true          # TC : CEPH-83571672
+          pool_type: replicated
+          pool_config:
+            pool-1: test_compression_repool-1
+            pool-2: test_compression_repool-2
+            max_objs: 1000
+            byte_size: 400KB
+            pg_num: 32
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.6
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on replicated pools
+
+# Blocked due to BZ 2172795. Bugzilla fixed.
+  - test:
+      name: Verify cluster behaviour during PG autoscaler warn
+      module: pool_tests.py
+      polarion-id:  CEPH-83573413
+      config:
+        verify_pool_warnings:
+          pool_configs:
+            - type: replicated
+              conf: sample-pool-1
+            - type: erasure
+              conf: sample-pool-2
+          pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
+
+  - test:
+      name: Verify autoscaler scales up pool to pg_num_min
+      module: pool_tests.py
+      polarion-id:  CEPH-83592793
+      config:
+        verify_pool_min_pg_count:
+          pool_configs:
+            - type: replicated
+              conf: sample-pool-1
+            - type: erasure
+              conf: sample-pool-2
+          pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Verify if PG Autoascler will autoscale pools to pg_num_min size
+
+  - test:
+      name: Verify degraded pool behaviour at min_size
+      module: pool_tests.py
+      polarion-id: CEPH-9185
+      config:
+        Verify_degraded_pool_min_size_behaviour:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: pool_degraded_test
+              pg_num: 1
+              disable_pg_autoscale: true
+      desc: On a degraded cluster verify that clients can read and write data into pools with min_size OSDs
+      abort-on-fail: false
+
+# Pool scale down tests commented until fix for 2302230
+  - test:
+      name: Test Online Reads Balancer Upmap-read
+      module: test_online_reads_balancer.py
+      desc: Testing Online reads balancer tool via balancer module | upmap-read
+      polarion-id: CEPH-83590731
+      config:
+        balancer_mode: upmap-read
+        negative_scenarios: true
+        scale_up: true
+        scale_down: false
+        create_pools:
+          - create_pool:
+              pool_name: rpool_1
+              pg_num: 64
+              byte_size: 256
+              pool_type: replicated
+              max_objs: 500
+              rados_read_duration: 30
+          - create_pool:
+              pool_name: rpool_2
+              pg_num: 128
+              pool_type: replicated
+              max_objs: 500
+              rados_read_duration: 30
+              byte_size: 256
+          - create_pool:
+              pool_name: rpool_3
+              pg_num: 32
+              max_objs: 500
+              rados_read_duration: 30
+              byte_size: 256
+              pool_type: replicated
+          - create_pool:
+              create: true
+              pool_name: ecpool_test_2
+              pool_type: erasure
+              pg_num: 32
+              k: 2
+              m: 2
+              max_objs: 500
+              rados_read_duration: 30
+              byte_size: 256
+        delete_pools:
+          - rpool_1
+          - rpool_2
+          - rpool_3
+          - ecpool_test_2
+
+  - test:
+      name: Inconsistent object pg check
+      desc: Inconsistent object pg check
+      module: test_osd_inconsistency_pg.py
+      polarion-id: CEPH-9924
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_pool
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: Inconsistent object pg check using pool snapshot for RE pools
+      desc: Inconsistent object pg check using pool snapshot for RE pools
+      module: test_osd_snap_inconsistency_pg.py
+      polarion-id: CEPH-9942
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_snap_pool_re
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: Inconsistent object secondary pg check using pool snapshot
+      desc: Inconsistent object pg check using pool snapshot for RE pools for secondary OSD in PG
+      module: test_osd_snap_inconsistency_pg.py
+      polarion-id: CEPH-83571452
+      config:
+        test_secondary: true
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_snap_pool
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: Compression test - EC pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571674
+      config:
+        Compression_tests:
+          pool_type: erasure
+          pool_config:
+            pool-1: test_compression_ecpool-1
+            pool-2: test_compression_ecpool-2
+            max_objs: 2000
+            byte_size: 10KB
+            pg_num: 32
+            k: 2
+            m: 2
+            plugin: jerasure
+            crush-failure-domain: host
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.7
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on erasure coded pools
+
+  - test:
+      name: Automatic trimming of Mon DB
+      module: customer_scenarios.py
+      polarion-id: CEPH-83574466
+      config:
+        mondb_trim_config:
+          paxos_service_trim_min: 10
+          paxos_service_trim_max: 100
+          osd_op_complaint_time: 0.000001
+          osd_max_backfills: 10
+          osd_recovery_max_active: 10
+      desc: Verification of mon DB trimming during various cluster operations
+
+  - test:
+      name: Automatic trimming of osdmaps
+      desc: check for periodic trimming of osdmaps
+      module: test_osdmap_trim.py
+      polarion-id: CEPH-10046
+
+  - test:
+      name: Trimming of onodes
+      desc: check for the onode trimming in the cluster
+      module: test_osd_onode_trimming.py
+      polarion-id: CEPH-83575269
+
+  - test:
+      name: CIDR Blocklisting.
+      module: test_cidr_blocklisting.py
+      polarion-id: CEPH-83575008
+      config:
+        pool_configs:
+          pool-1:
+            type: replicated
+            conf: sample-pool-1
+          pool-2:
+            type: replicated
+            conf: sample-pool-2
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: CIDR Blocklisting of ceph rbd clients
+
+# below test has been moved from: tier-2_rados_test-slow-op-requests.yaml
+  - test:
+      name: Limit slow request details to cluster log
+      module: test_slow_op_requests.py
+      desc: Limit slow request details to cluster log
+      polarion-id: CEPH-83574884
+      config:
+        pool_name: slow-ops
+        pg_num: 64
+        byte_size: 1024
+        pool_type: replicated
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        check_ec: False
+
+  - test:
+      name: Verify Ceph df MAX_AVAIL
+      desc: MAX_AVAIL value should not change to 0 upon addition of OSD with weight 0
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      config:
+        verify_cephdf_max_avail:
+          create_pool: true
+          pool_name: test-max-avail
+          obj_nums: 5
+          delete_pool: true
+
+# commented due to active bug: https://bugzilla.redhat.com/show_bug.cgi?id=2316351
+  - test:
+      name: Verify MAX_AVAIL variance with OSD size change
+      desc: MAX_AVAIL value update correctly when OSD size changes
+      module: test_cephdf.py
+      polarion-id: CEPH-83595780
+      config:
+        cephdf_max_avail_osd_expand: true
+
+  - test:
+      name: Verify MAX_AVAIL variance when OSDs are removed
+      desc: MAX_AVAIL value update correctly when OSDs are removed
+      module: test_cephdf.py
+      polarion-id: CEPH-83604474
+      config:
+        cephdf_max_avail_osd_rm: true
+      comments: bug to be fixed - BZ-2275995
+
+  - test:
+      name: Compression algorithms - modes
+      module: rados_prep.py
+      polarion-id: CEPH-83571670
+      config:
+        replicated_pool:
+          create: true
+          pool_name: re_pool_compress
+          pg_num: 32
+          max_objs: 100
+          rados_read_duration: 10
+        enable_compression:
+          pool_name: re_pool_compress
+          max_objs: 500
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+      desc: Enable/disable different compression modes.
+
+  - test:
+      name: Compression algorithm tuneables
+      module: rados_prep.py
+      polarion-id: CEPH-83571671
+      config:
+        replicated_pool:
+          create: true
+          pool_name: re_pool_compress
+          pg_num: 32
+          max_objs: 100
+          rados_read_duration: 10
+        enable_compression:
+          pool_name: re_pool_compress
+          max_objs: 500
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+      desc: Verify and alter different compression tunables.

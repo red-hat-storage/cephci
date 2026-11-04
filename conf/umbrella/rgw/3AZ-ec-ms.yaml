@@ -1,0 +1,159 @@
+# Test Suite that deploys 3 AZs in different subnets
+# Deployment for all the ceph daemons , with 9 mon's, 6 mgr's, 28 OSD daemons
+
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+      node1:
+        networks:
+          - provider_net_cci_11
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+          - osd
+        no-of-volumes: 3
+        disk-size: 10
+      node2:
+        networks:
+          - provider_net_cci_11
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 3
+        disk-size: 10
+      node3:
+        networks:
+          - provider_net_cci_11
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 3
+        disk-size: 10
+      node4:
+        networks:
+          - provider_net_cci_13
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+          - alertmanager
+          - grafana
+          - prometheus
+        no-of-volumes: 3
+        disk-size: 10
+      node5:
+        networks:
+          - provider_net_cci_13
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 3
+        disk-size: 10
+      node6:
+        networks:
+          - provider_net_cci_13
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 3
+        disk-size: 10
+      node7:
+        networks:
+          - provider_net_cci_16
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+          - alertmanager
+          - grafana
+          - prometheus
+        no-of-volumes: 3
+        disk-size: 10
+      node8:
+        networks:
+          - provider_net_cci_16
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 3
+        disk-size: 10
+      node9:
+        networks:
+          - provider_net_cci_16
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 3
+        disk-size: 10
+      node10:
+        role:
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+      node1:
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+
+      node2:
+        disk-size: 10
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 10
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+
+      node4:
+        disk-size: 10
+        no-of-volumes: 3
+        role:
+          - osd
+
+      node5:
+        disk-size: 10
+        no-of-volumes: 3
+        role:
+          - osd
+
+      node6:
+        disk-size: 10
+        no-of-volumes: 3
+        role:
+          - osd
+
+      node7:
+        disk-size: 10
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+
+      node8:
+        role:
+          - client

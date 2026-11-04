@@ -74,64 +74,60 @@ tests:
       name: Deploy cluster using cephadm
 
   - test:
+      name: configure clients
+      desc: Configure client.1-client.4 in parallel
+      module: test_parallel.py
       abort-on-fail: true
-      config:
-        command: add
-        id: client.1
-        node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.2
-        node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.4
-        node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
+      parallel:
+        - test:
+            name: configure client.1
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.1
+              node: node4
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.2
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.2
+              node: node5
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.3
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.3
+              node: node6
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
+        - test:
+            name: configure client.4
+            module: test_client.py
+            desc: Configure the RGW,RBD client system
+            config:
+              command: add
+              id: client.4
+              node: node7
+              install_packages:
+                - ceph-common
+                - ceph-fuse
+              copy_admin_keyring: true
 
   - test:
       name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
@@ -352,18 +348,7 @@ tests:
         file_count: 100
 
   - test:
-      name: Verify create file, create soflink and lookups from nfs clients
-      module: nfs_verify_file_ops_soft_links.py
-      desc: Verify create file, create soflink and lookups from nfs clients
-      polarion-id: CEPH-83577596
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-        file_count: 100
-
-  - test:
-      name: Nfs Verify File Operations
+      name: Nfs Verify File Ownership
       module: nfs_verify_file_operations.py
       desc: Change the ownership (user and group) of files within the NFS export
       polarion-id: CEPH-83577601
@@ -444,16 +429,38 @@ tests:
         nfs_version: 4.2
         clients: 2
 
+
+  - test:
+      name: NFS-Ganesha export config with Access Type as NONE
+      desc: Verify edit export config with access type as NONE
+      module: nfs_edit_export_config_with_access_none.py
+      polarion-id: CEPH-83593466
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
 # ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
-#  - test:
-#      name: Nfs access file from  with root-squash enabled
-#      module: nfs_verify_file_access_with_rootsquash.py
-#      desc: Test NFS file access with root-squash enabled
-#      polarion-id: CEPH-83577604
-#      abort-on-fail: false
-#      config:
-#        nfs_version: 4.2
-#        clients: 4
+  - test:
+      name: Nfs access file from  with root-squash enabled
+      module: nfs_verify_file_access_with_rootsquash.py
+      desc: Test NFS file access with root-squash enabled
+      polarion-id: CEPH-83577604
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+
+
+  - test:
+      name: Nfs verify setting and deleting multiple xattr on file
+      module: nfs_multiple_xattr_set_and_delete.py
+      desc: Test setting up and deleting multiple xattr on a single file
+      polarion-id: CEPH-83591993
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
 
   - test:
       name: Nfs verify multiple extended attribute with parallel clients access
@@ -566,6 +573,8 @@ tests:
         nfs_version: 4.2
         clients: 2
 
+  # Delegation settle/exit/ready/return seconds are event-poll timeout ceilings
+  # (grant/recall/revoke/DELEGRETURN), not forced sleep durations.
   - test:
       name: Verify cluster and export level NFSv4 delegations
       module: nfs_verify_cluster_level_delegations.py
@@ -670,7 +679,7 @@ tests:
       name: NFSv4 delegation client unmount scenario
       module: nfs_verify_delegation_client_lifecycle_scenarios.py
       desc: Delegation is returned (DELEGRETURN) when client unmounts with active delegation.
-      polarion-id: CCEPH-83632378
+      polarion-id: CEPH-83632378
       abort-on-fail: false
       config:
         nfs_name: cephfs-nfs

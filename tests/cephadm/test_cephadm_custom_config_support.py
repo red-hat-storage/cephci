@@ -11,24 +11,102 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def _verify_service_status(host, service_type):
-    """Verify service status is running
-    Wait for service to reach 'running' state. Service may transition from
-    'starting' to 'running', or may already be 'running' after redeploy.
-    """
-    for w in WaitUntil():
-        CephAdm(host).ceph.orch.ps(refresh=True)
+def _wait_for_service_daemons(host, service_type):
+    """Wait until every service daemon is running with a container ID."""
+    orch = CephAdm(host).ceph.orch
+    service_info = []
+    for waiter in WaitUntil(timeout=300, interval=10):
+        orch.ps(refresh=True)
         conf = {"daemon_type": service_type, "format": "json-pretty"}
-        service_info = loads(CephAdm(host).ceph.orch.ps(**conf))
-        status_desc = [c.get("status_desc") for c in service_info][0]
-        if status_desc == "starting":
-            log.info(f"{service_type} service is in starting state")
-        elif status_desc == "running":
-            log.info(f"All {service_type} services are up and running")
-            return True
-    if w.expired:
+        service_info = loads(orch.ps(**conf))
+        pending = [
+            daemon
+            for daemon in service_info
+            if daemon.get("status_desc") != "running" or not daemon.get("container_id")
+        ]
+        if service_info and not pending:
+            log.info(f"All {service_type} services are running with container IDs")
+            return service_info
+
+        for daemon in pending:
+            log.info(
+                f"Waiting for {daemon.get('daemon_name', service_type)} on "
+                f"{daemon.get('hostname')}: status={daemon.get('status_desc')}, "
+                f"container_id={daemon.get('container_id') or 'none'}"
+            )
+
+    if waiter.expired:
         raise OperationFailedError(
-            f"{service_type} service failed; expected status: running, found: {status_desc}"
+            f"{service_type} daemons did not become running with container IDs: "
+            f"{service_info}"
+        )
+
+
+def _wait_for_custom_config(
+    ceph_cluster,
+    host,
+    service_type,
+    service_info,
+    mount_path,
+    content,
+):
+    """Wait until the custom file is present in every current daemon container."""
+    orch = CephAdm(host).ceph.orch
+    daemon_names = {daemon["daemon_name"] for daemon in service_info}
+    pending = {}
+
+    for waiter in WaitUntil(timeout=300, interval=10):
+        orch.ps(refresh=True)
+        conf = {"daemon_type": service_type, "format": "json-pretty"}
+        current_daemons = {
+            daemon["daemon_name"]: daemon for daemon in loads(orch.ps(**conf))
+        }
+        pending = {}
+
+        for daemon_name in sorted(daemon_names):
+            daemon = current_daemons.get(daemon_name)
+            if not daemon:
+                pending[daemon_name] = "daemon is absent from ceph orch ps"
+                continue
+
+            status = daemon.get("status_desc")
+            container_id = daemon.get("container_id")
+            if status != "running" or not container_id:
+                pending[daemon_name] = (
+                    f"status={status}, container_id={container_id or 'none'}"
+                )
+                continue
+
+            hostname = daemon["hostname"]
+            node = get_node_by_id(ceph_cluster, hostname)
+            if not node:
+                raise CephadmOpsExecutionError(
+                    f"Unable to find cluster node for {daemon_name} on {hostname}"
+                )
+
+            result, error = Container(node).exec(
+                container=container_id,
+                cmds=f"cat {mount_path}",
+            )
+            if result != content:
+                reason = f"expected content is absent from container {container_id}"
+                if error:
+                    reason = f"{reason}: {error.strip()}"
+                pending[daemon_name] = reason
+
+        if not pending:
+            log.info(
+                f"Custom config {mount_path} is present in all {service_type} daemons"
+            )
+            return
+
+        for daemon_name, reason in pending.items():
+            log.info(f"Waiting for custom config in {daemon_name}: {reason}")
+
+    if waiter.expired:
+        raise CephadmOpsExecutionError(
+            f"Custom config {mount_path} was not updated in all {service_type} "
+            f"daemons: {pending}"
         )
 
 
@@ -62,33 +140,14 @@ def run(ceph_cluster, **kw):
     if "Scheduled" not in out:
         raise OperationFailedError(f"Fail to redeploy {service_type} daemon")
 
-    # Verify daemon are running
-    _verify_service_status(installer, service_type)
-
-    # Get container ID
-    CephAdm(installer).ceph.orch.ps(refresh=True)
-    conf = {"daemon_type": service_type, "format": "json-pretty"}
-    service_info = loads(CephAdm(nodes=installer).ceph.orch.ps(**conf))
-    container_id = [c.get("container_id") for c in service_info][0]
-    hostname = [c.get("hostname") for c in service_info][0]
-
-    # Convert hostname to ceph object
-    node = get_node_by_id(ceph_cluster, hostname)
-
-    # Validate custom file mounted in containers
-    timeout, interval = 60, 6
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        result = Container(node).exec(
-            container=str(container_id),
-            interactive=True,
-            tty=True,
-            cmds=f"cat {mount_path}",
-        )[0]
-        if result == content:
-            break
-    if w.expired:
-        raise CephadmOpsExecutionError(
-            f"{service_type} container file content not updated"
-        )
+    service_info = _wait_for_service_daemons(installer, service_type)
+    _wait_for_custom_config(
+        ceph_cluster,
+        installer,
+        service_type,
+        service_info,
+        mount_path,
+        content,
+    )
 
     return 0

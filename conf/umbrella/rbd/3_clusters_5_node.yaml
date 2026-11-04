@@ -1,0 +1,95 @@
+# For RBD mirror failback to new cluster scenario needed 3 clusters,
+# Configuration file for testcases with rbd-mirror failback scenarios
+# Contains three clusters each with -
+# 3 Mon, 2 Mgrs, 3 OSD nodes with 4 disks each, 1 rbd-mirror, 1 client
+# Each cluster to have 5 nodes
+globals:
+  - ceph-cluster:
+     name: ceph-rbd1
+     node1:
+       role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+     node2:
+       role: client
+     node3:
+       role:
+         - osd
+         - mon
+         - mgr
+       no-of-volumes: 4
+       disk-size: 15
+     node4:
+       role:
+          - osd
+          - mon
+       no-of-volumes: 4
+       disk-size: 15
+     node5:
+       role:
+          - osd
+          - rbd-mirror
+       no-of-volumes: 4
+       disk-size: 15
+
+  - ceph-cluster:
+      name: ceph-rbd2
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+      node2:
+        role: client
+      node3:
+        role:
+          - osd
+          - mon
+          - mgr
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mon
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 15
+
+  - ceph-cluster:
+      name: ceph-rbd3
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+      node2:
+        role: client
+      node3:
+        role:
+          - osd
+          - mon
+          - mgr
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mon
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - rbd-mirror
+        no-of-volumes: 4
+        disk-size: 15

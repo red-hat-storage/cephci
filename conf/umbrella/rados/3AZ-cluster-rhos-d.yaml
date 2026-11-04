@@ -1,0 +1,106 @@
+# Test Suite that deploys 3 AZs in different subnets
+# Deployment for all the ceph daemons , with 9 mon's, 6 mgr's, 28 OSD daemons
+
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - provider_net_cci_15
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node2:
+        networks:
+          - provider_net_cci_15
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node3:
+        networks:
+          - provider_net_cci_15
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node4:
+        networks:
+          - provider_net_cci_13
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+          - alertmanager
+          - grafana
+          - prometheus
+        no-of-volumes: 4
+        disk-size: 15
+      node5:
+        networks:
+          - provider_net_cci_13
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node6:
+        networks:
+          - provider_net_cci_13
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node7:
+        networks:
+          - provider_net_cci_16
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+          - alertmanager
+          - grafana
+          - prometheus
+        no-of-volumes: 4
+        disk-size: 15
+      node8:
+        networks:
+          - provider_net_cci_16
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 15
+      node9:
+        networks:
+          - provider_net_cci_16
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 4
+        disk-size: 15
+      node10:
+        role:
+          - client

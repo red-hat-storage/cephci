@@ -1,0 +1,188 @@
+#===============================================================================================
+# Regional File Mount / Virtual Server — Multi Share Export
+# Conf: conf/tentacle/nfs/virtual-server-multi-subnet.yaml
+#
+# Requires Ceph build with: ceph nfs cluster create ... --enable-virtual-server
+# OpenStack: --custom-config openstack_networks=provider_net_cci_16,provider_net_cci_15
+# Each VM must show 2+ IPv4 addresses on the NFS node and client (ip -o -4 addr show).
+#
+# Manual run:
+#   python run.py --suite suites/tentacle/nfs/tier-1-nfs-virtual-server-multi-share-export.yaml \
+#     --global-conf conf/tentacle/nfs/virtual-server-multi-subnet.yaml \
+#     --rhbuild <build> \
+#     --custom-config openstack_networks=provider_net_cci_16,provider_net_cci_15
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      desc: Bootstrap cluster and deploy CephFS for virtual-server NFS tests.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - nfs-utils
+        copy_admin_keyring: true
+      desc: Configure NFS client node4
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 1
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - nfs-utils
+        copy_admin_keyring: true
+      desc: Configure NFS client node5
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 2
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - nfs-utils
+        copy_admin_keyring: true
+      desc: Configure NFS client node6
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 3
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - nfs-utils
+        copy_admin_keyring: true
+      desc: Configure NFS client node7
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 3
+
+  - test:
+      name: Virtual Server single export single client multi-route
+      module: regional_mount.nfs_virtual_server_single_export_single_client.py
+      desc: Scenario 1 — one export, one client, mount and IO on each network route
+      polarion-id: CEPH-83632430
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+
+  - test:
+      name: Virtual Server single export multi client
+      module: regional_mount.nfs_virtual_server_single_export_multi_client.py
+      desc: Scenario 2 — one export, each client mounts via a different route
+      polarion-id: CEPH-83632431
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        min_routes: 2
+        sudo: false
+
+  - test:
+      name: Virtual Server multi export multi client
+      module: regional_mount.nfs_virtual_server_multi_export_multi_client.py
+      desc: Scenario 3 — multiple exports, each client uses a distinct route
+      polarion-id: CEPH-83632432
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        export_num: 2
+        min_routes: 2
+        sudo: false
+
+  - test:
+      name: Virtual Server export fencing single client
+      module: regional_mount.nfs_virtual_server_export_fencing_single_client.py
+      desc: Scenario 4 — Server_Addrs and CLIENT fencing on single client
+      polarion-id: CEPH-83632433
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        comments: fails due to IBMCEPH-13896
+
+  - test:
+      name: Virtual Server export fencing multi client
+      module: regional_mount.nfs_virtual_server_export_fencing_multi_client.py
+      desc: Scenario 5 — fence one export; other export remains multi-route
+      polarion-id: CEPH-83632434
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        export_num: 2
+        min_routes: 2
+        sudo: false
+        comments: fails due to IBMCEPH-13896

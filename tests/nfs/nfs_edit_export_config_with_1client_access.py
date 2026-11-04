@@ -58,7 +58,8 @@ def run(ceph_cluster, **kw):
     nfs_export_client = "/export_client_access"
     nfs_client_mount = "/mnt/nfs_client_mount"
     original_clients_value = "client_address"
-    new_clients_values = f"{clients[0].hostname}"
+    # Ganesha matches the client ACL against the TCP source address.
+    new_clients_values = f"{clients[0].ip_address}"
 
     window_nfs_mount = "Z:"
     nfs_server_name = [nfs_node.hostname for nfs_node in servers]
@@ -139,12 +140,22 @@ def run(ceph_cluster, **kw):
             f"mount -t nfs -o vers={version},port={port} "
             f"{nfs_server_name[0]}:{nfs_export_client} {nfs_client_mount}"
         )
-        _, rc = clients[1].exec_command(cmd=cmd, sudo=True, check_ec=False)
-        if "access denied by server" in str(rc):
-            log.info("As expected, Mount on unauthorized client failed")
-            pass
+        out, err = clients[1].exec_command(cmd=cmd, sudo=True, check_ec=False)
+        result = "%s\n%s" % (out or "", err or "")
+        unauthorized = clients[1].hostname
+        if "access denied by server" in result:
+            log.info(
+                "As expected, mount on unauthorized client %s failed", unauthorized
+            )
+        elif clients[1].exit_status == 0:
+            raise OperationFailedError(
+                "Mount passed on unauthorized client: %s" % unauthorized
+            )
         else:
-            log.error(f"Mount passed on unauthorized client: {clients[0].hostname}")
+            raise OperationFailedError(
+                "Unauthorized client %s mount failed unexpectedly: %s"
+                % (unauthorized, result.strip())
+            )
 
         sleep(15)
 
