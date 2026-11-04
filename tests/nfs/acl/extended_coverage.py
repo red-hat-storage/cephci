@@ -12,6 +12,15 @@ hotfix coverage:
      (IBMCEPH-21565 -- inherited GROUP@ write bits are lost on both new
      subdirectories and new files; the file case additionally gets an
      explicit Deny entry for write instead of the inherited Allow.)
+
+  2. A partial-permission inheritable ALLOW ACE (``A:fdig:<gid>:w``) must be
+     removable by reapplying the exact same ACE string that was used to add
+     it, via ``nfs4_setfacl -x``.
+     (IBMCEPH-19377 -- the server silently rewrites the single requested ACE
+     into a DENY+ALLOW pair at add time, e.g. ``D:fdig:<gid>:rx`` +
+     ``A:fdig:<gid>:waDtcy``; because ``-x`` matches by exact ACE string, the
+     original string never matches what is actually stored, so ``-x`` exits
+     0 ("success") while the entry for ``<gid>`` remains untouched.)
 """
 
 from cli.exceptions import ConfigError
@@ -31,11 +40,19 @@ PERM_DIR = "rwaDxtcy"
 
 BUG_ID = "IBMCEPH-21565"
 
+# Group id used to exercise the partial-permission wildcard ALLOW ACE
+# removal scenario. No actual group needs to exist on the client -- the
+# ACE identity is just a numeric gid on the wire.
+WILDCARD_GID = 4020
+WILDCARD_ACE = f"A:fdig:{WILDCARD_GID}:w"
+BUG_ID_WILDCARD_ACE_REMOVAL = "IBMCEPH-19377"
+
 # Known issues: tests listed here are still executed and reported, but a
 # failure is marked as "KNOWN" instead of a hard failure.
 KNOWN_ISSUES = {
     "Inherited GROUP@ Dir Write vs Umask": BUG_ID,
     "Inherited GROUP@ File Write vs Umask": BUG_ID,
+    "Wildcard ALLOW ACE Removal (fdig)": BUG_ID_WILDCARD_ACE_REMOVAL,
 }
 
 
@@ -112,6 +129,12 @@ def run(ceph_cluster, **kw):
             (
                 "Inherited GROUP@ File Write vs Umask",
                 _run_test(_test_inherited_group_write_file_umask, acl),
+            )
+        )
+        results.append(
+            (
+                "Wildcard ALLOW ACE Removal (fdig)",
+                _run_test(_test_wildcard_allow_ace_removal, acl),
             )
         )
 
@@ -303,4 +326,61 @@ def _test_inherited_group_write_file_umask(acl):
         return 1
 
     log.info("Inherited GROUP@ File Write vs Umask: PASSED")
+    return 0
+
+
+def _acl_has_identity(entries, identity):
+    """Return True if any ACL entry references the given numeric uid/gid."""
+    needle = f":{identity}:"
+    return any(needle in e for e in entries)
+
+
+def _test_wildcard_allow_ace_removal(acl):
+    """
+    A partial-permission inheritable ALLOW ACE (``A:fdig:<gid>:w``) must be
+    removable by reapplying the exact same ACE string that was used to add
+    it.
+
+    Bug (IBMCEPH-19377): Ganesha's NFSv4<->POSIX ACL translation cannot
+    represent a partial permission set ("w" only) as a single POSIX ACL
+    entry, so it silently rewrites the one ACE the client sent into a
+    DENY+ALLOW pair (e.g. ``D:fdig:<gid>:rx`` + ``A:fdig:<gid>:waDtcy``).
+    Because ``nfs4_setfacl -x`` matches by exact ACE string, the original
+    string used on add never matches what is actually stored, so ``-x``
+    exits 0 ("success") while the entry for ``<gid>`` remains untouched.
+    """
+    log.info(
+        "=== Test: Wildcard ALLOW ACE Removal via Original String (%s) ===",
+        BUG_ID_WILDCARD_ACE_REMOVAL,
+    )
+    name = "wildcard-allow-dir"
+    acl.cleanup_test_files(name)
+    acl.create_dir(name)
+
+    acl.add_acl(name, WILDCARD_ACE)
+    entries_after_add = acl.get_acl(name)
+    if not _acl_has_identity(entries_after_add, WILDCARD_GID):
+        log.error(
+            "[%s] ACE for gid %s missing immediately after add. ACL: %s",
+            BUG_ID_WILDCARD_ACE_REMOVAL,
+            WILDCARD_GID,
+            entries_after_add,
+        )
+        return 1
+
+    acl.remove_acl(name, WILDCARD_ACE)
+    entries_after_remove = acl.get_acl(name)
+    if _acl_has_identity(entries_after_remove, WILDCARD_GID):
+        log.error(
+            "[%s] nfs4_setfacl -x '%s' reported success but left the gid %s "
+            "ACE in place (server had silently rewritten it on add). "
+            "ACL after -x: %s",
+            BUG_ID_WILDCARD_ACE_REMOVAL,
+            WILDCARD_ACE,
+            WILDCARD_GID,
+            entries_after_remove,
+        )
+        return 1
+
+    log.info("Wildcard ALLOW ACE Removal via Original String: PASSED")
     return 0

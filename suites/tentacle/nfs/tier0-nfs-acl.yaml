@@ -14,7 +14,8 @@
 #    - Hotfix coverage: named-group inherit (existing vs new children),
 #      multi-group file w/a loss, special-identity access ACE retention
 #    - Extended coverage: inherited GROUP@ write rule vs. client umask on
-#      new dirs/files (IBMCEPH-21565)
+#      new dirs/files (IBMCEPH-21565); wildcard partial-permission ALLOW ACE
+#      survives removal by its original string (IBMCEPH-19377)
 #
 #===============================================================================================
 tests:
@@ -207,7 +208,7 @@ tests:
       name: NFS ACL - Extended Coverage (NFS mount)
       module: acl.extended_coverage.py
       desc: >
-        Extended coverage for a directory carrying an inherited GROUP@
+        Extended coverage for (1) a directory carrying an inherited GROUP@
         access rule (A:fdi:GROUP@:rwaDxtcy): newly created subdirectories
         and files under the suite's restrictive umask (0027) must retain
         the inherited write/append/delete-child permission instead of
@@ -218,9 +219,17 @@ tests:
         # files (explicit D::GROUP@:wax Deny instead of the inherited
         # Allow); resulting mode bits match plain umask-only behaviour as
         # if the inherited ACL rule were never applied.
+        and (2) a partial-permission inheritable ALLOW ACE (A:fdig:<gid>:w)
+        must be removable by reapplying the exact same ACE string used to
+        add it.
+        # Bug: IBMCEPH-19377 - the server silently rewrites the single
+        # requested ACE into a DENY+ALLOW pair at add time
+        # (D:fdig:<gid>:rx + A:fdig:<gid>:waDtcy), so nfs4_setfacl -x with
+        # the original string exits 0 ("success") but leaves the ACE for
+        # <gid> in place.
       abort-on-fail: false
       config:
         nfs_version: 4.2
         clients: 1
         mount_type: nfs
-      comments: "IBMCEPH-21565"
+      comments: "IBMCEPH-21565, IBMCEPH-19377"
