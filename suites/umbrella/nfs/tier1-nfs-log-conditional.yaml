@@ -1,0 +1,338 @@
+# Suite: cephadm NFS LOG { Match_Policy, Conditional } — IBMCEPH-18323
+# Conf: release NFS global conf (two NFS nodes for LC15)
+# Spec keys match_policy and log_conditional are stand-ins until the MR names them.
+# Sign-off minimum: LC1, LC3, LC4, LC5, LC10, LC11, LC12, LC14.
+# Two NFS nodes in this conf are required for LC15. One node skips LC15.
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client 2
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: TC-LC0 Environment and version gate
+      module: log_conditional.nfs_log_conditional.py
+      desc: Record versions. Default cluster has one LOG and no Conditional. Skip later cases when the spec field is absent.
+      polarion-id: CEPH-83633247
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC0
+        timeout: 600
+
+  - test:
+      name: TC-LC1 Omitted spec leaves logging unchanged
+      module: log_conditional.nfs_log_conditional.py
+      desc: No match_policy or log_conditional. One LOG block, no Conditional, mount and IO succeed.
+      polarion-id: CEPH-83633248
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC1
+        timeout: 600
+
+  - test:
+      name: TC-LC2 Spec accepts and stores the knob
+      module: log_conditional.nfs_log_conditional.py
+      desc: orch apply MATCH_ANY, one client, one Export_Id, NFS4 DEBUG. Re-exported spec keeps the values.
+      polarion-id: CEPH-83633249
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC2
+        timeout: 600
+
+  - test:
+      name: TC-LC3 One LOG block rendered
+      module: log_conditional.nfs_log_conditional.py
+      desc: Exactly one LOG block. Match_Policy is outside Conditional. Ganesha stays up.
+      polarion-id: CEPH-83633250
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC3
+        timeout: 600
+
+  - test:
+      name: TC-LC4 MATCH_ANY client or export
+      module: log_conditional.nfs_log_conditional.py
+      desc: Client A on the listed export and on another export logs NFS4 DEBUG. Client B stays at COMPONENTS.
+      polarion-id: CEPH-83633251
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC4
+        timeout: 600
+
+  - test:
+      name: TC-LC5 MATCH_ALL client and export
+      module: log_conditional.nfs_log_conditional.py
+      desc: Only client A on the listed export logs NFS4 DEBUG. Client-only and export-only stay at CRIT.
+      polarion-id: CEPH-83633252
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC5
+        timeout: 600
+
+  - test:
+      name: TC-LC6 Clients only
+      module: log_conditional.nfs_log_conditional.py
+      desc: MATCH_ANY with a client list and no export list. Client A is DEBUG. Client B is not.
+      polarion-id: CEPH-83633253
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC6
+        timeout: 600
+
+  - test:
+      name: TC-LC7 Exports only
+      module: log_conditional.nfs_log_conditional.py
+      desc: MATCH_ANY with an export list and no client list. Listed export is DEBUG for either client.
+      polarion-id: CEPH-83633254
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC7
+        timeout: 600
+
+  - test:
+      name: TC-LC8 Component map and FULL_DEBUG fallback
+      module: log_conditional.nfs_log_conditional.py
+      desc: Conditional sets only NFS4 DEBUG. FSAL is not listed there. Unspecified FSAL falls back to FULL_DEBUG when emitted.
+      polarion-id: CEPH-83633255
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC8
+        timeout: 600
+
+  - test:
+      name: TC-LC9 Invalid policy rejected
+      module: log_conditional.nfs_log_conditional.py
+      desc: match_policy MAYBE is rejected. Last good LOG is unchanged. NFS still mounts.
+      polarion-id: CEPH-83633256
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC9
+        timeout: 600
+
+  - test:
+      name: TC-LC10 MATCH_ALL empty list rejected
+      module: log_conditional.nfs_log_conditional.py
+      desc: MATCH_ALL with either list omitted is rejected. Both lists set is accepted.
+      polarion-id: CEPH-83633257
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC10
+        timeout: 600
+
+  - test:
+      name: TC-LC11 Clear spec drops stale lists
+      module: log_conditional.nfs_log_conditional.py
+      desc: Removing the spec fields removes Conditional on reload. Client A returns to COMPONENTS.
+      polarion-id: CEPH-83633258
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC11
+        timeout: 600
+
+  - test:
+      name: TC-LC12 COMPONENTS overlay stays one LOG block
+      module: log_conditional.nfs_log_conditional.py
+      desc: ceph nfs cluster config set LOG COMPONENTS merges into the same LOG block as Conditional.
+      polarion-id: CEPH-83633259
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC12
+        timeout: 600
+
+  - test:
+      name: TC-LC13 Reload without container recreate
+      module: log_conditional.nfs_log_conditional.py
+      desc: NFS4 DEBUG to INFO updates the live conf. Container id stays the same.
+      polarion-id: CEPH-83633260
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC13
+        timeout: 600
+
+  - test:
+      name: TC-LC14 Export mount and IO stay healthy
+      module: log_conditional.nfs_log_conditional.py
+      desc: NFSv4 write, read, and unlink succeed. Export remains listed. No restart loop.
+      polarion-id: CEPH-83633261
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC14
+        timeout: 600
+
+  - test:
+      name: TC-LC15 Both daemons render the same LOG block
+      module: log_conditional.nfs_log_conditional.py
+      desc: Placement on two NFS nodes renders the same LOG block. Skip when the lab has one NFS node.
+      polarion-id: CEPH-83633262
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: "2049"
+        nfs_name: cephfs-nfs-lc
+        fs_name: cephfs
+        export: /export
+        tc: LC15
+        timeout: 600
