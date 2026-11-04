@@ -3,7 +3,7 @@
 # conf: conf/tentacle/rgw/tier-0_rgw.yaml
 
 # Tier-1 single site. Steps: prereq, deploy, monitoring stack, client, upgrade, versions.
-# SSL CA copy and HAProxy stay with the client setup. No functional testcases.
+# Feature tests: 7 before the upgrade and the same 7 after it. No case is shared with the other single-site suites.
 
 tests:
   - test:
@@ -169,6 +169,72 @@ tests:
       module: haproxy.py
       name: Configure HAproxy
 
+  # Pre upgrade feature tests
+
+  - test:
+      name: S3CMD small and multipart object download pre upgrade
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+
+  - test:
+      name: Mbuckets with N objects etag verification pre upgrade
+      desc: test etag verification
+      polarion-id: CEPH-83574871
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+
+  - test:
+      name: Multipart upload of M buckets with N objects pre upgrade
+      desc: multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+
+  - test:
+      name: Swift storage policy customized placement pre upgrade
+      desc: Test storage policy to use customized placement for Swift
+      polarion-id: CEPH-9336
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_swift.yaml
+
+  - test:
+      name: ordered listing of buckets pre upgrade
+      desc: ordered listing of buckets
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+
+  - test:
+      name: Dynamic resharding with version pre upgrade
+      desc: Resharding test - dynamic with versioning
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+
+  - test:
+      name: lifecycle current version object expiration pre upgrade
+      desc: Test lifecycle with version enabled bucket containing only one object version
+      polarion-id: CEPH-11187
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_current_version_object_expiration.yaml
+
+
   - test:
       abort-on-fail: true
       name: Upgrade cluster to latest ceph version
@@ -204,3 +270,69 @@ tests:
           - "ceph mgr module enable orchestrator"
           - "sleep 200"
           - "ceph versions"
+
+  # Post upgrade feature tests
+
+  - test:
+      name: S3CMD small and multipart object download post upgrade
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+
+  - test:
+      name: Mbuckets with N objects etag verification post upgrade
+      desc: test etag verification
+      polarion-id: CEPH-83574871
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+
+  - test:
+      name: Multipart upload of M buckets with N objects post upgrade
+      desc: multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+
+  - test:
+      name: Swift storage policy customized placement post upgrade
+      desc: Test storage policy to use customized placement for Swift
+      polarion-id: CEPH-9336
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_swift.yaml
+
+  - test:
+      name: ordered listing of buckets post upgrade
+      desc: ordered listing of buckets
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+
+  - test:
+      name: Dynamic resharding with version post upgrade
+      desc: Resharding test - dynamic with versioning
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+
+  - test:
+      name: lifecycle current version object expiration post upgrade
+      desc: Test lifecycle with version enabled bucket containing only one object version
+      polarion-id: CEPH-11187
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_current_version_object_expiration.yaml
+

@@ -3,7 +3,7 @@
 # conf: conf/tentacle/rgw/tier-0_rgw.yaml
 
 # Tier-1 single site. Steps: prereq, deploy, monitoring stack, client, upgrade, versions.
-# SSL CA copy and HAProxy stay with the client setup. No functional testcases.
+# Feature tests: 7 before the upgrade and the same 7 after it. No case is shared with the other single-site suites.
 
 tests:
   - test:
@@ -169,6 +169,85 @@ tests:
       module: haproxy.py
       name: Configure HAproxy
 
+  # Pre upgrade feature tests
+
+  - test:
+      name: S3CMD rgw log details pre upgrade
+      desc: S3CMD tests, rgw log details
+      polarion-id: CEPH-83575470
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
+
+  - test:
+      name: Mbuckets with N objects download pre upgrade
+      desc: download objects from M buckets with N objects
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+
+  - test:
+      name: Delete objects from M buckets with N objects pre upgrade
+      desc: delete objects from M buckets with N objects
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+
+  - test:
+      name: Swift basic operations pre upgrade
+      desc: Test object operations with swift
+      polarion-id: CEPH-11019
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      name: sse-s3 per bucket encryption pre upgrade
+      desc: sse-s3 per bucket encryption with vault
+      polarion-id: CEPH-83574615
+      module: sanity_rgw.py
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+
+  - test:
+      name: compression with zstd pre upgrade
+      desc: test compression with zstd type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+
+  - test:
+      name: NFS cluster and export create pre upgrade
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+
+
   - test:
       abort-on-fail: true
       name: Upgrade cluster to latest ceph version
@@ -204,3 +283,82 @@ tests:
           - "ceph mgr module enable orchestrator"
           - "sleep 200"
           - "ceph versions"
+
+  # Post upgrade feature tests
+
+  - test:
+      name: S3CMD rgw log details post upgrade
+      desc: S3CMD tests, rgw log details
+      polarion-id: CEPH-83575470
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
+
+  - test:
+      name: Mbuckets with N objects download post upgrade
+      desc: download objects from M buckets with N objects
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+
+  - test:
+      name: Delete objects from M buckets with N objects post upgrade
+      desc: delete objects from M buckets with N objects
+      polarion-id: CEPH-14237
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+
+  - test:
+      name: Swift basic operations post upgrade
+      desc: Test object operations with swift
+      polarion-id: CEPH-11019
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      name: sse-s3 per bucket encryption post upgrade
+      desc: sse-s3 per bucket encryption with vault
+      polarion-id: CEPH-83574615
+      module: sanity_rgw.py
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+
+  - test:
+      name: compression with zstd post upgrade
+      desc: test compression with zstd type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+
+  - test:
+      name: NFS cluster and export create post upgrade
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+

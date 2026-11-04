@@ -3,7 +3,7 @@
 # conf: conf/tentacle/rgw/tier-0_rgw.yaml
 
 # Tier-1 single site. Steps: prereq, deploy, monitoring stack, client, upgrade, versions.
-# SSL CA copy and HAProxy stay with the client setup. No functional testcases.
+# Feature tests: 7 before the upgrade and the same 7 after it. No case is shared with the other single-site suites.
 
 tests:
   - test:
@@ -169,6 +169,84 @@ tests:
       module: haproxy.py
       name: Configure HAproxy
 
+  # Pre upgrade feature tests
+
+  - test:
+      name: S3CMD object header size check pre upgrade
+      desc: S3CMD object header size check
+      polarion-id: CEPH-83574691
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_header_size.py
+        config-file-name: ../../s3cmd/configs/test_header_size.yaml
+
+  - test:
+      name: M buckets with N objects pre upgrade
+      desc: test to create M buckets and N objects
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+
+  - test:
+      name: Multipart upload with failed parts pre upgrade
+      desc: Test multipart upload with failed upload parts using s3cmd and boto3
+      polarion-id: CEPH-83589550
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
+
+  - test:
+      name: Swift versioning pre upgrade
+      desc: Test versioned object in swift
+      polarion-id: CEPH-10640
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_versioning.yaml
+
+  - test:
+      name: STS rename of a large object pre upgrade
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      name: sse-s3 per bucket encryption on a versioned bucket pre upgrade
+      desc: sse-s3 per bucket encryption on a versioned bucket
+      polarion-id: CEPH-83575152
+      module: sanity_rgw.py
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+
+  - test:
+      name: Dynamic resharding pre upgrade
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+
+
   - test:
       abort-on-fail: true
       name: Upgrade cluster to latest ceph version
@@ -204,3 +282,81 @@ tests:
           - "ceph mgr module enable orchestrator"
           - "sleep 200"
           - "ceph versions"
+
+  # Post upgrade feature tests
+
+  - test:
+      name: S3CMD object header size check post upgrade
+      desc: S3CMD object header size check
+      polarion-id: CEPH-83574691
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_header_size.py
+        config-file-name: ../../s3cmd/configs/test_header_size.yaml
+
+  - test:
+      name: M buckets with N objects post upgrade
+      desc: test to create M buckets and N objects
+      polarion-id: CEPH-9789
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+
+  - test:
+      name: Multipart upload with failed parts post upgrade
+      desc: Test multipart upload with failed upload parts using s3cmd and boto3
+      polarion-id: CEPH-83589550
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
+
+  - test:
+      name: Swift versioning post upgrade
+      desc: Test versioned object in swift
+      polarion-id: CEPH-10640
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_versioning.yaml
+
+  - test:
+      name: STS rename of a large object post upgrade
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      name: sse-s3 per bucket encryption on a versioned bucket post upgrade
+      desc: sse-s3 per bucket encryption on a versioned bucket
+      polarion-id: CEPH-83575152
+      module: sanity_rgw.py
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+
+  - test:
+      name: Dynamic resharding post upgrade
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+
