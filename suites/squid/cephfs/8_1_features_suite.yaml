@@ -155,7 +155,7 @@ tests:
       polarion-id: CEPH-83632953
       desc: >
         Case-insensitive subvolume under max_mds>=4 with rename-heavy FUSE metadata
-        I/O; rotate mds fail; P0 Venky #72399 Foo→FOO and journal-trim recreate
+        I/O; rotate mds fail; alternate_name Foo→FOO and journal-trim recreate
         paths; max_mds scale-up; no alternate_name / rejoin crashes
         (IBMCEPH-16942 / IBMCEPH-21205 / #72399).
       abort-on-fail: true
@@ -168,7 +168,7 @@ tests:
         health_wait: 300
         mds_placement_count: 4
         run_max_mds_scaleup: true
-        run_venky_p0_repros: true
+        run_alternate_name_replay_repros: true
         foo_flip_iterations: 5
         trim_recreate_iterations: 3
         journal_flush_rounds: 8

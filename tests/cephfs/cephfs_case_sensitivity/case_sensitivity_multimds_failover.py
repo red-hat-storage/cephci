@@ -10,9 +10,9 @@ Polarion: CEPH-83632953
 
 Usecase 1: rename-heavy casefold storm + rotating ``ceph mds fail``.
 Usecase 2: ``max_mds`` scale-down/scale-up under load.
-Usecase 3 (P0 / Venky #72399 note-7): ``rm Foo`` then ``create FOO`` + MDS fail.
-Usecase 4 (P0 / Venky #72399 note-7): create → journal flush/trim → unlink →
-recreate → MDS fail (empty cached alternate_name vs journaled fullbit).
+Usecase 3: casefold ``rm Foo`` then ``create FOO`` + MDS fail (#72399).
+Usecase 4: create → journal flush/trim → unlink → recreate → MDS fail
+(empty cached alternate_name vs journaled fullbit; #72399).
 """
 
 import json
@@ -353,7 +353,7 @@ def _usecase_rm_foo_create_foo_failover(
     client, attr_util, fs_name, mounting_dir, config
 ):
     """
-    P0 Venky scenario: casefold ``rm Foo`` then ``create FOO``, then MDS fail.
+    Casefold ``rm Foo`` then ``create FOO``, then MDS fail (#72399 / IBMCEPH-21205).
 
     Cached null dentry may retain alternate_name ``Foo`` while the fullbit
     carries ``FOO``, hitting ``journal.cc`` alternate_name assert on replay.
@@ -362,7 +362,7 @@ def _usecase_rm_foo_create_foo_failover(
     fail_ranks = _resolve_fail_ranks(config, max_mds)
     post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
     iterations = int(config.get("foo_flip_iterations", 5))
-    work_dir = os.path.join(mounting_dir.rstrip("/"), "venky_foo_flip")
+    work_dir = os.path.join(mounting_dir.rstrip("/"), "casefold_foo_flip")
 
     log.info(
         "Usecase 3 (P0): rm Foo / create FOO + MDS fail (%s iterations)",
@@ -408,7 +408,7 @@ def _usecase_journal_trim_recreate_failover(
     client, attr_util, fs_name, mounting_dir, config
 ):
     """
-    P0 Venky scenario: create → flush/trim journal → unlink → recreate → MDS fail.
+    Create → flush/trim journal → unlink → recreate → MDS fail (#72399 / IBMCEPH-21205).
 
     After the create event is aged out of the journal, unlink leaves a nullbit
     with empty alternate_name; recreate journals a non-empty alternate_name and
@@ -420,7 +420,7 @@ def _usecase_journal_trim_recreate_failover(
     iterations = int(config.get("trim_recreate_iterations", 3))
     flush_rounds = int(config.get("journal_flush_rounds", 8))
     filler_files = int(config.get("journal_filler_files", 200))
-    work_dir = os.path.join(mounting_dir.rstrip("/"), "venky_trim_recreate")
+    work_dir = os.path.join(mounting_dir.rstrip("/"), "casefold_trim_recreate")
     prev_segments = None
 
     log.info(
@@ -531,7 +531,7 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         max_mds = int(config.get("max_mds", 4))
         run_scaleup = config.get("run_max_mds_scaleup", True)
-        run_p0_repros = config.get("run_venky_p0_repros", True)
+        run_p0_repros = config.get("run_alternate_name_replay_repros", True)
 
         fs_util = FsUtils(ceph_cluster, test_data=kw.get("test_data"))
         attr_util = CephFSAttributeUtilities(ceph_cluster)
@@ -582,7 +582,7 @@ def run(ceph_cluster, **kw):
 
         log.info(
             "TEST PASSED | max_mds=%s | fail_iterations=%s | ranks=%s | "
-            "scaleup=%s | venky_p0=%s",
+            "scaleup=%s | alternate_name_replay=%s",
             max_mds,
             config.get("fail_iterations", 10),
             _resolve_fail_ranks(config, max_mds),

@@ -871,7 +871,7 @@ class CephFSAttributeUtilities(object):
         ``alternate_name`` journal metadata (IBMCEPH-16942 repro amplifier).
         """
         client.exec_command(sudo=True, cmd="rm -f {}".format(stop_flag_path))
-        # Includes Venky/#72399 path: rm Foo then create FOO on the same
+        # Includes #72399 path: rm Foo then create FOO on the same
         # casefold dentry so replay can see mismatched alternate_name.
         storm_script = (
             "i=0; "
