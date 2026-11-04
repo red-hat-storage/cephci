@@ -885,6 +885,9 @@ class CephFSAttributeUtilities(object):
             "for c in A a B b C c; do "
             'touch "$d/${{c}}_$i" 2>/dev/null || true; '
             "done; "
+            # Drop any prior case-equivalent entry so a storm restart (i resets
+            # while FOO_$i remains) still creates Foo then flips to FOO.
+            'rm -f "$d/Foo_$i" "$d/FOO_$i" 2>/dev/null || true; '
             'echo x >"$d/Foo_$i" 2>/dev/null || true; '
             'rm -f "$d/Foo_$i" 2>/dev/null || true; '
             'echo y >"$d/FOO_$i" 2>/dev/null || true; '

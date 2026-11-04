@@ -93,7 +93,7 @@ def _wait_for_fs_ranks_active(
     """
     max_mds = int(max_mds)
     end = time.time() + timeout
-    laggy_since = None
+    laggy_since = {}
     while time.time() < end:
         out, _ = client.exec_command(
             sudo=True,
@@ -127,20 +127,26 @@ def _wait_for_fs_ranks_active(
                 log.info("All %s MDS ranks active for %s", max_mds, fs_name)
                 return True
 
-        laggy = [r for r, s in rank_states.items() if "laggy" in (s or "")]
-        if laggy:
-            if laggy_since is None:
-                laggy_since = time.time()
-            elif time.time() - laggy_since >= laggy_fail_sec:
+        # Per-rank laggy timers: a single shared timer can false-fail when
+        # different ranks are briefly laggy in sequence during normal failover.
+        now = time.time()
+        laggy_ranks = {
+            r for r, s in rank_states.items() if r < max_mds and "laggy" in (s or "")
+        }
+        for r in list(laggy_since):
+            if r not in laggy_ranks:
+                del laggy_since[r]
+        for r in laggy_ranks:
+            laggy_since.setdefault(r, now)
+            if now - laggy_since[r] >= laggy_fail_sec:
                 log.error(
-                    "Rank(s) stuck laggy for >=%ss on %s (states=%s)",
+                    "Rank %s stuck laggy for >=%ss on %s (states=%s)",
+                    r,
                     laggy_fail_sec,
                     fs_name,
                     rank_states,
                 )
                 return False
-        else:
-            laggy_since = None
 
         log.info("Waiting for ranks active on %s (states=%s)", fs_name, rank_states)
         time.sleep(interval)
@@ -207,16 +213,18 @@ def _resolve_fail_ranks(config, max_mds):
     return list(range(max_mds))
 
 
-def _mds_fail_rank(client, rank):
+def _mds_fail_rank(client, fs_name, rank):
+    # Qualify with fs_name so multi-FS clusters do not fail the default FS rank.
     out, err, exit_code, _ = client.exec_command(
         sudo=True,
-        cmd="ceph mds fail {}".format(rank),
+        cmd="ceph mds fail {}:{}".format(fs_name, rank),
         check_ec=False,
         verbose=True,
     )
     if exit_code != 0:
         log.error(
-            "ceph mds fail rank %s failed exit_code=%s stdout=%r stderr=%r",
+            "ceph mds fail %s:%s failed exit_code=%s stdout=%r stderr=%r",
+            fs_name,
             rank,
             exit_code,
             out,
@@ -257,7 +265,7 @@ def _fail_all_ranks_and_assert(
     """
     for rank in range(int(max_mds)):
         log.info("%s: failing rank %s", oracle_prefix, rank)
-        if not _mds_fail_rank(client, rank):
+        if not _mds_fail_rank(client, fs_name, rank):
             return False
         time.sleep(post_fail_sleep_sec)
         if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
@@ -378,7 +386,7 @@ def _usecase_multimds_failover(
             fail_iterations,
             rank_to_fail,
         )
-        if not _mds_fail_rank(client, rank_to_fail):
+        if not _mds_fail_rank(client, fs_name, rank_to_fail):
             return 1, fs_name, mounting_dir, stop_flag, subvol_group, subvol_name
         time.sleep(post_fail_sleep_sec)
 
@@ -690,11 +698,14 @@ def run(ceph_cluster, **kw):
         if client and fs_name and subvol_name and subvol_group:
             # Bound cleanup: a stuck MDS (replay/laggy) can hang subvolume rm
             # for the default 3600s and waste the suite (seen on 20.2.2-367).
+            # Enable mon_allow_pool_delete like fs_util.remove_fs() so volume
+            # removal can reclaim the data/meta pools.
             cleanup_timeout = 120
             try:
                 client.exec_command(
                     sudo=True,
                     cmd=(
+                        "ceph config set mon mon_allow_pool_delete true || true; "
                         "ceph fs subvolume rm {fs} {sv} {grp} --force || true; "
                         "ceph fs subvolumegroup rm {fs} {grp} --force || true; "
                         "ceph fs volume rm {fs} --yes-i-really-mean-it || true"
