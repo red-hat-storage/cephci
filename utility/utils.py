@@ -2556,6 +2556,7 @@ def run_fio(**fio_args):
         size: 'size' for file size/io size
         cmd_timeout: command timeout in seconds eg., 'notimeout' | 1200
         no_run_time: None | no_runtime
+        extra_args: optional string appended verbatim to the fio command
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
@@ -2642,6 +2643,10 @@ def run_fio(**fio_args):
         "sudo": True,
         "verbose": fio_args.get("verbose", False),
     }
+    # config_dict_to_string emits "--key value", so pass extra_args when the
+    # command must contain an exact token such as --direct=1.
+    if fio_args.get("extra_args"):
+        exec_args["cmd"] = f"{exec_args['cmd']} {fio_args['extra_args']}"
 
     if fio_args.get("get_time_taken"):
         exec_args["cmd"] = f"time {exec_args['cmd']}"

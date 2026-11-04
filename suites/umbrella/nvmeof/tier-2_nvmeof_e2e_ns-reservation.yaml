@@ -178,6 +178,8 @@ tests:
         initiators: # Configure Initiators with all pre-req
           - node8
           - node9
+        # O_DIRECT so reservation I/O is not served from the page cache
+        direct: 1
       desc: >
             verifies the read and write operations from two clients
             for the various reservation types
