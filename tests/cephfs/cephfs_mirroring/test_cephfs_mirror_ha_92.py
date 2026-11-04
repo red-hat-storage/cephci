@@ -2,8 +2,6 @@ import json
 import time
 import traceback
 
-from looseversion import LooseVersion
-
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import (
     CephfsMirroringUtils,
     wait_for_idle,
@@ -46,15 +44,15 @@ def run(ceph_cluster, **kw):
         0 on success, 1 on failure, -1 if skipped.
     """
     config = kw.get("config") or {}
-    build = config.get("build", config.get("rhbuild"))
-    if not build or LooseVersion(build.split("-")[0]) < LooseVersion("9.2"):
+    if CephfsMirroringUtils.skip_if_rhcs_below(config):
         log.info(
-            "Skipping test: requires Ceph version >= 9.2 (build=%s)",
-            build,
+            "Skipping test: requires Ceph version >= 9.2 (rhbuild=%s)",
+            config.get("rhbuild"),
         )
         return -1
 
     try:
+        build = config.get("build", config.get("rhbuild"))
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         test_data = kw.get("test_data")
         fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
