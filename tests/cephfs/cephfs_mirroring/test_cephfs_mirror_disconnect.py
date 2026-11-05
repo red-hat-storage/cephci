@@ -226,8 +226,9 @@ def run(ceph_cluster, **kw):
         # daemon on a node that differs from cephfs_mirror_node[0].
         first_asok_entry = next(iter(asok_files.values()))
         asok_node, asok_path = first_asok_entry[0], first_asok_entry[1]
+        asok_basename = asok_path.rsplit("/", 1)[-1]
         cmd = (
-            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_path} "
+            f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_basename} "
             f"fs mirror peer status "
             f"{source_fs}@{filesystem_id} {peer_uuid} -f json"
         )
