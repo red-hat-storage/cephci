@@ -4,8 +4,28 @@ import string
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
+
+
+def get_ceph_version_from_rhbuild(rhbuild):
+    """Return major Ceph/RHCS version from an rhbuild string.
+
+    Thin wrapper around :func:`utility.utils.get_rhbuild_major_version` so RBD
+    and cluster-health version gates share one parser.
+
+    Unlike the shared helper (which returns ``0`` for empty/malformed values so
+    health checks stay fail-closed/pre-5), RBD always expects a valid rhbuild.
+    A missing or unparseable value is treated as a config error.
+    """
+    major = get_rhbuild_major_version(rhbuild)
+    if major == 0:
+        raise ValueError(
+            f"Invalid or missing rhbuild {rhbuild!r}; expected a version like "
+            "'10.0-rhel-10' or '5.3'"
+        )
+    return major
 
 
 getdict = lambda x: {k: v for (k, v) in x.items() if isinstance(v, dict)}

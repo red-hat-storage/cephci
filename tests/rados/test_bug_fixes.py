@@ -27,7 +27,7 @@ from utility.odf_defaults import (
     is_msgr1_disabled,
     kernel_ms_mode_opt,
 )
-from utility.utils import method_should_succeed
+from utility.utils import get_rhbuild_major_version, method_should_succeed
 
 log = Log(__name__)
 
@@ -600,7 +600,7 @@ def run(ceph_cluster, **kw):
 
                 if (
                     rhbuild
-                    and rhbuild.split(".")[0] >= "8"
+                    and get_rhbuild_major_version(rhbuild) >= 8
                     and not (test["unmanaged"] or test["zap"])
                 ):
                     log.info(

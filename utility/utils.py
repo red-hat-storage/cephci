@@ -70,6 +70,36 @@ class GKLMSetupError(Exception):
     pass
 
 
+def get_rhbuild_major_version(rhbuild) -> int:
+    """Return RHCS major version as int from an rhbuild string.
+
+    Examples:
+        ``"10.0-rhel-10"`` -> ``10``
+        ``"5.3"`` -> ``5``
+        ``"4"`` -> ``4``
+
+    Avoid string compares like ``rhbuild.split(".")[0] >= "5"`` (``"10" >= "5"``
+    is False) and ``int(rhbuild[0])`` (``"10.x"`` becomes ``1``).
+
+    Empty or malformed values return ``0`` so version gates fail closed, and a
+    warning is logged so silent skips are visible.
+    """
+    if not rhbuild:
+        log.warning(
+            "Unable to parse rhbuild major version from %r; defaulting to 0",
+            rhbuild,
+        )
+        return 0
+    match = re.search(r"^\d+", str(rhbuild).strip())
+    if not match:
+        log.warning(
+            "Unable to parse rhbuild major version from %r; defaulting to 0",
+            rhbuild,
+        )
+        return 0
+    return int(match.group(0))
+
+
 def ibm_ceph_rpm_version_pin(ceph_version: str, os_major: str) -> str:
     """Build yum NEVRA suffix for IBM Storage Ceph RPMs (cephadm, ceph-common, …).
 
