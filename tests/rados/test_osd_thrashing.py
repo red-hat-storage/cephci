@@ -210,12 +210,15 @@ CONFIGURATION OPTIONS:
 - enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
 - mds_operations: Optional list of MDS ops (default: failover, rolling_restart,
   random_fail). Extra: colocated_fail, kill_loop, max_mds_scale, config_storm,
-  fs_fail_scale, standby_replay_fail, dir_pin, cap_revoke_failover, multi_fs_fail
+  fs_fail_scale, standby_replay_fail, dir_pin, cap_revoke_failover, multi_fs_fail,
+  balancer_toggle, dir_split_merge, export_during_snapshot, reconnect_scaledown,
+  maxmds_during_promotion (and other phase-2 backlog ops — see mds_thrash_helpers._OPS)
 - mds_kill_count / mds_kill_interval: kill_loop params (default: 5 / 5)
 - mds_fail_count: ranks to fail for random_fail (default: 1)
 - mds_scale_path: max_mds walk list e.g. [8, 1, 8] (default: [current, 1, current])
 - mds_scale_wait: seconds to wait per scale step (default: 20)
-- mds_scale_during_promote: nudge max_mds during standby_replay_fail (default: False)
+- mds_scale_during_promote: nudge max_mds during standby_replay_fail (default: False).
+  Prefer dedicated ``maxmds_during_promotion`` op for D4 instead of enabling this.
 - mds_recovery_wait: seconds between MDS ops (default: 15)
 - mds_pin_dirs: dirs for dir_pin batches (default: 20)
 - mds_cap_workers: background RW workers for cap_revoke_failover (default: 4)
@@ -518,7 +521,7 @@ def run(ceph_cluster, **kw):
     enable_crush_thrashing = config.get("enable_crush_thrashing", True)
     enable_pg_thrashing = config.get("enable_pg_thrashing", True)
     compression = config.get("compression", False)
-    enable_debug_logs = config.get("enable_debug_logs", True)
+    enable_debug_logs = config.get("enable_debug_logs", False)
     inject_errors = config.get("inject_errors", False)
     inconsistent_object_fail = config.get("inconsistent_object_fail", True)
     if inconsistent_object_fail and not _has_inconsistent_obj_fix(rados_obj):
@@ -2260,7 +2263,7 @@ def run(ceph_cluster, **kw):
                 "(boosting osd_max_backfills / osd_recovery_max_active)..."
             )
             if not wait_for_clean_pg_sets(
-                rados_obj, timeout=1200, recovery_thread=True
+                rados_obj, timeout=2700, recovery_thread=True
             ):
                 log.error("Not all PGs are active+clean")
                 raise Exception("Not all PGs are active+clean")

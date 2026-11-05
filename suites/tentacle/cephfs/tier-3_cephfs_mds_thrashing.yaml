@@ -13,9 +13,20 @@
 #
 # INTENSITY TIERS:
 # ----------------
-# Light      - MDS core ops + CephFS FIO/snapshots/subvolumes (600s)
-# Moderate   - Expanded MDS ops + MON/MGR/election/scrub + RBD FIO (1200s)
-# Aggressive - Full MDS op set + all peer thrashers/IO (OSD/CRUSH/PG/RGW/NFS/…) (1800s)
+# Phase 1 Light      - MDS core ops + CephFS FIO/snapshots/subvolumes (1200s)
+# Phase 1 Moderate   - Expanded MDS ops + MON/MGR/election/scrub + RBD FIO (1800s)
+# Phase 1 Aggressive - Full MDS op set (phase1+phase2) + all peer thrashers/IO (3600s)
+# Phase 2 Light      - Safer backlog subset (3600s)
+# Phase 2 Moderate   - Expanded backlog + MON/MGR/election/scrub + RBD FIO (3600s)
+# EI Light           - Same phase2-light bag × mds_chaos (3600s)
+# EI Moderate        - Same phase2-moderate bag × mds_chaos + client inject (3600s)
+# EI Aggressive      - Full phase1+phase2 bag × mds_chaos + MDS ms delays (3600s)
+#
+# Point of EI tiers: same thrash ops under CephErrorInjector faults — surfaces
+# races/bugs thrash-alone misses. Framework: ceph/rados/ceph_error_injector.py
+# (profile mds_chaos only — no mds_corruption / dentry-corrupt knobs so thrash
+# ops stay runnable). MON/OSD/MGR/BlueStore EI + mds_corruption stay in
+# suites/tentacle/rados/tier-3_rados_error_injection_thrashing.yaml.
 #
 # Prerequisites for full coverage:
 # - Multiple MDS daemons (placement count >= 6, max_mds >= 4) for colocated_fail
@@ -227,7 +238,7 @@ tests:
       desc: Change config options to enable logging to file
 
   # ===========================================================================
-  # MDS Thrashing — Light / Moderate / Aggressive
+  # Phase 1 — Light / Moderate / Aggressive (core MDS ops)
   # ===========================================================================
 
   - test:
@@ -303,7 +314,8 @@ tests:
   - test:
       name: MDS thrashing aggressive
       desc: >
-        Full MDS op set plus OSD/CRUSH/PG/MON/MGR/RGW/NFS and all IO/snapshot paths
+        Full MDS op set (phase1 + phase2 backlog) plus OSD/CRUSH/PG/MON/MGR/RGW/NFS
+        and all IO/snapshot paths (1h)
       module: test_osd_thrashing.py
       config:
         pool_configs:
@@ -312,7 +324,7 @@ tests:
           - pool_type: replicated
             sample_pool_id: sample-pool-2
         iterations: 120
-        duration: 2400
+        duration: 3600
         aggressive: true
         enable_mds_thrashing: true
         mds_operations:
@@ -328,9 +340,30 @@ tests:
           - dir_pin
           - cap_revoke_failover
           - multi_fs_fail
+          # phase-2 backlog — full set
+          - cap_explosion
+          - cache_limit_storm
+          - scale_to_one_pinned
+          - rapid_maxmds_oscillation
+          - fs_fail_during_scaledown
+          - bidirectional_maxmds
+          - fs_fail_joinable_storm
+          - snap_failover
+          - clone_during_rejoin
+          - client_reconnect_storm
+          - standby_exhaustion
+          - journal_replay_load
+          - double_fault
+          - fs_fail_quiesce
+          - balancer_toggle
+          - dir_split_merge
+          - export_during_snapshot
+          - reconnect_scaledown
+          - maxmds_during_promotion
         mds_scale_path: [4, 1, 4]
         mds_scale_wait: 20
-        mds_scale_during_promote: true
+        # D4 = maxmds_during_promotion; leave standby_replay_fail as B3 (no scale race)
+        mds_scale_during_promote: false
         mds_kill_count: 8
         mds_kill_interval: 4
         mds_fail_count: 2
@@ -352,3 +385,256 @@ tests:
         enable_ec_snapshots: true
         enable_cephfs_subvolume_thrashing: true
         enable_nfs_thrashing: true
+
+  # ===========================================================================
+  # Phase 2 — Light / Moderate (backlog ops; aggressive covered above)
+  # ===========================================================================
+
+  - test:
+      name: MDS thrashing phase2 light
+      desc: >
+        Fair-bag phase-2 MDS thrash with safer backlog ops under CephFS FIO +
+        snapshots (1h)
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 1200
+        aggressive: false
+        enable_mds_thrashing: true
+        mds_operations:
+          - cache_limit_storm
+          - scale_to_one_pinned
+          - snap_failover
+          - cap_explosion
+          - balancer_toggle
+        mds_scale_wait: 30
+        mds_recovery_wait: 15
+        mds_pin_dirs: 20
+        mds_cap_workers: 4
+        enable_fio_cephfs: true
+        enable_cephfs_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+
+  - test:
+      name: MDS thrashing phase2 moderate
+      desc: >
+        Expanded phase-2 backlog ops plus MON/MGR/election/scrub peer chaos and
+        RBD FIO (1h)
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1800
+        aggressive: true
+        enable_mds_thrashing: true
+        mds_operations:
+          - cache_limit_storm
+          - scale_to_one_pinned
+          - snap_failover
+          - cap_explosion
+          - rapid_maxmds_oscillation
+          - fs_fail_during_scaledown
+          - bidirectional_maxmds
+          - clone_during_rejoin
+          - client_reconnect_storm
+          - standby_exhaustion
+          - balancer_toggle
+          - reconnect_scaledown
+          - export_during_snapshot
+          - maxmds_during_promotion
+        mds_scale_wait: 25
+        mds_recovery_wait: 15
+        mds_pin_dirs: 20
+        mds_cap_workers: 4
+        mds_kill_count: 2
+        enable_mon_thrashing: true
+        enable_mgr_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_scrub_thrashing: true
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+
+  # ===========================================================================
+  # Error injection × MDS thrash ops (same bags + CephErrorInjector)
+  # Baseline = phase1/phase2 above; these re-run under mds_chaos / corruption.
+  # ===========================================================================
+
+  - test:
+      name: MDS thrashing EI light
+      desc: >
+        Same phase-2 light thrash bag under mds_chaos (health dummy + low-prob
+        traceless replies) to catch races thrash-alone misses (1h)
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 1800
+        aggressive: false
+        enable_mds_thrashing: true
+        mds_operations:
+          - cache_limit_storm
+          - scale_to_one_pinned
+          - snap_failover
+          - cap_explosion
+          - balancer_toggle
+        mds_scale_wait: 30
+        mds_recovery_wait: 15
+        mds_pin_dirs: 20
+        mds_cap_workers: 4
+        enable_fio_cephfs: true
+        enable_cephfs_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        error_injection:
+          profile: mds_chaos
+          profile_overrides:
+            mds_inject_traceless_reply_probability: 0.01
+
+  - test:
+      name: MDS thrashing EI moderate
+      desc: >
+        Same phase-2 moderate thrash bag under mds_chaos + client cap-release /
+        tick-delay inject; MON/MGR/scrub peer chaos (1h)
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1800
+        aggressive: true
+        enable_mds_thrashing: true
+        mds_operations:
+          - cache_limit_storm
+          - scale_to_one_pinned
+          - snap_failover
+          - cap_explosion
+          - rapid_maxmds_oscillation
+          - fs_fail_during_scaledown
+          - bidirectional_maxmds
+          - clone_during_rejoin
+          - client_reconnect_storm
+          - standby_exhaustion
+          - balancer_toggle
+          - reconnect_scaledown
+          - export_during_snapshot
+          - maxmds_during_promotion
+        mds_scale_wait: 25
+        mds_recovery_wait: 15
+        mds_pin_dirs: 20
+        mds_cap_workers: 4
+        mds_kill_count: 2
+        enable_mon_thrashing: true
+        enable_mgr_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_scrub_thrashing: true
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        error_injection:
+          profile: mds_chaos
+          configs:
+            client_inject_release_failure: true
+            client_debug_inject_tick_delay: 5
+
+  - test:
+      name: MDS thrashing EI aggressive
+      desc: >
+        Full phase1+phase2 thrash bag under mds_chaos (no dentry corruption) plus
+        client inject and MDS-targeted ms delays (1h)
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 3600
+        aggressive: true
+        enable_mds_thrashing: true
+        mds_operations:
+          - failover
+          - rolling_restart
+          - random_fail
+          - colocated_fail
+          - kill_loop
+          - max_mds_scale
+          - config_storm
+          - fs_fail_scale
+          - standby_replay_fail
+          - dir_pin
+          - cap_revoke_failover
+          - multi_fs_fail
+          - cap_explosion
+          - cache_limit_storm
+          - scale_to_one_pinned
+          - rapid_maxmds_oscillation
+          - fs_fail_during_scaledown
+          - bidirectional_maxmds
+          - fs_fail_joinable_storm
+          - snap_failover
+          - clone_during_rejoin
+          - client_reconnect_storm
+          - standby_exhaustion
+          - journal_replay_load
+          - double_fault
+          - fs_fail_quiesce
+          - balancer_toggle
+          - dir_split_merge
+          - export_during_snapshot
+          - reconnect_scaledown
+          - maxmds_during_promotion
+        mds_scale_path: [4, 1, 4]
+        mds_scale_wait: 20
+        mds_scale_during_promote: false
+        mds_kill_count: 8
+        mds_kill_interval: 4
+        mds_fail_count: 2
+        mds_pin_dirs: 40
+        mds_cap_workers: 6
+        mds_recovery_wait: 12
+        enable_osd_thrashing: true
+        enable_mon_thrashing: true
+        enable_mgr_thrashing: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: true
+        error_injection:
+          profile: mds_chaos
+          profile_overrides:
+            mds_inject_traceless_reply_probability: 0.05
+          configs:
+            client_inject_release_failure: true
+            client_debug_inject_tick_delay: 5
+            ms_inject_delay_type: mds
+            ms_inject_delay_max: 2
+            ms_inject_delay_probability: 0.03
