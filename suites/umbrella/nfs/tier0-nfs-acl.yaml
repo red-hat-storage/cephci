@@ -17,7 +17,8 @@
 #      new dirs/files (IBMCEPH-21565); wildcard partial-permission ALLOW ACE
 #      survives removal by its original string (IBMCEPH-19377); explicit
 #      OWNER@ deny-all ACE silently bypassed via mode-bit backfill
-#      (IBMCEPH-21577)
+#      (IBMCEPH-21577); inherited EVERYONE@ write rule vs. client umask on
+#      new dirs/files, same root cause as IBMCEPH-21565 (IBMCEPH-21579)
 #
 #===============================================================================================
 tests:
@@ -236,9 +237,19 @@ tests:
         # "OWNER@ never mentioned" apart from "OWNER@ explicitly denied
         # everything", so it silently reconstructs an ALLOW for the owner
         # from the pre-existing mode bits, discarding the explicit DENY.
+        and (4) a directory carrying an inherited EVERYONE@ access rule
+        (A:fdi:EVERYONE@:rwaDxtcy): same scenario as (1) but for the
+        EVERYONE@ special identity.
+        # Bug: IBMCEPH-21579 - same root cause as IBMCEPH-21565: the
+        # umask-override check only fires when the parent's default ACL
+        # has a POSIX ACL_MASK entry, which is only created for named
+        # user/group ACEs, never for OWNER@/GROUP@/EVERYONE@. Inherited
+        # EVERYONE@ write bits are lost on both new subdirectories and new
+        # files (explicit D::EVERYONE@:rwax Deny instead of the inherited
+        # Allow).
       abort-on-fail: false
       config:
         nfs_version: 4.2
         clients: 1
         mount_type: nfs
-      comments: "IBMCEPH-21565, IBMCEPH-19377, IBMCEPH-21577"
+      comments: "IBMCEPH-21565, IBMCEPH-19377, IBMCEPH-21577, IBMCEPH-21579"

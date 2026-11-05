@@ -29,6 +29,18 @@ hotfix coverage:
      never mentioned" apart from "empty because OWNER@ was explicitly
      denied everything", so it silently reconstructs an ALLOW for the owner
      from the pre-existing mode bits, discarding the explicit DENY.)
+
+  4. A directory carrying an inherited EVERYONE@ access rule
+     (``A:fdi:EVERYONE@:...`` with write/append/delete-child permissions)
+     must pass that write access on to newly created children -- same as
+     item 1, but for the EVERYONE@ special identity.
+     (IBMCEPH-21579 -- same root cause as IBMCEPH-21565: the umask-override
+     check only fires when the parent's default ACL has a POSIX ACL_MASK
+     entry, which is only created for named user/group ACEs, never for
+     OWNER@/GROUP@/EVERYONE@. Inherited EVERYONE@ write bits are lost on
+     both new subdirectories and new files; the file case additionally
+     gets an explicit Deny entry for write instead of the inherited
+     Allow.)
 """
 
 from cli.exceptions import ConfigError
@@ -60,6 +72,8 @@ OWNER_DENY_UID = 7001
 OWNER_DENY_USER = "nfsacl_denyowner"
 BUG_ID_OWNER_DENY_BYPASS = "IBMCEPH-21577"
 
+BUG_ID_EVERYONE_WRITE_UMASK = "IBMCEPH-21579"
+
 # Known issues: tests listed here are still executed and reported, but a
 # failure is marked as "KNOWN" instead of a hard failure.
 KNOWN_ISSUES = {
@@ -67,6 +81,8 @@ KNOWN_ISSUES = {
     "Inherited GROUP@ File Write vs Umask": BUG_ID,
     "Wildcard ALLOW ACE Removal (fdig)": BUG_ID_WILDCARD_ACE_REMOVAL,
     "OWNER@ Explicit Deny Bypass": BUG_ID_OWNER_DENY_BYPASS,
+    "Inherited EVERYONE@ Dir Write vs Umask": BUG_ID_EVERYONE_WRITE_UMASK,
+    "Inherited EVERYONE@ File Write vs Umask": BUG_ID_EVERYONE_WRITE_UMASK,
 }
 
 
@@ -155,6 +171,18 @@ def run(ceph_cluster, **kw):
             (
                 "OWNER@ Explicit Deny Bypass",
                 _run_test(_test_owner_deny_bypass, acl),
+            )
+        )
+        results.append(
+            (
+                "Inherited EVERYONE@ Dir Write vs Umask",
+                _run_test(_test_inherited_everyone_write_dir_umask, acl),
+            )
+        )
+        results.append(
+            (
+                "Inherited EVERYONE@ File Write vs Umask",
+                _run_test(_test_inherited_everyone_write_file_umask, acl),
             )
         )
 
@@ -475,4 +503,145 @@ def _test_owner_deny_bypass(acl):
         return 1
 
     log.info("OWNER@ Explicit Deny Bypass: PASSED")
+    return 0
+
+
+def _everyone_write_allowed(entries):
+    """
+    Return True only if EVERYONE@ is genuinely allowed to write.
+
+    Mirrors _group_write_allowed: IBMCEPH-21579's file-creation symptom is
+    an explicit Deny entry (``D::EVERYONE@:rwax``) which itself contains
+    the letter 'w', so a Deny entry for EVERYONE@ carrying 'w' must count
+    as "write NOT allowed", and an Allow entry for EVERYONE@ must actually
+    be present and carry 'w' for this to return True.
+    """
+    denied = any(
+        e.startswith("D:") and "EVERYONE@" in e and "w" in e.split(":")[-1]
+        for e in entries
+    )
+    if denied:
+        return False
+    return any(
+        e.startswith("A:") and "EVERYONE@" in e and "w" in e.split(":")[-1]
+        for e in entries
+    )
+
+
+def _setup_everyone_write_inherit_parent(acl):
+    """
+    Create a world-writable parent directory carrying an inherit-only
+    EVERYONE@ rule that grants write (IBMCEPH-21579 setup).
+    """
+    parent = "everyone-write-parent"
+    acl.cleanup_test_files(parent)
+    acl.create_dir(parent)
+    acl.chmod(parent, "777")
+
+    acl.add_acl(parent, f"A:fdi:EVERYONE@:{PERM_DIR}")
+    if not acl.verify_acl_contains(parent, f"A:fdi:EVERYONE@:{PERM_DIR}"):
+        log.error("Inherit ACE A:fdi:EVERYONE@:%s missing on parent", PERM_DIR)
+        return None
+    return parent
+
+
+def _test_inherited_everyone_write_dir_umask(acl):
+    """
+    A new subdirectory created under a parent's inherited EVERYONE@ write
+    rule must retain write access, regardless of the creating client's
+    umask.
+
+    Bug (IBMCEPH-21579): same root cause as IBMCEPH-21565 but for the
+    EVERYONE@ special identity -- ceph_fsal_mkdir()'s umask-override check
+    only widens the create mode when the parent's default ACL has a POSIX
+    ACL_MASK entry, which is only created for named user/group ACEs, never
+    for OWNER@/GROUP@/EVERYONE@. The subdirectory's own EVERYONE@ access
+    ACE comes back with write silently dropped, and the resulting mode
+    bits match plain umask-only behaviour as if the inherited rule were
+    never applied.
+    """
+    log.info(
+        "=== Test: Inherited EVERYONE@ Dir Write vs Umask (%s) ===",
+        BUG_ID_EVERYONE_WRITE_UMASK,
+    )
+    parent = _setup_everyone_write_inherit_parent(acl)
+    if parent is None:
+        return 1
+
+    acl.create_dir(f"{parent}/child-dir")
+
+    entries = acl.get_acl(f"{parent}/child-dir")
+    if not _everyone_write_allowed(entries):
+        log.error(
+            "[%s] child-dir's inherited EVERYONE@ ACE lost write bits. ACL: %s",
+            BUG_ID_EVERYONE_WRITE_UMASK,
+            entries,
+        )
+        return 1
+
+    # Functional proof: an arbitrary non-owner user (covered by EVERYONE@)
+    # should actually be able to create something inside child-dir, not
+    # just show the right letters in nfs4_getfacl.
+    out, err = acl.run_as_user(
+        USER_W,
+        f"touch {acl._full_path(parent + '/child-dir/x')}",
+        check_ec=False,
+    )
+    if acl._is_permission_failure(err):
+        log.error(
+            "[%s] %s denied create under child-dir despite inherited "
+            "EVERYONE@ write ACE",
+            BUG_ID_EVERYONE_WRITE_UMASK,
+            USER_W,
+        )
+        return 1
+
+    log.info("Inherited EVERYONE@ Dir Write vs Umask: PASSED")
+    return 0
+
+
+def _test_inherited_everyone_write_file_umask(acl):
+    """
+    A new file created under a parent's inherited EVERYONE@ write rule
+    must retain write access, regardless of the creating client's umask.
+
+    Bug (IBMCEPH-21579): the file comes back with an explicit Deny entry
+    (``D::EVERYONE@:rwax``) instead of the inherited Allow, and the
+    resulting mode bits match plain umask-only behaviour, as if the
+    inherited rule were never applied.
+    """
+    log.info(
+        "=== Test: Inherited EVERYONE@ File Write vs Umask (%s) ===",
+        BUG_ID_EVERYONE_WRITE_UMASK,
+    )
+    parent = "everyone-write-parent"
+    if not acl.verify_acl_contains(parent, f"A:fdi:EVERYONE@:{PERM_DIR}"):
+        parent = _setup_everyone_write_inherit_parent(acl)
+        if parent is None:
+            return 1
+
+    acl.create_file(f"{parent}/child-file")
+
+    entries = acl.get_acl(f"{parent}/child-file")
+    if not _everyone_write_allowed(entries):
+        log.error(
+            "[%s] child-file's inherited EVERYONE@ ACE lost write bits (or "
+            "was replaced by a Deny). ACL: %s",
+            BUG_ID_EVERYONE_WRITE_UMASK,
+            entries,
+        )
+        return 1
+
+    if not acl.verify_access(
+        USER_W, f"{parent}/child-file", operation="write", expect_success=True
+    ):
+        log.error(
+            "[%s] %s denied write to child-file despite inherited "
+            "EVERYONE@ write ACE",
+            BUG_ID_EVERYONE_WRITE_UMASK,
+            USER_W,
+        )
+        return 1
+
+    log.info("Inherited EVERYONE@ File Write vs Umask: PASSED")
     return 0
