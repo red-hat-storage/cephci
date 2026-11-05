@@ -101,6 +101,8 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--monitor-performance]
         [--disable-console-log]
         [--product <community> | <redhat> | <ibm>]
+        [--dashboard-pytest <path>]
+        [--dashboard-marker <expr>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
         [--custom-config <key>=<value>]...
@@ -185,6 +187,13 @@ Options:
                                     [default: false]
   --product <product>               The edition of Ceph. Accepted values are
                                     community, redhat and ibm
+  --dashboard-pytest <path>         Checkout of ceph_dashboard_api_automation.
+                                    When set, pytest runs after a successful
+                                    deploy. Omit it to keep the existing run.py
+                                    behavior.
+  --dashboard-marker <expr>         pytest -m expression. Required with
+                                    --dashboard-pytest. Quote expressions that
+                                    contain spaces.
 """
 log = Log()
 test_names = []
@@ -563,6 +572,23 @@ def run(args):
     osp_cred = load_file(osp_cred_file) if osp_cred_file else dict()
 
     cleanup_name = args.get("--cleanup")
+
+    # Optional dashboard pytest. Absent flags leave deploy-only runs unchanged.
+    # Reject a bad checkout before any VM is created.
+    dashboard_repo = None
+    if not cleanup_name:
+        from utility.dashboard_pytest import (
+            DashboardPytestError,
+            validate_dashboard_pytest_args,
+        )
+
+        try:
+            dashboard_repo = validate_dashboard_pytest_args(
+                args.get("--dashboard-pytest"), args.get("--dashboard-marker")
+            )
+        except DashboardPytestError as exc:
+            print("Error: %s" % exc)
+            return 1
 
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
@@ -1321,6 +1347,21 @@ def run(args):
     }
 
     email_results(test_result=test_res)
+
+    # Dashboard pytest is opt-in. A failed deploy must not start it, and a
+    # failed pytest must fail the run.
+    if dashboard_repo:
+        if jenkins_rc:
+            log.error("Skipping dashboard pytest because cluster deploy failed")
+        else:
+            from utility.dashboard_pytest import run_dashboard_pytest
+
+            if run_dashboard_pytest(
+                dashboard_repo,
+                args.get("--dashboard-marker"),
+                run_dir,
+            ):
+                jenkins_rc = 1
 
     if jenkins_rc or collect_coredump:
         log.info(
