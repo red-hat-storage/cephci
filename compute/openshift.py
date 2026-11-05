@@ -31,6 +31,8 @@ INSTANCETYPE_GROUP = "instancetype.kubevirt.io"
 INSTANCETYPE_VERSION = "v1beta1"
 DEFAULT_OCPVIRT_PROFILE = "o1.large"
 DEFAULT_OCPVIRT_ROOT_DISK_SIZE = "80Gi"
+OCPVIRT_RESOURCE_CPU_BUMP = 1
+OCPVIRT_RESOURCE_MEMORY_BUMP_GI = 2
 
 VM_POLL_INTERVAL = 10
 # CSI attach (Trident/NFS) after CDI clone can exceed 20 minutes.
@@ -56,6 +58,160 @@ def _disk_size_str(size_gib: Any, default: str = "40Gi") -> str:
         return f"{int(size_gib)}Gi"
     except (TypeError, ValueError):
         return default
+
+
+def _memory_gib(memory: str) -> int:
+    """Parse a normalized ocpvirt_memory quantity to integer GiB."""
+    match = re.fullmatch(r"(\d+)(Ti|Gi|Mi|T|G|M)", str(memory))
+    if not match:
+        raise NodeError(
+            f"Invalid ocpvirt_memory {memory!r}; expected a Kubernetes quantity "
+            "(e.g. 16Gi)"
+        )
+    amount = int(match.group(1))
+    unit = match.group(2)
+    if unit in ("Ti", "T"):
+        return amount * 1024
+    if unit in ("Mi", "M"):
+        if amount % 1024:
+            raise NodeError(
+                f"Invalid ocpvirt_memory {memory!r}; Mi/M values must be a "
+                "multiple of 1024 when converting to GiB"
+            )
+        return amount // 1024
+    return amount
+
+
+def _ocpvirt_domain_resources(cpu: int, memory: str) -> Dict[str, Any]:
+    """
+    Build domain.resources for custom CPU/memory VMs.
+
+    Requests/limits use guest CPU/memory plus ``OCPVIRT_RESOURCE_CPU_BUMP`` /
+    ``OCPVIRT_RESOURCE_MEMORY_BUMP_GI`` for KubeVirt launcher overhead.
+    """
+    cpu_req = int(cpu) + OCPVIRT_RESOURCE_CPU_BUMP
+    mem_req = f"{_memory_gib(memory) + OCPVIRT_RESOURCE_MEMORY_BUMP_GI}Gi"
+    return {
+        "requests": {"cpu": cpu_req, "memory": mem_req},
+        "limits": {"cpu": cpu_req, "memory": mem_req},
+    }
+
+
+def _cpu_to_millicores(value) -> int:
+    """Convert a Kubernetes CPU quantity to millicores."""
+    text = str(value).strip()
+    if text.endswith("m"):
+        return int(text[:-1])
+    return int(float(text) * 1000)
+
+
+def _limitrange_item_max(item) -> Dict[str, str]:
+    """Return cpu/memory max entries from a LimitRange item (object or dict)."""
+    raw = getattr(item, "max", None)
+    if raw is None and isinstance(item, dict):
+        raw = item.get("max")
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        data = raw
+    else:
+        data = dict(raw)
+    out: Dict[str, str] = {}
+    if data.get("cpu") is not None:
+        out["cpu"] = str(data["cpu"])
+    if data.get("memory") is not None:
+        out["memory"] = str(data["memory"])
+    return out
+
+
+def get_namespace_resource_max(core_api, namespace: str) -> Dict[str, str]:
+    """
+    Return the tightest Container/Pod cpu and memory max from LimitRanges.
+
+    Empty dict when the namespace has no usable max (validation is skipped).
+    """
+    try:
+        response = core_api.list_namespaced_limit_range(namespace)
+    except Exception as exc:
+        raise NodeError(
+            f"Failed to list LimitRanges in namespace {namespace!r}"
+        ) from exc
+
+    items = getattr(response, "items", None) or []
+    container_max: Dict[str, str] = {}
+    pod_max: Dict[str, str] = {}
+    for lr in items:
+        spec = getattr(lr, "spec", None) or {}
+        limits = getattr(spec, "limits", None)
+        if limits is None and isinstance(spec, dict):
+            limits = spec.get("limits")
+        for lim in limits or []:
+            lim_type = getattr(lim, "type", None)
+            if lim_type is None and isinstance(lim, dict):
+                lim_type = lim.get("type")
+            mx = _limitrange_item_max(lim)
+            if not mx:
+                continue
+            if lim_type == "Container":
+                container_max.update(mx)
+            elif lim_type == "Pod":
+                pod_max.update(mx)
+
+    # Use the lower of Container and Pod max when both are present.
+    result: Dict[str, str] = {}
+    for key in ("cpu", "memory"):
+        candidates = [v for v in (container_max.get(key), pod_max.get(key)) if v]
+        if not candidates:
+            continue
+        if len(candidates) == 1:
+            result[key] = candidates[0]
+            continue
+        if key == "cpu":
+            result[key] = min(candidates, key=_cpu_to_millicores)
+        else:
+            result[key] = min(candidates, key=_memory_gib)
+    return result
+
+
+def validate_ocpvirt_resources_against_limitrange(
+    core_api, namespace: str, cpu: int, memory: str
+) -> None:
+    """
+    Fail early if guest cpu/memory plus bump exceed namespace LimitRange max.
+
+    Raises:
+        NodeError: when bumped requests/limits would exceed LimitRange max.
+    """
+    caps = get_namespace_resource_max(core_api, namespace)
+    if not caps:
+        LOG.warning(
+            "No LimitRange max found in namespace %s; skipping custom resource check",
+            namespace,
+        )
+        return
+
+    requests = _ocpvirt_domain_resources(int(cpu), memory)["requests"]
+    errors = []
+    if "cpu" in caps and _cpu_to_millicores(requests["cpu"]) > _cpu_to_millicores(
+        caps["cpu"]
+    ):
+        errors.append(
+            f"cpu {cpu} (+{OCPVIRT_RESOURCE_CPU_BUMP} bump -> {requests['cpu']}) "
+            f"exceeds LimitRange max {caps['cpu']}"
+        )
+    if "memory" in caps and _memory_gib(requests["memory"]) > _memory_gib(
+        caps["memory"]
+    ):
+        errors.append(
+            f"memory {memory} (+{OCPVIRT_RESOURCE_MEMORY_BUMP_GI}Gi bump -> "
+            f"{requests['memory']}) exceeds LimitRange max {caps['memory']}"
+        )
+    if errors:
+        raise NodeError(
+            "ocpvirt custom resources exceed namespace LimitRange max in "
+            f"{namespace}: " + "; ".join(errors) + ". Lower ocpvirt_cpu/"
+            "ocpvirt_memory or raise the LimitRange max"
+        )
 
 
 def _image_source(image_name: str) -> Dict[str, Any]:
@@ -194,9 +350,10 @@ def build_virtualmachine_cr(
 
     Compute sizing comes from either ``instancetype_name``
     (``VirtualMachineClusterInstancetype``) or explicit ``cpu`` + ``memory``
-    (inline ``domain.cpu`` / ``domain.memory``). These modes are mutually
-    exclusive. Non-root volumes must be pre-created; ``precreated_volume_names``
-    is required (use an empty list when the VM has no extra disks).
+    (inline ``domain.cpu`` / ``domain.memory`` / ``domain.resources``). These
+    modes are mutually exclusive. Non-root volumes must be pre-created;
+    ``precreated_volume_names`` is required (use an empty list when the VM has
+    no extra disks).
 
     Prefer ``cloudinit_secret_name`` (cloudInitNoCloud.secretRef). Inline
     ``userData`` is capped at 2048 bytes by the KubeVirt admission webhook.
@@ -280,6 +437,7 @@ def build_virtualmachine_cr(
     if has_custom:
         domain["cpu"] = {"cores": int(cpu)}
         domain["memory"] = {"guest": memory}
+        domain["resources"] = _ocpvirt_domain_resources(int(cpu), memory)
 
     vm_spec: Dict[str, Any] = {
         "running": True,
@@ -591,10 +749,24 @@ def apply_ocpvirt_vm_profile(params: dict, ocp_cred: dict, custom_config=None) -
         updated["cpu"] = cpu
         updated["memory"] = memory
         updated.pop("instancetype", None)
+        pod_resources = _ocpvirt_domain_resources(int(cpu), memory)
+        namespace = ocp_cred.get("namespace")
+        if not namespace:
+            raise NodeError(
+                "namespace is required in conf/ocpvirt/<name>.yaml for custom "
+                "ocpvirt_cpu/ocpvirt_memory LimitRange validation"
+            )
+        _, core_api = get_k8s_clients(ocp_cred)
+        validate_ocpvirt_resources_against_limitrange(
+            core_api, namespace, int(cpu), memory
+        )
         LOG.info(
-            "Using OCP Virt custom resources: cpu=%s cores, memory=%s",
+            "Using OCP Virt custom resources: guest cpu=%s cores memory=%s; "
+            "pod requests/limits=%s (within LimitRange max in %s)",
             cpu,
             memory,
+            pod_resources["requests"],
+            namespace,
         )
         return updated
 

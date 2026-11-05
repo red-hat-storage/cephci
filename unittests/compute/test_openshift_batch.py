@@ -6,9 +6,14 @@ from compute.exceptions import NodeError
 from compute.openshift import (
     DEFAULT_OCPVIRT_PROFILE,
     KUBEVIRT_CLUSTER_INSTANCETYPE_KIND,
+    OCPVIRT_RESOURCE_CPU_BUMP,
+    OCPVIRT_RESOURCE_MEMORY_BUMP_GI,
+    _memory_gib,
+    _ocpvirt_domain_resources,
     apply_ocpvirt_vm_profile,
     build_virtualmachine_cr,
     datavolume_names_from_vm,
+    get_namespace_resource_max,
     load_ocpvirt_namespace_config,
     process_ocpvirt_custom_config,
     resolve_ocpvirt_credentials,
@@ -17,6 +22,7 @@ from compute.openshift import (
     validate_ocpvirt_credentials,
     validate_ocpvirt_inventory,
     validate_ocpvirt_namespace_config,
+    validate_ocpvirt_resources_against_limitrange,
     validate_precreated_volume_names,
 )
 
@@ -142,7 +148,23 @@ def test_apply_ocpvirt_vm_profile_defaults_to_o1_large(mock_clients):
     assert params["instancetype"] == "o1.large"
 
 
-def test_apply_ocpvirt_vm_profile_uses_custom_resources():
+def _mock_core_api_limitrange(cpu_max="20", memory_max="64Gi"):
+    core = MagicMock()
+    container = MagicMock()
+    container.type = "Container"
+    container.max = {"cpu": cpu_max, "memory": memory_max}
+    pod = MagicMock()
+    pod.type = "Pod"
+    pod.max = {"cpu": cpu_max, "memory": memory_max}
+    lr = MagicMock()
+    lr.spec.limits = [pod, container]
+    core.list_namespaced_limit_range.return_value = MagicMock(items=[lr])
+    return core
+
+
+@patch("compute.openshift.get_k8s_clients")
+def test_apply_ocpvirt_vm_profile_uses_custom_resources(mock_clients):
+    mock_clients.return_value = (MagicMock(), _mock_core_api_limitrange())
     params = apply_ocpvirt_vm_profile(
         {"image-name": "datasource://rhel9", "instancetype": "o1.large"},
         OCP_CRED,
@@ -151,6 +173,42 @@ def test_apply_ocpvirt_vm_profile_uses_custom_resources():
     assert params["cpu"] == 4
     assert params["memory"] == "16Gi"
     assert "instancetype" not in params
+
+
+@patch("compute.openshift.get_k8s_clients")
+def test_apply_ocpvirt_vm_profile_rejects_over_limitrange_max(mock_clients):
+    mock_clients.return_value = (
+        MagicMock(),
+        _mock_core_api_limitrange(cpu_max="16", memory_max="64Gi"),
+    )
+    with pytest.raises(NodeError, match="exceeds LimitRange max"):
+        apply_ocpvirt_vm_profile(
+            {"image-name": "datasource://rhel9"},
+            OCP_CRED,
+            ["ocpvirt_cpu=16", "ocpvirt_memory=16Gi"],
+        )
+
+
+def test_validate_ocpvirt_resources_against_limitrange_ok():
+    core = _mock_core_api_limitrange(cpu_max="20", memory_max="64Gi")
+    validate_ocpvirt_resources_against_limitrange(core, "ns", 16, "16Gi")
+
+
+def test_get_namespace_resource_max_picks_lower():
+    core = MagicMock()
+    container = MagicMock()
+    container.type = "Container"
+    container.max = {"cpu": "20", "memory": "64Gi"}
+    pod = MagicMock()
+    pod.type = "Pod"
+    pod.max = {"cpu": "16", "memory": "32Gi"}
+    lr = MagicMock()
+    lr.spec.limits = [pod, container]
+    core.list_namespaced_limit_range.return_value = MagicMock(items=[lr])
+    assert get_namespace_resource_max(core, "ns") == {
+        "cpu": "16",
+        "memory": "32Gi",
+    }
 
 
 @patch(
@@ -198,6 +256,27 @@ def test_build_virtualmachine_cr_with_custom_resources():
     domain = vm["spec"]["template"]["spec"]["domain"]
     assert domain["cpu"] == {"cores": 4}
     assert domain["memory"] == {"guest": "16Gi"}
+    cpu_req = 4 + OCPVIRT_RESOURCE_CPU_BUMP
+    mem_req = f"{16 + OCPVIRT_RESOURCE_MEMORY_BUMP_GI}Gi"
+    assert domain["resources"] == {
+        "requests": {"cpu": cpu_req, "memory": mem_req},
+        "limits": {"cpu": cpu_req, "memory": mem_req},
+    }
+
+
+def test_ocpvirt_domain_resources_bump():
+    assert _memory_gib("16Gi") == 16
+    assert _memory_gib("2048Mi") == 2
+    cpu_req = 8 + OCPVIRT_RESOURCE_CPU_BUMP
+    mem_req = f"{32 + OCPVIRT_RESOURCE_MEMORY_BUMP_GI}Gi"
+    assert _ocpvirt_domain_resources(8, "32Gi") == {
+        "requests": {"cpu": cpu_req, "memory": mem_req},
+        "limits": {"cpu": cpu_req, "memory": mem_req},
+    }
+    with pytest.raises(NodeError, match="Invalid ocpvirt_memory"):
+        _memory_gib("not-a-quantity")
+    with pytest.raises(NodeError, match="multiple of 1024"):
+        _memory_gib("100Mi")
 
 
 def test_build_virtualmachine_cr_requires_sizing():

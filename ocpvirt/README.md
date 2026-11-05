@@ -107,10 +107,13 @@ oc get virtualmachineclusterinstancetypes
 
 When no suitable instance type exists, pass explicit resources instead of a profile. cephci creates the VM with inline KubeVirt `domain.cpu` / `domain.memory` and does **not** set `spec.instancetype`.
 
+It also sets `domain.resources` requests/limits to guest CPU +1 and guest memory +2Gi (KubeVirt overhead). Before creating any PVCs/VMs, cephci checks that the bumped values fit under the namespace LimitRange **max** and fails early with a clear error if not.
+
 ```bash
 # both required; mutually exclusive with ocpvirt_profile
 --custom-config ocpvirt_cpu=4 \
 --custom-config ocpvirt_memory=16Gi
+# → guest 4 / 16Gi; pod requests+limits 5 CPU / 18Gi
 ```
 
 | Key | Aliases | Description |
@@ -123,6 +126,7 @@ Rules:
 - Both `ocpvirt_cpu` and `ocpvirt_memory` must be set together.
 - Do **not** also set `ocpvirt_profile` (clear error).
 - When only a profile is set (or neither), behavior is unchanged (`o1.large` default).
+- Guest + bump must be ≤ LimitRange max (e.g. max CPU 20 → `ocpvirt_cpu` ≤ 19).
 
 ### Suite / job metadata example
 
