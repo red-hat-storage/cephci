@@ -861,9 +861,19 @@ class UpgradeIOManager:
             "binary": "bonnie++",
         },
         "cthon": {
-            "rpms": ["git", "gcc", "nfs-utils", "time", "make", "libtirpc-devel"],
+            # libtirpc-devel is CRB/codeready-builder on RHEL. Prefer enabled
+            # repos over a CentOS Stream URL (NVR drift → 404; third-party RPM).
+            "rpms": ["git", "gcc", "nfs-utils", "time", "make", "libtirpc", "pkgconf"],
             "check_cmd": "test -x /root/cthon04/server",
             "post_install": (
+                # Folio RHEL: '*codeready-builder*' works; literal ',crb' in one
+                # --enablerepo fails with Unknown repo: crb. CentOS uses id crb.
+                "set -e; "
+                "rpm -q libtirpc-devel >/dev/null 2>&1 || "
+                "dnf install -y --enablerepo='*codeready-builder*' libtirpc-devel || "
+                "dnf install -y --enablerepo='crb' libtirpc-devel || "
+                "{ echo 'libtirpc-devel unavailable (enable CRB/codeready-builder)'; "
+                "exit 1; }; "
                 "rm -rf /root/cthon04 && "
                 "git clone --depth 1 https://github.com/linux-nfs/cthon04.git "
                 "/root/cthon04 && "
@@ -1588,6 +1598,15 @@ class UpgradeIOManager:
                 result[svc] = result.get(svc, 0) + count
 
         log.info("[bg_io] Started background IO: %s", result)
+        if (
+            "nfs" in deployed_services
+            and self._get_enabled_tools("nfs")
+            and result.get("nfs", 0) == 0
+        ):
+            log.error(
+                "[bg_io] NFS tools enabled but 0 NFS IO processes started "
+                "(no healthy NFS mounts?). cephfs_nfs will stay idle."
+            )
         return result
 
     # ------------------------------------------------------------------
@@ -3380,12 +3399,15 @@ exit 0
         point, cycling through the enabled tool list so every mount gets
         continuous IO during the upgrade.
 
-        Stale mounts (backed by crashed daemons, e.g. CQOS port conflicts)
-        are detected via a fast ``timeout 3 stat`` batch probe and skipped
-        to avoid 15-30s timeout cascades that exhaust SSH channels.
+        Caps via ``scale.nfs.bg_io_mounts_per_client`` (default 16) with
+        stride sampling so 100-cluster runs do not spawn hundreds of PIDs.
+
+        Stale mounts (crashed daemons) are skipped via batch ``stat`` probe.
         """
+        hostname = getattr(client, "hostname", client)
         mount_points = self._get_mount_points(client, "nfs")
         if not mount_points:
+            log.warning("[bg_io] NFS: no mount points on %s", hostname)
             return 0
 
         healthy_mounts = self._filter_healthy_nfs_mounts(client, mount_points)
@@ -3395,11 +3417,34 @@ exit 0
                 "[bg_io] NFS: %d/%d mounts healthy on %s, skipping %d stale",
                 len(healthy_mounts),
                 len(mount_points),
-                getattr(client, "hostname", client),
+                hostname,
                 skipped,
             )
         if not healthy_mounts:
+            log.warning("[bg_io] NFS: 0 healthy mounts on %s", hostname)
             return 0
+
+        try:
+            max_mounts = max(
+                1,
+                int(
+                    self.config.get("scale", {})
+                    .get("nfs", {})
+                    .get("bg_io_mounts_per_client", 16)
+                ),
+            )
+        except (TypeError, ValueError):
+            max_mounts = 16
+        if len(healthy_mounts) > max_mounts:
+            before = len(healthy_mounts)
+            step = before / float(max_mounts)
+            healthy_mounts = [healthy_mounts[int(i * step)] for i in range(max_mounts)]
+            log.info(
+                "[bg_io] NFS: capped to %d/%d healthy mounts on %s",
+                max_mounts,
+                before,
+                hostname,
+            )
 
         count = 0
         for i, mp in enumerate(healthy_mounts):
@@ -4426,7 +4471,12 @@ exit 0
         return [tool for tool, enabled in service_tools.items() if enabled]
 
     def _get_mount_points(self, client: Any, service: str) -> List[str]:
-        """Discover mount points for a given service type on a client."""
+        """Discover mount points for a given service type on a client.
+
+        Excludes ``upgrade_parallel_ops.mount_prefix`` (default ``/mnt/par_``)
+        so customer-like parallel-ops mounts are not swept into bg IO /
+        integrity / fill.
+        """
         try:
             if service == "cephfs":
                 out, _ = client.exec_command(
@@ -4448,7 +4498,17 @@ exit 0
                 )
             else:
                 return []
-            return [mp.strip() for mp in out.strip().split("\n") if mp.strip()]
+            prefix = (
+                self.config.get("upgrade_parallel_ops", {}).get(
+                    "mount_prefix", "/mnt/par_"
+                )
+                or "/mnt/par_"
+            )
+            return [
+                mp.strip()
+                for mp in out.strip().split("\n")
+                if mp.strip() and not mp.strip().startswith(prefix)
+            ]
         except Exception:
             return []
 
