@@ -18,7 +18,9 @@
 #      survives removal by its original string (IBMCEPH-19377); explicit
 #      OWNER@ deny-all ACE silently bypassed via mode-bit backfill
 #      (IBMCEPH-21577); inherited EVERYONE@ write rule vs. client umask on
-#      new dirs/files, same root cause as IBMCEPH-21565 (IBMCEPH-21579)
+#      new dirs/files, same root cause as IBMCEPH-21565 (IBMCEPH-21579);
+#      concurrent nfs4_setfacl/nfs4_getfacl on the same file intermittently
+#      fails reads with ERANGE (IBMCEPH-21590)
 #
 #===============================================================================================
 tests:
@@ -247,9 +249,18 @@ tests:
         # EVERYONE@ write bits are lost on both new subdirectories and new
         # files (explicit D::EVERYONE@:rwax Deny instead of the inherited
         # Allow).
+        and (5) concurrent nfs4_setfacl/nfs4_getfacl from different clients
+        on the same file must not cause ACL reads to fail.
+        # Bug: IBMCEPH-21590 - the kernel's two-step getxattr(size) then
+        # getxattr(value) query against NFS-Ganesha's "system.nfs4_acl"
+        # pseudo-xattr has nothing tying the two round trips together;
+        # if another client resizes the ACL in between, the second call
+        # is handed a stale size and nfs4_getfacl fails with ERANGE
+        # ("Numerical result out of range") at a double-digit-percent hit
+        # rate, with no crash and nothing logged as an error server-side.
       abort-on-fail: false
       config:
         nfs_version: 4.2
         clients: 1
         mount_type: nfs
-      comments: "IBMCEPH-21565, IBMCEPH-19377, IBMCEPH-21577, IBMCEPH-21579"
+      comments: "IBMCEPH-21565, IBMCEPH-19377, IBMCEPH-21577, IBMCEPH-21579, IBMCEPH-21590"

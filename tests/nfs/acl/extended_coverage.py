@@ -41,7 +41,22 @@ hotfix coverage:
      both new subdirectories and new files; the file case additionally
      gets an explicit Deny entry for write instead of the inherited
      Allow.)
+
+  5. Concurrent ``nfs4_setfacl``/``nfs4_getfacl`` from different clients on
+     the same file must not cause ACL reads to fail.
+     (IBMCEPH-21590 -- NFS-Ganesha exposes NFSv4 ACLs via the kernel's
+     "system.nfs4_acl" pseudo-xattr, queried with the standard two-step
+     ``getxattr(NULL, 0)`` (size) then ``getxattr(buf, size)`` (value).
+     Each call independently re-synthesizes the ACL from current server
+     state with nothing tying the two together, so while one client is
+     actively resizing the file's ACL, another client's read can be handed
+     a stale size and the kernel returns ``ERANGE`` ("Numerical result out
+     of range") -- reproducible at a double-digit-percent hit rate under
+     completely ordinary concurrent multi-client ACL usage, with no crash
+     on the server side.)
 """
+
+import re
 
 from cli.exceptions import ConfigError
 from tests.nfs.lib.nfs_acl import NfsAcl
@@ -74,6 +89,15 @@ BUG_ID_OWNER_DENY_BYPASS = "IBMCEPH-21577"
 
 BUG_ID_EVERYONE_WRITE_UMASK = "IBMCEPH-21579"
 
+# Parameters for the concurrent ACL set/get race scenario. No real users
+# need to exist on the client -- nfs4_setfacl accepts raw numeric ids, and
+# this test only checks read consistency, not access enforcement.
+RACE_LARGE_ACE_COUNT = 60
+RACE_LARGE_BASE_UID = 50000
+RACE_SMALL_UID = 60000
+RACE_DURATION_SECS = 15
+BUG_ID_CONCURRENT_ACL_RACE = "IBMCEPH-21590"
+
 # Known issues: tests listed here are still executed and reported, but a
 # failure is marked as "KNOWN" instead of a hard failure.
 KNOWN_ISSUES = {
@@ -83,6 +107,7 @@ KNOWN_ISSUES = {
     "OWNER@ Explicit Deny Bypass": BUG_ID_OWNER_DENY_BYPASS,
     "Inherited EVERYONE@ Dir Write vs Umask": BUG_ID_EVERYONE_WRITE_UMASK,
     "Inherited EVERYONE@ File Write vs Umask": BUG_ID_EVERYONE_WRITE_UMASK,
+    "Concurrent ACL Read Race": BUG_ID_CONCURRENT_ACL_RACE,
 }
 
 
@@ -183,6 +208,12 @@ def run(ceph_cluster, **kw):
             (
                 "Inherited EVERYONE@ File Write vs Umask",
                 _run_test(_test_inherited_everyone_write_file_umask, acl),
+            )
+        )
+        results.append(
+            (
+                "Concurrent ACL Read Race",
+                _run_test(_test_concurrent_acl_read_race, acl),
             )
         )
 
@@ -644,4 +675,100 @@ def _test_inherited_everyone_write_file_umask(acl):
         return 1
 
     log.info("Inherited EVERYONE@ File Write vs Umask: PASSED")
+    return 0
+
+
+def _test_concurrent_acl_read_race(acl):
+    """
+    nfs4_getfacl reads of a file must not fail while another client is
+    concurrently resizing that file's ACL via nfs4_setfacl.
+
+    Bug (IBMCEPH-21590): nfs4_getfacl queries the kernel's "system.nfs4_acl"
+    pseudo-xattr with the standard two-step getxattr(NULL, 0) (size) then
+    getxattr(buf, size) (value). Each call independently triggers a fresh
+    GETATTR(FATTR4_ACL) round trip to Ganesha, which re-synthesizes the ACL
+    from current server state with nothing tying the two calls together.
+    If another client resizes the ACL between them, the kernel detects the
+    size mismatch and returns ERANGE ("Numerical result out of range") to
+    the reading application. Reproduced at a double-digit-percent hit rate
+    with a single concurrent writer and reader; Ganesha itself never logs
+    an error for this and the service is not disrupted -- it is purely a
+    client-visible read-consistency failure under ordinary concurrent
+    multi-client ACL usage.
+
+    Runs one remote shell script that backgrounds a writer (alternating a
+    60-entry and a 1-entry ACL) and loops nfs4_getfacl in the foreground
+    for RACE_DURATION_SECS, then reports how many reads failed.
+    """
+    log.info("=== Test: Concurrent ACL Read Race (%s) ===", BUG_ID_CONCURRENT_ACL_RACE)
+    name = "acl-race-test"
+    acl.cleanup_test_files(name)
+    acl.create_file(name)
+    path = acl._full_path(name)
+
+    large_spec = ",".join(
+        f"A::{RACE_LARGE_BASE_UID + i}:r" for i in range(RACE_LARGE_ACE_COUNT)
+    )
+    small_spec = f"A::{RACE_SMALL_UID}:r"
+
+    script = (
+        f"F={path}\n"
+        f"end=$((SECONDS+{RACE_DURATION_SECS}))\n"
+        "( while [ $SECONDS -lt $end ]; do\n"
+        f"    nfs4_setfacl -s '{large_spec}' \"$F\" 2>/dev/null\n"
+        f"    nfs4_setfacl -s '{small_spec}' \"$F\" 2>/dev/null\n"
+        "  done ) &\n"
+        "WPID=$!\n"
+        "n=0; fail=0\n"
+        "while [ $SECONDS -lt $end ]; do\n"
+        "  n=$((n+1))\n"
+        '  out=$(nfs4_getfacl "$F" 2>&1)\n'
+        '  if echo "$out" | grep -q "Failed operation"; then\n'
+        "    fail=$((fail+1))\n"
+        "    if [ $fail -le 5 ]; then\n"
+        '      echo "SAMPLE_FAILURE #$fail (read $n): '
+        '$(echo "$out" | tr "\\n" " ")"\n'
+        "    fi\n"
+        "  fi\n"
+        "done\n"
+        "wait $WPID\n"
+        'echo "RACE_RESULT: $fail failures out of $n reads"\n'
+    )
+
+    out, _ = acl.client.exec_command(
+        sudo=True, cmd=script, timeout=RACE_DURATION_SECS + 30
+    )
+    log.info("Concurrent ACL read race output:\n%s", out)
+
+    match = re.search(r"RACE_RESULT: (\d+) failures out of (\d+) reads", out)
+    if not match:
+        log.error(
+            "[%s] Could not parse race test result from output: %s",
+            BUG_ID_CONCURRENT_ACL_RACE,
+            out,
+        )
+        return 1
+
+    failures, total = int(match.group(1)), int(match.group(2))
+    hit_rate = (failures / total * 100) if total else 0
+    log.info(
+        "Concurrent ACL read race: %d/%d reads failed (%.1f%% hit rate)",
+        failures,
+        total,
+        hit_rate,
+    )
+
+    if failures > 0:
+        log.error(
+            "[%s] %d/%d (%.1f%%) concurrent nfs4_getfacl reads failed with "
+            "ERANGE while another client concurrently resized the same "
+            "file's ACL",
+            BUG_ID_CONCURRENT_ACL_RACE,
+            failures,
+            total,
+            hit_rate,
+        )
+        return 1
+
+    log.info("Concurrent ACL Read Race: PASSED")
     return 0
