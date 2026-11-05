@@ -125,6 +125,17 @@ tests:
                 - max_mds
                 - "2"
               command: shell
+          # Suppress BLUESTORE_BLUEFS_OVERSIZED (9.2z1+, ceph/ceph#67192) on small CI OSDs
+          # https://tracker.ceph.com/issues/73826
+          - config:
+              command: shell
+              args:
+                - ceph
+                - config
+                - set
+                - global
+                - bluestore_bluefs_warn_ratio
+                - "1"
       destroy-cluster: false
       abort-on-fail: true
   - test:
