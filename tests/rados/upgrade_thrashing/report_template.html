@@ -869,6 +869,7 @@ h4 {
     <a href="#io-tools-used">IO Tools Used</a>
     <a href="#post-upgrade-comparison">Post-Upgrade Comparison</a>
     <a href="#feature-verification">Feature Verification</a>
+    <a href="#parallel-ops" id="nav-parallel-ops" style="display:none;">Parallel Ops</a>
     <a href="#bug-validations">Bug Validations</a>
     <a href="#data-integrity">Data Integrity</a>
     <a href="#test-config">Configuration</a>
@@ -1199,6 +1200,52 @@ h4 {
     </div>
     <table class="data-table" id="feature-table">
       <thead><tr><th>Service</th><th>Feature</th><th>Pre-Upgrade</th><th>Post-Upgrade</th><th>Regression</th><th>Details</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- Parallel Ops (customer-like CephFS/NFS admin churn) -->
+  <section id="parallel-ops" style="display:none;">
+    <h2>Parallel Ops</h2>
+    <div class="section-desc">
+      <p>Customer-like CephFS/NFS admin operations run concurrently for the full hop (start → teardown). Failures are informational only — they never fail the hop (including during fail_fs / MDS-down).</p>
+      <ul>
+        <li>Each enabled suite flag starts its own worker thread; volume-bound ops fan out per seed subvol</li>
+        <li><strong>OK</strong> = cycle finished without uncaught exception. Ceph CLI non-zero/Error is logged as warning/info and the cycle still counts OK</li>
+        <li><strong>Errors</strong> = rare uncaught cycle exceptions (e.g. unexpected client faults); non-gating</li>
+        <li>Latency is per full worker cycle. Phase table buckets sampled events against upgrade phase_boundaries</li>
+      </ul>
+    </div>
+    <div class="metrics-grid" id="parallel-ops-cards"></div>
+    <h3 style="margin-top:1.25rem;">By upgrade phase</h3>
+    <table class="data-table" id="parallel-ops-phase-table">
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th>OK</th>
+          <th>Errors</th>
+          <th>Error %</th>
+          <th>Avg cycle ms</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <h3 style="margin-top:1.25rem;">Per operation</h3>
+    <table class="data-table" id="parallel-ops-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Operation</th>
+          <th>Target</th>
+          <th>OK</th>
+          <th>Errors</th>
+          <th>p50 ms</th>
+          <th>p95 ms</th>
+          <th>max ms</th>
+          <th>Description</th>
+          <th>Samples</th>
+        </tr>
+      </thead>
       <tbody></tbody>
     </table>
   </section>
@@ -3908,6 +3955,92 @@ var _healthTimelineListenerAdded = false;
     });
     tbody.innerHTML = html;
   } catch(e) { console.error('renderFeatures failed:', e); }
+})();
+
+/* ---- Parallel Ops ---- */
+(function renderParallelOps() {
+  try {
+    var po = (REPORT_DATA.results || {}).parallel_ops || {};
+    var ops = po.operations || [];
+    var totals = po.totals || {};
+    if (!po.enabled || (!ops.length && !(totals.cycles > 0))) {
+      return;
+    }
+    var section = document.getElementById('parallel-ops');
+    var nav = document.getElementById('nav-parallel-ops');
+    if (section) section.style.display = '';
+    if (nav) nav.style.display = '';
+
+    function msCell(v) { return (v === 0 || v) ? v : '—'; }
+
+    var cards = [
+      { value: totals.workers || ops.length || 0, label: 'Workers', cls: '' },
+      { value: totals.ok || 0, label: 'OK cycles', cls: 'pass' },
+      { value: totals.fail || 0, label: 'Error cycles (non-gating)', cls: (totals.fail > 0 ? 'warn' : 'pass') },
+      { value: totals.cycles || 0, label: 'Total cycles', cls: '' }
+    ];
+    var cardHtml = '';
+    cards.forEach(function(c) {
+      cardHtml += '<div class="metric-card ' + c.cls + '"><div class="metric-value">' + c.value +
+        '</div><div class="metric-label">' + c.label + '</div></div>';
+    });
+    var seeds = (po.seeds || []).join(', ') || '—';
+    cardHtml += '<div class="metric-card"><div class="metric-value" style="font-size:1rem;">' +
+      esc(String(po.fs || '—')) + '</div><div class="metric-label">Filesystem</div>' +
+      '<div class="metric-detail">seeds: ' + esc(seeds) +
+      ' · events: ' + (po.events_sampled || 0) + '</div></div>';
+    var cardsEl = document.getElementById('parallel-ops-cards');
+    if (cardsEl) cardsEl.innerHTML = cardHtml;
+
+    var phaseBody = document.querySelector('#parallel-ops-phase-table tbody');
+    if (phaseBody) {
+      var phases = po.by_phase || [];
+      var ph = '';
+      phases.forEach(function(row) {
+        var cycles = (row.ok || 0) + (row.fail || 0);
+        var failPct = cycles ? Math.round(100 * (row.fail || 0) / cycles) + '%' : '—';
+        var warn = (row.fail || 0) > 0 ? ' style="background-color:#fff8e6;"' : '';
+        ph += '<tr' + warn + '>';
+        ph += '<td>' + esc(row.phase || '') + '</td>';
+        ph += '<td>' + (row.ok || 0) + '</td>';
+        ph += '<td>' + (row.fail || 0) + '</td>';
+        ph += '<td>' + failPct + '</td>';
+        ph += '<td>' + msCell(row.avg_ms) + '</td>';
+        ph += '</tr>';
+      });
+      phaseBody.innerHTML = ph ||
+        '<tr><td colspan="5" style="text-align:center;color:var(--ibm-gray-50);">No phase-bucketed events</td></tr>';
+    }
+
+    var tbody = document.querySelector('#parallel-ops-table tbody');
+    if (!tbody) return;
+    var html = '';
+    ops.forEach(function(o) {
+      var fail = o.fail || 0;
+      var rowStyle = fail > 0 ? ' style="background-color:#fff8e6;"' : '';
+      var lat = o.latency_ms || {};
+      var samples = o.error_samples || [];
+      var errCell = '—';
+      if (samples.length) {
+        errCell = '<details><summary>' + samples.length + ' sample(s)</summary><pre style="white-space:pre-wrap;font-size:0.75rem;margin:0.35rem 0 0;">' +
+          esc(samples.join('\n---\n')) + '</pre></details>';
+      }
+      html += '<tr' + rowStyle + '>';
+      html += '<td>' + esc(o.category || '') + '</td>';
+      html += '<td>' + esc(o.op || o.worker || '') + '</td>';
+      html += '<td>' + esc(o.target || '—') + '</td>';
+      html += '<td>' + (o.ok || 0) + '</td>';
+      html += '<td>' + fail + '</td>';
+      html += '<td>' + msCell(lat.p50) + '</td>';
+      html += '<td>' + msCell(lat.p95) + '</td>';
+      html += '<td>' + msCell(lat.max) + '</td>';
+      html += '<td>' + esc(o.description || '') + '</td>';
+      html += '<td>' + errCell + '</td>';
+      html += '</tr>';
+    });
+    tbody.innerHTML = html ||
+      '<tr><td colspan="10" style="text-align:center;color:var(--ibm-gray-50);">No parallel-ops cycles recorded</td></tr>';
+  } catch(e) { console.error('renderParallelOps failed:', e); }
 })();
 
 /* ---- Bug Validations ---- */

@@ -625,6 +625,7 @@ def _build_and_generate_report(
         report.set_mount_health(mount_health)
         report.set_io_tool_usage(io_tool_data)
         report.set_nfs_grace_analysis(nfs_grace_analysis)
+        report.set_parallel_ops_summary(config.get("parallel_ops_summary") or {})
         if isinstance(daemon_timeline, dict):
             report.set_daemon_timeline(daemon_timeline.get("daemon_timeline", []))
             report.set_upgrade_events(daemon_timeline.get("upgrade_events", []))
@@ -834,10 +835,12 @@ def run(ceph_cluster, **kw) -> int:
     from upgrade_thrashing.upgrade_io_manager import UpgradeIOManager
     from upgrade_thrashing.upgrade_report import UpgradeReportGenerator
     from upgrade_thrashing.upgrade_stats_collector import UpgradeStatsCollector
+    from upgrade_thrashing.upgrade_thrash_parallel_ops import UpgradeThrashParallelOps
 
     stats = UpgradeStatsCollector(rados_obj, config)
     io_mgr = UpgradeIOManager(ceph_cluster, rados_obj, config)
     report = UpgradeReportGenerator(config)
+    parallel_ops = None
     deployed_services = set()
     feat_mgr = None
     feature_results = {}
@@ -1058,6 +1061,10 @@ def run(ceph_cluster, **kw) -> int:
                 check_interval=fill_config.get("bg_io_check_interval_sec", 120),
             )
 
+        # Customer-like CephFS/NFS admin ops (suite: upgrade_parallel_ops)
+        parallel_ops = UpgradeThrashParallelOps(rados_obj, config, clients=clients)
+        parallel_ops.start()
+
         _record_health_snapshot(rados_obj, health_tracker)
 
         stats.begin_phase("baseline")
@@ -1244,6 +1251,25 @@ def run(ceph_cluster, **kw) -> int:
 
         if mds_config.get("fail_fs"):
             _recover_nfs_after_fail_fs(rados_obj)
+
+        # Stop parallel ops after NFS recover so teardown does not race redeploy
+        if parallel_ops is not None:
+            try:
+                parallel_ops.teardown()
+                summary = parallel_ops.get_summary()
+                config["parallel_ops_summary"] = summary
+                totals = summary.get("totals") or {}
+                log.info(
+                    "[par_ops] summary after upgrade: workers=%s ok=%s fail=%s "
+                    "cycles=%s ops=%d",
+                    totals.get("workers", 0),
+                    totals.get("ok", 0),
+                    totals.get("fail", 0),
+                    totals.get("cycles", 0),
+                    len(summary.get("operations") or []),
+                )
+            except Exception as e:
+                log.warning("[par_ops] teardown after upgrade: %s", e)
 
         post_ver, _ = cephadm_obj.shell(args=["ceph version --format json"])
         post_ver_str = _parse_ceph_version(post_ver)
@@ -1542,6 +1568,16 @@ def run(ceph_cluster, **kw) -> int:
             log.info("Cleanup: Restoring cluster state")
         log.info("=" * 60)
 
+        # Capture parallel-ops summary before emergency report (abort path
+        # otherwise ships HTML without the Parallel Ops section).
+        if parallel_ops is not None:
+            try:
+                parallel_ops.teardown()
+                if "parallel_ops_summary" not in config:
+                    config["parallel_ops_summary"] = parallel_ops.get_summary()
+            except Exception as e:
+                log.warning(f"[par_ops] finally teardown: {e}")
+
         if not report_generated:
             _, emerg_filename = _build_and_generate_report(
                 report=report,
@@ -1807,14 +1843,15 @@ def _detect_deployed_services(rados_obj, config):
     except Exception:
         log.warning("Could not list pools during service detection")
 
-    # 2. RBD: check for test images in rep_pool
-    try:
-        out, _ = rados_obj.node.shell(["rbd ls rep_pool --format json"])
-        images = json.loads(out) if out.strip() else []
-        if images:
-            deployed.add("rbd")
-    except Exception:
-        pass
+    # 2. RBD: check for test images in rep_pool (honor services.rbd toggle)
+    if services_config.get("rbd", False):
+        try:
+            out, _ = rados_obj.node.shell(["rbd ls rep_pool --format json"])
+            images = json.loads(out) if out.strip() else []
+            if images:
+                deployed.add("rbd")
+        except Exception:
+            pass
 
     # 3. Orch services: single ceph orch ls call covers cephfs, rgw, nfs,
     #    smb, nvmeof by checking service_type and running count.
