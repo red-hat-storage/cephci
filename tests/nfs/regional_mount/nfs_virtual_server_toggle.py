@@ -126,6 +126,8 @@ def run(ceph_cluster, **kw):
             config,
             single_export=True,
         )
+        # VS11 deletes the prior NFS service; wait for the VS daemon before conf asserts.
+        _wait_for_nfs_daemons(client, names["nfs_name"])
 
         # --- Setup gate: VS1 / VS2 ---
         _assert_spec_enabled(client, names["nfs_name"], True)

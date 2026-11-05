@@ -105,6 +105,10 @@ Suite and helpers already implement the feature doc:
 | 4 — fence one export, one client | `tests/nfs/regional_mount/nfs_virtual_server_export_fencing_single_client.py` | CEPH-83632433 |
 | 5 — fence one export; the other stays multi-route | `tests/nfs/regional_mount/nfs_virtual_server_export_fencing_multi_client.py` | CEPH-83632434 |
 | RFE — disable, then re-enable | `tests/nfs/regional_mount/nfs_virtual_server_toggle.py` | not assigned |
+| VS12 — second toggle cycle | `tests/nfs/regional_mount/nfs_virtual_server_lifecycle.py` | CEPH-83633234 |
+| VS13 — multi-daemon conf agrees | same module (`tc: VS13`) | CEPH-83633235 |
+| VS14 — invalid spec recovers | same module (`tc: VS14`) | CEPH-83633236 |
+| VS15 — redeploy keeps disable | same module (`tc: VS15`) | CEPH-83633237 |
 
 Shared helper: `tests/nfs/regional_mount/virtual_server.py` (`setup_virtual_server_exports`, route discovery, fencing inject, cleanup).
 
@@ -363,7 +367,7 @@ CLIENT {
 
 **Goal:** Turn the feature off without deleting the cluster or the export.
 
-**Automation:** `nfs_virtual_server_toggle.py` (first half). No Polarion ID yet.
+**Automation:** `nfs_virtual_server_toggle.py` (first half). No Polarion ID yet (Scenario 6).
 
 **Steps:**
 
@@ -451,6 +455,8 @@ ceph orch daemon reconfig <nfs-daemon>
 
 **Goal:** Repeated orch updates do not orphan containers or drop the export.
 
+**Automation:** `nfs_virtual_server_lifecycle.py` (`tc: VS12`). Polarion: CEPH-83633234.
+
 **Steps:**
 
 1. Repeat TC-VS8 and TC-VS10 once more on the same cluster.
@@ -467,6 +473,8 @@ ceph orch daemon reconfig <nfs-daemon>
 ### TC-VS13 — Multi-daemon conf agrees (P1)
 
 **Goal:** Every NFS daemon for the service renders the same `Virtual_Server` value.
+
+**Automation:** `nfs_virtual_server_lifecycle.py` (`tc: VS13`). Polarion: CEPH-83633235. Skips (pass) if fewer than 2 running NFS daemons.
 
 **Steps:**
 
@@ -485,6 +493,8 @@ ceph orch daemon reconfig <nfs-daemon>
 ### TC-VS14 — Invalid spec value (P1)
 
 **Goal:** A bad bool does not leave a lasting broken NFS data path.
+
+**Automation:** `nfs_virtual_server_lifecycle.py` (`tc: VS14`). Polarion: CEPH-83633236.
 
 **Dev review (9.2):** There is **no** runtime validation on `enable_virtual_server`. A bad value like `"maybe"` is accepted by `ceph orch apply` and only fails later at the Ganesha layer. Do not expect orch to reject the apply.
 
@@ -506,6 +516,8 @@ ceph orch daemon reconfig <nfs-daemon>
 ### TC-VS15 — Redeploy keeps the disabled setting (P2)
 
 **Goal:** The operator’s last choice survives `ceph orch redeploy`.
+
+**Automation:** `nfs_virtual_server_lifecycle.py` (`tc: VS15`). Polarion: CEPH-83633237.
 
 **Steps:**
 
@@ -555,10 +567,10 @@ ceph orch daemon reconfig <nfs-daemon>
 | VS9 | IO still works after disable | **P0 Blocker** | same module |
 | VS10 | Re-enable restores true and a second route | **P0 Blocker** | same module (second route is the gap to add) |
 | VS11 | Default create renders `Virtual_Server = false` | P0 | `nfs_virtual_server_toggle.py` |
-| VS12 | Second toggle does not orphan daemons | P1 | not automated |
-| VS13 | All daemons share the flag | P1 | not automated |
-| VS14 | Bad value accepted by orch; fails at Ganesha | P1 | not automated |
-| VS15 | Redeploy preserves disable | P2 | not automated |
+| VS12 | Second toggle does not orphan daemons | P1 | CEPH-83633234 / `nfs_virtual_server_lifecycle.py` |
+| VS13 | All daemons share the flag | P1 | CEPH-83633235 / same |
+| VS14 | Bad value accepted by orch; fails at Ganesha | P1 | CEPH-83633236 / same |
+| VS15 | Redeploy preserves disable | P2 | CEPH-83633237 / same |
 
 ---
 

@@ -1,0 +1,157 @@
+#===============================================================================================
+# Regional File Mount / Virtual Server — Scenarios 1–7 (OCP Virt reuse)
+# Conf: conf/tentacle/nfs/virtual-server-ocpvirt.yaml
+#
+# Use on an already-deployed cluster (--reuse). Skips bootstrap / client add.
+#
+#   python run.py --cloud ocpvirt \
+#     --suite suites/tentacle/nfs/tier-1-nfs-virtual-server-reuse-ocpvirt.yaml \
+#     --global-conf conf/tentacle/nfs/virtual-server-ocpvirt.yaml \
+#     --reuse rerun/hacharya-A2W45V \
+#     --custom-config ocpvirt_namespace=rdu3_ceph_sys_test \
+#     --custom-config ocpvirt_networks=ceph-public,bridge-504 \
+#     --rhbuild 9.2 --build latest --platform rhel-10
+#===============================================================================================
+tests:
+  - test:
+      name: Virtual Server single export single client multi-route
+      module: regional_mount.nfs_virtual_server_single_export_single_client.py
+      desc: Scenario 1 — one export, one client, mount and IO on each network route
+      polarion-id: CEPH-83632430
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+
+  - test:
+      name: Virtual Server single export multi client
+      module: regional_mount.nfs_virtual_server_single_export_multi_client.py
+      desc: Scenario 2 — one export, each client mounts via a different route
+      polarion-id: CEPH-83632431
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        min_routes: 2
+        sudo: false
+
+  - test:
+      name: Virtual Server multi export multi client
+      module: regional_mount.nfs_virtual_server_multi_export_multi_client.py
+      desc: Scenario 3 — multiple exports, each client uses a distinct route
+      polarion-id: CEPH-83632432
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        export_num: 2
+        min_routes: 2
+        sudo: false
+
+  - test:
+      name: Virtual Server export fencing single client
+      module: regional_mount.nfs_virtual_server_export_fencing_single_client.py
+      desc: Scenario 4 — Server_Addrs and CLIENT fencing on single client
+      polarion-id: CEPH-83632433
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        comments: fails due to IBMCEPH-13896
+
+  - test:
+      name: Virtual Server export fencing multi client
+      module: regional_mount.nfs_virtual_server_export_fencing_multi_client.py
+      desc: Scenario 5 — fence one export; other export remains multi-route
+      polarion-id: CEPH-83632434
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        export_num: 2
+        min_routes: 2
+        sudo: false
+        comments: fails due to IBMCEPH-13896
+
+  - test:
+      name: Virtual Server disable and re-enable toggle
+      module: regional_mount.nfs_virtual_server_toggle.py
+      desc: Scenario 6 — IBMCEPH-11530 orch apply + reconfig toggle (VS8–VS11)
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        run_vs11: true
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server second toggle cycle
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS12 — two disable/re-enable cycles; daemon count stable
+      polarion-id: CEPH-83633234
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS12
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server multi-daemon conf agrees
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS13 — Virtual_Server value agrees on all NFS daemons
+      polarion-id: CEPH-83633235
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS13
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server invalid enable_virtual_server recovers
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS14 — orch accepts bad value; restore recovers mount
+      polarion-id: CEPH-83633236
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS14
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server redeploy preserves disable
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS15 — orch redeploy keeps Virtual_Server=false
+      polarion-id: CEPH-83633237
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS15
+        comments: IBMCEPH-11530

@@ -1173,10 +1173,34 @@ def apply_enable_virtual_server(client, nfs_name, enabled, spec_path=None):
     ``reconfig_nfs_daemons`` afterwards (field is not in the dependency
     tracker, so auto-reconfig will not fire).
     """
+    apply_spec, out, err = apply_enable_virtual_server_raw(
+        client, nfs_name, bool(enabled), spec_path=spec_path, check_ec=True
+    )
+    log.info(
+        "Applied nfs.%s enable_virtual_server=%s (orch apply): %s %s",
+        nfs_name,
+        enabled,
+        out.strip(),
+        err.strip(),
+    )
+    return apply_spec
+
+
+def apply_enable_virtual_server_raw(
+    client, nfs_name, value, spec_path=None, check_ec=False
+):
+    """
+    Set ``enable_virtual_server`` to an arbitrary YAML value via orch apply.
+
+    Used by TC-VS14 to apply invalid values such as ``\"maybe\"`` (dev review:
+    orch accepts them; failure is at Ganesha / reconfig). Does **not** reconfig.
+
+    Returns ``(apply_spec, stdout, stderr)``.
+    """
     spec_path = spec_path or f"/tmp/nfs_{nfs_name}_vs_spec.yaml"
     apply_spec = export_nfs_orch_apply_spec(client, nfs_name)
     apply_spec.setdefault("spec", {})
-    apply_spec["spec"]["enable_virtual_server"] = bool(enabled)
+    apply_spec["spec"]["enable_virtual_server"] = value
     body = yaml.safe_dump(apply_spec, default_flow_style=False)
     client.exec_command(
         sudo=True,
@@ -1185,15 +1209,17 @@ def apply_enable_virtual_server(client, nfs_name, enabled, spec_path=None):
     out, err = client.exec_command(
         sudo=True,
         cmd=f"ceph orch apply -i {spec_path}",
+        check_ec=check_ec,
     )
+    out_t, err_t = _cmd_text(out), _cmd_text(err)
     log.info(
-        "Applied nfs.%s enable_virtual_server=%s (orch apply): %s %s",
+        "Applied nfs.%s enable_virtual_server=%r (orch apply): out=%s err=%s",
         nfs_name,
-        enabled,
-        _cmd_text(out).strip(),
-        _cmd_text(err).strip(),
+        value,
+        out_t.strip(),
+        err_t.strip(),
     )
-    return apply_spec
+    return apply_spec, out_t, err_t
 
 
 def reconfig_nfs_daemons(client, nfs_name):
@@ -1229,6 +1255,75 @@ def set_virtual_server_enabled(client, nfs_name, enabled):
     """Apply orch spec change then mandatory daemon reconfig."""
     apply_enable_virtual_server(client, nfs_name, enabled)
     reconfig_nfs_daemons(client, nfs_name)
+
+
+def expected_nfs_daemon_count(client, nfs_name):
+    """
+    Return expected NFS daemon count from orch placement (status RUNNING).
+
+    Falls back to the number of currently running daemons.
+    """
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ls --service-name nfs.{nfs_name} -f json",
+        check_ec=False,
+    )
+    text = _cmd_text(out).strip()
+    try:
+        data = json.loads(text) if text else []
+    except json.JSONDecodeError:
+        data = []
+    if isinstance(data, dict):
+        data = [data]
+    if data:
+        status = data[0].get("status") or {}
+        running = status.get("running")
+        if running is not None:
+            return int(running)
+        size = status.get("size")
+        if size is not None:
+            return int(size)
+    return len(list_running_nfs_daemons(client, nfs_name))
+
+
+def assert_nfs_daemon_count(client, nfs_name, expected, label=""):
+    """Fail if running nfs.<nfs_name> daemon count != expected."""
+    daemons = list_running_nfs_daemons(client, nfs_name)
+    actual = len(daemons)
+    names = [d.get("daemon_name") or d.get("daemon_id") for d in daemons]
+    prefix = f"{label}: " if label else ""
+    if actual != int(expected):
+        raise OperationFailedError(
+            f"{prefix}expected {expected} running nfs.{nfs_name} daemon(s), "
+            f"got {actual}: {names}"
+        )
+    log.info("%s%s running nfs.%s daemon(s): %s", prefix, actual, nfs_name, names)
+
+
+def redeploy_nfs_service(client, nfs_name, wait_timeout=300):
+    """``ceph orch redeploy nfs.<nfs_name>`` then wait for daemons to return."""
+    out, err = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch redeploy nfs.{nfs_name}",
+        check_ec=False,
+    )
+    log.info(
+        "Redeploy nfs.%s: out=%s err=%s",
+        nfs_name,
+        _cmd_text(out).strip(),
+        _cmd_text(err).strip(),
+    )
+    from time import sleep, time
+
+    end = time() + wait_timeout
+    while time() < end:
+        if list_running_nfs_daemons(client, nfs_name):
+            sleep(15)
+            return
+        sleep(10)
+    raise OperationFailedError(
+        f"Timed out waiting for nfs.{nfs_name} after orch redeploy"
+    )
 
 
 def parse_virtual_server_conf_value(ganesha_conf):

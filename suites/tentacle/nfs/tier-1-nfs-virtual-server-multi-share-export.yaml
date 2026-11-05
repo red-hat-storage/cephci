@@ -200,3 +200,63 @@ tests:
         sudo: false
         run_vs11: true
         comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server second toggle cycle
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS12 — two disable/re-enable cycles; daemon count stable
+      polarion-id: CEPH-83633234
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS12
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server multi-daemon conf agrees
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS13 — Virtual_Server value agrees on all NFS daemons
+      polarion-id: CEPH-83633235
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS13
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server invalid enable_virtual_server recovers
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS14 — orch accepts bad value; restore recovers mount
+      polarion-id: CEPH-83633236
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS14
+        comments: IBMCEPH-11530
+
+  - test:
+      name: Virtual Server redeploy preserves disable
+      module: regional_mount.nfs_virtual_server_lifecycle.py
+      desc: Scenario 7 / TC-VS15 — orch redeploy keeps Virtual_Server=false
+      polarion-id: CEPH-83633237
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        tc: VS15
+        comments: IBMCEPH-11530
