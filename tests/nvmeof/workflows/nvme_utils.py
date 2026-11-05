@@ -15,6 +15,7 @@ from ceph.nvmeof.cli.v2 import NVMeGWCLIV2
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
+from tests.nvmeof.workflows.log_collect import safe_collect_nvmeof_service_journals
 from utility.log import Log
 from utility.retry import retry
 from utility.systemctl import SystemCtl
@@ -305,6 +306,9 @@ def delete_nvme_service(ceph_cluster, config):
     - gw_group      # optional, as per release
     - mtls          # optional
     """
+    # Pre-cleanup journal collection for older tests that tear down via this helper.
+    safe_collect_nvmeof_service_journals(ceph_cluster=ceph_cluster, config=config)
+
     gw_groups = config.get("gw_groups", [{"gw_group": config.get("gw_group", "")}])
 
     for gwgroup_config in gw_groups:
