@@ -21,6 +21,14 @@ hotfix coverage:
      ``A:fdig:<gid>:waDtcy``; because ``-x`` matches by exact ACE string, the
      original string never matches what is actually stored, so ``-x`` exits
      0 ("success") while the entry for ``<gid>`` remains untouched.)
+
+  3. An explicit DENY-all ACE for OWNER@ (``nfs4_setfacl -s
+     'D::OWNER@:rwaDxtTcCy'``) must actually deny the owner all access.
+     (IBMCEPH-21577 -- a compatibility patch that backfills empty base ACL
+     entries from the file's mode bits cannot tell "empty because OWNER@ was
+     never mentioned" apart from "empty because OWNER@ was explicitly
+     denied everything", so it silently reconstructs an ALLOW for the owner
+     from the pre-existing mode bits, discarding the explicit DENY.)
 """
 
 from cli.exceptions import ConfigError
@@ -47,12 +55,18 @@ WILDCARD_GID = 4020
 WILDCARD_ACE = f"A:fdig:{WILDCARD_GID}:w"
 BUG_ID_WILDCARD_ACE_REMOVAL = "IBMCEPH-19377"
 
+# User used to exercise the OWNER@ explicit-deny bypass scenario.
+OWNER_DENY_UID = 7001
+OWNER_DENY_USER = "nfsacl_denyowner"
+BUG_ID_OWNER_DENY_BYPASS = "IBMCEPH-21577"
+
 # Known issues: tests listed here are still executed and reported, but a
 # failure is marked as "KNOWN" instead of a hard failure.
 KNOWN_ISSUES = {
     "Inherited GROUP@ Dir Write vs Umask": BUG_ID,
     "Inherited GROUP@ File Write vs Umask": BUG_ID,
     "Wildcard ALLOW ACE Removal (fdig)": BUG_ID_WILDCARD_ACE_REMOVAL,
+    "OWNER@ Explicit Deny Bypass": BUG_ID_OWNER_DENY_BYPASS,
 }
 
 
@@ -137,6 +151,12 @@ def run(ceph_cluster, **kw):
                 _run_test(_test_wildcard_allow_ace_removal, acl),
             )
         )
+        results.append(
+            (
+                "OWNER@ Explicit Deny Bypass",
+                _run_test(_test_owner_deny_bypass, acl),
+            )
+        )
 
         return _report_results(results)
 
@@ -148,6 +168,7 @@ def run(ceph_cluster, **kw):
         for c in clients:
             NfsAcl.delete_user(c, USER_W)
             NfsAcl.delete_group(c, GROUP_W)
+            NfsAcl.delete_user(c, OWNER_DENY_USER)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleanup completed")
 
@@ -383,4 +404,75 @@ def _test_wildcard_allow_ace_removal(acl):
         return 1
 
     log.info("Wildcard ALLOW ACE Removal via Original String: PASSED")
+    return 0
+
+
+def _owner_allow_granted(entries):
+    """Return True if OWNER@ has any ALLOW entry carrying real permission bits."""
+    return any(
+        e.startswith("A::OWNER@:") and len(e.split(":")[-1]) > 0 for e in entries
+    )
+
+
+def _test_owner_deny_bypass(acl):
+    """
+    An explicit DENY-all ACE for OWNER@ must actually deny the owner all
+    access to the file.
+
+    Bug (IBMCEPH-21577): ceph_set_acl()'s compatibility patch backfills
+    empty base POSIX ACL entries (ACL_USER_OBJ/ACL_GROUP_OBJ/ACL_OTHER) from
+    the file's current mode bits whenever the converted ACL_USER_OBJ
+    permset is empty. It cannot distinguish "empty because the client never
+    mentioned OWNER@" from "empty because the client explicitly denied
+    OWNER@ everything" (``D::OWNER@:rwaDxtTcCy`` with no ALLOW), so it
+    silently reconstructs an ALLOW for the owner from the pre-existing mode
+    bits, discarding the explicit DENY -- a real access-control bypass.
+    """
+    log.info("=== Test: OWNER@ Explicit Deny Bypass (%s) ===", BUG_ID_OWNER_DENY_BYPASS)
+    name = "owner-deny-test"
+    acl.cleanup_test_files(name)
+    acl.create_file(name)
+    path = acl._full_path(name)
+
+    NfsAcl.create_user(acl.client, OWNER_DENY_USER, OWNER_DENY_UID)
+    acl.client.exec_command(sudo=True, cmd=f"chown {OWNER_DENY_USER} {path}")
+    acl.chmod(name, "644")
+
+    # Full-replace with a single explicit DENY-all ACE for OWNER@ -- no
+    # ALLOW ACE for OWNER@ anywhere in the spec.
+    acl.set_acl(name, "D::OWNER@:rwaDxtTcCy")
+
+    entries = acl.get_acl(name)
+    if _owner_allow_granted(entries):
+        log.error(
+            "[%s] Explicit 'D::OWNER@:rwaDxtTcCy' was silently replaced by "
+            "an ALLOW entry reconstructed from mode bits. ACL: %s",
+            BUG_ID_OWNER_DENY_BYPASS,
+            entries,
+        )
+        return 1
+
+    if not acl.verify_access(
+        OWNER_DENY_USER, name, operation="write", expect_success=False
+    ):
+        log.error(
+            "[%s] %s was able to write to the file despite the explicit "
+            "OWNER@ deny-all ACE",
+            BUG_ID_OWNER_DENY_BYPASS,
+            OWNER_DENY_USER,
+        )
+        return 1
+
+    if not acl.verify_access(
+        OWNER_DENY_USER, name, operation="read", expect_success=False
+    ):
+        log.error(
+            "[%s] %s was able to read the file despite the explicit OWNER@ "
+            "deny-all ACE",
+            BUG_ID_OWNER_DENY_BYPASS,
+            OWNER_DENY_USER,
+        )
+        return 1
+
+    log.info("OWNER@ Explicit Deny Bypass: PASSED")
     return 0

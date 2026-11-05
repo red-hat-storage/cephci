@@ -15,7 +15,9 @@
 #      multi-group file w/a loss, special-identity access ACE retention
 #    - Extended coverage: inherited GROUP@ write rule vs. client umask on
 #      new dirs/files (IBMCEPH-21565); wildcard partial-permission ALLOW ACE
-#      survives removal by its original string (IBMCEPH-19377)
+#      survives removal by its original string (IBMCEPH-19377); explicit
+#      OWNER@ deny-all ACE silently bypassed via mode-bit backfill
+#      (IBMCEPH-21577)
 #
 #===============================================================================================
 tests:
@@ -227,9 +229,16 @@ tests:
         # (D:fdig:<gid>:rx + A:fdig:<gid>:waDtcy), so nfs4_setfacl -x with
         # the original string exits 0 ("success") but leaves the ACE for
         # <gid> in place.
+        and (3) an explicit DENY-all ACE for OWNER@
+        (D::OWNER@:rwaDxtTcCy) must actually deny the owner all access.
+        # Bug: IBMCEPH-21577 - a compatibility patch that backfills empty
+        # base POSIX ACL entries from the file's mode bits cannot tell
+        # "OWNER@ never mentioned" apart from "OWNER@ explicitly denied
+        # everything", so it silently reconstructs an ALLOW for the owner
+        # from the pre-existing mode bits, discarding the explicit DENY.
       abort-on-fail: false
       config:
         nfs_version: 4.2
         clients: 1
         mount_type: nfs
-      comments: "IBMCEPH-21565, IBMCEPH-19377"
+      comments: "IBMCEPH-21565, IBMCEPH-19377, IBMCEPH-21577"
