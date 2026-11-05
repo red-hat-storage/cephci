@@ -16,6 +16,7 @@ from ceph.utils import (
 )
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
+from utility.cephadm_agent_config import apply_use_agent_to_bootstrap_config
 from utility.odf_defaults import (
     APPLY_ODF_DEFAULTS_KEY,
     apply_odf_defaults_to_bootstrap_config,
@@ -427,6 +428,12 @@ class BootstrapMixin:
         # Opt-in ODF/Rook-like defaults via --custom-config apply-odf-defaults=true
         # Merges into args.config before INI render so mon_osd_*_ratio seeds OSDMap.
         apply_odf_defaults_to_bootstrap_config(
+            args, overrides=self.config.get("overrides")
+        )
+
+        # Opt-in cephadm agent via --custom-config use_agent=true
+        # Seeds mgr/cephadm/use_agent in bootstrap --config before host add.
+        apply_use_agent_to_bootstrap_config(
             args, overrides=self.config.get("overrides")
         )
 
