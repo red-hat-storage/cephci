@@ -317,58 +317,16 @@ tests:
 
 
   - test:
+      abort-on-fail: true
       clusters:
         ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status --rgw-realm RealmOne"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
+          config: {}
         ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status --rgw-realm RealmOne"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info
+          config: {}
+      desc: Verify RGW multisite configuration
       polarion-id: CEPH-83575227
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status --rgw-realm india"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status --rgw-realm india"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info
-      polarion-id: CEPH-83575227
+      module: verify_multisite_config.py
+      name: verify multisite configuration
 
   - test:
       clusters:

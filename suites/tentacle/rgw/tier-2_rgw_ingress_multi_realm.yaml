@@ -113,6 +113,15 @@ tests:
       polarion-id: CEPH-83573815
 
   - test:
+      abort-on-fail: true
+      config:
+        min_zones: 1
+        require_system_key: false
+      desc: Verify RGW multisite configuration
+      polarion-id: CEPH-83575227
+      module: verify_multisite_config.py
+      name: verify multisite configuration
+  - test:
       name: Deploy RGW Ingress daemon with SSL
       abort-on-fail: true
       desc: Add RGW and HA Proxy services using spec file.
