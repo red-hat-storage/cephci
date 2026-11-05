@@ -3059,6 +3059,77 @@ def get_registry_info(registry):
     return normalized
 
 
+# sha256 content digest (with or without algorithm prefix)
+_IMAGE_DIGEST_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
+# Mistyped digest used as a tag: repo:64hex or repo:sha256:64hex
+_TAGGED_DIGEST_RE = re.compile(r"^(?P<name>.+?)(?::sha256:|:)(?P<digest>[0-9a-f]{64})$")
+
+
+def is_image_digest(value):
+    """Return True if value is a bare or sha256-prefixed content digest."""
+    if not value or not isinstance(value, str):
+        return False
+    return bool(_IMAGE_DIGEST_RE.fullmatch(value.strip()))
+
+
+def compose_container_image(registry, image, tag):
+    """Build a pullable image ref from registry/image/tag parts.
+
+    Digest tags (64-char hex or ``sha256:<hex>``) use ``@sha256:`` so Quay
+    digest-only publishes work. Normal tags (``latest``, ``8-178``, etc.)
+    keep the ``:`` separator.
+    """
+    registry = (registry or "").rstrip("/")
+    image = (image or "").lstrip("/")
+    tag = (tag or "").strip()
+    if is_image_digest(tag):
+        digest = tag if tag.startswith("sha256:") else f"sha256:{tag}"
+        return f"{registry}/{image}@{digest}"
+    return f"{registry}/{image}:{tag}"
+
+
+def normalize_container_image(ref):
+    """Rewrite ``repo:<64-hex>`` to ``repo@sha256:<64-hex>``.
+
+    Leaves real tags and already-correct ``@sha256:`` refs unchanged so IBM
+    tag-based images (e.g. ``:8-178``) and RH CDN tags keep working.
+    """
+    if not ref or not isinstance(ref, str):
+        return ref
+    ref = ref.strip()
+    if "@sha256:" in ref:
+        return ref
+    match = _TAGGED_DIGEST_RE.fullmatch(ref)
+    if not match:
+        return ref
+    return f"{match.group('name')}@sha256:{match.group('digest')}"
+
+
+def split_container_image(ref):
+    """Split an image ref into ``(registry, path, tag_or_digest)``.
+
+    Digests are returned as ``sha256:<hex>``. Tag-style digests are normalized
+    first. Returns ``(None, None, None)`` for empty input.
+    """
+    ref = normalize_container_image(ref)
+    if not ref:
+        return None, None, None
+
+    registry, _, rest = ref.partition("/")
+    if not rest:
+        return registry, None, None
+
+    if "@sha256:" in rest:
+        path, _, digest = rest.partition("@")
+        return registry, path, digest
+
+    if ":" in rest:
+        path, _, tag = rest.rpartition(":")
+        return registry, path, tag
+
+    return registry, rest, None
+
+
 def registry_host_from_image(image):
     """Return registry host from a container image reference."""
     if not image or not isinstance(image, str):

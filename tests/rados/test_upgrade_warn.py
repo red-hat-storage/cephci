@@ -24,7 +24,13 @@ from ceph.utils import get_node_by_id, mgr_accept_license, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
-from utility.utils import resolve_registry_host, resolve_registry_login
+from utility.utils import (
+    compose_container_image,
+    normalize_container_image,
+    resolve_registry_host,
+    resolve_registry_login,
+    split_container_image,
+)
 
 log = Log(__name__)
 
@@ -177,7 +183,9 @@ def run(ceph_cluster, **kw):
             # an upgrade occurs. This enables us to execute the test in the right
             # context.
             config["base_url"] = _base_url
-            config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+            config["container_image"] = compose_container_image(
+                _registry, _image_name, _image_tag
+            )
             config["ceph_docker_registry"] = _registry
             config["ceph_docker_image"] = _image_name
             config["ceph_docker_image_tag"] = _image_tag
@@ -190,15 +198,15 @@ def run(ceph_cluster, **kw):
             _rpm_version = f"2:{_ver}.el{os_ver}cp"
 
         elif _custom_image and _custom_repo:
-            _registry, _image_name = _custom_image.split(":")[0].split("/", 1)
-            _image_tag = _custom_image.split(":")[-1]
+            _custom_image = normalize_container_image(_custom_image)
+            _registry, _image_name, _image_tag = split_container_image(_custom_image)
             _base_url = _custom_repo
 
             # The cluster object is configured so that the values are persistent till
             # an upgrade occurs. This enables us to execute the test in the right
             # context.
             config["base_url"] = _base_url
-            config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+            config["container_image"] = _custom_image
             config["ceph_docker_registry"] = _registry
             config["ceph_docker_image"] = _image_name
             config["ceph_docker_image_tag"] = _image_tag
