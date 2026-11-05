@@ -12,6 +12,11 @@ from tests.nvmeof.workflows.constants import (
 )
 from tests.nvmeof.workflows.inband_auth import create_dhchap_key
 from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.log_collect import (
+    flush_nvmeof_log_comments,
+    safe_collect_nvmeof_service_journals,
+    safe_collect_open_initiator_windows,
+)
 from tests.nvmeof.workflows.nvme_utils import get_network_mask
 from utility.log import Log
 from utility.utils import (
@@ -637,12 +642,19 @@ def disconnect_initiators(nvme_service, node=None):
     Args:
         nvme_service: NvmeService instance
     """
+    # Collect connect→disconnect dmesg windows before nvme disconnect-all.
+    # Uses the open-window registry (works even when callers use raw Initiator).
     if node:
+        safe_collect_open_initiator_windows(nodes=[node])
         initiator = Initiator(node)
         initiator.disconnect_all()
         return
+    nodes = []
     for initiator_cfg in nvme_service.config.get("initiators", []):
-        node = get_node_by_id(nvme_service.ceph_cluster, initiator_cfg["node"])
+        nodes.append(get_node_by_id(nvme_service.ceph_cluster, initiator_cfg["node"]))
+    if nodes:
+        safe_collect_open_initiator_windows(nodes=nodes)
+    for node in nodes:
         initiator = Initiator(node)
         initiator.disconnect_all()
 
@@ -656,9 +668,14 @@ def teardown(nvme_service, rbd_obj, cleanup_config=None):
         rbd_obj: RBD object for pool cleanup
     """
     rc = 0
-    # Disconnect initiators
+    # Disconnect initiators (collects initiator connect-window logs first).
     if "initiators" in nvme_service.config.get("cleanup", []):
         disconnect_initiators(nvme_service)
+
+    # Collect nvmeof service WARNING/ERROR journals before gateway/service cleanup.
+    # Also drains any initiator windows when disconnect was skipped.
+    safe_collect_nvmeof_service_journals(nvme_service=nvme_service)
+    flush_nvmeof_log_comments(getattr(nvme_service, "config", None))
 
     # Delete the multiple subsystems across multiple gateways.
     # Wrapped in try/except so that a "No such subsystem" error (e.g. when the
