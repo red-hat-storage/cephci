@@ -333,6 +333,8 @@ class UpgradeStatsCollector:
         except Exception:
             log.warning("Early Prometheus discovery failed, will retry at finalize")
 
+        self._last_mds_session_ls = 0.0
+
     # -----------------------------------------------------------------
     # Public API -- phase management
     # -----------------------------------------------------------------
@@ -398,7 +400,7 @@ class UpgradeStatsCollector:
         log.debug(f"CLI checkpoint '{label}' recorded")
 
     def io_stats_snapshot(self) -> None:
-        """Lightweight IO + MDS state snapshot (2 SSH calls per invocation)."""
+        """Lightweight IO + MDS state snapshot (periodic during upgrade/sleep)."""
         try:
             out, _ = self.rados_obj.node.installer.exec_command(
                 sudo=True,
@@ -434,6 +436,79 @@ class UpgradeStatsCollector:
                 self._record_sample("osd_tree", osd_tree)
         except Exception as e:
             log.debug(f"OSD tree snapshot failed: {e}")
+
+        self._mds_session_ls_snapshot()
+
+    def _mds_session_ls_snapshot(self) -> None:
+        """Log ``ceph tell mds.<fs>:<rank> session ls`` for active ranks (~5m).
+
+        Must use per-FS ``fs status`` — nameless status merges ranks across FS.
+        """
+        now = time.time()
+        if now - self._last_mds_session_ls < 300:
+            return
+        # Stamp first so overlapping io_stats ticks don't pile up tells.
+        self._last_mds_session_ls = now
+
+        want = (
+            self.config.get("scale", {})
+            .get("cephfs", {})
+            .get("filesystems", ["cephfs_direct", "cephfs_nfs"])
+        )
+        try:
+            known = {
+                f["name"]
+                for f in self.rados_obj.run_ceph_command(cmd="ceph fs ls", timeout=60)
+                or []
+            }
+        except Exception as e:
+            log.warning("[mds_session_ls] fs ls failed: %s", e)
+            return
+        sample = {}
+        for fs in want:
+            if fs not in known:
+                continue
+            try:
+                # Per-FS required: bare `ceph fs status` merges all FS mdsmaps.
+                st = self.rados_obj.run_ceph_command(
+                    cmd=f"ceph fs status {fs}", timeout=60
+                )
+            except Exception as e:
+                log.warning("[mds_session_ls] %s status failed: %s", fs, e)
+                continue
+            ranks = []
+            for m in st.get("mdsmap") or []:
+                state = m.get("state") or ""
+                if "active" not in state and "standby-replay" not in state:
+                    continue
+                rank, name = m.get("rank"), m.get("name")
+                # rank 0 is valid — use isinstance, not truthiness.
+                target = f"{fs}:{rank}" if isinstance(rank, int) else name
+                if not target:
+                    continue
+                try:
+                    sessions = self.rados_obj.run_ceph_command(
+                        cmd=f"ceph tell mds.{target} session ls", timeout=60
+                    )
+                    n = len(sessions) if isinstance(sessions, list) else None
+                    dump = json.dumps(sessions, separators=(",", ":"))
+                    if len(dump) > 8000:
+                        dump = dump[:8000] + "...(truncated)"
+                    log.info(
+                        "[mds_session_ls] mds.%s state=%s sessions=%s %s",
+                        target,
+                        state,
+                        n,
+                        dump,
+                    )
+                    ranks.append({"target": target, "state": state, "session_count": n})
+                except Exception as e:
+                    log.warning("[mds_session_ls] mds.%s error: %s", target, e)
+                    ranks.append({"target": target, "state": state, "error": str(e)})
+            if ranks:
+                sample[fs] = ranks
+        if sample:
+            self._record_sample("mds_session_ls", {"filesystems": sample})
 
     def orch_versions_snapshot(self) -> None:
         """Collect per-daemon version data from ceph orch ps for version chart."""

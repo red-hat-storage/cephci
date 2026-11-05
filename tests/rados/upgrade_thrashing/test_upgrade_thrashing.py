@@ -626,6 +626,7 @@ def _build_and_generate_report(
         report.set_mount_health(mount_health)
         report.set_io_tool_usage(io_tool_data)
         report.set_nfs_grace_analysis(nfs_grace_analysis)
+        report.set_parallel_ops_summary(config.get("parallel_ops_summary") or {})
         if isinstance(daemon_timeline, dict):
             report.set_daemon_timeline(daemon_timeline.get("daemon_timeline", []))
             report.set_upgrade_events(daemon_timeline.get("upgrade_events", []))
@@ -734,7 +735,7 @@ def _recover_nfs_after_fail_fs(rados_obj):
         return 0
 
 
-def _collect_upgrade_timeline(ceph_cluster, rados_obj, stats) -> dict:
+def _collect_upgrade_timeline(ceph_cluster, rados_obj, stats, config=None) -> dict:
     """Collect per-daemon upgrade timeline from MGR cephadm logs."""
     try:
         _all_stats = stats.get_all_data()
@@ -748,8 +749,16 @@ def _collect_upgrade_timeline(ceph_cluster, rados_obj, stats) -> dict:
                 _upg_end = b.get("timestamp", "")
         if not _upg_start or not _upg_end:
             return {}
+        # Exclude par_ops throwaway NFS (nfs.par_nfs_*) from the upgrade Gantt.
+        nfs_prefix = ((config or {}).get("upgrade_parallel_ops") or {}).get(
+            "nfs_prefix", "par_nfs"
+        )
         result = _collect_mgr_upgrade_timeline(
-            ceph_cluster, rados_obj, _upg_start, _upg_end
+            ceph_cluster,
+            rados_obj,
+            _upg_start,
+            _upg_end,
+            nfs_churn_prefix=nfs_prefix,
         )
         if isinstance(result, dict):
             timeline = result.get("daemon_timeline", [])
@@ -836,10 +845,12 @@ def run(ceph_cluster, **kw) -> int:
     from upgrade_thrashing.upgrade_io_manager import UpgradeIOManager
     from upgrade_thrashing.upgrade_report import UpgradeReportGenerator
     from upgrade_thrashing.upgrade_stats_collector import UpgradeStatsCollector
+    from upgrade_thrashing.upgrade_thrash_parallel_ops import UpgradeThrashParallelOps
 
     stats = UpgradeStatsCollector(rados_obj, config)
     io_mgr = UpgradeIOManager(ceph_cluster, rados_obj, config)
     report = UpgradeReportGenerator(config)
+    parallel_ops = None
     deployed_services = set()
     feat_mgr = None
     feature_results = {}
@@ -1060,6 +1071,10 @@ def run(ceph_cluster, **kw) -> int:
                 check_interval=fill_config.get("bg_io_check_interval_sec", 120),
             )
 
+        # Customer-like CephFS/NFS admin ops (suite: upgrade_parallel_ops)
+        parallel_ops = UpgradeThrashParallelOps(rados_obj, config, clients=clients)
+        parallel_ops.start()
+
         _record_health_snapshot(rados_obj, health_tracker)
 
         stats.begin_phase("baseline")
@@ -1250,6 +1265,25 @@ def run(ceph_cluster, **kw) -> int:
         if mds_config.get("fail_fs"):
             _recover_nfs_after_fail_fs(rados_obj)
 
+        # Stop parallel ops after NFS recover so teardown does not race redeploy
+        if parallel_ops is not None:
+            try:
+                parallel_ops.teardown()
+                summary = parallel_ops.get_summary()
+                config["parallel_ops_summary"] = summary
+                totals = summary.get("totals") or {}
+                log.info(
+                    "[par_ops] summary after upgrade: workers=%s ok=%s fail=%s "
+                    "cycles=%s ops=%d",
+                    totals.get("workers", 0),
+                    totals.get("ok", 0),
+                    totals.get("fail", 0),
+                    totals.get("cycles", 0),
+                    len(summary.get("operations") or []),
+                )
+            except Exception as e:
+                log.warning("[par_ops] teardown after upgrade: %s", e)
+
         post_ver, _ = cephadm_obj.shell(args=["ceph version --format json"])
         post_ver_str = _parse_ceph_version(post_ver)
         config["post_version"] = post_ver_str
@@ -1402,7 +1436,9 @@ def run(ceph_cluster, **kw) -> int:
             _run_mclock_functional_test(rados_obj, config)
 
         # Step 6: Bug validations (timeline + grace analysis before validators)
-        daemon_timeline = _collect_upgrade_timeline(ceph_cluster, rados_obj, stats)
+        daemon_timeline = _collect_upgrade_timeline(
+            ceph_cluster, rados_obj, stats, config=config
+        )
         _annotate_monitoring_manifest_upgrades(daemon_timeline, config)
         grace_cfg = config.get("nfs_grace_validation") or {}
         if grace_cfg.get("enabled"):
@@ -1544,6 +1580,16 @@ def run(ceph_cluster, **kw) -> int:
         else:
             log.info("Cleanup: Restoring cluster state")
         log.info("=" * 60)
+
+        # Capture parallel-ops summary before emergency report (abort path
+        # otherwise ships HTML without the Parallel Ops section).
+        if parallel_ops is not None:
+            try:
+                parallel_ops.teardown()
+                if "parallel_ops_summary" not in config:
+                    config["parallel_ops_summary"] = parallel_ops.get_summary()
+            except Exception as e:
+                log.warning("[par_ops] finally teardown: %s", e)
 
         if not report_generated:
             _, emerg_filename = _build_and_generate_report(
@@ -1700,6 +1746,7 @@ def _parse_ceph_version(raw_json_str: str) -> str:
 
 
 _VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
+_VERSION_BUILD_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:-(\d+))?")
 
 
 def _extract_version_number(text: str) -> str:
@@ -1719,6 +1766,18 @@ def _ceph_version_tuple(ver_str: str) -> tuple:
         return (0, 0, 0)
     parts = m.group(1).split(".")
     return tuple(int(p) for p in parts)
+
+
+def _ceph_version_build_tuple(ver_str: str) -> tuple:
+    """Return ``(major, minor, patch, build)``; build is 0 if absent.
+
+    Needed for gates that depend on RPM build (e.g. ``--enable-nfsv3`` after
+    ``19.2.1-292``). Prefer the raw ``ceph version`` line over X.Y.Z-only text.
+    """
+    m = _VERSION_BUILD_RE.search(ver_str or "")
+    if not m:
+        return (0, 0, 0, 0)
+    return tuple(int(x or 0) for x in m.groups())
 
 
 def _get_nfs_eligible_hosts(rados_obj) -> list:
@@ -1782,11 +1841,12 @@ def _setup_services(ceph_cluster, rados_obj, config):
         try:
             setup_fn(ceph_cluster, rados_obj, config)
             deployed.add(svc_name)
-            log.info(f"Service {svc_name} deployed successfully")
+            log.info("Service %s deployed successfully", svc_name)
         except Exception as e:
-            log.warning(
-                f"Service {svc_name} failed to deploy: {e}. " "Continuing without it."
-            )
+            # Enabled services are required. Swallowing here left NFS clusters
+            # up with zero exports/mounts while the suite continued as CephFS-only.
+            log.error("Service %s failed to deploy: %s", svc_name, e)
+            raise
 
     return deployed
 
@@ -1810,14 +1870,15 @@ def _detect_deployed_services(rados_obj, config):
     except Exception:
         log.warning("Could not list pools during service detection")
 
-    # 2. RBD: check for test images in rep_pool
-    try:
-        out, _ = rados_obj.node.shell(["rbd ls rep_pool --format json"])
-        images = json.loads(out) if out.strip() else []
-        if images:
-            deployed.add("rbd")
-    except Exception:
-        pass
+    # 2. RBD: check for test images in rep_pool (honor services.rbd toggle)
+    if services_config.get("rbd", False):
+        try:
+            out, _ = rados_obj.node.shell(["rbd ls rep_pool --format json"])
+            images = json.loads(out) if out.strip() else []
+            if images:
+                deployed.add("rbd")
+        except Exception:
+            pass
 
     # 3. Orch services: single ceph orch ls call covers cephfs, rgw, nfs,
     #    smb, nvmeof by checking service_type and running count.
@@ -2816,6 +2877,16 @@ def _pin_subvolumegroup(rados_obj, fs_name, svg_name, pin_policy):
         log.warning(f"SVG pin {fs_name}/{svg_name}: {e}")
 
 
+def _enable_ephemeral_distributed(rados_obj):
+    """Required for ceph.dir.pin.distributed / subvolume distributed pin."""
+    try:
+        rados_obj.node.shell(
+            ["ceph config set mds mds_export_ephemeral_distributed true"]
+        )
+    except Exception as e:
+        log.warning("Enable mds_export_ephemeral_distributed: %s", e)
+
+
 def _setup_cephfs(ceph_cluster, rados_obj, config):
     """Phase 1: Create CephFS filesystems with scaled MDS, SVGs, and subvolumes.
 
@@ -2892,6 +2963,9 @@ def _setup_cephfs(ceph_cluster, rados_obj, config):
 
         _wait_for_active_mds(rados_obj, fs_name)
 
+    if pin_policy == "distributed":
+        _enable_ephemeral_distributed(rados_obj)
+
     # Create the special test subvolume (used by feature manager)
     try:
         # mutating — do not use run_ceph_command (empty stdout => {})
@@ -2959,8 +3033,15 @@ def _setup_cephfs(ceph_cluster, rados_obj, config):
 
     selected_paths: list = []
     if mount_targets:
-        gp_lines = ["#!/bin/bash"]
+        # Pin mount roots in the same SSH trip as getpath: SVG distributed pin
+        # only spreads subvol dirs; IO children need the subvol root pinned too.
+        gp_lines = ["#!/bin/bash", "set +e"]
         for svg_name, sv in mount_targets:
+            if pin_policy == "distributed":
+                gp_lines.append(
+                    f"ceph fs subvolume pin {direct_fs} {sv} distributed 1 "
+                    f"--group_name {svg_name} 2>/dev/null || true"
+                )
             gp_lines.append(
                 f'echo "SV:{direct_fs}:{svg_name}:{sv}:$(ceph fs subvolume getpath '
                 f'{direct_fs} {sv} --group_name {svg_name} 2>/dev/null)"'
@@ -3370,21 +3451,25 @@ def _setup_nfs(ceph_cluster, rados_obj, config):
     daemons_per_cluster = nfs_scale.get("daemons_per_cluster", 1)
 
     # Detect Ceph version once for all feature-flag decisions below.
+    # Always normalize via _extract_version_number — raw `ceph version` lines
+    # break LooseVersion (TypeError str vs int) and aborted export setup.
     ceph_ver = ""
     ver_tuple = (0, 0, 0)
     enable_nfsv3 = False
     try:
-        ver_out, _ = rados_obj.node.shell(
-            ["bash -c \"ceph version | awk '{print $3}'\""]
-        )
-        ceph_ver = ver_out.strip()
+        ver_out, _ = rados_obj.node.shell(["ceph version"])
+        ceph_ver = _extract_version_number(ver_out or "")
         ver_tuple = _ceph_version_tuple(ceph_ver)
-        if LooseVersion(ceph_ver) > LooseVersion("19.2.1-292"):
-            enable_nfsv3 = True
-            log.info("NFS cluster: --enable-nfsv3 (Ceph >= 19.2.1-292)")
+        # Strict >19.2.1-292 (build-aware). X.Y.Z-only compare would wrongly
+        # enable nfsv3 on 19.2.1 builds below 293.
+        enable_nfsv3 = _ceph_version_build_tuple(ver_out or "") > (19, 2, 1, 292)
+        if enable_nfsv3:
+            log.info("NFS cluster: --enable-nfsv3 (Ceph %s)", ceph_ver)
         else:
-            log.info(f"NFS cluster: skipping --enable-nfsv3 (Ceph {ceph_ver})")
+            log.info("NFS cluster: skipping --enable-nfsv3 (Ceph %s)", ceph_ver)
     except Exception:
+        ceph_ver = ""
+        ver_tuple = (0, 0, 0)
         if nfs_config.get("nfsv3", False):
             enable_nfsv3 = True
 
@@ -3552,13 +3637,10 @@ def _setup_nfs(ceph_cluster, rados_obj, config):
             f"deployed successfully: {sorted(existing_nfs)}"
         )
 
-    # --delegations is only available in Ceph Tentacle (20.x / RHCS 9.x+).
+    # --delegations: Tentacle 20.x+ only (use ver_tuple, never raw LooseVersion).
     delegations_flag = ""
     if nfs_config.get("delegations", False):
-        if ceph_ver and (
-            ceph_ver.startswith("20.")
-            or LooseVersion(ceph_ver) >= LooseVersion("20.0.0")
-        ):
+        if ver_tuple >= (20, 0, 0):
             delegations_flag = " --delegations rw"
             log.info("NFS exports: --delegations rw (Ceph >= 20.x)")
         elif ceph_ver:
@@ -3590,6 +3672,8 @@ def _setup_nfs(ceph_cluster, rados_obj, config):
 
     # Per-cluster SVG groups on the NFS filesystem (batched)
     pin_policy = cephfs_scale.get("pin_policy", "distributed")
+    if pin_policy == "distributed":
+        _enable_ephemeral_distributed(rados_obj)
     svg_lines = ["#!/bin/bash", "set +e"]
     for ci in range(len(cluster_names)):
         svg = f"nfs_svg{ci + 1}"
@@ -3642,7 +3726,7 @@ def _setup_nfs(ceph_cluster, rados_obj, config):
                     }
                 )
 
-        # Fuse create + getpath into one SSH round-trip.
+        # Fuse create (+ optional distributed pin) + getpath into one SSH trip.
         sv_lines = ["#!/bin/bash", "set +e"]
         for idx, entry in enumerate(sv_entries):
             mode_arg = f" --mode={entry['sv_mode']}" if entry["sv_mode"] else ""
@@ -3651,6 +3735,11 @@ def _setup_nfs(ceph_cluster, rados_obj, config):
                 f" {entry['sv_name']}"
                 f" --group_name {entry['svg']} --earmark nfs{mode_arg}"
             )
+            if pin_policy == "distributed":
+                sv_lines.append(
+                    f"ceph fs subvolume pin {entry['fs_name']} {entry['sv_name']} "
+                    f"distributed 1 --group_name {entry['svg']} 2>/dev/null || true"
+                )
             sv_lines.append(
                 f'echo "NFS:{idx}:$(ceph fs subvolume getpath '
                 f'{entry["fs_name"]} {entry["sv_name"]} '
@@ -3815,38 +3904,77 @@ def _setup_nfs(ceph_cluster, rados_obj, config):
                     f"mount -t nfs4 -o vers={ver},port={port} "
                     f"{nfs_ip}:{pseudo} {mnt}"
                 )
-            line = f"mkdir -p {mnt} && timeout {tmo} {mcmd} && echo 'OK:{mnt}'"
+            # No per-mount OK echo — 1k+ lines blows SSH capture; counters suffice.
+            line = f"mkdir -p {mnt} && timeout {tmo} {mcmd}"
             for j in range(overlap):
                 target_client = clients[(exp_idx + j) % len(clients)]
                 mount_cmds_by_client[target_client].append(line)
 
-    # Execute one batched script per client.
-    for client in clients:
-        cmds = mount_cmds_by_client.get(client, [])
-        if not cmds:
-            continue
+    # SFTP script + bash file (inline heredoc hits ARG_MAX at ~100 clusters).
+    def _nfs_mount_one(client, cmds):
         hostname = getattr(client, "hostname", str(client))
+        script_path = "/tmp/ugt-nfs-mount.sh"
         script = (
             "#!/bin/bash\nset +e\nOK=0; FAIL=0\n"
             + "\n".join(f"{{ {c}; }} && OK=$((OK+1)) || FAIL=$((FAIL+1))" for c in cmds)
-            + '\necho "NFS_MOUNT_DONE ok=$OK fail=$FAIL"'
+            + '\necho "NFS_MOUNT_DONE ok=$OK fail=$FAIL"\n'
         )
         try:
+            rf = client.remote_file(sudo=True, file_name=script_path, file_mode="w")
+            try:
+                rf.write(script)
+                rf.flush()
+            finally:
+                rf.close()
+            # Preserve bash ec after rm (`; rm` alone would mask failures).
             out, _ = client.exec_command(
                 sudo=True,
-                cmd=f"bash -s <<'EOFMNT'\n{script}\nEOFMNT",
+                cmd=f"bash {script_path}; ec=$?; rm -f {script_path}; exit $ec",
                 timeout=max(600, len(cmds) * 3),
-            )
-            summary = ""
-            for ln in (out or "").strip().splitlines():
-                if ln.startswith("NFS_MOUNT_DONE"):
-                    summary = ln
-            log.info(
-                f"NFS mounts on {hostname}: {len(cmds)} attempted -- "
-                f"{summary or '(no summary)'}"
+                check_ec=False,
             )
         except Exception as e:
-            log.warning(f"NFS batch mount on {hostname}: {e}")
+            raise RuntimeError(f"{hostname}: {e}") from e
+        ok_n = fail_n = 0
+        for ln in (out or "").strip().splitlines():
+            m = re.match(r"NFS_MOUNT_DONE ok=(\d+) fail=(\d+)$", ln.strip())
+            if m:
+                ok_n, fail_n = int(m.group(1)), int(m.group(2))
+                break
+        log.info(
+            "NFS mounts on %s: %d attempted -- ok=%d fail=%d",
+            hostname,
+            len(cmds),
+            ok_n,
+            fail_n,
+        )
+        return ok_n, fail_n
+
+    jobs = [(c, cmds) for c, cmds in mount_cmds_by_client.items() if cmds]
+    total_ok = total_fail = 0
+    if jobs:
+        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            futs = [pool.submit(_nfs_mount_one, c, cmds) for c, cmds in jobs]
+            for fut in as_completed(futs):
+                try:
+                    ok_n, fail_n = fut.result()
+                    total_ok += ok_n
+                    total_fail += fail_n
+                except Exception as e:
+                    log.warning("NFS batch mount failed: %s", e)
+
+    if total_ok == 0:
+        raise RuntimeError(
+            f"NFS client mounts failed on all clients "
+            f"(ok={total_ok} fail={total_fail}). "
+            "Background NFS IO cannot run without mounts."
+        )
+    log.info(
+        "NFS client mounts complete: ok=%d fail=%d across %d client(s)",
+        total_ok,
+        total_fail,
+        len(jobs),
+    )
 
 
 def _resolve_daemon_host_ip(rados_obj, service_prefix, cluster_id, ceph_cluster=None):
@@ -4359,11 +4487,18 @@ def _wait_for_stabilization(rados_obj, timeout_sec):
         log.warning(f"Could not increase recovery threads: {e}")
 
     try:
-        rados_obj.wait_for_clean_pg_sets(
+        # wait_for_clean_pg_sets returns False on timeout (does not raise).
+        clean = rados_obj.wait_for_clean_pg_sets(
             timeout=timeout_sec,
             sleep_interval=15,
         )
-        log.info("Cluster PGs are clean")
+        if clean:
+            log.info("Cluster PGs are clean")
+        else:
+            log.warning(
+                "PG stabilization incomplete: active+clean not reached "
+                f"within {timeout_sec}s"
+            )
     except Exception as e:
         log.warning(f"PG stabilization incomplete: {e}")
 
@@ -6021,6 +6156,7 @@ def _collect_mgr_upgrade_timeline(
     rados_obj,
     upgrade_start: str,
     upgrade_end: str,
+    nfs_churn_prefix: str = "par_nfs",
 ) -> dict:
     """Collect per-daemon upgrade timeline from MGR cephadm module logs.
 
@@ -6033,7 +6169,12 @@ def _collect_mgr_upgrade_timeline(
         ``report.set_daemon_timeline()``.
       - ``upgrade_events``: list of operational events (key rotations,
         OSD flags, FS events, safety checks, image pulls, lifecycle).
+
+    ``nfs_churn_prefix`` deploys (``nfs.par_nfs_*``) are omitted — they are
+    parallel-ops throwaways, not image-upgrade members (MX74F5 Gantt artifact).
     """
+    from upgrade_thrashing.lifecycle_log import is_par_ops_nfs_daemon
+
     try:
         start_dt = datetime.fromisoformat(upgrade_start.replace("Z", "+00:00"))
         end_dt = datetime.fromisoformat(upgrade_end.replace("Z", "+00:00"))
@@ -6174,6 +6315,10 @@ def _collect_mgr_upgrade_timeline(
         # "Redeploying X with new keyring" is key_rotation, NOT a daemon upgrade.
         def _record_deploy(daemon_name, host, ts_iso, *, is_update=False):
             if not daemon_name:
+                return
+            # par_ops throwaways share daemon_type=nfs with real upgrade NFS;
+            # including them inflates the Gantt span (first→last create/rm).
+            if is_par_ops_nfs_daemon(daemon_name, nfs_churn_prefix):
                 return
             if daemon_name in seen_daemons:
                 # Image-upgrade timestamp wins over an earlier bare Deploying
