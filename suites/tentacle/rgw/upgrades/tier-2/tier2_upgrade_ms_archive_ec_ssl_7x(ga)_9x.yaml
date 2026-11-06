@@ -298,23 +298,9 @@ tests:
       module: test_client.py
       name: configure client
 
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            roles:
-              - rgw
-              - client
-        ceph-sec:
-          config:
-            roles:
-              - rgw
-              - client
-      desc: Copy cephadm root CA cert to rgw and client nodes
-      module: copy_cephadm_root_ca_cert.py
-      name: copy cephadm root ca cert
-      polarion-id: CEPH-10362
+  # Reef has no ceph orch certmgr store. The pre-upgrade CA copy is omitted
+  # here; the RGW cert comes from create-cert. The post-upgrade copy stays,
+  # because the cluster is 9.x by then.
 
   - test:
       abort-on-fail: true

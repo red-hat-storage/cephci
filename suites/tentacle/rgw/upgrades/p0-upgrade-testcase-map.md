@@ -15,7 +15,7 @@ Single-site feature tests are 5 before the upgrade and the same 5 after it. A co
 
 | Suite | The 5 feature tests |
 |---|---|
-| 7.1 | s3cmd delete lifecycle `test_deletelifecycle.yaml`, M buckets etag, multipart put `test_Mbuckets_with_Nobjects_multipart.yaml`, Swift storage policy, ordered listing |
+| 7.1 | s3cmd delete lifecycle `test_deletelifecycle.yaml`, M buckets etag, multipart put `test_Mbuckets_with_Nobjects_multipart.yaml`, Swift version copy `test_swift_version_copy_op.yaml`, ordered listing |
 | 8.1 | M buckets AWS4 `test_Mbuckets_with_Nobjects_aws4.yaml`, M buckets download, multipart delete `test_Mbuckets_with_Nobjects_delete.yaml`, Swift basic ops, vault SSE-S3 per bucket |
 | 9.1 | s3cmd rgw log details `test_rgw_log_details.yaml`, M buckets `test_Mbuckets_with_Nobjects.yaml`, GetObjectAttributes multipart, Swift versioning, STS rename |
 
@@ -34,7 +34,7 @@ Each suite runs, in order:
 1. Prereq
 2. Deploy the same way as the other upgrade suites: `cephadm bootstrap` with `rhcs-version`, `release: released`, and `platform: rhel-9`, then hosts, mgr, mon, osd, the EC 2+2 pools, and the SSL RGW spec. Single site has 3 RGW daemons on port 443. Two-site multisite has 6 per site: 3 `rgw_io` on port 443 and 3 `rgw_sync` on port 444, both on node2, node3, and node4. Sync uses 444 so it does not share the dashboard port. Reef 7.1 does not accept `disable_multisite_sync_traffic` in the RGW spec, so that suite sets `rgw_run_sync_thread false` on the io service instead.
 3. Monitoring stack (prometheus, grafana, alertmanager, node-exporter, crash). Bootstrap still uses `skip-monitoring-stack: true`, then this step applies the spec. On tier-2 it is applied on primary and secondary.
-4. Client, then the SSL CA copy and HAProxy in front of the RGW port
+4. Client, then the SSL CA copy and HAProxy in front of the RGW port. The 7.1 two-site suite skips the pre-upgrade CA copy: Reef has no `ceph orch certmgr` store, and that command aborted build 3612. The post-upgrade copy still runs.
 5. Multisite, tier-2 only: realm and zone setup for primary and secondary, realm info, non-tenanted user create with the user file copied to secondary
 6. The 5 feature tests
 7. Upgrade

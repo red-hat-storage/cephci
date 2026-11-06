@@ -199,13 +199,13 @@ tests:
         config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
 
   - test:
-      name: Swift storage policy customized placement pre upgrade
-      desc: Test storage policy to use customized placement for Swift
-      polarion-id: CEPH-9336
+      name: Swift version copy pre upgrade
+      desc: Restore a versioned object in Swift
+      polarion-id: CEPH-10646
       module: sanity_rgw.py
       config:
-        script-name: test_storage_policy.py
-        config-file-name: test_storage_policy_swift.yaml
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
 
   - test:
       name: ordered listing of buckets pre upgrade
@@ -282,13 +282,13 @@ tests:
         config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
 
   - test:
-      name: Swift storage policy customized placement post upgrade
-      desc: Test storage policy to use customized placement for Swift
-      polarion-id: CEPH-9336
+      name: Swift version copy post upgrade
+      desc: Restore a versioned object in Swift
+      polarion-id: CEPH-10646
       module: sanity_rgw.py
       config:
-        script-name: test_storage_policy.py
-        config-file-name: test_storage_policy_swift.yaml
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
 
   - test:
       name: ordered listing of buckets post upgrade
