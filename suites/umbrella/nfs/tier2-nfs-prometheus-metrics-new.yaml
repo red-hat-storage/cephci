@@ -1,0 +1,663 @@
+#===============================================================================================
+# NFS-Ganesha Prometheus Metrics — Umbrella combined suite
+# PME enablement (CEPH-83633168 / CEPH-83633169–83633182) +
+# New metrics & nomenclature (CEPH-83633129 / CEPH-83633131–83633148)
+# Modules:
+#   tests/nfs/test_nfs_prometheus_metrics_enable.py
+#   tests/nfs/test_nfs_prometheus_new_metrics.py
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
+# NEW/NOM/REG: shared NFS setup once + cleanup once (setup_nfs/cleanup_nfs)
+# PME: per-TC create/delete retained (enablement is the test)
+# Upgrade TCs U1/U2 remain in tier1-nfs-prometheus-metrics-enable-upgrade.yaml
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: false
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      desc: Bootstrap and deploy Ceph for NFS Prometheus metrics testing.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client 1
+
+  # ----- TC-PME-* (CEPH-83633169 … 83633182) -----
+  - test:
+      name: TC-PME-A1 Enable via CLI
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Enable NFS Prometheus metrics via ceph nfs cluster create --enable-nfs-metrics
+      polarion-id: CEPH-83633169
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633169
+        nfs_name: cephfs-nfs-pme-a1
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-A2 Enable via NFS service spec
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Enable NFS Prometheus metrics via spec.enable_nfs_metrics true
+      polarion-id: CEPH-83633170
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633170
+        nfs_name: cephfs-nfs-pme-a2
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-A3 Default create keeps metrics off
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Default ceph nfs cluster create leaves metrics disabled
+      polarion-id: CEPH-83633171
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633171
+        nfs_name: cephfs-nfs-pme-a3
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-F1 CLI spec metrics config parity
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: CLI --enable-nfs-metrics and spec enable_nfs_metrics produce same Enable_Metrics
+      polarion-id: CEPH-83633172
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633172
+        nfs_name: cephfs-nfs-pme-f1
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        f1_alt_port: 2050
+        f1_alt_monitoring_port: 9588
+
+  - test:
+      name: TC-PME-F2 Enable disable after cluster create
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Toggle enable_nfs_metrics via orch apply after create
+      polarion-id: CEPH-83633173
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633173
+        nfs_name: cephfs-nfs-pme-f2
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-R1 Create without flag still healthy
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Create without --enable-nfs-metrics still healthy and NFS usable
+      polarion-id: CEPH-83633174
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633174
+        nfs_name: cephfs-nfs-pme-r1
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-R2 Existing cluster not flipped to metrics-on
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Redeploy does not enable metrics on a metrics-off cluster
+      polarion-id: CEPH-83633175
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633175
+        nfs_name: cephfs-nfs-pme-r2
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-N1 Invalid enable-nfs-metrics value
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Invalid --enable-nfs-metrics=invalid is rejected with no leftover cluster
+      polarion-id: CEPH-83633178
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633178
+        nfs_name: cephfs-nfs-pme-n1
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-N2 Scrape metrics when disabled
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: /metrics is not served when metrics are disabled
+      polarion-id: CEPH-83633179
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633179
+        nfs_name: cephfs-nfs-pme-n2
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-N3 Spec metrics with invalid placement
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: enable_nfs_metrics with empty placement fails without metrics traceback
+      polarion-id: CEPH-83633180
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633180
+        nfs_name: cephfs-nfs-pme-n3
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-D1 MGR restart while metrics enabled
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Enable_Metrics and /metrics survive active MGR restart
+      polarion-id: CEPH-83633181
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633181
+        nfs_name: cephfs-nfs-pme-d1
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  - test:
+      name: TC-PME-D2 NFS daemon redeploy with metrics enabled
+      module: test_nfs_prometheus_metrics_enable.py
+      desc: Metrics endpoint returns after orch redeploy of metrics-enabled NFS
+      polarion-id: CEPH-83633182
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633182
+        nfs_name: cephfs-nfs-pme-d2
+        nfs_export: /export_pme
+        nfs_mount: /mnt/nfs_pme
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+
+  # ----- TC-PROM-NEW / NOM / REG (shared NFS lifecycle) -----
+  # One NFS Ganesha + export for all NEW/NOM/REG TCs below.
+  # PME TCs above keep per-case create/delete (create flags ARE the test).
+  # NOM-5 (CEPH-83633144) omitted: requires dedicated N-1→N upgrade suite.
+  - test:
+      name: TC-PROM-NEW shared NFS setup
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Create shared NFS cluster with enable_nfs_metrics and primary export
+      abort-on-fail: true
+      config:
+        action: setup
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+
+  - test:
+      name: TC-PROM-NEW-0 Environment - feature gate
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Gate NEW metrics on scrape presence of six new metric families
+      polarion-id: CEPH-83633131
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633131
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+
+  - test:
+      name: TC-PROM-NEW-1 ganesha_uptime_seconds increases
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Uptime metric present and monotonic while daemon stays up
+      polarion-id: CEPH-83633132
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633132
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        uptime_wait_seconds: 20
+
+  - test:
+      name: TC-PROM-NEW-2 ganesha_uptime_seconds resets after restart
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Uptime resets after NFS container restart; NFS I/O still works
+      polarion-id: CEPH-83633133
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633133
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        uptime_reset_max_seconds: 120
+
+  - test:
+      name: TC-PROM-NEW-3 Export size metrics present per export
+      module: test_nfs_prometheus_new_metrics.py
+      desc: export_total_size / available_size / free_bytes_percent present and sane
+      polarion-id: CEPH-83633134
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633134
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+
+  - test:
+      name: TC-PROM-NEW-4 Capacity metrics react to write-fill
+      module: test_nfs_prometheus_new_metrics.py
+      desc: available_size and free percent track fill and delete reclaim
+      polarion-id: CEPH-83633135
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633135
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        new4_fill_mb: 1024
+        new4_require_stable_total: false
+        new4_require_reclaim: true
+
+  - test:
+      name: TC-PROM-NEW-5 Inode metrics react to mass create
+      module: test_nfs_prometheus_new_metrics.py
+      desc: available_file_count and inode_utilization track mass file create
+      polarion-id: CEPH-83633136
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633136
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        new5_file_count: 3000
+        waive_cephfs_inode_unsupported: true
+
+  - test:
+      name: TC-PROM-NEW-6 Percent - consistency checks
+      module: test_nfs_prometheus_new_metrics.py
+      desc: free_bytes_percent consistent with available/total within tolerance
+      polarion-id: CEPH-83633137
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633137
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        new6_percent_tolerance: 2
+
+  - test:
+      name: TC-PROM-NEW-7 Multi-export attribution
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Distinct per-export capacity series when writing on one export only
+      polarion-id: CEPH-83633138
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633138
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        new7_fill_mb: 512
+
+  - test:
+      name: TC-PROM-NOM-0 Nomenclature mode detection
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Classify mdcache / nfs_v4 / nfs_ prefix as legacy-only dual or new-only
+      polarion-id: CEPH-83633139
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633139
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+
+  - test:
+      name: TC-PROM-NOM-1 mdcache rename
+      module: test_nfs_prometheus_new_metrics.py
+      desc: mdcache hits/misses resolve via aliases and increase under workload
+      polarion-id: CEPH-83633140
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633140
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        nom1_file_count: 200
+
+  - test:
+      name: TC-PROM-NOM-2 nfs_ prefix consistency
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Critical families present via nfs_ / alias resolution
+      polarion-id: CEPH-83633141
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633141
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        nom2_forbid_legacy_on_new_only: false
+
+  - test:
+      name: TC-PROM-NOM-3 nfsv4 to nfs_v4 migration
+      module: test_nfs_prometheus_new_metrics.py
+      desc: nfsv4__/nfs_v4 op_count increases after NFSv4 R/W workload
+      polarion-id: CEPH-83633142
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633142
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        nom3_fio_size: 64M
+        nom3_fio_runtime: 30
+
+  - test:
+      name: TC-PROM-NOM-4 Dual-export consistency audit
+      module: test_nfs_prometheus_new_metrics.py
+      desc: When dual mode, paired legacy/new values agree within tolerance
+      polarion-id: CEPH-83633143
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633143
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        nom4_tolerance_pct: 5
+
+  - test:
+      name: TC-PROM-REG-1 Enable_Metrics still gates metrics
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Enable_Metrics false hides /metrics while NFS I/O works; restore recovers
+      polarion-id: CEPH-83633145
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633145
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+
+  - test:
+      name: TC-PROM-REG-3 ganesha_stats coexistence
+      module: test_nfs_prometheus_new_metrics.py
+      desc: ganesha_stats works alongside /metrics HTTP 200
+      polarion-id: CEPH-83633147
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633147
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+
+  - test:
+      name: TC-PROM-REG-4 HA - multi-daemon scrape
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Each NFS daemon exports metrics; uptime independent per daemon
+      polarion-id: CEPH-83633148
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83633148
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
+        enable_nfs_metrics: true
+        enable_metrics: true
+        enable_dynamic_metrics: true
+        setup_nfs: false
+        cleanup_nfs: false
+        # Scale NFS to 2 hosts (conf has node2+node3 nfs roles)
+        nfs_daemon_count: 2
+
+  - test:
+      name: TC-PROM-NEW shared NFS cleanup
+      module: test_nfs_prometheus_new_metrics.py
+      desc: Tear down shared NFS cluster and export after NEW/NOM/REG TCs
+      abort-on-fail: false
+      config:
+        action: cleanup
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        nfs_version: 4.1
+        port: 2049
+        monitoring_port: 9587
