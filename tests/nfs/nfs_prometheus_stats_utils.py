@@ -261,10 +261,15 @@ MANIFEST_METRIC_ALIASES = {
     "nfs_requests_total": (
         "nfs_requests_total",
         "requests_total",
+        # Product often exposes RPC ingress instead of a global requests_total
+        "rpcs_received_total",
+        "nfs_rpcs_received_total",
     ),
     "requests_total": (
         "nfs_requests_total",
         "requests_total",
+        "rpcs_received_total",
+        "nfs_rpcs_received_total",
     ),
     "client_requests_total": (
         "client_requests_total",
@@ -322,11 +327,72 @@ MANIFEST_METRIC_ALIASES = {
         "mdcache_cache_hits_total",
         "mdcache_cache_hits_by_export_total",
         "nfs_mdcache_hits_total",
+        "mdcache_hits_total",
     ),
     "mdcache_cache_misses_total": (
         "mdcache_cache_misses_total",
         "mdcache_cache_misses_by_export_total",
         "nfs_mdcache_misses_total",
+        "mdcache_misses_total",
+    ),
+    "nfs_mdcache_misses_total": (
+        "nfs_mdcache_misses_total",
+        "mdcache_cache_misses_total",
+        "mdcache_misses_total",
+    ),
+    "nfs_mdcache_hits_total": (
+        "nfs_mdcache_hits_total",
+        "mdcache_cache_hits_total",
+        "mdcache_hits_total",
+    ),
+    # New metrics / LEGACY_METRICS=OFF nomenclature (TC-PROM-NEW / NOM)
+    "ganesha_uptime_seconds": (
+        "ganesha_uptime_seconds",
+        "nfs_ganesha_uptime_seconds",
+    ),
+    "nfs_ganesha_uptime_seconds": (
+        "nfs_ganesha_uptime_seconds",
+        "ganesha_uptime_seconds",
+    ),
+    "export_total_size": (
+        "export_total_size",
+        "nfs_export_total_size",
+    ),
+    "nfs_export_total_size": (
+        "nfs_export_total_size",
+        "export_total_size",
+    ),
+    "export_available_size": (
+        "export_available_size",
+        "nfs_export_available_size",
+    ),
+    "nfs_export_available_size": (
+        "nfs_export_available_size",
+        "export_available_size",
+    ),
+    "export_available_file_count": (
+        "export_available_file_count",
+        "nfs_export_available_file_count",
+    ),
+    "nfs_export_available_file_count": (
+        "nfs_export_available_file_count",
+        "export_available_file_count",
+    ),
+    "export_free_bytes_percent": (
+        "export_free_bytes_percent",
+        "nfs_export_free_bytes_percent",
+    ),
+    "nfs_export_free_bytes_percent": (
+        "nfs_export_free_bytes_percent",
+        "export_free_bytes_percent",
+    ),
+    "export_inode_utilization": (
+        "export_inode_utilization",
+        "nfs_export_inode_utilization",
+    ),
+    "nfs_export_inode_utilization": (
+        "nfs_export_inode_utilization",
+        "export_inode_utilization",
     ),
     "nfs_requests_by_export_total": (
         "nfs_requests_by_export_total",
