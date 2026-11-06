@@ -1,0 +1,43 @@
+# RHCS 9.x RGW Standalone Zipper smoke suite skips slow marker tests
+# conf: conf/tentacle/rgw/tier-0_rgw_standalone_1node.yaml
+# Test names must stay plain for cephci log file paths.
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      name: Deploy RGW Standalone Zipper image
+      desc: podman login and run developer experience zipper image on client node
+      module: test_rgw_standalone_deploy.py
+      config:
+        image: preprod.icr.io/cp/ibm-ceph/rgw-developer-experience-rhel10:v9.9.2-26951
+        container-name: dev-edition1
+        zgw-host-port: 7411
+        browser-port: 8091
+        # S3 API via s3browser (container 9080); same purpose as zgw-host-port/7480
+        s3browser-s3-port: 9091
+        data-dir: /root/my_zgw_data_dev_exp
+        ibm_build: true
+        force-recreate: true
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Smoke excluding slow
+      desc: Sanity feature copy multipart admin and stability tests excluding slow scale and large MPU
+      module: sanity_rgw.py
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_smoke.yaml
+        timeout: 7200
+        env-vars:
+          # Quotes required so sudo env keeps the marker expression intact
+          - RGW_STANDALONE_PYTEST_MARKER='not slow'
