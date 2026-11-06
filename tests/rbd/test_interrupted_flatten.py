@@ -1,8 +1,7 @@
 import json
-import random
 
 from ceph.rbd.initial_config import initial_rbd_config
-from ceph.rbd.utils import get_md5sum_rbd_image, getdict
+from ceph.rbd.utils import get_md5sum_rbd_image, getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from utility.log import Log
 from utility.utils import run_fio
@@ -170,8 +169,10 @@ def run(**kw):
 
     try:
         # Execute test either Replicated or EC pool
-        pool_type = random.choice(pool_types)
-        log.info(f"Running test on {pool_type}")
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+        )
 
         rc = interrupted_flatten_test(rbd_obj, client, pool_type, **kw)
         if rc != 0:

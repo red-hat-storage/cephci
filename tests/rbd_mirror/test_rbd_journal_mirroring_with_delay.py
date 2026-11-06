@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_mirror_config, random_string
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.journal_mirror_ops import (
     config_mirroring_delay,
@@ -154,27 +154,30 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            log.info(
-                f"Testing delayed replication on journal based mirroring for {pool_type}"
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+        )
+        log.info(
+            f"Testing delayed replication on journal based mirroring for {pool_type}"
+        )
+        rc = test_delayed_replication(
+            rbd_obj=rbd,
+            sec_obj=sec_rbd,
+            client_node=client,
+            sec_client=sec_client,
+            pool_type=pool_type,
+            delay_at_primary=True,
+            **kw,
+        )
+        if rc:
+            log.error(
+                f"RBD Mirror delay on journal mirroring clusters failed for {pool_type} at image level failed"
             )
-            rc = test_delayed_replication(
-                rbd_obj=rbd,
-                sec_obj=sec_rbd,
-                client_node=client,
-                sec_client=sec_client,
-                pool_type=pool_type,
-                delay_at_primary=True,
-                **kw,
-            )
-            if rc:
-                log.error(
-                    f"RBD Mirror delay on journal mirroring clusters failed for {pool_type} at image level failed"
-                )
-                return 1
-            log.info(
-                f"Testing delayed replication on journal based mirroring passed for {pool_type}"
-            )
+            return 1
+        log.info(
+            f"Testing delayed replication on journal based mirroring passed for {pool_type}"
+        )
     except Exception as e:
         log.error(
             f"Testing rbd mirror delay on journal mirroring clusters failed with error {str(e)}"

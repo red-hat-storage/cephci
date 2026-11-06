@@ -3,6 +3,11 @@ import random
 import string
 
 from ceph.ceph import CommandFailed
+from ceph.rbd.pool_select import (  # noqa: F401 - re-export for existing imports
+    VALID_POOL_TYPES,
+    select_pool_entry,
+    select_pool_type,
+)
 from utility.log import Log
 
 log = Log(__name__)

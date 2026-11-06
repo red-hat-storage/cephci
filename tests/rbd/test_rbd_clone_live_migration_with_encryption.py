@@ -44,6 +44,7 @@ from ceph.rbd.utils import (
     get_md5sum_rbd_image,
     getdict,
     random_string,
+    select_pool_type,
 )
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.encryption import create_passphrase_file
@@ -69,73 +70,76 @@ def migration_encrypted_rbd_clone_images(rbd_obj, client, **kw):
     kw["client"] = client
     rbd = rbd_obj.get("rbd")
 
-    for pool_type in rbd_obj.get("pool_types"):
-        rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = deepcopy(getdict(rbd_config))
+    pool_types = rbd_obj.get("pool_types")
+    # Execute test on either Replicated or EC pool
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=pool_types,
+    )
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = deepcopy(getdict(rbd_config))
 
-        for pool, pool_config in multi_pool_config.items():
-            kw["pool-name"] = pool
-            for encryption_type in kw.get("config", {}).get("encryption_type", {}):
-                kw.update({f"{pool}": {}})
-                kw[pool].update({"encryption_type": encryption_type})
-                kw[pool].update({"pool_type": pool_type})
-                image = (
-                    "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
+    for pool, pool_config in multi_pool_config.items():
+        kw["pool-name"] = pool
+        for encryption_type in kw.get("config", {}).get("encryption_type", {}):
+            kw.update({f"{pool}": {}})
+            kw[pool].update({"encryption_type": encryption_type})
+            kw[pool].update({"pool_type": pool_type})
+            image = "image_" + kw[pool]["encryption_type"] + "_" + random_string(len=3)
+            kw[pool].update({"image": image})
+
+            # Create an RBD image in pool
+            out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": 1024})
+            if err:
+                log.error(f"Create image {pool}/{image} failed with error {err}")
+                return 1
+            else:
+                log.info(f"Successfully created image {pool}/{image}")
+
+            # Creating snapshot of an image
+            snap_name = "snap1"
+            out, err = rbd.snap.create(pool=pool, image=image, snap=snap_name)
+            if "failed to create snapshot: (30) Read-only file system" in out + err:
+                log.error(f"Snapshot creation failed for {pool}/{image}")
+                return 1
+            else:
+                log.info(
+                    f"Successfully created snapshot {snap_name} for {pool}/{image}"
                 )
-                kw[pool].update({"image": image})
 
-                # Create an RBD image in pool
-                out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": 1024})
-                if err:
-                    log.error(f"Create image {pool}/{image} failed with error {err}")
-                    return 1
-                else:
-                    log.info(f"Successfully created image {pool}/{image}")
+            # Protect snapshot of an image
+            snap_name = "snap1"
+            out, err = rbd.snap.protect(pool=pool, image=image, snap=snap_name)
+            if "failed to Protect snapshot" in out + err:
+                log.error(f"Snapshot Protection failed for {pool}/{image}")
+                return 1
+            else:
+                log.info(
+                    f"Successfully Protected snapshot {snap_name} for {pool}/{image}"
+                )
 
-                # Creating snapshot of an image
-                snap_name = "snap1"
-                out, err = rbd.snap.create(pool=pool, image=image, snap=snap_name)
-                if "failed to create snapshot: (30) Read-only file system" in out + err:
-                    log.error(f"Snapshot creation failed for {pool}/{image}")
-                    return 1
-                else:
-                    log.info(
-                        f"Successfully created snapshot {snap_name} for {pool}/{image}"
-                    )
+            # Clone the snapshot to new image
+            clone_image = f"clone_{image}"
+            clone_spec = {
+                "source-snap-spec": f"{pool}/{image}@{snap_name}",
+                "dest-image-spec": f"{pool}/{clone_image}",
+            }
+            _, err = rbd.clone(**clone_spec)
+            if err:
+                log.error(
+                    f"Clone creation failed for {pool}/{image}@{snap_name} with error {err}"
+                )
+                return 1
+            else:
+                log.info(f"Cloning of snap {snap_name} is complete")
 
-                # Protect snapshot of an image
-                snap_name = "snap1"
-                out, err = rbd.snap.protect(pool=pool, image=image, snap=snap_name)
-                if "failed to Protect snapshot" in out + err:
-                    log.error(f"Snapshot Protection failed for {pool}/{image}")
-                    return 1
-                else:
-                    log.info(
-                        f"Successfully Protected snapshot {snap_name} for {pool}/{image}"
-                    )
+            err = run_io_on_encryption_formatted_image(rbd, pool, clone_image, **kw)
+            if err:
+                return 1
 
-                # Clone the snapshot to new image
-                clone_image = f"clone_{image}"
-                clone_spec = {
-                    "source-snap-spec": f"{pool}/{image}@{snap_name}",
-                    "dest-image-spec": f"{pool}/{clone_image}",
-                }
-                _, err = rbd.clone(**clone_spec)
-                if err:
-                    log.error(
-                        f"Clone creation failed for {pool}/{image}@{snap_name} with error {err}"
-                    )
-                    return 1
-                else:
-                    log.info(f"Cloning of snap {snap_name} is complete")
-
-                err = run_io_on_encryption_formatted_image(rbd, pool, clone_image, **kw)
-                if err:
-                    return 1
-
-                err = migrate_check_consistency(rbd, pool, clone_image, **kw)
-                if err:
-                    return 1
+            err = migrate_check_consistency(rbd, pool, clone_image, **kw)
+            if err:
+                return 1
 
     return 0
 
@@ -463,7 +467,6 @@ def run(**kw):
         kw.update({"cleanup_files": []})
 
         if rbd_obj:
-            log.info("Executing test on Replicated and EC pool")
             if migration_encrypted_rbd_clone_images(rbd_obj, client, **kw):
                 return 1
             log.info("Test rbd clone live migration with encryption is successful")

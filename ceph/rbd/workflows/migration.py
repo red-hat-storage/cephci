@@ -714,6 +714,18 @@ def prepare_gateway_like_client(client_a, client_b, packages=None):
     packages = packages or ["ceph-common", "fio", "rbd-nbd"]
     try:
         for pkg in packages:
+            # Skip install when already present — long yum runs on a live
+            # NVMe-oF gateway host can disrupt the daemon / gateway group.
+            installed = exec_cmd(
+                node=client_b,
+                cmd=f"rpm -q {pkg}",
+                output=True,
+                check_ec=False,
+            )
+            installed_txt = str(installed or "")
+            if pkg in installed_txt and "not installed" not in installed_txt:
+                log.info(f"Package {pkg} already installed on {client_b.hostname}")
+                continue
             exec_cmd(
                 node=client_b,
                 cmd=f"yum install -y --nogpgcheck {pkg}",

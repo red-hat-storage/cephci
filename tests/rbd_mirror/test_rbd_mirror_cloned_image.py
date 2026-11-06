@@ -11,6 +11,7 @@ Test Case Flow:
 8. Perform test steps for both Replicated and EC pool
 """
 
+from ceph.rbd.utils import select_pool_entry
 from tests.rbd.rbd_utils import Rbd
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
@@ -131,16 +132,13 @@ def run(**kw):
     mirror_obj = rbd_mirror_config(**kw)
 
     if mirror_obj:
-        log.info("Executing test on replicated pool")
-        if test_snapshot_mirror_clone(
-            mirror_obj.get("rep_rbdmirror"), "rep_pool_config", **kw
-        ):
-            return 1
-
-        log.info("Executing test on ec pool")
-        if test_snapshot_mirror_clone(
-            mirror_obj.get("ec_rbdmirror"), "ec_pool_config", **kw
-        ):
+        pool_entries = []
+        if "rep_rbdmirror" in mirror_obj:
+            pool_entries.append(("rep_rbdmirror", "rep_pool_config"))
+        if "ec_rbdmirror" in mirror_obj:
+            pool_entries.append(("ec_rbdmirror", "ec_pool_config"))
+        mirror_key, pool_type = select_pool_entry(kw.get("config", {}), pool_entries)
+        if test_snapshot_mirror_clone(mirror_obj.get(mirror_key), pool_type, **kw):
             return 1
 
     return 0

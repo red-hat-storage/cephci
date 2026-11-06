@@ -59,7 +59,7 @@ from copy import deepcopy
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.mirror_utils import check_mirror_consistency
-from ceph.rbd.utils import exec_cmd, getdict, random_string
+from ceph.rbd.utils import exec_cmd, getdict, random_string, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
     add_group_image_and_verify,
@@ -772,14 +772,12 @@ def run(**kw):
 
         log.info("Running Consistency Group dynamic mirroring across two clusters")
         # Run on either replicated or EC pool
-        pool_type = random.choice(pool_types)
-        log.info("Running test on %s", pool_type)
-
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+            apply_pool_only=True,
+        )
         config = kw.get("config")
-        if pool_type == "rep_pool_config":
-            config["rep-pool-only"] = True
-        else:
-            config["ec-pool-only"] = True
 
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
         if not config.get("grouptype"):

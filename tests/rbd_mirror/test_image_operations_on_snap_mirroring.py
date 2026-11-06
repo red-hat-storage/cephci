@@ -1,5 +1,5 @@
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from utility.log import Log
 
@@ -68,40 +68,43 @@ def test_image_operations(**kw):
     Test image operations like expand/shrink/remove in primary
     and secondary clusters
     """
-    for pool_type in kw.get("pool_types"):
-        config = kw.get("config", {}).get(pool_type)
-        multi_pool_config = getdict(config)
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            for image, image_config in multi_image_config.items():
-                image_size = image_config.get("size")
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=kw.get("pool_types"),
+    )
+    config = kw.get("config", {}).get(pool_type)
+    multi_pool_config = getdict(config)
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        for image, image_config in multi_image_config.items():
+            image_size = image_config.get("size")
 
-                test_obj = {
-                    "secondary": kw.get("sec_obj"),
-                    "primary": kw.get("rbd_obj"),
-                }
-                for cluster_type, rbd in test_obj.items():
-                    log.info(
-                        f"Testing image expand/shrink/remove on {cluster_type} cluster for image {image}"
+            test_obj = {
+                "secondary": kw.get("sec_obj"),
+                "primary": kw.get("rbd_obj"),
+            }
+            for cluster_type, rbd in test_obj.items():
+                log.info(
+                    f"Testing image expand/shrink/remove on {cluster_type} cluster for image {image}"
+                )
+                ret_val = test_image_remove_resize(
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    image_size=image_size,
+                    cluster_type=cluster_type,
+                )
+                if ret_val:
+                    log.error(
+                        f"Image expand/shrink/remove did not work as expected on \
+                              {cluster_type} cluster for image {image}"
                     )
-                    ret_val = test_image_remove_resize(
-                        rbd=rbd,
-                        pool=pool,
-                        image=image,
-                        image_size=image_size,
-                        cluster_type=cluster_type,
-                    )
-                    if ret_val:
-                        log.error(
-                            f"Image expand/shrink/remove did not work as expected on \
-                                  {cluster_type} cluster for image {image}"
-                        )
-                        return 1
-                    log.info(
-                        f"Image expand/shrink/remove completed successfully on {cluster_type} \
-                             cluster for image {image}"
-                    )
-                return 0
+                    return 1
+                log.info(
+                    f"Image expand/shrink/remove completed successfully on {cluster_type} \
+                         cluster for image {image}"
+                )
+            return 0
     return 0
 
 

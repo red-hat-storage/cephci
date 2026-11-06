@@ -39,7 +39,7 @@ from copy import deepcopy
 
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.utils import getdict, random_string, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
     enable_group_mirroring_and_verify_state,
@@ -82,7 +82,11 @@ def test_group_info_during_force_promote(
     for pool_type in pool_types:
         rbd_config = kw.get("config", {}).get(pool_type, {})
         multi_pool_config = deepcopy(getdict(rbd_config))
-        log.info("Running test CEPH-83620649 for %s", pool_type)
+        log.info(
+            "Running test CEPH-83620649: executing on %s pool (%s)",
+            "replicated" if pool_type == "rep_pool_config" else "EC",
+            pool_type,
+        )
 
         # FIO Params Required for ODF workload exclusively in group mirroring
         fio = kw.get("config", {}).get("fio", {})
@@ -300,12 +304,19 @@ def run(**kw):
     try:
         log.info("Running Consistency Group Mirroring across two clusters")
         pool_types = ["rep_pool_config", "ec_pool_config"]
+        # Run on either replicated or EC pool
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+            apply_pool_only=True,
+        )
+        config = kw.get("config")
+
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
-        if not kw.get("config").get("grouptype"):
-            for pooltype in pool_types:
-                group_type = grouptypes.pop(random.randrange(len(grouptypes)))
-                kw.get("config").get(pooltype).update({"grouptype": group_type})
-                log.info("Choosing Group type on %s - %s", pooltype, group_type)
+        if not config.get("grouptype"):
+            group_type = random.choice(grouptypes)
+            config.get(pool_type).update({"grouptype": group_type})
+            log.info("Choosing Group type on %s - %s", pool_type, group_type)
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
         for val in mirror_obj.values():

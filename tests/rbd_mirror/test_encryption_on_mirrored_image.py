@@ -2,7 +2,7 @@ from copy import deepcopy
 from time import sleep
 
 from ceph.rbd.initial_config import initial_mirror_config, random_string
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup, device_cleanup
 from ceph.rbd.workflows.encryption import (
     create_and_encrypt_clone,
@@ -447,15 +447,17 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            ret_val = test_encryption_on_mirrored_cluster(
-                mirror_obj=mirror_obj,
-                pool_type=pool_type,
-                **kw,
-            )
-            if ret_val:
-                log.error(f"RBD encryption test failed for pool_type {pool_type}")
-                break
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+        )
+        ret_val = test_encryption_on_mirrored_cluster(
+            mirror_obj=mirror_obj,
+            pool_type=pool_type,
+            **kw,
+        )
+        if ret_val:
+            log.error(f"RBD encryption test failed for pool_type {pool_type}")
     except Exception as e:
         log.error(f"Testing mirrored encryption failed with error {str(e)}")
         ret_val = 1

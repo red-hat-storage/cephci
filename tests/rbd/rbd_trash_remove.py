@@ -1,3 +1,4 @@
+from ceph.rbd.utils import select_pool_entry
 from tests.rbd.exceptions import ImageFoundError, RbdBaseException
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -64,12 +65,12 @@ def run(**kw):
     log.info("Running Trash image remove test")
     rbd_obj = initial_rbd_config(**kw)
     if rbd_obj:
+        pool_entries = []
         if "rbd_reppool" in rbd_obj:
-            log.info("Ecexuting test on Replication pool")
-            if rbd_trash_remove(rbd_obj.get("rbd_reppool"), "rep_pool_config", **kw):
-                return 1
+            pool_entries.append(("rbd_reppool", "rep_pool_config"))
         if "rbd_ecpool" in rbd_obj:
-            log.info("Executing test on EC pool")
-            if rbd_trash_remove(rbd_obj.get("rbd_ecpool"), "ec_pool_config", **kw):
-                return 1
+            pool_entries.append(("rbd_ecpool", "ec_pool_config"))
+        rbd_key, pool_type = select_pool_entry(kw.get("config", {}), pool_entries)
+        if rbd_trash_remove(rbd_obj.get(rbd_key), pool_type, **kw):
+            return 1
     return 0

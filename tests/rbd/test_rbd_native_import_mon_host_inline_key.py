@@ -79,11 +79,13 @@ from cli.rbd.rbd import Rbd
 from tests.nvmeof.workflows.gateway_entities import (
     configure_hosts,
     configure_listeners,
-    configure_subsystems,
     teardown,
 )
 from tests.nvmeof.workflows.nvme_service import NVMeService
-from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    get_network_mask,
+)
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
 
@@ -323,11 +325,113 @@ def deploy_basic_nvme_service(destination_cluster, nvme_config, client=None, **k
     return nvme_service
 
 
+def _ensure_nvme_gateway_ready(nvme_service, client, timeout=300):
+    """Re-check NVMe-oF daemons and refresh gateway CLI handles.
+
+    Kept in this RBD test module so we do not depend on NVMe workflow changes.
+    After long Client-B prep (or any gap), dashboard/CLI can return
+    ``Gateway group does not exist`` unless gateways are re-initialised.
+    """
+    if wait_nvme_daemons_running(client, timeout=timeout):
+        return 1
+    try:
+        nvme_service.init_gateways()
+    except Exception as error:
+        log.error(f"Failed to re-initialise NVMe-oF gateways: {error}")
+        return 1
+    if not nvme_service.gateways:
+        log.error("NVMeService.init_gateways returned no gateways after refresh")
+        return 1
+    gateway = nvme_service.gateways[0]
+    try:
+        out, _ = gateway.gateway.info(**{"base_cmd_args": {"format": "json"}})
+        info = json.loads(out) if out else {}
+    except Exception as error:
+        log.error(f"NVMe-oF gateway info failed after refresh: {error}")
+        return 1
+    if not info.get("gateway_initialization_over"):
+        log.error(
+            f"NVMe-oF gateway {gateway.node.hostname} not fully initialised: {info}"
+        )
+        return 1
+    log.info(
+        f"NVMe-oF gateway ready on {gateway.node.hostname} "
+        f"(group={info.get('group') or nvme_service.group})"
+    )
+    return 0
+
+
+def _add_nvme_subsystem_for_migration(nvme_service, destination_cluster):
+    """Add NVMe subsystem with RBD-local error handling (no NVMe file changes).
+
+    Unlike gateway_entities.configure_subsystems, this does not treat every
+    message containing ``exist`` as success — so
+    ``Gateway group does not exist`` is raised correctly.
+    """
+    if not nvme_service.config.get("subsystems"):
+        nvme_service.config["subsystems"] = [
+            _default_nvme_subsystem(nvme_service.config)
+        ]
+    sub_cfg = nvme_service.config["subsystems"][0]
+    nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
+    gateway = nvme_service.gateways[0]
+    release = nvme_service.ceph_cluster.rhcs_version
+    no_group_append = (
+        sub_cfg.get("no-group-append", True)
+        if release >= "8.0"
+        else sub_cfg.get("no-group-append", False)
+    )
+    ceph_version = get_ceph_version_from_cluster(
+        destination_cluster.get_nodes(role="client")[0]
+    )
+    args = {
+        "subsystem": nqn,
+        "max-namespaces": sub_cfg.get("max_ns", 32),
+        "enable-ha": sub_cfg.get("enable_ha", False),
+        "no-group-append": no_group_append,
+    }
+    if sub_cfg.get("serial"):
+        args["serial-number"] = sub_cfg.get("serial")
+    if LooseVersion(ceph_version) >= LooseVersion("20.2.1"):
+        if sub_cfg.get("listener_port"):
+            args["port"] = sub_cfg.get("listener_port")
+        if sub_cfg.get("secure_listener"):
+            args["secure_listeners"] = sub_cfg.get("secure_listener")
+        args["network-mask"] = (
+            sub_cfg.get("network_mask")
+            or sub_cfg.get("network-mask")
+            or get_network_mask(nvme_service.gateways)
+        )
+    try:
+        gateway.subsystem.add(**{"args": args})
+    except Exception as exc:
+        msg = str(exc).lower()
+        # Only treat true "already exists" as success — not "does not exist".
+        already = ("already" in msg) and ("exist" in msg)
+        if not already:
+            raise
+        log.info(f"Subsystem {nqn} already present, reusing it: {exc}")
+
+    list_out = gateway.subsystem.list(**{"base_cmd_args": {"format": "json"}})
+    out = list_out[0] if isinstance(list_out, (list, tuple)) else list_out
+    listed = json.loads(out) if out else {}
+    subsystems = listed.get("subsystems") or []
+    nqns = {s.get("nqn") or s.get("subnqn") for s in subsystems}
+    if nqn not in nqns:
+        raise RuntimeError(
+            f"Subsystem {nqn} not listed after add "
+            f"(gateway group may be unreachable): {listed}"
+        )
+    log.info(f"NVMe subsystem {nqn} configured on {gateway.node.hostname}")
+    return nqn
+
+
 def configure_nvme_for_existing_image(nvme_service, destination_cluster, pool, image):
     """Configure subsystem/host and attach an already-prepared RBD image.
 
-    Uses gateway_entities helpers for subsystem/listener/host. Namespace is
-    added manually because configure_namespaces always creates new images.
+    Subsystem add is handled locally in this RBD test module. Listener/host
+    helpers from gateway_entities are still used. Namespace is added manually
+    because configure_namespaces always creates new images.
     """
     if not nvme_service.config.get("subsystems"):
         nvme_service.config["subsystems"] = [
@@ -337,7 +441,7 @@ def configure_nvme_for_existing_image(nvme_service, destination_cluster, pool, i
     nqn = sub_cfg.get("nqn") or sub_cfg.get("subnqn")
     gateway = nvme_service.gateways[0]
 
-    configure_subsystems(nvme_service, ceph_cluster=destination_cluster)
+    _add_nvme_subsystem_for_migration(nvme_service, destination_cluster)
     ceph_version = get_ceph_version_from_cluster(
         destination_cluster.get_nodes(role="client")[0]
     )
@@ -1496,9 +1600,27 @@ def test_native_import_gateway_like_client(
             f"(confirmed different clusters)"
         )
 
-        # --- Steps 7-8: Deploy NVMe-oF gateway; Client-B is gateway node ---
+        # --- Steps 7-8: Prepare Client-B, then deploy NVMe-oF gateway ---
+        # Package/conf prep must run BEFORE gateway deploy. Doing yum install on
+        # the live gateway host (as in prior failures) can break the daemon and
+        # surface ``Error EINVAL: Gateway group does not exist``.
         if not destination_cluster:
             log.error("destination_cluster is required for NVMe-oF gateway deploy")
+            return 1
+
+        log.info(
+            f"Client-A for prepare/execute/commit: {client_a.hostname}; "
+            f"Client-B NVMe-oF gateway node: {client_b.hostname}"
+        )
+        log.info(
+            f"Preparing Client-B {client_b.hostname} (packages + dest-only conf) "
+            f"before NVMe-oF gateway deploy"
+        )
+        if prepare_gateway_like_client(client_a, client_b):
+            return 1
+        if assert_no_source_cluster_config(
+            client_b, source_fsid=source_fsid, source_mon_host=mon_host
+        ):
             return 1
 
         log.info(
@@ -1515,22 +1637,11 @@ def test_native_import_gateway_like_client(
             test_data=kw.get("test_data", {}),
         )
         nvmegwcli = nvme_service.gateways[0]
+        # Prefer the resolved gateway node from the service; keep client_b in sync.
         client_b = nvmegwcli.node
         nvme_deployed = True
         client_b_rbd = Rbd(client_b)
         exec_cmd(node=client_b, cmd=f"mkdir -p {workdir} && chmod 700 {workdir}")
-
-        log.info(
-            f"Client-A for prepare/execute/commit: {client_a.hostname}; "
-            f"Client-B NVMe-oF gateway node: {client_b.hostname}"
-        )
-        # Ensure gateway node can run rbd/fio with destination-only conf
-        if prepare_gateway_like_client(client_a, client_b):
-            return 1
-        if assert_no_source_cluster_config(
-            client_b, source_fsid=source_fsid, source_mon_host=mon_host
-        ):
-            return 1
 
         # --- Steps 9-11: Source-spec + import-only prepare on Client-A ---
         spec = prepare_native_source_spec_with_key(
@@ -1573,6 +1684,9 @@ def test_native_import_gateway_like_client(
             log.error("Migration prepare state verification failed")
             return 1
 
+        # Refresh gateway CLI handles before subsystem/namespace configure.
+        if _ensure_nvme_gateway_ready(nvme_service, client_a):
+            return 1
         # Expose prepared target via NVMe-oF (subsystem/host + existing image)
         configure_nvme_for_existing_image(
             nvme_service,

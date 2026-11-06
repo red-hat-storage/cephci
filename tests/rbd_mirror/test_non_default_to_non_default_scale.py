@@ -33,7 +33,7 @@ and enable mirroring for each image.
 import random
 
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.utils import getdict, random_string, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.namespace import enable_namespace_mirroring
@@ -50,7 +50,10 @@ def test_namespace_scale(pri_config, sec_config, pool_types, **kw):
     rbd_primary = pri_config.get("rbd")
     rbd_secondary = sec_config.get("rbd")
     client_primary = pri_config.get("client")
-    pool_type = random.choice(pool_types)
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=pool_types,
+    )
 
     rbd_config = kw.get("config", {}).get(pool_type, {})
     multi_pool_config = getdict(rbd_config)

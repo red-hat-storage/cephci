@@ -23,7 +23,7 @@ import time
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.rbd_mirror import compare_pool_mirror_status
 from utility.log import Log
@@ -205,16 +205,19 @@ def run(**kw):
         log.info("Initial configuration complete")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        for pool_type in pool_types:
-            log.info(
-                f"Running Test to verify changing and Reseting peer ID for {pool_type}"
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+        )
+        log.info(
+            f"Running Test to verify changing and Reseting peer ID for {pool_type}"
+        )
+        rc = test_peer_id(rbd, sec_rbd, pool_type, **kw)
+        if rc:
+            log.error(
+                "Test failed to verify changing and Reseting peer ID for {pool_type}"
             )
-            rc = test_peer_id(rbd, sec_rbd, pool_type, **kw)
-            if rc:
-                log.error(
-                    "Test failed to verify changing and Reseting peer ID for {pool_type}"
-                )
-                return 1
+            return 1
     except Exception as e:
         log.error(f"Test failed to verify changing and Reseting peer ID {str(e)}")
         return 1

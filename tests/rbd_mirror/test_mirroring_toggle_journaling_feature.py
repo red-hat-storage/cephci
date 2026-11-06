@@ -3,7 +3,7 @@ from time import sleep
 
 from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, select_pool_type
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.rbd_mirror import wait_for_replay_complete
 from utility.log import Log
@@ -80,63 +80,66 @@ def test_toggle_journaling_feature(**kw):
     """
     Toggles journaling feature while snapshots are created and deleted on an image
     """
-    for pool_type in kw.get("pool_types"):
-        config = kw.get("config", {}).get(pool_type)
-        multi_pool_config = getdict(config)
-        for pool, pool_config in multi_pool_config.items():
-            multi_image_config = getdict(pool_config)
-            for image in multi_image_config.keys():
-                try:
-                    test_config = [
-                        {"operation": "create", "count": 25},
-                        {"operation": "delete", "count": 15, "verify_count": 10},
-                    ]
-                    for test in test_config:
-                        with parallel() as p:
-                            p.spawn(
-                                create_delete_snapshot,
-                                rbd=kw.get("rbd_obj"),
-                                pool=pool,
-                                image=image,
-                                operation=test.get("operation"),
-                                count=test.get("count"),
-                            )
-                            p.spawn(
-                                toggle_journaling_and_verify,
-                                rbd1=kw.get("rbd_obj"),
-                                rbd2=kw.get("sec_obj"),
-                                pool=pool,
-                                image=image,
-                            )
-
-                        rbd2 = kw.get("sec_obj")
-                        wait_for_replay_complete(
-                            rbd=rbd2,
-                            cluster_name=kw.get("ceph_cluster").name,
-                            imagespec=f"{pool}/{image}",
+    pool_type = select_pool_type(
+        kw.get("config", {}),
+        available=kw.get("pool_types"),
+    )
+    config = kw.get("config", {}).get(pool_type)
+    multi_pool_config = getdict(config)
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        for image in multi_image_config.keys():
+            try:
+                test_config = [
+                    {"operation": "create", "count": 25},
+                    {"operation": "delete", "count": 15, "verify_count": 10},
+                ]
+                for test in test_config:
+                    with parallel() as p:
+                        p.spawn(
+                            create_delete_snapshot,
+                            rbd=kw.get("rbd_obj"),
+                            pool=pool,
+                            image=image,
+                            operation=test.get("operation"),
+                            count=test.get("count"),
+                        )
+                        p.spawn(
+                            toggle_journaling_and_verify,
+                            rbd1=kw.get("rbd_obj"),
+                            rbd2=kw.get("sec_obj"),
+                            pool=pool,
+                            image=image,
                         )
 
-                        image_spec = {"image-spec": f"{pool}/{image}", "format": "json"}
-                        out, err = rbd2.snap.ls(**image_spec)
-                        if err:
-                            log.error("Fetch snapshots for secondary failed")
+                    rbd2 = kw.get("sec_obj")
+                    wait_for_replay_complete(
+                        rbd=rbd2,
+                        cluster_name=kw.get("ceph_cluster").name,
+                        imagespec=f"{pool}/{image}",
+                    )
+
+                    image_spec = {"image-spec": f"{pool}/{image}", "format": "json"}
+                    out, err = rbd2.snap.ls(**image_spec)
+                    if err:
+                        log.error("Fetch snapshots for secondary failed")
+                        return 1
+                    if out:
+                        out_json = json.loads(out)
+                        snap_json = [k for k in out_json if "snap" in k["name"]]
+                        count = test.get("verify_count", test.get("count"))
+                        if len(snap_json) == count:
+                            log.info(
+                                f"All snapshots {test.get('operation')}d at primary are synced to secondary"
+                            )
+                        else:
+                            log.error(
+                                "There is discrepancy between primary and secondary snapshots"
+                            )
                             return 1
-                        if out:
-                            out_json = json.loads(out)
-                            snap_json = [k for k in out_json if "snap" in k["name"]]
-                            count = test.get("verify_count", test.get("count"))
-                            if len(snap_json) == count:
-                                log.info(
-                                    f"All snapshots {test.get('operation')}d at primary are synced to secondary"
-                                )
-                            else:
-                                log.error(
-                                    "There is discrepancy between primary and secondary snapshots"
-                                )
-                                return 1
-                except Exception as e:
-                    log.error(f"Test failed for {image} with error {e}")
-                    return 1
+            except Exception as e:
+                log.error(f"Test failed for {image} with error {e}")
+                return 1
     return 0
 
 

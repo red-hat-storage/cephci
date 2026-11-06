@@ -69,7 +69,13 @@ import time
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import exec_cmd, get_md5sum_rbd_image, getdict, random_string
+from ceph.rbd.utils import (
+    exec_cmd,
+    get_md5sum_rbd_image,
+    getdict,
+    random_string,
+    select_pool_type,
+)
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group import add_image_to_group_and_verify
 from ceph.rbd.workflows.group_mirror import (
@@ -117,7 +123,11 @@ def test_mirror_group_consistency(
         try:
             rbd_config = kw.get("config", {}).get(pool_type, {})
             multi_pool_config = deepcopy(getdict(rbd_config))
-            log.info("Running test CEPH-83613291  for %s", pool_type)
+            log.info(
+                "Running test CEPH-83613291: executing on %s pool (%s)",
+                "replicated" if pool_type == "rep_pool_config" else "EC",
+                pool_type,
+            )
 
             for pool, pool_config in multi_pool_config.items():
                 group_config = {}
@@ -568,7 +578,11 @@ def test_mirror_group_snapshot_consistency(
     for pool_type in pool_types:
         rbd_config = kw.get("config", {}).get(pool_type, {})
         multi_pool_config = deepcopy(getdict(rbd_config))
-        log.info("Running test CEPH-83610861  for %s", pool_type)
+        log.info(
+            "Running test CEPH-83610861: executing on %s pool (%s)",
+            "replicated" if pool_type == "rep_pool_config" else "EC",
+            pool_type,
+        )
         # FIO Params Required for ODF workload exclusively in group mirroring
         fio = kw.get("config", {}).get("fio", {})
         file_random1 = "/mnt/mnt_" + random_string(len=5) + "/file"
@@ -963,13 +977,20 @@ def run(**kw):
             "CEPH-83613291": test_mirror_group_consistency,
             "CEPH-83610861": test_mirror_group_snapshot_consistency,
         }
-        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
 
-        if not kw.get("config").get("grouptype"):
-            for pooltype in pool_types:
-                group_type = grouptypes.pop(random.randrange(len(grouptypes)))
-                kw.get("config").get(pooltype).update({"grouptype": group_type})
-                log.info("Choosing Group type on %s - %s", pooltype, group_type)
+        # Run on either replicated or EC pool
+        pool_type = select_pool_type(
+            kw.get("config", {}),
+            available=pool_types,
+            apply_pool_only=True,
+        )
+        config = kw.get("config")
+
+        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+        if not config.get("grouptype"):
+            group_type = random.choice(grouptypes)
+            config.get(pool_type).update({"grouptype": group_type})
+            log.info("Choosing Group type on %s - %s", pool_type, group_type)
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
         for val in mirror_obj.values():
