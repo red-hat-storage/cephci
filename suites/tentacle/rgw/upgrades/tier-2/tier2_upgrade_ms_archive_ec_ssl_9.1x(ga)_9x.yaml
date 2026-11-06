@@ -1,7 +1,8 @@
 # P0 two-site multisite upgrade: Tentacle 9.1 GA to 9.x latest
 # Topology: EC 2+2 on 4 OSD hosts, SSL, HAProxy, 6 RGW daemons per site
 #   rgw_io  x3 on node2, node3, node4 port 443
-#   rgw_sync x3 on node2, node3, node4 port 8443
+#   rgw_sync x3 on node2, node3, node4 port 444
+#   The dashboard keeps its own port, so sync uses 444.
 # conf: conf/tentacle/rgw/2-site-ec-profile-2+2@4nodes.yaml
 # node2 is used as an RGW host in addition to node3. node4 is client and RGW.
 
@@ -107,7 +108,7 @@ tests:
                         rgw_zone: primary
                         generate_cert: true
                         ssl: true
-                        rgw_frontend_port: 8443
+                        rgw_frontend_port: 444
                       placement:
                         nodes:
                           - node2
@@ -201,7 +202,7 @@ tests:
                         rgw_zone: secondary
                         generate_cert: true
                         ssl: true
-                        rgw_frontend_port: 8443
+                        rgw_frontend_port: 444
                       placement:
                         nodes:
                           - node2
@@ -347,8 +348,8 @@ tests:
           config:
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node2}:444,https://{node_ip:node3}:444,https://{node_ip:node4}:444 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node2}:444,https://{node_ip:node3}:444,https://{node_ip:node4}:444 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
@@ -369,9 +370,9 @@ tests:
             commands:
               - "ceph config set client.rgw.shared.sec.io rgw_verify_ssl False"
               - "ceph config set client.rgw.shared.sec.sync rgw_verify_ssl False"
-              - "radosgw-admin --rgw_verify_ssl=false realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin --rgw_verify_ssl=false period pull --url https://{node_ip:ceph-pri#node3}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin --rgw_verify_ssl=false realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3}:444 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin --rgw_verify_ssl=false period pull --url https://{node_ip:ceph-pri#node3}:444 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node2}:444,https://{node_ip:node3}:444,https://{node_ip:node4}:444 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin --rgw_verify_ssl=false period update --rgw-realm india --commit"
               - "ceph config set client.rgw.shared.sec.io rgw_realm india"
               - "ceph config set client.rgw.shared.sec.io rgw_zonegroup shared"
@@ -440,16 +441,16 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: S3CMD versioned object delete marker pre upgrade
-      desc: One delete marker when a versioned object is deleted several times with s3cmd
-      polarion-id: CEPH-83574806
+      name: ordered listing of pseudo directories pre upgrade
+      desc: Ordered listing of buckets that contain pseudo directories
+      polarion-id: CEPH-83573545
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: ../s3cmd/test_s3cmd.py
-            config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
-            monitor-consistency-bucket-stats: true
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_pseudo_ordered.yaml
+            verify-io-on-site: ["ceph-sec"]
 
   - test:
       name: M buckets with N objects using AWS4 pre upgrade
@@ -464,15 +465,15 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: GetObjectAttributes with multipart objects pre upgrade
-      desc: Upload multipart objects and read their attributes
-      polarion-id: CEPH-83595849
+      name: copy an object to another version pre upgrade
+      desc: Copy an object onto another version in a versioned bucket
+      polarion-id: CEPH-9179
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_copy.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -488,15 +489,15 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: M buckets with N objects etag verification pre upgrade
-      desc: Etag verification for M buckets with N objects
-      polarion-id: CEPH-83574871
+      name: delete multiple buckets pre upgrade
+      desc: Create buckets and delete them
+      polarion-id: CEPH-14237
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+            config-file-name: test_delete_multiple_buckets.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -555,16 +556,16 @@ tests:
               - "ceph versions"
 
   - test:
-      name: S3CMD versioned object delete marker post upgrade
-      desc: One delete marker when a versioned object is deleted several times with s3cmd
-      polarion-id: CEPH-83574806
+      name: ordered listing of pseudo directories post upgrade
+      desc: Ordered listing of buckets that contain pseudo directories
+      polarion-id: CEPH-83573545
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: ../s3cmd/test_s3cmd.py
-            config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
-            monitor-consistency-bucket-stats: true
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_pseudo_ordered.yaml
+            verify-io-on-site: ["ceph-sec"]
 
   - test:
       name: M buckets with N objects using AWS4 post upgrade
@@ -579,15 +580,15 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: GetObjectAttributes with multipart objects post upgrade
-      desc: Upload multipart objects and read their attributes
-      polarion-id: CEPH-83595849
+      name: copy an object to another version post upgrade
+      desc: Copy an object onto another version in a versioned bucket
+      polarion-id: CEPH-9179
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_copy.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -603,13 +604,13 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: M buckets with N objects etag verification post upgrade
-      desc: Etag verification for M buckets with N objects
-      polarion-id: CEPH-83574871
+      name: delete multiple buckets post upgrade
+      desc: Create buckets and delete them
+      polarion-id: CEPH-14237
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+            config-file-name: test_delete_multiple_buckets.yaml
             verify-io-on-site: ["ceph-sec"]

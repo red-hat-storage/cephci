@@ -1,7 +1,8 @@
 # P0 two-site multisite upgrade: Squid 8.1 GA to 9.x latest
 # Topology: EC 2+2 on 4 OSD hosts, SSL, HAProxy, 6 RGW daemons per site
 #   rgw_io  x3 on node2, node3, node4 port 443
-#   rgw_sync x3 on node2, node3, node4 port 8443
+#   rgw_sync x3 on node2, node3, node4 port 444
+#   The dashboard keeps its own port, so sync uses 444.
 # conf: conf/tentacle/rgw/2-site-ec-profile-2+2@4nodes.yaml
 # node2 is used as an RGW host in addition to node3. node4 is client and RGW.
 
@@ -107,7 +108,7 @@ tests:
                         rgw_zone: primary
                         generate_cert: true
                         ssl: true
-                        rgw_frontend_port: 8443
+                        rgw_frontend_port: 444
                       placement:
                         nodes:
                           - node2
@@ -201,7 +202,7 @@ tests:
                         rgw_zone: secondary
                         generate_cert: true
                         ssl: true
-                        rgw_frontend_port: 8443
+                        rgw_frontend_port: 444
                       placement:
                         nodes:
                           - node2
@@ -347,8 +348,8 @@ tests:
           config:
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node2}:444,https://{node_ip:node3}:444,https://{node_ip:node4}:444 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node2}:444,https://{node_ip:node3}:444,https://{node_ip:node4}:444 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
@@ -369,9 +370,9 @@ tests:
             commands:
               - "ceph config set client.rgw.shared.sec.io rgw_verify_ssl False"
               - "ceph config set client.rgw.shared.sec.sync rgw_verify_ssl False"
-              - "radosgw-admin --rgw_verify_ssl=false realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin --rgw_verify_ssl=false period pull --url https://{node_ip:ceph-pri#node3}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node2}:8443,https://{node_ip:node3}:8443,https://{node_ip:node4}:8443 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin --rgw_verify_ssl=false realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3}:444 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin --rgw_verify_ssl=false period pull --url https://{node_ip:ceph-pri#node3}:444 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node2}:444,https://{node_ip:node3}:444,https://{node_ip:node4}:444 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin --rgw_verify_ssl=false period update --rgw-realm india --commit"
               - "ceph config set client.rgw.shared.sec.io rgw_realm india"
               - "ceph config set client.rgw.shared.sec.io rgw_zonegroup shared"

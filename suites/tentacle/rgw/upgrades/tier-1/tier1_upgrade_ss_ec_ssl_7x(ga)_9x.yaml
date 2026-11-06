@@ -90,7 +90,7 @@ tests:
                       - node5
                   spec:
                     ssl: true
-                    generate_cert: true
+                    rgw_frontend_ssl_certificate: create-cert
                     rgw_frontend_port: 443
       desc: Deploy RHCS 7.1 single-site cluster, EC 2+2, SSL, 3 RGW daemons.
       polarion-id: CEPH-83573777

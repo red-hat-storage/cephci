@@ -257,7 +257,9 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
                     setup_ibm_licence(node, build_type=None)
 
                 node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
-                upd_cmd = "yum update --nogpgcheck -y 'ceph*'"
+                # Same CDN repos as the license install. The ceph packages are
+                # in the tools repo that set_tool_repo just added.
+                upd_cmd = "yum update --nogpgcheck --disablerepo='rhel-*' -y 'ceph*'"
                 if kwargs.get("rpm_version", None):
                     upd_cmd = f"{upd_cmd}-{kwargs['rpm_version']}"
 

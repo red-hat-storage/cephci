@@ -172,13 +172,13 @@ tests:
   # Pre upgrade feature tests
 
   - test:
-      name: S3CMD versioned object delete marker pre upgrade
-      desc: One delete marker when a versioned object is deleted several times with s3cmd
-      polarion-id: CEPH-83574806
+      name: S3CMD rgw log details pre upgrade
+      desc: S3CMD tests, rgw log details
+      polarion-id: CEPH-83575470
       module: sanity_rgw.py
       config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
 
   - test:
       name: M buckets with N objects pre upgrade
@@ -255,13 +255,13 @@ tests:
   # Post upgrade feature tests
 
   - test:
-      name: S3CMD versioned object delete marker post upgrade
-      desc: One delete marker when a versioned object is deleted several times with s3cmd
-      polarion-id: CEPH-83574806
+      name: S3CMD rgw log details post upgrade
+      desc: S3CMD tests, rgw log details
+      polarion-id: CEPH-83575470
       module: sanity_rgw.py
       config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
+        script-name: ../s3cmd/test_rgw_ops_log.py
+        config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
 
   - test:
       name: M buckets with N objects post upgrade
