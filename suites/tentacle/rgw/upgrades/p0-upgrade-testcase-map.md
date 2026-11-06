@@ -37,7 +37,7 @@ Each suite runs, in order:
 4. Client, then the SSL CA copy and HAProxy in front of the RGW port. The 7.1 two-site suite skips the pre-upgrade CA copy: Reef has no `ceph orch certmgr` store, and that command aborted build 3612. The post-upgrade copy still runs.
 5. Multisite, tier-2 only: realm and zone setup for primary and secondary, realm info, non-tenanted user create with the user file copied to secondary
 6. The 5 feature tests
-7. Upgrade
+7. Upgrade secondary, then primary, as two steps. Same commands as `tier-1_rgw_ms_upgrade_71GA_to_9x_latest.yaml`: `test_cephadm_upgrade.py` with `command: start`, `service: upgrade`, and `verify_cluster_health: true`. Secondary is CEPH-83574647. Primary starts only after secondary finishes and is CEPH-83582415.
 8. CA copy again, then `ceph versions`, then the same 5 feature tests
 
 Cluster conf:
