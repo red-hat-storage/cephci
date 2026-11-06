@@ -36,6 +36,7 @@ from jinja2 import Template
 
 from ceph.ceph import Ceph, CephNode, CommandFailed
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 S3CONF = """[DEFAULT]
@@ -220,13 +221,13 @@ def execute_s3_tests(
         base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml virtualenv/bin/nosetests -v"
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
         tests = "s3tests"
-        if build.split(".")[0] >= "8":
+        if get_rhbuild_major_version(build) >= 8:
             test_directory = "s3tests"
         else:
             test_directory = "s3tests_boto3"
 
         log.info(f"build :{build}")
-        if not build.split(".")[0] >= "7":
+        if get_rhbuild_major_version(build) < 7:
             if execute_granular:
                 tests = f"{test_directory}/functional/{path}"
             else:
@@ -465,7 +466,7 @@ def create_s3_conf(
     create_s3_user(node=rgw_node, user_prefix="alt", data=data)
     create_s3_user(node=rgw_node, user_prefix="tenant", data=data)
     create_s3_user(node=rgw_node, user_prefix="iam", data=data)
-    if build.split(".")[0] >= "8":
+    if get_rhbuild_major_version(build) >= 8:
         create_s3_user(node=rgw_node, user_prefix="iamroot", data=data)
         create_s3_user(node=rgw_node, user_prefix="iamrootalt", data=data)
 
@@ -477,12 +478,12 @@ def create_s3_conf(
     global S3CONF_TENANT_Tentacle
     global S3CONF_TENANT
 
-    if build.split(".")[0] >= "9":
+    if get_rhbuild_major_version(build) >= 9:
         S3CONF = S3CONF + S3CONF_TENANT_Tentacle
     else:
         S3CONF = S3CONF + S3CONF_TENANT
 
-    if build.split(".")[0] >= "8":
+    if get_rhbuild_major_version(build) >= 8:
         S3CONF = S3CONF + S3CONF_ACC
 
     templ = Template(S3CONF)

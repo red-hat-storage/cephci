@@ -340,7 +340,10 @@ class RadosOrchestrator:
         while iteration <= retry:
             iteration += 1
             cmd = f"ceph orch host maintenance enter {hostname} --force"
-            if yes_i_really_mean_it and self.rhbuild.split(".")[0] >= "7":
+            if (
+                yes_i_really_mean_it
+                and utils.get_rhbuild_major_version(self.rhbuild) >= 7
+            ):
                 cmd = f"ceph orch host maintenance enter {hostname} --force --yes-i-really-mean-it"
             try:
                 out, err = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
@@ -1523,7 +1526,7 @@ class RadosOrchestrator:
         set_overwrites = kwargs.get("set_overwrites", True)
 
         # 1. Check Ceph version (must be tentacle/>=9)
-        if int(self.rhbuild.split(".")[0]) < 9:
+        if utils.get_rhbuild_major_version(self.rhbuild) < 9:
             log.error("Ceph version < tentacle, cannot enable fast EC features")
             return False
 
@@ -1625,7 +1628,7 @@ class RadosOrchestrator:
         )
         crush_num_failure_domains = kwargs.get("crush-num-failure-domains", None)
         create_rule = kwargs.get("create_rule", False)
-        major_version = int(self.rhbuild.split(".")[0])
+        major_version = utils.get_rhbuild_major_version(self.rhbuild)
         default_plugin = "jerasure" if major_version < 9 else "isa"
         plugin = kwargs.get("plugin", default_plugin)
         technique = kwargs.get("technique")
@@ -2111,7 +2114,7 @@ class RadosOrchestrator:
             osd: "osd" service by default or "osd.<Id>"
             reset: revert mClock profile to default - balanced
         """
-        if self.rhbuild and self.rhbuild.split(".")[0] < "6":
+        if self.rhbuild and utils.get_rhbuild_major_version(self.rhbuild) < 6:
             log.info(
                 f"mClock specific settings are not valid below RHCS 6"
                 f", as the current RH build is {self.rhbuild}, returing TRUE"
@@ -2157,7 +2160,7 @@ class RadosOrchestrator:
         Returns:
             boolean: True if mClock parameter was set, False otherwise
         """
-        if self.rhbuild and self.rhbuild.split(".")[0] < "6":
+        if self.rhbuild and utils.get_rhbuild_major_version(self.rhbuild) < 6:
             log.info(
                 f"mClock specific settings are not valid below RHCS 6"
                 f", as the current RH build is {self.rhbuild}, returing TRUE"
@@ -5261,7 +5264,7 @@ EOF"""
         """
 
         # the command "orch set-unmanaged" is not available below Reef
-        if self.rhbuild and self.rhbuild.split(".")[0] < "7":
+        if self.rhbuild and utils.get_rhbuild_major_version(self.rhbuild) < 7:
             return self.set_service_managed_type(
                 service_type=service_type, unmanaged=True
             )
@@ -5293,7 +5296,7 @@ EOF"""
         """
 
         # the command "orch set-managed" is not available below Reef
-        if self.rhbuild and self.rhbuild.split(".")[0] < "7":
+        if self.rhbuild and utils.get_rhbuild_major_version(self.rhbuild) < 7:
             return self.set_service_managed_type(
                 service_type=service_type, unmanaged=False
             )

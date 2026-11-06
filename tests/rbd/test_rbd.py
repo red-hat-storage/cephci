@@ -15,6 +15,7 @@ import json
 import re
 from time import sleep
 
+from ceph.rbd.utils import get_ceph_version_from_rhbuild
 from ceph.utils import get_nodes_by_ids
 from utility.log import Log
 
@@ -129,7 +130,7 @@ def run(ceph_cluster, **kwargs) -> int:
             cmd="sudo /usr/sbin/alternatives --set python /usr/bin/python3"
         )
 
-    if rhbuild[0] > "4":
+    if get_ceph_version_from_rhbuild(rhbuild) > 4:
         out, err = nodes[0].exec_command(
             sudo=True, cmd="ceph config get mon mon_allow_pool_delete --format json"
         )
