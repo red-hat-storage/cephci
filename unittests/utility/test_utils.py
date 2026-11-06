@@ -3,7 +3,14 @@ from unittest import mock
 
 import pytest
 
-from utility.utils import custom_ceph_config, get_cephci_config
+from utility.utils import (
+    compose_container_image,
+    custom_ceph_config,
+    get_cephci_config,
+    is_image_digest,
+    normalize_container_image,
+    split_container_image,
+)
 
 suite_config = {
     "global": {
@@ -149,3 +156,115 @@ def test_get_cephci_config_raises(mock_expanduser):
     except IOError as exception:
         assert mock_expanduser.call_count == 1
         assert exception.errno == 2
+
+
+DIGEST = "79c0a55aff338be4196827c5d050384c0302e80ce44c84eb926b6cd7128bbc94"
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (DIGEST, True),
+        (f"sha256:{DIGEST}", True),
+        ("latest", False),
+        ("8-178", False),
+        (
+            "sha256-79c0a55aff338be4196827c5d050384c0302e80ce44c84eb926b6cd7128bbc94",
+            False,
+        ),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_is_image_digest(value, expected):
+    assert is_image_digest(value) is expected
+
+
+@pytest.mark.parametrize(
+    "registry,image,tag,expected",
+    [
+        (
+            "quay.io",
+            "rhceph-ci/rhceph",
+            DIGEST,
+            f"quay.io/rhceph-ci/rhceph@sha256:{DIGEST}",
+        ),
+        (
+            "quay.io",
+            "rhceph-ci/rhceph",
+            f"sha256:{DIGEST}",
+            f"quay.io/rhceph-ci/rhceph@sha256:{DIGEST}",
+        ),
+        (
+            "quay.io",
+            "rhceph-ci/rhceph",
+            "latest",
+            "quay.io/rhceph-ci/rhceph:latest",
+        ),
+        (
+            "cp.stg.icr.io",
+            "cp/ibm-ceph/ceph-8-rhel9",
+            "8-178",
+            "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-178",
+        ),
+        (
+            "registry.redhat.io",
+            "rhceph/rhceph-8-rhel9",
+            "latest",
+            "registry.redhat.io/rhceph/rhceph-8-rhel9:latest",
+        ),
+    ],
+)
+def test_compose_container_image(registry, image, tag, expected):
+    assert compose_container_image(registry, image, tag) == expected
+
+
+@pytest.mark.parametrize(
+    "ref,expected",
+    [
+        (
+            f"quay.io/rhceph-ci/rhceph:{DIGEST}",
+            f"quay.io/rhceph-ci/rhceph@sha256:{DIGEST}",
+        ),
+        (
+            f"quay.io/rhceph-ci/rhceph:sha256:{DIGEST}",
+            f"quay.io/rhceph-ci/rhceph@sha256:{DIGEST}",
+        ),
+        (
+            f"quay.io/rhceph-ci/rhceph@sha256:{DIGEST}",
+            f"quay.io/rhceph-ci/rhceph@sha256:{DIGEST}",
+        ),
+        (
+            "quay.io/rhceph-ci/keepalived:861cc2046a51ed5063bfaa63f06671092bdab08d1e02a43ebd410ba7e97c596d",
+            "quay.io/rhceph-ci/keepalived@sha256:861cc2046a51ed5063bfaa63f06671092bdab08d1e02a43ebd410ba7e97c596d",
+        ),
+        (
+            "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-178",
+            "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-178",
+        ),
+        (
+            "registry.redhat.io/rhceph/rhceph-8-rhel9:latest",
+            "registry.redhat.io/rhceph/rhceph-8-rhel9:latest",
+        ),
+        (
+            "localhost:5000/ceph/ceph:latest",
+            "localhost:5000/ceph/ceph:latest",
+        ),
+    ],
+)
+def test_normalize_container_image(ref, expected):
+    assert normalize_container_image(ref) == expected
+
+
+def test_split_container_image_digest_and_tag():
+    registry, path, tag = split_container_image(f"quay.io/rhceph-ci/rhceph:{DIGEST}")
+    assert registry == "quay.io"
+    assert path == "rhceph-ci/rhceph"
+    assert tag == f"sha256:{DIGEST}"
+
+    registry, path, tag = split_container_image(
+        "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-178"
+    )
+    assert registry == "cp.stg.icr.io"
+    assert path == "cp/ibm-ceph/ceph-8-rhel9"
+    assert tag == "8-178"

@@ -46,6 +46,7 @@ from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (  # ReportPortal,
     check_build_overrides,
+    compose_container_image,
     create_run_dir,
     create_unique_test_name,
     email_results,
@@ -764,7 +765,10 @@ def run(args):
     cli_arguments = f"{sys.executable} {' '.join(sys.argv)}"
     log.info(f"The CLI for the current run :\n{cli_arguments}\n")
     log.info(f"RPM Compose source - {base_url}")
-    log.info(f"Red Hat Ceph Image used - {docker_registry}/{docker_image}:{docker_tag}")
+    log.info(
+        "Red Hat Ceph Image used - %s",
+        compose_container_image(docker_registry, docker_image, docker_tag),
+    )
 
     ceph_version = [ctm.ceph_version]
     distro = []
@@ -1039,7 +1043,7 @@ def run(args):
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry
             config["skip_version_compare"] = skip_version_compare
-            config["container_image"] = "%s/%s:%s" % (
+            config["container_image"] = compose_container_image(
                 docker_registry,
                 docker_image,
                 docker_tag,

@@ -665,12 +665,21 @@ def teardown(nvme_service, rbd_obj, cleanup_config=None):
     # test failed before the subsystem was ever created) does not abort teardown
     # and leave the gateway service running — which would block the next test
     # from deploying its own gateway on the same nodes.
-    if "subsystems" in nvme_service.config["cleanup"]:
-        config_sub_node = nvme_service.config["subsystems"]
+    cleanup = (nvme_service.config or {}).get("cleanup") or []
+    if "subsystems" in cleanup:
+        config_sub_node = nvme_service.config.get("subsystems") or []
         if not isinstance(config_sub_node, list):
             config_sub_node = [config_sub_node]
+        gateways = getattr(nvme_service, "gateways", None) or []
+        if not gateways:
+            LOG.warning(
+                "Skipping subsystem teardown: NVMeService has no gateways "
+                "(deploy likely failed before gateway init)"
+            )
         for sub_cfg in config_sub_node:
-            gateway = nvme_service.gateways[0]
+            if not gateways:
+                break
+            gateway = gateways[0]
             try:
                 out, err = gateway.subsystem.delete(
                     **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
@@ -695,7 +704,7 @@ def teardown(nvme_service, rbd_obj, cleanup_config=None):
             rc = gw_rc
 
     # Delete the pool
-    if "pool" in nvme_service.config["cleanup"]:
+    if "pool" in cleanup:
         subsystem_config = nvme_service.config.get("subsystems", [])
         pools_to_delete = set()
         for sub_cfg in subsystem_config:

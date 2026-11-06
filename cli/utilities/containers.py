@@ -155,14 +155,20 @@ class Container(Cli):
             return out[0].strip()
         return out
 
-    def pull(self, image):
+    def pull(self, image, authfile=None):
         """Pull container image
 
         Args:
             image (str): Container image url
+            authfile (str): Path to a podman auth.json file (e.g. /etc/ceph/podman-auth.json).
+                            When provided the file is passed via --authfile so pulls from
+                            authenticated registries succeed.
         """
 
-        cmd = f"{self.base_cmd} pull {image}"
+        cmd = f"{self.base_cmd} pull"
+        if authfile:
+            cmd += f" --authfile {authfile}"
+        cmd += f" {image}"
 
         if self.execute(sudo=True, long_running=True, cmd=cmd):
             raise ContainerRegistryError(f"Failed to pull container image '{image}'")
