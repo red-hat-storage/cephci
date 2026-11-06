@@ -465,15 +465,15 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: copy an object to another version pre upgrade
-      desc: Copy an object onto another version in a versioned bucket
-      polarion-id: CEPH-9179
+      name: suspend bucket versioning pre upgrade
+      desc: Enable versioning, upload objects, then suspend versioning
+      polarion-id: CEPH-14263
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
             script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_copy.yaml
+            config-file-name: test_versioning_objects_suspend.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -489,15 +489,15 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: delete multiple buckets pre upgrade
-      desc: Create buckets and delete them
-      polarion-id: CEPH-14237
+      name: delete versioned objects pre upgrade
+      desc: Delete objects from a versioned bucket
+      polarion-id: CEPH-14262
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_delete_multiple_buckets.yaml
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_delete.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -580,15 +580,15 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: copy an object to another version post upgrade
-      desc: Copy an object onto another version in a versioned bucket
-      polarion-id: CEPH-9179
+      name: suspend bucket versioning post upgrade
+      desc: Enable versioning, upload objects, then suspend versioning
+      polarion-id: CEPH-14263
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
             script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_copy.yaml
+            config-file-name: test_versioning_objects_suspend.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -604,13 +604,13 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: delete multiple buckets post upgrade
-      desc: Create buckets and delete them
-      polarion-id: CEPH-14237
+      name: delete versioned objects post upgrade
+      desc: Delete objects from a versioned bucket
+      polarion-id: CEPH-14262
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_delete_multiple_buckets.yaml
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_delete.yaml
             verify-io-on-site: ["ceph-sec"]

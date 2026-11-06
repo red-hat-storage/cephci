@@ -27,7 +27,7 @@ Tier-2 is two-site multisite, primary and secondary. Swift is not required. Each
 |---|---|
 | 7.1 | s3cmd delete lifecycle, M buckets `test_Mbuckets_with_Nobjects.yaml`, multipart put, ordered listing, compression |
 | 8.1 | M buckets `test_Mbuckets.yaml`, object delete, unordered listing, bucket versioning, M buckets download |
-| 9.1 | pseudo-directory ordered listing, M buckets AWS4, versioned object copy, ordered listing of versioned buckets, delete multiple buckets |
+| 9.1 | pseudo-directory ordered listing, M buckets AWS4, suspend bucket versioning, ordered listing of versioned buckets, delete versioned objects |
 
 Each suite runs, in order:
 
