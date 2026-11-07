@@ -16,6 +16,7 @@ from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id
 from ceph.waiter import WaitUntil
+from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
 from tests.nvmeof.workflows.ha import HighAvailability
 from tests.nvmeof.workflows.initiator import NVMeInitiator
@@ -37,6 +38,38 @@ cleanup = False
 
 class NVMeAlertFailure(Exception):
     pass
+
+
+def _force_cleanup_nvmeof(ceph_cluster, rbd_obj, rbd_pool):
+    """Best-effort removal of leftover NVMeoF services and metadata pool.
+
+    Prior tests that only deleted orch services (or skipped teardown) leave
+    stale OMAP state in ``.nvmeof``, which makes subsequent gateway deploys
+    flap between 0/N and never become healthy.
+    """
+    try:
+        ceph = Orch(ceph_cluster, **{})
+        out, _ = ceph.shell(args=["ceph", "orch", "ls", "nvmeof", "--format", "json"])
+        out = (out or "").strip()
+        if out and out != "[]":
+            for service in json.loads(out):
+                service_name = service.get("service_name", "")
+                if "nvmeof" not in service_name:
+                    continue
+                LOG.info(f"Force-removing leftover NVMeoF service {service_name}")
+                try:
+                    ceph.shell(args=["ceph", "orch", "rm", service_name, "--force"])
+                except Exception as rm_err:
+                    LOG.warning(f"Failed to remove {service_name}: {rm_err}")
+            time.sleep(30)
+    except Exception as err:
+        LOG.warning(f"Force cleanup of NVMeoF services failed: {err}")
+
+    pools = {rbd_pool, DEFAULT_NVME_METADATA_POOL}
+    try:
+        rbd_obj.clean_up(pools=list(pools))
+    except Exception as err:
+        LOG.warning(f"Force cleanup of pools {pools} failed: {err}")
 
 
 class PrometheusAlerts:
@@ -85,11 +118,11 @@ class PrometheusAlerts:
         Fetch all alerts from Prometheus.
 
         Returns:
-            dict or None: The JSON response from Prometheus containing alert rules, or None on failure.
+            dict: The JSON response from Prometheus containing alert rules, or {} on failure.
         """
         uri = "api/v1/rules?type=alert"
         try:
-            response = requests.get(urljoin(self.baseurl, uri), timeout=5)
+            response = requests.get(urljoin(self.baseurl, uri), timeout=30)
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
@@ -101,14 +134,32 @@ class PrometheusAlerts:
         Fetch all NVMeoF related alerts from Prometheus.
 
         Returns:
-            dict or None: The JSON response from Prometheus containing alert rules, or None on failure.
+            dict: The NVMeoF alert group from Prometheus.
+
+        Raises:
+            NVMeAlertFailure: If Prometheus is unreachable or the nvmeof group is missing.
         """
-        alerts = self.fetch_prometheus_alerts()
-        for alert in alerts["data"]["groups"]:
-            if alert["name"] != "nvmeof":
+        for attempt in range(3):
+            alerts = self.fetch_prometheus_alerts()
+            if not alerts or "data" not in alerts:
+                LOG.warning(
+                    "Prometheus alert payload missing 'data'; refreshing endpoint "
+                    f"(attempt {attempt + 1}/3)"
+                )
+                self.baseurl = None
+                time.sleep(5)
                 continue
-            return alert
-        return False
+            for alert in alerts["data"].get("groups", []):
+                if alert.get("name") == "nvmeof":
+                    return alert
+            LOG.warning(
+                f"nvmeof alert group not found in Prometheus (attempt {attempt + 1}/3)"
+            )
+            self.baseurl = None
+            time.sleep(5)
+        raise NVMeAlertFailure(
+            "Failed to fetch nvmeof alert group from Prometheus after retries"
+        )
 
     def get_nvme_alert_by_name(self, alert_name):
         """Get a specific NVMe alert by its name.
@@ -116,7 +167,12 @@ class PrometheusAlerts:
         Args:
             alert_name: NVMeoF alert name
         """
-        for alert in self.get_nvme_alerts()["rules"]:
+        nvme_alerts = self.get_nvme_alerts()
+        if not nvme_alerts or "rules" not in nvme_alerts:
+            raise NVMeAlertFailure(
+                f"nvmeof alert group unavailable while looking up [ {alert_name} ]"
+            )
+        for alert in nvme_alerts["rules"]:
             if alert.get("name") == alert_name:
                 return alert
         raise Exception(f"[ {alert_name} ] alert not found.")
@@ -143,7 +199,11 @@ class PrometheusAlerts:
         _alert = str()
         timeout = self.calculate_timeout_window(timeout, interval)
         for w in WaitUntil(timeout=timeout, interval=interval):
-            _alert = self.get_nvme_alert_by_name(alert_name)
+            try:
+                _alert = self.get_nvme_alert_by_name(alert_name)
+            except Exception as err:
+                LOG.warning(f"[ {alert_name} ] lookup failed: {err}")
+                continue
             if _alert["state"] == state:
                 LOG.info(
                     f"[ {alert_name} ] is in Expected {state} state  - \n{dumps(_alert)}"
@@ -307,15 +367,15 @@ def test_ceph_83610950(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
+    rbd_pool = config["rbd_pool"]
+    rbd_obj = config["rbd_obj"]
+    svcs = []
+    services = []
     try:
-        rbd_pool = config["rbd_pool"]
-        rbd_obj = config["rbd_obj"]
         time_to_fire = config.get("time_to_fire", 60)
         interval = config.get("interval", 50)
         alert = "NVMeoFMultipleNamespacesOfRBDImage"
         msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
-        svcs = []
-        services = []
 
         # Deploy Services
         for svc in config["gw_groups"]:
@@ -385,14 +445,24 @@ def test_ceph_83610950(ceph_cluster, config):
         )
     except Exception as err:
         LOG.error(err)
+        raise
     finally:
         if config.get("cleanup"):
             LOG.info("Cleaning up NVMeoF services and RBD pool for CEPH-83610950.")
             for service in services:
-                service.delete_nvme_service()
-                rbd_obj.clean_up(pools=[rbd_pool])
+                try:
+                    service.delete_nvme_service()
+                except Exception as rm_err:
+                    LOG.warning(
+                        f"Failed to delete NVMe service during cleanup: {rm_err}"
+                    )
+            # Always remove RBD + .nvmeof metadata so the next test can redeploy cleanly
+            try:
+                rbd_obj.clean_up(pools=[rbd_pool, DEFAULT_NVME_METADATA_POOL])
+            except Exception as pool_err:
+                LOG.warning(f"Pool cleanup for CEPH-83610950 failed: {pool_err}")
             global cleanup
-            cleanup = False
+            cleanup = True
 
     LOG.info(f"CEPH-83610950 - {alert} alert validated successfully.")
 
@@ -997,11 +1067,11 @@ def test_ceph_83617404(ceph_cluster, config):
     # so we need to handle the cleanup in the test case itself
     svcs = list()
     services = dict()
+    rbd_pool = config["rbd_pool"]
+    rbd_obj = config["rbd_obj"]
     try:
         time_to_fire = config.get("time_to_fire", 60)
         interval = config.get("interval", 60)
-        rbd_pool = config["rbd_pool"]
-        rbd_obj = config["rbd_obj"]
         alert = "NVMeoFMaxGatewayGroups"
         original_gw_groups = deepcopy(config.get("gw_groups"))
 
@@ -1081,22 +1151,11 @@ def test_ceph_83617404(ceph_cluster, config):
 
     except Exception as err:
         LOG.error(err)
-        return 1
+        raise
     finally:
         if config.get("cleanup"):
             LOG.info("Cleaning up NVMeoF services and RBD pool for CEPH-83617404.")
-            # Execute ceph orch ls nvmeof and get the service names
-            ceph = Orch(ceph_cluster, **{})
-            cmd = "ceph orch ls nvmeof --format json"
-            out, _ = ceph.shell(args=[cmd])
-            services = json.loads(out)
-            for service in services:
-                if "nvmeof" in service["service_name"]:
-                    service_name = service["service_name"]
-                    ceph.shell(args=["ceph", "orch", "rm", service_name, "--force"])
-            # Sleep for 40 seconds to ensure the services are deleted
-            time.sleep(40)
-            rbd_obj.clean_up(pools=[rbd_pool])
+            _force_cleanup_nvmeof(ceph_cluster, rbd_obj, rbd_pool)
         global cleanup
         cleanup = True
     LOG.info("CEPH-83617404 - NVMeoFMaxGatewayGroups validated successfully.")
@@ -1106,7 +1165,8 @@ def test_ceph_83617622(ceph_cluster, config):
     """[CEPH-83617622] - Warning at maximum number of subsystems reached in group
 
     NVMeoFTooManySubsystems  Prometheus alert users to notify when user created
-    more than 128 subsystems in group
+    more than supported subsystems in group (default 128, overridable via
+    config nvmeof_spec.max_subsystems).
 
     Args:
         ceph_cluster: Ceph cluster object
@@ -1119,6 +1179,11 @@ def test_ceph_83617622(ceph_cluster, config):
     nqn_name = config["subsystems"][0]["nqn"]
     alert = "NVMeoFTooManySubsystems"
     msg = "The number of subsystems defined to the gateway exceeds supported values on cluster "
+    max_subsystems = (
+        config.get("nvmeof_spec", {}).get("max_subsystems")
+        or config.get("max_subsystems")
+        or 128
+    )
 
     # Deploy nvmeof service
     LOG.info("deploy nvme service")
@@ -1129,10 +1194,10 @@ def test_ceph_83617622(ceph_cluster, config):
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
     ha.gateways = nvme_service.gateways
 
-    # Configure subsystems
+    # Configure subsystems up to the supported maximum so the alert fires
     nvmegwcl1 = nvme_service.gateways[0]
     created_subsystems = list()
-    for i in range(0, 128):
+    for i in range(0, max_subsystems):
         subsystem = f"{nqn_name}.{i}"
         sub_args = {"subsystem": subsystem}
         nvmegwcl1.subsystem.add(**{"args": {**sub_args, **{"no-group-append": True}}})
@@ -1141,7 +1206,8 @@ def test_ceph_83617622(ceph_cluster, config):
     # Check for alert
     # NVMeoFTooManySubsystems prometheus alert should be firing
     LOG.info(
-        "NVMeoFTooManySubsystems should be firing because we have created 128 subsystems in group"
+        f"NVMeoFTooManySubsystems should be firing because we have created "
+        f"{max_subsystems} subsystems in group"
     )
     events = PrometheusAlerts(ha.orch)
     events.monitor_alert(alert, timeout=time_to_fire, interval=interval, msg=msg)
@@ -1150,7 +1216,8 @@ def test_ceph_83617622(ceph_cluster, config):
     LOG.info(
         "Delete few subsystems and check NVMeoFTooManySubsystems is in inactive state"
     )
-    selected_nqs_to_delete = created_subsystems[-9:]
+    delete_count = min(9, max(1, max_subsystems // 4))
+    selected_nqs_to_delete = created_subsystems[-delete_count:]
     for nqn in selected_nqs_to_delete:
         sub_args = {"subsystem": nqn}
         nvmegwcl1.subsystem.delete(**{"args": {**sub_args}})
@@ -1162,7 +1229,8 @@ def test_ceph_83617622(ceph_cluster, config):
 
     # Add the deleted nqns and check the alert is in firing state or not
     LOG.info(
-        "Add 128 susbystems and check NVMeoFTooManySubsystems alert is in firing state"
+        f"Re-add {delete_count} subsystems and check NVMeoFTooManySubsystems "
+        "alert is in firing state"
     )
     for nqn in selected_nqs_to_delete:
         sub_args = {"subsystem": nqn}
@@ -1205,6 +1273,7 @@ def test_ceph_83617545(ceph_cluster, config):
     nvme_service.init_gateways()
     config["nvme_service"] = nvme_service
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.gateways = nvme_service.gateways
     nvmegwcl1 = nvme_service.gateways[0]
 
     # Configure subsystems
@@ -1224,7 +1293,20 @@ def test_ceph_83617545(ceph_cluster, config):
         "Delete few namespaces and check NVMeoFTooManyNamespaces is in inactive state"
     )
 
+    # Prefer the first configured subsystem that actually exists on the gateway
     sub1_args = {"subsystem": nqn_name}
+    try:
+        listed, _ = nvmegwcl1.subsystem.list(**{"base_cmd_args": {"format": "json"}})
+        listed_nqns = {
+            s.get("nqn") or s.get("subnqn") for s in loads(listed).get("subsystems", [])
+        }
+        if nqn_name not in listed_nqns and listed_nqns:
+            nqn_name = sorted(listed_nqns)[0]
+            sub1_args = {"subsystem": nqn_name}
+            LOG.info(f"Using existing subsystem {nqn_name} for namespace delete/add")
+    except Exception as list_err:
+        LOG.warning(f"Could not list subsystems before namespace delete: {list_err}")
+
     nvmegwcl1.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
 
     # Check for alert and it should be in inactive state
@@ -1368,6 +1450,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         int - 0 when the execution is successful else 1 (for failure).
     """
     global cleanup
+    # Reset per-invocation so a prior test that set cleanup=True cannot skip
+    # teardown for a later failing test in the same suite run.
+    cleanup = False
     nvme_service = None
     rbd_obj = None
     config = kwargs["config"]
@@ -1384,6 +1469,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     custom_config = kwargs.get("test_data", {}).get("custom-config")
     check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
+    # Clear leftover orch services / .nvmeof OMAP from prior alert tests so
+    # gateway deploy does not flap at 0/N.
+    if config.get("cleanup"):
+        _force_cleanup_nvmeof(ceph_cluster, rbd_obj, config["rbd_pool"])
+        # Recreate the RBD pool after force cleanup may have deleted it
+        rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+
     try:
         # NVMe alert test case to run
         if config.get("test_case"):
@@ -1399,7 +1491,14 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             if service_to_clean is not None:
                 try:
                     teardown(service_to_clean, rbd_obj)
+                    cleanup = True
                 except Exception as teardown_err:
                     LOG.error(f"Teardown in run() finally failed: {teardown_err}")
+            if not cleanup:
+                try:
+                    _force_cleanup_nvmeof(ceph_cluster, rbd_obj, config["rbd_pool"])
+                    cleanup = True
+                except Exception as force_err:
+                    LOG.error(f"Force cleanup in run() finally failed: {force_err}")
 
     return 1
