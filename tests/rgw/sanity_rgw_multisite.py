@@ -258,6 +258,8 @@ def run(**kw):
         configure_kafka_cluster_with_security(primary_cluster, cloud_type)
         configure_kafka_cluster_with_security(secondary_cluster, cloud_type)
 
+    # Legacy external GKLM only. Container install + RGW remount is done in
+    # ceph-qe-scripts (reusables/gklm.py) when key_management_tool: gklm.
     setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
     if setup_gklm_prerequisites:
         setup_gklm_prereq(primary_cluster, cloud_type)
