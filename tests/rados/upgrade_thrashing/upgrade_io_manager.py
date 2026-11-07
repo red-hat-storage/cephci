@@ -4389,7 +4389,12 @@ exit 0
         return [tool for tool, enabled in service_tools.items() if enabled]
 
     def _get_mount_points(self, client: Any, service: str) -> List[str]:
-        """Discover mount points for a given service type on a client."""
+        """Discover mount points for a given service type on a client.
+
+        Excludes ``upgrade_parallel_ops.mount_prefix`` (default ``/mnt/par_``)
+        so customer-like parallel-ops mounts are not swept into bg IO /
+        integrity / fill.
+        """
         try:
             if service == "cephfs":
                 out, _ = client.exec_command(
@@ -4411,7 +4416,17 @@ exit 0
                 )
             else:
                 return []
-            return [mp.strip() for mp in out.strip().split("\n") if mp.strip()]
+            prefix = (
+                self.config.get("upgrade_parallel_ops", {}).get(
+                    "mount_prefix", "/mnt/par_"
+                )
+                or "/mnt/par_"
+            )
+            return [
+                mp.strip()
+                for mp in out.strip().split("\n")
+                if mp.strip() and not mp.strip().startswith(prefix)
+            ]
         except Exception:
             return []
 

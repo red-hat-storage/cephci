@@ -52,6 +52,7 @@
 #   - PG management (pg_num_min/pg_num_max pinning, mon_max_pg_per_osd auto-set)
 #   - Health warning tracking across all phases (not just during upgrade)
 #   - Per-component feature toggles with pre/post-upgrade validation
+#   - Parallel CephFS/NFS admin churn (upgrade_parallel_ops) during upgrade
 #   - 23 bug regression validators
 #   - Interactive HTML report with Gantt charts, IO timelines, phase annotations
 #
@@ -378,6 +379,95 @@
 #           ec_optimizations: false    # requires Ceph 20.x+ (IBM 9.x Tentacle)
 #         nfs:
 #           qos_bandwidth: false       # IBMCEPH-16312: config parsing crash
+#
+#   ---------------------------------------------------------------------------
+#   upgrade_parallel_ops:  (customer-like CephFS/NFS admin churn during upgrade)
+#     Soft-fail only — never aborts the upgrade. Module:
+#       tests/rados/upgrade_thrashing/upgrade_thrash_parallel_ops.py
+#     Starts after background IO; tears down after fail_fs NFS recover (and
+#     again in finally). No phase gate — all enabled workers run concurrently
+#     for the whole upgrade window (multi-customer overlap).
+#     HTML report: "Parallel Ops" shows per-worker ok/error counts, cycle
+#     latency (p50/p95/max), and buckets by upgrade phase_boundaries.
+#     Ceph CLI / remount failures (including fail_fs / MDS-down) are logged
+#     as warning/info only — they never fail the hop.
+#
+#     Isolation:
+#       svg / seed subvols / par_nfs_* clusters / mounts under mount_prefix
+#       are dedicated to this churn. UpgradeIOManager excludes mount_prefix
+#       from bg IO / integrity / fill mount discovery.
+#
+#     enabled: (true/false) [false]
+#     svg: (string) [par_ops]  Stable subvolumegroup (never deleted mid-run)
+#     nfs_prefix: (string) [par_nfs]  Prefix for throwaway NFS cluster ids
+#     base_port: (int) [2100]  Stable NFS port; throwaways use base_port+10..
+#       Folio hops use 2100; Cali holistic uses 2060 to avoid colliding with
+#       the suite's own NFS service ports.
+#     max_live_nfs_clusters: (int) [2]  Cap on concurrent throwaway NFS
+#       clusters (stable par_nfs_stable is not counted)
+#     seed_subvol_count: (int) [3]  Distinct seed subvols (par_sv0..) ≈
+#       distinct customers. Volume-bound workers fan out one thread per seed.
+#     mount_prefix: (string) [/mnt/par_]  Client mounts for remount churn
+#     snap_schedule_interval: (string) [1h]
+#       Allowed units: h/d/w/M/y only (mgr snap_schedule rejects 1m)
+#     rate_limits:
+#       manual_snap_interval_s: [60]   snap/clone + visibility loop
+#       subvol_interval_s:      [15]   SVG/subvol/export lifecycle loop
+#       nfs_create_interval_s:  [60]   NFS cluster create/rm + config/qos
+#       remount_interval_s:     [90]   NFS client remount + .snap probe
+#     cephfs:  (each true/false; each true flag => its own worker thread;
+#               volume-bound flags also fan out per seed_subvol_count)
+#       subvolumegroup_lifecycle  churn sibling SVG {svg}_churn only
+#       subvolume_lifecycle       create/info/resize/pin/metadata/rm
+#       subvolume_snapshot        manual snap create/ls/info/metadata/rm
+#       subvolume_clone           snap clone + clone status wait + rm
+#       group_snapshot            SVG snapshot create/ls/rm (on first seed)
+#       snap_schedule             add/retention/activate on seed path only
+#                                 (never FeatureManager's / root schedule)
+#       snapshot_visibility       set/get --value true on seed subvols
+#       readonly_status           fs ls/status, mds versions/metadata
+#     nfs:
+#       cluster_lifecycle         create/info/rm throwaway clusters
+#       cluster_config            config set/get/reset on par_nfs_stable
+#       export_lifecycle          create/ls/info/rm throwaway exports
+#       export_default            get-export-default only (read-only probe)
+#       qos_bandwidth / qos_iops  coded; leave false unless QoS is in scope
+#                                 (CLI matches FeatureManager PerShare form)
+#       client_remount_snap       mount/umount per seed export + .snap ls
+#       readonly_status           nfs cluster ls/info
+#     Example:
+#       upgrade_parallel_ops:
+#         enabled: true
+#         svg: par_ops
+#         nfs_prefix: par_nfs
+#         base_port: 2100
+#         max_live_nfs_clusters: 2
+#         seed_subvol_count: 3
+#         mount_prefix: /mnt/par_
+#         rate_limits:
+#           manual_snap_interval_s: 60
+#           subvol_interval_s: 15
+#           nfs_create_interval_s: 60
+#           remount_interval_s: 90
+#         snap_schedule_interval: "1h"
+#         cephfs:
+#           subvolumegroup_lifecycle: true
+#           subvolume_lifecycle: true
+#           subvolume_snapshot: true
+#           subvolume_clone: true
+#           group_snapshot: true
+#           snap_schedule: true
+#           snapshot_visibility: true
+#           readonly_status: true
+#         nfs:
+#           cluster_lifecycle: true
+#           cluster_config: true
+#           export_lifecycle: true
+#           export_default: true
+#           qos_bandwidth: false
+#           qos_iops: false
+#           client_remount_snap: true
+#           readonly_status: true
 #
 #   ---------------------------------------------------------------------------
 #   bug_validations:
@@ -913,6 +1003,42 @@ tests:
           nvmeof: false
 
         # =================================================================
+        # PARALLEL OPS (customer-like CephFS/NFS admin churn during upgrade)
+        # =================================================================
+        upgrade_parallel_ops:
+          enabled: true
+          svg: par_ops
+          nfs_prefix: par_nfs
+          base_port: 2100
+          max_live_nfs_clusters: 2
+          seed_subvol_count: 3
+          mount_prefix: /mnt/par_
+          rate_limits:
+            manual_snap_interval_s: 60
+            subvol_interval_s: 15
+            nfs_create_interval_s: 60
+            remount_interval_s: 90
+          snap_schedule_interval: "1h"
+          cephfs:
+            subvolumegroup_lifecycle: true
+            subvolume_lifecycle: true
+            subvolume_snapshot: true
+            subvolume_clone: true
+            group_snapshot: true
+            snap_schedule: true
+            snapshot_visibility: true
+            readonly_status: true
+          nfs:
+            cluster_lifecycle: true
+            cluster_config: true
+            export_lifecycle: true
+            export_default: true
+            qos_bandwidth: false
+            qos_iops: false
+            client_remount_snap: true
+            readonly_status: true
+
+        # =================================================================
         # FEATURE TOGGLES
         # =================================================================
         features:
@@ -1287,6 +1413,42 @@ tests:
           nfs: true
           smb: false
           nvmeof: false
+
+        # =================================================================
+        # PARALLEL OPS (customer-like CephFS/NFS admin churn during upgrade)
+        # =================================================================
+        upgrade_parallel_ops:
+          enabled: true
+          svg: par_ops
+          nfs_prefix: par_nfs
+          base_port: 2100
+          max_live_nfs_clusters: 2
+          seed_subvol_count: 3
+          mount_prefix: /mnt/par_
+          rate_limits:
+            manual_snap_interval_s: 60
+            subvol_interval_s: 15
+            nfs_create_interval_s: 60
+            remount_interval_s: 90
+          snap_schedule_interval: "1h"
+          cephfs:
+            subvolumegroup_lifecycle: true
+            subvolume_lifecycle: true
+            subvolume_snapshot: true
+            subvolume_clone: true
+            group_snapshot: true
+            snap_schedule: true
+            snapshot_visibility: true
+            readonly_status: true
+          nfs:
+            cluster_lifecycle: true
+            cluster_config: true
+            export_lifecycle: true
+            export_default: true
+            qos_bandwidth: false
+            qos_iops: false
+            client_remount_snap: true
+            readonly_status: true
 
         # =================================================================
         # FEATURE TOGGLES
