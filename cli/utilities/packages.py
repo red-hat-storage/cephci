@@ -60,12 +60,13 @@ class Package(Cli):
             return out[0].strip()
         return out
 
-    def install(self, pkg, nogpgcheck=False, env_vars={}):
+    def install(self, pkg, nogpgcheck=False, env_vars={}, disablerepo=None):
         """install a package or packages
 
         Args:
             pkg (str): package need to be installed
             env_vars (dict): dictiory with environment variables
+            disablerepo (str): repo glob to pass to --disablerepo
         """
         cmd = ""
         if env_vars:
@@ -75,6 +76,8 @@ class Package(Cli):
         cmd += f"{self.manager} install -y {pkg}"
         if nogpgcheck:
             cmd += " --nogpgcheck"
+        if disablerepo:
+            cmd += f" --disablerepo='{disablerepo}'"
 
         # When multiple nodes are passed, the execute returns a dict with return value
         # for each node Each of these return values has to be checked to ensure that

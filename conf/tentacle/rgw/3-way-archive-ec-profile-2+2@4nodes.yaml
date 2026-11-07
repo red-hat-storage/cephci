@@ -1,4 +1,6 @@
 #Conf for 2+2 EC profile on 4 nodes for 3 way active-active-archive rgw-multisite
+# node2 and node4 host RGW daemons. They carry the rgw role so ceph-common and the
+# admin keyring are installed there. User create SSHes to the first zone endpoint (node2).
 ---
 globals:
   - ceph-cluster:
@@ -21,6 +23,7 @@ globals:
           - mgr
           - mon
           - osd
+          - rgw
 
       node3:
         disk-size: 15
@@ -35,6 +38,7 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
 
   - ceph-cluster:
@@ -57,6 +61,7 @@ globals:
           - mgr
           - mon
           - osd
+          - rgw
 
       node3:
         disk-size: 15
@@ -71,6 +76,7 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
 
   - ceph-cluster:
@@ -93,6 +99,7 @@ globals:
           - mgr
           - mon
           - osd
+          - rgw
 
       node3:
         disk-size: 15
@@ -107,4 +114,5 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
