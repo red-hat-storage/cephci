@@ -168,6 +168,11 @@ Options:
                                     zone CRUSH path); use deploy_rook_defaults_ceph.py
                                     for rack+ssd topology instead.
                                     verify-odf-defaults=true checks config/osd/mon dump.
+                                    use_agent=true enables mgr/cephadm/use_agent at
+                                    bootstrap (test_bootstrap / test_cephadm_bootstrap
+                                    via --config; ansible bootstrap via post-bootstrap
+                                    config set) so agents deploy as hosts are added.
+                                    Example: --custom-config use_agent=true
   --custom-config-file <file>       Add custom config yaml to ceph_conf_overrides
   --xunit-results                   Create xUnit result file for test suite run
                                     [default: false]
@@ -233,6 +238,7 @@ def create_nodes(
             --custom-config openstack_vm_profile=c1.standard.xl
             --custom-config openstack_networks=provider_net_cci_1
             --custom-config use_ipv6=true
+            --custom-config use_agent=true
 
         If these values are not provided then the defaults would be used.
         openstack_networks (single or comma-separated) overrides cluster conf for all OpenStack VMs.
