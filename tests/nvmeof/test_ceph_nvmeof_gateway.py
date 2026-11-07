@@ -5,11 +5,16 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 """
 
 import json
+from time import sleep
 
 from ceph.ceph import Ceph
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
+from tests.nvmeof.workflows.gateway_entities import (
+    configure_gw_entities,
+    supports_subsystem_model_name,
+    teardown,
+)
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
@@ -20,7 +25,77 @@ from utility.utils import run_fio
 LOG = Log(__name__)
 
 
-def initiators(ceph_cluster, gateway, config):
+def models_from_nvme_list(nvme_list_output):
+    """Return Model column values from the ``nvme list`` table.
+
+    Column bounds come from the header row (Model through Namespace), so both
+    the current layout (with Generic) and the older layout are handled.
+    """
+    lines = [
+        line.rstrip() for line in str(nvme_list_output).splitlines() if line.strip()
+    ]
+    header_idx = None
+    for index, line in enumerate(lines):
+        if "Model" in line and "Namespace" in line and line.strip().startswith("Node"):
+            header_idx = index
+            break
+    if header_idx is None:
+        raise RuntimeError(
+            f"nvme list header with Model column not found:\n{nvme_list_output}"
+        )
+
+    header = lines[header_idx]
+    start = header.index("Model")
+    end = header.index("Namespace")
+    models = []
+    for line in lines[header_idx + 1 :]:
+        if set(line.strip()) <= set("- "):
+            continue
+        if not line.strip().startswith("/dev/"):
+            continue
+        models.append(line[start:end].strip())
+    return models
+
+
+def verify_nvme_list_model(initiator, expected_model, tries=4, delay=3):
+    """Fail unless ``expected_model`` appears under Model in ``nvme list``."""
+    last_out = ""
+    for attempt in range(1, tries + 1):
+        out, _ = initiator.list()
+        last_out = out or ""
+        LOG.info("nvme list on %s:\n%s", initiator.node.hostname, last_out)
+        models = models_from_nvme_list(last_out)
+        LOG.info("nvme list Model column values: %s", models)
+        if expected_model in models:
+            LOG.info(
+                "Model %s is reflected in nvme list on %s",
+                expected_model,
+                initiator.node.hostname,
+            )
+            return
+        if attempt < tries:
+            sleep(delay)
+    raise RuntimeError(
+        f"Model {expected_model!r} not found under Model in nvme list "
+        f"on {initiator.node.hostname}.\n{last_out}"
+    )
+
+
+def model_name_for_initiator(initiator_cfg, model_by_nqn):
+    """Return the model configured for this initiator's subsystem, if any."""
+    subnqn = initiator_cfg.get("subnqn") or initiator_cfg.get("nqn")
+    if not subnqn or subnqn == "connect-all":
+        return None
+    if subnqn in model_by_nqn:
+        return model_by_nqn[subnqn]
+    for nqn, model_name in model_by_nqn.items():
+        # Gateway may append ".<group>" when no-group-append is false.
+        if subnqn.startswith(f"{nqn}.") or nqn.startswith(f"{subnqn}."):
+            return model_name
+    return None
+
+
+def initiators(ceph_cluster, gateway, config, expected_model=None):
     """Run IOs from NVMe Initiators.
 
     - Discover NVMe targets
@@ -63,8 +138,13 @@ def initiators(ceph_cluster, gateway, config):
     _conn_cmd = {**cmd_args, **conn_port}
     LOG.debug(initiator.connect(**_conn_cmd))
 
-    # List NVMe targets
-    paths = initiator.list_devices()
+    # On Ceph 9.2+, a subsystem created with --model_name must show that
+    # name under Model in the initiator's nvme list table.
+    if expected_model:
+        verify_nvme_list_model(initiator, expected_model)
+        paths = initiator.list_devices(model=expected_model)
+    else:
+        paths = initiator.list_devices()
 
     results = []
     io_args = {"size": "100%"}
@@ -202,10 +282,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("subsystems"):
             configure_gw_entities(nvme_service, rbd_obj=rbd_obj, cluster=ceph_cluster)
 
+        model_by_nqn = {}
+        if supports_subsystem_model_name(ceph_cluster, nvme_service.ceph_version):
+            for sub in config.get("subsystems") or []:
+                if not isinstance(sub, dict) or not sub.get("model_name"):
+                    continue
+                nqn = sub.get("nqn") or sub.get("subnqn")
+                if nqn:
+                    model_by_nqn[nqn] = sub["model_name"]
+
         if config.get("initiators"):
             with parallel() as p:
                 for initiator in config["initiators"]:
-                    p.spawn(initiators, ceph_cluster, nvmegwcli, initiator)
+                    expected_model = model_name_for_initiator(initiator, model_by_nqn)
+                    p.spawn(
+                        initiators,
+                        ceph_cluster,
+                        nvmegwcli,
+                        initiator,
+                        expected_model,
+                    )
         return 0
     except Exception as err:
         LOG.error(err)

@@ -7,6 +7,15 @@ from utility.log import Log
 LOG = Log(__name__)
 
 
+def _model_matches(actual, expected, allow_prefix):
+    """Return True when an nvme ModelNumber matches the expected controller model."""
+    if not actual or not expected:
+        return False
+    if actual == expected:
+        return True
+    return allow_prefix and actual.startswith(expected)
+
+
 class NVMeCLI(Cli):
     """NVMe CLI commands.
 
@@ -89,9 +98,12 @@ class NVMeCLI(Cli):
             cmd=f"nvme list-subsys {device} {config_dict_to_string(kwargs)}", sudo=True
         )
 
-    def list_spdk_drives(self, nsid_device_pair=None):
+    def list_spdk_drives(self, nsid_device_pair=None, model=None):
         """List the NVMe Targets only SPDK drives.
-        Args: nsid_device_pair (optional)
+        Args:
+            nsid_device_pair (optional): Return namespace/NSID pairs.
+            model (optional): Controller model to match. Defaults to
+                "Ceph bdev Controller".
         Return:
             Dict: Dict of SPDK drives if `nsid_device_pair` is None else empty list.
             list: If `nsid_device_pair` is passed, list of dicts each containing "Namespace" and "NSID".
@@ -105,7 +117,10 @@ class NVMeCLI(Cli):
             LOG.debug("No NVMe devices found.")
             return []
 
-        ceph_model = "Ceph bdev Controller"
+        ceph_model = model or "Ceph bdev Controller"
+        # Default discovery still accepts the historical "Ceph bdev Controller*" prefix
+        # on the old nvme-cli layout. A caller-supplied model must match exactly.
+        allow_prefix = model is None
         devices, namespace_list = [], []
         for dev in devs:
             subsystems = dev.get("Subsystems", [])
@@ -122,7 +137,7 @@ class NVMeCLI(Cli):
                             namespace_list.append(
                                 {"Namespace": ns_path, "NSID": ns.get("NSID")}
                             )
-            elif dev.get("ModelNumber", "").startswith(ceph_model):
+            elif _model_matches(dev.get("ModelNumber", ""), ceph_model, allow_prefix):
                 # --- Old-style layout ---
                 ns_path = dev.get("DevicePath")
                 devices.append(ns_path)

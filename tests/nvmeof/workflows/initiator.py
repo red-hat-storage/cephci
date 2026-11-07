@@ -232,9 +232,13 @@ class NVMeInitiator(Initiator):
         )
 
     @retry((NoDevicesFound))
-    def list_devices(self):
-        """List NVMe targets."""
-        targets = self.list_spdk_drives()
+    def list_devices(self, model=None):
+        """List NVMe targets.
+
+        Args:
+            model: Controller model to match. Defaults to "Ceph bdev Controller".
+        """
+        targets = self.list_spdk_drives(model=model)
         if not targets:
             raise NoDevicesFound(f"NVMe Targets not found on {self.node.hostname}")
         LOG.debug(targets)

@@ -23,6 +23,19 @@ from utility.utils import (
 LOG = Log(__name__)
 
 
+def supports_subsystem_model_name(ceph_cluster, ceph_version=None):
+    """Return True when subsystem add accepts ``--model_name``.
+
+    The flag is valid on Ceph 9.2 and above. That is product version
+    ``rhcs_version`` >= 9.2, which corresponds to upstream Ceph >= 20.2.1.
+    """
+    if ceph_cluster is not None and ceph_cluster.rhcs_version >= LooseVersion("9.2"):
+        return True
+    if not ceph_version:
+        return False
+    return LooseVersion(str(ceph_version)) >= LooseVersion("20.2.1")
+
+
 def validate_subsystems(nvme_service, subsystem_config):
     """
     Validate that all the subsystems present in subsystem_config are correctly configured.
@@ -143,6 +156,24 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
                 sub_cfg.get("network_mask")
                 or sub_cfg.get("network-mask")
                 or get_network_mask(nvme_service.gateways)
+            )
+
+        model_name = sub_cfg.get("model_name")
+        if model_name and supports_subsystem_model_name(
+            nvme_service.ceph_cluster, ceph_version
+        ):
+            # Flag is --model_name (underscore). Quote values that contain spaces.
+            args["model_name"] = (
+                f"'{model_name}'"
+                if any(ch.isspace() for ch in str(model_name))
+                else model_name
+            )
+            LOG.info("Creating subsystem %s with --model_name %s", nqn, model_name)
+        elif model_name:
+            LOG.info(
+                "Skipping --model_name %s for %s; it is valid only on Ceph 9.2 and above",
+                model_name,
+                nqn,
             )
 
         try:
