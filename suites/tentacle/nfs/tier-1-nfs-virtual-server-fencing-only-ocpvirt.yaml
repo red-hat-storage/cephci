@@ -1,0 +1,32 @@
+#===============================================================================================
+# VS export fencing only (Scenarios 4–5) — IBMCEPH-13896 / IBMCEPH-17906 recheck
+#===============================================================================================
+tests:
+  - test:
+      name: Virtual Server export fencing single client
+      module: regional_mount.nfs_virtual_server_export_fencing_single_client.py
+      desc: Scenario 4 — Server_Addrs and CLIENT fencing on single client
+      polarion-id: CEPH-83632433
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        comments: IBMCEPH-13896 / IBMCEPH-17906 recheck
+
+  - test:
+      name: Virtual Server export fencing multi client
+      module: regional_mount.nfs_virtual_server_export_fencing_multi_client.py
+      desc: Scenario 5 — fence one export; other export remains multi-route
+      polarion-id: CEPH-83632434
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 2
+        export_num: 2
+        min_routes: 2
+        sudo: false
+        comments: IBMCEPH-13896 / IBMCEPH-17906 recheck

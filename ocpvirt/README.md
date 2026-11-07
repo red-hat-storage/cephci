@@ -253,6 +253,8 @@ python3 run.py \
 | `ocpvirt_profile` | `o1.large` | VirtualMachineClusterInstancetype name (omit when using custom CPU/RAM) |
 | `ocpvirt_cpu` | (none) | vCPU cores for inline sizing; requires `ocpvirt_memory` |
 | `ocpvirt_memory` | (none) | Memory quantity (e.g. `16Gi`); requires `ocpvirt_cpu` |
+| `ocpvirt_networks` | (namespace `network`) | Comma-separated Multus NADs for multi-homed VMs (e.g. `ceph-public,bridge-504`) |
+| `ocpvirt_root_disk_size` | (namespace default) | Root DataVolume size override (e.g. `40Gi`) |
 | `pvc_batch_size` | `3` | Non-root DataVolumes created per batch |
 | `vm_batch_size` | `1` | VirtualMachines created per batch |
 

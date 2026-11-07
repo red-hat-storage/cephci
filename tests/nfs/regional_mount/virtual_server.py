@@ -5,6 +5,7 @@ import json
 import re
 from time import sleep
 
+import yaml
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
@@ -30,6 +31,12 @@ except ImportError:
         setup_custom_nfs_cluster_multi_export_client,
         setup_nfs_cluster,
     )
+
+try:
+    from tests.nfs.lib.common_lib import get_nfs_container_id
+except ImportError:
+    from lib.common_lib import get_nfs_container_id  # type: ignore
+
 from utility.log import Log
 
 log = Log(__name__)
@@ -1088,3 +1095,351 @@ def get_nfs_server_hostname(ceph_cluster):
 
 def export_names_for_count(export_num, nfs_export_base="/export"):
     return [f"{nfs_export_base}_{i}" for i in range(export_num)]
+
+
+def _cmd_text(out):
+    if isinstance(out, tuple):
+        out = out[0]
+    if isinstance(out, bytes):
+        out = out.decode("utf-8", errors="replace")
+    return str(out or "")
+
+
+def list_running_nfs_daemons(client, nfs_name):
+    """Return orch-ps dicts for running ``nfs.<nfs_name>`` daemons."""
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ps --service-name nfs.{nfs_name} --format json",
+        check_ec=False,
+    )
+    try:
+        daemons = json.loads(_cmd_text(out) or "[]")
+    except json.JSONDecodeError as exc:
+        raise OperationFailedError(
+            f"Unable to parse orch ps for nfs.{nfs_name}: {exc}"
+        ) from exc
+    running = []
+    for daemon in daemons or []:
+        status = str(daemon.get("status_desc") or "").lower()
+        if status == "running":
+            running.append(daemon)
+    return running
+
+
+def export_nfs_orch_apply_spec(client, nfs_name):
+    """
+    Return an orch-apply-safe NFS service spec (no status/events).
+
+    Used for IBMCEPH-11530 toggle: edit ``spec.enable_virtual_server`` then
+    ``ceph orch apply -i`` + mandatory ``ceph orch daemon reconfig``.
+    """
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ls --service-name nfs.{nfs_name} --export -f yaml",
+        check_ec=False,
+    )
+    text = _cmd_text(out)
+    try:
+        docs = [doc for doc in yaml.safe_load_all(text) if doc]
+    except yaml.YAMLError as exc:
+        raise OperationFailedError(
+            f"Unable to parse exported orch YAML for nfs.{nfs_name}: {exc}"
+        ) from exc
+    if not docs:
+        raise OperationFailedError(f"Exported orch spec for nfs.{nfs_name} is empty")
+    doc = docs[0]
+    apply_spec = {
+        key: doc[key]
+        for key in ("service_type", "service_id", "placement", "spec")
+        if key in doc
+    }
+    apply_spec.setdefault("service_type", "nfs")
+    apply_spec.setdefault("service_id", nfs_name)
+    apply_spec.setdefault("spec", {})
+    return apply_spec
+
+
+def get_enable_virtual_server_from_spec(client, nfs_name):
+    """Return ``spec.enable_virtual_server`` from the exported orch NFS spec."""
+    spec = export_nfs_orch_apply_spec(client, nfs_name)
+    return (spec.get("spec") or {}).get("enable_virtual_server")
+
+
+def apply_enable_virtual_server(client, nfs_name, enabled, spec_path=None):
+    """
+    Set ``enable_virtual_server`` via ``ceph orch apply -i``.
+
+    Does **not** reconfig the daemon — callers must call
+    ``reconfig_nfs_daemons`` afterwards (field is not in the dependency
+    tracker, so auto-reconfig will not fire).
+    """
+    apply_spec, out, err = apply_enable_virtual_server_raw(
+        client, nfs_name, bool(enabled), spec_path=spec_path, check_ec=True
+    )
+    log.info(
+        "Applied nfs.%s enable_virtual_server=%s (orch apply): %s %s",
+        nfs_name,
+        enabled,
+        out.strip(),
+        err.strip(),
+    )
+    return apply_spec
+
+
+def apply_enable_virtual_server_raw(
+    client, nfs_name, value, spec_path=None, check_ec=False
+):
+    """
+    Set ``enable_virtual_server`` to an arbitrary YAML value via orch apply.
+
+    Used by TC-VS14 to apply invalid values such as ``\"maybe\"`` (dev review:
+    orch accepts them; failure is at Ganesha / reconfig). Does **not** reconfig.
+
+    Returns ``(apply_spec, stdout, stderr)``.
+    """
+    spec_path = spec_path or f"/tmp/nfs_{nfs_name}_vs_spec.yaml"
+    apply_spec = export_nfs_orch_apply_spec(client, nfs_name)
+    apply_spec.setdefault("spec", {})
+    apply_spec["spec"]["enable_virtual_server"] = value
+    body = yaml.safe_dump(apply_spec, default_flow_style=False)
+    client.exec_command(
+        sudo=True,
+        cmd=f"cat > {spec_path} <<'VS_SPEC_EOF'\n{body}VS_SPEC_EOF",
+    )
+    out, err = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch apply -i {spec_path}",
+        check_ec=check_ec,
+    )
+    out_t, err_t = _cmd_text(out), _cmd_text(err)
+    log.info(
+        "Applied nfs.%s enable_virtual_server=%r (orch apply): out=%s err=%s",
+        nfs_name,
+        value,
+        out_t.strip(),
+        err_t.strip(),
+    )
+    return apply_spec, out_t, err_t
+
+
+def reconfig_nfs_daemons(client, nfs_name):
+    """
+    Run ``ceph orch daemon reconfig`` for every running nfs daemon.
+
+    Mandatory after changing ``enable_virtual_server`` (developer-confirmed:
+    the field is not in the dependency tracker).
+    """
+    daemons = list_running_nfs_daemons(client, nfs_name)
+    if not daemons:
+        raise OperationFailedError(f"No running nfs.{nfs_name} daemons to reconfig")
+    for daemon in daemons:
+        daemon_name = daemon.get("daemon_name")
+        if not daemon_name:
+            daemon_id = daemon.get("daemon_id")
+            daemon_name = f"nfs.{nfs_name}.{daemon_id}"
+        out, err = client.exec_command(
+            sudo=True,
+            cmd=f"ceph orch daemon reconfig {daemon_name}",
+            check_ec=False,
+        )
+        log.info(
+            "Reconfig %s: rc-related out=%s err=%s",
+            daemon_name,
+            _cmd_text(out).strip(),
+            _cmd_text(err).strip(),
+        )
+    sleep(20)
+
+
+def set_virtual_server_enabled(client, nfs_name, enabled):
+    """Apply orch spec change then mandatory daemon reconfig."""
+    apply_enable_virtual_server(client, nfs_name, enabled)
+    reconfig_nfs_daemons(client, nfs_name)
+
+
+def expected_nfs_daemon_count(client, nfs_name):
+    """
+    Return expected NFS daemon count from orch placement (status RUNNING).
+
+    Falls back to the number of currently running daemons.
+    """
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ls --service-name nfs.{nfs_name} -f json",
+        check_ec=False,
+    )
+    text = _cmd_text(out).strip()
+    try:
+        data = json.loads(text) if text else []
+    except json.JSONDecodeError:
+        data = []
+    if isinstance(data, dict):
+        data = [data]
+    if data:
+        status = data[0].get("status") or {}
+        running = status.get("running")
+        if running is not None:
+            return int(running)
+        size = status.get("size")
+        if size is not None:
+            return int(size)
+    return len(list_running_nfs_daemons(client, nfs_name))
+
+
+def assert_nfs_daemon_count(client, nfs_name, expected, label=""):
+    """Fail if running nfs.<nfs_name> daemon count != expected."""
+    daemons = list_running_nfs_daemons(client, nfs_name)
+    actual = len(daemons)
+    names = [d.get("daemon_name") or d.get("daemon_id") for d in daemons]
+    prefix = f"{label}: " if label else ""
+    if actual != int(expected):
+        raise OperationFailedError(
+            f"{prefix}expected {expected} running nfs.{nfs_name} daemon(s), "
+            f"got {actual}: {names}"
+        )
+    log.info("%s%s running nfs.%s daemon(s): %s", prefix, actual, nfs_name, names)
+
+
+def redeploy_nfs_service(client, nfs_name, wait_timeout=300):
+    """``ceph orch redeploy nfs.<nfs_name>`` then wait for daemons to return."""
+    out, err = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch redeploy nfs.{nfs_name}",
+        check_ec=False,
+    )
+    log.info(
+        "Redeploy nfs.%s: out=%s err=%s",
+        nfs_name,
+        _cmd_text(out).strip(),
+        _cmd_text(err).strip(),
+    )
+    from time import sleep, time
+
+    end = time() + wait_timeout
+    while time() < end:
+        if list_running_nfs_daemons(client, nfs_name):
+            sleep(15)
+            return
+        sleep(10)
+    raise OperationFailedError(
+        f"Timed out waiting for nfs.{nfs_name} after orch redeploy"
+    )
+
+
+def parse_virtual_server_conf_value(ganesha_conf):
+    """
+    Return True/False from ``Virtual_Server = ...;`` in ganesha.conf.
+
+    The line is always present in the NFSv4 block (even for default clusters).
+    """
+    text = ganesha_conf if isinstance(ganesha_conf, str) else str(ganesha_conf)
+    match = re.search(
+        r"Virtual_Server\s*=\s*(true|false)\s*;",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        raise OperationFailedError(
+            "Virtual_Server line not found in ganesha.conf "
+            "(expected unconditional NFSv4 block entry)"
+        )
+    return match.group(1).lower() == "true"
+
+
+def read_ganesha_conf_from_nfs_node(nfs_node, nfs_name):
+    """Read ``/etc/ganesha/ganesha.conf`` from the NFS container on ``nfs_node``."""
+    cid = get_nfs_container_id(nfs_node, nfs_name=nfs_name)
+    if not cid:
+        raise OperationFailedError(
+            f"No nfs.{nfs_name} container on {nfs_node.hostname}"
+        )
+    out, _ = nfs_node.exec_command(
+        sudo=True,
+        cmd=f"podman exec {cid} cat /etc/ganesha/ganesha.conf",
+    )
+    return _cmd_text(out)
+
+
+def assert_virtual_server_conf(nfs_nodes, nfs_name, expected_enabled):
+    """
+    Assert every host that runs ``nfs.<nfs_name>`` renders Virtual_Server correctly.
+
+    Grep for the value (dev review): the line is always present.
+    Nodes listed in inventory with an NFS role but without this daemon are skipped.
+    """
+    if not isinstance(nfs_nodes, list):
+        nfs_nodes = [nfs_nodes]
+    expected = bool(expected_enabled)
+    checked = 0
+    for node in nfs_nodes:
+        cid = get_nfs_container_id(node, nfs_name=nfs_name)
+        if not cid:
+            log.info(
+                "Skipping %s for Virtual_Server check — no nfs.%s container",
+                node.hostname,
+                nfs_name,
+            )
+            continue
+        conf = read_ganesha_conf_from_nfs_node(node, nfs_name)
+        actual = parse_virtual_server_conf_value(conf)
+        log.info(
+            "ganesha.conf on %s: Virtual_Server = %s (expected %s)",
+            node.hostname,
+            actual,
+            expected,
+        )
+        if actual is not expected:
+            raise OperationFailedError(
+                f"Virtual_Server on {node.hostname} is {actual}, expected {expected}"
+            )
+        checked += 1
+    if checked == 0:
+        raise OperationFailedError(
+            f"No nfs.{nfs_name} containers found on provided NFS nodes"
+        )
+
+
+def _normalize_ceph_ls(raw):
+    """Normalize ``ceph nfs cluster/export ls`` output to a flat list of names."""
+    if raw is None:
+        return []
+    if isinstance(raw, tuple):
+        raw = raw[0]
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+    if isinstance(raw, list):
+        names = []
+        for item in raw:
+            if isinstance(item, (list, dict)):
+                names.extend(_normalize_ceph_ls(item))
+            elif isinstance(item, str) and item.strip().startswith("["):
+                names.extend(_normalize_ceph_ls(item))
+            else:
+                names.append(str(item).strip().strip('"'))
+        return [n for n in names if n]
+    return [str(raw)]
+
+
+def assert_cluster_and_export_preserved(client, nfs_name, export_name):
+    """Confirm cluster id and export survive an enable_virtual_server toggle."""
+    clusters = Ceph(client).nfs.cluster.ls()
+    cluster_list = _normalize_ceph_ls(clusters)
+    if nfs_name not in cluster_list:
+        raise OperationFailedError(
+            f"NFS cluster {nfs_name} missing after toggle; ls={cluster_list}"
+        )
+    exports = Ceph(client).nfs.export.ls(nfs_name)
+    export_list = _normalize_ceph_ls(exports)
+    if export_name not in export_list:
+        raise OperationFailedError(
+            f"Export {export_name} missing after toggle; ls={export_list}"
+        )
+    log.info("Preserved cluster %s and export %s", nfs_name, export_name)

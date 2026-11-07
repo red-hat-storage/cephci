@@ -1140,31 +1140,44 @@ def create_ocpvirt_ceph_nodes(
     profile = batch_cfg.get("ocpvirt_profile")
     cpu = batch_cfg.get("ocpvirt_cpu")
     memory = batch_cfg.get("ocpvirt_memory")
+    ocpvirt_networks = batch_cfg.get("ocpvirt_networks")
+    root_disk_size = batch_cfg.get("ocpvirt_root_disk_size")
+    extra = ""
+    if ocpvirt_networks:
+        extra += f", networks={ocpvirt_networks}"
+    if root_disk_size:
+        extra += f", root_disk_size={root_disk_size}"
     if cpu is not None and memory is not None:
         log.info(
             "Creating OCP Virtualization instances "
-            "(pvc_batch_size=%s, vm_batch_size=%s, cpu=%s, memory=%s)",
+            "(pvc_batch_size=%s, vm_batch_size=%s, cpu=%s, memory=%s%s)",
             pvc_batch_size,
             vm_batch_size,
             cpu,
             memory,
+            extra,
         )
     elif profile:
         log.info(
             "Creating OCP Virtualization instances "
-            "(pvc_batch_size=%s, vm_batch_size=%s, profile=%s)",
+            "(pvc_batch_size=%s, vm_batch_size=%s, profile=%s%s)",
             pvc_batch_size,
             vm_batch_size,
             profile,
+            extra,
         )
     else:
         log.info(
             "Creating OCP Virtualization instances "
-            "(pvc_batch_size=%s, vm_batch_size=%s)",
+            "(pvc_batch_size=%s, vm_batch_size=%s%s)",
             pvc_batch_size,
             vm_batch_size,
+            extra,
         )
     ocp_cred = resolve_ocpvirt_credentials(ocp_creds, custom_config)
+    if root_disk_size:
+        ocp_cred = dict(ocp_cred)
+        ocp_cred["root_disk_size"] = root_disk_size
 
     ceph_cluster = cluster_conf.get("ceph-cluster")
     params = dict()
@@ -1181,7 +1194,11 @@ def create_ocpvirt_ceph_nodes(
     params["ocp-cred"] = ocp_cred
     params["namespace"] = ocp_cred.get("namespace")
     params["storage_class"] = ocp_cred.get("storage_class")
-    params["network"] = ocp_cred.get("network", "default")
+    if ocpvirt_networks:
+        params["networks"] = ocpvirt_networks
+        params["network"] = ocpvirt_networks[0]
+    else:
+        params["network"] = ocp_cred.get("network", "default")
     params["cluster-name"] = ceph_cluster.get("name")
     params["root-login"] = True
 
@@ -1313,6 +1330,7 @@ def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
             no_of_volumes=params.get("no-of-volumes", 0),
             storage_class=params.get("storage_class"),
             network=params.get("network"),
+            networks=params.get("networks"),
             precreated_volume_names=precreated_volume_names,
             instancetype=params.get("instancetype") or "",
             cpu=params.get("cpu"),

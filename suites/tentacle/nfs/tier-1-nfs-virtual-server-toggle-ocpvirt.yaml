@@ -1,0 +1,28 @@
+#===============================================================================================
+# Regional File Mount / Virtual Server — IBMCEPH-11530 toggle only (OCP Virt reuse)
+# Conf: conf/tentacle/nfs/virtual-server-ocpvirt.yaml
+#
+# Use on an already-deployed cluster (--reuse). Skips bootstrap / client add.
+#
+#   python run.py --cloud ocpvirt \
+#     --suite suites/tentacle/nfs/tier-1-nfs-virtual-server-toggle-ocpvirt.yaml \
+#     --global-conf conf/tentacle/nfs/virtual-server-ocpvirt.yaml \
+#     --reuse rerun/ha92s1026-UJ26D2 \
+#     --custom-config ocpvirt_namespace=rdu3_ceph_sys_test \
+#     --custom-config ocpvirt_networks=ceph-public,bridge-504 \
+#     --rhbuild 9.2 --build stable --platform rhel-10
+#===============================================================================================
+tests:
+  - test:
+      name: Virtual Server disable and re-enable toggle
+      module: regional_mount.nfs_virtual_server_toggle.py
+      desc: Scenario 6 — IBMCEPH-11530 orch apply + reconfig toggle (VS8–VS11)
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        run_vs11: true
+        comments: IBMCEPH-11530
