@@ -46,6 +46,24 @@ tests:
                     mon-ip: node1
 
   - test:
+      name: Check ceph crashes after bootstrap
+      desc: Run ceph crash ls on each site and log the output
+      module: exec.py
+      abort-on-fail: false
+      destroy-cluster: false
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+
+  - test:
       name: Deploy Rook-aligned cephadm cluster
       desc: Host racks, mon/mgr by label, OSDs class ssd, bind .mgr to rack+ssd
       module: deploy_rook_defaults_ceph.py
@@ -92,7 +110,23 @@ tests:
                     placement:
                       nodes:
                         - node5
-
+  - test:
+      name: Check ceph crashes after bootstrap
+      desc: Run ceph crash ls on each site and log the output
+      module: exec.py
+      abort-on-fail: false
+      destroy-cluster: false
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
   - test:
       abort-on-fail: true
       clusters:
@@ -117,6 +151,23 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+  - test:
+      name: Check ceph crashes after bootstrap
+      desc: Run ceph crash ls on each site and log the output
+      module: exec.py
+      abort-on-fail: false
+      destroy-cluster: false
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
 
   - test:
       abort-on-fail: true
@@ -154,6 +205,24 @@ tests:
       polarion-id: CEPH-10362
 
   - test:
+      name: Check ceph crashes after multisite setup
+      desc: Run ceph crash ls on each site after multisite setup and log the output
+      module: exec.py
+      abort-on-fail: false
+      destroy-cluster: false
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+
+  - test:
       abort-on-fail: true
       clusters:
         ceph-pri:
@@ -165,6 +234,7 @@ tests:
               - "radosgw-admin realm list"
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
+              - "ceph crash ls"
       desc: Retrieve the configured environment details
       polarion-id: CEPH-83575227
       module: exec.py
@@ -182,6 +252,7 @@ tests:
               - "radosgw-admin realm list"
               - "radosgw-admin zonegroup list"
               - "radosgw-admin zone list"
+              - "ceph crash ls"
       desc: Retrieve the configured environment details
       polarion-id: CEPH-83575227
       module: exec.py
@@ -199,6 +270,23 @@ tests:
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
+  - test:
+      name: Check ceph crashes after bootstrap
+      desc: Run ceph crash ls on each site and log the output
+      module: exec.py
+      abort-on-fail: false
+      destroy-cluster: false
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
   - test:
       name: Verify DBR feature enabled on greenfield cluster
       desc: Check DBR feature enabled on greenfield cluster
@@ -244,6 +332,23 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
             monitor-consistency-bucket-stats: true
+  - test:
+      name: Check ceph crashes after bootstrap
+      desc: Run ceph crash ls on each site and log the output
+      module: exec.py
+      abort-on-fail: false
+      destroy-cluster: false
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph crash ls"
   - test:
       name: modify bucket policy on primary
       desc: test_bucket_policy_modify.yaml on primary
@@ -421,7 +526,7 @@ tests:
       clusters:
         ceph-pri:
           config:
-            test-version: v1
+            test-version: v2
             run-on-rgw: true
             script-name: test_acls.py
             config-file-name: test_acls.yaml
