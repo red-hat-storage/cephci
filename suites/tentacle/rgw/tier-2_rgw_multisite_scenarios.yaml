@@ -9,7 +9,7 @@
 # The deployment is evaluated by disabling sync and running IOs across the environments.
 # This particular yaml runs the tests on the primary and verifies no objects syncs on the
 # secondary site and vice versa
-# global-conf: conf/tentacle/rgw/rgw_multisite.yaml
+# global-conf: conf/tentacle/rgw/rgw_multisite_ec2+2.yaml
 ---
 
 tests:
@@ -62,6 +62,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "primary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -69,7 +84,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node3
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -107,6 +122,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -114,7 +144,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node3
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -128,7 +158,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -136,7 +166,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -154,8 +184,8 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node3}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node3}:80 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
@@ -169,9 +199,9 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node3}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node3}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node3}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
