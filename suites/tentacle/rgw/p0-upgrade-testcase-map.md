@@ -1,15 +1,15 @@
 # P0 RGW upgrade suites
 
-Single site is tier-1. Two-site multisite is tier-2.
+These suites live in `suites/tentacle/rgw/`. Single site is tier-1. Two-site multisite is tier-2.
 
-| Folder | Suite | Release | Path |
-|---|---|---|---|
-| `tier-1/` | `tier1_upgrade_ss_ec_ssl_7x(ga)_9x.yaml` | Reef | 7.1 GA to 9.x |
-| `tier-1/` | `tier1_upgrade_ss_ec_ssl_8x(ga)_9x.yaml` | Squid | 8.1 GA to 9.x |
-| `tier-1/` | `tier1_upgrade_ss_ec_ssl_9.1x(ga)_9x.yaml` | Tentacle | 9.1 GA to 9.x |
-| `tier-2/` | `tier2_upgrade_ms_archive_ec_ssl_7x(ga)_9x.yaml` | Reef | 7.1 GA to 9.x |
-| `tier-2/` | `tier2_upgrade_ms_archive_ec_ssl_8x(ga)_9x.yaml` | Squid | 8.1 GA to 9.x |
-| `tier-2/` | `tier2_upgrade_ms_archive_ec_ssl_9.1x(ga)_9x.yaml` | Tentacle | 9.1 GA to 9.x |
+| Suite | Release | Path |
+|---|---|---|
+| `tier1_upgrade_ss_ec_ssl_7x(ga)_9x.yaml` | Reef | 7.1 GA to 9.x |
+| `tier1_upgrade_ss_ec_ssl_8x(ga)_9x.yaml` | Squid | 8.1 GA to 9.x |
+| `tier1_upgrade_ss_ec_ssl_9.1x(ga)_9x.yaml` | Tentacle | 9.1 GA to 9.x |
+| `tier2_upgrade_ms_archive_ec_ssl_7x(ga)_9x.yaml` | Reef | 7.1 GA to 9.x |
+| `tier2_upgrade_ms_archive_ec_ssl_8x(ga)_9x.yaml` | Squid | 8.1 GA to 9.x |
+| `tier2_upgrade_ms_archive_ec_ssl_9.1x(ga)_9x.yaml` | Tentacle | 9.1 GA to 9.x |
 
 Single-site feature tests are 5 before the upgrade and the same 5 after it. A config used in one single-site suite is not used in the other two. Swift is in every single-site suite. s3cmd cases that create the bucket with s3cmd are not used on these SSL suites: that helper curls `ip:443` without HTTPS, treats the empty reply as unreachable, and returns before the bucket exists. The 7.1 s3cmd case creates the bucket with boto first. The 9.1 s3cmd case only checks RGW log files, which is the path that passed on the 8.1 SSL upgrade.
 
