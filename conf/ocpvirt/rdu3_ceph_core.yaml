@@ -17,6 +17,7 @@ datasources:
   rhel8: datasource://ceph-core--runtime-int/rhel810-iso
   rhel9: datasource://openshift-virtualization-os-images/rhel9
   rhel10: datasource://openshift-virtualization-os-images/rhel10
+  rocky10: datasource://openshift-virtualization-os-images/rocky10-iso
   rhel94: datasource://ceph-core--runtime-int/rhel94-iso
   rhel96: datasource://ceph-core--runtime-int/rhel96-iso
 
