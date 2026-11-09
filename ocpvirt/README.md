@@ -73,15 +73,16 @@ image-name: datasource://rhel9
 datasources:
   rhel9: datasource://openshift-virtualization-os-images/rhel9
   rhel10: datasource://openshift-virtualization-os-images/rhel10
+  rocky10: datasource://openshift-virtualization-os-images/rocky10-iso
 ```
 
 At provision time cephci converts the URL into a CDI `sourceRef` on the root DataVolume (clone from cluster `DataSource`).
 
-## Inventory (`conf/inventory/ocpvirt-rhel-*-latest.yaml`)
+## Inventory (`conf/inventory/ocpvirt-*-latest.yaml`)
 
 Contains only:
 
-- `image-name` — usually `datasource://rhel9` or `datasource://rhel10`
+- `image-name` — e.g. `datasource://rhel9`, `datasource://rhel10`, or `datasource://rocky10` (resolves to cluster DataSource `rocky10-iso`)
 - `setup` — cloud-init userdata (users, SSH keys, packages, `ceph-qa-ready` marker)
 
 CPU, memory, and root disk size are **not** in inventory. Sizing uses either `ocpvirt_profile` (instance type) or explicit `ocpvirt_cpu` + `ocpvirt_memory`; root disk size uses the namespace template.
