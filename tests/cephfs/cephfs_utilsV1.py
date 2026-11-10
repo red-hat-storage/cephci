@@ -111,6 +111,8 @@ class FsUtils(object):
                 "git",
                 "lua",
                 "acl",
+                "wget",
+                "git-core",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
