@@ -74,7 +74,7 @@ class NVMeInitiator(Initiator):
             [
                 i["wwn"].removeprefix("uuid.")
                 for i in out
-                if i.get("wwn", "").startswith("uuid.")
+                if (i.get("wwn") or "").startswith("uuid.")
             ]
         )
         LOG.debug(f"[ {self.node.hostname} ] LSBLK UUIds : {log_json_dump(out)}")
@@ -565,7 +565,7 @@ def fetch_paths_for_namespaces(client, namespaces, devices):
     """
     gw_paths = []
     wwn_to_name = {
-        device.get("wwn", "").removeprefix("uuid."): device["name"]
+        (device.get("wwn") or "").removeprefix("uuid."): device["name"]
         for device in devices
     }
     device_names = [
