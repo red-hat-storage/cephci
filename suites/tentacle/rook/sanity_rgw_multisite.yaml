@@ -136,6 +136,7 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
               - "ceph orch restart {service_name:shared.pri}"
+              - "sleep 120"
         ceph-sec:
           config:
             cephadm: true
@@ -148,6 +149,7 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
               - "ceph orch restart {service_name:shared.sec}"
+              - "sleep 120"
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
