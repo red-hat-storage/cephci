@@ -6,15 +6,22 @@ Designed around how customers triage Ceph NVMeoF failures:
   Gateway:  systemd unit journal for keep-alive disconnects, SPDK abort/terminate,
             admin qpair / socket errors (often logged as NOTICE, not only WARNING).
 
-Always-on soft checks: full dumps are written under ``<run_dir>/ceph_logs/``
-(Cluster Logs). Collection runs on Pass and Fail.
+Soft checks: journals/dmesg are always scanned. Cluster Logs files are written
+only when suite ``savealllogs`` is truthy, or when ERROR/critical findings (or a
+Cluster Logs write failure) are present. Artifacts are one chronologically
+merged file per node (gateway journals and initiator dmesg).
 
 Test log levels:
-  - INFO  — collection ran successfully (including /tmp path note, warn-only archives)
+  - INFO  — collection ran successfully (including skipped archive when clean)
   - ERROR — only when ERROR-level content is found in dmesg / journalctl
             (or collector hard-fails to write Cluster Logs)
 
 Findings never fail the test.
+
+Suite flag (top-level test config)::
+
+    config:
+      savealllogs: true   # or 1 / yes — archive full journals even when clean
 """
 
 from __future__ import annotations
@@ -23,8 +30,8 @@ import logging
 import os
 import re
 import threading
-from datetime import datetime
-from typing import Iterable, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from utility.log import Log
@@ -165,6 +172,11 @@ CONFIG_JOURNAL_SINCE_KEY = "_nvmeof_test_start_time"
 CLUSTER_LOGS_SUBDIR = "ceph_logs"
 DMESG_ARTIFACT_SUBDIR = os.path.join(CLUSTER_LOGS_SUBDIR, "nvmeof_initiator_dmesg")
 JOURNAL_ARTIFACT_SUBDIR = os.path.join(CLUSTER_LOGS_SUBDIR, "nvmeof_gateway_journallog")
+SAVEALLLOGS_KEY = "savealllogs"
+
+# Per-node merged artifact basenames (stable so later windows rewrite/merge in).
+GATEWAY_MERGED_FILENAME = "{hostname}_all_gateway_journals_merged.log"
+INITIATOR_MERGED_FILENAME = "{hostname}_all_initiator_dmesg_merged.log"
 
 # index.html Comments: top unique signatures + a few sample lines.
 COMMENT_TOP_N_SIGNATURES = 5
@@ -173,6 +185,10 @@ COMMENT_SAMPLE_LINES = 3
 # dmesg -T wall-clock header, e.g. ``[Thu Nov  4 09:55:13 2026] ...``
 _DMESG_T_TS_RE = re.compile(
     r"^\[([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\]"
+)
+# journalctl --output=short-iso, e.g. ``2026-11-05T11:45:32+00:00 host ...``
+_SHORT_ISO_TS_RE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[+-]\d{2}:\d{2}|Z)?)"
 )
 
 # Process-wide idempotency when callers pass no shared config dict.
@@ -191,6 +207,26 @@ _PUBLISHED_INITIATOR_WINDOWS: List[Tuple[str, str, str]] = []
 _OPEN_INITIATOR_WINDOWS = {}
 _OPEN_INITIATOR_LOCK = threading.Lock()
 
+# In-memory artifact buffers (hostname -> chunk list). Written only when persist
+# is enabled (savealllogs or ERROR/critical Comments / write-failure force).
+_ARTIFACT_LOCK = threading.Lock()
+_GATEWAY_CHUNKS: Dict[str, List[dict]] = {}
+_INITIATOR_CHUNKS: Dict[str, List[dict]] = {}
+_PERSIST_ARTIFACTS = False
+_GATEWAY_WRITTEN: Dict[str, str] = {}
+_INITIATOR_WRITTEN: Dict[str, str] = {}
+
+
+def _reset_artifact_buffers() -> None:
+    """Clear per-test merge buffers and persist latch."""
+    global _PERSIST_ARTIFACTS
+    with _ARTIFACT_LOCK:
+        _GATEWAY_CHUNKS.clear()
+        _INITIATOR_CHUNKS.clear()
+        _GATEWAY_WRITTEN.clear()
+        _INITIATOR_WRITTEN.clear()
+        _PERSIST_ARTIFACTS = False
+
 
 def bind_test_config(config, *, force_reset: bool = False) -> None:
     """Bind the suite test config so Comments can be updated with findings.
@@ -207,10 +243,44 @@ def bind_test_config(config, *, force_reset: bool = False) -> None:
             _PUBLISHED_INITIATOR_WINDOWS.clear()
             with _OPEN_INITIATOR_LOCK:
                 _OPEN_INITIATOR_WINDOWS.clear()
+            _reset_artifact_buffers()
             if isinstance(new_cfg, dict):
                 new_cfg["artifacts"] = ""
                 new_cfg.pop("_nvmeof_journals_collected", None)
         _ACTIVE_CONFIG = new_cfg
+
+
+def parse_savealllogs(config) -> bool:
+    """Return True when suite top-level ``savealllogs`` is truthy."""
+    if not isinstance(config, dict):
+        return False
+    value = config.get(SAVEALLLOGS_KEY, False)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _enable_persist_artifacts() -> None:
+    global _PERSIST_ARTIFACTS
+    with _ARTIFACT_LOCK:
+        _PERSIST_ARTIFACTS = True
+
+
+def _persist_enabled() -> bool:
+    with _ARTIFACT_LOCK:
+        return _PERSIST_ARTIFACTS
+
+
+def _should_persist_artifacts(config, has_errors: bool) -> bool:
+    """Latch persist on when savealllogs or ERROR/critical findings appear."""
+    if _persist_enabled():
+        return True
+    if has_errors or parse_savealllogs(config):
+        _enable_persist_artifacts()
+        return True
+    return False
 
 
 def _cluster_logs_relpath(artifact_path: Optional[str]) -> str:
@@ -736,10 +806,6 @@ def _safe_unit_filename(unit: str) -> str:
     return re.sub(r"[^\w.\-]+", "_", unit or "unknown_unit")
 
 
-def _artifact_stamp() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-
 def _write_artifact(subdir: str, filename: str, content: str) -> Optional[str]:
     """Write artifact under Cluster Logs (``<run_dir>/ceph_logs/...``).
 
@@ -767,6 +833,159 @@ def _write_artifact(subdir: str, filename: str, content: str) -> Optional[str]:
             exc,
         )
         return None
+
+
+def _parse_log_line_timestamp(line: str) -> Optional[datetime]:
+    """Best-effort parse of journalctl short-iso or dmesg -T timestamps."""
+    text = (line or "").strip()
+    if not text:
+        return None
+    iso = _SHORT_ISO_TS_RE.match(text)
+    if iso:
+        raw = iso.group(1)
+        try:
+            if raw.endswith("Z"):
+                return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            pass
+    dmesg = _DMESG_T_TS_RE.match(text)
+    if dmesg:
+        try:
+            return datetime.strptime(dmesg.group(1), "%a %b %d %H:%M:%S %Y")
+        except ValueError:
+            return None
+    return None
+
+
+def _buffer_chunk(kind: str, hostname: str, chunk: dict) -> None:
+    """Store a collected log chunk for later merged persist."""
+    with _ARTIFACT_LOCK:
+        store = _GATEWAY_CHUNKS if kind == "gateway" else _INITIATOR_CHUNKS
+        store.setdefault(hostname, []).append(chunk)
+
+
+def _build_merged_content(hostname: str, kind: str, chunks: List[dict]) -> str:
+    """Chronologically merge chunk lines; include scan/metadata sections.
+
+    Content lines are sorted by parsed timestamps and tagged with source +
+    collection time. Per-chunk ``scan_header`` / gateway triage metadata is
+    appended afterward so Cluster Logs retain the structured dumps operators
+    used to get from per-unit files.
+    """
+    title = (
+        "gateway journals"
+        if kind == "gateway"
+        else "initiator dmesg/journalctl"
+    )
+    header = [
+        f"# Merged NVMeoF {title} for hostname={hostname}",
+        f"# generated_at={datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        f"# chunk_count={len(chunks)}",
+        "# each content line ends with: src=<source> collected=<when>",
+        "#" + ("=" * 71),
+    ]
+    for idx, chunk in enumerate(chunks, start=1):
+        header.append(
+            f"# source[{idx}]: {chunk.get('source', '?')} "
+            f"collected={chunk.get('collected_at', '?')} "
+            f"since={chunk.get('since', '?')} until={chunk.get('until', '?')}"
+        )
+    header.append("#" + ("=" * 71))
+
+    sortable: List[Tuple[datetime, int, str]] = []
+    seq = 0
+    for chunk in chunks:
+        source = chunk.get("source") or "unknown"
+        collected = chunk.get("collected_at") or ""
+        for line in chunk.get("lines") or []:
+            text = (line or "").rstrip("\n")
+            if not text.strip():
+                continue
+            # list-subsys / synthetic lines: keep near the chunk's window by
+            # falling back to collected_at when no journal timestamp exists.
+            ts = _parse_log_line_timestamp(text)
+            if ts is None:
+                ts = _parse_log_line_timestamp(collected) or datetime.min.replace(
+                    tzinfo=timezone.utc
+                )
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            tagged = f"{text}  || src={source} collected={collected}"
+            sortable.append((ts, seq, tagged))
+            seq += 1
+
+    sortable.sort(key=lambda item: (item[0], item[1]))
+    body = "\n".join(item[2] for item in sortable)
+
+    meta_sections: List[str] = []
+    for chunk in chunks:
+        source = chunk.get("source") or "unknown"
+        collected = chunk.get("collected_at") or ""
+        meta_sections.append("#" + ("=" * 71))
+        meta_sections.append(
+            f"# scan/metadata for src={source} collected={collected}"
+        )
+        scan_header = (chunk.get("scan_header") or "").strip()
+        if scan_header:
+            meta_sections.append(scan_header)
+        for key in ("unit", "warn_cmd", "err_cmd", "full_cmd"):
+            value = chunk.get(key)
+            if value:
+                meta_sections.append(f"{key}={value}")
+        ha_suppressed = chunk.get("ha_crit_suppressed") or []
+        if ha_suppressed:
+            meta_sections.append(
+                f"--- HA-expected gateway keep-alive noise suppressed from "
+                f"Comments (count={len(ha_suppressed)}) ---"
+            )
+            meta_sections.extend(ha_suppressed)
+
+    parts = ["\n".join(header)]
+    if body:
+        parts.append(body)
+    if meta_sections:
+        parts.append("\n".join(meta_sections))
+    return "\n".join(parts) + "\n"
+
+
+def _persist_merged_node(kind: str, hostname: str) -> Optional[str]:
+    """Rewrite the per-node merged Cluster Logs file from buffered chunks."""
+    with _ARTIFACT_LOCK:
+        chunks = list(
+            (_GATEWAY_CHUNKS if kind == "gateway" else _INITIATOR_CHUNKS).get(
+                hostname, []
+            )
+        )
+    if not chunks:
+        return None
+    subdir = (
+        JOURNAL_ARTIFACT_SUBDIR if kind == "gateway" else DMESG_ARTIFACT_SUBDIR
+    )
+    filename = (
+        GATEWAY_MERGED_FILENAME if kind == "gateway" else INITIATOR_MERGED_FILENAME
+    ).format(hostname=hostname)
+    content = _build_merged_content(hostname, kind, chunks)
+    path = _write_artifact(subdir, filename, content)
+    if path:
+        with _ARTIFACT_LOCK:
+            store = _GATEWAY_WRITTEN if kind == "gateway" else _INITIATOR_WRITTEN
+            store[hostname] = path
+    return path
+
+
+def _persist_all_buffered_artifacts() -> Dict[str, Dict[str, Optional[str]]]:
+    """Flush every buffered node (used when persist latches mid-suite)."""
+    with _ARTIFACT_LOCK:
+        gw_hosts = list(_GATEWAY_CHUNKS.keys())
+        init_hosts = list(_INITIATOR_CHUNKS.keys())
+    written = {"gateway": {}, "initiator": {}}
+    for host in gw_hosts:
+        written["gateway"][host] = _persist_merged_node("gateway", host)
+    for host in init_hosts:
+        written["initiator"][host] = _persist_merged_node("initiator", host)
+    return written
+
 
 
 def _exec(node, cmd: str) -> str:
@@ -935,19 +1154,25 @@ def collect_initiator_kernel_logs(
 ) -> dict:
     """Collect journalctl -k + dmesg -T for an initiator time window.
 
-    Full content goes to Cluster Logs. Test log ERROR + index Comments only for
-    real err+ content (HA reconnect noise suppressed) or Cluster Logs write
-    failure. Never fails the test.
+    Always scans. Cluster Logs get one chronologically merged file per node only
+    when ``savealllogs`` is set or ERROR/critical findings appear (then prior
+    buffered windows are flushed too). Comments/ERROR only for real err+ content
+    (HA reconnect noise suppressed) or Cluster Logs write failure.
 
     When ``publish_comments`` is False (FIO sub-window while a connect window is
-    armed), artifacts and LOG.error still run; index Comments are left to the
-    broader connect→disconnect collector (host+time dedupe).
+    armed), LOG.error still runs; index Comments are left to the broader
+    connect→disconnect collector (host+time dedupe).
     """
     hostname = getattr(node, "hostname", "unknown-host")
+    cfg = None
+    with _ACTIVE_CONFIG_LOCK:
+        cfg = _ACTIVE_CONFIG
     if not since:
         since = get_node_timestamp(node)
         LOG.info("Missing %s since on %s; using %s", window_label, hostname, since)
     until = until or get_node_timestamp(node)
+    collected_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    save_all = parse_savealllogs(cfg)
     header = (
         f"{window_label} kernel/dmesg check on {hostname}\n"
         f"Window: since='{since}' until='{until}'\n"
@@ -957,6 +1182,7 @@ def collect_initiator_kernel_logs(
     archive_lines: List[str] = []
     # Lines that qualify for LOG.error + index.html Comments only.
     comment_error_lines: List[str] = []
+    merge_lines: List[str] = []
 
     # journalctl -p err is authoritative for ERROR comments (wall-clock stamps).
     j_all = _exec(
@@ -978,6 +1204,13 @@ def collect_initiator_kernel_logs(
             tagged = f"[journalctl -p err] {line}"
             archive_lines.append(tagged)
             comment_error_lines.append(tagged)
+            merge_lines.append(line)
+
+    # Full kernel journal for savealllogs archives (info+ too).
+    if save_all and (j_all or "").strip():
+        merge_lines.extend(
+            ln for ln in (j_all or "").splitlines() if _is_journal_content_line(ln)
+        )
 
     pattern_hits = _match_initiator_issue_lines(j_all)
     sections.append(
@@ -989,6 +1222,7 @@ def collect_initiator_kernel_logs(
     for line in pattern_hits:
         tagged = f"[journalctl NVMe/IO] {line}"
         archive_lines.append(tagged)
+        merge_lines.append(line)
         # Critical markers only (keep-alive / fatal) — not every reconnect notice.
         if _raw_line_key(line) in err_raw:
             continue
@@ -1003,10 +1237,22 @@ def collect_initiator_kernel_logs(
     # Human-readable dmesg -T (fallback to journalctl stamps when -T/--since
     # unavailable on the kernel).
     dmesg_text, dmesg_label = _collect_dmesg_timestamped(node, since, until)
+    # When savealllogs, widen to full dmesg -T but keep the connect window only.
+    # Never fall back to the unfiltered ring (boot-wide noise / false Comments).
+    if save_all:
+        full_dmesg = _exec(node, "dmesg -T 2>/dev/null || dmesg -T || true")
+        if (full_dmesg or "").strip():
+            windowed = _filter_dmesg_t_by_window(full_dmesg, since, until)
+            dmesg_text = (windowed or "").strip()
+            dmesg_label = (
+                f"dmesg -T (full; filtered to {since} -> {until})"
+                if dmesg_text
+                else f"dmesg -T (full; no lines in {since} -> {until})"
+            )
     sections.append(f"--- {dmesg_label} ---\n{(dmesg_text or '').strip()}\n")
     if dmesg_text.strip():
         unfiltered = "unfiltered fallback" in dmesg_label
-        if unfiltered:
+        if unfiltered and not save_all:
             source_lines = _match_initiator_issue_lines(dmesg_text)
         else:
             source_lines = [
@@ -1020,7 +1266,10 @@ def collect_initiator_kernel_logs(
                 continue
             tagged = f"{tag_prefix} {line}"
             archive_lines.append(tagged)
-            if unfiltered:
+            merge_lines.append(line)
+            # Comments: err-level dumps are already filtered; full savealllogs
+            # dumps only elevate critical/customer markers.
+            if save_all or unfiltered:
                 if re.search(
                     r"(I/O error|Keep-alive timer expired|keep.?alive.*(expir|timeout)|"
                     r"\bOops\b|\bBUG:|Call Trace|NULL pointer|soft lockup)",
@@ -1037,6 +1286,7 @@ def collect_initiator_kernel_logs(
         "unhealthy_paths": [],
         "empty": True,
     }
+    path_persist = False
     if path_check:
         path_info = check_initiator_nvme_paths(node)
         sections.append(
@@ -1044,49 +1294,76 @@ def collect_initiator_kernel_logs(
             f"{path_info.get('list_subsys') or '(empty)'}\n"
         )
         for line in path_info.get("unhealthy_paths") or []:
-            archive_lines.append(f"[list-subsys] {line}")
+            tagged = f"[list-subsys] {line}"
+            archive_lines.append(tagged)
+            merge_lines.append(tagged)
+            path_persist = True
         if path_info.get("empty"):
-            archive_lines.append(f"[list-subsys] empty output after {window_label}")
+            tagged = f"[list-subsys] empty output after {window_label}"
+            archive_lines.append(tagged)
+            merge_lines.append(tagged)
+            path_persist = True
+        elif path_info.get("list_subsys"):
+            # Keep healthy path dump in merged Cluster Logs for triage.
+            for line in (path_info.get("list_subsys") or "").splitlines():
+                if line.strip():
+                    merge_lines.append(f"[list-subsys] {line.strip()}")
 
     unique_archive = _dedupe_prefixed(archive_lines)
     # HA reconnect noise stays in artifacts only — not ERROR / Comments.
     unique_errors = _filter_comment_errors(_dedupe_prefixed(comment_error_lines))
     ha_noise_count = len(_dedupe_prefixed(comment_error_lines)) - len(unique_errors)
 
-    artifact_body = header + "\n".join(sections)
-    if unique_archive:
-        artifact_body += (
-            "\n--- archived findings ---\n" + "\n".join(unique_archive) + "\n"
-        )
-    if ha_noise_count > 0:
-        artifact_body += (
-            f"\n--- HA-expected reconnect noise suppressed from Comments "
-            f"(count={ha_noise_count}) ---\n"
-        )
+    # Dedupe merge lines while preserving chronological rewrite later.
+    seen_merge = set()
+    deduped_merge = []
+    for ln in merge_lines:
+        key = ln.strip()
+        if not key or key in seen_merge:
+            continue
+        seen_merge.add(key)
+        deduped_merge.append(ln)
 
     safe_label = re.sub(r"[^\w.\-]+", "_", window_label or "session")
-    artifact = _write_artifact(
-        DMESG_ARTIFACT_SUBDIR,
-        f"{hostname}_{safe_label}_{_artifact_stamp()}.log",
-        artifact_body,
+    chunk = {
+        "source": f"initiator:{hostname}:{safe_label}",
+        "collected_at": collected_at,
+        "since": since,
+        "until": until,
+        "lines": deduped_merge,
+        "scan_header": header + "\n".join(sections),
+    }
+    _buffer_chunk("initiator", hostname, chunk)
+
+    # Persist on ERROR/critical Comments, unhealthy/empty path state, or savealllogs.
+    persist = _should_persist_artifacts(
+        cfg, has_errors=bool(unique_errors) or path_persist
     )
-    rel = _cluster_logs_relpath(artifact) if artifact else None
-    # Comments/ERROR only: real -p err / critical markers (not HA reconnect), or
-    # Cluster Logs write failure.
-    if not artifact:
-        LOG.error(
-            "%s dmesg collection on %s failed to write Cluster Logs (%s -> %s)",
-            window_label,
-            hostname,
-            since,
-            until,
-        )
-        if publish_comments:
-            publish_index_comment(
-                f"[Initiator] Cluster Logs write FAILED on {hostname} "
-                f"[{since} -> {until}]"
+    artifact = None
+    if persist:
+        # Flush old+current for every buffered node once persist latches.
+        _persist_all_buffered_artifacts()
+        with _ARTIFACT_LOCK:
+            artifact = _INITIATOR_WRITTEN.get(hostname)
+        if not artifact:
+            # Persist was requested but write failed — elevate Comments.
+            LOG.error(
+                "%s dmesg collection on %s failed to write Cluster Logs (%s -> %s)",
+                window_label,
+                hostname,
+                since,
+                until,
             )
-    elif unique_errors:
+            if publish_comments:
+                publish_index_comment(
+                    f"[Initiator] Cluster Logs write FAILED on {hostname} "
+                    f"[{since} -> {until}]"
+                )
+            # Force-save latch already on; keep scanning future windows.
+            _enable_persist_artifacts()
+
+    rel = _cluster_logs_relpath(artifact) if artifact else None
+    if unique_errors:
         LOG.error(
             "Initiator dmesg/journalctl ERRORS on %s from %s to %s "
             "(count=%d); see Cluster Logs: %s",
@@ -1094,7 +1371,7 @@ def collect_initiator_kernel_logs(
             since,
             until,
             len(unique_errors),
-            rel,
+            rel or "(pending/not archived)",
         )
         if publish_comments:
             publish_initiator_index_comment(
@@ -1107,20 +1384,32 @@ def collect_initiator_kernel_logs(
             )
     else:
         extra = (
-            f"; HA reconnect noise archived={ha_noise_count}"
+            f"; HA reconnect noise scanned={ha_noise_count}"
             if ha_noise_count > 0
             else ""
         )
-        LOG.info(
-            "Initiator %s dmesg/journalctl collected on %s from %s to %s "
-            "(no ERRORS%s); Cluster Logs: %s",
-            window_label,
-            hostname,
-            since,
-            until,
-            extra,
-            rel,
-        )
+        if artifact:
+            LOG.info(
+                "Initiator %s dmesg/journalctl collected on %s from %s to %s "
+                "(no ERRORS%s); Cluster Logs: %s",
+                window_label,
+                hostname,
+                since,
+                until,
+                extra,
+                rel,
+            )
+        else:
+            LOG.info(
+                "Initiator %s dmesg/journalctl collected on %s from %s to %s "
+                "(no ERRORS%s); Cluster Logs not written "
+                "(savealllogs unset and no ERROR Comments)",
+                window_label,
+                hostname,
+                since,
+                until,
+                extra,
+            )
 
     return {
         "hostname": hostname,
@@ -1137,9 +1426,9 @@ def collect_initiator_kernel_logs(
 def collect_initiator_fio_dmesg(node, since: str, until: Optional[str] = None) -> dict:
     """Collect kernel/dmesg + path state for the FIO window on an initiator.
 
-    Always archives under Cluster Logs. Index Comments are skipped when a
-    connect→disconnect window is armed for the same host (that broader window
-    owns Comments; host+time dedupe avoids duplicates).
+    Scans always; Cluster Logs persist follows savealllogs / ERROR gating.
+    Index Comments are skipped when a connect→disconnect window is armed for
+    the same host (that broader window owns Comments; host+time dedupe).
     """
     publish_comments = not has_open_initiator_window(node)
     return collect_initiator_kernel_logs(
@@ -1240,13 +1529,12 @@ def collect_nvmeof_service_journals(
 ) -> dict:
     """Collect nvmeof unit journals before cleanup (customer triage view).
 
-    1. ``journalctl -u <unit> -p warning`` — full WARNING+ dump (all lines logged).
-    2. Same window scanned for customer-critical NOTICE-level markers.
+    Always scans ``-p err`` / critical markers for Comments. Cluster Logs get
+    one chronologically merged file per node only when ``savealllogs`` is set
+    (full journal info+) or ERROR/critical findings appear — then prior buffered
+    windows/units are flushed too.
 
-    Soft check only. Full journal content goes to Cluster Logs artifacts.
-    Test log ERROR + Comments for real err/critical content (HA keep-alive
-    disconnect noise suppressed) or Cluster Logs write failure. Idempotent via
-    config flag / NVMeService flag / process key after a successful collect.
+    Soft check only. Idempotent via config / NVMeService / process key.
     """
     cfg = config
     if cfg is None and nvme_service is not None:
@@ -1295,10 +1583,11 @@ def collect_nvmeof_service_journals(
         )
         return {"skipped": False, "results": [], "since": since}
 
+    save_all = parse_savealllogs(cfg if isinstance(cfg, dict) else None)
     results = []
+    any_errors = False
     for node, unit, hostname in targets:
-        # Archive warning+ for Cluster Logs; ERROR in test log only for -p err /
-        # customer-critical content.
+        # Scan warning+/err for triage; optionally pull full journal for archive.
         warn_cmd = (
             f"journalctl -u '{unit}' -p warning --since '{since}' --no-pager "
             f"--output=short-iso"
@@ -1334,12 +1623,13 @@ def collect_nvmeof_service_journals(
         raw_crit = _exec(node, crit_cmd)
         critical_hits = _filter_gateway_critical_hits((raw_crit or "").splitlines())
 
-        until = get_node_timestamp(node)
-        artifact_name = (
-            f"{hostname}_{_safe_unit_filename(unit)}_{_artifact_stamp()}.log"
+        full_cmd = (
+            f"journalctl -u '{unit}' --since '{since}' --no-pager --output=short-iso"
         )
-        # Unfiltered critical scan for Cluster Logs triage; ERROR/Comments use
-        # filtered err_lines / critical_hits (HA keep-alive suppressed).
+        raw_full = _exec(node, full_cmd) if save_all else ""
+
+        until = get_node_timestamp(node)
+        collected_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         ha_crit_suppressed = _dedupe(
             [
                 ln
@@ -1349,13 +1639,37 @@ def collect_nvmeof_service_journals(
                 and GATEWAY_CUSTOMER_CRITICAL_RE.search(ln)
             ]
         )
-        artifact_body = (
+
+        # Lines for chronological merge: full journal when savealllogs, else
+        # warning+ / err / critical scan lines.
+        if save_all and (raw_full or "").strip():
+            merge_lines = [
+                ln for ln in (raw_full or "").splitlines() if _is_journal_content_line(ln)
+            ]
+        else:
+            merge_lines = []
+            for bucket in (raw_err, raw_warn, raw_crit):
+                for ln in (bucket or "").splitlines():
+                    if _is_journal_content_line(ln):
+                        merge_lines.append(ln)
+
+        seen = set()
+        deduped_merge = []
+        for ln in merge_lines:
+            key = ln.strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped_merge.append(ln)
+
+        scan_header = (
             f"nvmeof journal on {hostname}\n"
             f"unit={unit}\n"
             f"since='{since}' until='{until}'\n"
             f"warn_cmd={warn_cmd}\n"
             f"err_cmd={err_cmd}\n"
-            f"{'=' * 72}\n"
+            + (f"full_cmd={full_cmd}\n" if save_all else "")
+            + f"{'=' * 72}\n"
             f"--- journalctl -p err ---\n{raw_err or ''}\n"
             f"{'=' * 72}\n"
             f"--- journalctl -p warning ---\n{raw_warn or ''}\n"
@@ -1365,31 +1679,46 @@ def collect_nvmeof_service_journals(
             + ("\n".join(critical_hits) if critical_hits else "(none)")
             + "\n"
         )
-        if ha_crit_suppressed:
-            artifact_body += (
-                f"{'=' * 72}\n"
-                f"--- HA-expected gateway keep-alive noise suppressed from "
-                f"Comments (count={len(ha_crit_suppressed)}) ---\n"
-                + "\n".join(ha_crit_suppressed)
-                + "\n"
-            )
-        artifact = _write_artifact(
-            JOURNAL_ARTIFACT_SUBDIR, artifact_name, artifact_body
-        )
-        rel = _cluster_logs_relpath(artifact) if artifact else None
-        has_real_errors = bool(err_lines) or bool(critical_hits)
+        chunk = {
+            "source": f"gateway:{hostname}:{_safe_unit_filename(unit)}",
+            "collected_at": collected_at,
+            "since": since,
+            "until": until,
+            "lines": deduped_merge,
+            "unit": unit,
+            "warn_cmd": warn_cmd,
+            "err_cmd": err_cmd,
+            "full_cmd": full_cmd if save_all else "",
+            "ha_crit_suppressed": ha_crit_suppressed,
+            "scan_header": scan_header,
+        }
+        _buffer_chunk("gateway", hostname, chunk)
 
-        if not artifact:
-            LOG.error(
-                "nvmeof journal collection on %s unit=%s failed to write Cluster Logs",
-                hostname,
-                unit,
-            )
-            publish_index_comment(
-                f"[Gateway] Cluster Logs write FAILED on {hostname} ({unit}) "
-                f"[{since} -> {until}]"
-            )
-        elif has_real_errors:
+        has_real_errors = bool(err_lines) or bool(critical_hits)
+        any_errors = any_errors or has_real_errors
+        persist = _should_persist_artifacts(
+            cfg if isinstance(cfg, dict) else None, has_errors=has_real_errors
+        )
+        artifact = None
+        if persist:
+            _persist_all_buffered_artifacts()
+            with _ARTIFACT_LOCK:
+                artifact = _GATEWAY_WRITTEN.get(hostname)
+            if not artifact:
+                LOG.error(
+                    "nvmeof journal collection on %s unit=%s failed to write "
+                    "Cluster Logs",
+                    hostname,
+                    unit,
+                )
+                publish_index_comment(
+                    f"[Gateway] Cluster Logs write FAILED on {hostname} ({unit}) "
+                    f"[{since} -> {until}]"
+                )
+                _enable_persist_artifacts()
+
+        rel = _cluster_logs_relpath(artifact) if artifact else None
+        if has_real_errors:
             # Comments only for -p err and/or critical markers (not warn-only).
             LOG.error(
                 "nvmeof gateway journal ERRORS on %s unit=%s from %s to %s "
@@ -1401,7 +1730,7 @@ def collect_nvmeof_service_journals(
                 len(err_lines),
                 len(critical_hits),
                 len(body_lines),
-                rel,
+                rel or "(pending/not archived)",
             )
             publish_index_comment(
                 _format_gateway_comment(
@@ -1414,16 +1743,27 @@ def collect_nvmeof_service_journals(
                     rel,
                 )
             )
-        else:
+        elif artifact:
             LOG.info(
                 "nvmeof gateway journal collected on %s unit=%s from %s to %s "
-                "(no ERRORS; warn=%d archived); Cluster Logs: %s",
+                "(no ERRORS; warn=%d); Cluster Logs: %s",
                 hostname,
                 unit,
                 since,
                 until,
                 len(body_lines),
                 rel,
+            )
+        else:
+            LOG.info(
+                "nvmeof gateway journal collected on %s unit=%s from %s to %s "
+                "(no ERRORS; warn=%d); Cluster Logs not written "
+                "(savealllogs unset and no ERROR Comments)",
+                hostname,
+                unit,
+                since,
+                until,
+                len(body_lines),
             )
 
         results.append(
@@ -1439,6 +1779,12 @@ def collect_nvmeof_service_journals(
                 "artifact": artifact,
             }
         )
+
+    # If any unit had errors / savealllogs, ensure every buffered node is flushed.
+    if _should_persist_artifacts(
+        cfg if isinstance(cfg, dict) else None, has_errors=any_errors
+    ):
+        _persist_all_buffered_artifacts()
 
     _mark_journals_collected(
         cfg if isinstance(cfg, dict) else None, nvme_service, idem_key
@@ -1461,13 +1807,14 @@ def safe_collect_nvmeof_service_journals(**kwargs) -> dict:
             cfg = getattr(nvme_service, "config", None)
         if isinstance(cfg, dict):
             # Re-bind without wiping this test's artifacts. If the active config
-            # object changed, drop leftover comment lines from a prior test so
-            # flush cannot contaminate the current Comments cell.
+            # object changed, drop leftover comment/buffer state from a prior
+            # test so flush cannot contaminate Comments or merged Cluster Logs.
             global _ACTIVE_CONFIG
             with _ACTIVE_CONFIG_LOCK:
                 if cfg is not _ACTIVE_CONFIG:
                     _COMMENT_LINES.clear()
                     _PUBLISHED_INITIATOR_WINDOWS.clear()
+                    _reset_artifact_buffers()
                 _ACTIVE_CONFIG = cfg
         # Fallback: collect initiator logs when no disconnect ran.
         try:
