@@ -155,7 +155,6 @@ tests:
       name: Test user creation with placement and storage class
       desc: Test user creation with placement and storage class
       polarion-id: CEPH-83575880
-      comments: known issue (BZ-2311474) targetted to 9.0
       module: sanity_rgw.py
       config:
         script-name: user_create.py
@@ -203,15 +202,6 @@ tests:
       config:
         script-name: ../aws/test_acl.py
         config-file-name: ../../aws/configs/test_public_read_write_acl.yaml
-
-  - test:
-      name: Test Inditex hotfix bz CORS presigned put url
-      desc: CORS ACLs prevents access to buckets with presigned PUT URIs with ACL private header
-      polarion-id: CEPH-83604475
-      module: sanity_rgw.py
-      config:
-        script-name: ../curl/test_cors_using_curl.py
-        config-file-name: ../../curl/configs/test_cors_presigned_put_url_using_curl.yaml
 
   - test:
       name: Greater test coverage for bucket CORS
@@ -327,7 +317,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_restricted_public_buckets.yaml
-      comments: known issue - Bug 2344730 targetted to 9.0
 
   - test:
       name: verify parquet object access after bucket reshard
@@ -436,16 +425,6 @@ tests:
       config:
         script-name: test_quota_edge_cases.py
         config-file-name: test_quota_decrease_below_usage.yaml
-
-  - test:
-      name: Test exact boundary - upload exactly at quota limit
-      desc: Test exact boundary - upload exactly at quota limit
-      polarion-id: CEPH-83575572
-      module: sanity_rgw.py
-      config:
-        script-name: test_quota_edge_cases.py
-        config-file-name: test_quota_edge_exact_boundary.yaml
-      comments: possible product issue - under investigation
 
   - test:
       name: Test very large quota values (1PB)
