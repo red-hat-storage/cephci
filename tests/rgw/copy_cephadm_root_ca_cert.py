@@ -13,24 +13,8 @@ CEPHADM_ROOT_CA_FILE = "cephadm-root-ca.crt"
 CA_TRUST_ANCHORS = "/etc/pki/ca-trust/source/anchors"
 
 
-def _release_tuple(version):
-    """Return the numeric Ceph release, ignoring a missing or dirty version."""
-    parts = []
-    for piece in version.split("."):
-        if not piece.isdigit():
-            break
-        parts.append(int(piece))
-    return tuple(parts)
-
-
 def get_cephadm_root_ca_cert(installer):
-    """Fetch the cephadm root CA certificate from the cluster.
-
-    Reef does not store one. Its RGW certificate is signed by the cephqe CA
-    embedded through ``rgw_frontend_ssl_certificate: create-cert``, and the
-    client already trusts that CA. Squid 19.2.0 exposes the cert through
-    cert-store. Later releases use certmgr.
-    """
+    """Fetch the cephadm root CA certificate from the cluster."""
     version_out, _ = installer.exec_command(
         cmd="cephadm shell -- ceph version", sudo=True
     )
@@ -38,11 +22,6 @@ def get_cephadm_root_ca_cert(installer):
     match = re.search(r"ceph version (\S+)", version_out)
     if match:
         ceph_version = match.group(1).split("-")[0]
-
-    release = _release_tuple(ceph_version)
-    if release and release < (19, 2, 0):
-        LOG.info("Ceph %s has no cephadm root CA to copy", ceph_version)
-        return None
 
     if ceph_version == "19.2.0":
         cmd = "cephadm shell -- ceph orch cert-store get cert cephadm_root_ca_cert"
@@ -74,8 +53,6 @@ def copy_cephadm_root_ca_cert_to_roles(cluster, roles=("rgw", "client")):
     """Copy cephadm root CA cert to nodes matching the given roles."""
     installer = cluster.get_nodes(role="installer")[0]
     cert = get_cephadm_root_ca_cert(installer)
-    if not cert:
-        return
     seen = set()
     for role in roles:
         for node in cluster.get_nodes(role=role):
@@ -96,8 +73,6 @@ def copy_peer_cas_to_roles(cluster, ceph_cluster_dict, roles=("rgw", "client")):
             continue
         peer_installer = peer_cluster.get_nodes(role="installer")[0]
         cert = get_cephadm_root_ca_cert(peer_installer)
-        if not cert:
-            continue
         cert_name = f"cephadm-root-ca-{peer_name}.crt"
         seen = set()
         for role in roles:
