@@ -1,0 +1,116 @@
+# IBMCEPH-18527: PSK rotation with keep_connections=True — OMAP replay regression
+# cluster configuration: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
+#
+# Standalone run for 9.1 repro (expect TS-03b FAIL) and 9.2z1 verify
+# (expect TS-03b PASS). Bug 1: peer GW OMAP replay overwrites keep_connections.
+---
+tests:
+
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: cp.icr.io
+                allow-fqdn-hostname: true
+                allow-overwrite: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: IBM Ceph 9.1 cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+        copy_admin_keyring: true
+        install_packages:
+          - ceph-common
+          - nvme-cli
+          - fio
+      desc: Setup client for NVMe-oF TLS-PSK IBMCEPH-18527 tests
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe TLS-PSK tests
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        tls_psk: true
+        run_ts03b: true
+        # IBMCEPH-18527: host add resets keep_connections; open one OMAP poll
+        # window so del(keep_connections=True)+add both land before peers poll.
+        state_update_interval_sec: 60
+        state_update_notify: false
+        ts03b_del_add_wait: 10
+        ts03b_fio_runtime: 360
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:tlspsk-kc
+            no-group-append: true
+            secure_listener: true
+            bdevs:
+              - count: 1
+                size: 20G
+                ns_create_image: true
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        IBMCEPH-18527: TLS-PSK connect, background FIO, RemoveHost with
+        keep_connections=True, AddHost with new PSK; assert no write drop
+        and GW2 OMAP replay preserves keep_connections=True.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_tlspsk_key_rotation.py
+      name: IBMCEPH-18527 TLS-PSK keep_connections rotation
+      polarion-id: IBMCEPH-18527

@@ -1,0 +1,171 @@
+# NVMe-oF TLS-PSK Cross-Feature Test Suite — Tier 3
+# cluster configuration: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
+#
+# These cases need a different starting spec or extra services, so they stay
+# out of the single-group lifecycle:
+#   mTLS and TLS-PSK together
+#   BYOK / KMIP namespace encryption
+#
+# RBD mirroring between two clusters is
+# suites/tentacle/nvmeof/tier-3_nvmeof_tlspsk_rbd_mirror.yaml
+# with conf/tentacle/nvmeof/ceph_nvmeof_rbd_mirror.yaml.
+#
+# HA, ALB, DHCHAP, and namespace masking run inside
+# suites/tentacle/nvmeof/tier-2_nvmeof_tlspsk_tests.yaml.
+---
+tests:
+
+  # - test:
+  #     abort-on-fail: true
+  #     module: install_prereq.py
+  #     name: install ceph pre-requisites
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       verify_cluster_health: true
+  #       steps:
+  #         - config:
+  #             command: bootstrap
+  #             service: cephadm
+  #             args:
+  #               mon-ip: node1
+  #               registry-url: registry.redhat.io
+  #               allow-fqdn-hostname: true
+  #               allow-overwrite: true
+  #               log-to-file: true
+  #         - config:
+  #             command: add_hosts
+  #             service: host
+  #             args:
+  #               attach_ip_address: true
+  #               labels: apply-all-labels
+  #         - config:
+  #             command: apply
+  #             service: mgr
+  #             args:
+  #               placement:
+  #                 label: mgr
+  #         - config:
+  #             command: apply
+  #             service: mon
+  #             args:
+  #               placement:
+  #                 label: mon
+  #         - config:
+  #             command: apply
+  #             service: osd
+  #             args:
+  #               all-available-devices: true
+  #     desc: RHCS cluster deployment using cephadm
+  #     destroy-cluster: false
+  #     module: test_cephadm.py
+  #     name: deploy cluster
+
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.1
+  #       nodes:
+  #         - node7
+  #         - node8
+  #       copy_admin_keyring: true
+  #       install_packages:
+  #         - ceph-common
+  #         - nvme-cli
+  #         - fio
+  #     desc: Setup client for NVMe-oF TLS-PSK tests
+  #     destroy-cluster: false
+  #     module: test_client.py
+  #     name: configure Ceph client for NVMe TLS-PSK tests
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        mtls: true
+        tls_psk: true
+        run_ts06b: true
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:tlspsk-mtls
+            no-group-append: true
+            allow_host: "*"
+            secure_listener: true
+            bdevs:
+              - count: 1
+                size: 2G
+                ns_create_image: true
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        Deploy the gateway with mTLS and TLS-PSK together. enable_auth
+        authenticates nvme CLI commands to the gateway. enable_encryption
+        encrypts initiator IO in transit. Create a secure subsystem through
+        the CLI, connect with --tls, run FIO, and confirm a plain connect is
+        refused. Both spec fields are still set afterwards.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_tlspsk_mtls_switch.py
+      name: NVMe-oF TLS-PSK with mTLS on the CLI path
+      polarion-id: CEPH-XXXXX
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        tls_psk: true
+        use_dummy_kmip: true
+        kmip:
+          server_node: node10
+          port: 5696
+        luks_combos:
+          - key_id: key-id-tlspsk-luks2-aes256
+            format: luks2
+            algo: aes256
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:tlspsk-byok
+            no-group-append: true
+            secure_listener: true
+            bdevs:
+              - count: 1
+                size: 4G
+                ns_create_image: true
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        TLS-PSK transport plus a KMIP LUKS2/AES-256 namespace. Connect with
+        --tls and run FIO on the encrypted namespace. Restart a gateway and
+        confirm the passphrase is fetched again and the namespace is still
+        accessible.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_tlspsk_byok.py
+      name: NVMe-oF TLS-PSK + BYOK KMIP double-layer encryption
+      polarion-id: CEPH-XXXXX
