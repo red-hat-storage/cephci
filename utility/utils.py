@@ -25,7 +25,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
-from looseversion import LooseVersion
 from packaging.version import InvalidVersion, Version
 
 from cli.exceptions import ConfigError
@@ -103,12 +102,14 @@ def get_rhbuild_major_version(rhbuild) -> int:
 def ibm_ceph_rpm_version_pin(ceph_version: str, os_major: str) -> str:
     """Build yum NEVRA suffix for IBM Storage Ceph RPMs (cephadm, ceph-common, …).
 
-    Tentacle and older builds use epoch ``2`` and the ``.elNcp`` dist tag, e.g.
-    ``2:20.2.2-351.el10cp``. Umbrella / upstream 21.x dropped the epoch and the
-    ``cp`` suffix, e.g. ``21.1.1-1.el10``.
+    IBM Storage Ceph RPMs use epoch ``2`` and the ``.elNcp`` dist tag across
+    Tentacle and Umbrella builds, e.g. ``2:20.2.2-351.el10cp`` and
+    ``2:21.1.1-9.el10cp``. Community / upstream packages may omit epoch and
+    ``cp``; those paths use a different pin (``VR*``) and do not call this
+    helper.
 
     Args:
-        ceph_version: Version-release without dist tag (e.g. ``21.1.1-1``).
+        ceph_version: Version-release without dist tag (e.g. ``21.1.1-9``).
         os_major: RHEL major from platform (e.g. ``10`` from ``rhel-10``).
 
     Returns:
@@ -116,8 +117,6 @@ def ibm_ceph_rpm_version_pin(ceph_version: str, os_major: str) -> str:
     """
     ver = (ceph_version or "").strip()
     major = (os_major or "").strip()
-    if LooseVersion(ver or "0") >= LooseVersion("21.0"):
-        return f"{ver}.el{major}"
     return f"2:{ver}.el{major}cp"
 
 
