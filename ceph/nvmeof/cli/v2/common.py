@@ -8,50 +8,69 @@ from utility.log import Log
 
 LOG = Log(__name__)
 
-# Transient gRPC/gateway connect failure seen while NVMeoF daemons settle.
+# Transient gRPC/gateway failures seen while NVMeoF daemons settle or redeploy.
+# "is going down" is returned by a daemon that accepted the RPC and is exiting.
 CONNECT_ALL_ADDRESSES_ERR = "failed to connect to all addresses"
+GATEWAY_GOING_DOWN_ERR = "is going down"
+TRANSIENT_GATEWAY_ERRORS = (CONNECT_ALL_ADDRESSES_ERR, GATEWAY_GOING_DOWN_ERR)
 CONNECT_RETRY_TIMEOUT = 120  # seconds
 CONNECT_RETRY_INTERVAL = 10  # seconds
 
 
-def run_with_connect_retry(cmd_fn, description="NVMeoF command"):
-    """Run an NVMeoF CLI call, retrying on gateway connect failures.
+def transient_gateway_error(exc):
+    """Return the transient-gateway marker contained in *exc*, or None."""
+    text = str(exc)
+    for marker in TRANSIENT_GATEWAY_ERRORS:
+        if marker in text:
+            return marker
+    return None
 
-    Retries for up to ``CONNECT_RETRY_TIMEOUT`` seconds at
-    ``CONNECT_RETRY_INTERVAL`` second intervals when the failure message
-    contains ``CONNECT_ALL_ADDRESSES_ERR``. Returns as soon as the command
-    succeeds. Non-matching failures are raised immediately.
+
+def run_with_connect_retry(
+    cmd_fn,
+    description="NVMeoF command",
+    timeout=CONNECT_RETRY_TIMEOUT,
+    interval=CONNECT_RETRY_INTERVAL,
+):
+    """Run an NVMeoF CLI call, retrying while the gateway is unavailable.
+
+    Retries for up to *timeout* seconds at *interval* second intervals when
+    the failure is a transient gateway error (connect refused to every
+    address, or the gateway reports it is going down). Returns as soon as
+    the command succeeds. Other failures are raised immediately.
 
     Args:
         cmd_fn: Zero-arg callable that performs the CLI execution.
         description: Short label used in retry log messages.
+        timeout: Retry budget in seconds.
+        interval: Sleep between attempts in seconds.
 
     Returns:
         Whatever ``cmd_fn`` returns on success.
     """
     last_exc = None
     attempt = 0
-    for _ in WaitUntil(timeout=CONNECT_RETRY_TIMEOUT, interval=CONNECT_RETRY_INTERVAL):
+    for _ in WaitUntil(timeout=timeout, interval=interval):
         attempt += 1
         try:
             return cmd_fn()
         except CommandFailed as exc:
-            if CONNECT_ALL_ADDRESSES_ERR not in str(exc):
+            marker = transient_gateway_error(exc)
+            if marker is None:
                 raise
             last_exc = exc
             LOG.warning(
-                "%s hit '%s'; retrying in %ds " "(attempt %d, timeout %ds)",
+                "%s hit '%s'; retrying in %ds (attempt %d, timeout %ds)",
                 description,
-                CONNECT_ALL_ADDRESSES_ERR,
-                CONNECT_RETRY_INTERVAL,
+                marker,
+                interval,
                 attempt,
-                CONNECT_RETRY_TIMEOUT,
+                timeout,
             )
     if last_exc is not None:
         raise last_exc
     raise CommandFailed(
-        f"{description} failed after {CONNECT_RETRY_TIMEOUT}s with "
-        f"'{CONNECT_ALL_ADDRESSES_ERR}'"
+        f"{description} failed after {timeout}s with a transient gateway error"
     )
 
 
