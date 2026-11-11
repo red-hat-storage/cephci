@@ -186,3 +186,17 @@ tests:
         min_routes: 2
         sudo: false
         comments: fails due to IBMCEPH-13896
+
+  - test:
+      name: Virtual Server disable and re-enable toggle
+      module: regional_mount.nfs_virtual_server_toggle.py
+      desc: Scenario 6 — IBMCEPH-11530 orch apply + reconfig toggle (VS8–VS11)
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        port: 2049
+        clients: 1
+        min_routes: 2
+        sudo: false
+        run_vs11: true
+        comments: IBMCEPH-11530

@@ -330,6 +330,55 @@ def _cloudinit_secret_name(vm_name: str) -> str:
     return f"{vm_name}-cloudinit"[:63].rstrip("-")
 
 
+def normalize_ocpvirt_networks(
+    network: Optional[Any] = None,
+    networks: Optional[List[str]] = None,
+) -> List[str]:
+    """
+    Normalize Multus / pod network names for a VirtualMachine.
+
+    ``networks`` (list) wins when non-empty. Otherwise ``network`` may be a
+    single name or a list. Empty / missing values become ``["default"]``
+    (pod network).
+    """
+    if networks:
+        names = [str(n).strip() for n in networks if str(n).strip()]
+        if names:
+            return names
+    if isinstance(network, (list, tuple)):
+        names = [str(n).strip() for n in network if str(n).strip()]
+        if names:
+            return names
+    if network is not None and str(network).strip():
+        return [str(network).strip()]
+    return ["default"]
+
+
+def build_ocpvirt_network_devices(
+    network_names: List[str],
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Build KubeVirt interface + network lists for one or more Multus NADs.
+
+    The first interface is named ``default`` (primary / SSH path). Additional
+    interfaces are ``net1``, ``net2``, … so Regional File Mount tests can see
+    multiple guest NICs.
+    """
+    interfaces: List[Dict[str, Any]] = []
+    networks: List[Dict[str, Any]] = []
+    for idx, name in enumerate(network_names):
+        iface_name = "default" if idx == 0 else f"net{idx}"
+        if not name or name == "default":
+            interfaces.append({"name": iface_name, "masquerade": {}})
+            networks.append({"name": iface_name, "pod": {}})
+        else:
+            interfaces.append({"name": iface_name, "bridge": {}})
+            networks.append(
+                {"name": iface_name, "multus": {"networkName": name}}
+            )
+    return interfaces, networks
+
+
 def build_virtualmachine_cr(
     node_name: str,
     namespace: str,
@@ -344,6 +393,7 @@ def build_virtualmachine_cr(
     precreated_volume_names: Optional[List[str]] = None,
     cpu: Optional[int] = None,
     memory: Optional[str] = None,
+    networks: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Build a simple KubeVirt VirtualMachine CR with embedded DataVolume templates.
@@ -357,6 +407,9 @@ def build_virtualmachine_cr(
 
     Prefer ``cloudinit_secret_name`` (cloudInitNoCloud.secretRef). Inline
     ``userData`` is capped at 2048 bytes by the KubeVirt admission webhook.
+
+    Networking: pass ``networks`` for multi-homed VMs (e.g. Regional File Mount),
+    or ``network`` for a single Multus NAD / ``default`` pod network.
     """
     has_custom = cpu is not None or memory is not None
     if instancetype_name and has_custom:
@@ -418,12 +471,8 @@ def build_virtualmachine_cr(
         disks.append({"name": disk_name, "disk": {"bus": "virtio"}})
         volumes.append({"name": disk_name, "dataVolume": {"name": vol_name}})
 
-    if not network or network == "default":
-        interfaces = [{"name": "default", "masquerade": {}}]
-        networks = [{"name": "default", "pod": {}}]
-    else:
-        interfaces = [{"name": "default", "bridge": {}}]
-        networks = [{"name": "default", "multus": {"networkName": network}}]
+    network_names = normalize_ocpvirt_networks(network=network, networks=networks)
+    interfaces, network_specs = build_ocpvirt_network_devices(network_names)
 
     domain: Dict[str, Any] = {
         "devices": {
@@ -451,7 +500,7 @@ def build_virtualmachine_cr(
             },
             "spec": {
                 "domain": domain,
-                "networks": networks,
+                "networks": network_specs,
                 "volumes": volumes,
             },
         },
@@ -939,6 +988,8 @@ def process_ocpvirt_custom_config(custom_config):
         ocpvirt_profile: VirtualMachineClusterInstancetype name (default o1.large).
         ocpvirt_cpu / ocpvirt-cpu: vCPU cores for inline domain sizing.
         ocpvirt_memory / ocpvirt-memory: Memory quantity (e.g. 16Gi) for inline sizing.
+        ocpvirt_networks: Comma-separated Multus NAD names (multi-homed VMs).
+        ocpvirt_root_disk_size: Root DataVolume size override (e.g. 40Gi).
         pvc_batch_size (default 3): non-root DataVolumes created per batch.
         vm_batch_size (default 1): VirtualMachines created per batch.
 
@@ -966,6 +1017,16 @@ def process_ocpvirt_custom_config(custom_config):
         overrides, "ocpvirt_memory", "ocpvirt-memory"
     )
 
+    ocpvirt_networks = None
+    raw_networks = overrides.get("ocpvirt_networks")
+    if raw_networks:
+        ocpvirt_networks = [
+            n.strip() for n in str(raw_networks).split(",") if n.strip()
+        ] or None
+    root_disk = overrides.get("ocpvirt_root_disk_size")
+    if root_disk:
+        root_disk = str(root_disk).strip() or None
+
     if (cpu_raw is None) ^ (memory_raw is None):
         raise NodeError(
             "ocpvirt_cpu and ocpvirt_memory must both be set for custom sizing "
@@ -984,6 +1045,8 @@ def process_ocpvirt_custom_config(custom_config):
             "ocpvirt_profile": None,
             "ocpvirt_cpu": _normalize_ocpvirt_cpu(cpu_raw),
             "ocpvirt_memory": _normalize_ocpvirt_memory(memory_raw),
+            "ocpvirt_networks": ocpvirt_networks,
+            "ocpvirt_root_disk_size": root_disk,
         }
 
     return {
@@ -992,6 +1055,8 @@ def process_ocpvirt_custom_config(custom_config):
         "ocpvirt_profile": profile or DEFAULT_OCPVIRT_PROFILE,
         "ocpvirt_cpu": None,
         "ocpvirt_memory": None,
+        "ocpvirt_networks": ocpvirt_networks,
+        "ocpvirt_root_disk_size": root_disk,
     }
 
 
@@ -1393,6 +1458,7 @@ class CephVMNodeOCP:
         instancetype: str = "",
         cpu: Optional[int] = None,
         memory: Optional[str] = None,
+        networks: Optional[List[str]] = None,
     ) -> None:
         """
         Create a VirtualMachine (and DataVolumes) on OCP Virtualization.
@@ -1405,6 +1471,9 @@ class CephVMNodeOCP:
             no_of_volumes: Number of additional blank DataVolumes.
             storage_class / network:
                 Optional overrides; defaults come from ocpvirt-credentials.
+            networks:
+                Optional Multus NAD list for multi-homed VMs. When set, overrides
+                ``network``. From ``--custom-config ocpvirt_networks=a,b``.
             precreated_volume_names:
                 Required list of existing blank DataVolume names to attach.
                 Pass an empty list when the VM has no extra volumes.
@@ -1434,7 +1503,14 @@ class CephVMNodeOCP:
 
         cred = self._ocp_cred
         storage_class = storage_class or cred.get("storage_class")
-        network = network if network is not None else cred.get("network", "default")
+        if networks:
+            network_names = normalize_ocpvirt_networks(networks=networks)
+        elif network is not None:
+            network_names = normalize_ocpvirt_networks(network=network)
+        else:
+            network_names = normalize_ocpvirt_networks(
+                network=cred.get("network", "default")
+            )
         root_disk_size = cred.get("root_disk_size") or DEFAULT_OCPVIRT_ROOT_DISK_SIZE
         access_modes = cred.get("access_modes") or ["ReadWriteOnce"]
         if isinstance(access_modes, str):
@@ -1453,7 +1529,8 @@ class CephVMNodeOCP:
             namespace=self.namespace,
             image_name=resolved_image_name,
             storage_class=storage_class,
-            network=network,
+            network=network_names[0],
+            networks=network_names,
             root_disk_size=root_disk_size,
             access_modes=access_modes,
             cloudinit_secret_name=secret_name,
