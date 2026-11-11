@@ -327,7 +327,7 @@ class BootstrapMixin:
             if build_type == "upstream" or manifest_obj.product == "community":
                 _rpm_version = f"{_ceph_version}*"
             else:
-                # Tentacle+: 2:VR.elNcp ; Umbrella 21.x: VR.elN (no epoch/cp)
+                # IBM Storage Ceph: 2:VR.elNcp (epoch + cp retained for 21.x)
                 _rpm_version = ibm_ceph_rpm_version_pin(_ceph_version, _os_major)
 
             self.install(**{"rpm_version": _rpm_version})
