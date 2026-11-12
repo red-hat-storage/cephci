@@ -1,0 +1,46 @@
+# Conf for 2+2 EC profile on 4 nodes for SSL RGW + HAProxy ingress passthrough.
+# Derived from tier-0_rgw_ingress.yaml: RGW on node3 and node4, ingress and
+# client colocated on the 4 OSD hosts (no dedicated diskless nodes).
+# Suite later: keep SSL RGW on node3+node4, remap client/ingress off node5/node6,
+# and create rgwec22_4 data pool.
+# crush-failure-domain=host requires k+m (4) OSD hosts.
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+          - ingress
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mon
+          - mgr
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
