@@ -65,7 +65,7 @@ def test_docopt_dashboard_flags_are_optional():
             "g.yaml",
         ],
     )
-    assert args["--dashboard-pytest"] is None
+    assert args["--dashboard-repo"] is None
     assert args["--dashboard-marker"] is None
 
 
@@ -82,13 +82,13 @@ def test_docopt_accepts_dashboard_flags():
             "s.yaml",
             "--global-conf",
             "g.yaml",
-            "--dashboard-pytest",
+            "--dashboard-repo",
             "/tmp/dash",
             "--dashboard-marker",
             "p0 and readonly",
         ],
     )
-    assert args["--dashboard-pytest"] == "/tmp/dash"
+    assert args["--dashboard-repo"] == "/tmp/dash"
     assert args["--dashboard-marker"] == "p0 and readonly"
 
 
@@ -98,7 +98,7 @@ def test_docopt_cleanup_usage_unchanged():
         usage, argv=["--cleanup", "instance", "--osp-cred", "cred.yaml"]
     )
     assert args["--cleanup"] == "instance"
-    assert args["--dashboard-pytest"] is None
+    assert args["--dashboard-repo"] is None
 
 
 def test_validate_dashboard_flags_absent():
@@ -107,7 +107,7 @@ def test_validate_dashboard_flags_absent():
 
 
 def test_validate_dashboard_flags_require_each_other(tmp_path):
-    with pytest.raises(DashboardPytestError, match="requires --dashboard-pytest"):
+    with pytest.raises(DashboardPytestError, match="requires --dashboard-repo"):
         validate_dashboard_pytest_args(None, "smoke")
     with pytest.raises(DashboardPytestError, match="requires --dashboard-marker"):
         validate_dashboard_pytest_args(str(tmp_path), None)

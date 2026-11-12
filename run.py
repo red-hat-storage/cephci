@@ -101,7 +101,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--monitor-performance]
         [--disable-console-log]
         [--product <community> | <redhat> | <ibm>]
-        [--dashboard-pytest <path>]
+        [--dashboard-repo <path>]
         [--dashboard-marker <expr>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
@@ -187,13 +187,15 @@ Options:
                                     [default: false]
   --product <product>               The edition of Ceph. Accepted values are
                                     community, redhat and ibm
-  --dashboard-pytest <path>         Checkout of ceph_dashboard_api_automation.
+  --dashboard-repo <path>           Checkout of ceph_dashboard_api_automation.
+                                    eg: --dashboard-repo ~/ceph_dashboard_api_automation
                                     When set, pytest runs after a successful
                                     deploy. Omit it to keep the existing run.py
                                     behavior.
   --dashboard-marker <expr>         pytest -m expression. Required with
-                                    --dashboard-pytest. Quote expressions that
+                                    --dashboard-repo. Quote expressions that
                                     contain spaces.
+                                    eg: --dashboard-marker "p0 and readonly"
 """
 log = Log()
 test_names = []
@@ -584,7 +586,7 @@ def run(args):
 
         try:
             dashboard_repo = validate_dashboard_pytest_args(
-                args.get("--dashboard-pytest"), args.get("--dashboard-marker")
+                args.get("--dashboard-repo"), args.get("--dashboard-marker")
             )
         except DashboardPytestError as exc:
             print("Error: %s" % exc)

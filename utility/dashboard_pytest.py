@@ -1,6 +1,6 @@
 """Run ceph_dashboard_api_automation after a successful cephci deploy.
 
-Invoked only when run.py is given --dashboard-pytest. The dashboard repo is a
+Invoked only when run.py is given --dashboard-repo. The dashboard repo is a
 separate checkout. This module does not import it.
 """
 
@@ -26,9 +26,9 @@ def validate_dashboard_pytest_args(pytest_path, marker):
     pytest_path = (pytest_path or "").strip()
     marker = (marker or "").strip()
     if marker and not pytest_path:
-        raise DashboardPytestError("--dashboard-marker requires --dashboard-pytest")
+        raise DashboardPytestError("--dashboard-marker requires --dashboard-repo")
     if pytest_path and not marker:
-        raise DashboardPytestError("--dashboard-pytest requires --dashboard-marker")
+        raise DashboardPytestError("--dashboard-repo requires --dashboard-marker")
     if not pytest_path:
         return None
     absolute = os.path.abspath(pytest_path)
