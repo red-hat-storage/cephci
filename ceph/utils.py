@@ -1317,6 +1317,7 @@ def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
             instancetype=params.get("instancetype") or "",
             cpu=params.get("cpu"),
             memory=params.get("memory"),
+            secure_boot=params.get("secure_boot", True),
         )
         vm.role = params["role"]
         vm.root_login = params["root-login"]

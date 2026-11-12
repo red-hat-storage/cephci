@@ -121,6 +121,7 @@ It also sets `domain.resources` requests/limits to guest CPU +1 and guest memory
 |-----|---------|-------------|
 | `ocpvirt_cpu` | `ocpvirt-cpu` | vCPU cores (positive integer) |
 | `ocpvirt_memory` | `ocpvirt-memory` | Kubernetes quantity (`16Gi`) or integer GiB (`16` → `16Gi`) |
+| `ocpvirt_secure_boot` | `ocpvirt-secure-boot` | EFI Secure Boot (`true`/`false`, default `true`) |
 
 Rules:
 
@@ -128,6 +129,7 @@ Rules:
 - Do **not** also set `ocpvirt_profile` (clear error).
 - When only a profile is set (or neither), behavior is unchanged (`o1.large` default).
 - Guest + bump must be ≤ LimitRange max (e.g. max CPU 20 → `ocpvirt_cpu` ≤ 19).
+- Set `ocpvirt_secure_boot=false` for unsigned/scratch kernels (e.g. kernel-update); default remains Secure Boot on.
 
 ### Suite / job metadata example
 
@@ -139,6 +141,14 @@ custom-config:
   - ocpvirt_namespace=rdu3_ceph_jenkins
   - ocpvirt_cpu=6
   - ocpvirt_memory=24Gi
+```
+
+Kernel-update / unsigned kernel jobs:
+
+```yaml
+custom-config:
+  - ocpvirt_namespace=rdu3_ceph_jenkins
+  - ocpvirt_secure_boot=false
 ```
 
 Equivalent CLI:

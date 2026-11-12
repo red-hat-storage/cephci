@@ -33,6 +33,7 @@ DEFAULT_OCPVIRT_PROFILE = "o1.large"
 DEFAULT_OCPVIRT_ROOT_DISK_SIZE = "80Gi"
 OCPVIRT_RESOURCE_CPU_BUMP = 1
 OCPVIRT_RESOURCE_MEMORY_BUMP_GI = 2
+DEFAULT_OCPVIRT_SECURE_BOOT = True
 
 VM_POLL_INTERVAL = 10
 # CSI attach (Trident/NFS) after CDI clone can exceed 20 minutes.
@@ -344,6 +345,7 @@ def build_virtualmachine_cr(
     precreated_volume_names: Optional[List[str]] = None,
     cpu: Optional[int] = None,
     memory: Optional[str] = None,
+    secure_boot: bool = DEFAULT_OCPVIRT_SECURE_BOOT,
 ) -> Dict[str, Any]:
     """
     Build a simple KubeVirt VirtualMachine CR with embedded DataVolume templates.
@@ -357,6 +359,9 @@ def build_virtualmachine_cr(
 
     Prefer ``cloudinit_secret_name`` (cloudInitNoCloud.secretRef). Inline
     ``userData`` is capped at 2048 bytes by the KubeVirt admission webhook.
+
+    ``secure_boot`` maps to ``domain.firmware.bootloader.efi.secureBoot``
+    (default True). Disable for unsigned/scratch kernels (e.g. kernel-update).
     """
     has_custom = cpu is not None or memory is not None
     if instancetype_name and has_custom:
@@ -432,7 +437,9 @@ def build_virtualmachine_cr(
             "rng": {},
         },
         "features": {"smm": {"enabled": True}},
-        "firmware": {"bootloader": {"efi": {}}},
+        "firmware": {
+            "bootloader": {"efi": {"secureBoot": bool(secure_boot)}},
+        },
     }
     if has_custom:
         domain["cpu"] = {"cores": int(cpu)}
@@ -735,14 +742,16 @@ def resolve_ocpvirt_instancetype(custom_api, profile_name: str) -> str:
 
 def apply_ocpvirt_vm_profile(params: dict, ocp_cred: dict, custom_config=None) -> dict:
     """
-    Apply OCP Virt compute sizing from ``--custom-config``.
+    Apply OCP Virt compute sizing and firmware flags from ``--custom-config``.
 
     Prefer explicit ``ocpvirt_cpu`` + ``ocpvirt_memory`` when both are set.
     Otherwise resolve ``ocpvirt_profile`` against cluster instance types
-    (default ``o1.large``).
+    (default ``o1.large``). Always sets ``secure_boot`` from
+    ``ocpvirt_secure_boot`` (default True).
     """
     cfg = process_ocpvirt_custom_config(custom_config)
     updated = dict(params)
+    updated["secure_boot"] = cfg["ocpvirt_secure_boot"]
     cpu = cfg.get("ocpvirt_cpu")
     memory = cfg.get("ocpvirt_memory")
     if cpu is not None and memory is not None:
@@ -762,11 +771,13 @@ def apply_ocpvirt_vm_profile(params: dict, ocp_cred: dict, custom_config=None) -
         )
         LOG.info(
             "Using OCP Virt custom resources: guest cpu=%s cores memory=%s; "
-            "pod requests/limits=%s (within LimitRange max in %s)",
+            "pod requests/limits=%s (within LimitRange max in %s); "
+            "secure_boot=%s",
             cpu,
             memory,
             pod_resources["requests"],
             namespace,
+            updated["secure_boot"],
         )
         return updated
 
@@ -778,8 +789,9 @@ def apply_ocpvirt_vm_profile(params: dict, ocp_cred: dict, custom_config=None) -
     updated.pop("memory", None)
     LOG.info(
         "Using OCP Virt cluster instance type %s "
-        "(VirtualMachineClusterInstancetype)",
+        "(VirtualMachineClusterInstancetype), secure_boot=%s",
         instancetype_name,
+        updated["secure_boot"],
     )
     return updated
 
@@ -930,6 +942,23 @@ def _normalize_ocpvirt_memory(value) -> str:
         ) from exc
 
 
+def _normalize_ocpvirt_secure_boot(value) -> bool:
+    """Validate and return OCP Virt Secure Boot as a bool (default True)."""
+    if value is None or value == "":
+        return DEFAULT_OCPVIRT_SECURE_BOOT
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on"):
+        return True
+    if text in ("0", "false", "no", "off"):
+        return False
+    raise NodeError(
+        f"Invalid ocpvirt_secure_boot {value!r}; expected true/false "
+        "(e.g. --custom-config ocpvirt_secure_boot=false)"
+    )
+
+
 def process_ocpvirt_custom_config(custom_config):
     """
     Parse OCP Virt batch and sizing settings from --custom-config.
@@ -939,6 +968,7 @@ def process_ocpvirt_custom_config(custom_config):
         ocpvirt_profile: VirtualMachineClusterInstancetype name (default o1.large).
         ocpvirt_cpu / ocpvirt-cpu: vCPU cores for inline domain sizing.
         ocpvirt_memory / ocpvirt-memory: Memory quantity (e.g. 16Gi) for inline sizing.
+        ocpvirt_secure_boot / ocpvirt-secure-boot: EFI Secure Boot (default true).
         pvc_batch_size (default 3): non-root DataVolumes created per batch.
         vm_batch_size (default 1): VirtualMachines created per batch.
 
@@ -965,6 +995,10 @@ def process_ocpvirt_custom_config(custom_config):
     memory_raw = _ocpvirt_custom_config_get(
         overrides, "ocpvirt_memory", "ocpvirt-memory"
     )
+    secure_boot_raw = _ocpvirt_custom_config_get(
+        overrides, "ocpvirt_secure_boot", "ocpvirt-secure-boot"
+    )
+    secure_boot = _normalize_ocpvirt_secure_boot(secure_boot_raw)
 
     if (cpu_raw is None) ^ (memory_raw is None):
         raise NodeError(
@@ -984,6 +1018,7 @@ def process_ocpvirt_custom_config(custom_config):
             "ocpvirt_profile": None,
             "ocpvirt_cpu": _normalize_ocpvirt_cpu(cpu_raw),
             "ocpvirt_memory": _normalize_ocpvirt_memory(memory_raw),
+            "ocpvirt_secure_boot": secure_boot,
         }
 
     return {
@@ -992,6 +1027,7 @@ def process_ocpvirt_custom_config(custom_config):
         "ocpvirt_profile": profile or DEFAULT_OCPVIRT_PROFILE,
         "ocpvirt_cpu": None,
         "ocpvirt_memory": None,
+        "ocpvirt_secure_boot": secure_boot,
     }
 
 
@@ -1393,6 +1429,7 @@ class CephVMNodeOCP:
         instancetype: str = "",
         cpu: Optional[int] = None,
         memory: Optional[str] = None,
+        secure_boot: bool = DEFAULT_OCPVIRT_SECURE_BOOT,
     ) -> None:
         """
         Create a VirtualMachine (and DataVolumes) on OCP Virtualization.
@@ -1417,6 +1454,9 @@ class CephVMNodeOCP:
             memory:
                 Memory quantity for inline ``domain.memory.guest``
                 (e.g. ``16Gi``; requires ``cpu``).
+            secure_boot:
+                EFI Secure Boot from ``--custom-config ocpvirt_secure_boot``.
+                Default True; set false for unsigned/scratch kernels.
         """
         if not instancetype and (cpu is None or memory is None):
             raise NodeError(
@@ -1461,6 +1501,7 @@ class CephVMNodeOCP:
             instancetype_name=instancetype or "",
             cpu=cpu,
             memory=memory,
+            secure_boot=secure_boot,
         )
         LOG.info(f"Creating VirtualMachine {vm_name} in namespace {self.namespace}")
 
