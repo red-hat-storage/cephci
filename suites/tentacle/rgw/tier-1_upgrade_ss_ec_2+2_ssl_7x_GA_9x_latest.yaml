@@ -1,0 +1,301 @@
+# P0 single-site upgrade: Reef 7.1 GA to 9.x latest
+# Topology: EC 2+2 on 4 OSD hosts, SSL, HAProxy, 3 RGW daemons (node3, node4, node5)
+# conf: conf/tentacle/rgw/tier-0_rgw.yaml
+
+# Tier-1 single site. Steps: prereq, deploy, monitoring stack, client, upgrade, versions.
+# Feature tests: 5 before the upgrade and the same 5 after it. No case is shared with the other single-site suites.
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 7.1
+                release: released
+                platform: rhel-9
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.index 32 32"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.index rgw"
+              command: shell
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node3
+                      - node4
+                      - node5
+                  spec:
+                    ssl: true
+                    rgw_frontend_ssl_certificate: create-cert
+                    rgw_frontend_port: 443
+      desc: Deploy RHCS 7.1 single-site cluster, EC 2+2, SSL, 3 RGW daemons.
+      polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS-ssl cluster using cephadm
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert
+      polarion-id: CEPH-10362
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node3:443
+          - node4:443
+          - node5:443
+      desc: Configure HAproxy in front of the three SSL RGW daemons
+      module: haproxy.py
+      name: Configure HAproxy
+
+  # Pre upgrade feature tests
+
+  - test:
+      name: S3CMD delete lifecycle rule pre upgrade
+      desc: Delete a bucket lifecycle rule with s3cmd
+      polarion-id: CEPH-83580364
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
+
+  - test:
+      name: Mbuckets with N objects etag verification pre upgrade
+      desc: test etag verification
+      polarion-id: CEPH-83574871
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+
+  - test:
+      name: Multipart upload of M buckets with N objects pre upgrade
+      desc: multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+
+  - test:
+      name: Swift version copy pre upgrade
+      desc: Restore a versioned object in Swift
+      polarion-id: CEPH-10646
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
+
+  - test:
+      name: ordered listing of buckets pre upgrade
+      desc: ordered listing of buckets
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+
+  - test:
+      abort-on-fail: true
+      name: Upgrade cluster to latest ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791
+      verify_cluster_health: true
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+          - client
+      desc: Copy cephadm root CA cert to rgw and client nodes post upgrade
+      module: copy_cephadm_root_ca_cert.py
+      name: copy cephadm root ca cert post upgrade
+      polarion-id: CEPH-10362
+
+  - test:
+      desc: Retrieve the versions of the cluster
+      module: exec.py
+      name: post upgrade gather version
+      polarion-id: CEPH-83575200
+      config:
+        cephadm: true
+        commands:
+          - "ceph mgr module enable orchestrator"
+          - "sleep 200"
+          - "ceph versions"
+
+  # Post upgrade feature tests
+
+  - test:
+      name: S3CMD delete lifecycle rule post upgrade
+      desc: Delete a bucket lifecycle rule with s3cmd
+      polarion-id: CEPH-83580364
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
+
+  - test:
+      name: Mbuckets with N objects etag verification post upgrade
+      desc: test etag verification
+      polarion-id: CEPH-83574871
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+
+  - test:
+      name: Multipart upload of M buckets with N objects post upgrade
+      desc: multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+
+  - test:
+      name: Swift version copy post upgrade
+      desc: Restore a versioned object in Swift
+      polarion-id: CEPH-10646
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_version_copy_op.yaml
+
+  - test:
+      name: ordered listing of buckets post upgrade
+      desc: ordered listing of buckets
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_flat_ordered.yaml
+
