@@ -1665,7 +1665,7 @@ def setup_deb_repos(node, ubuntu_repo):
 
 def setup_deb_cdn_repo(node, build=None):
     user = "redhat"
-    passwd = "OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9"
+    passwd = "masked"
     num = build.split(".")[0]
     cmd = (
         "umask 0077; echo deb https://{user}:{passwd}@rhcs.download.redhat.com/{num}-updates/Tools "
