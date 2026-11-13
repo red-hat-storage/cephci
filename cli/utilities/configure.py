@@ -189,9 +189,14 @@ def setup_ibm_licence(nodes, build_type, accept_eula={"ACCEPT_EULA": "Y"}):
     # Check for build type
     nogpgcheck = False if build_type in ("live", "cdn", "released") else True
 
-    # Install IBM licence
+    # Install IBM licence. Nightly installs come from the tools repo. The
+    # subscribed rhel-* CDN repos are duplicates of the lab mirrors and a DNS
+    # failure against cdn.redhat.com aborts the whole transaction.
     Package(nodes).install(
-        "ibm-storage-ceph-license", env_vars=accept_eula, nogpgcheck=nogpgcheck
+        "ibm-storage-ceph-license",
+        env_vars=accept_eula,
+        nogpgcheck=nogpgcheck,
+        disablerepo="rhel-*" if nogpgcheck else None,
     )
 
     # Accept IBM licence
