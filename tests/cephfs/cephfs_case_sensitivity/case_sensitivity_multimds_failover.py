@@ -1,9 +1,18 @@
 """
-IBMCEPH-16942 / tracker #72399 — casefold subvolume under multi-active MDS.
+IBMCEPH-16942 / IBMCEPH-21205 / tracker #72399 — casefold subvolume under
+multi-active MDS.
 
 Regression coverage for MDS journal replay and rejoin failures involving
 ``alternate_name`` and subtree authority after failover during case-insensitive
 metadata workloads.
+
+Polarion: CEPH-83632953
+
+Usecase 1: rename-heavy casefold storm + rotating ``ceph mds fail``.
+Usecase 2: ``max_mds`` scale-down/scale-up under load.
+Usecase 3: casefold ``rm Foo`` then ``create FOO`` + MDS fail (#72399).
+Usecase 4: create → journal flush/trim → unlink → recreate → MDS fail
+(empty cached alternate_name vs journaled fullbit; #72399).
 """
 
 import json
@@ -72,9 +81,19 @@ def _parse_fs_status_rank(rank):
         return None
 
 
-def _wait_for_fs_ranks_active(client, fs_name, max_mds, timeout=600, interval=10):
+def _wait_for_fs_ranks_active(
+    client, fs_name, max_mds, timeout=600, interval=10, laggy_fail_sec=180
+):
+    """
+    Wait until all ranks are active.
+
+    If any rank stays in ``replay(laggy)`` for ``laggy_fail_sec`` consecutive
+    seconds, return False early — that is the IBMCEPH-21205 / #72399 hang shape
+    and waiting the full timeout only delays crash-oracle attribution.
+    """
     max_mds = int(max_mds)
     end = time.time() + timeout
+    laggy_since = {}
     while time.time() < end:
         out, _ = client.exec_command(
             sudo=True,
@@ -108,8 +127,40 @@ def _wait_for_fs_ranks_active(client, fs_name, max_mds, timeout=600, interval=10
                 log.info("All %s MDS ranks active for %s", max_mds, fs_name)
                 return True
 
+        # Per-rank laggy timers: a single shared timer can false-fail when
+        # different ranks are briefly laggy in sequence during normal failover.
+        now = time.time()
+        laggy_ranks = {
+            r for r, s in rank_states.items() if r < max_mds and "laggy" in (s or "")
+        }
+        for r in list(laggy_since):
+            if r not in laggy_ranks:
+                del laggy_since[r]
+        for r in laggy_ranks:
+            laggy_since.setdefault(r, now)
+            if now - laggy_since[r] >= laggy_fail_sec:
+                log.error(
+                    "Rank %s stuck laggy for >=%ss on %s (states=%s)",
+                    r,
+                    laggy_fail_sec,
+                    fs_name,
+                    rank_states,
+                )
+                return False
+
         log.info("Waiting for ranks active on %s (states=%s)", fs_name, rank_states)
         time.sleep(interval)
+    return False
+
+
+def _fail_on_inactive_ranks(client, attr_util, fs_name, context):
+    """
+    When ranks never return active, still run crash/damage oracles so an
+    alternate_name replay crash is attributed instead of only a generic timeout.
+    """
+    log.error("Ranks did not return active (%s)", context)
+    # Oracles intentionally run even after timeout — return False either way.
+    _assert_post_fail_oracles(client, attr_util, fs_name, context)
     return False
 
 
@@ -160,6 +211,75 @@ def _resolve_fail_ranks(config, max_mds):
     if fail_ranks:
         return [int(r) for r in fail_ranks]
     return list(range(max_mds))
+
+
+def _mds_fail_rank(client, fs_name, rank):
+    # Qualify with fs_name so multi-FS clusters do not fail the default FS rank.
+    out, err, exit_code, _ = client.exec_command(
+        sudo=True,
+        cmd="ceph mds fail {}:{}".format(fs_name, rank),
+        check_ec=False,
+        verbose=True,
+    )
+    if exit_code != 0:
+        log.error(
+            "ceph mds fail %s:%s failed exit_code=%s stdout=%r stderr=%r",
+            fs_name,
+            rank,
+            exit_code,
+            out,
+            err,
+        )
+        return False
+    return True
+
+
+def _flush_mds_journals(client, fs_name, max_mds):
+    """Flush journal on every active rank; return False if any flush fails."""
+    for rank in range(int(max_mds)):
+        out, err, exit_code, _ = client.exec_command(
+            sudo=True,
+            cmd="ceph tell mds.{}:{} flush journal".format(fs_name, rank),
+            check_ec=False,
+            verbose=True,
+            timeout=600,
+        )
+        if exit_code != 0:
+            log.error(
+                "flush journal failed rank=%s exit_code=%s stdout=%r stderr=%r",
+                rank,
+                exit_code,
+                out,
+                err,
+            )
+            return False
+    return True
+
+
+def _fail_all_ranks_and_assert(
+    client, attr_util, fs_name, max_mds, post_fail_sleep_sec, oracle_prefix
+):
+    """
+    Fail every active rank after a focused mutation so the auth MDS for the
+    work directory is always forced through journal replay.
+    """
+    for rank in range(int(max_mds)):
+        log.info("%s: failing rank %s", oracle_prefix, rank)
+        if not _mds_fail_rank(client, fs_name, rank):
+            return False
+        time.sleep(post_fail_sleep_sec)
+        if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
+            return _fail_on_inactive_ranks(
+                client,
+                attr_util,
+                fs_name,
+                "{}-r{}".format(oracle_prefix, rank),
+            )
+        if not _assert_post_fail_oracles(
+            client, attr_util, fs_name, "{}-r{}".format(oracle_prefix, rank)
+        ):
+            return False
+    return True
 
 
 def _usecase_multimds_failover(
@@ -266,25 +386,14 @@ def _usecase_multimds_failover(
             fail_iterations,
             rank_to_fail,
         )
-        out, err, exit_code, _ = client.exec_command(
-            sudo=True,
-            cmd="ceph mds fail {}".format(rank_to_fail),
-            check_ec=False,
-            verbose=True,
-        )
-        if exit_code != 0:
-            log.error(
-                "ceph mds fail rank %s failed exit_code=%s stdout=%r stderr=%r",
-                rank_to_fail,
-                exit_code,
-                out,
-                err,
-            )
+        if not _mds_fail_rank(client, fs_name, rank_to_fail):
             return 1, fs_name, mounting_dir, stop_flag, subvol_group, subvol_name
         time.sleep(post_fail_sleep_sec)
 
         if not _wait_for_fs_ranks_active(client, fs_name, max_mds):
-            log.error("Ranks did not return active after fail iteration %s", iteration)
+            _fail_on_inactive_ranks(
+                client, attr_util, fs_name, "iteration-{}".format(iteration)
+            )
             return 1, fs_name, mounting_dir, stop_flag, subvol_group, subvol_name
 
         if not _assert_post_fail_oracles(
@@ -314,13 +423,171 @@ def _usecase_max_mds_scaleup(client, fs_util, attr_util, fs_name, max_mds):
         return 1
 
     if not _wait_for_fs_ranks_active(client, fs_name, max_mds, timeout=900):
-        log.error("Ranks not active after max_mds scale-up to %s", max_mds)
+        _fail_on_inactive_ranks(client, attr_util, fs_name, "post-scale-up")
         return 1
 
     if not _assert_post_fail_oracles(client, attr_util, fs_name, "post-scale-up"):
         return 1
 
     log.info("Passed Usecase 2: max_mds scale-up without damaged ranks")
+    return 0
+
+
+def _usecase_rm_foo_create_foo_failover(
+    client, attr_util, fs_name, mounting_dir, config
+):
+    """
+    Casefold ``rm Foo`` then ``create FOO``, then MDS fail (#72399 / IBMCEPH-21205).
+
+    Cached null dentry may retain alternate_name ``Foo`` while the fullbit
+    carries ``FOO``, hitting ``journal.cc`` alternate_name assert on replay.
+    """
+    max_mds = int(config.get("max_mds", 4))
+    post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
+    iterations = int(config.get("foo_flip_iterations", 5))
+    work_dir = os.path.join(mounting_dir.rstrip("/"), "casefold_foo_flip")
+
+    log.info(
+        "Usecase 3 (P0): rm Foo / create FOO + MDS fail (%s iterations)",
+        iterations,
+    )
+    attr_util.archive_mds_crashes(client)
+    client.exec_command(sudo=True, cmd="mkdir -p {!r}".format(work_dir))
+
+    for iteration in range(1, iterations + 1):
+        foo_path = os.path.join(work_dir, "Foo")
+        foo_upper = os.path.join(work_dir, "FOO")
+        client.exec_command(
+            sudo=True,
+            cmd="rm -f {f!r} {u!r}; echo flip > {f!r}".format(f=foo_path, u=foo_upper),
+        )
+        client.exec_command(sudo=True, cmd="rm -f {!r}".format(foo_path))
+        client.exec_command(sudo=True, cmd="echo flip2 > {!r}".format(foo_upper))
+
+        log.info(
+            "Usecase 3 iteration %s/%s: failing all ranks after Foo→FOO",
+            iteration,
+            iterations,
+        )
+        if not _fail_all_ranks_and_assert(
+            client,
+            attr_util,
+            fs_name,
+            max_mds,
+            post_fail_sleep_sec,
+            "foo-flip-{}".format(iteration),
+        ):
+            return 1
+
+    log.info("Passed Usecase 3: Foo→FOO casefold flip + MDS fail")
+    return 0
+
+
+def _usecase_journal_trim_recreate_failover(
+    client, attr_util, fs_name, mounting_dir, config
+):
+    """
+    Create → flush/trim journal → unlink → recreate → MDS fail (#72399 / IBMCEPH-21205).
+
+    After the create event is aged out of the journal, unlink leaves a nullbit
+    with empty alternate_name; recreate journals a non-empty alternate_name and
+    replay asserts if the cached dentry is not updated.
+    """
+    max_mds = int(config.get("max_mds", 4))
+    post_fail_sleep_sec = int(config.get("post_fail_sleep_sec", 5))
+    iterations = int(config.get("trim_recreate_iterations", 3))
+    flush_rounds = int(config.get("journal_flush_rounds", 8))
+    filler_files = int(config.get("journal_filler_files", 200))
+    work_dir = os.path.join(mounting_dir.rstrip("/"), "casefold_trim_recreate")
+    prev_segments = None
+
+    log.info(
+        "Usecase 4 (P0): journal-trim recreate + MDS fail (%s iterations)",
+        iterations,
+    )
+    attr_util.archive_mds_crashes(client)
+    client.exec_command(sudo=True, cmd="mkdir -p {!r}".format(work_dir))
+
+    # Shrink MDS log so flushes age create events out of the journal.
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd="ceph config get mds mds_log_max_segments",
+        check_ec=False,
+    )
+    prev_segments = (out or "").strip() or None
+    client.exec_command(
+        sudo=True,
+        cmd="ceph config set mds mds_log_max_segments 2",
+        check_ec=False,
+    )
+
+    try:
+        for iteration in range(1, iterations + 1):
+            target = os.path.join(work_dir, "TrimName_{}".format(iteration))
+            target_flip = os.path.join(work_dir, "trimname_{}".format(iteration))
+            filler = os.path.join(work_dir, "filler_{}".format(iteration))
+
+            client.exec_command(
+                sudo=True,
+                cmd="rm -f {t!r} {f!r}; echo orig > {t!r}".format(
+                    t=target, f=target_flip
+                ),
+            )
+            if not _flush_mds_journals(client, fs_name, max_mds):
+                return 1
+
+            # Generate journal pressure then flush repeatedly so the create
+            # event is trimmed before the unlink is journaled alone.
+            client.exec_command(
+                sudo=True,
+                cmd=(
+                    "mkdir -p {d!r}; "
+                    "for i in $(seq 1 {n}); do "
+                    "echo z > {d!r}/f_$i; "
+                    "done"
+                ).format(d=filler, n=filler_files),
+            )
+            for _ in range(flush_rounds):
+                if not _flush_mds_journals(client, fs_name, max_mds):
+                    return 1
+                time.sleep(1)
+
+            client.exec_command(sudo=True, cmd="rm -f {!r}".format(target))
+            # Do not flush after unlink — keep the nullbit in the journal for
+            # recreate + failover (empty alternate_name vs later fullbit).
+            client.exec_command(
+                sudo=True, cmd="echo recreated > {!r}".format(target_flip)
+            )
+
+            log.info(
+                "Usecase 4 iteration %s/%s: failing all ranks after trim/recreate",
+                iteration,
+                iterations,
+            )
+            if not _fail_all_ranks_and_assert(
+                client,
+                attr_util,
+                fs_name,
+                max_mds,
+                post_fail_sleep_sec,
+                "trim-recreate-{}".format(iteration),
+            ):
+                return 1
+    finally:
+        if prev_segments:
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config set mds mds_log_max_segments {}".format(prev_segments),
+                check_ec=False,
+            )
+        else:
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config rm mds mds_log_max_segments",
+                check_ec=False,
+            )
+
+    log.info("Passed Usecase 4: journal-trim recreate + MDS fail")
     return 0
 
 
@@ -339,6 +606,7 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         max_mds = int(config.get("max_mds", 4))
         run_scaleup = config.get("run_max_mds_scaleup", True)
+        run_p0_repros = config.get("run_alternate_name_replay_repros", True)
 
         fs_util = FsUtils(ceph_cluster, test_data=kw.get("test_data"))
         attr_util = CephFSAttributeUtilities(ceph_cluster)
@@ -361,17 +629,40 @@ def run(ceph_cluster, **kw):
         if rc != 0:
             return rc
 
+        # Focused P0 paths need a quiet mount (no racing storm).
+        if run_p0_repros:
+            attr_util.stop_casefold_metadata_storm(client, stop_flag)
+            time.sleep(2)
+
+            rc = _usecase_rm_foo_create_foo_failover(
+                client, attr_util, fs_name, mounting_dir, config
+            )
+            if rc != 0:
+                return rc
+
+            rc = _usecase_journal_trim_recreate_failover(
+                client, attr_util, fs_name, mounting_dir, config
+            )
+            if rc != 0:
+                return rc
+
+            if run_scaleup:
+                attr_util.start_casefold_metadata_storm(client, mounting_dir, stop_flag)
+                time.sleep(int(config.get("storm_restart_warmup_sec", 30)))
+
         if run_scaleup:
             rc = _usecase_max_mds_scaleup(client, fs_util, attr_util, fs_name, max_mds)
             if rc != 0:
                 return rc
 
         log.info(
-            "TEST PASSED | max_mds=%s | fail_iterations=%s | ranks=%s | scaleup=%s",
+            "TEST PASSED | max_mds=%s | fail_iterations=%s | ranks=%s | "
+            "scaleup=%s | alternate_name_replay=%s",
             max_mds,
             config.get("fail_iterations", 10),
             _resolve_fail_ranks(config, max_mds),
             run_scaleup,
+            run_p0_repros,
         )
         return 0
 
@@ -404,12 +695,23 @@ def run(ceph_cluster, **kw):
             except Exception as exc:
                 log.warning("Unmount cleanup: %s", exc)
 
-        if client and fs_name and subvol_name and subvol_group and fs_util:
+        if client and fs_name and subvol_name and subvol_group:
+            # Bound cleanup: a stuck MDS (replay/laggy) can hang subvolume rm
+            # for the default 3600s and waste the suite (seen on 20.2.2-367).
+            # Enable mon_allow_pool_delete like fs_util.remove_fs() so volume
+            # removal can reclaim the data/meta pools.
+            cleanup_timeout = 120
             try:
-                Ceph(client).fs.sub_volume.rm(
-                    fs_name, subvol_name, group=subvol_group, force=True
+                client.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "ceph config set mon mon_allow_pool_delete true || true; "
+                        "ceph fs subvolume rm {fs} {sv} {grp} --force || true; "
+                        "ceph fs subvolumegroup rm {fs} {grp} --force || true; "
+                        "ceph fs volume rm {fs} --yes-i-really-mean-it || true"
+                    ).format(fs=fs_name, sv=subvol_name, grp=subvol_group),
+                    check_ec=False,
+                    timeout=cleanup_timeout,
                 )
-                Ceph(client).fs.sub_volume_group.rm(fs_name, subvol_group)
-                fs_util.remove_fs(client, fs_name, validate=False)
             except Exception as exc:
                 log.warning("FS/subvolume cleanup: %s", exc)
