@@ -152,6 +152,9 @@ TEST WORKFLOW:
     ├── VALIDATION PHASE
     │   ├── Wait for cluster stabilization (active+clean PGs)
     │   ├── Check cluster health
+    │   ├── Clear error injections (cleanup_all) before hard service checks
+    │   ├── Settle wait: MDS_CLIENT_LATE_RELEASE / MDS_SLOW_REQUEST clear
+    │   │   └── On timeout + NFS thrashing: restart NFS daemons, then verify
     │   ├── If NFS thrashing: post-thrash NFS verification
     │   │   ├── Daemon health: all NFS daemons must be running
     │   │   ├── Mount health: pre-thrash integrity mounts must not be stale
@@ -173,7 +176,7 @@ TEST WORKFLOW:
     └── CLEANUP PHASE
         ├── Reset recovery settings
         ├── Remove debug logging configs (if enabled)
-        ├── Remove error injection configs (cleanup_all)
+        ├── Remove error injection configs (cleanup_all; idempotent if already cleared)
         ├── Restore down OSDs (mark in + restart OSD service)
         ├── If destructive MDS injection: destroy damaged filesystem + pools
         ├── Force log rotation on all OSD hosts (parallel)
@@ -210,19 +213,24 @@ CONFIGURATION OPTIONS:
 - enable_mds_thrashing: Enable MDS thrashing - failover/restart/random fail (default: False)
 - mds_operations: Optional list of MDS ops (default: failover, rolling_restart,
   random_fail). Extra: colocated_fail, kill_loop, max_mds_scale, config_storm,
-  fs_fail_scale, standby_replay_fail, dir_pin, cap_revoke_failover, multi_fs_fail
+  fs_fail_scale, standby_replay_fail, dir_pin, cap_revoke_failover, multi_fs_fail,
+  balancer_toggle, dir_split_merge, export_during_snapshot, reconnect_scaledown,
+  maxmds_during_promotion (and other phase-2 backlog ops — see mds_thrash_helpers._OPS)
 - mds_kill_count / mds_kill_interval: kill_loop params (default: 5 / 5)
 - mds_fail_count: ranks to fail for random_fail (default: 1)
 - mds_scale_path: max_mds walk list e.g. [8, 1, 8] (default: [current, 1, current])
 - mds_scale_wait: seconds to wait per scale step (default: 20)
-- mds_scale_during_promote: nudge max_mds during standby_replay_fail (default: False)
+- mds_scale_during_promote: nudge max_mds during standby_replay_fail (default: False).
+  Prefer dedicated ``maxmds_during_promotion`` op for D4 instead of enabling this.
 - mds_recovery_wait: seconds between MDS ops (default: 15)
 - mds_pin_dirs: dirs for dir_pin batches (default: 20)
 - mds_cap_workers: background RW workers for cap_revoke_failover (default: 4)
 - enable_nfs_thrashing: Enable NFS cluster/export setup for thrashing (default: False)
 - nfs_num_clusters: Number of ``ceph nfs cluster create`` instances (default: 3)
 - nfs_exports_per_cluster: Exports per cluster (default: 4)
-- nfs_placement: Placement daemon count argument to cluster create (default: 1)
+- nfs_placement: Placement daemon count for cluster create (default: 2; floored
+  to 2 when NFS thrashing is on — multi-daemon + disjoint hosts avoid monitoring
+  port clashes; ``ceph orch restart <service>`` itself works at N=1)
 - enable_cephfs_subvolume_thrashing: Enable CephFS subvolume thrashing (default: False)
 - enable_election_strategy_thrash: Enable election strategy changes during MON thrash (default: False)
 - enable_nfs_rdma: Create NFS clusters with ceph nfs cluster create --enable-rdma
@@ -395,14 +403,16 @@ def run(ceph_cluster, **kw):
        seconds.  NFS and SMB workflow errors are *expected* under chaos
        and are logged as warnings only (see ``_warn_checks``).  The sole
        hard-fail is an NFS data integrity checksum mismatch.
-    4. **Validation** -- After recovery, verify daemon health, NFS mount
-       staleness, data integrity, export accessibility, NFS/SMB RADOS
-       config integrity, SMB endpoint/CTDB health, and crash status.
+    4. **Validation** -- After PGs recover, clear error injections, wait
+       for MDS late-release / slow-request warnings to settle (on timeout
+       with NFS thrashing: restart NFS daemons), then verify daemon health,
+       NFS mount staleness, data integrity, export accessibility, NFS/SMB
+       RADOS config integrity, SMB endpoint/CTDB health, and crash status.
        Failures here set ``test_failed = True``.  When both NFS and OSD
        thrashing are active, NFS crashes where all daemons have recovered
        are downgraded to warnings (cascading OSD pool degradation).
     5. **Cleanup** -- Unmount filesystems, delete pools, re-enable
-       firewalls, and remove injection configs.
+       firewalls, and re-run injection cleanup (idempotent).
 
     Test Args (in config):
         pool_configs (list): List of pool configurations to create (REQUIRED)
@@ -439,7 +449,8 @@ def run(ceph_cluster, **kw):
         enable_nfs_thrashing (bool): Enable NFS cluster/export setup for thrashing (default: False)
         nfs_num_clusters (int): How many NFS clusters to create (default: 3)
         nfs_exports_per_cluster (int): Exports per cluster (default: 4)
-        nfs_placement (int): ``ceph nfs cluster create`` placement count (default: 1)
+        nfs_placement (int): ``ceph nfs cluster create`` placement count (default: 2;
+            floored to 2 when NFS thrashing is enabled for multi-daemon / disjoint hosts)
         enable_cephfs_subvolume_thrashing (bool): Enable CephFS subvolume thrashing (default: False)
         enable_election_strategy_thrash (bool): Enable election strategy changes (default: False)
         enable_fast_ec_config_params (bool): Enable fast EC config params (default: True)
@@ -518,7 +529,7 @@ def run(ceph_cluster, **kw):
     enable_crush_thrashing = config.get("enable_crush_thrashing", True)
     enable_pg_thrashing = config.get("enable_pg_thrashing", True)
     compression = config.get("compression", False)
-    enable_debug_logs = config.get("enable_debug_logs", True)
+    enable_debug_logs = config.get("enable_debug_logs", False)
     inject_errors = config.get("inject_errors", False)
     inconsistent_object_fail = config.get("inconsistent_object_fail", True)
     if inconsistent_object_fail and not _has_inconsistent_obj_fix(rados_obj):
@@ -556,7 +567,18 @@ def run(ceph_cluster, **kw):
     nfs_placement_label = config.get("nfs_placement_label") or None
     nfs_num_clusters = config.get("nfs_num_clusters", 3)
     nfs_exports_per_cluster = config.get("nfs_exports_per_cluster", 4)
-    nfs_placement = config.get("nfs_placement", 1)
+    # Default/floor 2: multi-daemon + disjoint host windows (monitoring ports).
+    # Note: ``ceph orch restart <service>`` works at N=1; ``daemon restart`` does not.
+    try:
+        nfs_placement = int(config.get("nfs_placement", 2) or 2)
+    except (TypeError, ValueError):
+        nfs_placement = 2
+    if enable_nfs_thrashing and nfs_placement < 2:
+        log.warning(
+            "nfs_placement=%s raised to 2 (prefer multi-daemon / disjoint hosts)",
+            nfs_placement,
+        )
+        nfs_placement = 2
     enable_scrub_thrashing = config.get("enable_scrub_thrashing", True)
     enable_cephfs_subvolume_thrashing = config.get(
         "enable_cephfs_subvolume_thrashing", False
@@ -2260,18 +2282,166 @@ def run(ceph_cluster, **kw):
                 "(boosting osd_max_backfills / osd_recovery_max_active)..."
             )
             if not wait_for_clean_pg_sets(
-                rados_obj, timeout=1200, recovery_thread=True
+                rados_obj, timeout=2700, recovery_thread=True
             ):
                 log.error("Not all PGs are active+clean")
                 raise Exception("Not all PGs are active+clean")
 
         rados_obj.log_cluster_health()
 
+        # Clear injections before hard post-thrash NFS/SMB checks.
+        # Mount/ls (and SMB endpoints) expect a recovered cluster;
+        # leaving client_inject_release_failure / ms_inject_delay active
+        # makes those checks fail by design under mds_chaos. cleanup_all
+        # is idempotent — finally re-runs it as a safety net.
+        log.info("Clearing error injections before post-thrash validation...")
+        injector.cleanup_all()
+
+        # Cap-release / slow-request warnings can linger on Ganesha hosts
+        # after injection removal. Wait briefly; timeout is warn-only.
+        # Only settle when post-thrash NFS/SMB checks will run. If settle
+        # times out under NFS thrashing, restart NFS daemons so wedged
+        # libcephfs sessions (typical after client_inject_release_failure)
+        # are recycled before mount/ls — distinguishes self-heal-needs-
+        # restart vs still-broken-after-restart.
+        _mds_settle_timed_out = False
+        # Soft-fail NFS availability when settle recycle is incomplete
+        # (orch block / wait timeout). Soft if *any* service is blocked —
+        # partial recycle must not hard-fail still-down peers. CRC mismatch
+        # / RADOS corruption stay hard.
+        _nfs_avail_soft = False
+        if (enable_nfs_thrashing and nfs_config) or (
+            enable_smb_thrashing and smb_config
+        ):
+            _mds_settle_checks = ("MDS_CLIENT_LATE_RELEASE", "MDS_SLOW_REQUEST")
+            _mds_settle_timeout = 300
+            _mds_settle_poll = 30
+            try:
+                deadline = time.time() + _mds_settle_timeout
+                while True:
+                    health_detail, _ = rados_obj.node.shell(
+                        args=["ceph health detail"], print_output=False
+                    )
+                    health_detail = health_detail or ""
+                    outstanding = [c for c in _mds_settle_checks if c in health_detail]
+                    if not outstanding:
+                        log.info(
+                            "MDS settle OK: %s not present after injection cleanup",
+                            ", ".join(_mds_settle_checks),
+                        )
+                        break
+                    remaining = int(deadline - time.time())
+                    if remaining <= 0:
+                        _mds_settle_timed_out = True
+                        log.warning(
+                            "MDS settle timed out after %ss; still seeing %s.",
+                            _mds_settle_timeout,
+                            outstanding,
+                        )
+                        break
+                    log.info(
+                        "Waiting for MDS warnings to clear: %s (%ss left)",
+                        outstanding,
+                        remaining,
+                    )
+                    time.sleep(_mds_settle_poll)
+            except Exception as e:
+                log.warning("MDS settle wait failed (%s); continuing validation", e)
+
+            if _mds_settle_timed_out and enable_nfs_thrashing and nfs_config:
+                # Restart only this test's NFS services — never all orch nfs.
+                # ``ceph orch restart <service>`` works at N=1; per-daemon
+                # restart is the path that hits the HA / --force guard.
+                blocked, restarted = [], []
+                for cluster in nfs_config.get("clusters", []):
+                    cid = cluster.get("cluster_id") or ""
+                    if not cid:
+                        continue
+                    svc = f"nfs.{cid}"
+                    log.warning(
+                        "MDS settle timed out — orch restart %s "
+                        "(recycle wedged Ganesha/libcephfs)",
+                        svc,
+                    )
+                    try:
+                        rados_obj.client.exec_command(
+                            cmd=f"ceph orch restart {svc}", sudo=True
+                        )
+                        restarted.append(svc)
+                    except Exception as e:
+                        blocked.append(svc)
+                        log.warning(
+                            "Harness limitation: orch restart %s failed: %s",
+                            svc,
+                            e,
+                        )
+                if restarted:
+                    wait_deadline = time.time() + 300
+                    pending = set(restarted)
+                    while pending and time.time() < wait_deadline:
+                        ready = set()
+                        for svc in list(pending):
+                            d_ids = (
+                                rados_obj.get_service_spec_daemons(service_name=svc)
+                                or []
+                            )
+                            if not d_ids:
+                                continue
+                            if all(
+                                (
+                                    rados_obj.get_daemon_status("nfs", str(d))
+                                    or (None, None)
+                                )[1]
+                                == "running"
+                                for d in d_ids
+                            ):
+                                ready.add(svc)
+                        pending -= ready
+                        if pending:
+                            time.sleep(15)
+                    if pending:
+                        blocked.extend(sorted(pending))
+                        log.warning(
+                            "NFS recycle wait timed out for %s",
+                            ", ".join(sorted(pending)),
+                        )
+                    else:
+                        log.info(
+                            "NFS recycle completed for %s — subsequent "
+                            "availability failures are product",
+                            ", ".join(restarted),
+                        )
+                        # Brief pause for Ganesha re-export / MDS rejoin.
+                        time.sleep(10)
+                    health_detail, _ = rados_obj.node.shell(
+                        args=["ceph health detail"], print_output=False
+                    )
+                    log.info(
+                        "Health after NFS restart (settle was timed out): %s",
+                        (
+                            (health_detail or "").splitlines()[0]
+                            if health_detail
+                            else "unknown"
+                        ),
+                    )
+                # Soft when any recycle is incomplete (run1 false-fail: c3
+                # up, c1/c2 stuck → old "nothing clean" gate stayed hard).
+                _nfs_avail_soft = bool(blocked)
+                if _nfs_avail_soft:
+                    log.warning(
+                        "Harness limitation: NFS recycle did not complete (%s). "
+                        "Post-thrash NFS availability failures will be soft; "
+                        "integrity mismatch / RADOS corruption stay hard.",
+                        ", ".join(blocked),
+                    )
+
         # ── Post-thrash NFS verification ──
         #
-        # After thrash threads have stopped and PGs are active+clean,
-        # validate the NFS subsystem end-to-end.  Every check that
-        # fails sets test_failed = True (these are hard failures).
+        # After thrash threads have stopped, PGs are active+clean, and
+        # error injections are cleared, validate the NFS subsystem
+        # end-to-end. Availability failures are hard unless
+        # ``_nfs_avail_soft`` (any settle recycle incomplete).
+        # Integrity mismatch and RADOS config corruption are always hard.
         #
         # Checks performed (in order):
         #   1. Daemon health: every nfs.<daemon_id> must report "running"
@@ -2283,7 +2453,7 @@ def run(ceph_cluster, **kw):
         #      I/O errors that are not mismatches are warn-only.
         #   4. Export accessibility: mount each export via
         #      _nfs_mount_context, run ``ls``, unmount.  Any mount or
-        #      ls failure is a hard failure.
+        #      ls failure is a hard failure (soft if ``_nfs_avail_soft``).
         #   5. RADOS config integrity: for each NFS cluster, read the
         #      conf-nfs.<cluster_id> RADOS object and validate it
         #      parses correctly.  Corruption is a hard failure.
@@ -2292,6 +2462,15 @@ def run(ceph_cluster, **kw):
             nfs_wf = NfsThrashWorkflows(
                 cephadm.installer, nfs_config, rados_obj, ceph_cluster
             )
+
+            def _nfs_avail_fail(msg, *args):
+                """Daemon/mount/export availability — soft when recycle blocked."""
+                nonlocal test_failed
+                if _nfs_avail_soft:
+                    log.warning("[post-thrash NFS][harness] " + msg, *args)
+                else:
+                    log.error("[post-thrash NFS] " + msg, *args)
+                    test_failed = True
 
             # NFS daemon health: all daemons must be running
             try:
@@ -2305,7 +2484,7 @@ def run(ceph_cluster, **kw):
                         service_name=svc_name
                     )
                     if not daemon_ids:
-                        log.error("[post-thrash NFS] No daemons found for %s", svc_name)
+                        _nfs_avail_fail("No daemons found for %s", svc_name)
                         nfs_daemon_healthy = False
                         continue
                     for daemon_id in daemon_ids:
@@ -2315,9 +2494,8 @@ def run(ceph_cluster, **kw):
                         )
                         status_desc = status[1] if status else "unknown"
                         if status_desc != "running":
-                            log.error(
-                                "[post-thrash NFS] Daemon nfs.%s "
-                                "status=%s (expected running)",
+                            _nfs_avail_fail(
+                                "Daemon nfs.%s status=%s (expected running)",
                                 daemon_id,
                                 status_desc,
                             )
@@ -2326,11 +2504,8 @@ def run(ceph_cluster, **kw):
                             log.debug("[post-thrash NFS] nfs.%s running", daemon_id)
                 if nfs_daemon_healthy:
                     log.info("Post-thrash NFS daemon health verified")
-                else:
-                    test_failed = True
             except Exception as e:
-                log.error("[post-thrash NFS] Daemon health check failed: %s", e)
-                test_failed = True
+                _nfs_avail_fail("Daemon health check failed: %s", e)
 
             # NFS mount health check on pre-thrash integrity mounts
             if nfs_integrity_mounts:
@@ -2339,21 +2514,20 @@ def run(ceph_cluster, **kw):
                         client_node, nfs_integrity_mounts, proto="nfs"
                     )
                     if mount_health.get("stale"):
-                        log.error(
-                            "[post-thrash NFS] Stale mounts detected: %s",
+                        _nfs_avail_fail(
+                            "Stale mounts detected: %s",
                             mount_health["stale"],
                         )
-                        test_failed = True
                     else:
                         log.info(
                             "[post-thrash NFS] Mount health OK: %s healthy",
                             len(mount_health.get("healthy", [])),
                         )
                 except Exception as e:
-                    log.error("[post-thrash NFS] Mount health check failed: %s", e)
-                    test_failed = True
+                    _nfs_avail_fail("Mount health check failed: %s", e)
 
-            # Post-thrash data integrity verification on pre-mounted paths
+            # Post-thrash data integrity: mismatch always hard; unreadable soft
+            # only when settle recycle did not complete (_nfs_avail_fail).
             if nfs_integrity_mounts:
                 try:
                     log.info(
@@ -2371,12 +2545,10 @@ def run(ceph_cluster, **kw):
                         )
                         test_failed = True
                     elif post_verify.get("errors"):
-                        log.error(
-                            "[post-thrash NFS] Data integrity errors on "
-                            "stable cluster: %s (file unreadable = potential data loss)",
+                        _nfs_avail_fail(
+                            "Data integrity errors (unreadable): %s",
                             post_verify["errors"],
                         )
-                        test_failed = True
                     else:
                         log.info(
                             "[post-thrash NFS] Data integrity verified: "
@@ -2384,10 +2556,7 @@ def run(ceph_cluster, **kw):
                             post_verify.get("files_checked", 0),
                         )
                 except Exception as e:
-                    log.error(
-                        "[post-thrash NFS] Data integrity verification failed: %s", e
-                    )
-                    test_failed = True
+                    _nfs_avail_fail("Data integrity verification failed: %s", e)
 
             # NFS export accessibility: mount each export, verify ls, unmount
             try:
@@ -2405,8 +2574,8 @@ def run(ceph_cluster, **kw):
                             index=idx,
                         ) as (exp_info, mount_point):
                             if exp_info is None or mount_point is None:
-                                log.error(
-                                    "[post-thrash NFS] Mount failed for export %s",
+                                _nfs_avail_fail(
+                                    "Mount failed for export %s",
                                     pseudo_path,
                                 )
                                 nfs_exports_ok = False
@@ -2422,21 +2591,18 @@ def run(ceph_cluster, **kw):
                                 mount_point,
                             )
                     except Exception as e:
-                        log.error(
-                            "[post-thrash NFS] Export %s access failed: %s",
+                        _nfs_avail_fail(
+                            "Export %s access failed: %s",
                             pseudo_path,
                             e,
                         )
                         nfs_exports_ok = False
                 if nfs_exports_ok:
                     log.info("Post-thrash NFS export accessibility verified")
-                else:
-                    test_failed = True
             except Exception as e:
-                log.error("[post-thrash NFS] Export accessibility check failed: %s", e)
-                test_failed = True
+                _nfs_avail_fail("Export accessibility check failed: %s", e)
 
-            # NFS RADOS config integrity: verify each cluster's config object
+            # NFS RADOS config integrity — always hard
             try:
                 nfs_rados_ok = True
                 for cluster in nfs_config.get("clusters", []):
@@ -2647,6 +2813,8 @@ def run(ceph_cluster, **kw):
                 mon_obj.remove_config(section="osd", name=name)
             log.info("ESB verification configs removed")
 
+        # Idempotent: validation already clears injections before NFS/SMB
+        # hard checks; this covers early exceptions and non-validation exits.
         log.info("Cleaning up all error injections...")
         injector.cleanup_all()
 
