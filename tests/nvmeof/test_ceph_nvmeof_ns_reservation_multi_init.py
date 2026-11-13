@@ -11,6 +11,10 @@ from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.log_collect import (
+    arm_nvmeof_journal_window,
+    safe_collect_nvmeof_service_journals,
+)
 from tests.nvmeof.workflows.nvme_gateway import create_gateway
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
@@ -154,6 +158,8 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
         rbd_obj: RBD object
         config: test config
     """
+    safe_collect_nvmeof_service_journals(ceph_cluster=ceph_cluster, config=config)
+
     # Delete the multiple Initiators across multiple gateways
     if "initiators" in config["cleanup"]:
         for initiator_cfg in config["initiators"]:
@@ -405,6 +411,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"][0])
+    arm_nvmeof_journal_window(config, gw_node)
     custom_config = kwargs.get("test_data", {}).get("custom-config")
 
     ceph = Orch(ceph_cluster, **{})
