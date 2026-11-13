@@ -1,0 +1,48 @@
+# IBMCEPH-18527 verify-only: reuse upgraded cluster, skip deploy.
+# cluster configuration: conf/tentacle/nvmeof/ceph_nvmeof_2GW_1Client.yaml
+---
+tests:
+
+  - test:
+      abort-on-fail: false
+      config:
+        install: true
+        spec_deployment: true
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        gw_group: group
+        gw_nodes:
+          - node5
+          - node6
+        listener_port: 4420
+        initiator_node: node10
+        tls_psk: true
+        run_ts03b: true
+        # IBMCEPH-18527: host add resets keep_connections; open one OMAP poll
+        # window so del(keep_connections=True)+add both land before peers poll.
+        state_update_interval_sec: 60
+        state_update_notify: false
+        ts03b_del_add_wait: 10
+        ts03b_fio_runtime: 360
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:tlspsk-kc
+            no-group-append: true
+            secure_listener: true
+            bdevs:
+              - count: 1
+                size: 20G
+                ns_create_image: true
+        cleanup:
+          - subsystems
+          - pool
+          - gateway
+      desc: >
+        IBMCEPH-18527 verify on 9.2z1: TLS-PSK keep_connections rotation
+        under FIO; assert no write drop and GW2 preserves keep_connections.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_tlspsk_key_rotation.py
+      name: IBMCEPH-18527 TLS-PSK keep_connections rotation verify
+      polarion-id: IBMCEPH-18527

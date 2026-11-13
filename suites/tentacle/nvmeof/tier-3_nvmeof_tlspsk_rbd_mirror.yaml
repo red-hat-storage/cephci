@@ -1,0 +1,199 @@
+# NVMe-oF TLS-PSK + RBD mirror — Tier 3
+#
+# Cluster configuration: conf/tentacle/nvmeof/ceph_nvmeof_rbd_mirror.yaml
+#   ceph-rbd1 and ceph-rbd2, five nodes plus two NVMe-oF nodes each.
+#   node2  — initiator
+#   node5  — rbd-mirror
+#   node6  — NVMe-oF gateway
+#   node7  — NVMe-oF gateway
+# One gateway per node. The two gateways are one group.
+#
+# The first tests bootstrap both clusters. Comment them out when reusing a
+# deployment that already has both clusters, the rbd-mirror daemons, and the
+# initiator packages.
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisites for both clusters
+      desc: Install the packages required on both clusters.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: Deploy the primary and secondary clusters
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy primary and secondary clusters
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - nvme-cli
+              - fio
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+              - nvme-cli
+              - fio
+            copy_admin_keyring: true
+      desc: Configure the initiator on both clusters
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client on both clusters
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Allow the mirrored pool to be deleted during cleanup
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: Deploy the RBD mirror daemon on both clusters
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror service
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            pool: rbd
+            image: nvmeof-tlspsk-mirror
+            image_size: 2G
+            nqn: nqn.2016-06.io.spdk:tlspsk-mirror
+            gw_group: tlspsk-mirror
+            gw_nodes:
+              - node6
+              - node7
+            listener_port: 4420
+            initiator_node: node2
+            fio_size: 256m
+            replay_timeout: 300
+            cleanup:
+              - subsystems
+              - gateway
+      desc: >
+        Journal-mirror rbd/nvmeof-tlspsk-mirror from ceph-rbd1 to ceph-rbd2.
+        Export that image from a TLS-PSK subsystem on node6 and node7, write
+        with nvme connect --tls, and require the secondary replay to finish
+        with a matching checksum. Demote the primary, promote the secondary,
+        export the same image there, and read and write it over --tls.
+        A connect without --tls is refused on both clusters.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_tlspsk_rbd_mirror.py
+      name: NVMe-oF TLS-PSK RBD mirror and planned failover
+      polarion-id: CEPH-XXXXX
