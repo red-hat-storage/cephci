@@ -1,5 +1,5 @@
 tests:
-  # Conf file is conf/tentacle/rgw/migrate_default_single_to_multisite.yaml
+  # Conf file is conf/tentacle/rgw/migrate_default_single_to_multisite_ec2+2.yaml
   # Cluster deployment stage
 
   - test:
@@ -48,6 +48,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create default.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "default.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -55,7 +70,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node2
                         - node4
                         - node3
         ceph-sec:
@@ -95,6 +110,21 @@ tests:
                   args:
                     all-available-devices: true
               - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create default.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "default.rgw.buckets.data rgw"
+                  command: shell
+              - config:
                   command: apply
                   service: rgw
                   pos_args:
@@ -102,7 +132,7 @@ tests:
                   args:
                     placement:
                       nodes:
-                        - node5
+                        - node2
                         - node4
                         - node3
       desc: RHCS cluster deployment using cephadm.
@@ -118,7 +148,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -126,7 +156,7 @@ tests:
           config:
             command: add
             id: client.1
-            node: node6
+            node: node4
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -137,25 +167,25 @@ tests:
       polarion-id: CEPH-83573758
 
 #Configure HAProxy on client nodes and port 5000
-# configuring HAproxy on the client node 'node6' and port '5000'
+# configuring HAproxy on the client node 'node4' and port '5000'
   - test:
       abort-on-fail: true
       clusters:
         ceph-sec:
           config:
             haproxy_clients:
-              - node6
+              - node4
             rgw_endpoints:
               - node4:80
-              - node5:80
+              - node2:80
               - node3:80
         ceph-pri:
           config:
             haproxy_clients:
-              - node6
+              - node4
             rgw_endpoints:
               - node4:80
-              - node5:80
+              - node2:80
               - node3:80
 
       desc: "Configure HAproxy"
@@ -188,8 +218,8 @@ tests:
               - "radosgw-admin realm create --rgw-realm india --default"
               - "radosgw-admin zonegroup rename --rgw-zonegroup default --zonegroup-new-name shared"
               - "radosgw-admin zone rename --rgw-zone default --zone-new-name primary --rgw-zonegroup shared"
-              - "radosgw-admin zonegroup modify --rgw-realm india --commit --rgw-zonegroup shared --endpoints  http://{node_ip:node6}:5000 --master --default"
-              - "radosgw-admin zone modify --rgw-realm india --commit --rgw-zonegroup shared --rgw-zone primary --endpoints  http://{node_ip:node6}:5000 --master --default"
+              - "radosgw-admin zonegroup modify --rgw-realm india --commit --rgw-zonegroup shared --endpoints  http://{node_ip:node4}:5000 --master --default"
+              - "radosgw-admin zone modify --rgw-realm india --commit --rgw-zonegroup shared --rgw-zone primary --endpoints  http://{node_ip:node4}:5000 --master --default"
               - "radosgw-admin user create --uid sync-user --display-name sync-user --access-key a123 --secret s123 --system"
               - "radosgw-admin zone modify --rgw-realm india --commit --rgw-zonegroup shared --rgw-zone primary  --access-key a123 --secret s123"
               - "radosgw-admin period update --rgw-realm india --commit"
@@ -202,12 +232,15 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node6}:5000 --access-key a123 --secret s123 --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node6}:5000 --access-key a123 --secret s123 "
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node4}:5000 --access-key a123 --secret s123 --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node4}:5000 --access-key a123 --secret s123 "
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.rgw.default rgw_realm india"
               - "ceph config set client.rgw.rgw.default rgw_zonegroup shared"
               - "ceph config set client.rgw.rgw.default rgw_zone secondary"
+              - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2 crush-failure-domain=host crush-device-class=hdd"
+              - "ceph osd pool create secondary.rgw.buckets.data 32 32 erasure rgwec22_4"
+              - "ceph osd pool application enable secondary.rgw.buckets.data rgw"
               - "ceph orch restart rgw.rgw.default"
               - "sleep 120"
               - "radosgw-admin sync status"
