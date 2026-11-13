@@ -1,0 +1,228 @@
+#===============================================================================================
+# NFS-Ganesha xcopy / COPY offload (NFSv4.2)
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml (or equivalent)
+#
+# Scenarios (cases in xcopy.test_nfs_xcopy_intra_export_sync):
+#   - XCOPY-01 Intra-Export Copy Offload (fs == fs)
+#   - XCOPY-02 Cross-Export Copy Offload (fs1 != fs2)
+#   - XCOPY-03 Large File ASYNC Copy Offload (2 GiB, mode=async)
+#   - XCOPY-04 Short_Copy=ON (per-chunk CB_OFFLOAD packaging)
+#   - XCOPY-05/06 Sparse copy + hole fill probe
+# XATTR-01..04: xcopy.test_nfs_xcopy_xattr.py
+# ASYNC-01..03: xcopy.test_nfs_xcopy_async.py
+# Suite 5 RES-01..04: xcopy.test_nfs_xcopy_resiliency.py
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Server-Side Copy (XCOPY) Core Operations & Scenarios
+      module: xcopy.test_nfs_xcopy_intra_export_sync.py
+      desc: Verify core xcopy operations and scenarios.
+      abort-on-fail: false
+      polarion-id: CEPH-83633054
+      config:
+        test_cases:
+          - intra_export_copy_offload_on
+          - cross_export_copy_offload_on
+          - large_file_async_copy_offload_on
+          - short_copy_offload_on
+          - sparse_file_copy_offload
+          - sparse_hole_preservation
+        nfs_version: "4.2"
+        clients: 1
+        file_size_mb: 128
+        chunk_size_mb: 64
+        large_file_size_mb: 2048
+
+  - test:
+      name: Server-Side Copy (XCOPY) Extended Attributes XATTR-01..04
+      module: xcopy.test_nfs_xcopy_xattr.py
+      desc: >
+        User xattr CRUD + persistence, xattr preservation across xcopy,
+        large payloads, and SELinux security labels (skip if SELinux N/A).
+      abort-on-fail: false
+      polarion-id: CEPH-83633055
+      config:
+        test_cases:
+          - user_xattr_crud
+          - xattr_preservation_xcopy
+          - large_max_xattr_payloads
+          - selinux_security_labels
+        nfs_version: "4.2"
+        clients: 1
+        file_size_mb: 128
+        chunk_size_mb: 64
+        xattr_max_value_bytes: 65536
+
+  - test:
+      name: Server-Side Copy (XCOPY) ASYNC Offload Lifecycle ASYNC-01..03
+      module: xcopy.test_nfs_xcopy_async.py
+      desc: >
+        ASYNC progress polling (OFFLOAD_STATUS / dst growth), graceful
+        OFFLOAD_CANCEL via SIGINT at ~30%, and client disconnect mid-copy.
+      abort-on-fail: false
+      polarion-id: CEPH-83633056
+      config:
+        test_cases:
+          - offload_status_polling
+          - offload_cancel_abort
+          - client_disconnect_mid_async
+        nfs_version: "4.2"
+        clients: 1
+        chunk_size_mb: 64
+        async_size_gb: 8
+        async_poll_interval_sec: 5
+        async_cancel_poll_interval_sec: 1
+        async_cancel_ratio: 0.30
+        async_cancel_max_ratio: 0.90
+        async_disconnect_wait_sec: 90
+        async_copy_timeout_sec: 7200
+        pcap_validate: true
+
+  - test:
+      name: Server-Side Copy (XCOPY) Locking Concurrency & Negative Resiliency RES-01..04
+      module: xcopy.test_nfs_xcopy_resiliency.py
+      desc: >
+        Exclusive lock / active-write conflict on copy source, destination
+        share_deny=WRITE, CephFS quota / NOSPC mid-copy, and source
+        truncate/unlink mid-ASYNC resiliency.
+      abort-on-fail: false
+      polarion-id: CEPH-83633058
+      config:
+        test_cases:
+          - concurrent_lock_conflict_src
+          - dst_share_deny_write
+          - storage_quota_mid_copy
+          - src_unlink_truncate_mid_async
+        nfs_version: "4.2"
+        clients: 2
+        file_size_mb: 256
+        chunk_size_mb: 64
+        # lock | write — RES-01 source conflict mode
+        res_src_conflict_mode: lock
+        res_quota_src_mb: 64
+        res_quota_headroom_mb: 8
+        # TC cites 20 GiB; default 8 GiB for practical runtime — set 20 for full scale.
+        res_async_size_gb: 8
+        res_src_mid_action: truncate

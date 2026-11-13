@@ -9,7 +9,7 @@ from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount
 from cli.utilities.utils import check_coredump_generated
-from tests.nfs.lib.common_lib import get_nfs_container_id
+from tests.nfs.lib.common_lib import get_nfs_container_id, podman_nfs_logs
 from tests.nfs.lib.multi_active.config import NfsMultiActiveConfig
 from tests.nfs.lib.tsm.constants import NfsFcntlLock
 from utility.log import Log
@@ -36,15 +36,7 @@ def _podman_logs(node, nfs_name, since=None):
     cid = get_nfs_container_id(node, nfs_name=nfs_name)
     if not cid:
         return None, ""
-    node_since = since.get(node.hostname) if isinstance(since, dict) else since
-    since_arg = f' --since "{node_since}"' if node_since else ""
-    out, _ = node.exec_command(
-        sudo=True,
-        cmd=f"podman logs{since_arg} {cid} 2>&1",
-        check_ec=False,
-        timeout=60,
-    )
-    return cid, out or ""
+    return cid, podman_nfs_logs(node, nfs_name, since=since)
 
 
 def _bump_counts(counts, total, open_c, lock_c, deleg_c):
