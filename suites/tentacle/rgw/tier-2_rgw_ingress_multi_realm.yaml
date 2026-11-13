@@ -3,7 +3,8 @@
 #
 # This test suite evaluates the Ingress HAproxy deployment scenario wherein there exists more than one
 # RGW daemons configured with multiple realm, along with zones and zonegroups.
-# global-conf: conf/tentacle/rgw/tier-1_rgw_multirealm.yaml
+# global-conf: conf/tentacle/rgw/tier-1_rgw_multirealm_ec2+2.yaml
+# 4-node EC 2+2 lab: RGW on node3+node4, client on node4, ingress HA on node1+node2 / node3+node4.
 
 tests:
 
@@ -53,6 +54,21 @@ tests:
               args:
                 all-available-devices: true
           - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
               command: apply_spec
               service: orch
               specs:
@@ -60,8 +76,8 @@ tests:
                   service_id: rgw.realm1
                   placement:
                     nodes:
-                      - node5
-                      - node6
+                      - node3
+                      - node4
                   spec:
                     rgw_frontend_port: 8080
           - config:
@@ -72,8 +88,8 @@ tests:
                   service_id: rgw.realm2
                   placement:
                     nodes:
-                      - node5
-                      - node6
+                      - node3
+                      - node4
                   spec:
                     rgw_frontend_port: 8081
       desc: RHCS cluster deployment using cephadm.
@@ -89,7 +105,7 @@ tests:
         commands:
           - "radosgw-admin realm create --rgw-realm india --default"
           - "radosgw-admin zonegroup create --rgw-zonegroup south --rgw-realm india --master --default"
-          - "radosgw-admin zone create --rgw-zone ka --rgw-zonegroup south --rgw-realm india --endpoints http://{node:node5}:8080 --master --default"
+          - "radosgw-admin zone create --rgw-zone ka --rgw-zonegroup south --rgw-realm india --endpoints http://{node:node3}:8080 --master --default"
           - "radosgw-admin period update --commit --rgw-realm india"
           - "ceph config set client.{service_name:rgw.realm1} rgw_realm india"
           - "ceph config set client.{service_name:rgw.realm1} rgw_zonegroup south"
@@ -97,7 +113,7 @@ tests:
           - "ceph orch restart {service_name:rgw.realm1}"
           - "radosgw-admin realm create --rgw-realm us"
           - "radosgw-admin zonegroup create --rgw-zonegroup east --rgw-realm us --master --default"
-          - "radosgw-admin zone create --rgw-zone east-1 --rgw-zonegroup east --rgw-realm us --endpoints http://{node:node6}:8081 --master --default"
+          - "radosgw-admin zone create --rgw-zone east-1 --rgw-zonegroup east --rgw-realm us --endpoints http://{node:node4}:8081 --master --default"
           - "radosgw-admin period update --commit --rgw-realm us"
           - "ceph config set client.{service_name:rgw.realm2} rgw_realm us"
           - "ceph config set client.{service_name:rgw.realm2} rgw_zonegroup east"
@@ -129,8 +145,8 @@ tests:
                   service_id: rgw.realm1
                   placement:
                     nodes:
-                      - node3
-                      - node4
+                      - node1
+                      - node2
                   spec:
                     backend_service: rgw.rgw.realm1
                     virtual_ip: 10.245.128.250/18 # floating ip1 in ibmc env
@@ -156,8 +172,8 @@ tests:
                   service_id: rgw.realm2
                   placement:
                     nodes:
-                      - node5
-                      - node6
+                      - node3
+                      - node4
                   spec:
                     backend_service: rgw.rgw.realm2
                     virtual_ip: 10.245.128.251/18 # floating ip2 in ibmc env
@@ -169,7 +185,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node7
+        node: node4
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -182,7 +198,7 @@ tests:
   - test:
       abort-on-fail: true
       config:
-        node: node7
+        node: node4
         sudo: True
         commands:
           - "yum install -y jq"

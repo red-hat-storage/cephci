@@ -2,7 +2,7 @@
 
 # Runs the Object Gateway tests from the repo
 # https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
-# global-conf: conf/tentacle/rgw/tier-0_rgw.yaml
+# global-conf: conf/tentacle/rgw/tier-0_rgw_ec2+2.yaml
 tests:
   - test:
       abort-on-fail: true
@@ -49,6 +49,21 @@ tests:
               args:
                 all-available-devices: true
           - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
               command: apply
               service: rgw
               pos_args:
@@ -59,7 +74,6 @@ tests:
                   nodes:
                     - node3
                     - node4
-                    - node5
       desc: RHCS cluster deployment using cephadm
       destroy-cluster: false
       module: test_cephadm.py
@@ -102,7 +116,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node6
+        node: node4
         install_packages:
           - ceph-common
         copy_admin_keyring: true
