@@ -1,0 +1,152 @@
+# RHCS 9.x tentacle RGW Standalone Zipper pytest suite
+# conf: conf/tentacle/rgw/tier-0_rgw_standalone_1node.yaml
+#
+# Deploy once, then run labelled pytest groups via RGW_STANDALONE_PYTEST_MARKER
+# consumed by run_rgw_standalone_pytest.py as pytest -m marker.
+#
+# Markers: sanity feature copy multipart admin scale stability bug slow
+# Test names must stay plain (no slash or other path-unsafe characters)
+# because cephci uses the name for log file paths under /tmp/cephci-run-*.
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      name: Deploy RGW Standalone Zipper image
+      desc: podman login and run developer experience zipper image on client node
+      module: test_rgw_standalone_deploy.py
+      polarion-id: CEPH-RGW-STANDALONE-DEPLOY
+      config:
+        image: preprod.icr.io/cp/ibm-ceph/rgw-developer-experience-rhel10:v9.9.2-26951
+        container-name: dev-edition1
+        zgw-host-port: 7401
+        browser-port: 8081
+        # S3 API via s3browser (container 9080); same purpose as zgw-host-port/7480
+        s3browser-s3-port: 9081
+        data-dir: /root/my_zgw_data_dev_exp
+        ibm_build: true
+        force-recreate: true
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Sanity CRUD
+      desc: Core object CRUD across user types using sanity marker
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-SANITY
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 3600
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=sanity
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Features
+      desc: ACL checksum policy PAB object lock versioning and quota using feature marker
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-FEATURE
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 3600
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=feature
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Copy
+      desc: Copy object matrix and LastModified regression using copy marker
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-COPY
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 3600
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=copy
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Multipart
+      desc: Basic multipart over 1000 parts and related MPU regressions using multipart marker
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-MULTIPART
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 7200
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=multipart
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Admin Users
+      desc: Admin user bucket account management user type CRUD and related BZ checks using admin marker
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-ADMIN
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 3600
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=admin
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Scale
+      desc: Progressive and 1K buckets plus capacity capped object scale using scale marker obj_count_max 20K
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-SCALE
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 10800
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=scale
+
+  - test:
+      abort-on-fail: false
+      name: Zipper Stability
+      desc: Container process and endpoint health before and after smoke using stability marker
+      module: sanity_rgw.py
+      polarion-id: CEPH-RGW-STANDALONE-STABILITY
+      config:
+        use-standalone: true
+        install_common: false
+        pytest-results: true
+        test-version: standalone
+        script-name: run_rgw_standalone_pytest.py
+        config-file-name: test_rgw_standalone_all.yaml
+        timeout: 1800
+        env-vars:
+          - RGW_STANDALONE_PYTEST_MARKER=stability
