@@ -36,6 +36,7 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
 
   - ceph-cluster:
@@ -72,4 +73,5 @@ globals:
         no-of-volumes: 3
         role:
           - osd
+          - rgw
           - client
