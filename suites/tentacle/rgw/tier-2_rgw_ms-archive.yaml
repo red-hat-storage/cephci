@@ -232,6 +232,19 @@ tests:
       polarion-id: CEPH-10362
 
   - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config: {}
+        ceph-sec:
+          config: {}
+        ceph-arc:
+          config: {}
+      desc: Verify RGW multisite configuration
+      polarion-id: CEPH-83575227
+      module: verify_multisite_config.py
+      name: verify multisite configuration
+  - test:
       clusters:
         ceph-pri:
           config:
