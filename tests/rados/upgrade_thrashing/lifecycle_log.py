@@ -572,6 +572,20 @@ def _build_type_lifecycle_summary(
     return chain
 
 
+def is_par_ops_nfs_daemon(daemon_name: str, nfs_prefix: str = "par_nfs") -> bool:
+    """True for upgrade_parallel_ops NFS (``nfs.<prefix>`` / ``nfs.<prefix>_*``).
+
+    These are create/rm churn during the hop, not image-upgrade members.
+    Including them in the daemon waterfall spans first→last throwaway and
+    paints a false multi-hour NFS upgrade bar (see MX74F5).
+    """
+    parts = (daemon_name or "").split(".")
+    if len(parts) < 2 or parts[0] != "nfs":
+        return False
+    svc = parts[1]
+    return svc == nfs_prefix or svc.startswith(f"{nfs_prefix}_")
+
+
 def compute_deploy_group_span(
     deploys: list[dict],
 ) -> tuple[float, str, str]:
