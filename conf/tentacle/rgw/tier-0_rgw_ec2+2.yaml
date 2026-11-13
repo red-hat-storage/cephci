@@ -1,0 +1,43 @@
+# Conf for 2+2 EC profile on 4 nodes for single-site RGW (tier-0 layout).
+# Derived from tier-0_rgw.yaml: RGW on node3 and node4, SMB colocated on node4,
+# client on node4. Every node is an OSD host (crush-failure-domain=host needs k+m=4).
+# Sanity single-site jobs should keep using tier-0_rgw.yaml (replicated).
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - smb
+          - client

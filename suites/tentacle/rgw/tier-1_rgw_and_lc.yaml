@@ -1,6 +1,6 @@
 # Tier-1: Upstream RGW test suite focusing on verifying the core features and lc on multiple buckets.
 
-# Config:  conf/tentacle/rgw/tier-0_rgw.yaml
+# Config:  conf/tentacle/rgw/tier-0_rgw_ec2+2.yaml
 
 tests:
   - test:
@@ -47,6 +47,21 @@ tests:
               args:
                 all-available-devices: true
           - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
               command: apply_spec
               service: orch
               specs:
@@ -56,7 +71,6 @@ tests:
                     nodes:
                       - node3
                       - node4
-                      - node5
                   spec:
                     ssl: true
                     generate_cert: true

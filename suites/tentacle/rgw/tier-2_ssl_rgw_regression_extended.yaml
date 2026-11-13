@@ -4,8 +4,8 @@
 # SSL passthrough mode (HAProxy forwards TCP traffic as-is to SSL RGWs).
 # End-to-end: Client -> HTTPS -> HAProxy (TCP passthrough) -> HTTPS -> RGW (SSL backend)
 
-# Requires a 6-node cluster layout: 2 RGW nodes, 1 ingress node, and 1 client.
-# global-conf: conf/tentacle/rgw/tier-2_rgw_ssl_ingress.yaml
+# Requires a 4-node EC 2+2 layout: RGW on node3+node4, ingress on node2, client on node4.
+# global-conf: conf/tentacle/rgw/tier-0_rgw_ingress_ec2+2.yaml
 
 tests:
   - test:
@@ -51,6 +51,21 @@ tests:
               service: osd
               args:
                 all-available-devices: true
+          - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwec22_4"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
           - config:
               command: apply_spec
               service: orch
@@ -120,7 +135,7 @@ tests:
       config:
         command: add
         id: client.1
-        node: node6
+        node: node4
         install_packages:
           - ceph-common
         copy_admin_keyring: true
