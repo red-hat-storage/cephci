@@ -237,6 +237,10 @@ def run(ceph_cluster, **kw):
 
         for command in commands:
             clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
+        log.info(
+            "TEST PASSED - CEPH-11265 ordered shutdown and recovery with "
+            "fuse/kernel/nfs mounts, IO validated after cluster up"
+        )
         return 0
 
     except Exception as e:

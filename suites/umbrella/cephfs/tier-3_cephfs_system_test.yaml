@@ -339,3 +339,9 @@ tests:
         daemon : 'mds'
         expect_list : ['issue_new_caps','get_allowed_caps','"sending MClientCaps"','client_caps\(revoke']
         unexpect_list: ['Exception','assert']
+  - test:
+      name: Complete lab shutdown and cluster recovery with CephFS
+      module: cephfs_system.cluster_down_up.py
+      polarion-id: CEPH-11265
+      desc: Ordered lab shutdown and cluster recovery with CephFS
+      abort-on-fail: false
