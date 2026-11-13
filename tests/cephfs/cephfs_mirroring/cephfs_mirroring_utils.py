@@ -680,6 +680,7 @@ class CephfsMirroringUtils(object):
         log.info("Get Peer Connection Information")
         log.info("Fetch peer connection information from the source system")
         out, _ = source_clients.exec_command(
+            sudo=True,
             cmd=f"ceph fs snapshot mirror peer_list {source_fs} --format json-pretty",
         )
         try:
@@ -826,6 +827,10 @@ class CephfsMirroringUtils(object):
             sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
         )
         data = json.loads(out)
+        if not data or not data[0].get("filesystems"):
+            raise CommandFailed(
+                "Mirror daemon status empty or has no filesystems yet " f"(raw={out!r})"
+            )
         filesystem_id = None
         for filesystem in data[0]["filesystems"]:
             if filesystem["name"] == fs_name:
@@ -852,6 +857,10 @@ class CephfsMirroringUtils(object):
             sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
         )
         data = json.loads(out)
+        if not data or not data[0].get("filesystems"):
+            raise CommandFailed(
+                "Mirror daemon status empty or has no filesystems yet " f"(raw={out!r})"
+            )
         peer_uuid = None
         for filesystem in data[0]["filesystems"]:
             if filesystem["name"] == fs_name:
@@ -2876,6 +2885,90 @@ class CephfsMirroringUtils(object):
         )
         return json.loads(out)
 
+    def get_mgr_path_peer_stats(self, source_client, fs_name, path):
+        """Return first peer stats dict for a mirrored path from MGR status.
+
+        Args:
+            source_client: Client to run ``ceph fs snapshot mirror status``.
+            fs_name (str): Filesystem name.
+            path (str): Mirrored directory path (with or without trailing ``/``).
+
+        Returns:
+            dict: Peer stats (state, last_synced_snap, snaps_synced, …),
+            or empty dict if path/peer not present yet.
+        """
+        path_key = path.rstrip("/")
+        status = self.get_mgr_mirror_status(source_client, fs_name)
+        path_data = status.get("metrics", {}).get(path_key, {})
+        peer_entries = list(path_data.get("peer", {}).values())
+        return peer_entries[0] if peer_entries else {}
+
+    def wait_for_idle_via_mgr(
+        self,
+        source_client,
+        fs_name,
+        path,
+        expected_snap_name=None,
+        timeout=300,
+        interval=15,
+    ):
+        """Poll ``ceph fs snapshot mirror status`` until path is idle.
+
+        MGR-based alternative to asok ``wait_for_idle`` /
+        ``validate_snapshot_sync_status``. Does not require mirror daemon
+        admin sockets.
+
+        Args:
+            source_client: Source cluster client.
+            fs_name (str): Filesystem name.
+            path (str): Mirrored directory path.
+            expected_snap_name (str, optional): When set, also require
+                ``last_synced_snap.name`` to equal this value.
+            timeout (int): Max seconds to wait.
+            interval (int): Seconds between polls.
+
+        Returns:
+            dict: Peer stats when idle (and snap match, if requested).
+
+        Raises:
+            CommandFailed: If condition is not met within timeout.
+        """
+        path_key = path.rstrip("/")
+        elapsed = 0
+        while elapsed < timeout:
+            try:
+                peer_stats = self.get_mgr_path_peer_stats(
+                    source_client, fs_name, path_key
+                )
+                state = peer_stats.get("state", "unknown")
+                last_snap = (peer_stats.get("last_synced_snap") or {}).get("name")
+                log.info(
+                    "[wait_for_idle_via_mgr %ds/%ds] path=%s state=%s "
+                    "last_synced=%s snaps_synced=%s",
+                    elapsed,
+                    timeout,
+                    path_key,
+                    state,
+                    last_snap,
+                    peer_stats.get("snaps_synced"),
+                )
+                if state == "idle":
+                    if expected_snap_name is None or last_snap == expected_snap_name:
+                        return peer_stats
+            except Exception as exc:
+                log.warning("wait_for_idle_via_mgr poll error (will retry): %s", exc)
+            time.sleep(interval)
+            elapsed += interval
+        raise CommandFailed(
+            f"Path '{path_key}' did not reach idle"
+            + (
+                f" with last_synced_snap={expected_snap_name}"
+                if expected_snap_name
+                else ""
+            )
+            + f" within {timeout}s via MGR status"
+        )
+
     def get_asok_peer_status_raw(
         self,
         cephfs_mirror_node,
@@ -3014,6 +3107,168 @@ class CephfsMirroringUtils(object):
         if path in status:
             return status[path].get("current_syncing_snap")
         return None
+
+    def get_dir_checksum(self, client, path, follow_symlinks=True):
+        """Compute a path-independent directory checksum (upstream dir_checksum).
+
+        Runs ``find`` from inside ``path`` so absolute mount prefixes do not
+        differ across clusters. Matches upstream:
+        ``find [-L] . -type f -exec md5sum {} +``, sort by path, md5 of that.
+
+        Args:
+            client: Ceph client that can see ``path``.
+            path (str): Absolute directory to checksum (e.g. snap path).
+            follow_symlinks (bool): Pass ``-L`` to find when True.
+
+        Returns:
+            str: Hex digest of the sorted per-file md5 listing.
+        """
+        flag = "-L" if follow_symlinks else ""
+        # Empty dirs: md5sum of empty stdin → d41d8cd98f00b204e9800998ecf8427e
+        cmd = (
+            f'bash -lc "cd {path} && '
+            f"find {flag} . -type f -exec md5sum {{}} + 2>/dev/null "
+            f"| sort -k2 | md5sum | awk '{{print $1}}'\""
+        )
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        digest = out.strip().split()[0] if out.strip() else ""
+        log.info("dir_checksum(%s) = %s", path, digest)
+        return digest
+
+    def verify_snapshot_checksum(
+        self, source_client, source_snap_path, target_client, target_snap_path
+    ):
+        """Assert source and target snapshot directories have matching checksums.
+
+        Args:
+            source_client: Primary client.
+            source_snap_path (str): Absolute path to primary snap dir.
+            target_client: Secondary client.
+            target_snap_path (str): Absolute path to secondary snap dir.
+
+        Returns:
+            tuple: (True, msg) on match, (False, msg) on mismatch/missing.
+        """
+        try:
+            source_client.exec_command(
+                sudo=True, cmd=f"test -d {source_snap_path}", check_ec=True
+            )
+        except CommandFailed:
+            return False, f"Source snap path missing: {source_snap_path}"
+        try:
+            target_client.exec_command(
+                sudo=True, cmd=f"test -d {target_snap_path}", check_ec=True
+            )
+        except CommandFailed:
+            return False, f"Target snap path missing: {target_snap_path}"
+
+        src = self.get_dir_checksum(source_client, source_snap_path)
+        tgt = self.get_dir_checksum(target_client, target_snap_path)
+        if src == tgt:
+            msg = f"Checksum match for {source_snap_path}: {src}"
+            log.info(msg)
+            return True, msg
+        msg = (
+            f"Checksum mismatch: source={src} ({source_snap_path}) "
+            f"target={tgt} ({target_snap_path})"
+        )
+        log.error(msg)
+        return False, msg
+
+    def read_file_content(self, client, path):
+        """Return file contents (no trailing newline stripping beyond strip)."""
+        out, _ = client.exec_command(sudo=True, cmd=f"cat {path}")
+        return out
+
+    def path_exists(self, client, path):
+        """Return True if path exists on the client."""
+        try:
+            client.exec_command(sudo=True, cmd=f"test -e {path}", check_ec=True)
+            return True
+        except CommandFailed:
+            return False
+
+    def list_dir_entries(self, client, path):
+        """Return list of directory entry names (ls)."""
+        out, _ = client.exec_command(sudo=True, cmd=f"ls {path}")
+        return out.strip().split() if out.strip() else []
+
+    def write_file_content(self, client, path, content):
+        """Write exact content to path (no added newline; matches upstream write_file)."""
+        parent = path.rsplit("/", 1)[0]
+        client.exec_command(sudo=True, cmd=f"mkdir -p {parent}")
+        # printf preserves exact bytes; content must not contain single-quotes
+        # that break the shell quoting — escape them for safety.
+        escaped = content.replace("'", "'\"'\"'")
+        client.exec_command(sudo=True, cmd=f"printf '%s' '{escaped}' > {path}")
+
+    def sync_and_verify_snapshot(
+        self,
+        source_client,
+        target_client,
+        source_mount,
+        dir_name,
+        snap_name,
+        source_fs,
+        target_fs,
+        mirror_path,
+        timeout=300,
+        interval=15,
+    ):
+        """Create a snap, wait via MGR status, verify with md5sum checksum helper.
+
+        Mirrors upstream ``sync_and_verify``. Uses
+        ``ceph fs snapshot mirror status`` (no asok) to wait for idle +
+        ``last_synced_snap``, then
+        ``list_and_verify_remote_snapshots_and_data_checksum``.
+
+        Args:
+            source_client: Primary client.
+            target_client: Secondary client.
+            source_mount (str): Primary fuse/kernel mount path.
+            dir_name (str): Relative mirrored directory name under mount.
+            snap_name (str): Snapshot to create and wait for.
+            source_fs (str): Primary filesystem name.
+            target_fs (str): Secondary filesystem name.
+            mirror_path (str): Absolute FS path added for mirroring
+                (e.g. ``/directory_rename``).
+            timeout (int): MGR idle wait timeout seconds.
+            interval (int): MGR poll interval seconds.
+
+        Returns:
+            dict: MGR peer stats after idle.
+
+        Raises:
+            CommandFailed: If idle wait or checksum verification fails.
+        """
+        source_client.exec_command(sudo=True, cmd="sync")
+        snap_mkdir = f"{source_mount.rstrip('/')}/{dir_name}/.snap/{snap_name}"
+        source_client.exec_command(sudo=True, cmd=f"mkdir {snap_mkdir}")
+        log.info("Created snapshot %s at %s", snap_name, snap_mkdir)
+
+        peer_stats = self.wait_for_idle_via_mgr(
+            source_client,
+            source_fs,
+            mirror_path,
+            expected_snap_name=snap_name,
+            timeout=timeout,
+            interval=interval,
+        )
+
+        ok, msg = self.list_and_verify_remote_snapshots_and_data_checksum(
+            target_client,
+            f"client.{target_client.node.hostname}",
+            f"{mirror_path.rstrip('/')}/",
+            source_client,
+            f"{source_mount.rstrip('/')}/",
+            target_fs,
+        )
+        if not ok:
+            raise CommandFailed(
+                f"Checksum verification failed after {snap_name}: {msg}"
+            )
+        log.info("Checksum OK after %s: %s", snap_name, msg)
+        return peer_stats
 
 
 def _ensure_ceph_common(asok_file):
