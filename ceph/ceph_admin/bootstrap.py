@@ -25,6 +25,7 @@ from utility.odf_defaults import (
 )
 from utility.registry_auth import PODMAN_AUTH_PATH
 from utility.utils import (
+    get_rhbuild_major_version,
     ibm_ceph_rpm_version_pin,
     resolve_registry_host,
     resolve_registry_login,
@@ -327,7 +328,7 @@ class BootstrapMixin:
             if build_type == "upstream" or manifest_obj.product == "community":
                 _rpm_version = f"{_ceph_version}*"
             else:
-                # Tentacle+: 2:VR.elNcp ; Umbrella 21.x: VR.elN (no epoch/cp)
+                # IBM Storage Ceph: 2:VR.elNcp (epoch + cp retained for 21.x)
                 _rpm_version = ibm_ceph_rpm_version_pin(_ceph_version, _os_major)
 
             self.install(**{"rpm_version": _rpm_version})
@@ -540,7 +541,9 @@ class BootstrapMixin:
             # - 7.1z3: https://bugzilla.redhat.com/show_bug.cgi?id=2314606
             # - 8.0: https://bugzilla.redhat.com/show_bug.cgi?id=2314438
             # - https://access.redhat.com/solutions/7088483
-            config_level = "global" if rhbuild.split(".")[0] >= "6" else "mon"
+            config_level = (
+                "global" if get_rhbuild_major_version(rhbuild) >= 6 else "mon"
+            )
             self.shell(
                 args=[
                     "ceph",

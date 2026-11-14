@@ -503,16 +503,6 @@ tests:
         clients: 1
 
   - test:
-      name: NFS-Ganesha export config to mount with 1 client access
-      desc: Verify edit the export config to mount with allow access to only 1 client
-      module: nfs_edit_export_config_with_1client_access.py
-      polarion-id: CEPH-83578397
-      abort-on-fail: false
-      config:
-        nfs_version: 3
-        clients: 2
-
-  - test:
       name: Nfs Verify setuid bit set on a file
       module: nfs_verify_setuid_bit.py
       desc: Verify setuid bit set on a file

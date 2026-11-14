@@ -1,13 +1,13 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-upgrade-rhcs-8x-to-9x.yaml
-# Scenario: Build to build Upgrade RHCS 8(GA) cluster to RHCS 9(Latest)
+# Test-Suite: tier1-upgrade-ibm-8x-to-10x-latest.yaml
+# Scenario: Build to build Upgrade IBMSC 8(GA) cluster to IBMSC 9(Latest)
 #
-# Cluster Configuration: conf/squid/upgrades/1admin-3node-1client-upgrade.yaml
+# Cluster Configuration: conf/umbrella/upgrades/1admin-3node-1client-upgrade.yaml
 #
 # Test Steps:
-# - Deploy RHCS 8(GA) cluster in RHEL 9
-# - Upgrade cluster from RHCS 9(GA) to RHCS 8(Latest)
+# - Deploy IBMSC 8(GA) cluster in RHEL 9
+# - Upgrade cluster from IBMSC 8(GA) to IBMSC 10(Latest)
 # - Validate cluster status
 # - Run I/O's
 ################################################################################################
@@ -19,8 +19,8 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Bootstrap RHCS 7(GA) cluster and deploy services with label placements.
-      desc: Bootstrap RHCS 7(GA) cluster and deploy services with label placements.
+      name: Bootstrap IBMSC 8(GA) cluster and deploy services with label placements.
+      desc: Bootstrap IBMSC 8(GA) cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -31,7 +31,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 8.1
-                release: rc
+                release: "released"
                 mon-ip: node1
                 orphan-initial-daemons: true
           - config:
@@ -84,7 +84,7 @@ tests:
                 placement:
                   nodes:
                     - node2
-                    - node6
+                    - node3
                   limit: 2
                   sep: " "
           - config:
@@ -109,13 +109,12 @@ tests:
         node: node4
         install_packages:
           - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
   - test:
-      name: Upgrade cluster to latest 9.x ceph version
+      name: Upgrade cluster to latest 10.x ceph version
       desc: Upgrade cluster to latest version
       module: test_cephadm_upgrade.py
       polarion-id: CEPH-83573791,CEPH-83573790

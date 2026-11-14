@@ -84,7 +84,7 @@ def _wait_peer_counter_gt(
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-83632744 - Validate CephFS mirroring asok metrics for 9.2 enhancements.
+    CEPH-83632745 - Validate CephFS mirroring asok metrics for 9.2 enhancements.
 
     Consolidated scenarios:
      1. Schema verification (field presence)
@@ -206,8 +206,8 @@ def run(ceph_cluster, **kw):
 
         fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
-        asok_file = fs_mirroring_utils.get_asok_file(
-            cephfs_mirror_node[0], fsid, daemon_name
+        asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
+            cephfs_mirror_node, fsid, daemon_name
         )
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
@@ -228,7 +228,13 @@ def run(ceph_cluster, **kw):
         log.info("Scenario 1: Schema verification")
         log.info("=" * 60)
         status_before = fs_mirroring_utils.get_fs_mirror_peer_status_using_asok(
-            cephfs_mirror_node[0], source_clients[0], source_fs
+            cephfs_mirror_node[0],
+            source_clients[0],
+            source_fs,
+            fsid=fsid,
+            filesystem_id=filesystem_id,
+            asok_files=asok_file,
+            peer_uuid=peer_uuid,
         )
         log.info("Peer status (initial): %s", json.dumps(status_before, indent=2))
 
@@ -270,7 +276,13 @@ def run(ceph_cluster, **kw):
             time.sleep(SYNC_POLL_INTERVAL_SECONDS)
             try:
                 status = fs_mirroring_utils.get_asok_peer_status_raw(
-                    cephfs_mirror_node[0], source_clients[0], source_fs
+                    cephfs_mirror_node[0],
+                    source_clients[0],
+                    source_fs,
+                    fsid=fsid,
+                    filesystem_id=filesystem_id,
+                    asok_files=asok_file,
+                    peer_uuid=peer_uuid,
                 )
                 log.info(
                     "[S2 Poll %d] Raw asok: %s",
@@ -388,6 +400,13 @@ def run(ceph_cluster, **kw):
         log.info("Scenario 3: Delta sync — mode, monotonicity, snapdiff")
         log.info("=" * 60)
 
+        log.info("Clean up full sync data before starting delta sync")
+        source_clients[0].exec_command(
+            sudo=True,
+            cmd="rm -f %sfulldata" % mount_path1,
+            check_ec=False,
+        )
+
         log.info("Create baseline files: 10 small (1 MiB) + 1 large (64 MiB)")
         source_clients[0].exec_command(
             sudo=True,
@@ -446,7 +465,13 @@ def run(ceph_cluster, **kw):
             time.sleep(SYNC_POLL_INTERVAL_SECONDS)
             try:
                 status = fs_mirroring_utils.get_asok_peer_status_raw(
-                    cephfs_mirror_node[0], source_clients[0], source_fs
+                    cephfs_mirror_node[0],
+                    source_clients[0],
+                    source_fs,
+                    fsid=fsid,
+                    filesystem_id=filesystem_id,
+                    asok_files=asok_file,
+                    peer_uuid=peer_uuid,
                 )
                 dir_data = status.get(path1_key, {})
                 state = dir_data.get("state", "")
@@ -558,7 +583,13 @@ def run(ceph_cluster, **kw):
         log.info("=" * 60)
 
         status_after = fs_mirroring_utils.get_asok_peer_status_raw(
-            cephfs_mirror_node[0], source_clients[0], source_fs
+            cephfs_mirror_node[0],
+            source_clients[0],
+            source_fs,
+            fsid=fsid,
+            filesystem_id=filesystem_id,
+            asok_files=asok_file,
+            peer_uuid=peer_uuid,
         )
         log.info("Full asok status: %s", json.dumps(status_after, indent=2))
 
@@ -658,7 +689,13 @@ def run(ceph_cluster, **kw):
             time.sleep(3)
             try:
                 status = fs_mirroring_utils.get_asok_peer_status_raw(
-                    cephfs_mirror_node[0], source_clients[0], source_fs
+                    cephfs_mirror_node[0],
+                    source_clients[0],
+                    source_fs,
+                    fsid=fsid,
+                    filesystem_id=filesystem_id,
+                    asok_files=asok_file,
+                    peer_uuid=peer_uuid,
                 )
                 dir_data = status.get(path1_key, {})
                 state = dir_data.get("state", "")
@@ -707,7 +744,13 @@ def run(ceph_cluster, **kw):
         log.info("=" * 60)
 
         final_status = fs_mirroring_utils.get_asok_peer_status_raw(
-            cephfs_mirror_node[0], source_clients[0], source_fs
+            cephfs_mirror_node[0],
+            source_clients[0],
+            source_fs,
+            fsid=fsid,
+            filesystem_id=filesystem_id,
+            asok_files=asok_file,
+            peer_uuid=peer_uuid,
         )
         log.info("Final asok status: %s", json.dumps(final_status, indent=2))
         for path, dir_status in final_status.items():

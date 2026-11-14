@@ -1,26 +1,28 @@
-#################################################################################
-# Automation support for upgrade from RHCS 9.0 to RHCS 9.x latest in RHEL9
+##############################################################################################
+# Tier-Level: 1
+# Test-Suite: tier1-upgrade-rhcs-9x-to-9x.yaml
+# Scenario: Build to build Upgrade RHCS 9(GA) cluster to RHCS 10(Latest)
 #
-#--------------------------------------------------------------------------------
-# Cluster Configuration: conf/tentacle/upgrades/1admin-3node-1client-upgrade.yaml
-#--------------------------------------------------------------------------------
+# Cluster Configuration: conf/umbrella/upgrades/1admin-3node-1client-upgrade.yaml
 #
 # Test Steps:
-#--------------------------------------------------------------------------------
-# - Deploy RHCS 9.0 cluster in RHEL 9
-# - Upgrade cluster from RHCS 9.0 to RHCS 9.x latest
+# - Deploy RHCS 9(GA) cluster
+# - Upgrade cluster from RHCS 9(GA) to RHCS 10(Latest)
 # - Validate cluster status
 # - Run I/O's
-#--------------------------------------------------------------------------------
-#################################################################################
+################################################################################################
 tests:
   - test:
       name: setup install pre-requisistes
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
-      abort-on-fail: true
+      name: Bootstrap RHCS 9(GA) cluster and deploy services with label placements.
+      desc: Bootstrap RHCS 9(GA) cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
       config:
         verify_cluster_health: true
         steps:
@@ -29,7 +31,7 @@ tests:
               service: cephadm
               args:
                 rhcs-version: 9.1
-                release: "released"
+                release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
           - config:
@@ -57,7 +59,7 @@ tests:
                 all-available-devices: true
           - config:
               command: shell
-              args:          # arguments to ceph orch
+              args:
                 - ceph
                 - fs
                 - volume
@@ -74,17 +76,17 @@ tests:
           - config:
               command: apply
               service: mds
-              base_cmd_args:          # arguments to ceph orch
+              base_cmd_args:
                 verbose: true
               pos_args:
-                - cephfs              # name of the filesystem
+                - cephfs
               args:
                 placement:
                   nodes:
                     - node2
-                    - node3
-                  limit: 2            # no of daemons
-                  sep: " "            # separator to be used for placements
+                    - node6
+                  limit: 2
+                  sep: " "
           - config:
               args:
                 - "ceph osd pool create rbd"
@@ -93,26 +95,27 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      desc: bootstrap and deployment services with label placements.
-      polarion-id: CEPH-83573777
       destroy-cluster: false
-      module: test_cephadm.py
-      name: Deploy RHCS cluster using cephadm
-  - test:
       abort-on-fail: true
+
+  - test:
+      name: Configure client1
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
       config:
         command: add
         id: client.1
         node: node4
         install_packages:
           - ceph-common
+          - ceph-fuse
         copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
       destroy-cluster: false
-      module: test_client.py
-      name: configure client
+      abort-on-fail: true
+
   - test:
-      name: Upgrade cluster to latest 9.x ceph version
+      name: Upgrade cluster to latest 10.x ceph version
       desc: Upgrade cluster to latest version
       module: test_cephadm_upgrade.py
       polarion-id: CEPH-83573791,CEPH-83573790
@@ -124,21 +127,26 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true
+
   - test:
       name: Executes RGW, RBD and FS operations
       desc: Run object, block and filesystem basic operations parallelly.
       module: test_parallel.py
       parallel:
         - test:
+            name: Test M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects
+            polarion-id: CEPH-9789
+            module: sanity_rgw.py
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects.yaml
               timeout: 300
-            desc: test to create "M" no of buckets and "N" no of objects
-            module: sanity_rgw.py
-            name: Test M buckets with N objects
-            polarion-id: CEPH-9789
         - test:
+            name: Run RBD tier-0 operations
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            module: rbd_tier0.py
             config:
               ec-pool-k-m: 2,1
               ec-pool-only: False
@@ -168,14 +176,8 @@ tests:
                 map: true
                 io: true
                 nounmap: false
-            desc: Run RBD tier-0 operations
-            polarion-id: CEPH-83575401
-            destroy-cluster: false
-            module: rbd_tier0.py
-            name: Run RBD tier-0 operations
         - test:
-            abort-on-fail: false
-            desc: "cephfs basic operations"
-            module: cephfs_basic_tests.py
             name: cephfs-basics
+            desc: "cephfs basic operations"
             polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+            module: cephfs_basic_tests.py

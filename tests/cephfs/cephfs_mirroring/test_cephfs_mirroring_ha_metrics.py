@@ -26,6 +26,12 @@ def run(ceph_cluster, **kw):
     0 if succesful, 1 if any errors found.
     """
 
+    kernel_mounting_dir_1 = None
+    fuse_mounting_dir_1 = None
+    source_fs_new = None
+    target_fs_new = None
+    target_user_new = None
+
     try:
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
@@ -69,9 +75,13 @@ def run(ceph_cluster, **kw):
 
         log.info("Name of the cephfs-mirror daemons")
         daemon_names = fs_mirroring_utils.get_daemon_name(source_clients[0])
-        asok_files = fs_mirroring_utils.get_asok_file(
+        asok_files = fs_mirroring_utils.get_asok_file_with_connectivity_check(
             cephfs_mirror_node, fsid, daemon_names
         )
+        if not asok_files:
+            raise AssertionError(
+                "No accessible cephfs-mirror asok found — daemon may not be running"
+            )
         log.info(f"Admin Socket files of all cephfs-mirror daemon : {asok_files}")
 
         cephfs_mirror_node1 = cephfs_mirror_node[0].node.hostname
@@ -826,39 +836,60 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean up the system")
         log.info("Unmount the paths on source")
-        mounting_dirs = [
-            kernel_mounting_dir_1,
-            fuse_mounting_dir_1,
-        ]
+        mounting_dirs = [d for d in [kernel_mounting_dir_1, fuse_mounting_dir_1] if d]
         for mounting_dir in mounting_dirs:
-            source_clients[0].exec_command(sudo=True, cmd=f"umount -l {mounting_dir}")
+            try:
+                source_clients[0].exec_command(
+                    sudo=True, cmd=f"umount -l {mounting_dir}", check_ec=False
+                )
+            except Exception as e:
+                log.warning(f"Failed to unmount {mounting_dir}: {e}")
 
         log.info("Delete the mounted paths")
-        mounting_dirs = [
-            kernel_mounting_dir_1,
-            fuse_mounting_dir_1,
-        ]
         for mounting_dir in mounting_dirs:
-            source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {mounting_dir}")
+            try:
+                source_clients[0].exec_command(
+                    sudo=True, cmd=f"rm -rf {mounting_dir}", check_ec=False
+                )
+            except Exception as e:
+                log.warning(f"Failed to delete {mounting_dir}: {e}")
 
-        log.info("Delete the users used for creating peer bootstrap")
-        fs_mirroring_utils.remove_user_used_for_peer_connection(
-            target_user_new, target_clients[0]
-        )
+        if target_user_new:
+            log.info("Delete the users used for creating peer bootstrap")
+            try:
+                fs_mirroring_utils.remove_user_used_for_peer_connection(
+                    target_user_new, target_clients[0]
+                )
+            except Exception as e:
+                log.warning(f"Failed to remove user {target_user_new}: {e}")
 
-        log.info("Delete filesystem on Source and Target Cluster")
-        source_clients[0].exec_command(
-            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
-        )
-        target_clients[0].exec_command(
-            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
-        )
-        source_clients[0].exec_command(
-            sudo=True, cmd=f"ceph fs volume rm {source_fs_new} --yes-i-really-mean-it"
-        )
-        target_clients[0].exec_command(
-            sudo=True, cmd=f"ceph fs volume rm {target_fs_new} --yes-i-really-mean-it"
-        )
+        if source_fs_new or target_fs_new:
+            log.info("Delete filesystem on Source and Target Cluster")
+            try:
+                source_clients[0].exec_command(
+                    sudo=True,
+                    cmd="ceph config set mon mon_allow_pool_delete true",
+                    check_ec=False,
+                )
+                target_clients[0].exec_command(
+                    sudo=True,
+                    cmd="ceph config set mon mon_allow_pool_delete true",
+                    check_ec=False,
+                )
+                if source_fs_new:
+                    source_clients[0].exec_command(
+                        sudo=True,
+                        cmd=f"ceph fs volume rm {source_fs_new} --yes-i-really-mean-it",
+                        check_ec=False,
+                    )
+                if target_fs_new:
+                    target_clients[0].exec_command(
+                        sudo=True,
+                        cmd=f"ceph fs volume rm {target_fs_new} --yes-i-really-mean-it",
+                        check_ec=False,
+                    )
+            except Exception as e:
+                log.warning(f"Failed during fs cleanup: {e}")
 
 
 def fetch_cephfs_mirror_counters(fsid, asok_files):
@@ -873,12 +904,13 @@ def fetch_cephfs_mirror_counters(fsid, asok_files):
         dict: Dictionary containing the cephfs mirror counters for each node.
     """
     counters = {}
+    asok_dir = f"/var/run/ceph/{fsid}"
     for node_name, asok_file_info in asok_files.items():
-        asok_file = asok_file_info[1]
-        command = f"ceph --admin-daemon {asok_file} counter dump -f json"
-        out, _ = asok_file_info[0].exec_command(
-            sudo=True, cmd=f"cd /var/run/ceph/{fsid}/ ; {command}"
+        asok_basename = asok_file_info[1].rsplit("/", 1)[-1]
+        command = (
+            f"cd {asok_dir} && ceph --admin-daemon {asok_basename} counter dump -f json"
         )
+        out, _ = asok_file_info[0].exec_command(sudo=True, cmd=command)
         data = json.loads(out)
         counters[node_name] = data
         log.info(f"Output of Metrics Report for {node_name}: {data}")

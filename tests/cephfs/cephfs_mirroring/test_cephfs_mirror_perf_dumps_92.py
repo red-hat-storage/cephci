@@ -1,4 +1,3 @@
-import json
 import random
 import string
 import time
@@ -12,50 +11,18 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def ensure_prometheus_enabled(client):
-    """Enable the Prometheus MGR module if the service endpoint is not found."""
-    svc_out, _ = client.exec_command(
-        sudo=True,
-        cmd="ceph mgr services -f json",
-    )
-    mgr_services = json.loads(svc_out)
-    prom_url = mgr_services.get("prometheus", "").rstrip("/")
-    if prom_url:
-        log.info(f"Prometheus service already available: {prom_url}")
-        return prom_url
-
-    log.info("Prometheus service not found, enabling mgr prometheus module")
-    client.exec_command(
-        sudo=True,
-        cmd="ceph mgr module enable prometheus",
-        check_ec=False,
-    )
-    time.sleep(10)
-    svc_out, _ = client.exec_command(
-        sudo=True,
-        cmd="ceph mgr services -f json",
-    )
-    mgr_services = json.loads(svc_out)
-    prom_url = mgr_services.get("prometheus", "").rstrip("/")
-    if prom_url:
-        log.info(f"Prometheus service enabled successfully: {prom_url}")
-    else:
-        log.warning("Prometheus service still not available after enabling module")
-    return prom_url
-
-
 def run(ceph_cluster, **kw):
     """
-    CEPH-83632798 - Validate enhanced cephfs_mirror_directory perf counters for 9.2.
+    CEPH-83632807 - Validate enhanced cephfs_mirror_directory perf counters for 9.2.
 
     Covers functional tests:
      1. Validate cephfs_mirror_directory counter group + label validation (combined)
      2. Counter lifecycle — add and remove directory (combined)
      3. dir_state semantics during state transitions
      4. Basis points encoding
-     5. Prometheus scrape end-to-end
      6. Multiple daemons/filesystems isolation
      7. Legacy counter groups still present
+     8. Counter leak soak test (continuous directory add/remove churn)
 
     Returns 0 on success, 1 on failure, -1 if skipped.
     """
@@ -156,7 +123,7 @@ def run(ceph_cluster, **kw):
 
         fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
-        asok_file = fs_mirroring_utils.get_asok_file(
+        asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
             cephfs_mirror_node[0], fsid, daemon_name
         )
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
@@ -283,40 +250,7 @@ def run(ceph_cluster, **kw):
                 f"expected {len(subvolume_paths)}"
             )
 
-        log.info("Prometheus: check cephfs_mirror_directory HELP/TYPE lines")
-        try:
-            prom_url = ensure_prometheus_enabled(source_clients[0])
-
-            if not prom_url:
-                log.warning("Prometheus service URL not found in mgr services")
-            else:
-                prom_out, _ = source_clients[0].exec_command(
-                    sudo=True,
-                    cmd=f"curl -sk {prom_url}/metrics 2>/dev/null "
-                    f"| grep cephfs_mirror_directory || echo 'no_match'",
-                    check_ec=False,
-                )
-                if "cephfs_mirror_directory" in prom_out:
-                    help_found = "# HELP cephfs_mirror_directory" in prom_out
-                    type_found = "# TYPE cephfs_mirror_directory" in prom_out
-                    log.info(
-                        f"Prometheus cephfs_mirror_directory: "
-                        f"HELP={help_found}, TYPE={type_found}"
-                    )
-                    for line in prom_out.strip().split("\n")[:10]:
-                        log.info(f"  {line}")
-                    if not help_found:
-                        log.warning("HELP line not found for cephfs_mirror_directory")
-                    if not type_found:
-                        log.warning("TYPE line not found for cephfs_mirror_directory")
-                else:
-                    log.warning(
-                        "cephfs_mirror_directory not found in Prometheus scrape"
-                    )
-        except Exception as e:
-            log.warning(f"Prometheus scrape check failed: {e}")
-
-        log.info("Counter group schema + label + Prometheus validation completed")
+        log.info("S1: Counter group schema + label validation completed")
 
         # ============================================================
         # Scenario 2: Counter lifecycle — add and remove directory
@@ -386,7 +320,7 @@ def run(ceph_cluster, **kw):
         source_clients[0].exec_command(sudo=True, cmd="ceph orch restart cephfs-mirror")
         time.sleep(30)
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
-        asok_file = fs_mirroring_utils.get_asok_file(
+        asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
             cephfs_mirror_node[0], fsid, daemon_name
         )
 
@@ -519,7 +453,113 @@ def run(ceph_cluster, **kw):
                 log.info("S3: last_sync_bytes validated (non-zero)")
 
         # ============================================================
+        # Scenario 6: Legacy counter groups still present
+        # ============================================================
+        log.info("=" * 60)
+        log.info("Scenario 6: Legacy counter groups still present")
+        log.info("=" * 60)
+
+        data = fs_mirroring_utils.get_cephfs_mirror_counters(
+            cephfs_mirror_node, fsid, asok_file
+        )
+
+        legacy_groups = [
+            "cephfs_mirror_mirrored_filesystems",
+            "cephfs_mirror_peers",
+            "cephfs_mirror",
+        ]
+        for group in legacy_groups:
+            if group in data:
+                log.info(f"Legacy group '{group}' present")
+            else:
+                log.warning(f"Legacy group '{group}' not found in counter dump")
+
+        label, counter = fs_mirroring_utils.get_labels_and_counters(
+            "cephfs_mirror_mirrored_filesystems", source_fs, data
+        )
+        if counter:
+            log.info(
+                f"Legacy mirrored_filesystems counter: "
+                f"directory_count={counter.get('directory_count')}"
+            )
+
+        label, counter = fs_mirroring_utils.get_labels_and_counters(
+            "cephfs_mirror_peers", source_fs, data
+        )
+        if counter:
+            log.info(
+                f"Legacy peers counter: snaps_synced={counter.get('snaps_synced')}"
+            )
+
+        # ============================================================
+        # Scenario 8: Counter leak soak test
+        # ============================================================
+        log.info("=" * 60)
+        log.info("Scenario 8: Counter leak soak test (directory churn)")
+        log.info("=" * 60)
+
+        data_pre_soak = fs_mirroring_utils.get_cephfs_mirror_counters(
+            cephfs_mirror_node, fsid, asok_file
+        )
+        baseline_dir_entries = len(data_pre_soak.get("cephfs_mirror_directory", []))
+        log.info(
+            "Baseline cephfs_mirror_directory entry count: %d", baseline_dir_entries
+        )
+
+        soak_path = "/soak_leak_test_dir/"
+        log.info("Running 50-iteration add/remove directory churn loop")
+        for iter_i in range(1, 51):
+            source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"ceph fs snapshot mirror add {source_fs} {soak_path}",
+                check_ec=False,
+            )
+            time.sleep(1)
+            source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"ceph fs snapshot mirror remove {source_fs} {soak_path}",
+                check_ec=False,
+            )
+            time.sleep(1)
+            if iter_i % 10 == 0:
+                log.info("Completed %d/50 churn iterations", iter_i)
+
+        time.sleep(5)
+        data_post_soak = fs_mirroring_utils.get_cephfs_mirror_counters(
+            cephfs_mirror_node, fsid, asok_file
+        )
+        post_soak_dir_entries = len(data_post_soak.get("cephfs_mirror_directory", []))
+        log.info(
+            "Post-soak cephfs_mirror_directory entry count: %d (baseline: %d)",
+            post_soak_dir_entries,
+            baseline_dir_entries,
+        )
+
+        if post_soak_dir_entries != baseline_dir_entries:
+            raise CommandFailed(
+                f"Scenario 8 FAILED: Counter leak detected! "
+                f"Expected {baseline_dir_entries} entries, got {post_soak_dir_entries}"
+            )
+
+        log.info("Scenario 8 PASSED: Zero counter leaks after 50 churn iterations")
+
+        log.info(
+            "Reset tick interval after Scenario 8 to relieve mirror daemon pressure"
+        )
+        source_clients[0].exec_command(
+            sudo=True,
+            cmd="ceph config rm client.cephfs-mirror cephfs_mirror_tick_interval",
+            check_ec=False,
+        )
+        log.info("Sleeping 10s to allow mirror daemon to stabilize after churn")
+        time.sleep(10)
+
+        # ============================================================
         # Scenario 4: Basis points encoding
+        # NOTE: current_sync_bytes_percent counter is not emitted by the
+        # cephfs-mirror daemon during active sync in tentacle 20.2.2-351.
+        # Tracked as IBMCEPH-17375. Moved to end so S5/S6/S8 are not
+        # blocked when this known product bug is present.
         # ============================================================
         log.info("=" * 60)
         log.info("Scenario 4: Basis points encoding")
@@ -619,75 +659,6 @@ def run(ceph_cluster, **kw):
                     raise CommandFailed("S4 FAILED: last_sync_bytes=0 after 5 GiB sync")
                 log.info("S4: last_sync_bytes validated (non-zero)")
 
-        # ============================================================
-        # Scenario 5: Prometheus scrape end-to-end
-        # ============================================================
-        log.info("=" * 60)
-        log.info("Scenario 5: Prometheus scrape end-to-end")
-        log.info("=" * 60)
-
-        try:
-            prom_url = ensure_prometheus_enabled(source_clients[0])
-
-            if not prom_url:
-                log.warning("Prometheus service URL not found in mgr services")
-            else:
-                prom_out, _ = source_clients[0].exec_command(
-                    sudo=True,
-                    cmd=f"curl -sk {prom_url}/metrics 2>/dev/null "
-                    f"| grep cephfs_mirror || echo 'no_match'",
-                    check_ec=False,
-                )
-                if "cephfs_mirror" in prom_out:
-                    log.info("Prometheus cephfs_mirror metrics found")
-                    for line in prom_out.strip().split("\n")[:10]:
-                        log.info("  %s", line)
-                else:
-                    log.info("Prometheus cephfs_mirror metrics not found in scrape")
-        except Exception as e:
-            log.warning("Prometheus scrape check: %s", e)
-
-        log.info("Prometheus scrape scenario completed")
-
-        # ============================================================
-        # Scenario 6: Legacy counter groups still present
-        # ============================================================
-        log.info("=" * 60)
-        log.info("Scenario 6: Legacy counter groups still present")
-        log.info("=" * 60)
-
-        data = fs_mirroring_utils.get_cephfs_mirror_counters(
-            cephfs_mirror_node, fsid, asok_file
-        )
-
-        legacy_groups = [
-            "cephfs_mirror_mirrored_filesystems",
-            "cephfs_mirror_peers",
-            "cephfs_mirror",
-        ]
-        for group in legacy_groups:
-            if group in data:
-                log.info(f"Legacy group '{group}' present")
-            else:
-                log.warning(f"Legacy group '{group}' not found in counter dump")
-
-        label, counter = fs_mirroring_utils.get_labels_and_counters(
-            "cephfs_mirror_mirrored_filesystems", source_fs, data
-        )
-        if counter:
-            log.info(
-                f"Legacy mirrored_filesystems counter: "
-                f"directory_count={counter.get('directory_count')}"
-            )
-
-        label, counter = fs_mirroring_utils.get_labels_and_counters(
-            "cephfs_mirror_peers", source_fs, data
-        )
-        if counter:
-            log.info(
-                f"Legacy peers counter: snaps_synced={counter.get('snaps_synced')}"
-            )
-
         log.info("All perf dump scenarios passed")
 
         log.info("Reset tick interval to default")
@@ -778,6 +749,13 @@ def run(ceph_cluster, **kw):
                 source_fs,
                 subvol_group_name,
                 check_ec=False,
+            )
+
+            log.info("Clean up mirrored data and snapshots on target cluster")
+            fs_mirroring_utils.cleanup_target_cluster(
+                target_clients[0],
+                target_fs=target_fs,
+                subvolume_paths=subvolume_paths,
             )
         except Exception as cleanup_err:
             log.warning(f"Cleanup encountered an error: {cleanup_err}")

@@ -97,6 +97,7 @@ def run(ceph_cluster, **kw):
      2. Tri-interface on failure
      3. Tri-interface snap lifecycle counters
      4. Tri-interface with multiple directories
+     5. Tri-interface stale detection & recovery during daemon stop
 
     Returns 0 on success, 1 on failure, -1 if skipped.
     """
@@ -400,7 +401,12 @@ def run(ceph_cluster, **kw):
             f"  CONSISTENT: last_synced_snap name matches ({asok_last.get('name')})"
         )
 
-        log.info("Delta sync: write 5 GiB new data for second snapshot")
+        log.info(
+            "Delta sync: remove tri_full and write 5 GiB new data for second snapshot"
+        )
+        source_clients[0].exec_command(
+            sudo=True, cmd=f"rm -f {mount_path1}tri_full", check_ec=False
+        )
         source_clients[0].exec_command(
             sudo=True,
             cmd=f"dd if=/dev/urandom of={mount_path1}tri_delta bs=1M count=5120",
@@ -634,6 +640,139 @@ def run(ceph_cluster, **kw):
         log.info(f"Dir3 full perf: {tri_d3['perf']}")
         log.info("Multiple directories isolation validated")
 
+        # ============================================================
+        # Scenario 5: Tri-interface stale detection & recovery during daemon stop
+        # ============================================================
+        log.info("=" * 60)
+        log.info(
+            "Scenario 5: Tri-interface stale detection & recovery during daemon stop"
+        )
+        log.info("=" * 60)
+
+        snap_tri_stale = "snap_tri_stale"
+        log.info("Write 5 GiB data to ensure active sync for stale test")
+        source_clients[0].exec_command(
+            sudo=True,
+            cmd=f"dd if=/dev/urandom of={mount_path1}large_tri_stale.dat bs=100M count=50 status=none",
+        )
+        source_clients[0].exec_command(
+            sudo=True, cmd=f"mkdir {mount_path1}.snap/{snap_tri_stale}"
+        )
+
+        log.info("Poll for active sync state before stopping daemon")
+        pre_stop_pct = 0.0
+        path1_key = subvol_path1.rstrip("/")
+        for poll_i in range(30):
+            time.sleep(2)
+            peer_status = fs_mirroring_utils.get_fs_mirror_peer_status_using_asok(
+                cephfs_mirror_node[0], source_clients[0], source_fs
+            )
+            ps = peer_status.get(path1_key, {})
+            state = ps.get("state")
+            syncing = ps.get("current_syncing_snap")
+            log.info(f"[Stale Pre-Stop Poll {poll_i}] state={state}, syncing={syncing}")
+            if state == "syncing" or syncing:
+                pct_str = (
+                    syncing.get("bytes", {}).get("sync_percent", "0%")
+                    if syncing
+                    else "0%"
+                )
+                try:
+                    pre_stop_pct = float(str(pct_str).rstrip("%"))
+                except ValueError:
+                    pre_stop_pct = 0.0
+                log.info(f"Active sync detected, pre-stop progress: {pre_stop_pct}%")
+                break
+
+        log.info("Stop cephfs-mirror daemon mid-sync")
+        source_clients[0].exec_command(sudo=True, cmd="ceph orch stop cephfs-mirror")
+        time.sleep(15)
+
+        log.info("Query all 3 interfaces in stopped daemon state")
+
+        # 1. Asok should be unreachable
+        asok_unreachable = False
+        try:
+            fs_mirroring_utils.get_fs_mirror_peer_status_using_asok(
+                cephfs_mirror_node[0], source_clients[0], source_fs
+            )
+        except Exception as asok_err:
+            log.info(
+                "Asok is unreachable as expected while daemon is stopped: %s", asok_err
+            )
+            asok_unreachable = True
+
+        if not asok_unreachable:
+            log.warning("Asok did not raise error immediately after daemon stop")
+
+        # 2. Perf counters should be unreachable
+        perf_unreachable = False
+        try:
+            fs_mirroring_utils.get_cephfs_mirror_counters(
+                cephfs_mirror_node[0], fsid, asok_file
+            )
+        except Exception as perf_err:
+            log.info(
+                "Perf counters unreachable as expected while daemon is stopped: %s",
+                perf_err,
+            )
+            perf_unreachable = True
+
+        if not perf_unreachable:
+            log.warning(
+                "Perf counters did not raise error immediately after daemon stop"
+            )
+
+        # 3. MGR should report stale / frozen metrics without advancing
+        mgr_status_stop = fs_mirroring_utils.get_mgr_mirror_status(
+            source_clients[0], source_fs
+        )
+        log.info(
+            f"MGR status while daemon is stopped: {json.dumps(mgr_status_stop, indent=2)}"
+        )
+        mgr_metrics_stop = mgr_status_stop.get("metrics", {})
+        path1_mgr_stop = mgr_metrics_stop.get(path1_key, {})
+        if not path1_mgr_stop:
+            raise CommandFailed(
+                f"Path {path1_key} disappeared from MGR status during daemon stop"
+            )
+
+        log.info("Restart cephfs-mirror daemon and validate recovery")
+        source_clients[0].exec_command(sudo=True, cmd="ceph orch start cephfs-mirror")
+        time.sleep(15)
+
+        log.info("Wait for daemon running confirmation")
+        fs_mirroring_utils.wait_for_daemon_running(
+            source_clients[0],
+            cephfs_mirror_node,
+            ceph_cluster=ceph_cluster_dict.get("ceph1"),
+        )
+
+        log.info(
+            "Wait for snap_tri_stale sync to complete and return to idle across interfaces"
+        )
+        for poll_i in range(40):
+            time.sleep(15)
+            peer_status = fs_mirroring_utils.get_fs_mirror_peer_status_using_asok(
+                cephfs_mirror_node[0], source_clients[0], source_fs
+            )
+            ps = peer_status.get(path1_key, {})
+            state = ps.get("state")
+            last = ps.get("last_synced_snap", {}).get("name")
+            log.info(
+                f"[Stale Post-Restart Poll {poll_i}] state={state}, last_synced={last}"
+            )
+            if state == "idle" and last == snap_tri_stale:
+                break
+        else:
+            raise CommandFailed(
+                "Scenario 5: Sync did not reach idle after daemon restart"
+            )
+
+        log.info(
+            "Scenario 5 PASSED: Tri-interface stale detection & recovery validated"
+        )
+
         log.info("All tri-interface scenarios passed")
 
         source_clients[0].exec_command(
@@ -664,24 +803,26 @@ def run(ceph_cluster, **kw):
                     sudo=True, cmd=f"ceph config rm {key}", check_ec=False
                 )
 
-            log.info("Delete the snapshots")
-            all_snaps = [
-                "snap_tri_full",
-                "snap_tri_delta",
-                "snap_conflict",
-                "snap_lc",
-                "snap_lc_renamed",
-                "snap_multi_d1",
-                "snap_multi_d3",
-            ]
-            snap_mount_paths = [mount_path1, mount_path2, mount_path3]
-            for spath in snap_mount_paths:
-                for snap in all_snaps:
-                    source_clients[0].exec_command(
-                        sudo=True,
-                        cmd=f"rmdir {spath}.snap/{snap}",
-                        check_ec=False,
-                    )
+            if locals().get("mount_path1"):
+                log.info("Delete the snapshots")
+                all_snaps = [
+                    "snap_tri_full",
+                    "snap_tri_delta",
+                    "snap_conflict",
+                    "snap_lc",
+                    "snap_lc_renamed",
+                    "snap_multi_d1",
+                    "snap_multi_d3",
+                    "snap_tri_stale",
+                ]
+                snap_mount_paths = [mount_path1, mount_path2, mount_path3]
+                for spath in snap_mount_paths:
+                    for snap in all_snaps:
+                        source_clients[0].exec_command(
+                            sudo=True,
+                            cmd=f"rmdir {spath}.snap/{snap}",
+                            check_ec=False,
+                        )
 
             log.info("Unmount the paths")
             for mdir in [kernel_mounting_dir, fuse_mounting_dir, fuse_mounting_dir_2]:
@@ -742,6 +883,13 @@ def run(ceph_cluster, **kw):
                 source_fs,
                 subvol_group_name,
                 check_ec=False,
+            )
+
+            log.info("Clean up mirrored data and snapshots on target cluster")
+            fs_mirroring_utils.cleanup_target_cluster(
+                target_clients[0],
+                target_fs=target_fs,
+                subvolume_paths=subvolume_paths,
             )
         except Exception as cleanup_err:
             log.warning(f"Cleanup encountered an error: {cleanup_err}")

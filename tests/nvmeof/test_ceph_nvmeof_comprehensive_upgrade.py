@@ -11,16 +11,9 @@ Phases (single test execution):
   7. Run HA failover/failback with IO validation
   8. Optional cleanup
 
-Uses existing workflow modules and helpers without modifying them.
-
-``_comprehensive_upgrade_prerequisites`` and ``_comprehensive_cephadm_install``
-intentionally mirror ``test_ceph_nvmeof_upgrade`` helpers but run registry
-login and cephadm install on non-installer hosts via installer-jump SSH using
-ceph orch host names (gateway nodes are often unreachable from the runner).
 """
 
 import json
-import shlex
 import threading
 import time
 from collections import defaultdict
@@ -29,12 +22,10 @@ from concurrent.futures import ThreadPoolExecutor
 from looseversion import LooseVersion
 
 from ceph.ceph import Ceph
-from ceph.ceph_admin.common import config_dict_to_string
 from ceph.ceph_admin.orch import Orch
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.utils import get_node_by_id
 from cephci.utils.configs import get_configs, get_registry_credentials
-from cli.utilities.configure import setup_ibm_licence
 from cli.utilities.containers import Registry
 from tests.nvmeof.test_ceph_nvmeof_ns_resize import (
     check_io_percent,
@@ -71,14 +62,7 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 DEFAULT_REGISTRY_LOGIN_TIMEOUT = 1200
-DEFAULT_CEPHADM_INSTALL_TIMEOUT = 1200
 MIN_MASKING_NAMESPACE_COUNT = 2
-CEPHADM_INSTALL_CMD = "yum -y install cephadm --nogpgcheck"
-CEPHADM_VERIFY_CMD = "rpm -qa | grep cephadm"
-IBM_LICENSE_INSTALL_CMD = (
-    "ACCEPT_EULA=Y yum install -y ibm-storage-ceph-license --nogpgcheck"
-)
-IBM_LICENSE_ACCEPT_CMD = "cat /usr/share/ibm-storage-ceph-license/accept"
 UPGRADE_FIO_OUTPUT_DIR = "/tmp/cephci_nvmeof_upgrade_io"
 
 
@@ -862,257 +846,17 @@ def _prepare_initiator_clients(ceph_cluster, config, nvme_service):
 # --- Upgrade orchestration ---
 
 
-def _is_same_inventory_node(left, right):
-    """Return True when two inventory node objects refer to the same host."""
-    if left.ip_address and right.ip_address and left.ip_address == right.ip_address:
-        return True
-    if left.hostname == right.hostname:
-        return True
-    left_short = left.shortname or left.hostname.split(".")[0]
-    right_short = right.shortname or right.hostname.split(".")[0]
-    if left_short == right_short:
-        return True
-    if left.id and right.id and left.id == right.id:
-        return True
-    return False
-
-
-def _resolve_orch_host_map(cluster, orch):
-    """Map inventory nodes to ceph orch host names."""
-    out, _ = orch.shell(args=["ceph", "orch", "host", "ls", "--format=json"])
-    orch_hosts = json.loads(out)
-
-    hosts_by_ip = {}
-    hosts_by_name = {}
-    for entry in orch_hosts:
-        name = entry["hostname"]
-        hosts_by_name[name] = name
-        for addr in entry.get("addr", "").split(","):
-            addr = addr.strip()
-            if addr:
-                hosts_by_ip[addr] = name
-
-    known_hosts = set(hosts_by_name)
-    host_map = {}
-    for node in cluster.get_nodes(ignore="client"):
-        orch_name = hosts_by_ip.get(node.ip_address)
-        if not orch_name:
-            orch_name = hosts_by_name.get(node.hostname)
-        if not orch_name and node.id:
-            orch_name = hosts_by_name.get(node.id)
-        if not orch_name:
-            short = node.shortname or node.hostname.split(".")[0]
-            orch_name = hosts_by_name.get(short)
-        if not orch_name or orch_name not in known_hosts:
-            raise ValueError(
-                f"Cannot map inventory node {node.hostname} "
-                f"(ip={node.ip_address}, id={node.id}) to a ceph orch host"
-            )
-        host_map[node] = orch_name
-    return host_map
-
-
-def _registry_login_args(registry):
-    return {
-        "registry-url": registry["registry"],
-        "registry-username": registry["username"],
-        "registry-password": registry["password"],
-    }
-
-
-def _registry_podman_login_cmd(registry):
-    return (
-        f"podman login --username {shlex.quote(registry['username'])} "
-        f"--password {shlex.quote(registry['password'])} "
-        f"{shlex.quote(registry['registry'])}"
-    )
-
-
-def _registry_cephadm_login_cmd(registry):
-    return f"cephadm registry-login {config_dict_to_string(_registry_login_args(registry))}"
-
-
-def _run_registry_login_on_node(node, registry, orch, timeout):
-    """Run podman login and cephadm registry-login on a directly reachable node."""
-    Registry(node).login(
-        registry["registry"], registry["username"], registry["password"]
-    )
-    orch.registry_login(
-        node=node,
-        args=_registry_login_args(registry),
-        timeout=timeout,
-        long_running=True,
-    )
-
-
-def _node_root_password(node):
-    """Return the root password for installer-jump SSH."""
-    return getattr(node, "root_passwd", None) or "passwd"
-
-
-def _ensure_sshpass_on_installer(installer_node):
-    """Install sshpass on the installer when password-based SSH is required."""
-    out, _ = installer_node.exec_command(
-        cmd="command -v sshpass || rpm -q sshpass 2>/dev/null",
-        check_ec=False,
-    )
-    if "sshpass" in out:
-        return
-    installer_node.exec_command(
-        sudo=True,
-        cmd="yum -y install sshpass --nogpgcheck",
-        long_running=True,
-    )
-
-
-def _run_via_installer_ssh(
-    installer_node, orch_host, remote_cmd, timeout, root_password="passwd"
-):
-    """Run a command on a cluster host by SSH from the installer node.
-
-    Uses sshpass with root credentials because inter-node SSH keys are often
-    not configured on freshly bootstrapped IBM/RHEL test clusters.
-    """
-    _ensure_sshpass_on_installer(installer_node)
-    remote_target = f"root@{orch_host}"
-    installer_node.exec_command(
-        cmd=(
-            f"sshpass -p {shlex.quote(root_password)} ssh "
-            f"-o StrictHostKeyChecking=no -o ConnectTimeout=120 "
-            f"-o UserKnownHostsFile=/dev/null "
-            f"{shlex.quote(remote_target)} {shlex.quote(remote_cmd)}"
-        ),
-        sudo=True,
-        long_running=True,
-        timeout=timeout,
-    )
-
-
-def _run_registry_login_via_installer(
-    installer_node, orch_host, registry, timeout, root_password="passwd"
-):
-    """Run registry login on a cluster host using installer SSH (outside cephadm shell)."""
-    for cmd in (
-        _registry_podman_login_cmd(registry),
-        _registry_cephadm_login_cmd(registry),
-    ):
-        _run_via_installer_ssh(
-            installer_node, orch_host, cmd, timeout, root_password=root_password
-        )
-
-
-def _install_ibm_license_on_node(node):
-    """Install and accept the IBM Storage Ceph license on a reachable node."""
-    setup_ibm_licence(node, build_type=None)
-
-
-def _install_ibm_license_via_installer(
-    installer_node, orch_host, timeout, root_password="passwd"
-):
-    """Install and accept the IBM license using installer SSH."""
-    for cmd in (IBM_LICENSE_INSTALL_CMD, IBM_LICENSE_ACCEPT_CMD):
-        _run_via_installer_ssh(
-            installer_node, orch_host, f"sudo {cmd}", timeout, root_password
-        )
-
-
-def _install_cephadm_on_node(node, timeout):
-    """Install cephadm RPM on a node reachable from the test runner."""
-    node.exec_command(
-        sudo=True,
-        cmd=CEPHADM_INSTALL_CMD,
-        long_running=True,
-        timeout=timeout,
-    )
-    node.exec_command(cmd=CEPHADM_VERIFY_CMD)
-
-
-def _install_cephadm_via_installer(
-    installer_node, orch_host, timeout, root_password="passwd"
-):
-    """Install cephadm RPM on a cluster host using installer SSH."""
-    _run_via_installer_ssh(
-        installer_node, orch_host, f"sudo {CEPHADM_INSTALL_CMD}", timeout, root_password
-    )
-    _run_via_installer_ssh(
-        installer_node, orch_host, CEPHADM_VERIFY_CMD, timeout, root_password
-    )
-
-
-def _comprehensive_cephadm_install(cluster, orch, ibm_build, timeout):
+def _comprehensive_cephadm_install(orch):
     """Install cephadm on all cluster hosts.
 
-    ``orch.install()`` SSHs from the test runner to every node. Gateway hosts are
-    often reachable only from the installer, so non-installer nodes use the same
-    installer-jump pattern as registry login.
+    Same path as ``test_ceph_nvmeof_upgrade``: ``orch.install()`` handles IBM
+    license acceptance and yum install of cephadm on every non-client node.
     """
-    installer_node = cluster.get_ceph_object("installer").node
-    host_map = _resolve_orch_host_map(cluster, orch)
-
-    for node, orch_host in host_map.items():
-        if _is_same_inventory_node(node, installer_node):
-            LOG.info(
-                "Installing cephadm on %s (direct, timeout=%ss)",
-                node.hostname,
-                timeout,
-            )
-            if ibm_build:
-                _install_ibm_license_on_node(node)
-            _install_cephadm_on_node(node, timeout)
-            continue
-
-        LOG.info(
-            "Installing cephadm on %s via installer %s (orch host %s, timeout=%ss)",
-            node.hostname,
-            installer_node.hostname,
-            orch_host,
-            timeout,
-        )
-        root_password = _node_root_password(node)
-        if ibm_build:
-            _install_ibm_license_via_installer(
-                installer_node, orch_host, timeout, root_password
-            )
-        _install_cephadm_via_installer(
-            installer_node, orch_host, timeout, root_password
-        )
-
-
-def _login_registry_on_cluster(
-    cluster, orch, registry, timeout=DEFAULT_REGISTRY_LOGIN_TIMEOUT
-):
-    """Log in to the registry on every cluster host."""
-    installer_node = cluster.get_ceph_object("installer").node
-    host_map = _resolve_orch_host_map(cluster, orch)
-
-    for node, orch_host in host_map.items():
-        if _is_same_inventory_node(node, installer_node):
-            LOG.info(
-                "Registry login on %s (direct, timeout=%ss)",
-                node.hostname,
-                timeout,
-            )
-            _run_registry_login_on_node(node, registry, orch, timeout)
-            continue
-
-        LOG.info(
-            "Registry login on %s via installer %s (orch host %s, timeout=%ss)",
-            node.hostname,
-            installer_node.hostname,
-            orch_host,
-            timeout,
-        )
-        _run_registry_login_via_installer(
-            installer_node,
-            orch_host,
-            registry,
-            timeout,
-            root_password=_node_root_password(node),
-        )
+    orch.install()
 
 
 def _comprehensive_upgrade_prerequisites(cluster, orch, **upg_cfg):
-    """Upgrade prerequisites with installer-jump registry login for this test only."""
+    """Upgrade prerequisites matching ``test_ceph_nvmeof_upgrade.upgrade_prerequisites``."""
     cdn = upg_cfg.get("cdn", False)
     ibm_build = upg_cfg.get("ibm_build", False)
     overrides = upg_cfg.get("overrides") or {}
@@ -1129,12 +873,38 @@ def _comprehensive_upgrade_prerequisites(cluster, orch, **upg_cfg):
             key="upgrade-registry",
         )
         if host:
+            LOG.info(
+                "Logging into upgrade registry %s (image=%s)",
+                host,
+                upg_cfg.get("container_image") or upg_cfg.get("nvmeof_cli_image"),
+            )
             registry = get_registry_credentials(host)
+        else:
+            LOG.warning("No upgrade registry host resolved; skipping registry login")
     if registry:
         login_timeout = upg_cfg.get(
             "registry_login_timeout", DEFAULT_REGISTRY_LOGIN_TIMEOUT
         )
-        _login_registry_on_cluster(cluster, orch, registry, login_timeout)
+        args = {
+            "registry-url": registry["registry"],
+            "registry-username": registry["username"],
+            "registry-password": registry["password"],
+        }
+        for node in cluster.get_nodes(ignore="client"):
+            LOG.info(
+                "Registry login on %s (direct, timeout=%ss)",
+                node.hostname,
+                login_timeout,
+            )
+            Registry(node).login(
+                registry["registry"], registry["username"], registry["password"]
+            )
+            orch.registry_login(
+                node=node,
+                args=args,
+                timeout=login_timeout,
+                long_running=True,
+            )
 
     if not cdn:
         if overrides and not cdn:
@@ -1375,12 +1145,6 @@ def _upgrade_settings(config, kwargs, ibm_build):
         "registry_login_timeout": upgrade_io_cfg.get(
             "registry_login_timeout", DEFAULT_REGISTRY_LOGIN_TIMEOUT
         ),
-        "cephadm_install_timeout": upgrade_io_cfg.get(
-            "cephadm_install_timeout",
-            upgrade_io_cfg.get(
-                "registry_login_timeout", DEFAULT_CEPHADM_INSTALL_TIMEOUT
-            ),
-        ),
     }
 
 
@@ -1396,12 +1160,7 @@ def _prepare_upgrade(ceph_cluster, config, orch, kwargs, ibm_build):
     _comprehensive_upgrade_prerequisites(ceph_cluster, orch, **upg_cfg)
 
     LOG.info("Install/upgrade cephadm on cluster nodes")
-    _comprehensive_cephadm_install(
-        ceph_cluster,
-        orch,
-        ibm_build,
-        upg_cfg["cephadm_install_timeout"],
-    )
+    _comprehensive_cephadm_install(orch)
 
     LOG.info("Verify upgrade target images are available")
     orch.upgrade_check(image=upg_cfg["container_image"])
@@ -1502,7 +1261,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             release: null
           upgrade_io:
             registry_login_timeout: 1200
-            cephadm_install_timeout: 1200
             fio_ready_timeout: 300
             post_upgrade_sleep: 60
             fio_runtime: 10800
