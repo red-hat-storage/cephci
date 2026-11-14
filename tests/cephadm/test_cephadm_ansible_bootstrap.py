@@ -7,6 +7,10 @@ from cli.utilities.configure import (
     setup_client_node,
     setup_installer_node,
 )
+from utility.cephadm_agent_config import (
+    enable_use_agent_post_bootstrap,
+    resolve_custom_overrides,
+)
 
 
 def run(ceph_cluster, **kwargs):
@@ -15,6 +19,10 @@ def run(ceph_cluster, **kwargs):
     config, custom_config = (
         kwargs.get("config"),
         kwargs.get("test_data", {}).get("custom-config", {}),
+    )
+    overrides = resolve_custom_overrides(
+        custom_config,
+        kwargs.get("test_data", {}).get("custom_config_dict"),
     )
 
     # Check mandatory parameter bootstrap
@@ -79,6 +87,10 @@ def run(ceph_cluster, **kwargs):
 
     # Execute cephadm bootstrap playbook
     exec_cephadm_bootstrap(installer, nodes, playbook, **module_args)
+
+    # Ansible wrapper does not pass bootstrap --config; enable agent after bootstrap
+    # when --custom-config use_agent=true.
+    enable_use_agent_post_bootstrap(installer, overrides=overrides)
 
     # Set container configs
     set_container_image_config(installer, custom_config)
