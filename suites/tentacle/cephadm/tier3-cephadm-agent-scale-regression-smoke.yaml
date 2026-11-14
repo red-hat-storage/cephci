@@ -1,0 +1,75 @@
+---
+# ==================================================================================
+# Tier-level: 3 (smoke / gate)
+# Test-Suite: tier3-cephadm-agent-scale-regression-smoke.yaml
+#
+# Same flow as tier3-cephadm-agent-scale-regression.yaml with reduced counts for
+# OSP / small conf validation.
+#
+# Cluster Configuration (IBM Cloud):
+#   conf/tentacle/cephadm/1admin-9node-1client-agent-scale-ibmc-smoke.yaml
+#   inventory: conf/inventory/ibm-rhel-9.6-server-bx2-4x16.yaml
+#
+# Run with: --cloud ibmc
+# use_agent is set in bootstrap args.config (optional: --custom-config use_agent=true after #6310)
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: Installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap (1 host, use_agent)
+      desc: Bootstrap single-host cluster with mgr/cephadm/use_agent=true
+      module: test_bootstrap.py
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: "node1"
+          orphan-initial-daemons: true
+          # monitoring stack enabled (prometheus/grafana/alertmanager/node-exporter)
+          config:
+            mgr:
+              mgr/cephadm/use_agent: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm agent scale regression smoke TC1-TC3
+      desc: Reduced-count TC1–TC3 with health/RSS monitors and background IO
+      module: cephadm_agent.test_agent_scale_regression.py
+      abort-on-fail: true
+      config:
+        scale:
+          initial_hosts: 5
+          initial_osds: 8
+          expand_hosts: 3
+          expand_osds: 4
+          allow_fewer_hosts: true
+          host_add_mode: burst
+          host_labels:
+            - osd
+            - mgr
+            - node-exporter
+            - crash
+          ensure_monitoring: true
+          host_timeout: 1800
+          agent_timeout: 1800
+          osd_timeout: 3600
+          mgr_failover_timeout: 120
+          retarget_timeout: 600
+          health_poll_sec: 30
+          mgr_rss_poll_sec: 30
+          fail_on_agent_down: true
+          deploy_rgw: true
+          deploy_nfs: true
+          workloads:
+            enable_rados: true
+            enable_rgw: true
+            enable_nfs: true
+            rados_bench_sec: 15
