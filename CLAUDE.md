@@ -5,9 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 CephCI is Red Hat/IBM's system test framework for Red Hat Ceph Storage. It is **not** a unit-test
-suite: `run.py` provisions real cluster nodes on a cloud (OpenStack, IBM VPC, AWS, baremetal,
-onecloud, ocpvirt), SSHes into them, and drives test modules declared in YAML suite files. The
-unit tests under `unittests/` only cover framework helpers.
+suite: `run.py` (a shim over `cephci/orchestration/`) provisions real cluster nodes on a cloud
+(OpenStack, IBM VPC, AWS, baremetal, onecloud, ocpvirt), SSHes into them, and drives test modules
+declared in YAML suite files. The unit tests under `unittests/` only cover the framework itself.
 
 ## Commands
 
@@ -29,15 +29,19 @@ python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt     # runtime; test_requirements.txt adds linters/pytest
 
 # Run a test suite against a real cluster (needs ~/.cephci.yaml + osp creds)
-python run.py --product ibm --release 9.2 --platform rhel-10 \
+python run.py \
+  --product ibm \
+  --release 9.2 \
+  --platform rhel-10 \
   --build nightly \
-  --cloud openstack --osp-cred osp/osp-cred-ci-2.yaml \
+  --cloud openstack \
+  --osp-cred osp/osp-cred-ci-2.yaml \
   --global-conf conf/tentacle/cephadm/1admin-4node-1client-cluster.yaml \
   --inventory conf/inventory/rhel-10-latest.yaml \
   --suite suites/tentacle/cephadm/tier0-cephadm.yaml \
   --log-level debug
 
-python run.py --help          # docopt usage block lives at the top of run.py
+python run.py --help          # docopt usage block lives in cephci/orchestration/doc.py
 python run.py --store ...     # pickle cluster state into rerun/
 python run.py --reuse rerun/<file> ...   # re-run tests on an existing cluster (big time saver)
 python run.py --cleanup <instances-name> --osp-cred <file>   # delete leaked VMs/volumes
@@ -95,15 +99,19 @@ docstring in `init_suite.py` before touching this. Prefer symlinks over copying 
 
 ### Test module contract (`tests/`)
 
-`run.py` appends most `tests/*` subdirectories to `sys.path`, so `module: test_mon.py` in a suite
-resolves by bare filename — **module filenames must stay unique across `tests/`**. Each module
-exposes:
+`cephci/orchestration/loader.py` appends most `tests/*` subdirectories to `sys.path`, so
+`module: test_mon.py` in a suite resolves by bare filename — **module filenames should stay
+unique across `tests/`**; an ambiguous name logs a warning and resolves by search order. A
+suite may also name a module by dotted path (`module: tests.cephadm.test_host`), which is
+unambiguous and preferred for new suites. The `sys.path` entries are load-bearing beyond
+suite resolution: modules under `tests/nfs` and `tests/smb` import siblings by bare name
+(`from nfs_operations import ...`). Each module exposes:
 
 ```python
 def run(ceph_cluster, **kw) -> int:   # 0 = Pass, -1 = Skipped, anything else = Failed
 ```
 
-`kw` carries `config` (the suite's `config` block, enriched by `run.py` with `product`,
+`kw` carries `config` (the suite's `config` block, enriched by `build_test_config()` with `product`,
 `release`, `platform` and the `manifest` object, plus `rhbuild` — which is the
 `"<release>-<platform>"` string, not the bare version — `base_url`, `container_image`,
 `cloud-type`, custom-config flags, ...), `test_data`
@@ -129,13 +137,26 @@ tests must use `log = Log(__name__)` from `utility.log` rather than `print` or s
   `build_cmd_from_args`. New CLI-driven tests generally prefer this over `ceph_admin`.
 - **`rest/`, `api/`** — REST/dashboard API endpoints and workflows.
 
+### The orchestration (`cephci/orchestration/`)
+
+`run.py` is a shim; the run itself is a sequence of phases in `cephci/orchestration/`:
+`config.py` (docopt dict -> validated `RunConfig`), `build.py` (product/release/platform ->
+`BuildArtifacts`), `provisioning.py` (generic cluster creation over a provider),
+`loader.py`, `execution.py` (per-test config + invocation), `results.py`, `artifacts.py`
+and `runner.py` (the flow). `doc.py` holds the docopt usage block, which is a frozen
+interface — `pipeline/*.groovy` builds command lines as text. `docs/refactor/run.md`
+records the structure, the invariants and the quirks deliberately preserved.
+
 ### Provisioning and lifecycle
 
-`compute/` has one module per cloud backend (`openstack` via libcloud, `ibm_vpc`, `aws_ec2`,
-`baremetal`, `onecloud`, `openshift` for ocpvirt), each exposing create and
-`cleanup_*_ceph_nodes`. `cephci/` holds the newer provisioning/cleanup/report helpers
-(`provision.py`, `cleanup.py`, `cluster_conf.py`, `cluster_info.py`, `utils/build_info.py` ->
-`CephTestManifest`, which resolves the build/compose under test).
+`cephci/providers/` has one `CloudProvider` per backend (`openstack`, `ibmc`, `aws`,
+`baremetal`, `onecloud`, `ocpvirt`), each wrapping the create/cleanup functions in
+`ceph/utils.py` and `compute/` and declaring how CephCI logs into its nodes. Adding a cloud
+means adding a module there plus one registry entry in `cephci/providers/__init__.py`.
+`compute/` holds the cloud SDK code itself. `cephci/` also has the newer
+provisioning/cleanup/report helpers (`provision.py`, `cleanup.py`, `cluster_conf.py`,
+`cluster_info.py`, `utils/build_info.py` -> `CephTestManifest`, which resolves the
+build/compose under test).
 
 Results go out via `utility/polarion.py` (`--post-results`), Report Portal, `utility/xunit.py`
 (`--xunit-results`), and e-mail. `pipeline/*.groovy` are the Jenkins jobs that invoke `run.py`.
