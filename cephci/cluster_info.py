@@ -203,6 +203,76 @@ def collect_ceph_coredumps(cluster, _dir):
         log.info(f"Downloading {tar_file} from {node.hostname} to {download_dir}")
 
 
+def collect_recipe(ceph_cluster):
+    """
+    Gather the system under test details.
+
+    At present, the following information are gathered
+        container (podman/docker)   version
+        ceph                        Deployed Ceph version
+
+    Args:
+        ceph_cluster:   Cluster participating in the test.
+
+    Returns:
+        None
+    """
+    version_details = {}
+    installer_node = ceph_cluster.get_ceph_objects("installer")
+    client_node = ceph_cluster.get_ceph_objects("client")
+
+    if installer_node:
+        # podman version
+        out, _ = installer_node[0].exec_command(
+            sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
+        )
+
+        output = out.rstrip()
+        if output:
+            log.info(f"Podman Version {output}")
+            version_details["PODMAN"] = output
+
+        # docker version
+        out, _ = installer_node[0].exec_command(
+            sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            log.info(f"Docker Version {output}")
+            version_details["DOCKER"] = output
+
+        # cephadm version
+        out, _ = installer_node[0].exec_command(
+            sudo=True, cmd="cephadm version", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            log.info(f"cephadm Version: {output}")
+    if client_node:
+        # client rpm version
+        out, _ = client_node[0].exec_command(
+            sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            log.info(f"ceph client rpm Version: {output}")
+
+        # ceph cluster version
+        out, _ = client_node[0].exec_command(
+            sudo=True, cmd="ceph version", check_ec=False
+        )
+        output = out.rstrip()
+        if output:
+            match = re.search(r"ceph version (\S+)", output)
+            short_version = match.group(1) if match else output
+            log.info(f"Ceph cluster Version: {output}")
+            version_details["CEPH"] = short_version
+
+    # Collected by the pipelines from the working directory.
+    with open("version_info.json", "w") as version_detail:
+        json.dump(version_details, version_detail)
+
+
 def write_output(data, output):
     """Write output data to stream"""
     with open(output, "w") as fp:

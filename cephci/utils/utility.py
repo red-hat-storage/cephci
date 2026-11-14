@@ -4,8 +4,48 @@ import os
 import tempfile
 
 import __main__
+import requests
+import yaml
 
 from utility.log import Log
+
+logger = Log(__name__)
+
+
+def load_file(file_name):
+    """Retrieve yaml data content from file.
+
+    Args:
+        file_name (str): Relative or absolute path of the file.
+
+    Returns:
+        The deserialized content of the file.
+    """
+    file_path = os.path.abspath(file_name)
+    with open(file_path, "r") as conf_:
+        content = yaml.safe_load(conf_)
+
+    return content
+
+
+def get_html_page(url: str) -> str:
+    """Returns the content of the provided link.
+
+    Args:
+        url (str): The location to be read.
+
+    Returns:
+        str: The page content, or an empty string when it cannot be retrieved.
+    """
+    resp = requests.get(url, verify=False)
+
+    try:
+        if resp.ok:
+            return resp.text
+    except BaseException:  # noqa
+        logger.debug(f"Failed to retrieve contents at {url}")
+
+    return ""
 
 
 def set_logging_env(level=None, path=None):
