@@ -1,0 +1,1420 @@
+# ==================================================================================
+# IBM Cloud (ibmc) cluster layout for cephadm agent scale regression
+#
+# Shape:
+#   node1              — bootstrap only (_admin/installer/mon/mgr), no OSD volumes
+#   node2..node101     — TC1: 100 OSD hosts × 5 volumes = 500 OSDs
+#   node102..node151   — TC3: 50 OSD hosts × 5 volumes = 250 OSDs
+#   node152            — client (RGW/NFS workloads)
+#
+# Totals: 151 cluster nodes + 1 client = 152 VMs
+#         750 data volumes (15 GiB each)
+#
+# Suite:
+#   suites/tentacle/cephadm/tier3-cephadm-agent-scale-regression.yaml
+#
+# Example run:
+#   python run.py --rhbuild 9.1 \
+#     --cloud ibmc \
+#     --global-conf conf/tentacle/cephadm/1admin-151node-1client-agent-scale-ibmc.yaml \
+#     --inventory conf/inventory/ibm-rhel-9.6-server-bx2-4x16.yaml \
+#     --suite suites/tentacle/cephadm/tier3-cephadm-agent-scale-regression.yaml \
+#     --osp-cred <ibmc-cred.yaml> \
+#     --custom-config use_agent=true \
+#     --platform rhel-9 \
+#     --build <build> \
+#     --log-level info
+#
+# Notes:
+#   - Prefer bx2-4x16 (or larger) inventory profile; bx2-2x8 is tight for 5×OSD + agent.
+#   - VPC/network/SG come from --osp-cred + inventory (e.g. ci-vpc-01 / vpc-dmfg).
+#   - image-name.ibmc below matches common IBM VPC RHEL 9.6; override via inventory if needed.
+# ==================================================================================
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - mon
+          - mgr
+          - rgw
+          - nfs
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node3:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - mon
+          - mgr
+          - rgw
+          - nfs
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node4:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - nfs
+        no-of-volumes: 5
+        disk-size: 15
+      node5:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - nfs
+        no-of-volumes: 5
+        disk-size: 15
+      node6:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - nfs
+        no-of-volumes: 5
+        disk-size: 15
+      node7:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mgr
+        no-of-volumes: 5
+        disk-size: 15
+      node8:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mgr
+        no-of-volumes: 5
+        disk-size: 15
+      node9:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mgr
+        no-of-volumes: 5
+        disk-size: 15
+      node10:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node11:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node12:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node13:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node14:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node15:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node16:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node17:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node18:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node19:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node20:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node21:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node22:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node23:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node24:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node25:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node26:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node27:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node28:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node29:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node30:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node31:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node32:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node33:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node34:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node35:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node36:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node37:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node38:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node39:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node40:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node41:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node42:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node43:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node44:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node45:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node46:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node47:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node48:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node49:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node50:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node51:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node52:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node53:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node54:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node55:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node56:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node57:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node58:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node59:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node60:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node61:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node62:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node63:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node64:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node65:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node66:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node67:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node68:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node69:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node70:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node71:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node72:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node73:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node74:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node75:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node76:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node77:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node78:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node79:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node80:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node81:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node82:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node83:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node84:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node85:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node86:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node87:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node88:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node89:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node90:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node91:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node92:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node93:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node94:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node95:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node96:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node97:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node98:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node99:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node100:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node101:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node102:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node103:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node104:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node105:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node106:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node107:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node108:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node109:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node110:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node111:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node112:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node113:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node114:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node115:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node116:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node117:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node118:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node119:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node120:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node121:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node122:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node123:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node124:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node125:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node126:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node127:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node128:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node129:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node130:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node131:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node132:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node133:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node134:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node135:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node136:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node137:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node138:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node139:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node140:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node141:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node142:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node143:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node144:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node145:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node146:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node147:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node148:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node149:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node150:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node151:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 5
+        disk-size: 15
+      node152:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - client

@@ -1,0 +1,97 @@
+---
+# ==================================================================================
+# Tier-level: 3
+# Test-Suite: tier3-cephadm-agent-scale-regression.yaml
+#
+# Cephadm agent scale regression (TC1–TC3)
+#
+# Prerequisites:
+#   - use_agent is enabled in bootstrap args.config (mgr/cephadm/use_agent=true).
+#     Optional once PR #6310 merges: also pass --custom-config use_agent=true.
+#   - Lab conf with enough nodes (bootstrap + initial_hosts + expand_hosts).
+#     Full target: 1 installer + 100 + 50 = 151 non-client nodes, 750 OSDs (5×150).
+#   - Smaller labs: keep allow_fewer_hosts=true (default) and/or override scale.*.
+#
+# IBM Cloud conf (preferred):
+#   conf/umbrella/cephadm/1admin-151node-1client-agent-scale-ibmc.yaml
+#   inventory: conf/inventory/ibm-rhel-9.6-server-bx2-4x16.yaml
+#
+# Smoke / gate (IBM):
+#   conf/umbrella/cephadm/1admin-9node-1client-agent-scale-ibmc-smoke.yaml
+#   suite: tier3-cephadm-agent-scale-regression-smoke.yaml
+#
+# TC1  Bootstrap 1 host (use_agent) → add 100 hosts / 500 OSDs
+#      Measure: host-add+agent-UP, OSD-create+UP
+#      Then start RGW/NFS (rados) workloads for remaining cases
+# TC2  Mgr failover → measure agent retarget to new mgr
+# TC3  Expand +50 hosts / +250 OSDs → measure host+agent and OSD timings
+#
+# Monitors (post-TC1 for health; all cases for RSS):
+#   - ceph health every 30s for CEPHADM_AGENT_DOWN (fail if seen)
+#   - active mgr RSS sampling every 30s
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: Installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap (1 host, use_agent)
+      desc: Bootstrap single-host cluster with mgr/cephadm/use_agent=true
+      module: test_bootstrap.py
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: "node1"
+          orphan-initial-daemons: true
+          # monitoring stack enabled (prometheus/grafana/alertmanager/node-exporter)
+          # use_agent via bootstrap --config (independent of PR #6310 custom-config)
+          config:
+            mgr:
+              mgr/cephadm/use_agent: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm agent scale regression TC1-TC3
+      desc: >
+        TC1 host/OSD scale + timings; start RGW/NFS IO; TC2 mgr failover retarget;
+        TC3 expansion; health/RSS monitors
+      module: cephadm_agent.test_agent_scale_regression.py
+      abort-on-fail: true
+      config:
+        scale:
+          # Full lab targets — with allow_fewer_hosts, smaller confs auto-scale down
+          initial_hosts: 100
+          initial_osds: 500
+          expand_hosts: 50
+          expand_osds: 250
+          allow_fewer_hosts: true
+          host_add_mode: burst
+          host_labels:
+            - osd
+            - mgr
+            - node-exporter
+            - crash
+          ensure_monitoring: true
+          host_timeout: 7200
+          agent_timeout: 7200
+          osd_timeout: 10800
+          mgr_failover_timeout: 180
+          retarget_timeout: 1800
+          health_poll_sec: 30
+          mgr_rss_poll_sec: 30
+          fail_on_agent_down: true
+          max_mgr_rss_growth_kb: 0
+          deploy_rgw: true
+          deploy_nfs: true
+          workloads:
+            enable_rados: true
+            enable_rgw: true
+            enable_nfs: true
+            rados_bench_sec: 30
