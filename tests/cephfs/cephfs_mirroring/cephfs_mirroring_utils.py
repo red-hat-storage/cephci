@@ -9,7 +9,6 @@ import json
 import random
 import re
 import secrets
-import shlex
 import string
 import time
 
@@ -2888,94 +2887,6 @@ class CephfsMirroringUtils(object):
         )
         return json.loads(out)
 
-    def get_mgr_path_peer_stats(self, source_client, fs_name, path):
-        """Return first peer stats dict for a mirrored path from MGR status.
-
-        Args:
-            source_client: Client to run ``ceph fs snapshot mirror status``.
-            fs_name (str): Filesystem name.
-            path (str): Mirrored directory path (with or without trailing ``/``).
-
-        Returns:
-            dict: Peer stats (state, last_synced_snap, snaps_synced, …),
-            or empty dict if path/peer not present yet.
-        """
-        path_key = path.rstrip("/")
-        status = self.get_mgr_mirror_status(source_client, fs_name)
-        path_data = status.get("metrics", {}).get(path_key, {})
-        peer_entries = list(path_data.get("peer", {}).values())
-        return peer_entries[0] if peer_entries else {}
-
-    def wait_for_idle_via_mgr(
-        self,
-        source_client,
-        fs_name,
-        path,
-        expected_snap_name,
-        timeout=300,
-        interval=15,
-    ):
-        """Poll ``ceph fs snapshot mirror status`` until path is idle.
-
-        MGR-based alternative to asok ``wait_for_idle`` /
-        ``validate_snapshot_sync_status``. Does not require mirror daemon
-        admin sockets.
-
-        Args:
-            source_client: Source cluster client.
-            fs_name (str): Filesystem name.
-            path (str): Mirrored directory path.
-            expected_snap_name (str): Require ``last_synced_snap.name`` to
-                equal this value once idle.
-            timeout (int): Max seconds to wait.
-            interval (int): Seconds between polls.
-
-        Returns:
-            dict: Peer stats when idle with matching last_synced_snap.
-
-        Raises:
-            CommandFailed: If condition is not met within timeout.
-        """
-        if not expected_snap_name:
-            raise ValueError("expected_snap_name is required for wait_for_idle_via_mgr")
-        path_key = path.rstrip("/")
-        deadline = time.monotonic() + timeout
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            try:
-                peer_stats = self.get_mgr_path_peer_stats(
-                    source_client, fs_name, path_key
-                )
-                state = peer_stats.get("state", "unknown")
-                last_snap = (peer_stats.get("last_synced_snap") or {}).get("name")
-                log.info(
-                    "[wait_for_idle_via_mgr %ds left/%ds] path=%s state=%s "
-                    "last_synced=%s snaps_synced=%s",
-                    int(remaining),
-                    timeout,
-                    path_key,
-                    state,
-                    last_snap,
-                    peer_stats.get("snaps_synced"),
-                )
-                if state == "idle" and last_snap == expected_snap_name:
-                    return peer_stats
-            except (
-                CommandFailed,
-                json.JSONDecodeError,
-                KeyError,
-                TypeError,
-                IndexError,
-            ) as exc:
-                log.warning("wait_for_idle_via_mgr poll error (will retry): %s", exc)
-            time.sleep(min(interval, max(remaining, 0)))
-        raise CommandFailed(
-            f"Path '{path_key}' did not reach idle with "
-            f"last_synced_snap={expected_snap_name} within {timeout}s via MGR status"
-        )
-
     def get_asok_peer_status_raw(
         self,
         cephfs_mirror_node,
@@ -3115,39 +3026,6 @@ class CephfsMirroringUtils(object):
             return status[path].get("current_syncing_snap")
         return None
 
-    def read_file_content(self, client, path):
-        """Return file contents as returned by ``cat`` (no extra stripping)."""
-        out, _ = client.exec_command(sudo=True, cmd=f"cat {shlex.quote(path)}")
-        return out
-
-    def path_exists(self, client, path):
-        """Return True if path exists on the client."""
-        try:
-            client.exec_command(
-                sudo=True, cmd=f"test -e {shlex.quote(path)}", check_ec=True
-            )
-            return True
-        except CommandFailed:
-            return False
-
-    def list_dir_entries(self, client, path):
-        """Return list of directory entry names (ls)."""
-        out, _ = client.exec_command(sudo=True, cmd=f"ls {shlex.quote(path)}")
-        return out.strip().split() if out.strip() else []
-
-    def write_file_content(self, client, path, content):
-        """Write exact content to path (no added newline; matches upstream write_file).
-
-        Content is passed via a quoted printf argument; embedded single-quotes
-        are escaped so shell metacharacters in ``path``/``content`` are safe.
-        """
-        parent = path.rsplit("/", 1)[0]
-        client.exec_command(sudo=True, cmd=f"mkdir -p {shlex.quote(parent)}")
-        escaped = content.replace("'", "'\"'\"'")
-        client.exec_command(
-            sudo=True, cmd=f"printf '%s' '{escaped}' > {shlex.quote(path)}"
-        )
-
     def sync_and_verify_snapshot(
         self,
         source_client,
@@ -3163,43 +3041,54 @@ class CephfsMirroringUtils(object):
     ):
         """Create a snap, wait via MGR status, verify with md5sum checksum helper.
 
-        Mirrors upstream ``sync_and_verify``. Uses
-        ``ceph fs snapshot mirror status`` (no asok) to wait for idle +
-        ``last_synced_snap``, then
+        Uses ``ceph fs snapshot mirror status`` (no asok) until the path is
+        idle with ``last_synced_snap`` matching *snap_name*, then
         ``list_and_verify_remote_snapshots_and_data_checksum``.
-
-        Args:
-            source_client: Primary client.
-            target_client: Secondary client.
-            source_mount (str): Primary fuse/kernel mount path.
-            dir_name (str): Relative mirrored directory name under mount.
-            snap_name (str): Snapshot to create and wait for.
-            source_fs (str): Primary filesystem name.
-            target_fs (str): Secondary filesystem name.
-            mirror_path (str): Absolute FS path added for mirroring
-                (e.g. ``/directory_rename``).
-            timeout (int): MGR idle wait timeout seconds.
-            interval (int): MGR poll interval seconds.
-
-        Returns:
-            dict: MGR peer stats after idle.
-
-        Raises:
-            CommandFailed: If idle wait or checksum verification fails.
         """
         source_client.exec_command(sudo=True, cmd="sync")
         snap_mkdir = f"{source_mount.rstrip('/')}/{dir_name}/.snap/{snap_name}"
         source_client.exec_command(sudo=True, cmd=f"mkdir {snap_mkdir}")
         log.info("Created snapshot %s at %s", snap_name, snap_mkdir)
 
-        peer_stats = self.wait_for_idle_via_mgr(
-            source_client,
-            source_fs,
-            mirror_path,
-            expected_snap_name=snap_name,
-            timeout=timeout,
-            interval=interval,
-        )
+        path_key = mirror_path.rstrip("/")
+        deadline = time.monotonic() + timeout
+        peer_stats = {}
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CommandFailed(
+                    f"Path '{path_key}' did not reach idle with "
+                    f"last_synced_snap={snap_name} within {timeout}s via MGR status"
+                )
+            try:
+                status = self.get_mgr_mirror_status(source_client, source_fs)
+                peers = list(
+                    status.get("metrics", {}).get(path_key, {}).get("peer", {}).values()
+                )
+                peer_stats = peers[0] if peers else {}
+                state = peer_stats.get("state", "unknown")
+                last_snap = (peer_stats.get("last_synced_snap") or {}).get("name")
+                log.info(
+                    "[sync_and_verify %ds left] path=%s state=%s last_synced=%s",
+                    int(remaining),
+                    path_key,
+                    state,
+                    last_snap,
+                )
+                if state == "idle" and last_snap == snap_name:
+                    break
+            except (
+                CommandFailed,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                IndexError,
+            ) as exc:
+                log.warning("MGR status poll error (will retry): %s", exc)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                continue
+            time.sleep(min(interval, remaining))
 
         ok, msg = self.list_and_verify_remote_snapshots_and_data_checksum(
             target_client,

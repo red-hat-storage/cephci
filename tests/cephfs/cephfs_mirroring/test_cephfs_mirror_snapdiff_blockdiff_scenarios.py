@@ -72,6 +72,32 @@ def _scenario_dirs(suffix):
     }
 
 
+def _write_file(client, path, content):
+    """Write exact content (no added newline)."""
+    parent = path.rsplit("/", 1)[0]
+    client.exec_command(sudo=True, cmd=f"mkdir -p {parent}")
+    escaped = content.replace("'", "'\"'\"'")
+    client.exec_command(sudo=True, cmd=f"printf '%s' '{escaped}' > {path}")
+
+
+def _read_file(client, path):
+    out, _ = client.exec_command(sudo=True, cmd=f"cat {path}")
+    return out
+
+
+def _path_exists(client, path):
+    try:
+        client.exec_command(sudo=True, cmd=f"test -e {path}", check_ec=True)
+        return True
+    except CommandFailed:
+        return False
+
+
+def _list_dir(client, path):
+    out, _ = client.exec_command(sudo=True, cmd=f"ls {path}")
+    return out.strip().split() if out.strip() else []
+
+
 def _snapshot_file_state(client, path):
     """Return (file_type, size_bytes, sha256) for path — matches upstream."""
     stat_out, _ = client.exec_command(sudo=True, cmd=f"stat -c '%F:%s' {path}")
@@ -274,7 +300,7 @@ def _run_pure_truncate(
         mirror_path=mirror_path,
     )
 
-    if not fs_mirroring_utils.path_exists(tgt, f"{tgt_base}/{pure_dir}/.snap/snap_b"):
+    if not _path_exists(tgt, f"{tgt_base}/{pure_dir}/.snap/snap_b"):
         raise CommandFailed("snap_b missing on secondary (pure truncate)")
 
     mismatches = []
@@ -508,20 +534,14 @@ def _run_directory_rename(
             f"{src_base}/{replacement_dst}"
         ),
     )
-    fs_mirroring_utils.write_file_content(
-        src, f"{src_base}/{old_dir}/{renamed_file}", renamed_contents
-    )
-    fs_mirroring_utils.write_file_content(
-        src, f"{src_base}/{cross_old}/{cross_file}", cross_contents
-    )
-    fs_mirroring_utils.write_file_content(
+    _write_file(src, f"{src_base}/{old_dir}/{renamed_file}", renamed_contents)
+    _write_file(src, f"{src_base}/{cross_old}/{cross_file}", cross_contents)
+    _write_file(
         src,
         f"{src_base}/{replacement_src}/{replacement_file}",
         replacement_contents,
     )
-    fs_mirroring_utils.write_file_content(
-        src, f"{src_base}/{replacement_dst}/old-only", "stale data"
-    )
+    _write_file(src, f"{src_base}/{replacement_dst}/old-only", "stale data")
 
     fs_mirroring_utils.add_path_for_mirroring(src, source_fs, mirror_path)
 
@@ -554,16 +574,16 @@ def _run_directory_rename(
     )
 
     remote_snap1 = f"{tgt_base}/{rename_dir}/.snap/snap1"
-    entries = fs_mirroring_utils.list_dir_entries(tgt, remote_snap1)
+    entries = _list_dir(tgt, remote_snap1)
     if "dirB" in entries:
         raise CommandFailed(
             f"Old name dirB still present on secondary snap1: {entries}"
         )
-    if fs_mirroring_utils.path_exists(tgt, f"{remote_snap1}/dirB"):
+    if _path_exists(tgt, f"{remote_snap1}/dirB"):
         raise CommandFailed("Old name dirB still exists on secondary snap1")
-    content = fs_mirroring_utils.read_file_content(
-        tgt, f"{remote_snap1}/dirB-renamed/{renamed_file}"
-    ).rstrip("\n")
+    content = _read_file(tgt, f"{remote_snap1}/dirB-renamed/{renamed_file}").rstrip(
+        "\n"
+    )
     if content != renamed_contents:
         raise CommandFailed(
             f"Renamed nested content mismatch: expected={renamed_contents!r} "
@@ -587,7 +607,7 @@ def _run_directory_rename(
         mirror_path=mirror_path,
     )
 
-    content = fs_mirroring_utils.read_file_content(
+    content = _read_file(
         tgt, f"{tgt_base}/{rename_dir}/.snap/snap2/d2/Y/{cross_file}"
     ).rstrip("\n")
     if content != cross_contents:
@@ -615,14 +635,12 @@ def _run_directory_rename(
     )
 
     remote_repl = f"{tgt_base}/{rename_dir}/.snap/snap3/replace/B"
-    repl_entries = fs_mirroring_utils.list_dir_entries(tgt, remote_repl)
+    repl_entries = _list_dir(tgt, remote_repl)
     if "old-only" in repl_entries:
         raise CommandFailed(
             f"Stale old-only still present after replace: {repl_entries}"
         )
-    content = fs_mirroring_utils.read_file_content(
-        tgt, f"{remote_repl}/{replacement_file}"
-    ).rstrip("\n")
+    content = _read_file(tgt, f"{remote_repl}/{replacement_file}").rstrip("\n")
     if content != replacement_contents:
         raise CommandFailed(
             f"Replace nested content mismatch: expected={replacement_contents!r} "
