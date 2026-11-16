@@ -177,33 +177,36 @@ tests:
 
 
 # --- Regional FS parity: Snapshot/Clone Pipeline ---
+     # All SNAP cases share one NFS cluster (cephfs-nfs). Creating a new
+     # cluster per case fights over Ganesha ports 2049/9587 on the same hosts.
      - test:
          name: SNAP-01 parent snapshot delete under clone NFS IO
-         module: snapshot_clone.test_parent_snap_delete_under_io.py
+         module: nfs_snap_clone.test_parent_snap_delete_under_io.py
          desc: Delete parent snapshot while writing to cloned NFS export
          polarion-id: ""
          abort-on-fail: false
          config:
            fs_name: cephfs
-           nfs_name: cephfs-nfs-snap
+           nfs_name: cephfs-nfs
 
      - test:
          name: SNAP-02 cascaded snap clone checksum
-         module: snapshot_clone.test_cascaded_snap_clone_checksum.py
+         module: nfs_snap_clone.test_cascaded_snap_clone_checksum.py
          desc: Cascaded snap to clone chain with checksum verification
          polarion-id: ""
          abort-on-fail: false
          config:
            fs_name: cephfs
-           nfs_name: cephfs-nfs-cascade
+           nfs_name: cephfs-nfs
 
      - test:
          name: SNAP-03 BYOK independent key clone
-         module: snapshot_clone.test_byok_independent_key_clone.py
+         module: nfs_snap_clone.test_byok_independent_key_clone.py
          desc: Independent enctag on BYOK cloned NFS export
          polarion-id: ""
          abort-on-fail: false
          config:
            fs_name: cephfs
+           nfs_instance_name: cephfs-nfs
            nfs_version: "4.2"
            clients: 1

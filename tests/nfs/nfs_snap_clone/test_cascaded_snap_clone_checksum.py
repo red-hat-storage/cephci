@@ -10,8 +10,10 @@ import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
-from tests.nfs.snapshot_clone.snap_clone_nfs_lib import (
+from tests.nfs.nfs_snap_clone.snap_clone_nfs_lib import (
+    DEFAULT_NFS_NAME,
     checksum_file,
+    ensure_nfs_cluster,
     wait_clone_complete,
 )
 from utility.log import Log
@@ -35,7 +37,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
 
         fs_name = config.get("fs_name", "cephfs")
-        nfs_name = config.get("nfs_name", "cephfs-nfs-cascade")
+        nfs_name = config.get("nfs_name", DEFAULT_NFS_NAME)
         rand = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
         group = f"ganeshagroup_cas_{rand}"
         sv0 = f"sv0_{rand}"
@@ -46,10 +48,12 @@ def run(ceph_cluster, **kw):
 
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             return 1
-        setup_params = cephfs_common_utils.test_setup(
-            fs_name, client, nfs_name=nfs_name
+        # Reuse NFS from SNAP-01 / prior case — never spawn a second cluster.
+        nfs = ensure_nfs_cluster(
+            client, ceph_cluster, nfs_name=nfs_name, fs_util=fs_util
         )
-        nfs_server = setup_params["nfs_server"]
+        nfs_name = nfs["nfs_name"]
+        nfs_server = nfs["nfs_server"]
 
         fs_util.create_subvolumegroup(client, vol_name=fs_name, group_name=group)
         fs_util.create_subvolume(

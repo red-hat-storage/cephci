@@ -10,7 +10,11 @@ from threading import Thread
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
-from tests.nfs.snapshot_clone.snap_clone_nfs_lib import wait_clone_complete
+from tests.nfs.nfs_snap_clone.snap_clone_nfs_lib import (
+    DEFAULT_NFS_NAME,
+    ensure_nfs_cluster,
+    wait_clone_complete,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -25,7 +29,6 @@ def run(ceph_cluster, **kw):
       4. Delete the parent snapshot while write continues.
       5. Verify clone I/O still succeeds and cluster stays healthy.
     """
-    setup_params = None
     writer = {"stop": False, "error": None}
     try:
         config = kw.get("config", {})
@@ -42,7 +45,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
 
         fs_name = config.get("fs_name", "cephfs")
-        nfs_name = config.get("nfs_name", "cephfs-nfs-snap")
+        nfs_name = config.get("nfs_name", DEFAULT_NFS_NAME)
         group = config.get("group_name", "ganeshagroup_snap")
         subvol = config.get("subvol_name", "sv_parent_snap")
         snap = config.get("snap_name", "snap_parent_1")
@@ -56,10 +59,12 @@ def run(ceph_cluster, **kw):
             log.error("Cluster not healthy before test")
             return 1
 
-        setup_params = cephfs_common_utils.test_setup(
-            fs_name, client, nfs_name=nfs_name
+        # Reuse existing NFS; do not create a second cluster (port 2049 clash).
+        nfs = ensure_nfs_cluster(
+            client, ceph_cluster, nfs_name=nfs_name, fs_util=fs_util
         )
-        nfs_server = setup_params["nfs_server"]
+        nfs_name = nfs["nfs_name"]
+        nfs_server = nfs["nfs_server"]
 
         fs_util.create_subvolumegroup(client, vol_name=fs_name, group_name=group)
         fs_util.create_subvolume(
@@ -165,9 +170,3 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         writer["stop"] = True
-        try:
-            if setup_params:
-                # best-effort unmounts left to suite cleanup / next run
-                pass
-        except Exception:  # noqa: BLE001
-            pass

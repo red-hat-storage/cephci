@@ -12,11 +12,17 @@ from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
     collect_gklm_logs_on_failure,
+    create_nfs_instance_for_byok,
     get_enctag,
     load_gklm_config,
-    nfs_byok_test_setup,
+    setup_gklm_infrastructure,
 )
-from tests.nfs.snapshot_clone.snap_clone_nfs_lib import wait_clone_complete
+from tests.nfs.nfs_snap_clone.snap_clone_nfs_lib import (
+    DEFAULT_NFS_NAME,
+    list_nfs_clusters,
+    wait_clone_complete,
+)
+from utility.gklm_client.gklm_client import build_gklm_client
 from utility.log import Log
 from utility.utils import get_cephci_config
 
@@ -52,7 +58,8 @@ def run(ceph_cluster, **kw):
         gklm_params = load_gklm_config(custom_data, config, cephci_data)
         rand = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
         fs_name = config.get("fs_name", "cephfs")
-        nfs_name = config.get("nfs_instance_name", f"nfs_byok_clone_{rand}")
+        # Share suite NFS name; do not invent a new cluster per run (port clash).
+        nfs_name = config.get("nfs_instance_name", DEFAULT_NFS_NAME)
         group = f"byok_clone_grp_{rand}"
         parent_sv = f"byok_parent_{rand}"
         snap = f"byok_snap_{rand}"
@@ -60,23 +67,70 @@ def run(ceph_cluster, **kw):
 
         gkml_client_name = gklm_params.get("gklm_client_name", f"cephci_byok_{rand}")
         gklm_cert_alias = gklm_params.get("gklm_cert_alias", f"byok_cert_{rand}")
-        byok_setup_params = {
-            "nfs_nodes": nfs_nodes,
-            "installer": installer,
-            "nfs_name": nfs_name,
-            "gklm_client_name": gkml_client_name,
-            "gklm_cert_alias": gklm_cert_alias,
-            **gklm_params,
-        }
-        rc, enctag_parent, gklm_rest_client, cert = nfs_byok_test_setup(
-            byok_setup_params
-        )
-        if rc != 0:
-            log.error("BYOK setup failed")
-            return 1
+        nfs_node = nfs_nodes[0]
 
-        # Force a second key object: temporarily drop objects list reuse by
-        # creating another symmetric key via get_enctag after renaming alias.
+        setup_gklm_infrastructure(
+            nfs_nodes=nfs_nodes,
+            gklm_ip=gklm_params["gklm_ip"],
+            gklm_hostname=gklm_params["gklm_hostname"],
+        )
+        gklm_rest_client = build_gklm_client(
+            {
+                "gklm_ip": gklm_params["gklm_ip"],
+                "gklm_user": gklm_params["gklm_user"],
+                "gklm_password": gklm_params["gklm_password"],
+                **(
+                    {"gklm_rest_prefix": gklm_params["gklm_rest_prefix"]}
+                    if gklm_params.get("gklm_rest_prefix")
+                    else {}
+                ),
+            },
+            verify=False,
+        )
+        rsa_key, cert, _ = gklm_rest_client.certificates.get_certificates(
+            subject={
+                "common_name": nfs_node.hostname,
+                "ip_address": nfs_node.ip_address,
+            }
+        )
+        created_client_data = gklm_rest_client.clients.create_client(gkml_client_name)
+        enctag_parent = get_enctag(
+            gklm_rest_client,
+            gkml_client_name,
+            gklm_cert_alias,
+            gklm_params.get("gklm_user", "admin"),
+            cert,
+            created_client_data,
+        )
+        if not enctag_parent:
+            raise RuntimeError("Failed to allocate parent enctag")
+
+        existing = list_nfs_clusters(client)
+        if nfs_name in existing:
+            log.info("Reusing existing NFS cluster %s for BYOK exports", nfs_name)
+        elif existing:
+            nfs_name = existing[0]
+            log.info(
+                "Reusing already-deployed NFS cluster %s for BYOK exports "
+                "(skip create — avoids port 2049 clash)",
+                nfs_name,
+            )
+        else:
+            log.info("No NFS cluster present; creating BYOK NFS %s", nfs_name)
+            ca_cert = gklm_rest_client.certificates.get_system_certificate(
+                cert_name=gklm_params["gklm_hostname"]
+            )
+            create_nfs_instance_for_byok(
+                installer,
+                nfs_node,
+                nfs_name,
+                gklm_params["gklm_hostname"],
+                rsa_key,
+                cert,
+                ca_cert,
+            )
+
+        # Force a second key object for the clone export.
         clone_alias = f"{gklm_cert_alias}_clone"
         enctag_clone = get_enctag(
             gklm_rest_client,
