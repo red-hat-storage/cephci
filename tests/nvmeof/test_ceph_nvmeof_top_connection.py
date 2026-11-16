@@ -1843,9 +1843,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         _settle()
 
         step02_happy_path_under_io(nvmegwcli, sub_nqn, host_nqn, gw_group)
-        # step06_multi_gateway(
-        #     nvmegwcli, sub_nqn, host_nqn, gw_group, expected_gw_ips, initiator_objs
-        # )
+        step06_multi_gateway(
+            nvmegwcli, sub_nqn, host_nqn, gw_group, expected_gw_ips, initiator_objs
+        )
         step07_gw_group_filter(
             nvmegwcli,
             sub_nqn,
