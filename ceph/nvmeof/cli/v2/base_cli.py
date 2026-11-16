@@ -59,10 +59,6 @@ class BaseCLI:
         self.shell = shell
         self.ceph_version = None
 
-    def __local_mtls_cert_path(self) -> str:
-        """Currently mtls is not supported in Ceph NVMe CLI."""
-        return ""
-
     def get_ceph_version(self):
         if self.ceph_version is None:
             out, _ = self.shell(args=["ceph", "--format", "json", "version"])
@@ -74,27 +70,38 @@ class BaseCLI:
 
         return self.ceph_version
 
-    @substitute_keys(KEY_MAP)
-    def run_nvme_cli(self, entity, action, **kwargs):
-        LOG.info(f"NVMeoF command - {entity} {action}")
+    def build_command(self, entity, action, **kwargs):
+        """Build a ``ceph nvmeof`` command.
+
+        When mTLS is on, the mgr loads the client certificate, client key,
+        and server certificate from the cephadm cert store and opens the
+        gRPC channel itself. ``ceph nvmeof`` does not accept
+        ``--client-key``, ``--client-cert``, or ``--server-cert`` (those
+        flags belong to the container ``nvmeof-cli``).
+
+        An injected ``--server_address`` can fail that handshake when it is
+        not the address the dashboard registered for the gateway
+        (IBMCEPH-16272). The helper therefore leaves the address unset while
+        mTLS is on, unless the caller passed one. A plaintext command still
+        targets this gateway node.
+        """
         base_cmd_args = kwargs.get("base_cmd_args", {})
-
-        # TODO: Currently mtls is not supported in Ceph NVMe CLI(Tentacle).
-        #       Fix this once mtls is supported
-        if self.mtls:
-            pass
-
         cmd_args = kwargs.get("args", {})
         ceph_version = self.get_ceph_version()
 
-        # Gateway group
         if not cmd_args.get("gw_group"):
             cmd_args["gw_group"] = self.gateway_group
 
-        # Gateway address
-        # TODO: Remove this once we have a proper way to determine right argument for the command.
-        if not cmd_args.get("traddr") or not cmd_args.get("server_address"):
-            if self.get_ceph_version() > "20.1.0-145":
+        # Gateway address. While mTLS is on, ceph nvmeof selects the
+        # dashboard's registered gateway and presents the stored client
+        # certificate. Injecting this node's address can fail that
+        # handshake (IBMCEPH-16272).
+        # TODO: Remove the plaintext injection once we have a proper way to
+        # determine the right argument for the command.
+        if not self.mtls and (
+            not cmd_args.get("traddr") or not cmd_args.get("server_address")
+        ):
+            if ceph_version > "20.1.0-145":
                 cmd_args["server_address"] = self.node.ip_address
             else:
                 cmd_args["traddr"] = self.node.ip_address
@@ -104,14 +111,18 @@ class BaseCLI:
             if LooseVersion(ceph_version) < LooseVersion("20.2.1"):
                 cmd_args["size"] = cmd_args.pop("rbd-image-size")
 
-        command = [
+        return [
             self.BASE_CMD,
-            self.__local_mtls_cert_path(),
             entity,
             action,
             config_dict_to_string(cmd_args),
             config_dict_to_string(base_cmd_args),
         ]
+
+    @substitute_keys(KEY_MAP)
+    def run_nvme_cli(self, entity, action, **kwargs):
+        LOG.info(f"NVMeoF command - {entity} {action}")
+        command = self.build_command(entity, action, **kwargs)
         # As a alternative to bug reported https://ibm-ceph.atlassian.net/browse/IBMCEPH-16456,
         # Which is intermittent and happens when the NVMe CLI is executed on a gateway node.
         # we are using a retry mechanism to handle the connection error.
