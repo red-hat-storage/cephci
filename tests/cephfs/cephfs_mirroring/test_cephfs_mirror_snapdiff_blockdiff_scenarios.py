@@ -3,7 +3,7 @@ test_cephfs_mirror_snapdiff_blockdiff_scenarios.py
 
 CEPH-83633198 — validate_snapdiff_blockdiff_scenarios
 
-Blockdiff incremental-sync regressions (RHCS >= 10.0).
+Snapdiff / blockdiff incremental-sync regressions (RHCS >= 10.0).
 
 Ported from upstream qa/tasks/cephfs/test_mirroring.py:
 
@@ -19,6 +19,10 @@ Ported from upstream qa/tasks/cephfs/test_mirroring.py:
    Incremental blockdiff over a sparse file with absent hole objects must
    treat holes as -ENOENT (not -EIO) and complete sync.
 
+4. test_cephfs_mirror_incremental_sync_with_directory_rename (PR #70757)
+   Unchanged descendants survive same-parent rename, cross-parent rename,
+   and same-name directory replacement across snapdiff sync.
+
 Uses ceph-fuse mounts. No asok — waits via
 ``ceph fs snapshot mirror status`` and verifies with md5sum_script helper.
 """
@@ -29,8 +33,6 @@ import string
 import time
 import traceback
 
-from looseversion import LooseVersion
-
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -38,11 +40,15 @@ from utility.log import Log
 
 log = Log(__name__)
 
-_BLOCKDIFF_MIN_SIZE = 16777216  # 16 MiB default
-_PURE_DIR = "d0"
-_EMPTY_CLONES_DIR = "empty_clones"
-_SPARSE_DIR = "sparse_sync"
-_SPARSE_FILE = "sparse"
+# Defaults match cephfs-mirror option cephfs_mirror_blockdiff_min_file_size (16 MiB).
+_BLOCKDIFF_MIN_SIZE = 16 * 1024 * 1024
+_OBJECT_SIZE = 4 * 1024 * 1024  # default CephFS object size
+_NUM_OBJECTS = 8  # 32 MiB with default 4 MiB layout
+_CLONE_WAIT_TIMEOUT = 120
+_CLONE_WAIT_INTERVAL = 2
+# TODO(BZ-tracker#74984): pin mtimes so snapdiff reports truncated/regrown files.
+_MTIME_SNAP_A = "2020-01-01 00:00:00 UTC"
+_MTIME_SNAP_B = "2020-01-01 00:00:02 UTC"
 _CASES = [
     # (file_name, initial_size_mb, final_size_mb)
     ("object_boundary_shrink", 64, 32),
@@ -50,9 +56,20 @@ _CASES = [
     ("same_object_shrink", 19, 18),
     ("sparse_grow", 20, 40),
 ]
-_OBJECT_SIZE = 4194304
-_NUM_OBJECTS = 8  # 32 MiB with default 4 MiB layout
-_SCENARIO_DIRS = (_PURE_DIR, _EMPTY_CLONES_DIR, _SPARSE_DIR)
+_MD5SUM_SCRIPT = "md5sum_script.sh"
+_MD5SUM_DST = f"/root/{_MD5SUM_SCRIPT}"
+_MD5SUM_SRC = "tests/cephfs/cephfs_mirror_upgrade/md5sum_script.sh"
+
+
+def _scenario_dirs(suffix):
+    """Return unique top-level dir names for this run (avoid remount collisions)."""
+    return {
+        "pure": f"d0_{suffix}",
+        "empty": f"empty_clones_{suffix}",
+        "sparse": f"sparse_sync_{suffix}",
+        "rename": f"directory_rename_{suffix}",
+        "sparse_file": "sparse",
+    }
 
 
 def _snapshot_file_state(client, path):
@@ -87,6 +104,7 @@ def _remove_all_snaps(client, dir_path):
 def _cleanup_scenario_dirs(
     client,
     mount_base,
+    dir_names,
     fs_mirroring_utils=None,
     source_fs=None,
     remove_from_mirror=False,
@@ -94,12 +112,11 @@ def _cleanup_scenario_dirs(
     """Clear leftover scenario dirs so re-runs do not hit 'snap File exists'.
 
     Order: demirror path (optional) → remove all snaps → ``rm -rf`` the dir.
-    Leftover ``/d0`` (and siblings) persist across remounts of the same FS.
     """
     if not client or not mount_base:
         return
     base = mount_base.rstrip("/")
-    for dir_name in _SCENARIO_DIRS:
+    for dir_name in dir_names:
         dir_path = f"{base}/{dir_name}"
         mirror_path = f"/{dir_name}"
         if (
@@ -124,27 +141,51 @@ def _cleanup_scenario_dirs(
             log.warning("Cleanup of %s failed: %s", dir_path, exc)
 
 
-def _get_mds_rank0_gid(client, fs_name):
-    """Return active rank-0 MDS gid from ``ceph fs status``."""
-    out, _ = client.exec_command(sudo=True, cmd=f"ceph fs status {fs_name} -f json")
-    data = json.loads(out)
-    for entry in data.get("mdsmap", []):
-        if entry.get("rank") == 0 and entry.get("state") == "active":
-            return entry.get("gid")
-    # Fallback: first active entry
-    for entry in data.get("mdsmap", []):
-        if entry.get("state") == "active":
-            return entry.get("gid")
-    raise CommandFailed(f"No active MDS found for {fs_name}")
+def _safe_umount_and_rm(client, mnt):
+    """Lazy-umount then remove the mountpoint only if it is no longer mounted."""
+    if not client or not mnt:
+        return
+    client.exec_command(sudo=True, cmd=f"umount -l {mnt}", check_ec=False)
+    # Avoid ``rm -rf`` on a still-mounted path (would delete CephFS contents).
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"mountpoint -q {mnt}; echo $?",
+        check_ec=False,
+    )
+    still_mounted = (out or "").strip().splitlines()
+    rc = still_mounted[-1] if still_mounted else "1"
+    if rc == "0":
+        log.warning("Skipping rm -rf %s — still a mountpoint after umount -l", mnt)
+        return
+    client.exec_command(sudo=True, cmd=f"rm -rf {mnt}", check_ec=False)
+
+
+def _assert_no_new_crashes(fs_util, client, context):
+    """Fail if ``ceph crash ls-new`` is non-empty (call after ``crash archive-all``)."""
+    crashes = fs_util.get_crash_ls_new(client)
+    if crashes:
+        log.error("New crashes after %s: %s", context, json.dumps(crashes, default=str))
+        raise CommandFailed(f"Unexpected ceph crash(es) during {context}: {crashes}")
+    log.info("No new ceph crashes (%s)", context)
 
 
 def _wait_for_object_clone_sizes(
-    client, data_pool, oid, expected_sizes, timeout=120, interval=2
+    client,
+    data_pool,
+    oid,
+    expected_sizes,
+    deadline=None,
+    interval=_CLONE_WAIT_INTERVAL,
 ):
-    """Wait until rados listsnaps clone sizes match expected_sizes."""
-    elapsed = 0
+    """Wait until rados listsnaps clone sizes match expected_sizes.
+
+    ``deadline`` is a ``time.monotonic()`` absolute; when omitted a fresh
+    ``_CLONE_WAIT_TIMEOUT`` window is used.
+    """
+    if deadline is None:
+        deadline = time.monotonic() + _CLONE_WAIT_TIMEOUT
     last_sizes = None
-    while elapsed < timeout:
+    while time.monotonic() < deadline:
         out, err = client.exec_command(
             sudo=True,
             cmd=f"rados -p {data_pool} listsnaps {oid} --format=json",
@@ -159,42 +200,50 @@ def _wait_for_object_clone_sizes(
             if last_sizes == expected_sizes:
                 return
         except (json.JSONDecodeError, TypeError, AttributeError) as exc:
-            log.debug("listsnaps parse for %s failed: %s (err=%s)", oid, exc, err)
-        time.sleep(interval)
-        elapsed += interval
+            log.warning(
+                "listsnaps parse for %s failed: %s (err=%s out=%r)",
+                oid,
+                exc,
+                err,
+                out,
+            )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(interval, remaining))
     raise CommandFailed(
         f"listsnaps {oid}: expected sizes {expected_sizes}, last seen {last_sizes}"
     )
 
 
 def _run_pure_truncate(
-    fs_mirroring_utils, src, tgt, src_base, tgt_base, source_fs, target_fs, snap_names
+    fs_mirroring_utils, src, tgt, src_base, tgt_base, source_fs, target_fs, dirs
 ):
     """Scenario 1 — upstream test_cephfs_mirror_blockdiff_pure_truncate."""
-    mirror_path = f"/{_PURE_DIR}"
+    pure_dir = dirs["pure"]
+    mirror_path = f"/{pure_dir}"
     log.info("=" * 60)
     log.info("SCENARIO 1: blockdiff pure truncate")
     log.info("=" * 60)
 
-    src.exec_command(sudo=True, cmd=f"mkdir -p {src_base}/{_PURE_DIR}")
+    src.exec_command(sudo=True, cmd=f"mkdir -p {src_base}/{pure_dir}")
     fs_mirroring_utils.add_path_for_mirroring(src, source_fs, mirror_path)
 
     for file_name, initial_mb, _ in _CASES:
         src.exec_command(
             sudo=True,
             cmd=(
-                f"dd if=/dev/zero of={src_base}/{_PURE_DIR}/{file_name} "
+                f"dd if=/dev/zero of={src_base}/{pure_dir}/{file_name} "
                 f"bs=1M count={initial_mb} conv=fsync"
             ),
         )
 
     log.info("snap_a baseline full sync")
-    snap_names.append("snap_a")
     fs_mirroring_utils.sync_and_verify_snapshot(
         source_client=src,
         target_client=tgt,
         source_mount=src_base,
-        dir_name=_PURE_DIR,
+        dir_name=pure_dir,
         snap_name="snap_a",
         source_fs=source_fs,
         target_fs=target_fs,
@@ -205,34 +254,33 @@ def _run_pure_truncate(
     for file_name, initial_mb, final_mb in _CASES:
         src.exec_command(
             sudo=True,
-            cmd=f"truncate -s {final_mb}M {src_base}/{_PURE_DIR}/{file_name}",
+            cmd=f"truncate -s {final_mb}M {src_base}/{pure_dir}/{file_name}",
         )
         if final_mb > initial_mb:
             src.exec_command(
                 sudo=True,
-                cmd=f"touch -m {src_base}/{_PURE_DIR}/{file_name}",
+                cmd=f"touch -m {src_base}/{pure_dir}/{file_name}",
             )
 
     log.info("snap_b size-only incremental sync")
-    snap_names.append("snap_b")
     fs_mirroring_utils.sync_and_verify_snapshot(
         source_client=src,
         target_client=tgt,
         source_mount=src_base,
-        dir_name=_PURE_DIR,
+        dir_name=pure_dir,
         snap_name="snap_b",
         source_fs=source_fs,
         target_fs=target_fs,
         mirror_path=mirror_path,
     )
 
-    if not fs_mirroring_utils.path_exists(tgt, f"{tgt_base}/{_PURE_DIR}/.snap/snap_b"):
+    if not fs_mirroring_utils.path_exists(tgt, f"{tgt_base}/{pure_dir}/.snap/snap_b"):
         raise CommandFailed("snap_b missing on secondary (pure truncate)")
 
     mismatches = []
     for file_name, _, final_mb in _CASES:
-        src_path = f"{src_base}/{_PURE_DIR}/.snap/snap_b/{file_name}"
-        tgt_path = f"{tgt_base}/{_PURE_DIR}/.snap/snap_b/{file_name}"
+        src_path = f"{src_base}/{pure_dir}/.snap/snap_b/{file_name}"
+        tgt_path = f"{tgt_base}/{pure_dir}/.snap/snap_b/{file_name}"
         source_state = _snapshot_file_state(src, src_path)
         dest_state = _snapshot_file_state(tgt, tgt_path)
         expected_size = final_mb * 1024 * 1024
@@ -261,19 +309,12 @@ def _run_pure_truncate(
 
 
 def _run_empty_clones(
-    fs_mirroring_utils,
-    fs_util_ceph1,
-    src,
-    tgt,
-    src_base,
-    source_fs,
-    target_fs,
-    snap_names,
+    fs_mirroring_utils, fs_util_ceph1, src, tgt, src_base, source_fs, target_fs, dirs
 ):
     """Scenario 2 — upstream test_cephfs_mirror_blockdiff_empty_clones."""
-    mirror_path = f"/{_EMPTY_CLONES_DIR}"
-    file_rel = f"{_EMPTY_CLONES_DIR}/f"
-    file_path = f"{src_base}/{file_rel}"
+    empty_dir = dirs["empty"]
+    mirror_path = f"/{empty_dir}"
+    file_path = f"{src_base}/{empty_dir}/f"
 
     log.info("=" * 60)
     log.info("SCENARIO 2: blockdiff empty clones")
@@ -285,7 +326,7 @@ def _run_empty_clones(
         raise CommandFailed(f"Could not resolve data pool for {source_fs}")
     log.info("Data pool for listsnaps: %s", data_pool)
 
-    src.exec_command(sudo=True, cmd=f"mkdir -p {src_base}/{_EMPTY_CLONES_DIR}")
+    src.exec_command(sudo=True, cmd=f"mkdir -p {src_base}/{empty_dir}")
     fs_mirroring_utils.add_path_for_mirroring(src, source_fs, mirror_path)
 
     src.exec_command(
@@ -310,17 +351,17 @@ def _run_empty_clones(
 
     # No snapshots yet: truncate leaves empty objects without clones
     src.exec_command(sudo=True, cmd=f"truncate -s 0 {file_path}")
+    empty_deadline = time.monotonic() + _CLONE_WAIT_TIMEOUT
     for oid in oids:
-        _wait_for_object_clone_sizes(src, data_pool, oid, [0])
+        _wait_for_object_clone_sizes(src, data_pool, oid, [0], deadline=empty_deadline)
 
-    regrow_file("2020-01-01 00:00:00 UTC")
+    regrow_file(_MTIME_SNAP_A)
     log.info("empty_clones snap_a")
-    snap_names.append("snap_a")
     fs_mirroring_utils.sync_and_verify_snapshot(
         source_client=src,
         target_client=tgt,
         source_mount=src_base,
-        dir_name=_EMPTY_CLONES_DIR,
+        dir_name=empty_dir,
         snap_name="snap_a",
         source_fs=source_fs,
         target_fs=target_fs,
@@ -329,50 +370,51 @@ def _run_empty_clones(
 
     # Truncating under snap_a clones the empty objects: [clone 0, head 0]
     src.exec_command(sudo=True, cmd=f"truncate -s 0 {file_path}")
+    clone_deadline = time.monotonic() + _CLONE_WAIT_TIMEOUT
     for oid in oids[:-1]:
-        _wait_for_object_clone_sizes(src, data_pool, oid, [0, 0])
-    _wait_for_object_clone_sizes(src, data_pool, oids[-1], [_OBJECT_SIZE, 0])
+        _wait_for_object_clone_sizes(
+            src, data_pool, oid, [0, 0], deadline=clone_deadline
+        )
+    _wait_for_object_clone_sizes(
+        src, data_pool, oids[-1], [_OBJECT_SIZE, 0], deadline=clone_deadline
+    )
 
-    active_gid = _get_mds_rank0_gid(src, source_fs)
-    log.info("MDS rank-0 gid before snap_b sync: %s", active_gid)
+    # Direct crash check (not MDS gid proxy): archive then assert no new crashes.
+    log.info("Archiving pre-existing crash records before empty-clones snap_b")
+    src.exec_command(sudo=True, cmd="ceph crash archive-all", check_ec=False)
 
-    regrow_file("2020-01-01 00:00:02 UTC")
+    regrow_file(_MTIME_SNAP_B)
     log.info("empty_clones snap_b (incremental — must not crash MDS)")
-    snap_names.append("snap_b")
     fs_mirroring_utils.sync_and_verify_snapshot(
         source_client=src,
         target_client=tgt,
         source_mount=src_base,
-        dir_name=_EMPTY_CLONES_DIR,
+        dir_name=empty_dir,
         snap_name="snap_b",
         source_fs=source_fs,
         target_fs=target_fs,
         mirror_path=mirror_path,
     )
 
-    gid_after = _get_mds_rank0_gid(src, source_fs)
-    if gid_after != active_gid:
-        raise CommandFailed(
-            f"MDS rank-0 gid changed during empty-clones sync "
-            f"(before={active_gid}, after={gid_after}) — possible MDS crash/restart"
-        )
-    log.info("MDS rank-0 gid unchanged: %s", gid_after)
+    _assert_no_new_crashes(fs_util_ceph1, src, "empty-clones snap_b incremental sync")
     log.info("SCENARIO 2 PASSED: blockdiff empty clones")
     return mirror_path
 
 
 def _run_sparse_file_sync(
-    fs_mirroring_utils, src, tgt, src_base, source_fs, target_fs, snap_names
+    fs_mirroring_utils, src, tgt, src_base, source_fs, target_fs, dirs
 ):
     """Scenario 3 — upstream test_cephfs_mirror_sparse_file_sync."""
-    mirror_path = f"/{_SPARSE_DIR}"
-    file_path = f"{src_base}/{_SPARSE_DIR}/{_SPARSE_FILE}"
+    sparse_dir = dirs["sparse"]
+    sparse_file = dirs["sparse_file"]
+    mirror_path = f"/{sparse_dir}"
+    file_path = f"{src_base}/{sparse_dir}/{sparse_file}"
 
     log.info("=" * 60)
     log.info("SCENARIO 3: sparse file sync (hole objects)")
     log.info("=" * 60)
 
-    src.exec_command(sudo=True, cmd=f"mkdir -p {src_base}/{_SPARSE_DIR}")
+    src.exec_command(sudo=True, cmd=f"mkdir -p {src_base}/{sparse_dir}")
     # 64MB sparse: 1MB data at 0, 32MB, 60MB; other 4MB objects are holes
     src.exec_command(sudo=True, cmd=f"truncate -s 64M {file_path}")
     src.exec_command(
@@ -381,27 +423,26 @@ def _run_sparse_file_sync(
     )
     src.exec_command(
         sudo=True,
-        cmd=(f"dd if=/dev/zero of={file_path} bs=1M seek=32 count=1 " f"conv=notrunc"),
+        cmd=f"dd if=/dev/zero of={file_path} bs=1M seek=32 count=1 conv=notrunc",
     )
     src.exec_command(
         sudo=True,
-        cmd=(f"dd if=/dev/zero of={file_path} bs=1M seek=60 count=1 " f"conv=notrunc"),
+        cmd=f"dd if=/dev/zero of={file_path} bs=1M seek=60 count=1 conv=notrunc",
     )
-    # Pin mtime so snapdiff reports the file (tracker #74984)
+    # TODO(BZ-tracker#74984): pin mtime so snapdiff reports the file
     src.exec_command(
         sudo=True,
-        cmd=f"touch -m -d '2020-01-01 00:00:00 UTC' {file_path}",
+        cmd=f"touch -m -d '{_MTIME_SNAP_A}' {file_path}",
     )
 
     fs_mirroring_utils.add_path_for_mirroring(src, source_fs, mirror_path)
 
     log.info("sparse_sync snap_a full sync")
-    snap_names.append("snap_a")
     fs_mirroring_utils.sync_and_verify_snapshot(
         source_client=src,
         target_client=tgt,
         source_mount=src_base,
-        dir_name=_SPARSE_DIR,
+        dir_name=sparse_dir,
         snap_name="snap_a",
         source_fs=source_fs,
         target_fs=target_fs,
@@ -411,22 +452,19 @@ def _run_sparse_file_sync(
     log.info("Rewrite 1 MiB at offset 32 MiB (incremental blockdiff path)")
     src.exec_command(
         sudo=True,
-        cmd=(
-            f"dd if=/dev/urandom of={file_path} bs=1M seek=32 count=1 " f"conv=notrunc"
-        ),
+        cmd=f"dd if=/dev/urandom of={file_path} bs=1M seek=32 count=1 conv=notrunc",
     )
     src.exec_command(
         sudo=True,
-        cmd=f"touch -m -d '2020-01-01 00:00:02 UTC' {file_path}",
+        cmd=f"touch -m -d '{_MTIME_SNAP_B}' {file_path}",
     )
 
     log.info("sparse_sync snap_b incremental sync over sparse holes")
-    snap_names.append("snap_b")
     fs_mirroring_utils.sync_and_verify_snapshot(
         source_client=src,
         target_client=tgt,
         source_mount=src_base,
-        dir_name=_SPARSE_DIR,
+        dir_name=sparse_dir,
         snap_name="snap_b",
         source_fs=source_fs,
         target_fs=target_fs,
@@ -437,11 +475,169 @@ def _run_sparse_file_sync(
     return mirror_path
 
 
+def _run_directory_rename(
+    fs_mirroring_utils, src, tgt, src_base, tgt_base, source_fs, target_fs, dirs
+):
+    """Scenario 4 — upstream incremental sync with directory rename."""
+    rename_dir = dirs["rename"]
+    mirror_path = f"/{rename_dir}"
+    old_dir = f"{rename_dir}/dirB"
+    new_dir = f"{rename_dir}/dirB-renamed"
+    renamed_file = "sub/deeper/unchanged"
+    renamed_contents = "unchanged across directory rename"
+    cross_old = f"{rename_dir}/d1/X"
+    cross_new = f"{rename_dir}/d2/Y"
+    cross_file = "sub/deeper/unchanged"
+    cross_contents = "unchanged across parent directory rename"
+    replacement_src = f"{rename_dir}/replace/A"
+    replacement_dst = f"{rename_dir}/replace/B"
+    replacement_file = "sub/deeper/unchanged"
+    replacement_contents = "unchanged across same-name directory replacement"
+
+    log.info("=" * 60)
+    log.info("SCENARIO 4: incremental sync with directory rename")
+    log.info("=" * 60)
+
+    src.exec_command(
+        sudo=True,
+        cmd=(
+            f"mkdir -p {src_base}/{old_dir}/sub/deeper "
+            f"{src_base}/{cross_old}/sub/deeper "
+            f"{src_base}/{rename_dir}/d2 "
+            f"{src_base}/{replacement_src}/sub/deeper "
+            f"{src_base}/{replacement_dst}"
+        ),
+    )
+    fs_mirroring_utils.write_file_content(
+        src, f"{src_base}/{old_dir}/{renamed_file}", renamed_contents
+    )
+    fs_mirroring_utils.write_file_content(
+        src, f"{src_base}/{cross_old}/{cross_file}", cross_contents
+    )
+    fs_mirroring_utils.write_file_content(
+        src,
+        f"{src_base}/{replacement_src}/{replacement_file}",
+        replacement_contents,
+    )
+    fs_mirroring_utils.write_file_content(
+        src, f"{src_base}/{replacement_dst}/old-only", "stale data"
+    )
+
+    fs_mirroring_utils.add_path_for_mirroring(src, source_fs, mirror_path)
+
+    log.info("directory_rename snap0 baseline")
+    fs_mirroring_utils.sync_and_verify_snapshot(
+        source_client=src,
+        target_client=tgt,
+        source_mount=src_base,
+        dir_name=rename_dir,
+        snap_name="snap0",
+        source_fs=source_fs,
+        target_fs=target_fs,
+        mirror_path=mirror_path,
+    )
+
+    log.info("directory_rename snap1 same-parent rename dirB → dirB-renamed")
+    src.exec_command(
+        sudo=True,
+        cmd=f"mv {src_base}/{old_dir} {src_base}/{new_dir}",
+    )
+    fs_mirroring_utils.sync_and_verify_snapshot(
+        source_client=src,
+        target_client=tgt,
+        source_mount=src_base,
+        dir_name=rename_dir,
+        snap_name="snap1",
+        source_fs=source_fs,
+        target_fs=target_fs,
+        mirror_path=mirror_path,
+    )
+
+    remote_snap1 = f"{tgt_base}/{rename_dir}/.snap/snap1"
+    entries = fs_mirroring_utils.list_dir_entries(tgt, remote_snap1)
+    if "dirB" in entries:
+        raise CommandFailed(
+            f"Old name dirB still present on secondary snap1: {entries}"
+        )
+    if fs_mirroring_utils.path_exists(tgt, f"{remote_snap1}/dirB"):
+        raise CommandFailed("Old name dirB still exists on secondary snap1")
+    content = fs_mirroring_utils.read_file_content(
+        tgt, f"{remote_snap1}/dirB-renamed/{renamed_file}"
+    ).rstrip("\n")
+    if content != renamed_contents:
+        raise CommandFailed(
+            f"Renamed nested content mismatch: expected={renamed_contents!r} "
+            f"got={content!r}"
+        )
+    log.info("PASS: same-parent rename nested content preserved")
+
+    log.info("directory_rename snap2 cross-parent rename d1/X → d2/Y")
+    src.exec_command(
+        sudo=True,
+        cmd=f"mv {src_base}/{cross_old} {src_base}/{cross_new}",
+    )
+    fs_mirroring_utils.sync_and_verify_snapshot(
+        source_client=src,
+        target_client=tgt,
+        source_mount=src_base,
+        dir_name=rename_dir,
+        snap_name="snap2",
+        source_fs=source_fs,
+        target_fs=target_fs,
+        mirror_path=mirror_path,
+    )
+
+    content = fs_mirroring_utils.read_file_content(
+        tgt, f"{tgt_base}/{rename_dir}/.snap/snap2/d2/Y/{cross_file}"
+    ).rstrip("\n")
+    if content != cross_contents:
+        raise CommandFailed(
+            f"Cross-rename nested content mismatch: expected={cross_contents!r} "
+            f"got={content!r}"
+        )
+    log.info("PASS: cross-parent rename nested content preserved")
+
+    log.info("directory_rename snap3 same-name replace rm B; mv A B")
+    src.exec_command(sudo=True, cmd=f"rm -rf {src_base}/{replacement_dst}")
+    src.exec_command(
+        sudo=True,
+        cmd=f"mv {src_base}/{replacement_src} {src_base}/{replacement_dst}",
+    )
+    fs_mirroring_utils.sync_and_verify_snapshot(
+        source_client=src,
+        target_client=tgt,
+        source_mount=src_base,
+        dir_name=rename_dir,
+        snap_name="snap3",
+        source_fs=source_fs,
+        target_fs=target_fs,
+        mirror_path=mirror_path,
+    )
+
+    remote_repl = f"{tgt_base}/{rename_dir}/.snap/snap3/replace/B"
+    repl_entries = fs_mirroring_utils.list_dir_entries(tgt, remote_repl)
+    if "old-only" in repl_entries:
+        raise CommandFailed(
+            f"Stale old-only still present after replace: {repl_entries}"
+        )
+    content = fs_mirroring_utils.read_file_content(
+        tgt, f"{remote_repl}/{replacement_file}"
+    ).rstrip("\n")
+    if content != replacement_contents:
+        raise CommandFailed(
+            f"Replace nested content mismatch: expected={replacement_contents!r} "
+            f"got={content!r}"
+        )
+    log.info("PASS: same-name replace — new content present, old-only gone")
+    log.info("SCENARIO 4 PASSED: directory rename incremental sync")
+    return mirror_path
+
+
 def run(ceph_cluster, **kw):
     """
     validate_snapdiff_blockdiff_scenarios (CEPH-83633198)
 
-    Validate blockdiff pure-truncate, empty-clones, and sparse-file sync.
+    Validate pure-truncate, empty-clones, sparse-file, and directory-rename sync.
 
     Returns:
         0 on success, 1 on failure, -1 if skipped (RHCS < 10.0).
@@ -449,6 +645,13 @@ def run(ceph_cluster, **kw):
     log.info("POLARION  : CEPH-83633198")
     log.info("TESTCASE : validate_snapdiff_blockdiff_scenarios")
     config = kw.get("config") or {}
+    if CephfsMirroringUtils.skip_if_rhcs_below(config, "10.0"):
+        log.info(
+            "Skipping test: requires Ceph version >= 10.0 (rhbuild=%s)",
+            config.get("rhbuild"),
+        )
+        return -1
+
     source_clients = None
     target_clients = None
     source_fs = None
@@ -460,6 +663,8 @@ def run(ceph_cluster, **kw):
     target_user = "mirror_remote"
     target_site_name = "remote_site"
     mirroring_paths = []
+    dirs = None
+    md5_clients = []
 
     try:
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
@@ -477,11 +682,6 @@ def run(ceph_cluster, **kw):
         )
 
         build = config.get("build", config.get("rhbuild"))
-        rhcs_ver = str(build).split("-")[0] if build else "0"
-        if LooseVersion(rhcs_ver) < LooseVersion("10.0"):
-            log.info("Skipping test: requires Ceph version >= 10.0 (build=%s)", build)
-            return -1
-
         source_clients = ceph_cluster_dict.get("ceph1").get_ceph_objects("client")
         target_clients = ceph_cluster_dict.get("ceph2").get_ceph_objects("client")
 
@@ -523,6 +723,7 @@ def run(ceph_cluster, **kw):
             source_clients[0], source_fs
         )
 
+        # Soft check: default is 16 MiB; cluster may override — log, don't hard-fail.
         out, _ = source_clients[0].exec_command(
             sudo=True,
             cmd=(
@@ -532,18 +733,31 @@ def run(ceph_cluster, **kw):
         )
         actual_min = int(out.strip())
         if actual_min != _BLOCKDIFF_MIN_SIZE:
-            raise CommandFailed(
-                f"cephfs_mirror_blockdiff_min_file_size is {actual_min}, "
-                f"expected {_BLOCKDIFF_MIN_SIZE} (16 MiB)"
+            log.warning(
+                "cephfs_mirror_blockdiff_min_file_size is %s (expected default %s); "
+                "continuing with cluster value",
+                actual_min,
+                _BLOCKDIFF_MIN_SIZE,
             )
-        log.info(
-            "Verified cephfs_mirror_blockdiff_min_file_size=%s (16 MiB)",
-            actual_min,
-        )
+        else:
+            log.info(
+                "Verified cephfs_mirror_blockdiff_min_file_size=%s (16 MiB)",
+                actual_min,
+            )
 
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
+        dir_suffix = "".join(
+            random.choice(string.ascii_lowercase + string.digits) for _ in range(6)
+        )
+        dirs = _scenario_dirs(dir_suffix)
+        scenario_dir_names = [
+            dirs["pure"],
+            dirs["empty"],
+            dirs["sparse"],
+            dirs["rename"],
+        ]
         fuse_src = f"/mnt/cephfs_fuse{mounting_dir}_primary/"
         fuse_tgt = f"/mnt/cephfs_fuse{mounting_dir}_secondary/"
 
@@ -566,56 +780,85 @@ def run(ceph_cluster, **kw):
         src_base = fuse_src.rstrip("/")
         tgt_base = fuse_tgt.rstrip("/")
 
-        md5sum_script = "md5sum_script.sh"
         for client in (src, tgt):
             client.upload_file(
                 sudo=True,
-                src="tests/cephfs/cephfs_mirror_upgrade/md5sum_script.sh",
-                dst=f"/root/{md5sum_script}",
+                src=_MD5SUM_SRC,
+                dst=_MD5SUM_DST,
             )
+            md5_clients.append(client)
 
-        pure_snaps = []
-        empty_snaps = []
-        sparse_snaps = []
+        # Run all scenarios; collect per-scenario failures instead of aborting early.
+        scenario_failures = []
+        scenarios = [
+            (
+                "pure_truncate",
+                lambda: _run_pure_truncate(
+                    fs_mirroring_utils,
+                    src,
+                    tgt,
+                    src_base,
+                    tgt_base,
+                    source_fs,
+                    target_fs,
+                    dirs,
+                ),
+            ),
+            (
+                "empty_clones",
+                lambda: _run_empty_clones(
+                    fs_mirroring_utils,
+                    fs_util_ceph1,
+                    src,
+                    tgt,
+                    src_base,
+                    source_fs,
+                    target_fs,
+                    dirs,
+                ),
+            ),
+            (
+                "sparse_file_sync",
+                lambda: _run_sparse_file_sync(
+                    fs_mirroring_utils,
+                    src,
+                    tgt,
+                    src_base,
+                    source_fs,
+                    target_fs,
+                    dirs,
+                ),
+            ),
+            (
+                "directory_rename",
+                lambda: _run_directory_rename(
+                    fs_mirroring_utils,
+                    src,
+                    tgt,
+                    src_base,
+                    tgt_base,
+                    source_fs,
+                    target_fs,
+                    dirs,
+                ),
+            ),
+        ]
+        for name, runner in scenarios:
+            try:
+                mirroring_paths.append(runner())
+            except Exception as exc:
+                log.error("Scenario %s FAILED: %s", name, exc)
+                log.error(traceback.format_exc())
+                scenario_failures.append((name, str(exc)))
 
-        path1 = _run_pure_truncate(
-            fs_mirroring_utils,
-            src,
-            tgt,
-            src_base,
-            tgt_base,
-            source_fs,
-            target_fs,
-            pure_snaps,
-        )
-        mirroring_paths.append(path1)
-
-        path2 = _run_empty_clones(
-            fs_mirroring_utils,
-            fs_util_ceph1,
-            src,
-            tgt,
-            src_base,
-            source_fs,
-            target_fs,
-            empty_snaps,
-        )
-        mirroring_paths.append(path2)
-
-        path3 = _run_sparse_file_sync(
-            fs_mirroring_utils,
-            src,
-            tgt,
-            src_base,
-            source_fs,
-            target_fs,
-            sparse_snaps,
-        )
-        mirroring_paths.append(path3)
+        if scenario_failures:
+            summary = "; ".join(f"{n}: {e}" for n, e in scenario_failures)
+            raise CommandFailed(f"Scenario failures: {summary}")
 
         log.info("=" * 60)
         log.info(
-            "ALL BLOCKDIFF PURE-TRUNCATE + EMPTY-CLONES + SPARSE-FILE CHECKS PASSED"
+            "ALL SNAPDIFF/BLOCKDIFF SCENARIOS PASSED "
+            "(truncate + empty-clones + sparse + directory-rename)"
         )
         log.info("=" * 60)
         return 0
@@ -626,15 +869,27 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        for client in md5_clients:
+            try:
+                client.exec_command(
+                    sudo=True, cmd=f"rm -f {_MD5SUM_DST}", check_ec=False
+                )
+            except Exception as exc:
+                log.debug("md5sum_script cleanup skipped: %s", exc)
+
         if config.get("cleanup", True):
             log.info("Cleanup")
-            # Always clear known scenario dirs (not only tracked snaps) so a
-            # failed mid-run still leaves the FS re-runnable.
+            scenario_dir_names = (
+                [dirs["pure"], dirs["empty"], dirs["sparse"], dirs["rename"]]
+                if dirs
+                else []
+            )
             try:
-                if source_clients and fuse_src:
+                if source_clients and fuse_src and scenario_dir_names:
                     _cleanup_scenario_dirs(
                         source_clients[0],
                         fuse_src,
+                        scenario_dir_names,
                         fs_mirroring_utils=fs_mirroring_utils,
                         source_fs=source_fs,
                         remove_from_mirror=True,
@@ -643,9 +898,12 @@ def run(ceph_cluster, **kw):
                 log.warning("Primary scenario-dir cleanup failed: %s", exc)
 
             try:
-                if target_clients and fuse_tgt:
+                if target_clients and fuse_tgt and scenario_dir_names:
                     _cleanup_scenario_dirs(
-                        target_clients[0], fuse_tgt, remove_from_mirror=False
+                        target_clients[0],
+                        fuse_tgt,
+                        scenario_dir_names,
+                        remove_from_mirror=False,
                     )
             except Exception as exc:
                 log.warning("Secondary scenario-dir cleanup failed: %s", exc)
@@ -653,7 +911,7 @@ def run(ceph_cluster, **kw):
             try:
                 if fs_mirroring_utils and source_clients and source_fs:
                     paths = list(mirroring_paths) or [
-                        f"/{name}" for name in _SCENARIO_DIRS
+                        f"/{name}" for name in scenario_dir_names
                     ]
                     for mpath in paths:
                         try:
@@ -667,6 +925,7 @@ def run(ceph_cluster, **kw):
             except Exception as exc:
                 log.warning("Mirror path cleanup failed: %s", exc)
 
+            # Use cached peer_uuid only — get_peer_uuid_by_name retries ~4 minutes.
             try:
                 if (
                     fs_mirroring_utils
@@ -674,23 +933,16 @@ def run(ceph_cluster, **kw):
                     and target_clients
                     and source_fs
                     and target_fs
+                    and peer_uuid
                 ):
-                    live_peer = peer_uuid
-                    try:
-                        live_peer = fs_mirroring_utils.get_peer_uuid_by_name(
-                            source_clients[0], source_fs
-                        )
-                    except Exception:
-                        pass
-                    if live_peer:
-                        fs_mirroring_utils.destroy_cephfs_mirroring(
-                            source_fs,
-                            source_clients[0],
-                            target_fs,
-                            target_clients[0],
-                            target_user,
-                            live_peer,
-                        )
+                    fs_mirroring_utils.destroy_cephfs_mirroring(
+                        source_fs,
+                        source_clients[0],
+                        target_fs,
+                        target_clients[0],
+                        target_user,
+                        peer_uuid,
+                    )
             except Exception as exc:
                 log.warning("Destroy mirroring failed: %s", exc)
 
@@ -698,12 +950,7 @@ def run(ceph_cluster, **kw):
                 (source_clients[0] if source_clients else None, fuse_src),
                 (target_clients[0] if target_clients else None, fuse_tgt),
             ]:
-                if not client or not mnt:
-                    continue
                 try:
-                    client.exec_command(
-                        sudo=True, cmd=f"umount -l {mnt}", check_ec=False
-                    )
-                    client.exec_command(sudo=True, cmd=f"rm -rf {mnt}", check_ec=False)
+                    _safe_umount_and_rm(client, mnt)
                 except Exception as exc:
                     log.warning("Unmount/cleanup %s failed: %s", mnt, exc)

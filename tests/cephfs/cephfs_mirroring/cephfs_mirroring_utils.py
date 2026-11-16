@@ -9,6 +9,7 @@ import json
 import random
 import re
 import secrets
+import shlex
 import string
 import time
 
@@ -812,6 +813,16 @@ class CephfsMirroringUtils(object):
         log.info(daemon_names)
         return daemon_names
 
+    @staticmethod
+    def _parse_mirror_daemon_status(out):
+        """Parse daemon-status JSON; raise if empty / no filesystems yet."""
+        data = json.loads(out)
+        if not data or not data[0].get("filesystems"):
+            raise CommandFailed(
+                f"Mirror daemon status empty or has no filesystems yet (raw={out!r})"
+            )
+        return data
+
     @retry(CommandFailed, tries=5, delay=30)
     def get_filesystem_id_by_name(self, source_clients, fs_name):
         """
@@ -826,11 +837,7 @@ class CephfsMirroringUtils(object):
         out, _ = source_clients.exec_command(
             sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
         )
-        data = json.loads(out)
-        if not data or not data[0].get("filesystems"):
-            raise CommandFailed(
-                "Mirror daemon status empty or has no filesystems yet " f"(raw={out!r})"
-            )
+        data = self._parse_mirror_daemon_status(out)
         filesystem_id = None
         for filesystem in data[0]["filesystems"]:
             if filesystem["name"] == fs_name:
@@ -856,11 +863,7 @@ class CephfsMirroringUtils(object):
         out, _ = source_clients.exec_command(
             sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
         )
-        data = json.loads(out)
-        if not data or not data[0].get("filesystems"):
-            raise CommandFailed(
-                "Mirror daemon status empty or has no filesystems yet " f"(raw={out!r})"
-            )
+        data = self._parse_mirror_daemon_status(out)
         peer_uuid = None
         for filesystem in data[0]["filesystems"]:
             if filesystem["name"] == fs_name:
@@ -2908,7 +2911,7 @@ class CephfsMirroringUtils(object):
         source_client,
         fs_name,
         path,
-        expected_snap_name=None,
+        expected_snap_name,
         timeout=300,
         interval=15,
     ):
@@ -2922,20 +2925,25 @@ class CephfsMirroringUtils(object):
             source_client: Source cluster client.
             fs_name (str): Filesystem name.
             path (str): Mirrored directory path.
-            expected_snap_name (str, optional): When set, also require
-                ``last_synced_snap.name`` to equal this value.
+            expected_snap_name (str): Require ``last_synced_snap.name`` to
+                equal this value once idle.
             timeout (int): Max seconds to wait.
             interval (int): Seconds between polls.
 
         Returns:
-            dict: Peer stats when idle (and snap match, if requested).
+            dict: Peer stats when idle with matching last_synced_snap.
 
         Raises:
             CommandFailed: If condition is not met within timeout.
         """
+        if not expected_snap_name:
+            raise ValueError("expected_snap_name is required for wait_for_idle_via_mgr")
         path_key = path.rstrip("/")
-        elapsed = 0
-        while elapsed < timeout:
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
                 peer_stats = self.get_mgr_path_peer_stats(
                     source_client, fs_name, path_key
@@ -2943,30 +2951,29 @@ class CephfsMirroringUtils(object):
                 state = peer_stats.get("state", "unknown")
                 last_snap = (peer_stats.get("last_synced_snap") or {}).get("name")
                 log.info(
-                    "[wait_for_idle_via_mgr %ds/%ds] path=%s state=%s "
+                    "[wait_for_idle_via_mgr %ds left/%ds] path=%s state=%s "
                     "last_synced=%s snaps_synced=%s",
-                    elapsed,
+                    int(remaining),
                     timeout,
                     path_key,
                     state,
                     last_snap,
                     peer_stats.get("snaps_synced"),
                 )
-                if state == "idle":
-                    if expected_snap_name is None or last_snap == expected_snap_name:
-                        return peer_stats
-            except Exception as exc:
+                if state == "idle" and last_snap == expected_snap_name:
+                    return peer_stats
+            except (
+                CommandFailed,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                IndexError,
+            ) as exc:
                 log.warning("wait_for_idle_via_mgr poll error (will retry): %s", exc)
-            time.sleep(interval)
-            elapsed += interval
+            time.sleep(min(interval, max(remaining, 0)))
         raise CommandFailed(
-            f"Path '{path_key}' did not reach idle"
-            + (
-                f" with last_synced_snap={expected_snap_name}"
-                if expected_snap_name
-                else ""
-            )
-            + f" within {timeout}s via MGR status"
+            f"Path '{path_key}' did not reach idle with "
+            f"last_synced_snap={expected_snap_name} within {timeout}s via MGR status"
         )
 
     def get_asok_peer_status_raw(
@@ -3108,99 +3115,38 @@ class CephfsMirroringUtils(object):
             return status[path].get("current_syncing_snap")
         return None
 
-    def get_dir_checksum(self, client, path, follow_symlinks=True):
-        """Compute a path-independent directory checksum (upstream dir_checksum).
-
-        Runs ``find`` from inside ``path`` so absolute mount prefixes do not
-        differ across clusters. Matches upstream:
-        ``find [-L] . -type f -exec md5sum {} +``, sort by path, md5 of that.
-
-        Args:
-            client: Ceph client that can see ``path``.
-            path (str): Absolute directory to checksum (e.g. snap path).
-            follow_symlinks (bool): Pass ``-L`` to find when True.
-
-        Returns:
-            str: Hex digest of the sorted per-file md5 listing.
-        """
-        flag = "-L" if follow_symlinks else ""
-        # Empty dirs: md5sum of empty stdin → d41d8cd98f00b204e9800998ecf8427e
-        cmd = (
-            f'bash -lc "cd {path} && '
-            f"find {flag} . -type f -exec md5sum {{}} + 2>/dev/null "
-            f"| sort -k2 | md5sum | awk '{{print $1}}'\""
-        )
-        out, _ = client.exec_command(sudo=True, cmd=cmd)
-        digest = out.strip().split()[0] if out.strip() else ""
-        log.info("dir_checksum(%s) = %s", path, digest)
-        return digest
-
-    def verify_snapshot_checksum(
-        self, source_client, source_snap_path, target_client, target_snap_path
-    ):
-        """Assert source and target snapshot directories have matching checksums.
-
-        Args:
-            source_client: Primary client.
-            source_snap_path (str): Absolute path to primary snap dir.
-            target_client: Secondary client.
-            target_snap_path (str): Absolute path to secondary snap dir.
-
-        Returns:
-            tuple: (True, msg) on match, (False, msg) on mismatch/missing.
-        """
-        try:
-            source_client.exec_command(
-                sudo=True, cmd=f"test -d {source_snap_path}", check_ec=True
-            )
-        except CommandFailed:
-            return False, f"Source snap path missing: {source_snap_path}"
-        try:
-            target_client.exec_command(
-                sudo=True, cmd=f"test -d {target_snap_path}", check_ec=True
-            )
-        except CommandFailed:
-            return False, f"Target snap path missing: {target_snap_path}"
-
-        src = self.get_dir_checksum(source_client, source_snap_path)
-        tgt = self.get_dir_checksum(target_client, target_snap_path)
-        if src == tgt:
-            msg = f"Checksum match for {source_snap_path}: {src}"
-            log.info(msg)
-            return True, msg
-        msg = (
-            f"Checksum mismatch: source={src} ({source_snap_path}) "
-            f"target={tgt} ({target_snap_path})"
-        )
-        log.error(msg)
-        return False, msg
-
     def read_file_content(self, client, path):
-        """Return file contents (no trailing newline stripping beyond strip)."""
-        out, _ = client.exec_command(sudo=True, cmd=f"cat {path}")
+        """Return file contents as returned by ``cat`` (no extra stripping)."""
+        out, _ = client.exec_command(sudo=True, cmd=f"cat {shlex.quote(path)}")
         return out
 
     def path_exists(self, client, path):
         """Return True if path exists on the client."""
         try:
-            client.exec_command(sudo=True, cmd=f"test -e {path}", check_ec=True)
+            client.exec_command(
+                sudo=True, cmd=f"test -e {shlex.quote(path)}", check_ec=True
+            )
             return True
         except CommandFailed:
             return False
 
     def list_dir_entries(self, client, path):
         """Return list of directory entry names (ls)."""
-        out, _ = client.exec_command(sudo=True, cmd=f"ls {path}")
+        out, _ = client.exec_command(sudo=True, cmd=f"ls {shlex.quote(path)}")
         return out.strip().split() if out.strip() else []
 
     def write_file_content(self, client, path, content):
-        """Write exact content to path (no added newline; matches upstream write_file)."""
+        """Write exact content to path (no added newline; matches upstream write_file).
+
+        Content is passed via a quoted printf argument; embedded single-quotes
+        are escaped so shell metacharacters in ``path``/``content`` are safe.
+        """
         parent = path.rsplit("/", 1)[0]
-        client.exec_command(sudo=True, cmd=f"mkdir -p {parent}")
-        # printf preserves exact bytes; content must not contain single-quotes
-        # that break the shell quoting — escape them for safety.
+        client.exec_command(sudo=True, cmd=f"mkdir -p {shlex.quote(parent)}")
         escaped = content.replace("'", "'\"'\"'")
-        client.exec_command(sudo=True, cmd=f"printf '%s' '{escaped}' > {path}")
+        client.exec_command(
+            sudo=True, cmd=f"printf '%s' '{escaped}' > {shlex.quote(path)}"
+        )
 
     def sync_and_verify_snapshot(
         self,
