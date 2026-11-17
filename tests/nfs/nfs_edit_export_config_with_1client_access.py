@@ -217,9 +217,12 @@ def run(ceph_cluster, **kw):
             authorized_ok = False
             while time() < deadline:
                 nfs_up, mountd_port = _nfs_rpc_state(nfs_node)
-                if not nfs_up or (nfs_version == 3 and not mountd_port):
+                # NFSv4 is not registered with rpcbind. Waiting for an "nfs"
+                # line in rpcinfo never succeeds and the authorized mount is
+                # never attempted. Only NFSv3 needs portmapper and mountd.
+                if nfs_version == 3 and (not nfs_up or not mountd_port):
                     log.info(
-                        "Polling NFS %s until rpcinfo shows the server",
+                        "Polling NFS %s until rpcinfo shows the NFSv3 server",
                         nfs_node.hostname,
                     )
                     sleep(2)

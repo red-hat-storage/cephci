@@ -201,6 +201,76 @@ def wait_for_tls_strings_in_nfs_logs(
     return False
 
 
+def nfs_orch_daemon_identity(client_node, nfs_name):
+    """Return daemon identity tuples for ``nfs.<nfs_name>``.
+
+    Each tuple is ``(daemon_name, container_id, started, status_desc)``.
+    Returns ``None`` when ``ceph orch ps`` cannot be parsed.
+    """
+    try:
+        raw, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph orch ps --service_name nfs.{nfs_name} --format json",
+            timeout=60,
+            check_ec=False,
+        )
+        if raw is None:
+            text = ""
+        elif isinstance(raw, str):
+            text = raw.strip()
+        else:
+            text = raw.read().decode().strip()
+        if not text:
+            return ()
+        data = json.loads(text)
+        if not isinstance(data, list):
+            return None
+        identity = []
+        for daemon in data:
+            identity.append(
+                (
+                    daemon.get("daemon_name"),
+                    daemon.get("container_id"),
+                    daemon.get("started"),
+                    daemon.get("status_desc"),
+                )
+            )
+        return tuple(sorted(identity, key=lambda item: str(item[0])))
+    except Exception as ex:
+        log.debug("orch ps identity nfs.%s: %s", nfs_name, ex)
+        return None
+
+
+def wait_until_nfs_daemon_restarted(
+    client_node, nfs_name, previous, timeout=300, interval=5
+):
+    """Wait until ``nfs.<nfs_name>`` is running under a new daemon identity.
+
+    ``ceph orch ps`` can still list the previous daemon as running for several
+    seconds after a spec apply. A mount in that window uses the old process.
+    """
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        current = nfs_orch_daemon_identity(client_node, nfs_name)
+        if not current:
+            continue
+        running = any(
+            "running" in str(status or "").lower() for _, _, _, status in current
+        )
+        if running and current != previous:
+            log.info(
+                "nfs.%s daemon restarted after ~%s s (identity changed)",
+                nfs_name,
+                w._attempt * w.interval,
+            )
+            return True
+    log.warning(
+        "Timed out after %ss waiting for nfs.%s to restart",
+        timeout,
+        nfs_name,
+    )
+    return False
+
+
 def wait_until_ceph_orch_nfs_ps_ready(
     client_node, nfs_name_substring, timeout=300, interval=5
 ):
