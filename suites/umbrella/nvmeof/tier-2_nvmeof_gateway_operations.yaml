@@ -612,10 +612,9 @@ tests:
                 omap: true
           - config:
               service: host
-              command: list             # List access hosts with --clear-alerts
+              command: list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
-                clear-alerts: true
           - config:
               service: gateway
               command: listener_info             # List ana states for subsystem
