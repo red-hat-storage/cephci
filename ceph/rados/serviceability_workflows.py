@@ -14,6 +14,7 @@ from tests.ceph_installer import test_cephadm
 from tests.cephadm.test_host import run as deploy_host
 from tests.rados import rados_test_util as rados_utils
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 
@@ -533,7 +534,7 @@ class ServiceabilityMethods:
         log.info("Starting to drain host: " + host_obj.hostname)
         cmd = f"ceph orch host drain {host_obj.hostname} --force"
         if zap:
-            if self.rhbuild.split(".")[0] > "6":
+            if get_rhbuild_major_version(self.rhbuild) > 6:
                 cmd = cmd + " --zap-osd-devices"
             else:
                 rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=host_obj)
@@ -602,7 +603,7 @@ class ServiceabilityMethods:
                 + " seconds"
             )
 
-        if self.rhbuild.split(".")[0] < "7":
+        if get_rhbuild_major_version(self.rhbuild) < 7:
             # zap all devices on the removed host
             # because we are not zapping OSD devices
             # with host drain

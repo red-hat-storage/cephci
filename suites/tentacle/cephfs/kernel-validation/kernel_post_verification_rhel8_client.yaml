@@ -1,0 +1,244 @@
+#####################################################################################
+# Kernel pre-verification with mixed OS (RHCS 7.x):
+#   - Cluster daemons on RHEL 9 (node1-node3)
+#   - Clients on RHEL 8 (node4-node5)
+#
+# Cluster Configuration:
+#   conf/squid/cephfs/kernel_verification_rhel8_client.yaml
+#
+# Example CLI:
+#   python3 run.py \
+#     --platform rhel-9 \
+#     --rhbuild 7.1 \
+#     --inventory conf/inventory/rhel-9.6-server-x86_64.yaml \
+#     --global-conf conf/squid/cephfs/kernel_verification_rhel8_client.yaml \
+#     --suite suites/tentacle/cephfs/kernel_pre_verification_rhel8_client.yaml \
+#     --custom-config pre=<kernel-repo-url> \
+#     --build stable
+#####################################################################################
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        nodes:
+          - node5:
+              release: 7.1
+              platform: rhel-8
+              tag: released
+        install_packages:
+          - ceph-common
+      desc: "Configure RHCS 7.1 client on RHEL 8 (client system 1)"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        nodes:
+          - node6:
+              release: 7.1
+              platform: rhel-8
+              tag: released
+        install_packages:
+          - ceph-common
+      desc: "Configure RHCS 7.1 client on RHEL 8 (client system 2)"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      abort-on-fail: true
+      desc: "kernel update for CephFS kernel bugs"
+      module: kernel_update.py
+      name: kernel update
+      polarion-id: "CEPH-83575404"
+  - test:
+      abort-on-fail: false
+      desc: "Deploy MDS with default values using cephadm"
+      module: mds_default_values.py
+      name: cephfs default values for mds
+      polarion-id: "CEPH-83574284"
+  -
+    test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+  -
+    test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+  - test:
+      name: Increase and Decrease of MDS
+      module: mds_inc_dec.py
+      desc: Deploy mds using cephadm and increase & decrease number of mds.
+      polarion-id: CEPH-83574286
+      abort-on-fail: false
+  - test:
+      name: cephfs_volume_management
+      module: cephfs_volume_management.py
+      polarion-id: CEPH-83573445
+      desc: cephfs volume management
+      abort-on-fail: false
+  - test:
+        name: cephfs_tier1_ops
+        module: cephfs_tier1_ops.py
+        polarion-id: CEPH-83573447
+        desc: cephfs tier1 operations
+        abort-on-fail: false
+  - test:
+      name: Run fsstress on kernel and fuse mounts
+      module: cephfs_bugs.test_fsstress_on_kernel_and_fuse.py
+      polarion-id: CEPH-83575623
+      desc: Run fsstress on kernel and fuse mounts
+      abort-on-fail: false
+
+########################################################
+############# RBD Tests ################################
+########################################################
+
+  - test:
+        name: 10_rbd_kernel
+        module: test_rbd.py
+        desc: Executing upstream RBD Kernel scenarios
+        polarion-id: CEPH-83574528
+        config:
+          script: kernel.sh
+          script_path: qa/workunits/rbd
+          branch: tentacle
+
+  - test:
+      name: 11_rbd_krbd_exclusive
+      module: test_rbd.py
+      desc: Executing upstream RBD kernel exclusive scenarios
+      polarion-id: CEPH-83574531
+      config:
+        script: krbd_exclusive_option.sh
+        script_path: qa/workunits/rbd
+        branch: tentacle
+
+  - test:
+      name: test delete clones with io
+      module: delete_clones_with_io.py
+      desc: Create clone of an image and delete while krbd IO is running
+      polarion-id: CEPH-9225
+
+  - test:
+      name: RBD Group-related commands validation
+      module: test_rbd_group_commands_validation.py
+      desc: Verify rbd group commands
+      polarion-id: CEPH-83594545
+      config:
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+
+  - test:
+      name: RBD image creation in the namespace
+      module: test_rbd_namespace_image_pool.py
+      desc: Run image creation in the namespace
+      polarion-id: CEPH-83582476
+      config:
+        rep-pool-only: true
+        rep_pool_config:
+          rbd: {}

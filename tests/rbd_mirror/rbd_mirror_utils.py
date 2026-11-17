@@ -9,6 +9,7 @@ from typing import List
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
+from ceph.rbd.utils import get_ceph_version_from_rhbuild
 from ceph.utils import get_node_by_id
 from tests.rbd.exceptions import IOonSecondaryError
 from utility.log import Log
@@ -20,7 +21,7 @@ class RbdMirror:
     def __init__(self, cluster, config):
         self.ceph_nodes = cluster
         self.k_m = config.get("ec-pool-k-m", None)
-        self.ceph_version = int(config.get("rhbuild")[0])
+        self.ceph_version = get_ceph_version_from_rhbuild(config.get("rhbuild"))
         self.cluster_name = "ceph"
         self.rbd_client = "client.admin"
         self.ceph_args = " --cluster {}".format(self.cluster_name)

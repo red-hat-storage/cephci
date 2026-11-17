@@ -91,8 +91,8 @@ class XfsTestSetup:
         self.client.exec_command(sudo=True, cmd=f"yum install -y {packages}")
 
         log.info("Adding users for xfs test...")
-        self.client.exec_command(sudo=True, cmd="useradd -m fsgqa")
-        self.client.exec_command(sudo=True, cmd="useradd -m fsgqa2")
+        self.client.exec_command(sudo=True, cmd="useradd -m fsgqa", check_ec=False)
+        self.client.exec_command(sudo=True, cmd="useradd -m fsgqa2", check_ec=False)
         return 0
 
     def clone_and_build_xfstests(self):

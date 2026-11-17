@@ -69,6 +69,57 @@ class GKLMSetupError(Exception):
     pass
 
 
+def get_rhbuild_major_version(rhbuild) -> int:
+    """Return RHCS major version as int from an rhbuild string.
+
+    Examples:
+        ``"10.0-rhel-10"`` -> ``10``
+        ``"5.3"`` -> ``5``
+        ``"4"`` -> ``4``
+
+    Avoid string compares like ``rhbuild.split(".")[0] >= "5"`` (``"10" >= "5"``
+    is False) and ``int(rhbuild[0])`` (``"10.x"`` becomes ``1``).
+
+    Empty or malformed values return ``0`` so version gates fail closed, and a
+    warning is logged so silent skips are visible.
+    """
+    if not rhbuild:
+        log.warning(
+            "Unable to parse rhbuild major version from %r; defaulting to 0",
+            rhbuild,
+        )
+        return 0
+    match = re.search(r"^\d+", str(rhbuild).strip())
+    if not match:
+        log.warning(
+            "Unable to parse rhbuild major version from %r; defaulting to 0",
+            rhbuild,
+        )
+        return 0
+    return int(match.group(0))
+
+
+def ibm_ceph_rpm_version_pin(ceph_version: str, os_major: str) -> str:
+    """Build yum NEVRA suffix for IBM Storage Ceph RPMs (cephadm, ceph-common, …).
+
+    IBM Storage Ceph RPMs use epoch ``2`` and the ``.elNcp`` dist tag across
+    Tentacle and Umbrella builds, e.g. ``2:20.2.2-351.el10cp`` and
+    ``2:21.1.1-9.el10cp``. Community / upstream packages may omit epoch and
+    ``cp``; those paths use a different pin (``VR*``) and do not call this
+    helper.
+
+    Args:
+        ceph_version: Version-release without dist tag (e.g. ``21.1.1-9``).
+        os_major: RHEL major from platform (e.g. ``10`` from ``rhel-10``).
+
+    Returns:
+        String suitable for ``yum install <pkg>-<pin>``.
+    """
+    ver = (ceph_version or "").strip()
+    major = (os_major or "").strip()
+    return f"2:{ver}.el{major}cp"
+
+
 def config_dict_to_string(data: Dict) -> str:
     """
     Convert the provided data to a string of optional arguments.
@@ -2534,6 +2585,7 @@ def run_fio(**fio_args):
         size: 'size' for file size/io size
         cmd_timeout: command timeout in seconds eg., 'notimeout' | 1200
         no_run_time: None | no_runtime
+        extra_args: optional string appended verbatim to the fio command
     Prerequisite: fio package must have been installed on the client node.
     One of device_name, filename, (rbdname,pool) is required.
     """
@@ -2620,6 +2672,10 @@ def run_fio(**fio_args):
         "sudo": True,
         "verbose": fio_args.get("verbose", False),
     }
+    # config_dict_to_string emits "--key value", so pass extra_args when the
+    # command must contain an exact token such as --direct=1.
+    if fio_args.get("extra_args"):
+        exec_args["cmd"] = f"{exec_args['cmd']} {fio_args['extra_args']}"
 
     if fio_args.get("get_time_taken"):
         exec_args["cmd"] = f"time {exec_args['cmd']}"
@@ -3141,9 +3197,20 @@ def restart_rgw_and_wait(rgw_node, rgw_service_name):
 
 
 def setup_gklm_prereq(ceph_cluster, cloud_type):
-    """setup GKLM authentication certs on the rgw nodes, redeploy rgw to mounted gklm certs path
-    and set ceph configs for sse-kms-kmip"""
-    log.info("setting up GKLM prerequisites")
+    """Setup GKLM auth certs on RGW nodes, remount, and set sse-kms-kmip ceph config.
+
+    Legacy path for a *pre-existing* lab GKLM (certs + endpoint files from rgw_configs).
+
+    Preferred for new runs: install GKLM as a podman container from
+    ceph-qe-scripts (``reusables/gklm.py`` / ``test_sse_s3_kms_with_vault.py``),
+    which also remounts ``/usr/local/gklm`` into RGW. Suites should set
+    ``git_clone_configs_repo: true`` so ``IGKLM_5.1_F_CNTR_LNX.tar`` is present,
+    and should *not* need this helper when using on-the-fly container install.
+    """
+    log.info(
+        "setting up GKLM prerequisites (legacy external GKLM); "
+        "prefer ceph-qe-scripts GKLM container install when available"
+    )
     rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
     gklm_auth_cert_path_remote = f"{GKLM_HOME}/rgwselfsigned.cert"
     gklm_auth_key_path_remote = f"{GKLM_HOME}/rgwselfsigned.key"

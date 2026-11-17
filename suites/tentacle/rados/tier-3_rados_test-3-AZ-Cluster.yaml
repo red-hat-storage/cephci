@@ -23,6 +23,8 @@ tests:
           release: released
           platform: rhel-9
           ssh-user: cephuser
+          skip-monitoring-stack: true # Skip monitoring until IBMCEPHQE-19638 is fixed
+          skip-dashboard: true # Skip dashboard until IBMCEPHQE-19638 is fixed
           apply-spec:
             - service_type: host
               address: true

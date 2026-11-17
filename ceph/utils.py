@@ -1200,18 +1200,39 @@ def create_ocpvirt_ceph_nodes(
         ocp_creds: Auth-only credential file with globals["ocpvirt-credentials"].
         run_id: Unique id for the run.
         instances_name: Optional name prefix for instances.
-        custom_config: CLI overrides (ocpvirt_namespace, ocpvirt_profile, batch sizes).
+        custom_config: CLI overrides (ocpvirt_namespace, ocpvirt_profile /
+            ocpvirt_cpu+ocpvirt_memory, batch sizes).
     """
     batch_cfg = process_ocpvirt_custom_config(custom_config)
     pvc_batch_size = batch_cfg["pvc_batch_size"]
     vm_batch_size = batch_cfg["vm_batch_size"]
     profile = batch_cfg.get("ocpvirt_profile")
-    log.info(
-        "Creating OCP Virtualization instances "
-        f"(pvc_batch_size={pvc_batch_size}, vm_batch_size={vm_batch_size}"
-        + (f", profile={profile}" if profile else "")
-        + ")"
-    )
+    cpu = batch_cfg.get("ocpvirt_cpu")
+    memory = batch_cfg.get("ocpvirt_memory")
+    if cpu is not None and memory is not None:
+        log.info(
+            "Creating OCP Virtualization instances "
+            "(pvc_batch_size=%s, vm_batch_size=%s, cpu=%s, memory=%s)",
+            pvc_batch_size,
+            vm_batch_size,
+            cpu,
+            memory,
+        )
+    elif profile:
+        log.info(
+            "Creating OCP Virtualization instances "
+            "(pvc_batch_size=%s, vm_batch_size=%s, profile=%s)",
+            pvc_batch_size,
+            vm_batch_size,
+            profile,
+        )
+    else:
+        log.info(
+            "Creating OCP Virtualization instances "
+            "(pvc_batch_size=%s, vm_batch_size=%s)",
+            pvc_batch_size,
+            vm_batch_size,
+        )
     ocp_cred = resolve_ocpvirt_credentials(ocp_creds, custom_config)
 
     ceph_cluster = cluster_conf.get("ceph-cluster")
@@ -1362,7 +1383,10 @@ def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
             storage_class=params.get("storage_class"),
             network=params.get("network"),
             precreated_volume_names=precreated_volume_names,
-            instancetype=params.get("instancetype"),
+            instancetype=params.get("instancetype") or "",
+            cpu=params.get("cpu"),
+            memory=params.get("memory"),
+            secure_boot=params.get("secure_boot", True),
         )
         vm.role = params["role"]
         vm.root_login = params["root-login"]
@@ -1710,7 +1734,7 @@ def setup_deb_repos(node, ubuntu_repo):
 
 def setup_deb_cdn_repo(node, build=None):
     user = "redhat"
-    passwd = "OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9"
+    passwd = "masked"
     num = build.split(".")[0]
     cmd = (
         "umask 0077; echo deb https://{user}:{passwd}@rhcs.download.redhat.com/{num}-updates/Tools "

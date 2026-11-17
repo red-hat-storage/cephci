@@ -1,5 +1,5 @@
 # Suite: NFS Ganesha conditional logging (Configuration & Management)
-# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
 
 tests:
   - test:
@@ -147,6 +147,97 @@ tests:
         min_clients: 1
         nfs_name: cephfs-nfs-cl
         operation: tc_cl_config_03
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-04 default Match_Policy MATCH_ANY
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Cluster config set without Match_Policy (default MATCH_ANY / OR).
+        Conditional Clients=client1 Exports=export_A NFS4=DEBUG —
+        export-only and client-only traffic must elevate; neither must not.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_04
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-05 MATCH_ALL via cluster config
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Cluster-config MATCH_ALL (ALL) with Clients+Export_A and NFS4=FULL_DEBUG
+        — counterpart of CONFIG-02 via ceph nfs cluster config set. Elevate only
+        when both match; client-only, export-only, and neither must not.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_05
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-CONFIG-06 MATCH_ANY exports only
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Match_Policy=ANY with Exports only (no Clients). Any client on
+        export A gets NFS4 FULL_DEBUG; traffic on export B never does.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_config_06
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-DYNAMIC-01 ganesha_mgr CRUD
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        Runtime conditional logging CRUD via ganesha_mgr — add/update/remove
+        Conditional rules and verify matching vs non-matching client log levels.
+        Skips (soft-pass) when the cephadm NFS container has no system D-Bus
+        for ganesha_mgr (dbus.SystemBus failure).
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        min_clients: 2
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_dynamic_01
+        service_wait_timeout: 600
+        redeploy_wait: 20
+        timeout: 7200
+
+  - test:
+      name: TC-CL-DYNAMIC-02 DBus persistence hot-reload
+      module: conditional_logging.test_conditional_logging.py
+      desc: >
+        DBus conditional overrides vs config reload — elevated logs under DBus
+        policy; ganesha remains stable after SIGHUP reload.
+        Skips (soft-pass) when ganesha_mgr cannot open dbus.SystemBus in the
+        NFS container.
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        min_clients: 1
+        nfs_name: cephfs-nfs-cl
+        operation: tc_cl_dynamic_02
         service_wait_timeout: 600
         redeploy_wait: 20
         timeout: 7200

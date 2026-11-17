@@ -21,6 +21,8 @@ tests:
           mon-ip: node1
           rhcs-version: 8.0
           release: released
+          skip-monitoring-stack: true # Skip monitoring until IBMCEPHQE-19638 is fixed
+          skip-dashboard: true # Skip dashboard until IBMCEPHQE-19638 is fixed
           ssh-user: cephuser
           apply-spec:
             - service_type: host

@@ -297,9 +297,11 @@ class SnapUtils(object):
             path : a snap-schedule path which needs to be deactivated
         Optional:
             sched_val : schedule , type - str, a schedule value that needs to be deactivated
+            check_ec : bool, default True
         Returns: None
         for eg., snap_util.deactivate_snap_schedule(client,deactivate_path,sched_val=sched_val)
         """
+        check_ec = kw_args.pop("check_ec", True)
         cmd = f"ceph fs snap-schedule deactivate {path}"
         if kw_args.get("subvol_name"):
             sv_name = kw_args["subvol_name"]
@@ -310,7 +312,7 @@ class SnapUtils(object):
             cmd += f" {kw_args.get('sched_val')}"
         if kw_args.get("fs_name"):
             cmd += f" --fs {kw_args.get('fs_name')}"
-        client.exec_command(sudo=True, cmd=cmd)
+        client.exec_command(sudo=True, cmd=cmd, check_ec=check_ec)
 
     def remove_snap_schedule(self, client, path, **kw_args):
         """

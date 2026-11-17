@@ -1,0 +1,166 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure the Linux SMB client
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy an SMB cluster with the remote-control service
+      desc: Create SMB shares and enable local Unix-socket remote control.
+      module: smb_remote_control_setup.py
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - { source_type: resource, ref: ug1 }
+            placement:
+              label: smb
+            remote_control:
+              locally_enabled: true
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - { name: user1, password: passwd }
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Verify CFL command availability
+      desc: Validate SMB rolling-upgrade CFL readiness - help.
+      module: smb_rolling_upgrade.py
+      polarion-id: CEPH-83633088
+      config:
+        smb_cluster_id: smb1
+        operation: help
+        expected_level:
+          major: 1
+          minor: 0
+
+  - test:
+      name: Verify clusterlevel-features
+      desc: Validate SMB rolling-upgrade CFL readiness - features.
+      module: smb_rolling_upgrade.py
+      polarion-id: CEPH-83633089
+      config:
+        smb_cluster_id: smb1
+        operation: features
+        expected_level:
+          major: 1
+          minor: 0
+
+  - test:
+      name: Verify active CFL
+      desc: Validate SMB rolling-upgrade CFL readiness - active_level.
+      module: smb_rolling_upgrade.py
+      polarion-id: CEPH-83633090
+      config:
+        smb_cluster_id: smb1
+        operation: active_level
+        expected_level:
+          major: 1
+          minor: 0
+
+  - test:
+      name: Verify cluster-wide CFL information
+      desc: Validate SMB rolling-upgrade CFL readiness - cluster_levels.
+      module: smb_rolling_upgrade.py
+      polarion-id: CEPH-83633091
+      config:
+        smb_cluster_id: smb1
+        operation: cluster_levels
+        expected_level:
+          major: 1
+          minor: 0
+
+  - test:
+      name: Verify default upgrade is a dry run
+      desc: Validate SMB rolling-upgrade CFL readiness - upgrade_dry_run.
+      module: smb_rolling_upgrade.py
+      polarion-id: CEPH-83633092
+      config:
+        smb_cluster_id: smb1
+        operation: upgrade_dry_run
+        expected_level:
+          major: 1
+          minor: 0
+
+  - test:
+      name: Verify apply when CFL is already current
+      desc: Validate SMB rolling-upgrade CFL readiness - upgrade_already_current.
+      module: smb_rolling_upgrade.py
+      polarion-id: CEPH-83633093
+      config:
+        smb_cluster_id: smb1
+        operation: upgrade_already_current
+        expected_level:
+          major: 1
+          minor: 0

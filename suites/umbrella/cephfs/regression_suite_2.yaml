@@ -348,6 +348,7 @@ tests:
       polarion-id: CEPH-83573524
       desc: Retains the snapshots after deletig the subvolume
       abort-on-fail: false
+      comments: "IBMCEPH-21082"
   - test:
       abort-on-fail: false
       desc: "Disable ceph debug logs"

@@ -1,7 +1,7 @@
 #===============================================================================================
 # NFS-Ganesha Scalable Statistics (Prometheus) — combined suite
 # S-*, F-*, A-*, R-*, X-*, SC-*, N-* (HA-* remains baremetal/tier1-nfs-prometheus-stats-ha.yaml)
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Backend: Ceph FSAL only (GPFS cases excluded)
 # Requires 2 clients (S-07, F-09). Accuracy/scale use 4 clients (node4–node7).
 # Run with cluster reuse or uncomment bootstrap below.

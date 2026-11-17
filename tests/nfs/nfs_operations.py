@@ -1838,11 +1838,52 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
         )
 
 
+def _add_firewalld_tcp_port(nfs_node, port):
+    """Open a public-zone TCP port in the runtime and permanent rulesets.
+
+    Do not reload firewalld. ``firewall-cmd --reload`` replaces the runtime
+    ruleset with the permanent one and drops ports cephadm opened only at
+    runtime, including NFS 2049. The client then gets firewalld REJECT, which
+    ``mount.nfs`` reports as ``No route to host`` for the whole retry window.
+    """
+    for permanent in (False, True):
+        cmd = "sudo firewall-cmd --zone=public --add-port=%s/tcp" % port
+        if permanent:
+            cmd += " --permanent"
+        out, err, exit_code, _ = nfs_node.exec_command(
+            sudo=True, cmd=cmd, verbose=True, check_ec=False
+        )
+        text = "%s\n%s" % (out or "", err or "")
+        if exit_code == 0 or "ALREADY_ENABLED" in text:
+            log.info(
+                "Opened firewall port %s/tcp (%s) on %s",
+                port,
+                "permanent" if permanent else "runtime",
+                nfs_node.hostname,
+            )
+            continue
+        raise OperationFailedError(
+            "Failed to open firewall port %s/tcp on %s: %s"
+            % (port, nfs_node.hostname, text.strip())
+        )
+
+
+def _remember_rpc_port(service_ports, service, proto, port):
+    """Keep the TCP port when rpcinfo lists both TCP and UDP."""
+    current = service_ports.get(service)
+    if current is None or proto == "tcp":
+        service_ports[service] = port
+
+
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
 def open_mandatory_v3_ports(nfs_node, ports_to_open):
     """
     Open the required ports for NFSv3 mount based on rpcinfo output.
     (portmapper, mountd, nlockmgr) and opens them in the firewall.
+
+    Also opens TCP 2049. Mounts use that port, and cephadm's runtime rule for
+    it must stay in place. Ports are added to the runtime and permanent
+    rulesets without ``firewall-cmd --reload``.
 
     Args:
         nfs_node: NFS server node where ports need to be opened
@@ -1854,10 +1895,13 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
     log.info(f"Opening NFSv3 ports on node: {nfs_node.hostname}")
     log.info(f"Services to open: {ports_to_open}")
 
-    # Initialize the service_ports_mapping dictionary to store the port lists
-    service_ports_mapping = {"portmapper": None, "mountd": None, "nlockmgr": None}
+    service_ports_mapping = {
+        "portmapper": None,
+        "mountd": None,
+        "nlockmgr": None,
+        "nfs": None,
+    }
 
-    # Execute rpcinfo command to get the port information
     log.info("Querying rpcinfo for service ports")
     cmd = "sudo rpcinfo -p"
     out, _ = nfs_node.exec_command(sudo=True, cmd=cmd)
@@ -1869,51 +1913,43 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
             f"rpcinfo -p returned empty output on {nfs_node.hostname}"
         )
 
-    # Split the output into lines and iterate over them
-    lines = out.splitlines()
-    port_mapper_found = False  # Have the first portmapper port
-
-    for line in lines:
-        # Skip header and empty lines
+    for line in out.splitlines():
         if "program vers proto port service" in line or not line.strip():
             continue
-
-        # Split line into columns
         columns = line.split()
-        port, service = columns[3], columns[4]
-
-        # Check for relevant services
-        if service == "portmapper" and not port_mapper_found:
-            service_ports_mapping["portmapper"] = port
-            port_mapper_found = True
-        elif service == "mountd":
-            service_ports_mapping["mountd"] = port
-        elif service == "nlockmgr":
-            service_ports_mapping["nlockmgr"] = port
+        if len(columns) < 5:
+            continue
+        proto, port, service = columns[2], columns[3], columns[4]
+        if service in service_ports_mapping:
+            _remember_rpc_port(service_ports_mapping, service, proto, port)
 
     log.debug(f"Discovered service ports: {service_ports_mapping}")
 
-    # Open firewall ports based on services in ports_to_open
+    ports = []
     for service in ports_to_open:
         port_to_open = service_ports_mapping.get(service)
-
-        if port_to_open:
-            # Open the port using the firewall command
-            log.info(f"Opening firewall port {port_to_open}/tcp for {service}")
-            nfs_node.exec_command(
-                sudo=True,
-                cmd=f"sudo firewall-cmd --zone=public --add-port={port_to_open}/tcp --permanent",
-            )
-            log.info(f"Successfully opened {service} port: {port_to_open}")
-        else:
+        if not port_to_open:
             log.error(f"{service} port not found in rpcinfo output")
             log.error(f"Available services: {service_ports_mapping}")
             raise OperationFailedError(f"{service} port not found in rpcinfo output")
+        if port_to_open not in ports:
+            ports.append(port_to_open)
 
-    # Reload the firewall to apply the changes
-    log.info("Reloading firewall to apply changes")
-    nfs_node.exec_command(sudo=True, cmd="sudo firewall-cmd --reload")
-    log.info("Firewall rules reloaded successfully")
+    nfs_port = service_ports_mapping.get("nfs") or "2049"
+    if nfs_port not in ports:
+        ports.append(nfs_port)
+
+    for port_to_open in ports:
+        _add_firewalld_tcp_port(nfs_node, port_to_open)
+
+    listed, _ = nfs_node.exec_command(
+        sudo=True, cmd="sudo firewall-cmd --list-ports", check_ec=False
+    )
+    log.info(
+        "Active firewall ports on %s: %s",
+        nfs_node.hostname,
+        (listed or "").strip(),
+    )
 
 
 def chown_mount_for_cephuser(client, mount_name):

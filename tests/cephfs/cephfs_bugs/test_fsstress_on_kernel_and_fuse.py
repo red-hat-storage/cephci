@@ -125,6 +125,12 @@ def run(ceph_cluster, **kw):
             commands = [
                 f"mkdir -p {directory}fsstress/",
                 f"cd {directory}fsstress/ && wget {fsstress_url}",
+                # Upstream fsstress.sh still uses http://download.ceph.com for LTP;
+                # HTTP times out in some environments while HTTPS works.
+                (
+                    f"sed -i 's|http://download.ceph.com|https://download.ceph.com|g' "
+                    f"{directory}fsstress/fsstress.sh"
+                ),
                 f"chmod 777 {directory}fsstress/fsstress.sh",
             ]
             run_commands(client1, commands)

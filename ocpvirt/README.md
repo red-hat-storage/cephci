@@ -73,22 +73,23 @@ image-name: datasource://rhel9
 datasources:
   rhel9: datasource://openshift-virtualization-os-images/rhel9
   rhel10: datasource://openshift-virtualization-os-images/rhel10
+  rocky10: datasource://openshift-virtualization-os-images/rocky10-iso
 ```
 
 At provision time cephci converts the URL into a CDI `sourceRef` on the root DataVolume (clone from cluster `DataSource`).
 
-## Inventory (`conf/inventory/ocpvirt-rhel-*-latest.yaml`)
+## Inventory (`conf/inventory/ocpvirt-*-latest.yaml`)
 
 Contains only:
 
-- `image-name` — usually `datasource://rhel9` or `datasource://rhel10`
+- `image-name` — e.g. `datasource://rhel9`, `datasource://rhel10`, or `datasource://rocky10` (resolves to cluster DataSource `rocky10-iso`)
 - `setup` — cloud-init userdata (users, SSH keys, packages, `ceph-qa-ready` marker)
 
-CPU, memory, and root disk size are **not** in inventory. Sizing uses `ocpvirt_profile` (instance type); root disk size uses the namespace template.
+CPU, memory, and root disk size are **not** in inventory. Sizing uses either `ocpvirt_profile` (instance type) or explicit `ocpvirt_cpu` + `ocpvirt_memory`; root disk size uses the namespace template.
 
 ## Instance types (`ocpvirt_profile`)
 
-VM CPU/memory come from a cluster **VirtualMachineClusterInstancetype**:
+By default, VM CPU/memory come from a cluster **VirtualMachineClusterInstancetype**:
 
 ```bash
 # default: o1.large (2 vCPU, 8Gi)
@@ -102,6 +103,65 @@ oc get virtualmachineclusterinstancetypes
 ```
 
 **Recommended on RDU3 tenants:** `o1.*` / `u1.*` (general-purpose, no dedicated CPU). **`cx1.*`** profiles require `cpumanager=true` nodes and may fail to schedule on some tenants.
+
+## Custom CPU / memory (`ocpvirt_cpu` + `ocpvirt_memory`)
+
+When no suitable instance type exists, pass explicit resources instead of a profile. cephci creates the VM with inline KubeVirt `domain.cpu` / `domain.memory` and does **not** set `spec.instancetype`.
+
+It also sets `domain.resources` requests/limits to guest CPU +1 and guest memory +2Gi (KubeVirt overhead). Before creating any PVCs/VMs, cephci checks that the bumped values fit under the namespace LimitRange **max** and fails early with a clear error if not.
+
+```bash
+# both required; mutually exclusive with ocpvirt_profile
+--custom-config ocpvirt_cpu=4 \
+--custom-config ocpvirt_memory=16Gi
+# → guest 4 / 16Gi; pod requests+limits 5 CPU / 18Gi
+```
+
+| Key | Aliases | Description |
+|-----|---------|-------------|
+| `ocpvirt_cpu` | `ocpvirt-cpu` | vCPU cores (positive integer) |
+| `ocpvirt_memory` | `ocpvirt-memory` | Kubernetes quantity (`16Gi`) or integer GiB (`16` → `16Gi`) |
+| `ocpvirt_secure_boot` | `ocpvirt-secure-boot` | EFI Secure Boot (`true`/`false`, default `true`) |
+
+Rules:
+
+- Both `ocpvirt_cpu` and `ocpvirt_memory` must be set together.
+- Do **not** also set `ocpvirt_profile` (clear error).
+- When only a profile is set (or neither), behavior is unchanged (`o1.large` default).
+- Guest + bump must be ≤ LimitRange max (e.g. max CPU 20 → `ocpvirt_cpu` ≤ 19).
+- Set `ocpvirt_secure_boot=false` for unsigned/scratch kernels (e.g. kernel-update); default remains Secure Boot on.
+
+### Suite / job metadata example
+
+For a suite that needs non-standard sizing (e.g. 6 vCPU / 24Gi):
+
+```yaml
+# Jenkins / suite custom-config metadata
+custom-config:
+  - ocpvirt_namespace=rdu3_ceph_jenkins
+  - ocpvirt_cpu=6
+  - ocpvirt_memory=24Gi
+```
+
+Kernel-update / unsigned kernel jobs:
+
+```yaml
+custom-config:
+  - ocpvirt_namespace=rdu3_ceph_jenkins
+  - ocpvirt_secure_boot=false
+```
+
+Equivalent CLI:
+
+```bash
+python3 run.py \
+  --cloud ocpvirt \
+  --osp-cred /path/to/osp-cred.yaml \
+  --custom-config ocpvirt_namespace=rdu3_ceph_jenkins \
+  --custom-config ocpvirt_cpu=6 \
+  --custom-config ocpvirt_memory=24Gi \
+  ...
+```
 
 ## Steps to generate required configs
 
@@ -201,7 +261,9 @@ python3 run.py \
 | Key | Default | Description |
 |-----|---------|-------------|
 | `ocpvirt_namespace` | (required) | Basename of `conf/ocpvirt/<name>.yaml` |
-| `ocpvirt_profile` | `o1.large` | VirtualMachineClusterInstancetype name |
+| `ocpvirt_profile` | `o1.large` | VirtualMachineClusterInstancetype name (omit when using custom CPU/RAM) |
+| `ocpvirt_cpu` | (none) | vCPU cores for inline sizing; requires `ocpvirt_memory` |
+| `ocpvirt_memory` | (none) | Memory quantity (e.g. `16Gi`); requires `ocpvirt_cpu` |
 | `pvc_batch_size` | `3` | Non-root DataVolumes created per batch |
 | `vm_batch_size` | `1` | VirtualMachines created per batch |
 

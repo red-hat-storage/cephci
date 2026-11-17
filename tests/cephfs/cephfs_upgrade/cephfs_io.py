@@ -22,6 +22,10 @@ def run(ceph_cluster, **kw):
     1. Client machine with root access.
     2. Directory path where the filesystem is mounted
     """
+    # run_start_time is initialised here so the finally block never raises
+    # NameError even when the try body exits early via an exception.
+    run_start_time = datetime.now()
+    stats = {"total_iterations": 0, "smallfile": 0, "dd": 0}
     try:
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
@@ -35,7 +39,6 @@ def run(ceph_cluster, **kw):
             )
             return 1
         client1 = clients[0]
-        stats = {"total_iterations": 0, "smallfile": 0, "dd": 0}
         out, rc = client1.exec_command(
             sudo=True, cmd="mount -t ceph | awk {'print $3'}", check_ec=False
         )
@@ -65,7 +68,6 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"mkdir {total_mounts[0]}/run_ios", check_ec=False
         )
         log.info("Successfully created run_ios folder in mount directory")
-        run_start_time = datetime.now()
         if timeout:
             stop = datetime.now() + timedelta(seconds=timeout)
         else:

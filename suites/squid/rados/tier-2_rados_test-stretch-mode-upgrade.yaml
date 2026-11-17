@@ -28,6 +28,8 @@ tests:
           mon-ip: node1
           orphan-initial-daemons: true
           registry-url: registry.redhat.io
+          skip-monitoring-stack: true # Skip monitoring until IBMCEPHQE-19638 is fixed
+          skip-dashboard: true # Skip dashboard until IBMCEPHQE-19638 is fixed
           ssh-user: cephuser
           apply-spec:
             - service_type: host

@@ -1,23 +1,45 @@
-{%- set nlt = "\n  " -%}
-{%- set nl4t = "\n    " -%}
-{%- set newline = "\n" -%}
+{#- Recursively render a YAML value at the given indent (spaces). -#}
+{%- macro render_value(value, indent) -%}
+{%- if value is mapping -%}
+{%- for key, val in value.items() %}
+{{ indent }}{{ key }}:{% if val is mapping or (val is iterable and val is not string) %}{{ render_value(val, indent ~ '  ') }}{% else %} {{ val }}{% endif %}
+{%- endfor -%}
+{%- elif value is iterable and value is not string -%}
+{%- for item in value %}
+{{ indent }}-{% if item is mapping %}{% for key, val in item.items() %}{% if loop.first %} {{ key }}:{% if val is mapping or (val is iterable and val is not string) %}{{ render_value(val, indent ~ '    ') }}{% else %} {{ val }}{% endif %}{% else %}
+{{ indent }}  {{ key }}:{% if val is mapping or (val is iterable and val is not string) %}{{ render_value(val, indent ~ '    ') }}{% else %} {{ val }}{% endif %}{% endif %}{% endfor %}{% else %} {{ item }}{% endif %}
+{%- endfor -%}
+{%- else -%}{{ value }}
+{%- endif -%}
+{%- endmacro -%}
+{%- macro render_key_value(key, value, indent='') -%}
+{{ indent }}{{ key }}:{% if value is mapping or (value is iterable and value is not string) %}{{ render_value(value, indent ~ '  ') }}{% else %} {{ value }}{% endif %}
+{%- endmacro -%}
+{%- set skip_keys = ['service_type', 'service_id', 'placement', 'spec'] -%}
 ---
 service_type: {{ spec['service_type'] }}
+{%- if spec.get('service_id') %}
 service_id: {{ spec['service_id'] }}
-{%+ if spec['unmanaged'] -%}unmanaged: {{ spec['unmanaged'] }}
-{% endif -%}
-{%+ if spec['method'] -%}method: {{ spec['method'] }}
-{% endif -%}
-placement:
-{%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
-{%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif %}
-{%- if spec['placement']['label'] -%}{{ nlt }}label: {{ spec['placement']['label'] }}{%- endif -%}
-{%- if spec['spec'] -%}{{ newline }}spec:
-{%- for name, dict in spec['spec'].items() -%}
-{%- if dict is mapping -%}{{ nlt }}{{ name }}:
-{%- for key, data in spec['spec'][name].items() -%}{{ nl4t }}{{ key }}: {{ data }}{%- endfor -%}
-{% else %}{{ nlt }}{{ name }}: {{ dict}}{% endif -%}
+{%- endif %}
+{%- for key, value in spec.items() if key not in skip_keys %}
+{{ render_key_value(key, value) }}
 {%- endfor %}
-{% endif %}
-{%- if spec['extra_container_args'] -%}extra_container_args: {{ spec['extra_container_args'] }}
-{% endif -%}
+placement:
+{%- if spec['placement'].get('count') %}
+  count: {{ spec['placement']['count'] }}
+{%- endif -%}
+{%- if spec['placement'].get('hosts') %}
+  hosts: {{ spec['placement']['hosts'] }}
+{%- endif -%}
+{%- if spec['placement'].get('host_pattern') %}
+  host_pattern: '{{ spec['placement']['host_pattern'] }}'
+{%- endif -%}
+{%- if spec['placement'].get('label') %}
+  label: {{ spec['placement']['label'] }}
+{%- endif %}
+{%- if spec.get('spec') %}
+spec:
+{%- for key, value in spec['spec'].items() %}
+{{ render_key_value(key, value, '  ') }}
+{%- endfor %}
+{%- endif %}

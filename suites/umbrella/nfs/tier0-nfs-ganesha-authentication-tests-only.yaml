@@ -1,7 +1,7 @@
 #===============================================================================================
 # NFS-Ganesha authentication tests only (LDAP + Kerberos)
 # Suite: suites/tentacle/nfs/tier0-nfs-ganesha-authentication-tests-only.yaml
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Auth cases only — no cluster bootstrap. Use on an existing cluster that already has
 # cephadm deploy, MDS, and four NFS clients (node4–node7) configured.

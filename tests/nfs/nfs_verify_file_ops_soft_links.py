@@ -92,6 +92,9 @@ def run(ceph_cluster, **kw):
 
     try:
         # Setup nfs cluster
+        # One shared export so file create, symlink, and lookup hit the same
+        # CephFS path. The default is one export per client, which hides file1
+        # from the client that verifies it.
         setup_nfs_cluster(
             clients,
             nfs_server_name,
@@ -105,6 +108,7 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
             enable_rdma=config.get("enable_rdma", False),
             rdma_port=config.get("rdma_port"),
+            single_export=True,
         )
 
         # Create oprtaions on each client

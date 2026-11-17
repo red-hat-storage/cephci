@@ -228,6 +228,8 @@ def create_nodes(
             --custom-config ibmc_profile=bx2-2x8
             --custom-config ocpvirt_namespace=rdu3_ceph_jenkins
             --custom-config ocpvirt_profile=cx1.2xlarge  # optional; default o1.large
+            # or custom sizing (mutually exclusive with ocpvirt_profile):
+            # --custom-config ocpvirt_cpu=4 --custom-config ocpvirt_memory=16Gi
             --custom-config openstack_vm_profile=c1.standard.xl
             --custom-config openstack_networks=provider_net_cci_1
             --custom-config use_ipv6=true

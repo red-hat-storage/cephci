@@ -54,7 +54,8 @@ from upgrade_thrashing.lifecycle_log import (
 from upgrade_thrashing.upgrade_cephx_rotation import (
     cephx_failure_reasons,
     cephx_remediation_enabled,
-    remediate_cephx_auth_warnings,
+    run_cephx_post_upgrade_steps,
+    snapshot_cephx_keys,
 )
 from upgrade_thrashing.upgrade_health_monitor import (
     HealthWarningTracker,
@@ -829,6 +830,7 @@ def run(ceph_cluster, **kw) -> int:
     upgrade_aborted = False
     abort_reason = None
     abort_info = {}
+    pre_cephx_keys = None
 
     from upgrade_thrashing.upgrade_feature_manager import UpgradeFeatureManager
     from upgrade_thrashing.upgrade_io_manager import UpgradeIOManager
@@ -1097,6 +1099,9 @@ def run(ceph_cluster, **kw) -> int:
         pre_upgrade_versions = _get_version_snapshot(rados_obj)
         log.info(f"Pre-upgrade version snapshot: {pre_upgrade_versions}")
 
+        if cephx_remediation_enabled(config):
+            pre_cephx_keys = snapshot_cephx_keys(rados_obj)
+
         target_ver = config.get("_target_ceph_version", "")
         if target_ver and pre_upgrade_versions:
             running_versions = set()
@@ -1288,23 +1293,21 @@ def run(ceph_cluster, **kw) -> int:
 
         if not upgrade_aborted and cephx_remediation_enabled(config):
             log.info("=" * 60)
-            log.info("CephX post-upgrade key rotation remediation")
+            log.info("CephX post-upgrade key verify + remediation")
             log.info("=" * 60)
-            cephx_result = remediate_cephx_auth_warnings(
+            cephx_out = run_cephx_post_upgrade_steps(
                 cephadm_obj,
                 rados_obj,
                 ceph_cluster,
+                config=config,
+                pre_snapshot=pre_cephx_keys,
                 io_mgr=io_mgr,
                 clients=clients,
                 deployed_services=deployed_services,
-                config=config,
                 stats=stats,
             )
-            if cephx_result.get("status") == "failed":
-                log.error(
-                    "CephX remediation failed: %s",
-                    cephx_result.get("errors"),
-                )
+            if not cephx_out.get("ok"):
+                log.error("CephX post-upgrade failed: %s", cephx_out.get("errors"))
                 return 1
 
         # ============================================================
@@ -1557,7 +1560,7 @@ def run(ceph_cluster, **kw) -> int:
                 upgrade_aborted=upgrade_aborted,
                 abort_reason=abort_reason,
                 failure_reasons=cephx_failure_reasons(
-                    config.get("cephx_remediation_result")
+                    config.get("cephx_post_upgrade_result")
                 ),
                 emergency=True,
                 feature_results=feature_results,

@@ -2,7 +2,7 @@
 #-------------------------------------
 #---    Test Suite for Nfs Ganesha Functional Sanity Tests---
 #-------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 # Functional sanity test cases for
 #    - Bootstrap
 #    - Host management
@@ -204,3 +204,57 @@ tests:
          nfs_export: /export_byok
          nfs_instance_name: nfs_byok
 
+  - test:
+      name: TLS deploy, mount verify, and basic IO
+      module: security.test_tls_feature.py
+      desc: >
+        TLS deploy, orch check, tlshd, TLS mount, log checks, basic IO.
+      abort-on-fail: false
+      polarion-id: CEPH-83629167
+      config:
+        nfs_version: 4.2
+        clients: 1
+        nfs_cluster_name: cephfs-nfs-tls
+        operation: tls_deploy_mount_verify
+        # Happy-path kTLS mount logs "TLS connection established"; AUTH_TLS is
+        # probe/STARTTLS path only and is not present on a successful mount.
+        tls_log_substrings:
+          - TLS connection established
+          - "[TLS]"
+        strict_tls_log_check: true
+
+  - test:
+      name: NFSv4 delegation read write and none scenarios
+      module: nfs_verify_delegation_rw_none_scenarios.py
+      desc: Validate read,write and none scenarios for NFSv4 delegation
+      polarion-id: CEPH-83632375
+      abort-on-fail: false
+      config:
+        nfs_name: cephfs-nfs
+        auto_create_nfs_cluster: true
+        delegation_log_settle_seconds: 90
+
+  - test:
+      name: NFS Prometheus scalable statistics sanity
+      module: test_nfs_prometheus_stats.py
+      desc: NFS Prometheus scalable statistics sanity
+      polarion-id: CEPH-83632504
+      abort-on-fail: false
+      config:
+        polarion-id: CEPH-83632504
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 2
+        nfs_version: 4.1
+        port: 2049
+        idle_wait_seconds: 120
+        idle_in_flight_max: 5
+        idle_max_counter_drift: 100
+        prometheus_query_wait_seconds: 30
+        prometheus_increase_window: 2m
+        s07_min_clients: 2
+        s07_max_client_series_when_disabled: 0
+        s08_fio_runtime: 60
+        s08_fio_size: 64M

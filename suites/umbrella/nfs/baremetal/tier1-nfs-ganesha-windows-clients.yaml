@@ -2,7 +2,7 @@
 #------------------------------------------------------------
 #---    Test Suite for Nfs Ganesha with Windows clients   ---
 #------------------------------------------------------------
-# Conf: conf/tentacle/nfs/1admin-7node-3client.yaml
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #===============================================================================================
 tests:
   - test:

@@ -66,25 +66,36 @@ BLOCKED_OPERATIONS = frozenset(
 
 
 def install_grpcurl(node):
-    """Install grpcurl on *node* if not already present."""
+    """Install grpcurl on *node* if not already present.
+
+    Detects the node architecture at runtime and downloads the matching
+    grpcurl binary (arm64 for aarch64, x86_64 otherwise).
+    """
     log.info("Installing grpcurl on %s", node.hostname)
     out, _ = node.exec_command(cmd="which grpcurl", check_ec=False)
-    if "grpcurl" in out:
+    if "grpcurl" in (out or ""):
         log.info("grpcurl already installed on %s", node.hostname)
         return
 
+    arch_out, _ = node.exec_command(cmd="uname -m", check_ec=False)
+    arch = (arch_out or "").strip()
+    if arch == "aarch64":
+        tarball = "grpcurl_1.8.9_linux_arm64.tar.gz"
+    else:
+        tarball = "grpcurl_1.8.9_linux_x86_64.tar.gz"
+
+    log.info(f"Detected arch={arch!r}, downloading {tarball}")
     wget_cmd = (
         "curl -LO "
-        "https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/"
-        "grpcurl_1.8.9_linux_x86_64.tar.gz"
+        f"https://github.com/fullstorydev/grpcurl/releases/download/v1.8.9/{tarball}"
     )
     install_cmd = (
-        f"{wget_cmd} && tar -xvzf grpcurl_1.8.9_linux_x86_64.tar.gz && "
+        f"{wget_cmd} && tar -xvzf {tarball} && "
         "chmod +x grpcurl && mv grpcurl /usr/local/bin/"
     )
     node.exec_command(sudo=True, cmd=install_cmd)
     out, _ = node.exec_command(cmd="grpcurl --version", check_ec=False)
-    log.info("grpcurl version on %s: %s", node.hostname, out.strip())
+    log.info("grpcurl version on %s: %s", node.hostname, (out or "").strip())
 
 
 def open_grpc_firewall(nfs_node, port=DEFAULT_GRPC_PORT):

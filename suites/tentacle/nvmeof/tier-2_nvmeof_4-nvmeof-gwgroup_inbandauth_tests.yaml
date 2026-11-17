@@ -174,7 +174,7 @@ tests:
       destroy-cluster: false
       module: test_nvmeof_gwgroup_inbandauth.py
       name: NVMe-oF tests with uni and bidirectional in-band authentication.
-      polarion-id: CEPH-83608200
+      polarion-id: CEPH-83608203
 
 # bidirectional in-band auth across GW groups with change DHCHAP key scenario
   - test:

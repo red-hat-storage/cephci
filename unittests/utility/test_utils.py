@@ -3,7 +3,11 @@ from unittest import mock
 
 import pytest
 
-from utility.utils import custom_ceph_config, get_cephci_config
+from utility.utils import (
+    custom_ceph_config,
+    get_cephci_config,
+    get_rhbuild_major_version,
+)
 
 suite_config = {
     "global": {
@@ -149,3 +153,41 @@ def test_get_cephci_config_raises(mock_expanduser):
     except IOError as exception:
         assert mock_expanduser.call_count == 1
         assert exception.errno == 2
+
+
+@pytest.mark.parametrize(
+    "rhbuild,expected",
+    [
+        ("10.0-rhel-10", 10),
+        ("5.3", 5),
+        ("4", 4),
+        (" 10.0 ", 10),
+        ("", 0),
+        (None, 0),
+        ("rhel-10", 0),
+        ("abc", 0),
+    ],
+)
+def test_get_rhbuild_major_version(rhbuild, expected):
+    """Numeric major parse must not regress to string/[0] compares."""
+    assert get_rhbuild_major_version(rhbuild) == expected
+
+
+def test_get_rhbuild_major_version_warns_on_unparseable(caplog):
+    """Empty/malformed rhbuild should warn when defaulting to 0."""
+    with caplog.at_level("WARNING"):
+        assert get_rhbuild_major_version("") == 0
+        assert get_rhbuild_major_version("no-digits") == 0
+    assert any(
+        "Unable to parse rhbuild major version" in r.message for r in caplog.records
+    )
+
+
+def test_get_ceph_version_from_rhbuild_raises_on_unparseable():
+    """RBD wrapper must fail fast; silent 0 would skip >=3 setup paths."""
+    from ceph.rbd.utils import get_ceph_version_from_rhbuild
+
+    assert get_ceph_version_from_rhbuild("10.0-rhel-10") == 10
+    for bad in ("", None, "rhel-10", "abc"):
+        with pytest.raises(ValueError, match="Invalid or missing rhbuild"):
+            get_ceph_version_from_rhbuild(bad)

@@ -177,4 +177,3 @@ tests:
       polarion-id: CEPH-83575623
       desc: Run fsstress on kernel and fuse mounts
       abort-on-fail: false
-

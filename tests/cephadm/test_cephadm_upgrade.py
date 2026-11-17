@@ -140,7 +140,12 @@ def run(ceph_cluster, **kwargs) -> int:
         orch.set_tool_repo()
 
         # Update cephadm rpms
-        orch.install(**{"upgrade": True})
+        orch.install(
+            **{
+                "upgrade": True,
+                "upgrade_client": config.get("upgrade_client", True),
+            }
+        )
 
         # Authenticate against upgrade image registry (host-keyed registries:)
         _login_upgrade_registry(orch, ceph_cluster, config)

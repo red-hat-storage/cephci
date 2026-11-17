@@ -49,7 +49,7 @@ import random
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
     add_group_image_and_verify,
@@ -318,7 +318,7 @@ def test_group_mirroring_neg_case(
                 client=client_primary,
                 cluster="ceph",
                 rbd=rbd_primary,
-                ceph_version=int(config.get("rhbuild")[0]),
+                ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
                 is_ec_pool=False,
                 is_secondary=False,
                 do_not_create_image=True,
