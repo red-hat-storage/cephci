@@ -25,7 +25,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    release: stable
+                    release: released
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
@@ -72,7 +72,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    release: stable
+                    release: released
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
