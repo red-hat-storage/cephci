@@ -9,8 +9,6 @@ from json import dumps, loads
 from random import choice
 from urllib.parse import urljoin, urlparse
 
-import requests
-
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.orch import Orch
@@ -34,6 +32,10 @@ LOG = Log(__name__)
 
 cleanup = False
 
+# Keep curl scrapes from hanging when the endpoint/network stalls.
+CURL_CONNECT_TIMEOUT = 5
+CURL_MAX_TIME = 30
+
 
 class NVMeAlertFailure(Exception):
     pass
@@ -52,6 +54,7 @@ class PrometheusAlerts:
             orch: Orchestrator object that interfaces with the Ceph cluster.
         """
         self.orch = orch
+        self._prometheus_node = None
         self._baseurl = self._fetch_prometheus_endpoint()
 
     @property
@@ -78,21 +81,45 @@ class PrometheusAlerts:
         url = url.strip()
         hostname = urlparse(url).hostname
         server = get_node_by_id(self.orch.cluster, hostname)
+        self._prometheus_node = server
         return url.replace(hostname, server.ip_address)
 
     def fetch_prometheus_alerts(self):
         """
         Fetch all alerts from Prometheus.
 
+        Scrapes via SSH/curl on the Prometheus host so the call works when
+        port 9095 is not reachable from the cephci runner (e.g. IBM Cloud).
+
         Returns:
-            dict or None: The JSON response from Prometheus containing alert rules, or None on failure.
+            dict: The JSON response from Prometheus containing alert rules,
+                or an empty dict on failure.
         """
         uri = "api/v1/rules?type=alert"
+        scrape_node = self._prometheus_node or self.orch.installer
+        # Prefer loopback when curling on the Prometheus host itself so IBM Cloud
+        # / firewall rules that block node-IP:9095 from outside still succeed.
+        if self._prometheus_node is not None:
+            parsed = urlparse(self.baseurl)
+            port = parsed.port or 9095
+            url = urljoin(f"{parsed.scheme}://127.0.0.1:{port}/", uri)
+        else:
+            url = urljoin(self.baseurl, uri)
         try:
-            response = requests.get(urljoin(self.baseurl, uri), timeout=5)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
+            out, err = scrape_node.exec_command(
+                sudo=True,
+                cmd=(
+                    f"curl -sf --connect-timeout {CURL_CONNECT_TIMEOUT} "
+                    f"--max-time {CURL_MAX_TIME} '{url}'"
+                ),
+                check_ec=False,
+            )
+            body = (out or "").strip()
+            if not body:
+                LOG.error(f"[ERROR] Failed to fetch NVMe-oF alerts from {url}: {err}")
+                return {}
+            return json.loads(body)
+        except Exception as e:
             LOG.error(f"[ERROR] Failed to fetch NVMe-oF alerts: {e}")
             return {}
 
@@ -104,6 +131,10 @@ class PrometheusAlerts:
             dict or None: The JSON response from Prometheus containing alert rules, or None on failure.
         """
         alerts = self.fetch_prometheus_alerts()
+        if not alerts or "data" not in alerts:
+            raise NVMeAlertFailure(
+                f"Prometheus alerts fetch failed or returned empty payload: {alerts}"
+            )
         for alert in alerts["data"]["groups"]:
             if alert["name"] != "nvmeof":
                 continue
@@ -116,7 +147,13 @@ class PrometheusAlerts:
         Args:
             alert_name: NVMeoF alert name
         """
-        for alert in self.get_nvme_alerts()["rules"]:
+        nvme_alerts = self.get_nvme_alerts()
+        if not nvme_alerts or "rules" not in nvme_alerts:
+            raise NVMeAlertFailure(
+                f"NVMeoF alert group missing/empty while looking up {alert_name}: "
+                f"{nvme_alerts}"
+            )
+        for alert in nvme_alerts["rules"]:
             if alert.get("name") == alert_name:
                 return alert
         raise Exception(f"[ {alert_name} ] alert not found.")

@@ -189,6 +189,19 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
+def _reservation_fio(device_name, client_node, io_type, direct=None):
+    """Run a reservation fio job, optionally with --direct=<n>."""
+    fio_args = {
+        "device_name": device_name,
+        "client_node": client_node,
+        "io_type": io_type,
+        "size": "100M",
+    }
+    if direct:
+        fio_args["extra_args"] = "--direct=1"
+    return run_fio(**fio_args)
+
+
 def test_reservation(
     rtype,
     initiator_1,
@@ -198,6 +211,7 @@ def test_reservation(
     dev_to_be_reserved,
     dev_nsid_to_be_reserved,
     rkey,
+    direct=None,
 ):
     """Cleanup the ceph-nvme gw entities.
 
@@ -210,6 +224,7 @@ def test_reservation(
         dev_to_be_reserved : Device to be reserved
         dev_nsid_to_be_reserved : Namespace id of the dev to ber eserved
         rkey : reservation key
+        direct: when set, fio is invoked with --direct=<value>
     """
 
     expectations = RESERVATION_EXPECTATIONS[rtype]
@@ -251,11 +266,8 @@ def test_reservation(
     # Step 3: Client1 Write
     LOG.info(" rtype-%s : Reservation holder Client1 Write test", rtype)
     try:
-        out = run_fio(
-            device_name=dev_to_be_reserved,
-            client_node=client_node_1,
-            io_type="write",
-            size="100M",
+        out = _reservation_fio(
+            dev_to_be_reserved, client_node_1, "write", direct=direct
         )
         assert expectations[
             "c1_reg_write"
@@ -274,11 +286,8 @@ def test_reservation(
     # Step 4: Registered Client2 Write
     LOG.info("rtype-%s : Registered [Client2]  Write test", rtype)
     try:
-        out = run_fio(
-            device_name=dev_to_be_reserved,
-            client_node=client_node_2,
-            io_type="write",
-            size="100M",
+        out = _reservation_fio(
+            dev_to_be_reserved, client_node_2, "write", direct=direct
         )
         assert expectations[
             "c2_reg_write"
@@ -295,12 +304,7 @@ def test_reservation(
     # Step 5: Registered Client2 Read
     LOG.info("rtype-%s : Registered [Client2] Read test", rtype)
     try:
-        out = run_fio(
-            device_name=dev_to_be_reserved,
-            client_node=client_node_2,
-            io_type="read",
-            size="100M",
-        )
+        out = _reservation_fio(dev_to_be_reserved, client_node_2, "read", direct=direct)
         assert expectations[
             "c2_reg_read"
         ], f"Registered Client2 read succeeded but should have failed: {out}"
@@ -326,11 +330,8 @@ def test_reservation(
     # Step 6: Unregistered Client2 Write
     LOG.info("rtype - %s : Unregistered Client2 Write test", rtype)
     try:
-        out = run_fio(
-            device_name=dev_to_be_reserved,
-            client_node=client_node_2,
-            io_type="write",
-            size="100M",
+        out = _reservation_fio(
+            dev_to_be_reserved, client_node_2, "write", direct=direct
         )
         assert expectations[
             "c2_reg_read"
@@ -351,12 +352,7 @@ def test_reservation(
     # Step 7: Unregistered Client2 Read
     LOG.info("rtype-%s : Unregistered Client2 Read test", rtype)
     try:
-        out = run_fio(
-            device_name=dev_to_be_reserved,
-            client_node=client_node_2,
-            io_type="read",
-            size="100M",
-        )
+        out = _reservation_fio(dev_to_be_reserved, client_node_2, "read", direct=direct)
         assert expectations[
             "c2_read"
         ], f"Unregistered Client2 read succeeded but should have failed: {out}"
@@ -464,6 +460,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         # Generate a random reservation key
         rkey = random.randint(1000, 9999)
         LOG.debug("Using randomly generated 4 digit key %s", rkey)
+        direct = config.get("direct")
         for rtype in RESERVATION_NAMES.keys():
             test_reservation(
                 rtype,
@@ -474,6 +471,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 dev_to_be_reserved,
                 dev_nsid_to_be_reserved,
                 rkey,
+                direct=direct,
             )
         return 0
     except Exception as err:

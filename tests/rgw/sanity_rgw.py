@@ -301,6 +301,9 @@ def run(ceph_cluster, **kw):
     if configure_kafka_broker_security:
         configure_kafka_security(ceph_cluster, cloud_type)
 
+    # Legacy: wire a pre-existing lab GKLM (static certs/endpoint from rgw_configs).
+    # New GKLM SSE-KMS suites install GKLM in-container via ceph-qe-scripts
+    # (reusables/gklm.py) and only need git_clone_configs_repo for the image tar.
     setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
     if setup_gklm_prerequisites:
         setup_gklm_prereq(ceph_cluster, cloud_type)

@@ -586,6 +586,23 @@ tests:
 #        enable_election_strategy_thrash: false
 #        enable_mgr_thrashing: false
 #        enable_mds_thrashing: true
+#        mds_operations:
+#          - failover
+#          - rolling_restart
+#          - random_fail
+#          - colocated_fail
+#          - kill_loop
+#          - max_mds_scale
+#          - config_storm
+#          - dir_pin
+#          - cap_revoke_failover
+#        mds_scale_path: [4, 2, 1, 4]
+#        mds_scale_wait: 25
+#        mds_kill_count: 5
+#        mds_kill_interval: 5
+#        mds_pin_dirs: 20
+#        mds_cap_workers: 4
+#        mds_recovery_wait: 15
 #        enable_nfs_thrashing: true
 #        nfs_num_clusters: 1
 #        nfs_exports_per_cluster: 4
@@ -636,6 +653,23 @@ tests:
 #        enable_mon_thrashing: false
 #        enable_mgr_thrashing: false
 #        enable_mds_thrashing: true
+#        mds_operations:
+#          - failover
+#          - rolling_restart
+#          - random_fail
+#          - colocated_fail
+#          - kill_loop
+#          - max_mds_scale
+#          - config_storm
+#          - dir_pin
+#          - cap_revoke_failover
+#        mds_scale_path: [4, 2, 1, 4]
+#        mds_scale_wait: 25
+#        mds_kill_count: 5
+#        mds_kill_interval: 5
+#        mds_pin_dirs: 20
+#        mds_cap_workers: 4
+#        mds_recovery_wait: 15
 #        # NFS HA with VIP over TCP (ingress + keepalived, no RDMA)
 #        enable_nfs_thrashing: true
 #        nfs_num_clusters: 1
@@ -695,6 +729,23 @@ tests:
 #        enable_mon_thrashing: false
 #        enable_mgr_thrashing: false
 #        enable_mds_thrashing: true
+#        mds_operations:
+#          - failover
+#          - rolling_restart
+#          - random_fail
+#          - colocated_fail
+#          - kill_loop
+#          - max_mds_scale
+#          - config_storm
+#          - dir_pin
+#          - cap_revoke_failover
+#        mds_scale_path: [4, 2, 1, 4]
+#        mds_scale_wait: 25
+#        mds_kill_count: 5
+#        mds_kill_interval: 5
+#        mds_pin_dirs: 20
+#        mds_cap_workers: 4
+#        mds_recovery_wait: 15
 #        # NFS HA with VIP over RDMA (ingress + keepalived + RDMA)
 #        enable_nfs_thrashing: true
 #        nfs_num_clusters: 1

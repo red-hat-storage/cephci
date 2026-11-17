@@ -1,0 +1,354 @@
+# =============================================================================
+# MDS Thrashing Test Suite
+# =============================================================================
+# Component-focused thrashing of CephFS MDS via mds_thrash_helpers (imported by
+# test_osd_thrashing.py). Ops are selected with a fair shuffle bag so each
+# enabled operation runs once per round before repeats.
+#
+# Covers: failover, rolling_restart, random_fail, colocated_fail, kill_loop,
+# max_mds_scale, config_storm, fs_fail_scale, standby_replay_fail, dir_pin,
+# cap_revoke_failover, multi_fs_fail. Power-cycle is not included.
+#
+# To be run with conf: 9-node-ec-cluster-1-client.yaml
+#
+# INTENSITY TIERS:
+# ----------------
+# Light      - MDS core ops + CephFS FIO/snapshots/subvolumes (600s)
+# Moderate   - Expanded MDS ops + MON/MGR/election/scrub + RBD FIO (1200s)
+# Aggressive - Full MDS op set + all peer thrashers/IO (OSD/CRUSH/PG/RGW/NFS/…) (1800s)
+#
+# Prerequisites for full coverage:
+# - Multiple MDS daemons (placement count >= 6, max_mds >= 4) for colocated_fail
+# - Client mount + attr (setfattr) for dir_pin / cap_revoke_failover
+# - Second CephFS (cephfs2) so multi_fs_fail is not soft-dropped
+# =============================================================================
+
+tests:
+  # ===========================================================================
+  # Deployment Preamble
+  # ===========================================================================
+  - test:
+      name: Setup install prerequisites
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+            - node5
+            - node6
+            - node8
+            - node9
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+  - test:
+      name: MDS Service deployment with multi-FS
+      desc: Create cephfs + cephfs2 and deploy enough MDS daemons for multi-rank thrash
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs2
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    count: 6
+                    label: mds
+                - service_type: mds
+                  service_id: cephfs2
+                  placement:
+                    count: 4
+                    label: mds
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "4"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs2
+                - max_mds
+                - "2"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node7
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - ceph-fuse
+          - attr
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      desc: Install fio and attr
+      module: exec.py
+      name: Install FIO and attr
+      config:
+        sudo: true
+        commands:
+          - "dnf install fio attr -y"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  # ===========================================================================
+  # MDS Thrashing — Light / Moderate / Aggressive
+  # ===========================================================================
+
+  - test:
+      name: MDS thrashing light
+      desc: >
+        Fair-bag MDS thrash with core ops (failover, rolling_restart, random_fail,
+        max_mds_scale) under CephFS FIO + snapshots
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 1200
+        aggressive: false
+        enable_mds_thrashing: true
+        mds_operations:
+          - failover
+          - rolling_restart
+          - random_fail
+          - max_mds_scale
+        mds_scale_path: [4, 1, 4]
+        mds_scale_wait: 30
+        mds_recovery_wait: 15
+        enable_fio_cephfs: true
+        enable_cephfs_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+
+  - test:
+      name: MDS thrashing moderate
+      desc: >
+        Expanded MDS ops plus MON/MGR/election/scrub peer chaos and RBD FIO
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 60
+        duration: 1800
+        aggressive: true
+        enable_mds_thrashing: true
+        mds_operations:
+          - failover
+          - rolling_restart
+          - random_fail
+          - colocated_fail
+          - kill_loop
+          - max_mds_scale
+          - config_storm
+          - dir_pin
+          - cap_revoke_failover
+        mds_scale_path: [4, 2, 1, 4]
+        mds_scale_wait: 25
+        mds_kill_count: 5
+        mds_kill_interval: 5
+        mds_pin_dirs: 20
+        mds_cap_workers: 4
+        mds_recovery_wait: 15
+        enable_mon_thrashing: true
+        enable_mgr_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_scrub_thrashing: true
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+
+  - test:
+      name: MDS thrashing aggressive
+      desc: >
+        Full MDS op set plus OSD/CRUSH/PG/MON/MGR/RGW/NFS and all IO/snapshot paths
+      module: test_osd_thrashing.py
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 120
+        duration: 2400
+        aggressive: true
+        enable_mds_thrashing: true
+        mds_operations:
+          - failover
+          - rolling_restart
+          - random_fail
+          - colocated_fail
+          - kill_loop
+          - max_mds_scale
+          - config_storm
+          - fs_fail_scale
+          - standby_replay_fail
+          - dir_pin
+          - cap_revoke_failover
+          - multi_fs_fail
+        mds_scale_path: [4, 1, 4]
+        mds_scale_wait: 20
+        mds_scale_during_promote: true
+        mds_kill_count: 8
+        mds_kill_interval: 4
+        mds_fail_count: 2
+        mds_pin_dirs: 40
+        mds_cap_workers: 6
+        mds_recovery_wait: 12
+        enable_osd_thrashing: true
+        enable_mon_thrashing: true
+        enable_mgr_thrashing: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        enable_scrub_thrashing: true
+        enable_rgw_thrashing: true
+        enable_election_strategy_thrash: true
+        enable_fio_cephfs: true
+        enable_fio_rbd: true
+        enable_cephfs_snapshots: true
+        enable_rbd_snapshots: true
+        enable_ec_snapshots: true
+        enable_cephfs_subvolume_thrashing: true
+        enable_nfs_thrashing: true

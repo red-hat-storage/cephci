@@ -6,6 +6,7 @@ from time import sleep
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin.common import config_dict_to_string
+from ceph.rbd.utils import get_ceph_version_from_rhbuild
 from ceph.waiter import WaitUntil
 from tests.rbd.exceptions import (
     CreateFileError,
@@ -24,7 +25,7 @@ class Rbd:
     def __init__(self, **kw):
         self.ceph_args = ""
         self.config = kw.get("config")
-        self.ceph_version = int(self.config.get("rhbuild")[0])
+        self.ceph_version = get_ceph_version_from_rhbuild(self.config.get("rhbuild"))
         self.datapool = None
         self.flag = 0
         self.k_m = self.config.get("ec-pool-k-m", None)
@@ -77,7 +78,12 @@ class Rbd:
         try:
             cmd = kw.get("cmd", "")
             node = kw.get("node") if kw.get("node") else self.ceph_client
-            if self.k_m and "rbd create" in cmd and "--data-pool" not in cmd:
+            if (
+                self.k_m
+                and self.datapool
+                and "rbd create" in cmd
+                and "--data-pool" not in cmd
+            ):
                 cmd = cmd + " --data-pool {}".format(self.datapool)
             if kw.get("client_id"):
                 cmd += f" -n {kw['client_id']}"

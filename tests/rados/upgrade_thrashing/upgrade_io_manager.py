@@ -2172,6 +2172,43 @@ exit 0
         )
         return result
 
+    def remount_cephfs_mounts(self, clients: List[Any]) -> Dict[str, Any]:
+        """Proactively remount CephFS kernel/fuse mounts after keyring refresh.
+
+        NFS is skipped (Ganesha picks up keys via rotate-key / redeploy).
+        """
+        result: Dict[str, Any] = {
+            "remounted": [],
+            "failed": [],
+            "skipped_no_info": [],
+        }
+        for client in clients or []:
+            hostname = getattr(client, "hostname", str(client))
+            for mp in self._get_mount_points(client, "cephfs"):
+                mount_info = self._get_mount_info(client, mp, "cephfs")
+                if not mount_info:
+                    # Do not umount if we cannot rebuild the mount command.
+                    result["skipped_no_info"].append(f"{hostname}:{mp}")
+                    log.warning(
+                        "[cephx_remount] No mount info for CephFS %s on %s",
+                        mp,
+                        hostname,
+                    )
+                    continue
+                self._attempt_lazy_umount(client, mp)
+                if self._attempt_remount(client, mp, mount_info, "cephfs"):
+                    result["remounted"].append(f"{hostname}:{mp}")
+                else:
+                    result["failed"].append(f"{hostname}:{mp}")
+        log.info(
+            "[cephx_remount] CephFS remount done: remounted=%d failed=%d "
+            "skipped_no_info=%d",
+            len(result["remounted"]),
+            len(result["failed"]),
+            len(result["skipped_no_info"]),
+        )
+        return result
+
     def check_mount_health(
         self,
         clients: List[Any],

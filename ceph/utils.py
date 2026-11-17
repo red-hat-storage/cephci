@@ -1317,6 +1317,7 @@ def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
             instancetype=params.get("instancetype") or "",
             cpu=params.get("cpu"),
             memory=params.get("memory"),
+            secure_boot=params.get("secure_boot", True),
         )
         vm.role = params["role"]
         vm.root_login = params["root-login"]
@@ -1664,7 +1665,7 @@ def setup_deb_repos(node, ubuntu_repo):
 
 def setup_deb_cdn_repo(node, build=None):
     user = "redhat"
-    passwd = "OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9"
+    passwd = "masked"
     num = build.split(".")[0]
     cmd = (
         "umask 0077; echo deb https://{user}:{passwd}@rhcs.download.redhat.com/{num}-updates/Tools "

@@ -22,7 +22,7 @@ from ceph.parallel import parallel
 from cli.ceph.ceph import Ceph as CephCli
 from utility import lvm_utils
 from utility.log import Log
-from utility.utils import custom_ceph_config
+from utility.utils import custom_ceph_config, get_rhbuild_major_version
 
 logger = Log(__name__)
 
@@ -668,7 +668,7 @@ class Ceph(object):
         if cluster_name is not None:
             cmd += f" --cluster {cluster_name}"
 
-        if rhbuild and rhbuild.split(".")[0] >= "5":
+        if get_rhbuild_major_version(rhbuild) >= 5:
             cmd = f"cephadm shell -- {cmd}"
 
         out, err = client.exec_command(cmd=cmd, sudo=True)
@@ -711,7 +711,7 @@ class Ceph(object):
         Returns:
            int: return 0 when ceph is in healthy state, else 1
         """
-        pacific = True if (rhbuild and rhbuild.split(".")[0] >= "5") else False
+        pacific = get_rhbuild_major_version(rhbuild) >= 5
         if not client:
             client = (
                 self.get_ceph_object("client")
@@ -1139,7 +1139,7 @@ class Ceph(object):
             Returns the fsid of the cluster
         """
         cmd = "ceph fsid"
-        pacific = True if (rhbuild and rhbuild.split(".")[0] >= "5") else False
+        pacific = get_rhbuild_major_version(rhbuild) >= 5
         if not client:
             client = (
                 self.get_ceph_object("client")

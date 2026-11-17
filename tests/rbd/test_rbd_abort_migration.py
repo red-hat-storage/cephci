@@ -36,7 +36,7 @@ Test Case Flow:
 from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
-from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.utils import get_ceph_version_from_rhbuild, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.migration import verify_migration_state
 from ceph.rbd.workflows.rbd import create_single_pool_and_images
@@ -111,7 +111,7 @@ def rollback_migration(rbd_obj, client, **kw):
                 client=client,
                 cluster="ceph",
                 rbd=rbd,
-                ceph_version=int(config.get("rhbuild")[0]),
+                ceph_version=get_ceph_version_from_rhbuild(config.get("rhbuild")),
                 is_ec_pool=is_ec_pool,
                 is_secondary=False,
                 do_not_create_image=True,

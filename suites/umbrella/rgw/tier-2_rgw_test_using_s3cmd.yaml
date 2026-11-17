@@ -252,7 +252,6 @@ tests:
       desc: disable and enable dynamic resharding for 1K buckets
       polarion-id: CEPH-11478
       module: sanity_rgw.py
-      comments: known issue BZ2404412 targetted to 9.0
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_1k_bucket.yaml
@@ -311,7 +310,7 @@ tests:
   #     config:
   #       script-name: ../s3cmd/test_rate_limit.py
   #       config-file-name: ../../s3cmd/configs/test_ratelimit_split.yaml
-  #     comments: known issue RFE 2367726 targeted to 9.1
+  #     comments: known issue RFE 2367726 targeted to 10.0
 
   - test:
       name: Test ratelimit on bucket owner change
@@ -327,7 +326,6 @@ tests:
       desc: Setting Public acl to the bucket
       polarion-id: CEPH-83619036
       module: sanity_rgw.py
-      comments: Known product issue BZ2367947 targeted to 8.0z5
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_setting_public_acl.yaml
@@ -337,7 +335,6 @@ tests:
       desc: test create existing bucket with rgw config rgw_bucket_eexist_override
       polarion-id: CEPH-83620440
       module: sanity_rgw.py
-      comments: Known product issue BZ2368828 targeted to 8.0z5
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_create_bucket_for_existing_bucket.yaml

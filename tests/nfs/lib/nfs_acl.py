@@ -142,6 +142,12 @@ class NfsAcl:
         log.info("Adding ACE to %s: %s", path, ace_spec)
         self.client.exec_command(sudo=True, cmd=f"nfs4_setfacl -a '{ace_spec}' {path}")
 
+    def remove_acl(self, name, ace_spec):
+        """Remove an ACE using ``nfs4_setfacl -x``."""
+        path = self._full_path(name)
+        log.info("Removing ACE from %s: %s", path, ace_spec)
+        self.client.exec_command(sudo=True, cmd=f"nfs4_setfacl -x '{ace_spec}' {path}")
+
     def set_acl_from_file(self, name, spec_file_path):
         """Apply ACL from a spec file using ``nfs4_setfacl -S``."""
         path = self._full_path(name)
