@@ -8,10 +8,11 @@
 #   restarts and primary handovers. Exported via Prometheus/ceph-exporter.
 #
 # Counter schema (recoverystate_perf):
-#   pg_vulnerability_duration: {avgcount, sum, avgtime, max_inc}
+#   pg_vulnerability_duration: {avgcount, sum, avgtime[, max_inc]}
 #   pg_vulnerability_duration_min
-#   pg_rebuild_duration: {avgcount, sum, avgtime, max_inc}
+#   pg_rebuild_duration: {avgcount, sum, avgtime[, max_inc]}
 #   pg_rebuild_duration_min
+#   Note: max_inc exists only when avgcount > 1 (absent after reset / single sample)
 #
 # Known limitations (documented):
 #   - CRUSH rebalance / add OSD / autoscaler counted like failure
@@ -22,523 +23,534 @@
 tests:
   # Cluster deployment stage
 
-  - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
+  # - test:
+  #     abort-on-fail: true
+  #     desc: Install software pre-requisites for cluster deployment.
+  #     module: install_prereq.py
+  #     name: setup pre-requisites
 
-  - test:
-      abort-on-fail: true
-      config:
-        verify_cluster_health: true
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              base_cmd_args:
-                verbose: true
-              args:
-                mon-ip: node1
-                orphan-initial-daemons: true
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: mgr
-              args:
-                placement:
-                  label: mgr
-          - config:
-              command: apply
-              service: mon
-              args:
-                placement:
-                  label: mon
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-      desc: RHCS cluster deployment using cephadm.
-      destroy-cluster: false
-      module: test_cephadm.py
-      name: deploy cluster
+  # - test:
+  #     abort-on-fail: true
+  #     config:
+  #       verify_cluster_health: true
+  #       steps:
+  #         - config:
+  #             command: bootstrap
+  #             service: cephadm
+  #             base_cmd_args:
+  #               verbose: true
+  #             args:
+  #               mon-ip: node1
+  #               orphan-initial-daemons: true
+  #         - config:
+  #             command: add_hosts
+  #             service: host
+  #             args:
+  #               attach_ip_address: true
+  #               labels: apply-all-labels
+  #         - config:
+  #             command: apply
+  #             service: mgr
+  #             args:
+  #               placement:
+  #                 label: mgr
+  #         - config:
+  #             command: apply
+  #             service: mon
+  #             args:
+  #               placement:
+  #                 label: mon
+  #         - config:
+  #             command: apply
+  #             service: osd
+  #             args:
+  #               all-available-devices: true
+  #     desc: RHCS cluster deployment using cephadm.
+  #     destroy-cluster: false
+  #     module: test_cephadm.py
+  #     name: deploy cluster
 
-  - test:
-      name: Configure client admin
-      desc: Configures client admin node on cluster
-      module: test_client.py
-      polarion-id:
-      config:
-        command: add
-        id: client.1
-        node: node17
-        install_packages:
-          - ceph-common
-          - ceph-base
-        copy_admin_keyring: true
-        caps:
-          mon: "allow *"
-          osd: "allow *"
-          mds: "allow *"
-          mgr: "allow *"
+  # - test:
+  #     name: Configure client admin
+  #     desc: Configures client admin node on cluster
+  #     module: test_client.py
+  #     polarion-id:
+  #     config:
+  #       command: add
+  #       id: client.1
+  #       node: node17
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-base
+  #       copy_admin_keyring: true
+  #       caps:
+  #         mon: "allow *"
+  #         osd: "allow *"
+  #         mds: "allow *"
+  #         mgr: "allow *"
 
-  - test:
-      name: Enable logging to file
-      module: rados_prep.py
-      config:
-        log_to_file: true
-      desc: Change config options to enable logging to file
+  # - test:
+  #     name: Enable logging to file
+  #     module: rados_prep.py
+  #     config:
+  #       log_to_file: true
+  #     desc: Change config options to enable logging to file
 
   # =========================================================================
   # Test plan cases (Durability metrics.pdf)
   # =========================================================================
 
   # --- 1. Verify last_degraded field exists ---
-  - test:
-      name: last_degraded field exists in pg dump
-      desc: ceph pg dump JSON shows last_degraded for each PG; equals last_clean for newly created PGs
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: last_degraded_present
+  # - test:
+  #     name: last_degraded field exists in pg dump
+  #     desc: ceph pg dump JSON shows last_degraded for each PG; equals last_clean for newly created PGs
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: last_degraded_present
 
-  # --- 2. Verify last_degraded timestamp latching logic ---
-  - test:
-      name: last_degraded timestamp latching
-      desc: Stop OSD to degrade; last_degraded set at stop time, unchanged while degraded; last_degraded < last_clean after recovery
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: last_degraded_latch
-        pool_name: dur_lastdeg_latch
-        nobj: 50
-        delete_pool: true
+  # # --- 2. Verify last_degraded timestamp latching logic ---
+  # - test:
+  #     name: last_degraded timestamp latching
+  #     desc: Stop OSD to degrade; last_degraded set at stop time, unchanged while degraded; last_degraded < last_clean after recovery
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: last_degraded_latch
+  #       pool_name: dur_lastdeg_latch
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- 3. Verify pg query output ---
-  - test:
-      name: last_degraded in pg query
-      desc: ceph pg <pgid> query shows last_degraded with correct timestamp format
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: last_degraded_pg_query
-        pool_name: dur_lastdeg_query
-        nobj: 20
-        delete_pool: true
+  # # --- 3. Verify pg query output ---
+  # - test:
+  #     name: last_degraded in pg query
+  #     desc: ceph pg <pgid> query shows last_degraded with correct timestamp format
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: last_degraded_pg_query
+  #       pool_name: dur_lastdeg_query
+  #       nobj: 20
+  #       delete_pool: true
 
-  # --- 4. Checks for newly introduced counters ---
-  - test:
-      name: Durability counter registration check
-      desc: recoverystate_perf has pg_vulnerability_duration(+max_inc)/_min and pg_rebuild_duration(+max_inc)/_min at defaults on all OSDs
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: counter_registration
+  # # --- 4. Checks for newly introduced counters ---
+  # - test:
+  #     name: Durability counter registration check
+  #     desc: recoverystate_perf has pg_vulnerability_duration/_min and pg_rebuild_duration/_min at defaults on all OSDs (max_inc absent when avgcount <= 1)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: counter_registration
 
   # --- 5. Counter Priority is PRIO_USEFUL ---
-  - test:
-      name: Durability counter priority check
-      desc: perf schema priority of vulnerability/rebuild (incl max/min) is PRIO_USEFUL (5)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: counter_priority
+  # - test:
+  #     name: Durability counter priority check
+  #     desc: perf schema priority of vulnerability/rebuild (incl max/min) is PRIO_USEFUL (5)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: counter_priority
 
-  - test:
-      name: Durability counter section name check
-      desc: Counters live in recoverystate_perf, not osd section
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: counter_section_name
+# PAss 
+  # - test:
+  #     name: Durability counter section name check
+  #     desc: Counters live in recoverystate_perf, not osd section
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: counter_section_name
 
   # --- 6. Prometheus Integration + PromQL (IBMCEPH-17425) ---
-  # Metric families (ceph-exporter):
-  #   ceph_recoverystate_perf_pg_vulnerability_duration_{sum,count,max_inc}
-  #   ceph_recoverystate_perf_pg_vulnerability_duration_min
-  #   ceph_recoverystate_perf_pg_rebuild_duration_{sum,count,max_inc}
-  #   ceph_recoverystate_perf_pg_rebuild_duration_min
-  # Note: avgtime is NOT scraped; derive via sum/count (IBMCEPH-17425).
-  # PromQL source: IBMCEPH-17425 comments (Ankush / Sridhar) adapted for both
-  # vulnerability and rebuild counter families in the full solution.
+  # ceph-exporter scrape (curl -s http://localhost:9926/metrics):
+  #   ceph_recoverystate_perf_pg_rebuild_duration_{count,sum,min}
+  #   ceph_recoverystate_perf_pg_vulnerability_duration_{count,sum,min}
+  # Note: avgtime and max_inc are NOT exported; avgtime = sum/count.
+  # Prometheus on :9095 also knows these names via label __name__.
 
-  - test:
-      name: Durability Prometheus integration - metric presence
-      desc: After rebuild, exporter scrape exposes vulnerability and rebuild sum/count/max_inc/min series
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_integration
+  # - test:
+  #     name: Durability Prometheus integration - metric presence
+  #     desc: After rebuild, curl localhost:9926/metrics exposes rebuild and vulnerability count/sum/min series
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_integration
+  #       exporter_port: 9926
 
-  - test:
-      name: Prometheus metrics match perf dump values
-      desc: Cross-validate Prometheus series against OSD perf dump for both counter families on affected OSD
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_matches_perf_dump
+  # - test:
+  #     name: Durability Prometheus API - metric presence
+  #     desc: After rebuild, Prometheus /api/v1/query returns rebuild and vulnerability count/sum/min for the primary OSD
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_api_metric_presence
+  #       prometheus_port: 9095
+  #       prom_scrape_wait: 30
+  #       pool_name: rebuild_prom_api
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Prometheus metrics match perf dump values
+  #     desc: Cross-validate Prometheus series against OSD perf dump for both counter families on affected OSD
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_matches_perf_dump
 
   # --- IBMCEPH-17425 #1: MTTR windowed (rate form) ---
-  - test:
-      name: PromQL MTTR windowed - rebuild
-      desc: IBMCEPH-17425 - rate(sum[1h])/rate(count[1h]) for rebuild; match hand-computed avg episode duration
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_windowed
-        counter_family: rebuild
-        promql: "rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h])"
-        pool_name: dur_prom_mttr_r
-        nobj: 80
-        delete_pool: true
+  # - test:
+  #     name: PromQL MTTR windowed - rebuild
+  #     desc: IBMCEPH-17425 - rate(sum[1h])/rate(count[1h]) for rebuild; match hand-computed avg episode duration
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_windowed
+  #       counter_family: rebuild
+  #       promql: "rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h])"
+  #       pool_name: dur_prom_mttr_r
+  #       nobj: 80
+  #       delete_pool: true
 
-  - test:
-      name: PromQL MTTR windowed - vulnerability
-      desc: IBMCEPH-17425 adapted - rate(vuln_sum[1h])/rate(vuln_count[1h]) mean time to restore redundancy
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_windowed
-        counter_family: vulnerability
-        promql: "rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h])"
-        pool_name: dur_prom_mttr_v
-        nobj: 80
-        delete_pool: true
+  # - test:
+  #     name: PromQL MTTR windowed - vulnerability
+  #     desc: IBMCEPH-17425 adapted - rate(vuln_sum[1h])/rate(vuln_count[1h]) mean time to restore redundancy
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_windowed
+  #       counter_family: vulnerability
+  #       promql: "rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h])"
+  #       pool_name: dur_prom_mttr_v
+  #       nobj: 80
+  #       delete_pool: true
 
   # --- IBMCEPH-17425 #2: MTTR all-time since OSD boot ---
-  - test:
-      name: PromQL MTTR all-time since boot - rebuild
-      desc: IBMCEPH-17425 - sum/count instant query; must match perf dump avgtime
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_all_time
-        counter_family: rebuild
-        promql: "ceph_recoverystate_perf_pg_rebuild_duration_sum / ceph_recoverystate_perf_pg_rebuild_duration_count"
-        pool_name: dur_prom_boot_r
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL MTTR all-time since boot - rebuild
+  #     desc: IBMCEPH-17425 - sum/count instant query; must match perf dump avgtime
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_all_time
+  #       counter_family: rebuild
+  #       promql: "ceph_recoverystate_perf_pg_rebuild_duration_sum / ceph_recoverystate_perf_pg_rebuild_duration_count"
+  #       pool_name: dur_prom_boot_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL MTTR all-time since boot - vulnerability
-      desc: IBMCEPH-17425 adapted - vuln sum/count matches perf dump avgtime
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_all_time
-        counter_family: vulnerability
-        promql: "ceph_recoverystate_perf_pg_vulnerability_duration_sum / ceph_recoverystate_perf_pg_vulnerability_duration_count"
-        pool_name: dur_prom_boot_v
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL MTTR all-time since boot - vulnerability
+  #     desc: IBMCEPH-17425 adapted - vuln sum/count matches perf dump avgtime
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_all_time
+  #       counter_family: vulnerability
+  #       promql: "ceph_recoverystate_perf_pg_vulnerability_duration_sum / ceph_recoverystate_perf_pg_vulnerability_duration_count"
+  #       pool_name: dur_prom_boot_v
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 Ankush: clamp_min instant average ---
-  - test:
-      name: PromQL clamp_min average - rebuild
-      desc: IBMCEPH-17425 Ankush - sum / clamp_min(count, 1); equals perf dump avgtime; safe when count=0
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: clamp_min_average
-        counter_family: rebuild
-        promql: "ceph_recoverystate_perf_pg_rebuild_duration_sum / clamp_min(ceph_recoverystate_perf_pg_rebuild_duration_count, 1)"
-        pool_name: dur_prom_clamp_r
-        nobj: 50
-        delete_pool: true
+  # # --- IBMCEPH-17425 Ankush: clamp_min instant average ---
+  # - test:
+  #     name: PromQL clamp_min average - rebuild
+  #     desc: IBMCEPH-17425 Ankush - sum / clamp_min(count, 1); equals perf dump avgtime; safe when count=0
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: clamp_min_average
+  #       counter_family: rebuild
+  #       promql: "ceph_recoverystate_perf_pg_rebuild_duration_sum / clamp_min(ceph_recoverystate_perf_pg_rebuild_duration_count, 1)"
+  #       pool_name: dur_prom_clamp_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL clamp_min average - vulnerability
-      desc: IBMCEPH-17425 adapted - vuln sum / clamp_min(count, 1)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: clamp_min_average
-        counter_family: vulnerability
-        promql: "ceph_recoverystate_perf_pg_vulnerability_duration_sum / clamp_min(ceph_recoverystate_perf_pg_vulnerability_duration_count, 1)"
-        pool_name: dur_prom_clamp_v
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL clamp_min average - vulnerability
+  #     desc: IBMCEPH-17425 adapted - vuln sum / clamp_min(count, 1)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: clamp_min_average
+  #       counter_family: vulnerability
+  #       promql: "ceph_recoverystate_perf_pg_vulnerability_duration_sum / clamp_min(ceph_recoverystate_perf_pg_vulnerability_duration_count, 1)"
+  #       pool_name: dur_prom_clamp_v
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 #3: NaN-safe per-OSD (drop idle series) ---
-  - test:
-      name: PromQL NaN-safe per-OSD MTTR - rebuild
-      desc: IBMCEPH-17425 - windowed MTTR and rate(count[1h]) > 0; idle OSDs absent not zero-div
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_nan_safe
-        counter_family: rebuild
-        promql: "(rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h])) and rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h]) > 0"
-        pool_name: dur_prom_nan_r
-        nobj: 50
-        delete_pool: true
+  # # --- IBMCEPH-17425 #3: NaN-safe per-OSD (drop idle series) ---
+  # - test:
+  #     name: PromQL NaN-safe per-OSD MTTR - rebuild
+  #     desc: IBMCEPH-17425 - windowed MTTR and rate(count[1h]) > 0; idle OSDs absent not zero-div
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_nan_safe
+  #       counter_family: rebuild
+  #       promql: "(rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h])) and rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h]) > 0"
+  #       pool_name: dur_prom_nan_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL NaN-safe per-OSD MTTR - vulnerability
-      desc: IBMCEPH-17425 adapted - vuln windowed MTTR with rate(count)>0 guard
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_nan_safe
-        counter_family: vulnerability
-        promql: "(rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h])) and rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h]) > 0"
-        pool_name: dur_prom_nan_v
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL NaN-safe per-OSD MTTR - vulnerability
+  #     desc: IBMCEPH-17425 adapted - vuln windowed MTTR with rate(count)>0 guard
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_nan_safe
+  #       counter_family: vulnerability
+  #       promql: "(rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h])) and rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h]) > 0"
+  #       pool_name: dur_prom_nan_v
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 #4: aggregation-safe cluster avg ---
-  - test:
-      name: PromQL aggregation-safe cluster avg - rebuild
-      desc: IBMCEPH-17425 - avg(rate(sum)/clamp_min(rate(count),1e-9)); idle OSD must not poison rollup
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_agg_safe
-        counter_family: rebuild
-        promql: "avg(rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / clamp_min(rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h]), 1e-9))"
-        pool_name: dur_prom_agg_r
-        nobj: 50
-        delete_pool: true
+  # # --- IBMCEPH-17425 #4: aggregation-safe cluster avg ---
+  # - test:
+  #     name: PromQL aggregation-safe cluster avg - rebuild
+  #     desc: IBMCEPH-17425 - avg(rate(sum)/clamp_min(rate(count),1e-9)); idle OSD must not poison rollup
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_agg_safe
+  #       counter_family: rebuild
+  #       promql: "avg(rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / clamp_min(rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h]), 1e-9))"
+  #       pool_name: dur_prom_agg_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL aggregation-safe cluster avg - vulnerability
-      desc: IBMCEPH-17425 adapted - cluster avg MTTR for vulnerability
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: mttr_agg_safe
-        counter_family: vulnerability
-        promql: "avg(rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) / clamp_min(rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h]), 1e-9))"
-        pool_name: dur_prom_agg_v
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL aggregation-safe cluster avg - vulnerability
+  #     desc: IBMCEPH-17425 adapted - cluster avg MTTR for vulnerability
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: mttr_agg_safe
+  #       counter_family: vulnerability
+  #       promql: "avg(rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) / clamp_min(rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[1h]), 1e-9))"
+  #       pool_name: dur_prom_agg_v
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 Ankush: cluster delta form ---
-  - test:
-      name: PromQL cluster-wide delta average - rebuild
-      desc: IBMCEPH-17425 Ankush - sum(delta(sum[5m]))/sum(delta(count[5m])) across all OSDs
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: cluster_delta_average
-        counter_family: rebuild
-        promql: "sum(delta(ceph_recoverystate_perf_pg_rebuild_duration_sum[5m])) / sum(delta(ceph_recoverystate_perf_pg_rebuild_duration_count[5m]))"
-        pool_name: dur_prom_cdelta_r
-        nobj: 80
-        delete_pool: true
+  # # --- IBMCEPH-17425 Ankush: cluster delta form ---
+  # - test:
+  #     name: PromQL cluster-wide delta average - rebuild
+  #     desc: IBMCEPH-17425 Ankush - sum(delta(sum[5m]))/sum(delta(count[5m])) across all OSDs
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: cluster_delta_average
+  #       counter_family: rebuild
+  #       promql: "sum(delta(ceph_recoverystate_perf_pg_rebuild_duration_sum[5m])) / sum(delta(ceph_recoverystate_perf_pg_rebuild_duration_count[5m]))"
+  #       pool_name: dur_prom_cdelta_r
+  #       nobj: 80
+  #       delete_pool: true
 
-  - test:
-      name: PromQL cluster-wide delta average - vulnerability
-      desc: IBMCEPH-17425 adapted - cluster delta average for vulnerability
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: cluster_delta_average
-        counter_family: vulnerability
-        promql: "sum(delta(ceph_recoverystate_perf_pg_vulnerability_duration_sum[5m])) / sum(delta(ceph_recoverystate_perf_pg_vulnerability_duration_count[5m]))"
-        pool_name: dur_prom_cdelta_v
-        nobj: 80
-        delete_pool: true
+  # - test:
+  #     name: PromQL cluster-wide delta average - vulnerability
+  #     desc: IBMCEPH-17425 adapted - cluster delta average for vulnerability
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: cluster_delta_average
+  #       counter_family: vulnerability
+  #       promql: "sum(delta(ceph_recoverystate_perf_pg_vulnerability_duration_sum[5m])) / sum(delta(ceph_recoverystate_perf_pg_vulnerability_duration_count[5m]))"
+  #       pool_name: dur_prom_cdelta_v
+  #       nobj: 80
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 #5/#6: completion frequency ---
-  - test:
-      name: PromQL rebuild completion frequency rate
-      desc: IBMCEPH-17425 - rate(count[24h]) events/sec churn indicator
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: completion_frequency_rate
-        counter_family: rebuild
-        promql: "rate(ceph_recoverystate_perf_pg_rebuild_duration_count[24h])"
-        pool_name: dur_prom_freq_r
-        nobj: 50
-        delete_pool: true
+  # # --- IBMCEPH-17425 #5/#6: completion frequency ---
+  # - test:
+  #     name: PromQL rebuild completion frequency rate
+  #     desc: IBMCEPH-17425 - rate(count[24h]) events/sec churn indicator
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: completion_frequency_rate
+  #       counter_family: rebuild
+  #       promql: "rate(ceph_recoverystate_perf_pg_rebuild_duration_count[24h])"
+  #       pool_name: dur_prom_freq_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL rebuild completion frequency increase
-      desc: IBMCEPH-17425 - increase(count{ceph_daemon}[7d]) absolute episode count
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: completion_frequency_increase
-        counter_family: rebuild
-        promql: "increase(ceph_recoverystate_perf_pg_rebuild_duration_count[7d])"
-        pool_name: dur_prom_inc_r
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL rebuild completion frequency increase
+  #     desc: IBMCEPH-17425 - increase(count{ceph_daemon}[7d]) absolute episode count
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: completion_frequency_increase
+  #       counter_family: rebuild
+  #       promql: "increase(ceph_recoverystate_perf_pg_rebuild_duration_count[7d])"
+  #       pool_name: dur_prom_inc_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL vulnerability completion frequency rate
-      desc: IBMCEPH-17425 adapted - rate(vuln_count[24h]) episode frequency
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: completion_frequency_rate
-        counter_family: vulnerability
-        promql: "rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[24h])"
-        pool_name: dur_prom_freq_v
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL vulnerability completion frequency rate
+  #     desc: IBMCEPH-17425 adapted - rate(vuln_count[24h]) episode frequency
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: completion_frequency_rate
+  #       counter_family: vulnerability
+  #       promql: "rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[24h])"
+  #       pool_name: dur_prom_freq_v
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 #7/#8: topk hotspot / slowest ---
-  - test:
-      name: PromQL topk most frequent rebuilders
-      desc: IBMCEPH-17425 - topk(5, rate(rebuild_count[24h])); affected primary appears in top set
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: topk_frequent
-        counter_family: rebuild
-        promql: "topk(5, rate(ceph_recoverystate_perf_pg_rebuild_duration_count[24h]))"
-        pool_name: dur_prom_topk_r
-        nobj: 100
-        delete_pool: true
+  # # --- IBMCEPH-17425 #7/#8: topk hotspot / slowest ---
+  # - test:
+  #     name: PromQL topk most frequent rebuilders
+  #     desc: IBMCEPH-17425 - topk(5, rate(rebuild_count[24h])); affected primary appears in top set
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: topk_frequent
+  #       counter_family: rebuild
+  #       promql: "topk(5, rate(ceph_recoverystate_perf_pg_rebuild_duration_count[24h]))"
+  #       pool_name: dur_prom_topk_r
+  #       nobj: 100
+  #       delete_pool: true
 
-  - test:
-      name: PromQL topk reliability hotspot - vulnerability
-      desc: IBMCEPH-17425 adapted / upstream - topk(5, rate(vuln_count[24h])) triage flag
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: topk_frequent
-        counter_family: vulnerability
-        promql: "topk(5, rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[24h]))"
-        pool_name: dur_prom_topk_v
-        nobj: 100
-        delete_pool: true
+  # - test:
+  #     name: PromQL topk reliability hotspot - vulnerability
+  #     desc: IBMCEPH-17425 adapted / upstream - topk(5, rate(vuln_count[24h])) triage flag
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: topk_frequent
+  #       counter_family: vulnerability
+  #       promql: "topk(5, rate(ceph_recoverystate_perf_pg_vulnerability_duration_count[24h]))"
+  #       pool_name: dur_prom_topk_v
+  #       nobj: 100
+  #       delete_pool: true
 
-  - test:
-      name: PromQL topk slowest average rebuilds
-      desc: IBMCEPH-17425 - topk(5, rate(sum[24h])/rate(count[24h])) slowest OSDs
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: topk_slowest
-        counter_family: rebuild
-        promql: "topk(5, rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[24h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[24h]))"
-        pool_name: dur_prom_slow_r
-        nobj: 80
-        delete_pool: true
+  # - test:
+  #     name: PromQL topk slowest average rebuilds
+  #     desc: IBMCEPH-17425 - topk(5, rate(sum[24h])/rate(count[24h])) slowest OSDs
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: topk_slowest
+  #       counter_family: rebuild
+  #       promql: "topk(5, rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[24h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[24h]))"
+  #       pool_name: dur_prom_slow_r
+  #       nobj: 80
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 #9/#10: cumulative PG-rebuild-seconds ---
-  - test:
-      name: PromQL cumulative rebuild-seconds windowed
-      desc: IBMCEPH-17425 - increase(rebuild_sum[7d]); processing volume not wall-clock vulnerability
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: cumulative_windowed
-        counter_family: rebuild
-        promql: "increase(ceph_recoverystate_perf_pg_rebuild_duration_sum[7d])"
-        pool_name: dur_prom_cum_r
-        nobj: 50
-        delete_pool: true
+  # # --- IBMCEPH-17425 #9/#10: cumulative PG-rebuild-seconds ---
+  # - test:
+  #     name: PromQL cumulative rebuild-seconds windowed
+  #     desc: IBMCEPH-17425 - increase(rebuild_sum[7d]); processing volume not wall-clock vulnerability
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: cumulative_windowed
+  #       counter_family: rebuild
+  #       promql: "increase(ceph_recoverystate_perf_pg_rebuild_duration_sum[7d])"
+  #       pool_name: dur_prom_cum_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL cumulative rebuild-seconds all-time
-      desc: IBMCEPH-17425 - ceph_recoverystate_perf_pg_rebuild_duration_sum equals perf dump sum
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: cumulative_all_time
-        counter_family: rebuild
-        promql: "ceph_recoverystate_perf_pg_rebuild_duration_sum"
-        pool_name: dur_prom_sum_r
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL cumulative rebuild-seconds all-time
+  #     desc: IBMCEPH-17425 - ceph_recoverystate_perf_pg_rebuild_duration_sum equals perf dump sum
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: cumulative_all_time
+  #       counter_family: rebuild
+  #       promql: "ceph_recoverystate_perf_pg_rebuild_duration_sum"
+  #       pool_name: dur_prom_sum_r
+  #       nobj: 50
+  #       delete_pool: true
 
-  - test:
-      name: PromQL weekly vulnerability exposure report
-      desc: Upstream durability - sum(increase(vuln_sum[7d])) cluster-wide exposure seconds
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: weekly_exposure
-        counter_family: vulnerability
-        promql: "sum(increase(ceph_recoverystate_perf_pg_vulnerability_duration_sum[7d]))"
-        pool_name: dur_prom_week_v
-        nobj: 80
-        delete_pool: true
+  # - test:
+  #     name: PromQL weekly vulnerability exposure report
+  #     desc: Upstream durability - sum(increase(vuln_sum[7d])) cluster-wide exposure seconds
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: weekly_exposure
+  #       counter_family: vulnerability
+  #       promql: "sum(increase(ceph_recoverystate_perf_pg_vulnerability_duration_sum[7d]))"
+  #       pool_name: dur_prom_week_v
+  #       nobj: 80
+  #       delete_pool: true
 
-  # --- Silent exposure (full solution; vulnerability - rebuild) ---
-  - test:
-      name: PromQL silent exposure fraction
-      desc: rate(vuln_sum[1h]) - rate(rebuild_sum[1h]) >= 0; waiting vs repairing
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: silent_exposure
-        promql: "rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) - rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h])"
-        pool_name: dur_prom_silent
-        nobj: 80
-        delete_pool: true
+  # # --- Silent exposure (full solution; vulnerability - rebuild) ---
+  # - test:
+  #     name: PromQL silent exposure fraction
+  #     desc: rate(vuln_sum[1h]) - rate(rebuild_sum[1h]) >= 0; waiting vs repairing
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: silent_exposure
+  #       promql: "rate(ceph_recoverystate_perf_pg_vulnerability_duration_sum[1h]) - rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h])"
+  #       pool_name: dur_prom_silent
+  #       nobj: 80
+  #       delete_pool: true
 
-  # --- max_inc / min gauges ---
-  - test:
-      name: PromQL vulnerability max_inc worst episode
-      desc: ceph_recoverystate_perf_pg_vulnerability_duration_max_inc matches perf dump max_inc; alert candidate > threshold
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: max_inc
-        counter_family: vulnerability
-        promql: "ceph_recoverystate_perf_pg_vulnerability_duration_max_inc"
-        pool_name: dur_prom_max_v
-        nobj: 80
-        delete_pool: true
+  # # --- max_inc / min gauges ---
+  # - test:
+  #     name: PromQL vulnerability max_inc worst episode
+  #     desc: ceph_recoverystate_perf_pg_vulnerability_duration_max_inc matches perf dump max_inc; alert candidate > threshold
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: max_inc
+  #       counter_family: vulnerability
+  #       promql: "ceph_recoverystate_perf_pg_vulnerability_duration_max_inc"
+  #       pool_name: dur_prom_max_v
+  #       nobj: 80
+  #       delete_pool: true
 
-  - test:
-      name: PromQL rebuild and vulnerability min gauges
-      desc: "*_duration_min series present and match perf dump _min; >0 once any episode exists"
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql
-        query_name: min_gauges
-        promql_rebuild: "ceph_recoverystate_perf_pg_rebuild_duration_min"
-        promql_vulnerability: "ceph_recoverystate_perf_pg_vulnerability_duration_min"
-        pool_name: dur_prom_min
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: PromQL rebuild and vulnerability min gauges
+  #     desc: "*_duration_min series present and match perf dump _min; >0 once any episode exists"
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql
+  #       query_name: min_gauges
+  #       promql_rebuild: "ceph_recoverystate_perf_pg_rebuild_duration_min"
+  #       promql_vulnerability: "ceph_recoverystate_perf_pg_vulnerability_duration_min"
+  #       pool_name: dur_prom_min
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- IBMCEPH-17425 negative: delta after reset must not yield negative avg ---
-  - test:
-      name: PromQL no negative average after OSD counter reset
-      desc: IBMCEPH-17425 - after OSD restart/perf reset, prefer rate() over naive delta(); no negative avg
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_promql_no_negative_after_reset
-        counter_family: rebuild
-        promql_unsafe: "delta(ceph_recoverystate_perf_pg_rebuild_duration_sum[5m]) / clamp_min(delta(ceph_recoverystate_perf_pg_rebuild_duration_count[5m]), 1)"
-        promql_safe: "rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h])"
-        pool_name: dur_prom_neg_reset
-        nobj: 50
-        delete_pool: true
+  # # --- IBMCEPH-17425 negative: delta after reset must not yield negative avg ---
+  # - test:
+  #     name: PromQL no negative average after OSD counter reset
+  #     desc: IBMCEPH-17425 - after OSD restart/perf reset, prefer rate() over naive delta(); no negative avg
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_promql_no_negative_after_reset
+  #       counter_family: rebuild
+  #       promql_unsafe: "delta(ceph_recoverystate_perf_pg_rebuild_duration_sum[5m]) / clamp_min(delta(ceph_recoverystate_perf_pg_rebuild_duration_count[5m]), 1)"
+  #       promql_safe: "rate(ceph_recoverystate_perf_pg_rebuild_duration_sum[1h]) / rate(ceph_recoverystate_perf_pg_rebuild_duration_count[1h])"
+  #       pool_name: dur_prom_neg_reset
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- scrape / exporter restart ---
-  - test:
-      name: Prometheus scrape interval and retention after exporter restart
-      desc: Scrape ~15s; after exporter restart OSD counters unchanged and next scrape matches perf dump
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: prometheus_scrape_after_exporter_restart
-        pool_name: dur_prom_scrape
-        nobj: 50
-        delete_pool: true
+  # # --- scrape / exporter restart ---
+  # - test:
+  #     name: Prometheus scrape interval and retention after exporter restart
+  #     desc: Scrape ~15s; after exporter restart OSD counters unchanged and next scrape matches perf dump
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: prometheus_scrape_after_exporter_restart
+  #       pool_name: dur_prom_scrape
+  #       nobj: 50
+  #       delete_pool: true
 
-  # --- 7. Stop single OSD / Kill OSD process (Non-primary) ---
-  # case1: within mon_osd_down_out_interval | case2: beyond | case3: not restarted
-  # replicated + EC; expect vuln=full exposure, rebuild=active only, rebuild < vuln;
-  # unaffected/replica OSDs unchanged; sub-second uses nanosecond max/min
+  # # --- 7. Stop single OSD / Kill OSD process (Non-primary) ---
+  # # case1: within mon_osd_down_out_interval | case2: beyond | case3: not restarted
+  # # replicated + EC; expect vuln=full exposure, rebuild=active only, rebuild < vuln;
+  # # unaffected/replica OSDs unchanged; sub-second uses nanosecond max/min
 
-  - test:
-      name: Non-primary OSD stop - within down_out_interval (replicated)
-      desc: case1 - stop non-primary < mon_osd_down_out_interval and restart; verify vuln/rebuild on primary
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: non_primary_osd_stop
-        pool_type: replicated
-        pool_name: dur_nonpri_within
-        sub_case: within_down_out
-        nobj: 50
-        delete_pool: true
+  # - test:
+  #     name: Non-primary OSD stop - within down_out_interval (replicated)
+  #     desc: case1 - stop non-primary < mon_osd_down_out_interval and restart; expect vulnerability only (rebuild may stay 0 without mid-window IO)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: non_primary_osd_stop
+  #       pool_type: replicated
+  #       pool_name: dur_nonpri_within
+  #       sub_case: within_down_out
+  #       nobj: 50
+  #       delete_pool: true
 
   - test:
       name: Non-primary OSD stop - beyond down_out_interval (replicated)
@@ -566,7 +578,7 @@ tests:
 
   - test:
       name: Non-primary OSD stop - within down_out_interval (EC)
-      desc: case1 EC - stop non-primary < mon_osd_down_out_interval and restart
+      desc: case1 EC - stop < mon_osd_down_out_interval and restart; expect vulnerability only (rebuild may stay 0 without mid-window IO)
       module: test_pg_rebuild_perf_counters.py
       config:
         scenario: non_primary_osd_stop
@@ -606,769 +618,771 @@ tests:
         nobj: 50
         delete_pool: true
 
-  # --- 8. Stop single OSD / Kill OSD process (Primary) ---
-  # New primary stores counters; downed primary counters NOT reset to 0 on restart
-
-  - test:
-      name: Primary OSD stop - within down_out_interval (replicated)
-      desc: case1 - stop primary < mon_osd_down_out_interval; new primary stores counters; downed primary not cleared
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_osd_stop
-        pool_type: replicated
-        pool_name: dur_pri_within
-        sub_case: within_down_out
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Primary OSD stop - beyond down_out_interval (replicated)
-      desc: case2 - stop primary > mon_osd_down_out_interval; verify counters on new primary
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_osd_stop
-        pool_type: replicated
-        pool_name: dur_pri_rep
-        sub_case: beyond_down_out
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Primary OSD stop - not restarted (replicated)
-      desc: case3 - stop primary permanently; verify counters on new primary
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_osd_stop
-        pool_type: replicated
-        pool_name: dur_pri_perm
-        sub_case: not_restarted
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Primary OSD stop - within down_out_interval (EC)
-      desc: case1 EC - stop primary < mon_osd_down_out_interval
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_osd_stop
-        pool_type: erasure
-        pool_name: dur_pri_ec_within
-        sub_case: within_down_out
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Primary OSD stop - beyond down_out_interval (EC)
-      desc: case2 EC - stop primary > mon_osd_down_out_interval
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_osd_stop
-        pool_type: erasure
-        pool_name: dur_pri_ec
-        sub_case: beyond_down_out
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Primary OSD stop - not restarted (EC)
-      desc: case3 EC - stop primary permanently
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_osd_stop
-        pool_type: erasure
-        pool_name: dur_pri_ec_perm
-        sub_case: not_restarted
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  # --- 9. Stop single OSD Host ---
-
-  - test:
-      name: OSD host stop - within down_out_interval (replicated)
-      desc: case1 - stop host < mon_osd_down_out_interval; counters on primaries of affected PGs
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_host_stop
-        pool_type: replicated
-        pool_name: dur_host_within
-        sub_case: within_down_out
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: OSD host stop - beyond down_out_interval (replicated)
-      desc: case2 - stop host > mon_osd_down_out_interval; new primary stores counters if needed
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_host_stop
-        pool_type: replicated
-        pool_name: dur_host_rep
-        sub_case: beyond_down_out
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: OSD host stop - not restarted (replicated)
-      desc: case3 - stop host permanently; verify counters after re-replication
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_host_stop
-        pool_type: replicated
-        pool_name: dur_host_perm
-        sub_case: not_restarted
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: OSD host stop - within down_out_interval (EC)
-      desc: case1 EC - stop host < mon_osd_down_out_interval
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_host_stop
-        pool_type: erasure
-        pool_name: dur_host_ec_within
-        sub_case: within_down_out
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: OSD host stop - beyond down_out_interval (EC)
-      desc: case2 EC - stop host > mon_osd_down_out_interval
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_host_stop
-        pool_type: erasure
-        pool_name: dur_host_ec
-        sub_case: beyond_down_out
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: OSD host stop - not restarted (EC)
-      desc: case3 EC - stop host permanently
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_host_stop
-        pool_type: erasure
-        pool_name: dur_host_ec_perm
-        sub_case: not_restarted
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  # --- 10. Backfill scenarios (toofull pause / revoke / unfound) ---
-  # rebuild unchanged during pauses; +1 rebuild and >=1 vulnerability after clean
-
-  - test:
-      name: Backfill toofull pause revoke and unfound single sample
-      desc: size 1->2 with backfillfull=0.85; rebuild unchanged during toofull/revoke/unfound; +1 rebuild and >=1 vuln after clean
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: backfill_toofull_unfound
-        pool_name: dur_backfill_toofull
-        original_size: 1
-        new_size: 2
-        nobj: 600
-        backfillfull_ratio: 0.85
-        delete_pool: true
-
-  # --- 11. Misplaced object recovery / pool size / CRUSH reweight ---
-
-  - test:
-      name: Misplaced object recovery - pool size increase
-      desc: Increase pool size; primary vulnerability and rebuild increase (rebalance-vs-failure known limitation)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: misplaced_recovery
-        pool_name: dur_misplaced
-        original_size: 2
-        new_size: 3
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Backfill via OSD reweight
-      desc: Reweight OSD to 0 and back; verify counters track misplaced/backfill recovery
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: backfill_only_recovery
-        pool_name: dur_reweight
-        nobj: 80
-        delete_pool: true
-
-  # --- 12. PG split carries vulnerability window ---
-
-  - test:
-      name: PG split carries vulnerability window
-      desc: Degrade then increase pg_num; child inherits onset from parent; parent and child record rebuild independently
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: pg_split_during_rebuild
-        pool_name: dur_pg_split
-        nobj: 100
-        delete_pool: true
-
-  # --- 13. Repair must NOT contribute ---
-
-  - test:
-      name: Repair does not contribute to durability counters
-      desc: Inconsistent objects + deep-scrub/repair; vulnerability and rebuild counters unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: repair_counters
-        pool_name: dur_repair
-        nobj: 20
-        delete_pool: true
-
-  # --- 14. Recovery with client I/O load ---
-
-  - test:
-      name: Recovery with client IO load (replicated)
-      desc: Continuous IO, stop OSD/host; affected primary counters increment correctly
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: recovery_with_io
-        pool_type: replicated
-        pool_name: dur_io_rep
-        nobj: 100
-        delete_pool: true
-
-  - test:
-      name: Recovery with client IO load (EC)
-      desc: Continuous IO on EC pool, stop OSD; verify counters
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: recovery_with_io
-        pool_type: erasure
-        pool_name: dur_io_ec
-        k: 4
-        m: 2
-        nobj: 100
-        delete_pool: true
-
-  # --- 15. Primary to replica transition must NOT clear counters ---
-
-  - test:
-      name: Primary to replica transition does not clear counters
-      desc: Populate counters, force primary remap; counters not reset to 0 after becoming replica
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_transition
-        pool_name: dur_transition
-        nobj: 30
-        delete_pool: true
-
-  # --- 16. Recovery with throttled settings ---
-
-  - test:
-      name: Recovery with throttled settings (replicated)
-      desc: osd_recovery_max_active=1; rebuild=active only, vulnerability=full exposure
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: throttled_recovery
-        pool_type: replicated
-        pool_name: dur_throttle_rep
-        nobj: 80
-        delete_pool: true
-
-  - test:
-      name: Recovery with throttled settings (EC)
-      desc: osd_recovery_max_active=1 on EC; verify counters
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: throttled_recovery
-        pool_type: erasure
-        pool_name: dur_throttle_ec
-        k: 4
-        m: 2
-        nobj: 80
-        delete_pool: true
-
-  # --- 17. Adding new OSD/host DOES contribute (known limitation) ---
-
-  - test:
-      name: Adding new OSD contributes to durability counters
-      desc: Add OSD, wait for rebalance; vulnerability and rebuild increase (documented rebalance-vs-failure limitation)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: add_osd
-        pool_name: dur_add_osd
-        nobj: 50
-        delete_pool: true
-
-  # --- 18. OSD restart must NOT reset counters to 0 ---
-
-  - test:
-      name: OSD restart does not reset durability counters
-      desc: Populate counters on primary, restart that OSD; pg_vulnerability_duration and pg_rebuild_duration do not reset to 0
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_restart_reset
-        pool_name: dur_restart
-        nobj: 50
-        delete_pool: true
-
-  # --- 19. Multiple PGs finishing at different times ---
-
-  - test:
-      name: Multiple PGs finishing at different times
-      desc: Varied durations (e.g. 8/20/45/60); verify avgcount/sum/avgtime/min/max; rebuild uses recovery/backfill time only
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: multiple_pg_rebuild
-        pool_name: dur_multi_pg
-        pg_num: 32
-        nobj: 200
-        delete_pool: true
-
-  - test:
-      name: Min/max invariant for vulnerability and rebuild
-      desc: Verify max_inc >= samples and _min <= samples for both counter families
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: min_max_invariant
-        delete_pool: true
-
-  # --- 20. Counters survive pool deletion ---
-
-  - test:
-      name: Counters survive pool deletion
-      desc: Populate counters then delete pool; vulnerability/rebuild values remain on OSD
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: pool_delete_counter_persistence
-        pool_name_1: dur_del_1
-        pool_name_2: dur_del_2
-        nobj: 50
-
-  # --- 21. No objects / no redundancy loss (empty pool) ---
-
-  - test:
-      name: Empty pool undersized - vulnerability only
-      desc: Empty pool OSD stop; vulnerability increases, rebuild does NOT (no objects)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: empty_pool_vulnerability
-        pool_name: dur_empty
-        delete_pool: true
-
-  # --- 22. PG split and merge during rebuild ---
-
-  - test:
-      name: PG split and merge during rebuild
-      desc: pg_num/bulk updates; split increases vuln/rebuild; merge only when clean and vulnerability unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: pg_split_merge_during_rebuild
-        pool_name: dur_pg_split_merge
-        nobj: 100
-        delete_pool: true
-
-  # --- 23. Rapid PG state flapping ---
-
-  - test:
-      name: Rapid PG state flapping
-      desc: Stop/start OSD multiple times; each distinct episode recorded; no race/corruption
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: osd_flapping
-        pool_name: dur_flap
-        flap_count: 3
-        nobj: 50
-        delete_pool: true
-
-  # --- 24. Rebuild spanning a primary handover (full solution) ---
-  # Single consolidated vulnerability/rebuild on primary for entire window (not interim fragmentation)
-
-  - test:
-      name: Rebuild spanning primary handover - within down_out
-      desc: case1 - mid-rebuild primary switch before mon_osd_down_out_interval; single consolidated episode
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: rebuild_spanning_handover
-        pool_name: dur_handover_within
-        sub_case: within_down_out
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Rebuild spanning primary handover - beyond down_out
-      desc: case2 - mid-rebuild primary switch after mon_osd_down_out_interval; single consolidated episode
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: rebuild_spanning_handover
-        pool_name: dur_handover_beyond
-        sub_case: beyond_down_out
-        nobj: 50
-        delete_pool: true
-
-  # --- 25. Rolling upgrade from n-2/n-1 to n ---
-
-  - test:
-      name: Rolling upgrade n-1 to n durability metrics
-      desc: Upgrade OSDs; pg_stat_t decode defaults missing last_degraded to last_clean; field available post-upgrade
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: rolling_upgrade_durability
-        nobj: 50
-
-  # --- 26. Mixed version cluster behavior ---
-
-  - test:
-      name: Mixed version cluster durability metrics
-      desc: Mixed n-1/n OSDs; failure on both; older OSDs do not crash on new encoding; full function post-upgrade
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: mixed_version_durability
-        nobj: 50
-
-  # --- 27. Serviceability scenarios ---
-
-  - test:
-      name: Serviceability - add/remove OSD host mon mgr and rolling restart
-      desc: Add/remove OSD/host/mon/mgr, rolling restart, rack failure; vuln/rebuild persist and stay accurate
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: serviceability_scenarios
-        nobj: 50
-        delete_pool: true
-
-  # --- 28. Negative scenarios ---
-
-  - test:
-      name: MGR restart does not reset OSD counters
-      desc: Trigger rebuild, restart MGR; OSD vulnerability/rebuild counters unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: negative_daemon_restart
-        daemon_type: mgr
-        pool_name: dur_neg_mgr
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: MON restart does not reset OSD counters
-      desc: Trigger rebuild, restart MON; OSD durability counters unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: negative_daemon_restart
-        daemon_type: mon
-        pool_name: dur_neg_mon
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: ceph-exporter restart does not reset OSD counters
-      desc: Trigger rebuild, restart exporter/Prometheus; OSD counters unchanged and next scrape matches
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: negative_daemon_restart
-        daemon_type: ceph-exporter
-        pool_name: dur_neg_exp
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Prometheus service restart does not reset OSD counters
-      desc: Trigger rebuild, restart Prometheus; OSD counters unchanged; historical scrape points retained
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: negative_daemon_restart
-        daemon_type: prometheus
-        pool_name: dur_neg_prom
-        nobj: 50
-        delete_pool: true
-
-  # =========================================================================
-  # Edge cases / bug-hunting (plan + full-solution limitations + older suite)
-  # =========================================================================
-
-  # --- rebuild vs vulnerability invariant ---
-  - test:
-      name: Rebuild duration less than or equal vulnerability duration
-      desc: After controlled failure/recovery verify rebuild sum <= vulnerability sum and avgcount relationships
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: rebuild_vs_vulnerability
-        pool_name: dur_rebuild_vs_vuln
-        nobj: 80
-        delete_pool: true
-
-  # --- per-OSD scope ---
-  - test:
-      name: Only affected primary OSDs increment counters
-      desc: Unrelated and replica OSDs must remain unchanged after a localized OSD failure
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: per_osd_counter_scope
-        pool_name: dur_per_osd
-        nobj: 50
-        delete_pool: true
-
-  # --- noout / peering-only (no recovery) ---
-  - test:
-      name: No recovery with noout flag (replicated)
-      desc: Set noout, stop/restart OSD quickly; vulnerability and rebuild counters unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: no_recovery_noout
-        pool_type: replicated
-        pool_name: dur_noout_rep
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: No recovery with noout flag (EC)
-      desc: Set noout on EC pool; stop/restart OSD quickly; counters unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: no_recovery_noout
-        pool_type: erasure
-        pool_name: dur_noout_ec
-        k: 4
-        m: 2
-        nobj: 50
-        delete_pool: true
-
-  - test:
-      name: Peering-only event does not increment counters
-      desc: Quick OSD bounce with noout (peering only, no recovery); counters unchanged
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: peering_only_no_recovery
-        pool_name: dur_peer_only
-        nobj: 30
-        delete_pool: true
-
-  # --- sub-second / nanosecond resolution ---
-  - test:
-      name: Sub-second vulnerability and rebuild tracking
-      desc: Tiny pool fast rebuild; max_inc/_min record sub-second (nanosecond) durations, not truncated to 0
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: sub_second_rebuild
-        pool_name: dur_subsec
-        delete_pool: true
-
-  # --- double latch / sustained degraded ---
-  - test:
-      name: Double latch prevention during sustained degraded state
-      desc: Keep PG degraded with throttled recovery; no double-counting of vulnerability episodes
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: double_latch_prevention
-        pool_name: dur_dbl_latch
-        nobj: 50
-        delete_pool: true
-
-  # --- mid-peering false completion ---
-  - test:
-      name: Mid-peering false completion does not close window
-      desc: Momentary degraded-count=0 during peering must not publish a vulnerability sample
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: mid_peering_false_completion
-        pool_name: dur_mid_peer
-        nobj: 50
-        delete_pool: true
-
-  # --- same-primary interval restart ---
-  - test:
-      name: Same-primary interval restart keeps single vulnerability window
-      desc: Interval churn under same primary must not wipe onset; one consolidated vulnerability sample
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: same_primary_interval_restart
-        pool_name: dur_same_pri_interval
-        nobj: 50
-        delete_pool: true
-
-  # --- restart loop during degradation ---
-  - test:
-      name: OSD restart loop during degradation - single window
-      desc: Restart primary repeatedly while degraded; single vulnerability window recorded
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: restart_loop_single_window
-        pool_name: dur_restart_loop
-        nobj: 50
-        delete_pool: true
-
-  # --- last_degraded persists across primary restart mid-window ---
-  - test:
-      name: last_degraded persists across primary OSD restart mid-window
-      desc: Kill/restart primary mid-degradation; last_degraded persists; eventual duration uses true onset
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: last_degraded_persists_restart
-        pool_name: dur_persist_restart
-        nobj: 50
-        delete_pool: true
-
-  # --- exactly-once close-to-publish ---
-  - test:
-      name: Exactly-once recording across close-to-publish crash
-      desc: Crash primary near window close/publish; vuln episode recorded exactly once (vuln_window_reported)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: exactly_once_close_publish
-        pool_name: dur_exactly_once
-        nobj: 50
-        delete_pool: true
-
-  # --- primary crash during recovery ---
-  - test:
-      name: Primary crash during recovery continues on new primary
-      desc: Crash primary mid-recovery; new primary continues window and records one consolidated episode
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: primary_crash_during_recovery
-        pool_name: dur_pri_crash
-        nobj: 80
-        delete_pool: true
-
-  # --- compound / multi-pool / high PG ---
-  - test:
-      name: Compound failure - second OSD fails during recovery
-      desc: Stop second OSD while first failure is recovering; counters track both episodes
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: compound_failure
-        pool_name: dur_compound
-        nobj: 80
-        delete_pool: true
-
-  - test:
-      name: Multiple pools sharing same primary OSD
-      desc: Multiple pools on same primary; trigger recovery; verify aggregate counters
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: multi_pool_same_primary
-        pool_prefix: dur_mp
-        num_pools: 3
-        nobj: 30
-        delete_pool: true
-
-  - test:
-      name: High PG count with simultaneous failures
-      desc: Large pg_num pool with concurrent OSD failure; counters remain consistent under load
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: high_pg_simultaneous_failure
-        pool_name: dur_high_pg
-        pg_num: 128
-        nobj: 300
-        delete_pool: true
-
-  # --- last_degraded undersized via OSD out ---
-  - test:
-      name: last_degraded armed by undersized via OSD out
-      desc: Mark OSD out; undersized state arms last_degraded and closes vulnerability window on clean
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: last_degraded_undersized
-        pool_name: dur_lastdeg_under
-        nobj: 50
-        delete_pool: true
-
-  # --- kill -9 vs systemctl stop ---
-  - test:
-      name: Non-primary OSD kill -9 beyond down_out (replicated)
-      desc: kill -9 non-primary beyond mon_osd_down_out_interval; verify vuln/rebuild same as clean stop
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: non_primary_osd_stop
-        pool_type: replicated
-        pool_name: dur_nonpri_kill9
-        sub_case: beyond_down_out
-        kill_signal: 9
-        nobj: 50
-        delete_pool: true
-
-  # --- network partition ---
-  - test:
-      name: Network partition during degradation
-      desc: Partition primary from replicas mid-window; verify no corruption and correct eventual recording
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: network_partition_during_degradation
-        pool_name: dur_net_part
-        nobj: 50
-        delete_pool: true
-
-  # --- very long window ---
-  - test:
-      name: Very long vulnerability window
-      desc: Hold PG degraded for extended time then recover; vulnerability sum approximates wall-clock exposure
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: long_vulnerability_window
-        pool_name: dur_long_window
-        hold_secs: 600
-        nobj: 50
-        delete_pool: true
-
-  # --- PG merge when clean ---
-  - test:
-      name: PG merge when clean does not change vulnerability
-      desc: Decrease pg_num after active+clean; vulnerability counter must not change
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: pg_merge_when_clean
-        pool_name: dur_pg_merge
-        nobj: 100
-        delete_pool: true
-
-  # --- autoscaler / balancer benign rebalance (known limitation) ---
-  - test:
-      name: PG autoscaler activity increments vulnerability (known limitation)
-      desc: Enable autoscaler resize; vulnerability may increase with zero redundancy loss (document limitation)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: autoscaler_rebalance_limitation
-        pool_name: dur_autoscaler
-        nobj: 100
-        delete_pool: true
-
-  - test:
-      name: Balancer activity increments vulnerability (known limitation)
-      desc: Trigger balancer optimize; vulnerability may increase for remapped PGs (document limitation)
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: balancer_rebalance_limitation
-        pool_name: dur_balancer
-        nobj: 100
-        delete_pool: true
-
-  # --- inactive PG not counted ---
-  - test:
-      name: Inactive stuck PG does not increment durability counters
-      desc: PG stuck below Activating is availability loss not redundancy loss; counters must not count it
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: inactive_pg_not_counted
-        pool_name: dur_inactive
-        nobj: 30
-        delete_pool: true
-
-  # --- kill OSD during last_degraded update ---
-  - test:
-      name: OSD crash during last_degraded update - no corruption
-      desc: Crash OSD while arming last_degraded; no pg_history corruption; window recoverable
-      module: test_pg_rebuild_perf_counters.py
-      config:
-        scenario: crash_during_last_degraded_update
-        pool_name: dur_crash_lastdeg
-        nobj: 50
-        delete_pool: true
+  # # --- 8. Stop single OSD / Kill OSD process (Primary) ---
+  # # within_down_out: same primary stores vuln/rebuild after return
+  # # stays down / beyond: new acting primary stores durations
+  # # recovering → rebuild++; degraded/undersized → vulnerability++
+
+  # - test:
+  #     name: Primary OSD stop - within down_out_interval (replicated)
+  #     desc: case1 - primary returns within down_out; vuln/rebuild stored on that same primary (rebuild only if recovering)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_osd_stop
+  #       pool_type: replicated
+  #       pool_name: dur_pri_within
+  #       sub_case: within_down_out
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Primary OSD stop - beyond down_out_interval (replicated)
+  #     desc: case2 - primary out beyond down_out; new acting primary stores vuln/rebuild durations
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_osd_stop
+  #       pool_type: replicated
+  #       pool_name: dur_pri_rep
+  #       sub_case: beyond_down_out
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Primary OSD stop - not restarted (replicated)
+  #     desc: case3 - primary stays down; new acting primary stores vuln/rebuild durations
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_osd_stop
+  #       pool_type: replicated
+  #       pool_name: dur_pri_perm
+  #       sub_case: not_restarted
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Primary OSD stop - within down_out_interval (EC)
+  #     desc: case1 EC - primary returns within down_out; durations stored on that same primary
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_osd_stop
+  #       pool_type: erasure
+  #       pool_name: dur_pri_ec_within
+  #       sub_case: within_down_out
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Primary OSD stop - beyond down_out_interval (EC)
+  #     desc: case2 EC - primary out beyond down_out; new acting primary stores durations
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_osd_stop
+  #       pool_type: erasure
+  #       pool_name: dur_pri_ec
+  #       sub_case: beyond_down_out
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Primary OSD stop - not restarted (EC)
+  #     desc: case3 EC - primary stays down; new acting primary stores durations
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_osd_stop
+  #       pool_type: erasure
+  #       pool_name: dur_pri_ec_perm
+  #       sub_case: not_restarted
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 9. Stop single OSD Host ---
+
+  # - test:
+  #     name: OSD host stop - within down_out_interval (replicated)
+  #     desc: case1 - stop < mon_osd_down_out_interval and restart; expect vulnerability only (rebuild may stay 0 without mid-window IO)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_host_stop
+  #       pool_type: replicated
+  #       pool_name: dur_host_within
+  #       sub_case: within_down_out
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: OSD host stop - beyond down_out_interval (replicated)
+  #     desc: case2 - stop host > mon_osd_down_out_interval; new primary stores counters if needed
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_host_stop
+  #       pool_type: replicated
+  #       pool_name: dur_host_rep
+  #       sub_case: beyond_down_out
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: OSD host stop - not restarted (replicated)
+  #     desc: case3 - stop host permanently; verify counters after re-replication
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_host_stop
+  #       pool_type: replicated
+  #       pool_name: dur_host_perm
+  #       sub_case: not_restarted
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: OSD host stop - within down_out_interval (EC)
+  #     desc: case1 EC - stop < mon_osd_down_out_interval and restart; expect vulnerability only (rebuild may stay 0 without mid-window IO)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_host_stop
+  #       pool_type: erasure
+  #       pool_name: dur_host_ec_within
+  #       sub_case: within_down_out
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: OSD host stop - beyond down_out_interval (EC)
+  #     desc: case2 EC - stop host > mon_osd_down_out_interval
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_host_stop
+  #       pool_type: erasure
+  #       pool_name: dur_host_ec
+  #       sub_case: beyond_down_out
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: OSD host stop - not restarted (EC)
+  #     desc: case3 EC - stop host permanently
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_host_stop
+  #       pool_type: erasure
+  #       pool_name: dur_host_ec_perm
+  #       sub_case: not_restarted
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 10. Backfill scenarios (toofull pause / revoke / unfound) ---
+  # # rebuild unchanged during pauses; +1 rebuild and >=1 vulnerability after clean
+
+  # - test:
+  #     name: Backfill toofull pause revoke and unfound single sample
+  #     desc: size 1->2 with backfillfull=0.85; rebuild unchanged during toofull/revoke/unfound; +1 rebuild and >=1 vuln after clean
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: backfill_toofull_unfound
+  #       pool_name: dur_backfill_toofull
+  #       original_size: 1
+  #       new_size: 2
+  #       nobj: 600
+  #       backfillfull_ratio: 0.85
+  #       delete_pool: true
+
+  # # --- 11. Misplaced object recovery / pool size / CRUSH reweight ---
+
+  # - test:
+  #     name: Misplaced object recovery - pool size increase
+  #     desc: Increase pool size; primary vulnerability and rebuild increase (rebalance-vs-failure known limitation)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: misplaced_recovery
+  #       pool_name: dur_misplaced
+  #       original_size: 2
+  #       new_size: 3
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Backfill via OSD reweight
+  #     desc: Reweight OSD to 0 and back; verify counters track misplaced/backfill recovery
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: backfill_only_recovery
+  #       pool_name: dur_reweight
+  #       nobj: 80
+  #       delete_pool: true
+
+  # # --- 12. PG split carries vulnerability window ---
+
+  # - test:
+  #     name: PG split carries vulnerability window
+  #     desc: Degrade then increase pg_num; child inherits onset from parent; parent and child record rebuild independently
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: pg_split_during_rebuild
+  #       pool_name: dur_pg_split
+  #       nobj: 100
+  #       delete_pool: true
+
+  # # --- 13. Repair must NOT contribute ---
+
+  # - test:
+  #     name: Repair does not contribute to durability counters
+  #     desc: Inconsistent objects + deep-scrub/repair; vulnerability and rebuild counters unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: repair_counters
+  #       pool_name: dur_repair
+  #       nobj: 20
+  #       delete_pool: true
+
+  # # --- 14. Recovery with client I/O load ---
+
+  # - test:
+  #     name: Recovery with client IO load (replicated)
+  #     desc: Continuous IO, stop OSD/host; affected primary counters increment correctly
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: recovery_with_io
+  #       pool_type: replicated
+  #       pool_name: dur_io_rep
+  #       nobj: 100
+  #       delete_pool: true
+
+  # - test:
+  #     name: Recovery with client IO load (EC)
+  #     desc: Continuous IO on EC pool, stop OSD; verify counters
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: recovery_with_io
+  #       pool_type: erasure
+  #       pool_name: dur_io_ec
+  #       k: 4
+  #       m: 2
+  #       nobj: 100
+  #       delete_pool: true
+
+  # # --- 15. Primary to replica transition must NOT clear counters ---
+
+  # - test:
+  #     name: Primary to replica transition does not clear counters
+  #     desc: Populate counters, force primary remap; counters not reset to 0 after becoming replica
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_transition
+  #       pool_name: dur_transition
+  #       nobj: 30
+  #       delete_pool: true
+
+  # # --- 16. Recovery with throttled settings ---
+
+  # - test:
+  #     name: Recovery with throttled settings (replicated)
+  #     desc: osd_recovery_max_active=1; rebuild=active only, vulnerability=full exposure
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: throttled_recovery
+  #       pool_type: replicated
+  #       pool_name: dur_throttle_rep
+  #       nobj: 80
+  #       delete_pool: true
+
+  # - test:
+  #     name: Recovery with throttled settings (EC)
+  #     desc: osd_recovery_max_active=1 on EC; verify counters
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: throttled_recovery
+  #       pool_type: erasure
+  #       pool_name: dur_throttle_ec
+  #       k: 4
+  #       m: 2
+  #       nobj: 80
+  #       delete_pool: true
+
+  # # --- 17. Adding new OSD/host DOES contribute (known limitation) ---
+
+  # - test:
+  #     name: Adding new OSD contributes to durability counters
+  #     desc: Add OSD, wait for rebalance; vulnerability and rebuild increase (documented rebalance-vs-failure limitation)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: add_osd
+  #       pool_name: dur_add_osd
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 18. OSD restart must NOT reset counters to 0 ---
+
+  # - test:
+  #     name: OSD restart does not reset durability counters
+  #     desc: Populate counters on primary, restart that OSD; pg_vulnerability_duration and pg_rebuild_duration do not reset to 0
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_restart_reset
+  #       pool_name: dur_restart
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 19. Multiple PGs finishing at different times ---
+
+  # - test:
+  #     name: Multiple PGs finishing at different times
+  #     desc: Varied durations (e.g. 8/20/45/60); verify avgcount/sum/avgtime/min/max; rebuild uses recovery/backfill time only
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: multiple_pg_rebuild
+  #       pool_name: dur_multi_pg
+  #       pg_num: 32
+  #       nobj: 200
+  #       delete_pool: true
+
+  # - test:
+  #     name: Min/max invariant for vulnerability and rebuild
+  #     desc: Verify max_inc >= samples and _min <= samples for both counter families
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: min_max_invariant
+  #       delete_pool: true
+
+  # # --- 20. Counters survive pool deletion ---
+
+  # - test:
+  #     name: Counters survive pool deletion
+  #     desc: Populate counters then delete pool; vulnerability/rebuild values remain on OSD
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: pool_delete_counter_persistence
+  #       pool_name_1: dur_del_1
+  #       pool_name_2: dur_del_2
+  #       nobj: 50
+
+  # # --- 21. No objects / no redundancy loss (empty pool) ---
+
+  # - test:
+  #     name: Empty pool undersized - vulnerability only
+  #     desc: Empty pool OSD stop; vulnerability increases, rebuild does NOT (no objects)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: empty_pool_vulnerability
+  #       pool_name: dur_empty
+  #       delete_pool: true
+
+  # # --- 22. PG split and merge during rebuild ---
+
+  # - test:
+  #     name: PG split and merge during rebuild
+  #     desc: pg_num/bulk updates; split increases vuln/rebuild; merge only when clean and vulnerability unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: pg_split_merge_during_rebuild
+  #       pool_name: dur_pg_split_merge
+  #       nobj: 100
+  #       delete_pool: true
+
+  # # --- 23. Rapid PG state flapping ---
+
+  # - test:
+  #     name: Rapid PG state flapping
+  #     desc: Stop/start OSD multiple times; each distinct episode recorded; no race/corruption
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: osd_flapping
+  #       pool_name: dur_flap
+  #       flap_count: 3
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 24. Rebuild spanning a primary handover (full solution) ---
+  # # Single consolidated vulnerability/rebuild on primary for entire window (not interim fragmentation)
+
+  # - test:
+  #     name: Rebuild spanning primary handover - within down_out
+  #     desc: case1 - stop < mon_osd_down_out_interval and restart; expect vulnerability only (rebuild may stay 0 without mid-window IO)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: rebuild_spanning_handover
+  #       pool_name: dur_handover_within
+  #       sub_case: within_down_out
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Rebuild spanning primary handover - beyond down_out
+  #     desc: case2 - mid-rebuild primary switch after mon_osd_down_out_interval; single consolidated episode
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: rebuild_spanning_handover
+  #       pool_name: dur_handover_beyond
+  #       sub_case: beyond_down_out
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 25. Rolling upgrade from n-2/n-1 to n ---
+
+  # - test:
+  #     name: Rolling upgrade n-1 to n durability metrics
+  #     desc: Upgrade OSDs; pg_stat_t decode defaults missing last_degraded to last_clean; field available post-upgrade
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: rolling_upgrade_durability
+  #       nobj: 50
+
+  # # --- 26. Mixed version cluster behavior ---
+
+  # - test:
+  #     name: Mixed version cluster durability metrics
+  #     desc: Mixed n-1/n OSDs; failure on both; older OSDs do not crash on new encoding; full function post-upgrade
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: mixed_version_durability
+  #       nobj: 50
+
+  # # --- 27. Serviceability scenarios ---
+
+  # - test:
+  #     name: Serviceability - add/remove OSD host mon mgr and rolling restart
+  #     desc: Add/remove OSD/host/mon/mgr, rolling restart, rack failure; vuln/rebuild persist and stay accurate
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: serviceability_scenarios
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- 28. Negative scenarios ---
+
+  # - test:
+  #     name: MGR restart does not reset OSD counters
+  #     desc: Trigger rebuild, restart MGR; OSD vulnerability/rebuild counters unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: negative_daemon_restart
+  #       daemon_type: mgr
+  #       pool_name: dur_neg_mgr
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: MON restart does not reset OSD counters
+  #     desc: Trigger rebuild, restart MON; OSD durability counters unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: negative_daemon_restart
+  #       daemon_type: mon
+  #       pool_name: dur_neg_mon
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: ceph-exporter restart does not reset OSD counters
+  #     desc: Trigger rebuild, restart exporter/Prometheus; OSD counters unchanged and next scrape matches
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: negative_daemon_restart
+  #       daemon_type: ceph-exporter
+  #       pool_name: dur_neg_exp
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Prometheus service restart does not reset OSD counters
+  #     desc: Trigger rebuild, restart Prometheus; OSD counters unchanged; historical scrape points retained
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: negative_daemon_restart
+  #       daemon_type: prometheus
+  #       pool_name: dur_neg_prom
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # =========================================================================
+  # # Edge cases / bug-hunting (plan + full-solution limitations + older suite)
+  # # =========================================================================
+
+  # # --- rebuild vs vulnerability invariant ---
+  # - test:
+  #     name: Rebuild duration less than or equal vulnerability duration
+  #     desc: After controlled failure/recovery verify rebuild sum <= vulnerability sum and avgcount relationships
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: rebuild_vs_vulnerability
+  #       pool_name: dur_rebuild_vs_vuln
+  #       nobj: 80
+  #       delete_pool: true
+
+  # # --- per-OSD scope ---
+  # - test:
+  #     name: Only affected primary OSDs increment counters
+  #     desc: Unrelated and replica OSDs must remain unchanged after a localized OSD failure
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: per_osd_counter_scope
+  #       pool_name: dur_per_osd
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- noout / peering-only (no recovery) ---
+  # - test:
+  #     name: No recovery with noout flag (replicated)
+  #     desc: Set noout, stop/restart OSD quickly; vulnerability and rebuild counters unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: no_recovery_noout
+  #       pool_type: replicated
+  #       pool_name: dur_noout_rep
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: No recovery with noout flag (EC)
+  #     desc: Set noout on EC pool; stop/restart OSD quickly; counters unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: no_recovery_noout
+  #       pool_type: erasure
+  #       pool_name: dur_noout_ec
+  #       k: 4
+  #       m: 2
+  #       nobj: 50
+  #       delete_pool: true
+
+  # - test:
+  #     name: Peering-only event does not increment counters
+  #     desc: Quick OSD bounce with noout (peering only, no recovery); counters unchanged
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: peering_only_no_recovery
+  #       pool_name: dur_peer_only
+  #       nobj: 30
+  #       delete_pool: true
+
+  # # --- sub-second / nanosecond resolution ---
+  # - test:
+  #     name: Sub-second vulnerability and rebuild tracking
+  #     desc: Tiny pool fast rebuild; max_inc/_min record sub-second (nanosecond) durations, not truncated to 0
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: sub_second_rebuild
+  #       pool_name: dur_subsec
+  #       delete_pool: true
+
+  # # --- double latch / sustained degraded ---
+  # - test:
+  #     name: Double latch prevention during sustained degraded state
+  #     desc: Keep PG degraded with throttled recovery; no double-counting of vulnerability episodes
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: double_latch_prevention
+  #       pool_name: dur_dbl_latch
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- mid-peering false completion ---
+  # - test:
+  #     name: Mid-peering false completion does not close window
+  #     desc: Momentary degraded-count=0 during peering must not publish a vulnerability sample
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: mid_peering_false_completion
+  #       pool_name: dur_mid_peer
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- same-primary interval restart ---
+  # - test:
+  #     name: Same-primary interval restart keeps single vulnerability window
+  #     desc: Interval churn under same primary must not wipe onset; one consolidated vulnerability sample
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: same_primary_interval_restart
+  #       pool_name: dur_same_pri_interval
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- restart loop during degradation ---
+  # - test:
+  #     name: OSD restart loop during degradation - single window
+  #     desc: Restart primary repeatedly while degraded; single vulnerability window recorded
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: restart_loop_single_window
+  #       pool_name: dur_restart_loop
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- last_degraded persists across primary restart mid-window ---
+  # - test:
+  #     name: last_degraded persists across primary OSD restart mid-window
+  #     desc: Kill/restart primary mid-degradation; last_degraded persists; eventual duration uses true onset
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: last_degraded_persists_restart
+  #       pool_name: dur_persist_restart
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- exactly-once close-to-publish ---
+  # - test:
+  #     name: Exactly-once recording across close-to-publish crash
+  #     desc: Crash primary near window close/publish; vuln episode recorded exactly once (vuln_window_reported)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: exactly_once_close_publish
+  #       pool_name: dur_exactly_once
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- primary crash during recovery ---
+  # - test:
+  #     name: Primary crash during recovery continues on new primary
+  #     desc: Crash primary mid-recovery; new primary continues window and records one consolidated episode
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: primary_crash_during_recovery
+  #       pool_name: dur_pri_crash
+  #       nobj: 80
+  #       delete_pool: true
+
+  # # --- compound / multi-pool / high PG ---
+  # - test:
+  #     name: Compound failure - second OSD fails during recovery
+  #     desc: Stop second OSD while first failure is recovering; counters track both episodes
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: compound_failure
+  #       pool_name: dur_compound
+  #       nobj: 80
+  #       delete_pool: true
+
+  # - test:
+  #     name: Multiple pools sharing same primary OSD
+  #     desc: Multiple pools on same primary; trigger recovery; verify aggregate counters
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: multi_pool_same_primary
+  #       pool_prefix: dur_mp
+  #       num_pools: 3
+  #       nobj: 30
+  #       delete_pool: true
+
+  # - test:
+  #     name: High PG count with simultaneous failures
+  #     desc: Large pg_num pool with concurrent OSD failure; counters remain consistent under load
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: high_pg_simultaneous_failure
+  #       pool_name: dur_high_pg
+  #       pg_num: 128
+  #       nobj: 300
+  #       delete_pool: true
+
+  # # --- last_degraded undersized via OSD out ---
+  # - test:
+  #     name: last_degraded armed by undersized via OSD out
+  #     desc: Mark OSD out; undersized state arms last_degraded and closes vulnerability window on clean
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: last_degraded_undersized
+  #       pool_name: dur_lastdeg_under
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- kill -9 vs systemctl stop ---
+  # - test:
+  #     name: Non-primary OSD kill -9 beyond down_out (replicated)
+  #     desc: kill -9 non-primary beyond mon_osd_down_out_interval; verify vuln/rebuild same as clean stop
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: non_primary_osd_stop
+  #       pool_type: replicated
+  #       pool_name: dur_nonpri_kill9
+  #       sub_case: beyond_down_out
+  #       kill_signal: 9
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- network partition ---
+  # - test:
+  #     name: Network partition during degradation
+  #     desc: Partition primary from replicas mid-window; verify no corruption and correct eventual recording
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: network_partition_during_degradation
+  #       pool_name: dur_net_part
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- very long window ---
+  # - test:
+  #     name: Very long vulnerability window
+  #     desc: Hold PG degraded for extended time then recover; vulnerability sum approximates wall-clock exposure
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: long_vulnerability_window
+  #       pool_name: dur_long_window
+  #       hold_secs: 600
+  #       nobj: 50
+  #       delete_pool: true
+
+  # # --- PG merge when clean ---
+  # - test:
+  #     name: PG merge when clean does not change vulnerability
+  #     desc: Decrease pg_num after active+clean; vulnerability counter must not change
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: pg_merge_when_clean
+  #       pool_name: dur_pg_merge
+  #       nobj: 100
+  #       delete_pool: true
+
+  # # --- autoscaler / balancer benign rebalance (known limitation) ---
+  # - test:
+  #     name: PG autoscaler activity increments vulnerability (known limitation)
+  #     desc: Enable autoscaler resize; vulnerability may increase with zero redundancy loss (document limitation)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: autoscaler_rebalance_limitation
+  #       pool_name: dur_autoscaler
+  #       nobj: 100
+  #       delete_pool: true
+
+  # - test:
+  #     name: Balancer activity increments vulnerability (known limitation)
+  #     desc: Trigger balancer optimize; vulnerability may increase for remapped PGs (document limitation)
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: balancer_rebalance_limitation
+  #       pool_name: dur_balancer
+  #       nobj: 100
+  #       delete_pool: true
+
+  # # --- inactive PG not counted ---
+  # - test:
+  #     name: Inactive stuck PG does not increment durability counters
+  #     desc: PG stuck below Activating is availability loss not redundancy loss; counters must not count it
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: inactive_pg_not_counted
+  #       pool_name: dur_inactive
+  #       nobj: 30
+  #       delete_pool: true
+
+  # # --- kill OSD during last_degraded update ---
+  # - test:
+  #     name: OSD crash during last_degraded update - no corruption
+  #     desc: Crash OSD while arming last_degraded; no pg_history corruption; window recoverable
+  #     module: test_pg_rebuild_perf_counters.py
+  #     config:
+  #       scenario: crash_during_last_degraded_update
+  #       pool_name: dur_crash_lastdeg
+  #       nobj: 50
+  #       delete_pool: true
