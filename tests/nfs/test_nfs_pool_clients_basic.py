@@ -22,13 +22,24 @@ from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Unmount
 from tests.nfs.nfs_oc_pec import (
+    SoftSkip,
+    _load_nfs_orch_spec,
     _node_by_hostname,
+    apply_clients_per_pool,
     apply_nfs_object_cache,
+    assert_cluster_info_clients_per_pool,
+    assert_export_client_pool,
     assert_pool_users_absent,
     ceph_users_object_name,
     create_nfs_with_clients_per_pool,
+    delete_nfs_cluster,
     ensure_nfs_admin_socket,
+    full_nfs_cleanup,
     list_cephfs_asoks,
+    patch_nfs_orch_spec,
+    pool_enhancement_supported,
+    rm_nfs_mount_point,
+    run_pool_rotate_key,
     skip_oc_pec_unless_supported,
     skip_pool_unless_supported,
     verify_ceph_users,
@@ -47,6 +58,32 @@ DEFAULT_EXPORTS = 6
 DEFAULT_SIZE = "200MiB"
 DEFAULT_DIRTY = "100MiB"
 _OC_COMBOS = frozenset({"pool_with_oc", "pool_with_oc_pec"})
+# IBM Ceph 10.0 / Umbrella (Ceph >= 21.0.0) only
+_ENHANCEMENT_SCENARIOS = frozenset(
+    {
+        "pool_raise_k",
+        "pool_enable_brownfield",
+        "pool_rotate_key",
+        "nfs_spec_log_to_file",
+    }
+)
+# Pre-fix orch rejection text for in-place clients_per_pool (raise / brownfield).
+_CPP_IMMUTABLE_NEEDLES = (
+    "only when creating",
+    "can only be set",
+    "only be set when creating",
+    "immutable",
+)
+
+
+def _softskip_or_fail_cpp(rc, combined, soft_msg, hard_msg):
+    """SoftSkip known immutable-cpp rejection; else OperationFailedError."""
+    if rc == 0:
+        return
+    low = combined.lower()
+    if any(s in low for s in _CPP_IMMUTABLE_NEEDLES):
+        raise SoftSkip(f"{soft_msg}: {combined[:300]}")
+    raise OperationFailedError(f"{hard_msg}: {combined[:400]}")
 
 
 def _pool_export_count(config, k, key="exports"):
@@ -66,12 +103,7 @@ def _do_mount(client, mount_point, version, port, server, export):
 
 def _do_unmount(client, mount_point):
     Unmount(client).unmount(mount_point)
-    client.exec_command(
-        sudo=True,
-        cmd=f"timeout 120 rm -rf -- {mount_point}",
-        check_ec=False,
-        timeout=180,
-    )
+    rm_nfs_mount_point(client, mount_point)
     sleep(2)
 
 
@@ -145,6 +177,8 @@ def _server_ip(ceph_cluster, hostname):
 def _create_pool_cluster(
     ceph_cluster, client, installer, nfs_name, nfs_server, port, clients_per_pool=None
 ):
+    # Drop leftovers from aborted runs so brownfield baseline is clean.
+    delete_nfs_cluster(client, nfs_name)
     Ceph(client).mgr.module.enable(module="nfs", force=True)
     sleep(2)
     cluster_nodes = _nodes_for_hosts(ceph_cluster, nfs_server)
@@ -188,67 +222,6 @@ def _create_export(client, nfs_name, export_path, cmount_path=False):
                 f"export {export_path} created without cmount_path "
                 f"(got {got!r}); CLI wrapper must pass --cmount_path"
             )
-
-
-def _delete_cluster(client, nfs_name):
-    try:
-        client.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster rm {nfs_name}", timeout=60
-        )
-    except Exception as err:
-        log.warning("cluster rm %s: %s", nfs_name, err)
-    for _ in range(12):
-        out, _ = client.exec_command(
-            sudo=True,
-            cmd=f"ceph orch ls --service-name nfs.{nfs_name}",
-            check_ec=False,
-        )
-        text = str(out)
-        if "No services reported" in text or f"nfs.{nfs_name}" not in text:
-            return
-        sleep(5)
-
-
-def _delete_exports_and_subvols(client, nfs_name, export_paths):
-    for export_path in export_paths:
-        try:
-            Ceph(client).nfs.export.delete(nfs_name, export_path)
-        except Exception as err:
-            log.warning("export delete %s: %s", export_path, err)
-        subvol_name = export_path.replace("/", "")
-        if not subvol_name:
-            continue
-        client.exec_command(
-            sudo=True,
-            cmd=(
-                f"ceph fs subvolume rm cephfs {subvol_name} "
-                "--group_name ganeshagroup --force"
-            ),
-            check_ec=False,
-        )
-
-
-def _full_cleanup(client, nfs_name, export_paths, mount_points):
-    if isinstance(mount_points, str):
-        mount_points = [mount_points]
-    for mount_point in mount_points:
-        try:
-            client.exec_command(
-                sudo=True,
-                cmd=f"timeout 60 umount -l {mount_point}",
-                check_ec=False,
-                timeout=90,
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=f"timeout 120 rm -rf -- {mount_point}",
-                check_ec=False,
-                timeout=180,
-            )
-        except Exception:
-            pass
-    _delete_exports_and_subvols(client, nfs_name, export_paths)
-    _delete_cluster(client, nfs_name)
 
 
 def _mount_all(client, ceph_cluster, server, port, exports, mounts):
@@ -313,7 +286,7 @@ def scenario_pool_off_control(ceph_cluster, config):
             client, mounts[0], "4.2", port, _server_ip(ceph_cluster, server), exports[0]
         )
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 def scenario_pool_ceph_users_object(ceph_cluster, config):
@@ -347,7 +320,7 @@ def scenario_pool_ceph_users_object(ceph_cluster, config):
             check_ceph_users=True,
         )
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 def scenario_pool_k3_proof(ceph_cluster, config):
@@ -393,13 +366,47 @@ def scenario_pool_k3_proof(ceph_cluster, config):
         asoks = list_cephfs_asoks(ceph_cluster, client, nfs_name)
         if len(asoks) < k:
             raise OperationFailedError(f"asoks dropped after ASN IO: {asoks}")
+        # IBMCEPH-19519 eng scope (10.0+ only)
+        if pool_enhancement_supported(ceph_cluster):
+            assert_cluster_info_clients_per_pool(client, nfs_name, k)
+            assert_export_client_pool(client, nfs_name, exports[0], expect_users=k)
         _io_unmount_remount(client, mounts[0], "4.2", port, server_ip, exports[0])
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
+
+
+def _assert_cpp_create_rejected(client, nfs_name, server, port, bad):
+    """Create with bad clients_per_pool must fail and leave no cluster."""
+    cmd = (
+        f"ceph nfs cluster create {nfs_name} '{server}' "
+        f"--port {port} --clients_per_pool {bad}"
+    )
+    out, err = client.exec_command(sudo=True, cmd=cmd, check_ec=False, timeout=120)
+    text = f"{out or ''}{err or ''}"
+    rc = getattr(client, "exit_status", 0)
+    ls_out, _ = client.exec_command(
+        sudo=True, cmd="ceph nfs cluster ls", check_ec=False, timeout=60
+    )
+    if nfs_name in str(ls_out):
+        delete_nfs_cluster(client, nfs_name)
+        raise OperationFailedError(
+            f"invalid clients_per_pool={bad!r} created cluster: {text}"
+        )
+    if rc == 0:
+        raise OperationFailedError(
+            f"invalid clients_per_pool={bad!r} exited 0 "
+            f"without listing cluster: {text}"
+        )
+    log.info(
+        "invalid clients_per_pool=%r rejected OK rc=%s: %s",
+        bad,
+        rc,
+        text[:200],
+    )
 
 
 def scenario_pool_invalid_k(ceph_cluster, config):
-    client, server, _installer = _setup_nodes(ceph_cluster, config)
+    client, server, installer = _setup_nodes(ceph_cluster, config)
     nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}badk")
     port = str(config.get("port", "2063"))
     # CFG-06: 0 / -1 / abc hit different validators; keep all three.
@@ -408,46 +415,53 @@ def scenario_pool_invalid_k(ceph_cluster, config):
     sleep(2)
     try:
         for bad in bad_values:
-            cmd = (
-                f"ceph nfs cluster create {nfs_name} '{server}' "
-                f"--port {port} --clients_per_pool {bad}"
+            _assert_cpp_create_rejected(client, nfs_name, server, port, bad)
+        # IBMCEPH-19517 — K ceiling (10.0+ only)
+        if pool_enhancement_supported(ceph_cluster):
+            ceil_name = f"{nfs_name}ceil"
+            _assert_cpp_create_rejected(
+                client, ceil_name, server, str(int(port) + 100), 65
             )
-            out, err = client.exec_command(
-                sudo=True, cmd=cmd, check_ec=False, timeout=120
-            )
-            text = f"{out or ''}{err or ''}"
-            rc = getattr(client, "exit_status", 0)
-            ls_out, _ = client.exec_command(
-                sudo=True, cmd="ceph nfs cluster ls", check_ec=False, timeout=60
-            )
-            if nfs_name in str(ls_out):
-                _delete_cluster(client, nfs_name)
-                raise OperationFailedError(
-                    f"invalid clients_per_pool={bad!r} created cluster: {text}"
+            k64 = f"{nfs_name}k64"
+            k64_port = str(int(port) + 101)
+            try:
+                _create_pool_cluster(
+                    ceph_cluster,
+                    client,
+                    installer,
+                    k64,
+                    server,
+                    k64_port,
+                    clients_per_pool=64,
                 )
-            if rc == 0:
-                raise OperationFailedError(
-                    f"invalid clients_per_pool={bad!r} exited 0 "
-                    f"without listing cluster: {text}"
+                _create_export(client, k64, "/pool_k64_1", cmount_path=False)
+                sleep(5)
+                assert_cluster_info_clients_per_pool(client, k64, 64)
+                mount = "/mnt/pool_k64_1"
+                server_ip = _server_ip(ceph_cluster, server)
+                _do_mount(client, mount, "4.2", k64_port, server_ip, "/pool_k64_1")
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"dd if=/dev/urandom of={mount}/k64.bin bs=1M count=2 "
+                    f"conv=fsync status=none",
+                    timeout=60,
                 )
-            log.info(
-                "invalid clients_per_pool=%r rejected OK rc=%s: %s",
-                bad,
-                rc,
-                text[:200],
-            )
+            finally:
+                full_nfs_cleanup(client, k64, ["/pool_k64_1"], ["/mnt/pool_k64_1"])
     finally:
-        _delete_cluster(client, nfs_name)
+        delete_nfs_cluster(client, nfs_name)
 
 
-def scenario_pool_immutable_k(ceph_cluster, config):
+def scenario_pool_raise_k(ceph_cluster, config):
+    """IBMCEPH-19485: raise clients_per_pool in place; reject decrease."""
     client, server, installer = _setup_nodes(ceph_cluster, config)
-    nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}imm")
+    nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}raise")
     port = str(config.get("port", "2064"))
     k = int(config.get("clients_per_pool", DEFAULT_K))
-    n = _pool_export_count(config, k)
-    exports = [f"/pool_imm_{i}" for i in range(1, n + 1)]
-    mounts = [f"/mnt/pool_imm_{i}" for i in range(1, n + 1)]
+    raised = int(config.get("raised_k", k + 2))
+    n = _pool_export_count(config, raised)
+    exports = [f"/pool_raise_{i}" for i in range(1, n + 1)]
+    mounts = [f"/mnt/pool_raise_{i}" for i in range(1, n + 1)]
     try:
         _create_pool_cluster(
             ceph_cluster, client, installer, nfs_name, server, port, clients_per_pool=k
@@ -455,43 +469,84 @@ def scenario_pool_immutable_k(ceph_cluster, config):
         for export_path in exports:
             _create_export(client, nfs_name, export_path, cmount_path=False)
         sleep(5)
-        _mount_all(client, ceph_cluster, server, port, exports, mounts)
+        server_ip = _mount_all(client, ceph_cluster, server, port, exports, mounts)
         verify_pool(ceph_cluster, client, nfs_name, expect_clients=k)
-        # Attempt in-place K change via orch spec merge
-        out, err = client.exec_command(
-            sudo=True,
-            cmd=(f"ceph orch ls --service-name nfs.{nfs_name} --export --format json"),
-            check_ec=False,
+        rc, combined = apply_clients_per_pool(
+            client, installer, nfs_name, raised, restart=True
         )
-        specs = json.loads(out) if out and str(out).strip().startswith("[") else []
-        if not specs:
+        # Pre-19485 builds reject in-place raise; soft-skip those only.
+        _softskip_or_fail_cpp(
+            rc,
+            combined,
+            "raise clients_per_pool rejected (pre-19485?)",
+            f"raise clients_per_pool to {raised} failed",
+        )
+        # Remount so raised-K clients open before asok count assert
+        server_ip = _remount_all(client, ceph_cluster, server, port, exports, mounts)
+        verify_pool(ceph_cluster, client, nfs_name, expect_clients=raised)
+        _io_unmount_remount(client, mounts[0], "4.2", port, server_ip, exports[0])
+        # Decrease must fail
+        dec_rc, dec_out = apply_clients_per_pool(
+            client, installer, nfs_name, max(2, k - 1), restart=False
+        )
+        if dec_rc == 0:
             raise OperationFailedError(
-                f"immutable_k: no orch export for nfs.{nfs_name}"
+                f"decrease clients_per_pool unexpectedly succeeded: {dec_out[:300]}"
             )
-        spec = specs[0]
-        spec.setdefault("spec", {})
-        spec["spec"]["clients_per_pool"] = k + 1
-        spec.pop("status", None)
-        spec.pop("events", None)
-        remote = "/tmp/pool_imm_spec.json"
-        rf = client.remote_file(sudo=True, file_name=remote, file_mode="w")
-        rf.write(json.dumps(spec))
-        rf.flush()
-        apply_out, apply_err = client.exec_command(
-            sudo=True,
-            cmd=f"ceph orch apply -i {remote}",
-            check_ec=False,
-        )
-        log.info(
-            "orch apply clients_per_pool=%s: %s %s",
-            k + 1,
-            apply_out,
-            apply_err,
-        )
-        sleep(10)
-        verify_pool(ceph_cluster, client, nfs_name, expect_clients=k)
+        assert_cluster_info_clients_per_pool(client, nfs_name, raised)
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
+
+
+def scenario_pool_enable_brownfield(ceph_cluster, config):
+    """IBMCEPH-19484: enable clients_per_pool on existing non-pool cluster."""
+    client, server, installer = _setup_nodes(ceph_cluster, config)
+    nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}bf")
+    port = str(config.get("port", "2070"))
+    k = int(config.get("clients_per_pool", DEFAULT_K))
+    n = _pool_export_count(config, k)
+    exports = [f"/pool_bf_{i}" for i in range(1, n + 1)]
+    mounts = [f"/mnt/pool_bf_{i}" for i in range(1, n + 1)]
+    try:
+        _create_pool_cluster(
+            ceph_cluster,
+            client,
+            installer,
+            nfs_name,
+            server,
+            port,
+            clients_per_pool=None,
+        )
+        assert_pool_users_absent(client, nfs_name)
+        for export_path in exports:
+            _create_export(client, nfs_name, export_path, cmount_path=False)
+        sleep(5)
+        server_ip = _mount_all(client, ceph_cluster, server, port, exports, mounts)
+        asoks = list_cephfs_asoks(ceph_cluster, client, nfs_name)
+        if len(asoks) != 1:
+            raise OperationFailedError(
+                f"brownfield baseline expected 1 asok, got {asoks}"
+            )
+        rc, combined = apply_clients_per_pool(
+            client, installer, nfs_name, k, restart=True
+        )
+        # Soft-skip only known pre-19484 rejection text; fail anything else.
+        _softskip_or_fail_cpp(
+            rc,
+            combined,
+            "brownfield enable clients_per_pool rejected (pre-19484)",
+            f"brownfield enable clients_per_pool={k} failed",
+        )
+        assert_export_client_pool(
+            client, nfs_name, exports[0], expect_users=k, timeout=90
+        )
+        # Remount so pool clients open before asok count assert
+        server_ip = _remount_all(client, ceph_cluster, server, port, exports, mounts)
+        verify_pool(ceph_cluster, client, nfs_name, expect_clients=k)
+        assert_cluster_info_clients_per_pool(client, nfs_name, k)
+        _io_unmount_remount(client, mounts[0], "4.2", port, server_ip, exports[0])
+    finally:
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 def scenario_pool_ceph_users_fallback(ceph_cluster, config):
@@ -532,7 +587,7 @@ def scenario_pool_ceph_users_fallback(ceph_cluster, config):
             check_ceph_users=False,
         )
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 def scenario_pool_daemon_restart(ceph_cluster, config):
@@ -558,16 +613,39 @@ def scenario_pool_daemon_restart(ceph_cluster, config):
         _remount_all(client, ceph_cluster, server, port, exports, mounts)
         verify_pool(ceph_cluster, client, nfs_name, expect_clients=k)
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
-def _pool_pec_topology(ceph_cluster, config, nfs_name, port, k, pool_n, pec_n):
-    """Create K=pool + pec_n same-FS PEC exports (IBMCEPH-20715: expect K+pec asoks)."""
-    client, server, installer = _setup_nodes(ceph_cluster, config)
+def _pool_mix_paths(pool_n, pec_n):
+    """Export/mount path lists for pool+PEC mix scenarios (built before try)."""
     pool_exports = [f"/pool_mix_p{i}" for i in range(1, pool_n + 1)]
     pec_exports = [f"/pool_mix_e{i}" for i in range(1, pec_n + 1)]
     pool_mounts = [f"/mnt/pool_mix_p{i}" for i in range(1, pool_n + 1)]
     pec_mounts = [f"/mnt/pool_mix_e{i}" for i in range(1, pec_n + 1)]
+    return (
+        pool_exports,
+        pec_exports,
+        pool_mounts,
+        pec_mounts,
+        pool_exports + pec_exports,
+        pool_mounts + pec_mounts,
+    )
+
+
+def _pool_pec_topology(
+    ceph_cluster,
+    client,
+    installer,
+    server,
+    nfs_name,
+    port,
+    k,
+    pool_exports,
+    pec_exports,
+    pool_mounts,
+    pec_mounts,
+):
+    """Create K=pool + same-FS PEC exports (IBMCEPH-20715: expect K+pec asoks)."""
     all_exports = pool_exports + pec_exports
     all_mounts = pool_mounts + pec_mounts
     _create_pool_cluster(
@@ -578,19 +656,7 @@ def _pool_pec_topology(ceph_cluster, config, nfs_name, port, k, pool_n, pec_n):
     for export_path in pec_exports:
         _create_export(client, nfs_name, export_path, cmount_path=True)
     sleep(5)
-    server_ip = _mount_all(client, ceph_cluster, server, port, all_exports, all_mounts)
-    return (
-        client,
-        server,
-        installer,
-        server_ip,
-        pool_exports,
-        pec_exports,
-        pool_mounts,
-        pec_mounts,
-        all_exports,
-        all_mounts,
-    )
+    return _mount_all(client, ceph_cluster, server, port, all_exports, all_mounts)
 
 
 def _verify_pool_pec_mix(ceph_cluster, client, nfs_name, k, pec_n):
@@ -638,32 +704,40 @@ def scenario_pool_with_oc(ceph_cluster, config):
         )
         _io_unmount_remount(client, mounts[0], "4.2", port, server_ip, exports[0])
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 def scenario_pool_with_pec(ceph_cluster, config):
     """Pool K + same-FS --cmount_path PEC: expect K+pec asoks (IBMCEPH-20715)."""
-    # Bind client before try so finally cleanup runs if topology fails mid-setup.
+    # Bind client + paths before try so finally cleanup runs if topology fails.
     client, _server, _installer = _setup_nodes(ceph_cluster, config)
     nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}pec")
     port = str(config.get("port", "2068"))
     k = int(config.get("clients_per_pool", DEFAULT_K))
     pool_n = _pool_export_count(config, k, key="pool_exports")
     pec_n = int(config.get("pec_exports", 2))
-    all_exports, all_mounts = [], []
+    (
+        pool_exports,
+        pec_exports,
+        pool_mounts,
+        pec_mounts,
+        all_exports,
+        all_mounts,
+    ) = _pool_mix_paths(pool_n, pec_n)
     try:
-        (
+        server_ip = _pool_pec_topology(
+            ceph_cluster,
             client,
-            _server,
             _installer,
-            server_ip,
+            _server,
+            nfs_name,
+            port,
+            k,
             pool_exports,
-            _pec_exports,
+            pec_exports,
             pool_mounts,
             pec_mounts,
-            all_exports,
-            all_mounts,
-        ) = _pool_pec_topology(ceph_cluster, config, nfs_name, port, k, pool_n, pec_n)
+        )
         _verify_pool_pec_mix(ceph_cluster, client, nfs_name, k, pec_n)
         client.exec_command(
             sudo=True,
@@ -682,15 +756,21 @@ def scenario_pool_with_pec(ceph_cluster, config):
             timeout=120,
         )
         _verify_pool_pec_mix(ceph_cluster, client, nfs_name, k, pec_n)
+        # IBMCEPH-19519: / export has client_pool; PEC omits it (10.0+)
+        if pool_enhancement_supported(ceph_cluster):
+            assert_export_client_pool(client, nfs_name, pool_exports[0], expect_users=k)
+            assert_export_client_pool(
+                client, nfs_name, pec_exports[0], expect_users=None
+            )
         _io_unmount_remount(
             client, pool_mounts[0], "4.2", port, server_ip, pool_exports[0]
         )
     finally:
-        _full_cleanup(client, nfs_name, all_exports, all_mounts)
+        full_nfs_cleanup(client, nfs_name, all_exports, all_mounts)
 
 
 def scenario_pool_with_oc_pec(ceph_cluster, config):
-    # Bind client before try so finally cleanup runs if topology fails mid-setup.
+    # Bind client + paths before try so finally cleanup runs if topology fails.
     client, server, installer = _setup_nodes(ceph_cluster, config)
     nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}all")
     port = str(config.get("port", "2069"))
@@ -699,20 +779,28 @@ def scenario_pool_with_oc_pec(ceph_cluster, config):
     pec_n = int(config.get("pec_exports", 2))
     size = config.get("oc_size", DEFAULT_SIZE)
     dirty = config.get("oc_max_dirty", DEFAULT_DIRTY)
-    all_exports, all_mounts = [], []
+    (
+        pool_exports,
+        pec_exports,
+        pool_mounts,
+        pec_mounts,
+        all_exports,
+        all_mounts,
+    ) = _pool_mix_paths(pool_n, pec_n)
     try:
-        (
+        server_ip = _pool_pec_topology(
+            ceph_cluster,
             client,
-            server,
             installer,
-            server_ip,
+            server,
+            nfs_name,
+            port,
+            k,
             pool_exports,
             pec_exports,
             pool_mounts,
             pec_mounts,
-            all_exports,
-            all_mounts,
-        ) = _pool_pec_topology(ceph_cluster, config, nfs_name, port, k, pool_n, pec_n)
+        )
         _verify_pool_pec_mix(ceph_cluster, client, nfs_name, k, pec_n)
         apply_nfs_object_cache(
             installer, nfs_name, enable=True, size=size, max_dirty=dirty
@@ -731,7 +819,84 @@ def scenario_pool_with_oc_pec(ceph_cluster, config):
             client, pec_mounts[0], "4.2", port, server_ip, pec_exports[0]
         )
     finally:
-        _full_cleanup(client, nfs_name, all_exports, all_mounts)
+        full_nfs_cleanup(client, nfs_name, all_exports, all_mounts)
+
+
+def scenario_nfs_spec_log_to_file(ceph_cluster, config):
+    """IBMCEPH-13289: NFSServiceSpec log_to_file=true writes daemon logs to file."""
+    client, server, installer = _setup_nodes(ceph_cluster, config)
+    nfs_name = config.get("nfs_name", f"{DEFAULT_CLUSTER}logf")
+    port = str(config.get("port", "2072"))
+    export = "/pool_logf_1"
+    mount = "/mnt/pool_logf_1"
+    try:
+        _create_pool_cluster(
+            ceph_cluster,
+            client,
+            installer,
+            nfs_name,
+            server,
+            port,
+            clients_per_pool=None,
+        )
+        rc, combined = patch_nfs_orch_spec(
+            client,
+            installer,
+            nfs_name,
+            {"log_to_file": True},
+            timeout=300,
+            restart=True,
+        )
+        if rc != 0:
+            # Soft-skip only unknown-field style rejection; fail anything else.
+            if "log_to_file" in combined and (
+                "unknown" in combined.lower() or "unexpected" in combined.lower()
+            ):
+                raise SoftSkip(
+                    f"NFS spec log_to_file not supported (pre-13289?): "
+                    f"{combined[:300]}"
+                )
+            raise OperationFailedError(
+                f"orch apply log_to_file=true failed rc={rc}: {combined[:400]}"
+            )
+        applied = _load_nfs_orch_spec(client, nfs_name)
+        if applied.get("spec", {}).get("log_to_file") is not True:
+            raise OperationFailedError(
+                f"nfs.{nfs_name} orch spec log_to_file not True after apply: "
+                f"{applied.get('spec')}"
+            )
+        _create_export(client, nfs_name, export, cmount_path=False)
+        server_ip = _server_ip(ceph_cluster, server)
+        _do_mount(client, mount, "4.2", port, server_ip, export)
+        client.exec_command(
+            sudo=True,
+            cmd=f"echo logf > {mount}/.probe && sync",
+            timeout=30,
+        )
+        nfs_node = _node_by_hostname(ceph_cluster, server)
+        fsid_out, _ = client.exec_command(
+            sudo=True, cmd="ceph fsid", check_ec=False, timeout=30
+        )
+        fsid = (fsid_out or "").strip()
+        # Only this cluster's daemon dir; require non-empty files (not *ganesha*
+        # leftovers / empty dirs from global log_to_file).
+        logs_out, _ = nfs_node.exec_command(
+            sudo=True,
+            cmd=(
+                f"find /var/log/ceph/{fsid} -maxdepth 2 -type f -size +0 "
+                f"-path '*/nfs.{nfs_name}*' 2>/dev/null | head -20"
+            ),
+            check_ec=False,
+            timeout=60,
+        )
+        if not (logs_out or "").strip():
+            raise OperationFailedError(
+                f"nfs.{nfs_name} log_to_file=true but no non-empty log files under "
+                f"/var/log/ceph/{fsid}/nfs.{nfs_name}*"
+            )
+        log.info("nfs.%s log_to_file evidence:\n%s", nfs_name, logs_out[:500])
+    finally:
+        full_nfs_cleanup(client, nfs_name, [export], [mount])
 
 
 SCENARIO_MAP = {
@@ -739,26 +904,39 @@ SCENARIO_MAP = {
     "pool_ceph_users_object": scenario_pool_ceph_users_object,
     "pool_k3_proof": scenario_pool_k3_proof,
     "pool_invalid_k": scenario_pool_invalid_k,
-    "pool_immutable_k": scenario_pool_immutable_k,
+    "pool_raise_k": scenario_pool_raise_k,
+    "pool_enable_brownfield": scenario_pool_enable_brownfield,
     "pool_ceph_users_fallback": scenario_pool_ceph_users_fallback,
     "pool_daemon_restart": scenario_pool_daemon_restart,
     "pool_with_oc": scenario_pool_with_oc,
     "pool_with_pec": scenario_pool_with_pec,
     "pool_with_oc_pec": scenario_pool_with_oc_pec,
+    "pool_rotate_key": run_pool_rotate_key,
+    "nfs_spec_log_to_file": scenario_nfs_spec_log_to_file,
 }
 
 
 def run(ceph_cluster, **kw):
     config = kw.get("config") or {}
-    if skip_pool_unless_supported(ceph_cluster):
+    scenario_key = config.get("scenario")
+    # 13289 does not require --clients_per_pool
+    needs_pool_flag = scenario_key != "nfs_spec_log_to_file"
+    if needs_pool_flag and skip_pool_unless_supported(ceph_cluster):
         log.info("TEST SKIPPED - pool requires --clients_per_pool on create -h")
         return 0
-    scenario_key = config.get("scenario")
     if not scenario_key:
         raise ConfigError(f"config['scenario'] required: {list(SCENARIO_MAP)}")
     scenario_fn = SCENARIO_MAP.get(scenario_key)
     if not scenario_fn:
         raise ConfigError(f"Unknown scenario {scenario_key!r}")
+    if scenario_key in _ENHANCEMENT_SCENARIOS and not pool_enhancement_supported(
+        ceph_cluster
+    ):
+        log.info(
+            "TEST SKIPPED - scenario=%s requires Ceph >= 21.0.0 (IBM Ceph 10.0)",
+            scenario_key,
+        )
+        return 0
     if scenario_key in _OC_COMBOS and skip_oc_pec_unless_supported(ceph_cluster):
         log.info(
             "TEST SKIPPED - scenario=%s needs OC (live Ceph < 20.2.2)",
@@ -769,15 +947,20 @@ def run(ceph_cluster, **kw):
     client, _, _installer = _setup_nodes(ceph_cluster, config)
     rados_obj, start_time = init_cluster_health_check(ceph_cluster, config)
     rc = 0
+    skipped = False
     with ensure_nfs_admin_socket(client):
         try:
             scenario_fn(ceph_cluster, config)
+        except SoftSkip as err:
+            log.info("TEST SKIPPED - scenario=%s -- %s", scenario_key, err)
+            skipped = True
         except Exception as err:
             log.error("Scenario FAILED: %s -- %s", scenario_key, err, exc_info=True)
             rc = 1
+        # SoftSkip still runs crash check — skip must not hide a crash.
         if log_cluster_health_and_check_crashes(rados_obj, start_time):
             rc = 1
-        if rc == 0:
+        if rc == 0 and not skipped:
             log.info(
                 "TEST PASSED - scenario=%s pool clients workflow completed",
                 scenario_key,
