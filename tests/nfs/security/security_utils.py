@@ -411,9 +411,7 @@ def _stop_in_flight_nfs_mount(client_node, mount_path):
     can finish after the negative check and leave the export mounted.
     """
     path = shlex.quote(mount_path)
-    awk_prog = (
-        r"$1+0 > 1 && $2 ~ /(^|\/)mount(\.nfs)?$/ && index($0, path) {print $1}"
-    )
+    awk_prog = r"$1+0 > 1 && $2 ~ /(^|\/)mount(\.nfs)?$/ && index($0, path) {print $1}"
     client_node.exec_command(
         sudo=True,
         cmd=(
@@ -480,9 +478,7 @@ def attempt_nfs_mount_expect_failure(client_node, mount_cmd, timeout=120):
             TimeoutException,
             TimeoutError,
         ) as kill_exc:
-            log.warning(
-                "Could not stop in-flight mount %s: %s", mount_path, kill_exc
-            )
+            log.warning("Could not stop in-flight mount %s: %s", mount_path, kill_exc)
         if mount_path_is_active(client_node, mount_path):
             log.error(
                 "Mount %s completed after the hung mount command was stopped",
