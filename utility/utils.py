@@ -1727,10 +1727,8 @@ def fetch_build_artifacts(
         product = "ceph"
 
     build_details: dict[str, Any] = get_build_details(product, ceph_version, build)
-    ceph_image: str = build_details["images"]["ceph-base"]
-    _dtr: str = ceph_image.split("/", 1)[0]
-    _tag: str = ceph_image.split(":")[-1]
-    _image_path: str = ceph_image.split("/", 1)[-1].split(":")[0]
+    ceph_image: str = normalize_container_image(build_details["images"]["ceph-base"])
+    _dtr, _image_path, _tag = split_container_image(ceph_image, normalize=False)
 
     return (
         build_details["repositories"][datacenter][platform],
@@ -3091,6 +3089,115 @@ def get_registry_info(registry):
     normalized["username"] = username
     normalized["password"] = password
     return normalized
+
+
+# sha256 content digest (with or without algorithm prefix)
+_IMAGE_DIGEST_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
+# Canonical digest reference: repo@sha256:<64-hex>
+_DIGEST_REF_RE = re.compile(r"^(?P<name>.+)@sha256:(?P<digest>[0-9a-f]{64})$")
+# Mistyped digest used as a tag: repo:64hex or repo:sha256:64hex
+_TAGGED_DIGEST_RE = re.compile(r"^(?P<name>.+?)(?::sha256:|:)(?P<digest>[0-9a-f]{64})$")
+
+
+def is_image_digest(value):
+    """Return True if value is a bare or sha256-prefixed content digest."""
+    if not value or not isinstance(value, str):
+        return False
+    return bool(_IMAGE_DIGEST_RE.fullmatch(value.strip()))
+
+
+def normalize_container_image(ref, tag_style=False):
+    """Return a pullable image reference for the registry flavour in use.
+
+    The default form uses the canonical digest separator, rewriting digests
+    mistyped as tags (``repo:<64-hex>``) to ``repo@sha256:<64-hex>`` while
+    leaving ordinary tags untouched::
+
+        quay.io/rhceph-ci/rhceph:8-178   (tag, unchanged)
+        quay.io/rhceph-ci/rhceph:<hex>   -> ...rhceph@sha256:<hex>
+
+    Some registry mirrors (the ``eu-de`` datacenter) expose content digests as
+    tags and reject ``@sha256:`` references, so ``tag_style=True`` performs the
+    inverse rewrite::
+
+        repo@sha256:<hex> -> repo:<hex>
+        repo:sha256:<hex> -> repo:<hex>
+    """
+    if not ref or not isinstance(ref, str):
+        return ref
+    ref = ref.strip()
+
+    if tag_style:
+        match = _DIGEST_REF_RE.fullmatch(ref) or _TAGGED_DIGEST_RE.fullmatch(ref)
+        if match:
+            return f"{match.group('name')}:{match.group('digest')}"
+        return ref
+
+    if "@sha256:" in ref:
+        return ref
+    match = _TAGGED_DIGEST_RE.fullmatch(ref)
+    if not match:
+        return ref
+    return f"{match.group('name')}@sha256:{match.group('digest')}"
+
+
+def compose_container_image(registry, image, tag, tag_style=False):
+    """Build a pullable image ref from registry/image/tag parts.
+
+    Digest tags (64-char hex or ``sha256:<hex>``) use ``@sha256:`` so Quay
+    digest-only publishes work. Normal tags (``latest``, ``8-178``, etc.)
+    keep the ``:`` separator.
+
+    Args:
+        tag_style: Use ``:`` for digest tags too (mirrors that publish digests
+            as tags, e.g. the eu-de datacenter).
+    """
+    registry = (registry or "").rstrip("/")
+    image = (image or "").lstrip("/")
+    tag = (tag or "").strip()
+
+    if is_image_digest(tag):
+        if tag_style:
+            return f"{registry}/{image}:{tag.removeprefix('sha256:')}"
+        digest = tag if tag.startswith("sha256:") else f"sha256:{tag}"
+        return f"{registry}/{image}@{digest}"
+    return f"{registry}/{image}:{tag}"
+
+
+def split_container_image(ref, normalize=True):
+    """Split an image ref into ``(registry, path, tag_or_digest)``.
+
+    Digests are returned as ``sha256:<hex>``. Tag-style digests are normalized
+    first unless ``normalize=False``, which lets callers that already resolved
+    the desired form (see ``normalize_container_image(..., tag_style=True)``)
+    split it verbatim. References without a registry component yield an empty
+    registry. Returns ``(None, None, None)`` for empty input.
+    """
+    if normalize:
+        ref = normalize_container_image(ref)
+    if not ref:
+        return None, None, None
+
+    if "/" not in ref:
+        # "name", "name:tag" or "name@sha256:<hex>" with no registry prefix.
+        if "@sha256:" in ref:
+            path, _, digest = ref.partition("@")
+            return "", path, digest
+        if ":" in ref:
+            path, _, tag = ref.rpartition(":")
+            return "", path, tag
+        return "", ref, None
+
+    registry, _, rest = ref.partition("/")
+    if "@sha256:" in rest:
+        path, _, digest = rest.partition("@")
+        return registry, path, digest
+
+    if ":" in rest:
+        path, _, tag = rest.rpartition(":")
+        return registry, path, tag
+
+    return registry, rest, None
 
 
 def registry_host_from_image(image):

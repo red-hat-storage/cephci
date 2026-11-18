@@ -3,7 +3,12 @@
 from tests.ceph_ansible import switch_rpm_to_container, test_ansible_upgrade
 from tests.ceph_installer import test_ansible, test_cephadm
 from tests.cephadm import test_cephadm_upgrade
-from utility.utils import Log, get_release_repo
+from utility.utils import (
+    Log,
+    get_release_repo,
+    normalize_container_image,
+    split_container_image,
+)
 
 LOG = Log(__name__)
 
@@ -55,21 +60,17 @@ def get_ansible_conf(config, version, is_repo_present, is_ceph_conf_present):
         install_config["base_url"] = config["base_url"]
         container_image = config["container_image"]
 
+    # Split the resolved ref instead of re-parsing it: digest references
+    # (repo@sha256:<hex>) have no ":" tag component.
+    container_image = normalize_container_image(container_image)
+    _registry, _image, _tag = split_container_image(container_image, normalize=False)
     install_config["container_image"] = container_image
-    install_config["ansi_config"]["ceph_docker_registry"] = container_image.split(
-        "/", 1
-    )[0]
-    install_config["ceph_docker_registry"] = container_image.split("/", 1)[0]
-    install_config["ansi_config"]["ceph_docker_image"] = container_image.split("/", 1)[
-        1
-    ].split(":")[0]
-    install_config["ceph_docker_image"] = container_image.split("/", 1)[1].split(":")[0]
-    install_config["ansi_config"]["ceph_docker_image_tag"] = container_image.split(
-        "/", 1
-    )[1].split(":")[1]
-    install_config["ceph_docker_image_tag"] = container_image.split("/", 1)[1].split(
-        ":"
-    )[1]
+    install_config["ansi_config"]["ceph_docker_registry"] = _registry
+    install_config["ceph_docker_registry"] = _registry
+    install_config["ansi_config"]["ceph_docker_image"] = _image
+    install_config["ceph_docker_image"] = _image
+    install_config["ansi_config"]["ceph_docker_image_tag"] = _tag
+    install_config["ceph_docker_image_tag"] = _tag
 
     return install_config
 

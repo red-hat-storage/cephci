@@ -77,7 +77,12 @@ from cephci.utils.build_info import CephTestManifest
 from cli.utilities.configure import setup_ibm_licence
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.utils import (
+    compose_container_image,
+    get_cephci_config,
+    normalize_container_image,
+    split_container_image,
+)
 
 log = Log(__name__)
 
@@ -4815,7 +4820,12 @@ def _prepare_upgrade_context(ceph_cluster, cephadm_obj, config):
         _ver = ctm.ceph_version
 
         config["base_url"] = _base_url
-        config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+        config["container_image"] = compose_container_image(
+            _registry,
+            _image_name,
+            _image_tag,
+            tag_style=ctm.uses_tag_style_images,
+        )
         config["ceph_docker_registry"] = _registry
         config["ceph_docker_image"] = _image_name
         config["ceph_docker_image_tag"] = _image_tag
@@ -4845,12 +4855,11 @@ def _prepare_upgrade_context(ceph_cluster, cephadm_obj, config):
 
     elif _custom_image and _custom_repo:
         log.info(f"Using custom image: {_custom_image}")
-        # Parse image ref: host[:port]/path:tag
-        img_ref, _image_tag = _custom_image.rsplit(":", 1)
-        _registry, _image_name = img_ref.split("/", 1)
+        _custom_image = normalize_container_image(_custom_image)
+        _registry, _image_name, _image_tag = split_container_image(_custom_image)
 
         config["base_url"] = _custom_repo
-        config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+        config["container_image"] = _custom_image
         config["ceph_docker_registry"] = _registry
         config["ceph_docker_image"] = _image_name
         config["ceph_docker_image_tag"] = _image_tag
