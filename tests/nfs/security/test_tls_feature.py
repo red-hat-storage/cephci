@@ -26,6 +26,7 @@ from tests.nfs.security.security_utils import (
     generate_mismatched_tls_trust_cert,
     generate_tls_cert_bundle,
     mount_export_via_stunnel,
+    nfs_orch_daemon_identity,
     normalize_fio_buffer_pattern,
     probe_tls_handshake_with_openssl,
     setup_plain_nfs_cluster,
@@ -42,6 +43,7 @@ from tests.nfs.security.security_utils import (
     verify_tls_strings_in_nfs_logs,
     wait_for_tls_strings_in_nfs_logs,
     wait_until_ceph_orch_nfs_ps_ready,
+    wait_until_nfs_daemon_restarted,
     wait_until_nfs_export_visible,
     write_client_tls_ca_cert,
 )
@@ -813,6 +815,7 @@ def _scenario_invalid_server_certs(
     bad_key = corrupt_pem_material(cert_key)
     bad_cert = corrupt_pem_material(cert)
     bad_ca = corrupt_pem_material(ca_cert)
+    previous_daemon = nfs_orch_daemon_identity(client_node, nfs_name)
     deploy_tls_nfs_cluster_with_certs(
         installer_node=installer,
         nfs_node=nfs_node,
@@ -830,7 +833,7 @@ def _scenario_invalid_server_certs(
         scenario,
         5,
         total,
-        f"Wait for nfs.{nfs_name} daemon ready in ceph orch ps after redeploy",
+        f"Wait until nfs.{nfs_name} restarts on the corrupted certificates",
     )
     redeploy_wait = int(
         tls_config_get(
@@ -840,13 +843,21 @@ def _scenario_invalid_server_certs(
             default=300,
         )
     )
-    if not wait_until_ceph_orch_nfs_ps_ready(
-        client_node, nfs_name, timeout=redeploy_wait, interval=5
+    if not wait_until_nfs_daemon_restarted(
+        client_node,
+        nfs_name,
+        previous_daemon,
+        timeout=redeploy_wait,
+        interval=5,
     ):
         raise OperationFailedError(
-            f"NFS service {nfs_name} not ready after invalid-cert redeploy"
+            f"NFS service {nfs_name} did not restart after invalid-cert redeploy"
         )
-    _log_neg_step_done(scenario, 5, total, "Ganesha daemon running with invalid certs")
+    # orch "running" is the new container, not proof Ganesha has loaded the PEM.
+    sleep(15)
+    _log_neg_step_done(
+        scenario, 5, total, "Ganesha daemon restarted with invalid certs"
+    )
 
     _attempt_tls_mount_and_capture_tlshd(
         client_node,

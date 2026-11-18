@@ -34,6 +34,7 @@ def qos_update_pershare_for_export(
                     ceph_export_nfs_obj.qos.enable_per_share(
                         nfs_name=nfs_name,
                         export=export,
+                        operation="bandwidth_control",
                         max_export_combined_bw=qos_parameters.get(
                             "max_export_combined_bw"
                         ),
@@ -42,6 +43,7 @@ def qos_update_pershare_for_export(
                     ceph_export_nfs_obj.qos.enable_per_share(
                         nfs_name=nfs_name,
                         export=export,
+                        operation="bandwidth_control",
                         max_export_read_bw=qos_parameters.get("max_export_read_bw"),
                         max_export_write_bw=qos_parameters.get("max_export_write_bw"),
                     )
