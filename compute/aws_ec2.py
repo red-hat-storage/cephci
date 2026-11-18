@@ -238,7 +238,6 @@ class CephVMNodeAWS:
         self._subnet: str = ""
         self._roles: list = list()
         self.node = None
-        self.root_login: bool = True
 
         # Lazy import: boto3 is only needed when actually using AWS
         self.client = get_ec2_client(

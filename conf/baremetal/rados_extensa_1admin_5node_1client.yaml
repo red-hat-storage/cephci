@@ -7,7 +7,7 @@ globals:
         - hostname: extensa015
           ip: 10.8.130.215
           id: node1
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -19,7 +19,7 @@ globals:
         - hostname: extensa016
           ip: 10.8.130.216
           id: node2
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -35,7 +35,7 @@ globals:
         - hostname: extensa017
           ip: 10.8.130.217
           id: node3
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -51,7 +51,7 @@ globals:
         - hostname: extensa018
           ip: 10.8.130.218
           id: node4
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -66,7 +66,7 @@ globals:
         - hostname: extensa019
           ip: 10.8.130.219
           id: node5
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - _admin
@@ -83,6 +83,6 @@ globals:
         - hostname: extensa020
           ip: 10.8.130.220
           id: node6
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

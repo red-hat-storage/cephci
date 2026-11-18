@@ -1,4 +1,8 @@
 ---
+# EXEMPTION: Windows is not a Ceph node. The key-only rule applied to the
+# Linux inventories (no chpasswd, no ssh_pwauth, root authorized_keys) does
+# not apply here; the Windows clients still authenticate with a password.
+# See cli/utilities/windows_utils.py.
 version_id: 2022 Standard Edition
 id: windows
 instance:
@@ -16,7 +20,6 @@ instance:
         gecos: Ceph User
         primary_group: Users
         groups: cloud-users
-        passwd: Paspiyrw#$*97521
         inactive: False
         expiredate: 2025-10-01
         ssh_authorized_keys:

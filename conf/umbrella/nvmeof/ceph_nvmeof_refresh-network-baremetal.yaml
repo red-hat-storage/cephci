@@ -5,7 +5,7 @@
 #   - primary   = IPv4 hosting the GW (node ip below)
 #   - secondary = another IPv4 on a different iface (used for add_network / refresh)
 #
-# Update hostname / ip / root_password / volumes to match the lab.
+# Update hostname / ip / root_private_key / volumes to match the lab.
 #
 # Suggested run:
 #   conf/umbrella/nvmeof/ceph_nvmeof_refresh-network-baremetal.yaml
@@ -21,7 +21,7 @@ globals:
         - hostname: tala002
           id: node1
           ip: 10.64.0.188
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -38,7 +38,7 @@ globals:
         - hostname: tala003
           id: node2
           ip: 10.64.0.189
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - osd
@@ -54,7 +54,7 @@ globals:
         - hostname: tala004
           id: node3
           ip: 10.64.0.190
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - osd
@@ -69,7 +69,7 @@ globals:
         - hostname: tala005
           id: node4
           ip: 10.64.0.191
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
           volumes:
@@ -84,7 +84,7 @@ globals:
         - hostname: tala010
           id: node5
           ip: 10.64.0.196
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - nvmeof-gw
           volumes:
@@ -98,7 +98,7 @@ globals:
         - hostname: tala011
           id: node6
           ip: 10.64.0.197
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - nvmeof-gw
           volumes:
@@ -112,7 +112,7 @@ globals:
         - hostname: tala012
           id: node7
           ip: 10.64.0.198
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - nvmeof-gw
           volumes:
@@ -126,7 +126,7 @@ globals:
         - hostname: tala013
           id: node8
           ip: 10.64.0.199
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - nvmeof-gw
           volumes:
@@ -140,6 +140,6 @@ globals:
         - hostname: tala001
           id: node9
           ip: 10.64.0.187
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

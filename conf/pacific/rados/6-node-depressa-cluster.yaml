@@ -16,7 +16,7 @@ globals:
             - mon
             - mgr
             - osd
-          root_password: redhat
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdb
             - /dev/sdc
@@ -30,7 +30,7 @@ globals:
             - mon
             - mgr
             - osd
-          root_password: redhat
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdb
             - /dev/sdc
@@ -44,7 +44,7 @@ globals:
             - osd
             - mds
             - rgw
-          root_password: redhat
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdb
             - /dev/sdc
@@ -57,7 +57,7 @@ globals:
           role:
             - osd
             - mon
-          root_password: redhat
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdb
             - /dev/sdc
@@ -70,7 +70,7 @@ globals:
           role:
             - osd
             - mgr
-          root_password: redhat
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdb
             - /dev/sdc
@@ -85,7 +85,7 @@ globals:
             - rgw
             - osd
             - client
-          root_password: redhat
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdb
             - /dev/sdc

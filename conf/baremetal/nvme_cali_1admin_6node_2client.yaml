@@ -15,7 +15,7 @@ globals:
             - mon
             - mgr
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -30,7 +30,7 @@ globals:
             - mgr
             - mon
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -44,7 +44,7 @@ globals:
           role:
             - mon
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -57,7 +57,7 @@ globals:
           ip: 10.8.130.4
           role:
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -70,7 +70,7 @@ globals:
           ip: 10.8.130.5
           role:
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -83,7 +83,7 @@ globals:
           ip: 10.8.130.6
           role:
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -97,7 +97,7 @@ globals:
           role:
             - nvmeof-gw
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -110,14 +110,14 @@ globals:
           ip: 10.8.130.8
           role:
             - nvmeof-gw
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: cali009
           id: node9
           ip: 10.8.130.9
           role:
             - nvmeof-gw
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sdc
             - /dev/sdd
@@ -128,18 +128,18 @@ globals:
         - hostname: cali010
           id: node10
           ip: 10.8.130.10
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - nvmeof-gw
         - hostname: cali011
           id: node11
           ip: 10.8.130.11
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
         - hostname: cali012
           id: node12
           ip: 10.8.130.12
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

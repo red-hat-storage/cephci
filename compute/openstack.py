@@ -118,7 +118,6 @@ class CephVMNodeV2:
         self._roles: list = list()
 
         # Fixme: determine if we can pick this information for OpenStack.
-        self.root_login: str
         self.osd_scenario: int
         self.keypair: Optional[str] = None
 

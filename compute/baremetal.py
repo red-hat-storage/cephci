@@ -5,6 +5,7 @@ from os.path import expanduser
 from typing import List, Optional
 
 from ceph.ceph import SSHConnectionManager
+from cli.exceptions import ResourceNotFoundError
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -21,14 +22,18 @@ class CephBaremetalNode:
 
         params :
             username
-            password
+            root_private_key
             Ip
             Hostname
-            root_login
             volumes
             subnet
             Id
             location
+
+        Raises:
+            ResourceNotFoundError: when root_private_key is absent. Password
+                authentication is not supported; the baremetal prep pipeline
+                must authorize the runner key for root.
         """
         # CephVM attributes
         self._roles: list = list()
@@ -38,22 +43,20 @@ class CephBaremetalNode:
         self.params = params
         self.location = params.get("location")
         self.private_key = params.get("root_private_key")
-        if self.private_key:
-            self.private_key = expanduser(self.private_key)
-            self.root_connection = SSHConnectionManager(
-                self.params.get("ip"),
-                "root",
-                self.params.get("root_password"),
-                look_for_keys=True,
-                private_key_file_path=self.private_key,
+        if not self.private_key:
+            raise ResourceNotFoundError(
+                f"No 'root_private_key' configured for baremetal node "
+                f"{self.params.get('ip')}. Password authentication is not "
+                f"supported -- add the key path to the node definition."
             )
-        else:
-            self.root_connection = SSHConnectionManager(
-                self.params.get("ip"),
-                "root",
-                self.params.get("root_password"),
-                look_for_keys=False,
-            )
+
+        self.private_key = expanduser(self.private_key)
+        self.root_connection = SSHConnectionManager(
+            self.params.get("ip"),
+            "root",
+            look_for_keys=True,
+            private_key_file_path=self.private_key,
+        )
 
         self.rssh = self.root_connection.get_client
 
@@ -88,9 +91,9 @@ class CephBaremetalNode:
         """
         LOG.info(f"Creating user account with {name} ...")
 
-        self.rssh().exec_command(
-            command=f"useradd {name} -p '$1$1fsNAJ7G$bx4Sz9VnpOnIygVKVaGCT.'"
-        )
+        # No password is set: the account is reachable by key only, via the
+        # authorized_keys copied from root below.
+        self.rssh().exec_command(command=f"useradd {name}")
 
         key_file = "~/.ssh/authorized_keys"
         create_dir = f"install -d -m 700  -o {name} -g {name} /home/{name}/.ssh"
@@ -128,15 +131,6 @@ class CephBaremetalNode:
     def hostname(self) -> str:
         """Return the hostname of the VM."""
         return self.params.get("hostname")
-
-    @property
-    def root_password(self) -> str:
-        """Return root password for the machine"""
-        return self.params.get("root_password", "passwd")
-
-    @property
-    def root_login(self) -> str:
-        return self.params.get("root_login", "root")
 
     @property
     def volumes(self):

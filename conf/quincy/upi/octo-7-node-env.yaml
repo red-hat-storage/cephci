@@ -15,7 +15,7 @@ globals:
           hostname: clara003
           id: node1
           ip: 10.8.129.3
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -30,7 +30,7 @@ globals:
           hostname: clara004
           id: node2
           ip: 10.8.129.4
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - mgr
@@ -43,7 +43,7 @@ globals:
           hostname: clara006
           id: node3
           ip: 10.8.129.6
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - mon
@@ -55,7 +55,7 @@ globals:
           hostname: clara007
           id: node4
           ip: 10.8.129.7
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -67,7 +67,7 @@ globals:
           hostname: clara009
           id: node5
           ip: 10.8.129.9
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -79,7 +79,7 @@ globals:
           hostname: clara010
           id: node6
           ip: 10.8.129.10
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
             - nvmeof-gw
@@ -90,7 +90,7 @@ globals:
         - hostname: clara014
           id: node7
           ip: 10.8.129.14
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
           volumes:

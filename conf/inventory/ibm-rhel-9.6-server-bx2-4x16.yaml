@@ -13,61 +13,7 @@ instance:
     #cloud-config
     no_ssh_fingerprints: true
     disable_root: false
-    ssh_pwauth: true
-    timezone: Etc/UTC
-
-    # Derive repos/<major>/<minor>/ from guest VERSION_ID so mix-os
-    # (e.g. rhel-100 on a 9.2 default inventory) hits the matching mirror.
-    # RHEL 9 uses dnf vars under /etc/dnf/vars (yum is dnf-compatible).
-    bootcmd:
-      - |
-        set -e
-        . /etc/os-release
-        major=${VERSION_ID%%.*}
-        minor=${VERSION_ID#*.}
-        minor=${minor%%.*}
-        mkdir -p /etc/dnf/vars
-        printf '%s\n' "$major" > /etc/dnf/vars/releasever_major
-        printf '%s\n' "$minor" > /etc/dnf/vars/releasever_minor
-
-    # We are forcing an update of the packages
-    package_update: true
-
-    # Create the base repositories (dnf vars from bootcmd above)
-    yum_repos:
-      appstream:
-        name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/AppStream/
-        enabled: true
-        gpgcheck: false
-      baseos:
-        name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/BaseOS/
-        gpgcheck: false
-        enabled: true
-
-      crb:
-        name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/CRB/
-        gpgcheck: false
-        enabled: true
-
-    # write_files: sysctl/sshd only (no containers policy, no registry mirror)
-    write_files:
-      # Container registries: do NOT mirror via nginx-vm-01 (Frankfurt).
-      # Shared by Dallas, London, and Madrid. VMs pull upstream hosts directly
-      # (preprod.icr.io, cp.icr.io, quay.io, registry.*.redhat.io).
-      # Auth uses bootstrap --registry-url / credentials (see #6124 / #6156).
-      - content: |
-          net.core.default_qdisc=netem
-        path: /etc/sysctl.d/1000-qdisc.conf
-        owner: root:root
-        permissions: '0644'
-      - content: |
-          PermitRootLogin yes
-        path: /etc/ssh/sshd_config.d/50-cephci.conf
-        owner: root:root
-        permissions: '0644'
+    ssh_pwauth: false
 
     groups:
       - cephuser
@@ -81,32 +27,21 @@ instance:
         shell: /bin/bash
         ssh-authorized-keys:
           - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDeI9B2StVok97tZ3k+kYQrYFxCqPeS1N367SP1uIQDYdwgVW+HwQcwriCG7DtfB5rY1Sa2L34B5A6XPWU2SME8w9G4C7/mtCW6N1caT7G0BQUHzOFpWg/l9ZSse0iz17kzX91BcCaL/HdmmMySxM6kBmYHOHDhJFhfN9KU+5paPNTYCT9J4L57oycYkxO0X4WoEhgztc/wkUw58K+7xWSBVVLFJxk4jJQHRnk1UyoLykSf3IF6/o9cbGUhhxvTtRzBaRnEHLg2xinqGXeH2wOelBTa6dDXdQwEkI2R7aM/9v5kmUboEwaySCXBEQ9ktKhdiGichbWg1rd+oNSOURF7OO0GstjgumFvjmasLBbM7pOTcaJqIytgD2t25bT+DIsv8wBZJHTEGGk5gwDKNWeDCQgui3PyCTInUV+SHpzgvVqGgfnTzV2k+rObQL2+fodRT9p8kaLF4RLxpGuwrLMywdk4Kro/EO/26irONvuPFv4GvJMw5vybnpQ08EDKsrk5avXGpJ7fAgTUg9vEKkP/rM3K5z8epkBKtxe/mXpNgWDy5A/9KCoQ+TMC9JsoJQFtnn7CkfTUZ166gFtdg2aS0D7MAX0Af7Sr6AEhNLTgpAFfibFyuIjui5NhA4LK5NZf6mb4wd1CmmpeBkr+FInth51Rz7XyG7kTLdQc3DTqAQ== ibm-storage-qe-ci-user-fips RSA key
-
+      - name: root
+        ssh-authorized-keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDeI9B2StVok97tZ3k+kYQrYFxCqPeS1N367SP1uIQDYdwgVW+HwQcwriCG7DtfB5rY1Sa2L34B5A6XPWU2SME8w9G4C7/mtCW6N1caT7G0BQUHzOFpWg/l9ZSse0iz17kzX91BcCaL/HdmmMySxM6kBmYHOHDhJFhfN9KU+5paPNTYCT9J4L57oycYkxO0X4WoEhgztc/wkUw58K+7xWSBVVLFJxk4jJQHRnk1UyoLykSf3IF6/o9cbGUhhxvTtRzBaRnEHLg2xinqGXeH2wOelBTa6dDXdQwEkI2R7aM/9v5kmUboEwaySCXBEQ9ktKhdiGichbWg1rd+oNSOURF7OO0GstjgumFvjmasLBbM7pOTcaJqIytgD2t25bT+DIsv8wBZJHTEGGk5gwDKNWeDCQgui3PyCTInUV+SHpzgvVqGgfnTzV2k+rObQL2+fodRT9p8kaLF4RLxpGuwrLMywdk4Kro/EO/26irONvuPFv4GvJMw5vybnpQ08EDKsrk5avXGpJ7fAgTUg9vEKkP/rM3K5z8epkBKtxe/mXpNgWDy5A/9KCoQ+TMC9JsoJQFtnn7CkfTUZ166gFtdg2aS0D7MAX0Af7Sr6AEhNLTgpAFfibFyuIjui5NhA4LK5NZf6mb4wd1CmmpeBkr+FInth51Rz7XyG7kTLdQc3DTqAQ== ibm-storage-qe-ci-user-fips RSA key
       - name: psathyan
         primary-group: psathyan
         sudo: ALL=(root) NOPASSWD:ALL
         shell: /bin/bash
         ssh-authorized-keys:
           - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBPDlMqoFJqzj9yP5o3w4O/rm4fHWSDKAsDr4YxHHFN35hEQ5vb4xALP0KoZg3UthbqnbXWvtSD3VoG3EFvPLjXNoO8xnM6VZrrDZYw8MT9Em2i+mCam+tpDBWbOojGvEfw== psathyan-fips
-
       - name: rchilkun
         primary-group: rchilkun
         sudo: ALL=(root) NOPASSWD:ALL
         shell: /bin/bash
         ssh-authorized-keys:
           - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAHzT2JgaOA+RQsExHsk3E4IZjD4ZPNJghZbt4TucWcVd+jVotfWDFR+AHQwShYaCy4RCbXiPgWvZUjMmRWwmZqOwwHRQ520hhwdc6+R/h7i7axVBO++kQDvvH450B+Vr9UHwVB9LICPBSXHXIUUdFB5eSUi8C5LSsxd+JnRIyhM9vOCcg== rakeshnarayanchilkunda@Rakeshs-MacBook-Pro-3.local
-
-      - name: root
-        ssh-authorized-keys:
-          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDeI9B2StVok97tZ3k+kYQrYFxCqPeS1N367SP1uIQDYdwgVW+HwQcwriCG7DtfB5rY1Sa2L34B5A6XPWU2SME8w9G4C7/mtCW6N1caT7G0BQUHzOFpWg/l9ZSse0iz17kzX91BcCaL/HdmmMySxM6kBmYHOHDhJFhfN9KU+5paPNTYCT9J4L57oycYkxO0X4WoEhgztc/wkUw58K+7xWSBVVLFJxk4jJQHRnk1UyoLykSf3IF6/o9cbGUhhxvTtRzBaRnEHLg2xinqGXeH2wOelBTa6dDXdQwEkI2R7aM/9v5kmUboEwaySCXBEQ9ktKhdiGichbWg1rd+oNSOURF7OO0GstjgumFvjmasLBbM7pOTcaJqIytgD2t25bT+DIsv8wBZJHTEGGk5gwDKNWeDCQgui3PyCTInUV+SHpzgvVqGgfnTzV2k+rObQL2+fodRT9p8kaLF4RLxpGuwrLMywdk4Kro/EO/26irONvuPFv4GvJMw5vybnpQ08EDKsrk5avXGpJ7fAgTUg9vEKkP/rM3K5z8epkBKtxe/mXpNgWDy5A/9KCoQ+TMC9JsoJQFtnn7CkfTUZ166gFtdg2aS0D7MAX0Af7Sr6AEhNLTgpAFfibFyuIjui5NhA4LK5NZf6mb4wd1CmmpeBkr+FInth51Rz7XyG7kTLdQc3DTqAQ== ibm-storage-qe-ci-user-fips RSA key
-
-    chpasswd:
-      expire: false
-      users:
-        - name: cephuser
-          password: $y$j9T$PxJ09a3yVNnPj0Veb8QDT.$bdWoyLq1IdGwlimyJC98P5OsSFE2w7.9ac68z4eoa01
-        - name: root
-          password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
 
     packages:
       - lvm2
@@ -123,6 +58,8 @@ instance:
     package_reboot_if_required: true
 
     runcmd:
-      - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf
-      - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
+      - timedatectl set-timezone Etc/UTC
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - echo "PermitRootLogin prohibit-password" > /etc/ssh/sshd_config.d/50-ceph-qe.conf
+      - systemctl restart sshd
       - touch /ceph-qa-ready

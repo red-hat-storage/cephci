@@ -1,5 +1,6 @@
 import json
 import pickle
+from os.path import expanduser
 
 import paramiko
 import yaml
@@ -36,7 +37,13 @@ cluster_status_cmds = [
 def get_cluster_status(client):
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_client.connect(client["ip"], username="root", password=client["root_password"])
+    connect_kw = {"username": "root", "allow_agent": False}
+    private_key = client.get("root_private_key")
+    if private_key:
+        connect_kw["key_filename"] = [expanduser(private_key)]
+    else:
+        connect_kw["look_for_keys"] = True
+    ssh_client.connect(client["ip"], **connect_kw)
     for cmd in cluster_status_cmds:
         stdin, stdout, stderr = ssh_client.exec_command(cmd)
         cluster_stat = json.loads(stdout.read())
@@ -103,7 +110,10 @@ if __name__ == "__main__":
     if arguments.get("--pickle"):
         cluster_dict = load_cluster_config(conf)
         client = cluster_dict.get("ceph").get_ceph_objects("client")[0]
-        client_dict = {"ip": client.ip_address, "root_password": client.root_password}
+        client_dict = {
+            "ip": client.ip_address,
+            "root_private_key": getattr(client, "private_key_path", None),
+        }
     else:
         parsed_data = load_cluster_from_file(conf)
         client_nodes = get_nodes_with_role(parsed_data)
@@ -111,7 +121,7 @@ if __name__ == "__main__":
             raise ValueError("No nodes with the specified role found.")
         client_dict = {
             "ip": client_nodes[0].get("ip"),
-            "root_password": client_nodes[0].get("root_password"),
+            "root_private_key": client_nodes[0].get("root_private_key"),
         }
     try:
         get_cluster_status(client_dict)

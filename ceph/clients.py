@@ -17,6 +17,13 @@ class CommandFailed(Exception):
 
 
 class WinNode(object):
+    """Windows iSCSI initiator node.
+
+    EXEMPTION: Windows is not a Ceph node and has no SSH key provisioned, so
+    it still authenticates with a password. Ceph (Linux) nodes are key-only --
+    see ceph.ceph.SSHConnectionManager. Do not copy this pattern.
+    """
+
     def __init__(self, **kw):
         self.login = "Administrator"
         self.password = "CephUser123"

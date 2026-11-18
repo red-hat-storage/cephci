@@ -3,19 +3,22 @@
 """Purge Ceph Cluster.
 
 Usage:
-    purge_ceph_cluster.py [--installer <IP>] [--username <USERNAME>] [--password <PASSWORD>]
+    purge_ceph_cluster.py [--installer <IP>] [--username <USERNAME>] [--private-key <PATH>]
 
 Options:
     -h --help       Show this help message and exit.
     --installer <IP>     Installer node IP.
     --username <USERNAME>   SSH username.
-    --password <PASSWORD>   SSH password.
+    --private-key <PATH>    Path to the SSH private key. Defaults to the
+                            runner's default keys when omitted.
 
 Assumptions :
-    This will assume all the ceph nodes will have same root username password as provided for installer node
+    All ceph nodes authorize the same username/key as the installer node.
+    Password authentication is not supported.
 """
 
 import json
+from os.path import expanduser
 
 import paramiko
 from docopt import docopt
@@ -50,11 +53,16 @@ def main():
 
     installer_node_ip = args["--installer"]
     username = args["--username"]
-    password = args["--password"]
+    private_key = args["--private-key"]
+    connect_kw = {"username": username, "allow_agent": False}
+    if private_key:
+        connect_kw["key_filename"] = [expanduser(private_key)]
+    else:
+        connect_kw["look_for_keys"] = True
 
     ssh_installer = paramiko.SSHClient()
     ssh_installer.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_installer.connect(installer_node_ip, username=username, password=password)
+    ssh_installer.connect(installer_node_ip, **connect_kw)
 
     fsid = get_fsid(ssh_installer)
 
@@ -67,7 +75,7 @@ def main():
     for node_ip in node_ips:
         ssh_node = paramiko.SSHClient()
         ssh_node.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_node.connect(node_ip, username=username, password=password)
+        ssh_node.connect(node_ip, **connect_kw)
 
         # Ensure cephadm package is installed
         _cmd = "dnf install -y cephadm"

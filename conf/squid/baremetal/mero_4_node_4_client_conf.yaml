@@ -16,7 +16,7 @@ globals:
             - mgr
             - rgw
             - osd
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -40,7 +40,7 @@ globals:
             - mon
             - osd
             - _admin
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -63,7 +63,7 @@ globals:
             - mon
             - mgr
             - osd-bak
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -88,7 +88,7 @@ globals:
             - alertmanager
             - grafana
             - prometheus
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -108,22 +108,22 @@ globals:
           ip: 10.8.128.8
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: magna010
           id: node6
           ip: 10.8.128.10
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: magna012
           id: node7
           ip: 10.8.128.12
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: magna060
           id: node8
           ip: 10.8.128.60
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
