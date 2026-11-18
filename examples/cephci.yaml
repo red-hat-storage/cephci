@@ -23,7 +23,12 @@ credentials:
   cloud:
     openstack:
       username: <fake-username>
+      # OpenStack API password (not SSH). SSH to the instances is key-only --
+      # see private_key_path below.
       password: <fake-password>
+      # Private key matching a public key authorized for cephuser and root in
+      # the inventory cloud-init. Required: SSH password auth is unsupported.
+      private_key_path: ~/.ssh/id_rsa
       auth-url: <fake-authurl>
       auth-version: <fake-auth-version>
       tenant-name: <fake-tenant>

@@ -11,8 +11,9 @@ from utility.log import Log
 
 LOG = Log(__name__)
 
-ROOT_PASSWD = "passwd"
-CEPH_PASSWD = "pass123"
+# Accounts reachable on every node. Access is key-based only -- no password is
+# emitted here, because none is set on the hosts.
+NODE_USERS = ["root", "cephuser"]
 
 
 doc = """
@@ -93,12 +94,9 @@ def collect_conf(cloud, prefix, config):
             # Update hostname
             _conf[name][node_name]["hostname"] = node.id
 
-            # Update users
-            # TODO (vamahaja): Support for multiple users
-            _conf[name][node_name]["users"] = [
-                {"user": "root", "password": ROOT_PASSWD},
-                {"user": "cephuser", "password": CEPH_PASSWD},
-            ]
+            # Update users. Authentication is by SSH key; the hosts have no
+            # passwords set, so none are reported.
+            _conf[name][node_name]["users"] = [{"user": user} for user in NODE_USERS]
 
             # Update roles
             _conf[name][node_name]["roles"] = cluster.get(key, {}).get("role")

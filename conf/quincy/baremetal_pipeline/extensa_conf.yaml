@@ -12,7 +12,7 @@ globals:
       - _admin
       - installer
       - mon
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa003
       id: node2
       ip: 10.8.130.203
@@ -21,14 +21,14 @@ globals:
       - mgr
       - mon
       - _admin
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa004
       id: node3
       ip: 10.8.130.204
       role:
       - mds
       - mon
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa005
       id: node4
       ip: 10.8.130.205
@@ -36,7 +36,7 @@ globals:
       - osd
       - rgw
       - nfs
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -47,7 +47,7 @@ globals:
       ip: 10.8.130.206
       role:
       - osd
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -60,7 +60,7 @@ globals:
       - osd
       - rgw
       - nfs
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -71,7 +71,7 @@ globals:
       ip: 10.8.130.208
       role:
       - osd
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sda
       - /dev/sdc
@@ -82,7 +82,7 @@ globals:
       ip: 10.8.130.209
       role:
       - osd
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sda
       - /dev/sdb
@@ -96,7 +96,7 @@ globals:
       - osd
       - mds
       - _admin
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -107,13 +107,13 @@ globals:
       ip: 10.8.130.212
       role:
       - client
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa013
       id: node11
       ip: 10.8.130.213
       role:
       - client
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa014
       id: node12
       ip: 10.8.130.214
@@ -121,7 +121,7 @@ globals:
       - osd
       - mon
       - mds
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -134,7 +134,7 @@ globals:
       - osd
       - mon
       - mgr
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -147,7 +147,7 @@ globals:
       - osd
       - rgw
       - nfs
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -159,7 +159,7 @@ globals:
       - osd
       - rgw
       - nfs
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
       volumes:
       - /dev/sdb
       - /dev/sdc
@@ -171,16 +171,16 @@ globals:
       ip: 10.8.130.218
       role:
       - client
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa019
       id: node17
       ip: 10.8.130.219
       role:
       - client
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa
     - hostname: extensa020
       id: node18
       ip: 10.8.130.220
       role:
       - client
-      root_password: passwd
+      root_private_key: ~/.ssh/id_rsa

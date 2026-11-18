@@ -13,7 +13,7 @@ globals:
         - hostname: depressa002
           id: node1
           ip: 10.1.172.202
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -34,7 +34,7 @@ globals:
         - hostname: depressa003
           id: node2
           ip: 10.1.172.203
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - mon
@@ -51,7 +51,7 @@ globals:
         - hostname: depressa004
           id: node3
           ip: 10.1.172.204
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - mon
@@ -67,7 +67,7 @@ globals:
         - hostname: depressa005
           id: node4
           ip: 10.1.172.205
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - mds
@@ -83,7 +83,7 @@ globals:
         - hostname: depressa006
           id: node5
           ip: 10.1.172.206
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - nfs
             - rgw
@@ -98,7 +98,7 @@ globals:
         - hostname: depressa011
           id: node6
           ip: 10.1.172.211
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - osd
@@ -114,7 +114,7 @@ globals:
         - hostname: depressa012
           id: node7
           ip: 10.1.172.212
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw

@@ -14,7 +14,7 @@
 #         - hostname: grim061
 #           ip: 10.64.66.198
 #           id: node1
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - _admin
 #             - installer
@@ -36,7 +36,7 @@
 #         - hostname: grim062
 #           ip: 10.64.66.199
 #           id: node2
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - osd
 #             - mon
@@ -57,7 +57,7 @@
 #         - hostname: grim063
 #           ip: 10.64.66.200
 #           id: node3
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - mon
 #             - osd
@@ -77,7 +77,7 @@
 #         - hostname: grim064
 #           ip: 10.64.66.201
 #           id: node4
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - osd
 #             - mds
@@ -95,19 +95,19 @@
 #         - hostname: grim065
 #           ip: 10.64.66.202
 #           id: node5
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - client
 #         - hostname: grim066
 #           ip: 10.64.66.203
 #           id: node6
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - client
 #         - hostname: grim067
 #           ip: 10.64.66.204
 #           id: node7
-#           root_password: pass123
+#           root_private_key: ~/.ssh/id_rsa
 #           role:
 #             - client
 #===============================================================================================

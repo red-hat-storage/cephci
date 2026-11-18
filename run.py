@@ -301,7 +301,6 @@ def create_nodes(
         use_ipv6 = resolve_use_ipv6(custom_config, cloud_type, osp_cred)
 
         ceph_nodes = []
-        root_password = None
         # OneCloud creds: globals.onecloud-credentials (osp-cred) or credentials.cloud.onecloud (cephci.yaml)
         onecloud_cfg = {}
         if cloud_type == "onecloud":
@@ -318,43 +317,40 @@ def create_nodes(
                 onecloud_cfg.get("private_key_path", "(none)"),
             )
         for node in ceph_vmnodes.values():
-            look_for_key = False
             private_key_path = ""
             private_key_password = None
             bootstrap_key_path = ""
             bootstrap_key_password = ""
-            cephuser_password = "cephuser"
             ssh_username = "cephuser"
             root_username = None  # None = use default "root"
 
             if cloud_type == "openstack":
+                glbs = osp_cred.get("globals") or {}
+                os_cfg = glbs.get("openstack-credentials") or {}
+                private_key_path = os_cfg.get("private_key_path", "")
+                private_key_password = os_cfg.get("private_key_password")
                 private_ip = node.get_private_ip()
                 ceph_nodename = node.node.name
             elif "baremetal" in cloud_type:
                 private_key_path = node.private_key if node.private_key else ""
                 private_ip = node.ip_address
-                look_for_key = True if node.private_key else False
-                root_password = node.root_password
                 ceph_nodename = node.hostname
             elif cloud_type == "ibmc":
                 glbs = osp_cred.get("globals")
                 ibmc = glbs.get("ibm-credentials")
                 private_key_path = ibmc.get("private_key_path")
                 private_ip = node.ip_address
-                look_for_key = True
                 ceph_nodename = node.hostname
             elif cloud_type == "aws":
                 glbs = osp_cred.get("globals")
                 aws_cfg = glbs.get("aws-credentials")
                 private_key_path = aws_cfg.get("private_key_path", "")
                 private_ip = node.ip_address
-                look_for_key = True
                 ceph_nodename = node.hostname
             elif cloud_type == "ocpvirt":
                 ocp_cfg = resolve_ocpvirt_credentials(osp_cred, custom_config)
                 private_key_path = ocp_cfg.get("private_key_path", "")
                 private_ip = node.ip_address
-                look_for_key = bool(private_key_path)
                 ceph_nodename = node.hostname
             elif cloud_type == "onecloud":
                 private_ip = node.ip_address
@@ -366,8 +362,6 @@ def create_nodes(
                 bootstrap_key_password = onecloud_cfg.get("bootstrap_key_password", "")
                 ssh_username = onecloud_ssh_user
                 root_username = onecloud_ssh_user
-                root_password = ""
-                look_for_key = True
                 private_key_path = onecloud_cfg.get("private_key_path", "")
                 private_key_password = onecloud_cfg.get("private_key_password")
 
@@ -383,27 +377,13 @@ def create_nodes(
                 # IPv6 attrs only when available (OpenStack dual-stack); other envs have no ipv6_* on node
                 ipv6_address = getattr(node, "ipv6_address", None)
                 ipv6_subnet = getattr(node, "ipv6_subnet", None)
-                pwd = (
-                    (root_password or "passwd")
-                    if ssh_username == "root"
-                    else cephuser_password
-                )
-                root_pwd = (
-                    ""
-                    if (cloud_type == "onecloud" and look_for_key)
-                    else (root_password or "passwd")
-                )
                 ceph = CephNode(
                     username=ssh_username,
-                    password=pwd,
-                    root_password=root_pwd,
                     root_username=root_username,
-                    look_for_key=look_for_key,
                     private_key_path=private_key_path,
                     private_key_password=private_key_password,
                     bootstrap_key_path=bootstrap_key_path,
                     bootstrap_key_password=bootstrap_key_password,
-                    root_login=node.root_login,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
                     ipv4_address=node.ip_address,
@@ -1341,7 +1321,7 @@ def run(args):
             sosreport.run(
                 installer.ip_address,
                 installer.username,
-                installer.password or "cephuser",
+                installer.private_key_path,
                 run_dir,
             )
 

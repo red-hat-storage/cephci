@@ -247,9 +247,10 @@ Examples
               hostname: "ndoe1.test.local" # FQDN of the server
               location: "site-01"          # Optional - datacenter or rack meta details.
               ip:                          # Public IPv4 address of the host
-              root_password:               # Provide the root password (Optional)
-              root_private_key:            # Private SSH key to be used for remote login
-                                           # It is optional if root_password is provided
+              root_private_key:            # Private SSH key used for remote login.
+                                           # Required - password authentication is
+                                           # not supported. The matching public key
+                                           # must be authorized for root on the host.
               role:                        # List of services to be deployed
                 - _admin
                 - installer

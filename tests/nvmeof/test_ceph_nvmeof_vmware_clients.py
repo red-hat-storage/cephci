@@ -33,6 +33,9 @@ def configure_esx(gateway, config, nguid_list):
     nqn = config.get("sub_nqn")
     port = config.get("sub_port")
 
+    # EXEMPTION: the ESXi hypervisor is not a Ceph node and has no SSH key
+    # provisioned, so it still authenticates with a password. Ceph nodes are
+    # key-only -- see ceph.ceph.SSHConnectionManager.
     ssh_esx = paramiko.SSHClient()
     ssh_esx.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh_esx.connect(esx_ip, username="root", password=esx_passwd)
