@@ -1,0 +1,121 @@
+---
+# ==================================================================================
+# Tier-level: 3 (smoke / gate)
+# Test-Suite: tier3-cephadm-agent-scale-regression-smoke.yaml
+#
+# Reduced-count TC1–TC6, TC8–TC9 for IBM smoke conf validation.
+# TC7 firewall omitted — covered by tier2.
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: Installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap (1 host, use_agent)
+      desc: Bootstrap single-host cluster with mgr/cephadm/use_agent=true
+      module: test_bootstrap.py
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: "node1"
+          orphan-initial-daemons: true
+          config:
+            mgr:
+              mgr/cephadm/use_agent: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm agent scale regression smoke TC1 host OSD bring-up
+      desc: Reduced-count TC1 bring-up; abort-on-fail skips remaining TCs
+      module: cephadm_agent.test_agent_scale_bringup.py
+      abort-on-fail: true
+      config:
+        scale: &agent_scale_smoke
+          initial_hosts: 5
+          initial_osds: 8
+          expand_hosts: 3
+          expand_osds: 4
+          allow_fewer_hosts: true
+          host_add_mode: burst
+          host_labels:
+            - osd
+            - mgr
+            - node-exporter
+            - crash
+          ensure_monitoring: true
+          host_timeout: 1800
+          agent_timeout: 1800
+          osd_timeout: 3600
+          mgr_failover_timeout: 120
+          retarget_timeout: 600
+          health_poll_sec: 30
+          mgr_rss_poll_sec: 30
+          fail_on_agent_down: true
+          deploy_rgw: true
+          deploy_nfs: true
+          skip_tc3_if_no_hosts: true
+          mgr_failover_iterations: 2
+          agent_restart_sample: 1
+          auth_check_sample: 0
+          cert_store_max_entry_bytes: 65536
+          workloads:
+            enable_rados: true
+            enable_rgw: true
+            enable_nfs: true
+            rados_bench_sec: 15
+
+  - test:
+      name: Cephadm agent scale regression smoke TC2 mgr failover retarget
+      desc: Reduced-count TC2 mgr failover + agent retarget under IO
+      module: cephadm_agent.test_agent_scale_mgr_failover.py
+      config:
+        scale: *agent_scale_smoke
+
+  - test:
+      name: Cephadm agent scale regression smoke TC3 node expansion
+      desc: Reduced-count TC3 expansion under IO
+      module: cephadm_agent.test_agent_scale_expansion.py
+      config:
+        scale: *agent_scale_smoke
+
+  - test:
+      name: Cephadm agent scale regression smoke TC4 agent restart
+      desc: Stop/start agent; CEPHADM_AGENT_DOWN raise and clear
+      module: cephadm_agent.test_agent_scale_restart.py
+      config:
+        scale: *agent_scale_smoke
+
+  - test:
+      name: Cephadm agent scale regression smoke TC5 mgr failover loop
+      desc: Repeated mgr failover + retarget under IO
+      module: cephadm_agent.test_agent_scale_mgr_loop.py
+      config:
+        scale: *agent_scale_smoke
+
+  - test:
+      name: Cephadm agent scale regression smoke TC6 registry auth
+      desc: podman-auth.json presence on agent hosts
+      module: cephadm_agent.test_agent_scale_registry_auth.py
+      config:
+        scale: *agent_scale_smoke
+
+  - test:
+      name: Cephadm agent scale regression smoke TC8 monitoring
+      desc: Monitoring stack running after scale
+      module: cephadm_agent.test_agent_scale_monitoring.py
+      config:
+        scale: *agent_scale_smoke
+
+  - test:
+      name: Cephadm agent scale regression smoke TC9 cert store size
+      desc: Cert-store related config-key size under limit
+      module: cephadm_agent.test_agent_scale_cert_store.py
+      config:
+        scale: *agent_scale_smoke

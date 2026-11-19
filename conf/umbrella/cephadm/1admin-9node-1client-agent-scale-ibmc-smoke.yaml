@@ -1,0 +1,119 @@
+# ==================================================================================
+# IBM Cloud (ibmc) gate layout for agent scale regression SMOKE
+#
+# Shape (matches tier3-cephadm-agent-scale-regression-smoke.yaml defaults):
+#   node1           — bootstrap (_admin/installer/mon/mgr)
+#   node2..node6    — TC1: 5 OSD hosts × 2 volumes (~8+ OSDs)
+#   node7..node9    — TC3: 3 OSD hosts × 2 volumes
+#   node10          — client
+#
+# Suite:
+#   suites/umbrella/cephadm/tier3-cephadm-agent-scale-regression-smoke.yaml
+#
+# Example:
+#   python run.py --cloud ibmc \
+#     --global-conf conf/umbrella/cephadm/1admin-9node-1client-agent-scale-ibmc-smoke.yaml \
+#     --inventory conf/inventory/ibm-rhel-9.6-server-bx2-4x16.yaml \
+#     --suite suites/umbrella/cephadm/tier3-cephadm-agent-scale-regression-smoke.yaml \
+#     --osp-cred <ibmc-cred.yaml> --custom-config use_agent=true ...
+# ==================================================================================
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - crash
+          - prometheus
+          - grafana
+          - alertmanager
+      node2:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mon
+          - mgr
+          - rgw
+          - nfs
+        no-of-volumes: 2
+        disk-size: 15
+      node3:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mon
+          - mgr
+          - rgw
+          - nfs
+        no-of-volumes: 2
+        disk-size: 15
+      node4:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node5:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node6:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node7:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node8:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node9:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node10:
+        image-name:
+          ibmc: rhel-96-server-amd64-kvm
+        role:
+          - client
