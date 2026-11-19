@@ -256,6 +256,18 @@ tests:
       clusters:
         ceph-pri:
           config:
+            script-name: ../rest/test_admin_api_user_types.py
+            config-file-name: ../../rest/configs/test_admin_api_user_types.yaml
+            timeout: 900
+      desc: Exercise AdminOps REST for user types, keys, quotas, and accounts
+      module: sanity_rgw_multisite.py
+      name: Test AdminOps REST user types and account operations
+      polarion-id: CEPH-83623503
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
             script-name: test_sync_status_local_source_zone.py
             config-file-name: test_sync_status_local_source_zone.yaml
       desc: Verify radosgw-admin sync status rejects local/invalid source zone
