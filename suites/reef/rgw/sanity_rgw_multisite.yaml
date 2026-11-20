@@ -545,7 +545,7 @@ tests:
       clusters:
         ceph-pri:
           config:
-            test-version: v1
+            test-version: v2
             run-on-rgw: true
             script-name: test_acls.py
             config-file-name: test_acls.yaml
