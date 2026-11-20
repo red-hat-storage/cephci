@@ -5,6 +5,7 @@ import shlex
 import time
 from pathlib import Path
 
+from ceph.ceph import CommandFailed, SocketTimeoutException, TimeoutException
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import OperationFailedError
@@ -201,6 +202,76 @@ def wait_for_tls_strings_in_nfs_logs(
     return False
 
 
+def nfs_orch_daemon_identity(client_node, nfs_name):
+    """Return daemon identity tuples for ``nfs.<nfs_name>``.
+
+    Each tuple is ``(daemon_name, container_id, started, status_desc)``.
+    Returns ``None`` when ``ceph orch ps`` cannot be parsed.
+    """
+    try:
+        raw, _ = client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph orch ps --service_name nfs.{nfs_name} --format json",
+            timeout=60,
+            check_ec=False,
+        )
+        if raw is None:
+            text = ""
+        elif isinstance(raw, str):
+            text = raw.strip()
+        else:
+            text = raw.read().decode().strip()
+        if not text:
+            return ()
+        data = json.loads(text)
+        if not isinstance(data, list):
+            return None
+        identity = []
+        for daemon in data:
+            identity.append(
+                (
+                    daemon.get("daemon_name"),
+                    daemon.get("container_id"),
+                    daemon.get("started"),
+                    daemon.get("status_desc"),
+                )
+            )
+        return tuple(sorted(identity, key=lambda item: str(item[0])))
+    except Exception as ex:
+        log.debug("orch ps identity nfs.%s: %s", nfs_name, ex)
+        return None
+
+
+def wait_until_nfs_daemon_restarted(
+    client_node, nfs_name, previous, timeout=300, interval=5
+):
+    """Wait until ``nfs.<nfs_name>`` is running under a new daemon identity.
+
+    ``ceph orch ps`` can still list the previous daemon as running for several
+    seconds after a spec apply. A mount in that window uses the old process.
+    """
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        current = nfs_orch_daemon_identity(client_node, nfs_name)
+        if not current:
+            continue
+        running = any(
+            "running" in str(status or "").lower() for _, _, _, status in current
+        )
+        if running and current != previous:
+            log.info(
+                "nfs.%s daemon restarted after ~%s s (identity changed)",
+                nfs_name,
+                w._attempt * w.interval,
+            )
+            return True
+    log.warning(
+        "Timed out after %ss waiting for nfs.%s to restart",
+        timeout,
+        nfs_name,
+    )
+    return False
+
+
 def wait_until_ceph_orch_nfs_ps_ready(
     client_node, nfs_name_substring, timeout=300, interval=5
 ):
@@ -316,9 +387,49 @@ def build_tls_nfs_mount_cmd(server, export, mount, version, port):
     )
 
 
+def _mount_command_timed_out(exc):
+    """Return True when ``exec_command`` gave up because the mount did not exit.
+
+    ``check_ec=False`` still surfaces a timeout: ``long_running`` closes the
+    channel and raises ``CommandFailed`` around ``TimeoutException``.
+    """
+    if isinstance(exc, (SocketTimeoutException, TimeoutException, TimeoutError)):
+        return True
+    if isinstance(exc, CommandFailed) and exc.args:
+        cause = exc.args[0]
+        if isinstance(cause, (TimeoutException, SocketTimeoutException, TimeoutError)):
+            return True
+        if "allocated execution time" in str(cause):
+            return True
+    return False
+
+
+def _stop_in_flight_nfs_mount(client_node, mount_path):
+    """Stop a remote ``mount`` that is still running for ``mount_path``.
+
+    Closing the SSH channel does not always reap ``mount.nfs``. Left alone, it
+    can finish after the negative check and leave the export mounted.
+    """
+    path = shlex.quote(mount_path)
+    awk_prog = r"$1+0 > 1 && $2 ~ /(^|\/)mount(\.nfs)?$/ && index($0, path) {print $1}"
+    client_node.exec_command(
+        sudo=True,
+        cmd=(
+            f"ps -eo pid,args | awk -v path={path} {shlex.quote(awk_prog)} "
+            "| xargs -r kill"
+        ),
+        check_ec=False,
+        timeout=30,
+    )
+
+
 def attempt_nfs_mount_expect_failure(client_node, mount_cmd, timeout=120):
     """
-    Run a mount command without raising on non-zero exit.
+    Run a mount command without raising on non-zero exit or a hang.
+
+    A mount that does not exit within ``timeout`` is a failed mount when the
+    path is not in the mount table. A path that is mounted is exit 0, including
+    when the command itself was killed at the timeout.
 
     Returns a dict with exit_code, stdout, stderr, and mount_cmd.
     """
@@ -329,13 +440,68 @@ def attempt_nfs_mount_expect_failure(client_node, mount_cmd, timeout=120):
         mount_cmd,
     )
     start_time = time.time()
-    out, err, exit_code, _duration = client_node.exec_command(
-        sudo=True,
-        cmd=mount_cmd,
-        check_ec=False,
-        verbose=True,
-        timeout=timeout,
-    )
+    try:
+        out, err, exit_code, _duration = client_node.exec_command(
+            sudo=True,
+            cmd=mount_cmd,
+            check_ec=False,
+            verbose=True,
+            timeout=timeout,
+        )
+    except (
+        CommandFailed,
+        SocketTimeoutException,
+        TimeoutException,
+        TimeoutError,
+    ) as exc:
+        if not _mount_command_timed_out(exc):
+            raise
+        elapsed = time.time() - start_time
+        mount_path = mount_cmd.strip().split()[-1]
+        if mount_path_is_active(client_node, mount_path):
+            log.info(
+                "Mount %s became active during the %ds timeout",
+                mount_path,
+                timeout,
+            )
+            return {
+                "exit_code": 0,
+                "stdout": "",
+                "stderr": str(exc),
+                "mount_cmd": mount_cmd,
+            }
+        try:
+            _stop_in_flight_nfs_mount(client_node, mount_path)
+        except (
+            CommandFailed,
+            SocketTimeoutException,
+            TimeoutException,
+            TimeoutError,
+        ) as kill_exc:
+            log.warning("Could not stop in-flight mount %s: %s", mount_path, kill_exc)
+        if mount_path_is_active(client_node, mount_path):
+            log.error(
+                "Mount %s completed after the hung mount command was stopped",
+                mount_path,
+            )
+            return {
+                "exit_code": 0,
+                "stdout": "",
+                "stderr": str(exc),
+                "mount_cmd": mount_cmd,
+            }
+        log.info(
+            "Mount did not complete in %.2fs (timeout=%ds) and %s is not mounted",
+            elapsed,
+            timeout,
+            mount_path,
+        )
+        return {
+            "exit_code": 124,
+            "stdout": "",
+            "stderr": (f"mount did not complete within {timeout}s: {exc}"),
+            "mount_cmd": mount_cmd,
+        }
     elapsed = time.time() - start_time
     result = {
         "exit_code": exit_code,
@@ -361,7 +527,15 @@ def capture_tlshd_status(client_node):
         check_ec=False,
         timeout=60,
     )
-    combined = "\n".join(part for part in (out, err) if part).strip()
+    journal, journal_err = client_node.exec_command(
+        sudo=True,
+        cmd="journalctl -u tlshd --no-pager -n 80 --since '5 min ago'",
+        check_ec=False,
+        timeout=60,
+    )
+    combined = "\n".join(
+        part for part in (out, err, journal, journal_err) if part
+    ).strip()
     log.info("tlshd status on %s:\n%s", client_node.hostname, combined)
     return combined
 
@@ -373,16 +547,21 @@ def mount_path_is_active(client_node, mount_path):
 
 
 def assert_mount_failed(mount_result, context, client_node=None, mount_path=None):
-    """Raise if a mount attempt did not fail as expected."""
+    """Raise if a mount attempt did not fail as expected.
+
+    An active mount is a failure of the negative check at any exit code,
+    including a harness timeout that returned after the export came up.
+    """
     mount_active = False
     if client_node is not None and mount_path is not None:
         mount_active = mount_path_is_active(client_node, mount_path)
-    if mount_result.get("exit_code") == 0 and mount_active:
+    if mount_active:
         raise OperationFailedError(
-            f"{context}: mount succeeded but was expected to fail "
-            f"(cmd={mount_result.get('mount_cmd')!r})"
+            f"{context}: mount is active but was expected to fail "
+            f"(exit={mount_result.get('exit_code')}, "
+            f"cmd={mount_result.get('mount_cmd')!r})"
         )
-    if mount_result.get("exit_code") == 0 and not mount_active:
+    if mount_result.get("exit_code") == 0:
         log.info(
             "%s: mount exit=0 but %s is not active; treating as expected failure",
             context,
@@ -394,9 +573,10 @@ def assert_tlshd_handshake_failure(tlshd_status, context):
     """Raise if recent tlshd journal output does not show a TLS handshake failure.
 
     Accept common ktls-utils / gnutls failure signals. When Ganesha TLS is broken
-    (e.g. corrupted server certs), tlshd often logs handshake timeout or unexpected
-    TLS packets rather than a literal 'Handshake ... failed' line. With a mismatched
-    client trust anchor, tlshd typically logs 'Certificate signer not found' instead.
+    (e.g. corrupted server certs), tlshd often logs handshake timeout, a
+    truncated handshake, or "non-properly terminated" rather than a literal
+    'Handshake ... failed' line. With a mismatched client trust anchor, tlshd
+    typically logs 'Certificate signer not found' instead.
     """
     status = str(tlshd_status or "")
     status_lower = status.lower()
@@ -414,6 +594,10 @@ def assert_tlshd_handshake_failure(tlshd_status, context):
         return
     if "unexpected tls packet" in status_lower:
         return
+    if "non-properly terminated" in status_lower:
+        return
+    if "handshake data was truncated" in status_lower:
+        return
     if "gnutls" in status_lower and (
         "error" in status_lower
         or "unexpected" in status_lower
@@ -424,7 +608,7 @@ def assert_tlshd_handshake_failure(tlshd_status, context):
     raise OperationFailedError(
         f"{context}: tlshd status did not report a TLS handshake failure "
         f"(expected handshake failed/timeout, certificate signer not found, "
-        f"gnutls error, or EACCES in journal)"
+        f"gnutls error, non-properly terminated, or EACCES in journal)"
     )
 
 

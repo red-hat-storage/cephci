@@ -14,12 +14,12 @@ def update_export_conf(
 ):
     try:
         out = Ceph(client).nfs.export.get(nfs_name, nfs_export)
-        client.exec_command(sudo=True, cmd=f"echo '{out}' > export.conf")
+        client.exec_command(sudo=True, cmd=f"echo '{out}' > /tmp/export.conf")
         client.exec_command(
             sudo=True,
-            cmd=f"sed -i 's/{original_access_type}/{new_access_type}/g' export.conf",
+            cmd=f"sed -i 's/{original_access_type}/{new_access_type}/gI' /tmp/export.conf",
         )
-        Ceph(client).nfs.export.apply(nfs_name, "export.conf")
+        Ceph(client).nfs.export.apply(nfs_name, "/tmp/export.conf")
     except Exception:
         raise OperationFailedError(
             "failed to update access type in export conf file as NONE"
@@ -51,8 +51,9 @@ def run(ceph_cluster, **kw):
 
     # Export Conf Parameter
     nfs_export_access_none = "/exportNone"
-    original_access_type = '"access_type": "RW"'
-    new_access_type = '"access_type": "NONE"'
+    # ceph nfs export get writes access_type in lowercase ("rw", "none").
+    original_access_type = '"access_type": "rw"'
+    new_access_type = '"access_type": "none"'
 
     try:
         # Setup nfs cluster
@@ -89,7 +90,7 @@ def run(ceph_cluster, **kw):
 
         # Verify the update was successful
         out = Ceph(clients[0]).nfs.export.get(nfs_name, nfs_export_access_none)
-        if '"access_type": "NONE"' not in out:
+        if '"access_type": "none"' not in out.lower():
             raise OperationFailedError(
                 "The update of export with access_type as NONE failed. Export conf not updated"
             )
