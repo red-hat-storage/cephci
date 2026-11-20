@@ -41,6 +41,10 @@ class FIPSConfigError(Exception):
     pass
 
 
+class PrerequisiteError(Exception):
+    """Raised when a prerequisite step cannot be completed on a node."""
+
+
 rpm_packages = {
     "7": [
         "wget",
@@ -664,13 +668,67 @@ def workaround_openssl_issue(node) -> None:
         node: client node object
     """
 
-    openssl_url = (
-        "https://mirror.stream.centos.org/9-stream/BaseOS/"
-        "x86_64/os/Packages/openssl-libs-3.5.1-1.el9.x86_64.rpm"
+    # Do NOT hardcode the exact RPM name. CentOS Stream 9 is a rolling repo and
+    # rotates packages out: openssl-libs-3.5.1-1.el9.x86_64.rpm now returns 404
+    # (it was replaced by 3.5.7-*). That made this workaround fail permanently,
+    # which then surfaced as the confusing "yum install ceph-common ... nothing
+    # provides libcrypto.so.3(OPENSSL_3.4.0)" failure on client nodes.
+    #
+    # Resolve the highest available openssl-libs >= the required version instead,
+    # and report clearly if the mirror has nothing usable.
+    _MIN_OPENSSL = "3.5.1"
+    _pkg_dir = "https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/os/Packages/"
+
+    def _version_key(ver: str):
+        # "3.5.7" -> (3, 5, 7); tolerant of suffixes
+        parts = []
+        for tok in ver.split("."):
+            num = ""
+            for ch in tok:
+                if ch.isdigit():
+                    num += ch
+                else:
+                    break
+            parts.append(int(num) if num else 0)
+        return tuple(parts)
+
+    listing, _ = node.exec_command(cmd=f"curl -fsSL {_pkg_dir}", check_ec=False)
+    candidates = []
+    for name in re.findall(
+        r"openssl-libs-(\d[^\"<>]*?)\.el9\.x86_64\.rpm", listing or ""
+    ):
+        # name is like "3.5.7-1"; keep release too for exact filename
+        candidates.append(f"openssl-libs-{name}.el9.x86_64.rpm")
+
+    if not candidates:
+        raise PrerequisiteError(
+            f"openssl workaround: no openssl-libs rpms found at {_pkg_dir}. "
+            f"Cannot satisfy openssl >= {_MIN_OPENSSL} for the upstream tentacle build."
+        )
+
+    def _pkg_ver(fname: str) -> str:
+        m = re.match(r"openssl-libs-([0-9.]+)-", fname)
+        return m.group(1) if m else "0"
+
+    candidates = [
+        c for c in candidates if _version_key(_pkg_ver(c)) >= _version_key(_MIN_OPENSSL)
+    ]
+    if not candidates:
+        raise PrerequisiteError(
+            f"openssl workaround: no openssl-libs >= {_MIN_OPENSSL} available at "
+            f"{_pkg_dir}. Package was likely rotated; check the tracker link above."
+        )
+
+    # Highest version first
+    candidates.sort(key=lambda c: _version_key(_pkg_ver(c)), reverse=True)
+    pkg = candidates[0]
+    log.info(
+        f"openssl workaround: installing {pkg} on {node.hostname} "
+        f"(mirror no longer carries the previously hardcoded 3.5.1-1)"
     )
-    node.exec_command(cmd=f"wget {openssl_url}", sudo=True, long_running=True)
+    node.exec_command(cmd=f"wget -q {_pkg_dir}{pkg}", sudo=True, long_running=True)
     node.exec_command(
-        cmd="rpm --force -i openssl-libs-3.5.1-1.el9.x86_64.rpm",
+        cmd=f"rpm --force -i {pkg}",
         sudo=True,
         long_running=True,
     )
