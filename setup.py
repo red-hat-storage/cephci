@@ -16,7 +16,7 @@ setup(
     install_requires=[
         "apache-libcloud==3.8.0",
         "boto3>=1.34.0; python_version >= '3.12'",
-        "cryptography==45.0.4",
+        "cryptography==50.0.0",
         "docopt==0.6.2",
         "htmllistparse==0.6.1",
         "ibm-cloud-sdk-core==3.24.2",
