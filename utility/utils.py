@@ -561,7 +561,10 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     )
 
     # check for 'failed' or 'ERROR' in sync status.
-    if "failed|ERROR" in check_sync_status:
+    # NOTE: this must be a regex/any() check. `"failed|ERROR" in status` is a
+    # literal substring test and can never match either word, so the sync-error
+    # path below was dead code.
+    if any(marker in check_sync_status for marker in ("failed", "ERROR")):
         log.info("checking for any sync error")
         sync_error_list, err = verify_io_on_site_node.exec_command(
             cmd="sudo radosgw-admin sync error list"
@@ -588,11 +591,14 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
                 log.info("sync completed")
                 break
 
-        if (retry_count > retry) and (
-            "behind" in check_sync_status or "recovering" in check_sync_status
-        ):
+        # Test the *state*, not the loop counter. The previous guard
+        # `retry_count > retry` could never be true (range(retry) leaves
+        # retry_count at retry-1), so this timeout never fired and a stuck
+        # sync fell through to the checks below instead of failing here.
+        if "behind" in check_sync_status or "recovering" in check_sync_status:
             raise Exception(
-                f"sync is still in progress. with {retry} retries and sleep of {delay}secs between each retry"
+                f"sync is still in progress after {retry} retries with "
+                f"{delay}secs between each retry"
             )
 
     log.info(check_sync_status)
