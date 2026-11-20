@@ -359,6 +359,10 @@ def run(ceph_cluster, **kw):
                         )
                         log.error(e)
                         time.sleep(20)
+                else:
+                    raise RuntimeError(
+                        f"OSD {osd_id} did not return to running after five attempts"
+                    )
 
                 log.info(
                     f"Successfully added back osd {osd_id} to cluster\n"
