@@ -154,6 +154,7 @@ class UpgradeReportGenerator:
         self._health_warnings: dict = {}
         self._mount_health: dict = {}
         self._nfs_grace_analysis: dict = {}
+        self._parallel_ops_summary: dict = {}
         self._test_outcome: dict | None = None
         self._crash_details: dict = {}
         self._agg_cache: dict[str, dict] = {}
@@ -198,6 +199,10 @@ class UpgradeReportGenerator:
     def set_io_tool_usage(self, io_tool_usage: dict) -> None:
         """Receive tool-usage matrix from collect_io_outputs()."""
         self._io_tool_usage = io_tool_usage or {}
+
+    def set_parallel_ops_summary(self, summary: dict) -> None:
+        """Receive UpgradeThrashParallelOps.get_summary() for the HTML report."""
+        self._parallel_ops_summary = summary or {}
 
     def set_daemon_timeline(self, daemon_timeline_data: list) -> None:
         """Receive per-daemon redeployment timeline from cephadm log parsing.
@@ -260,6 +265,7 @@ class UpgradeReportGenerator:
         self._log_io_tools_used()
         self._log_feature_summary()
         self._log_bug_summary()
+        self._log_parallel_ops_summary()
         self._log_integrity_summary()
         self._log_mount_health_summary()
         self._log_nfs_grace_summary()
@@ -469,6 +475,7 @@ class UpgradeReportGenerator:
                 "performance_regression": regression,
                 "io_tools_used": self._io_tool_usage,
                 "nfs_grace_analysis": self._build_nfs_grace_summary(),
+                "parallel_ops": self._build_parallel_ops_summary(),
             },
             "health_warnings": self._health_warnings,
             "phase_boundaries": self._stats_data.get("phase_boundaries", []),
@@ -1363,6 +1370,57 @@ class UpgradeReportGenerator:
             "metrics": metrics,
             "cycles": cycles,
             "stagger_sec": raw.get("stagger_sec"),
+        }
+
+    def _build_parallel_ops_summary(self) -> dict:
+        """Parallel-ops counters + latency + ok/fail by upgrade phase."""
+        raw = self._parallel_ops_summary or {}
+        if not raw.get("enabled"):
+            return {}
+        operations = raw.get("operations") or []
+        totals = raw.get("totals") or {}
+        # Prefer minute aggregates (full hop); fall back to legacy cycle events.
+        samples = raw.get("time_buckets") or raw.get("events") or []
+        if not operations and not totals.get("cycles"):
+            return {}
+        by_phase = _bucket_parallel_ops_by_phase(
+            samples, self._stats_data.get("phase_boundaries") or []
+        )
+        # Display unit is seconds; source counters stay in ms.
+        for op in operations:
+            if not isinstance(op, dict):
+                continue
+            lat = op.get("latency_ms") or {}
+            op["latency_s"] = {
+                k: (
+                    round(lat[k] / 1000.0, 3)
+                    if isinstance(lat.get(k), (int, float))
+                    else None
+                )
+                for k in ("avg", "p50", "p95", "max")
+            }
+            op["latency_s"]["samples"] = lat.get("samples")
+            op["latency_s"]["cycles"] = lat.get("cycles")
+        for row in by_phase:
+            if isinstance(row.get("avg_ms"), (int, float)):
+                row["avg_s"] = round(row["avg_ms"] / 1000.0, 3)
+
+        return {
+            "enabled": True,
+            "fs": raw.get("fs"),
+            "seeds": raw.get("seeds") or [],
+            "window": raw.get("window", "full_hop"),
+            "totals": {
+                "ok": int(totals.get("ok", 0) or 0),
+                "fail": int(totals.get("fail", 0) or 0),
+                "cycles": int(totals.get("cycles", 0) or 0),
+                "workers": int(totals.get("workers", len(operations)) or 0),
+            },
+            "operations": operations,
+            "by_phase": by_phase,
+            "buckets_sampled": len(samples),
+            # Compat for older report HTML expecting events_sampled
+            "events_sampled": len(samples),
         }
 
     def _build_features_list(self) -> list[dict]:
@@ -2272,6 +2330,74 @@ class UpgradeReportGenerator:
                     f"pre=pass -> post=fail: {f.get('details', '')}"
                 )
 
+    def _log_parallel_ops_summary(self) -> None:
+        """Print parallel CephFS/NFS admin-op counters to the log."""
+        summary = self._build_parallel_ops_summary()
+        if not summary:
+            return
+        log.info("")
+        log.info("-" * 100)
+        log.info("PARALLEL OPS SUMMARY (full hop: start → teardown)")
+        log.info("-" * 100)
+        totals = summary.get("totals") or {}
+        log.info(
+            "  fs=%s seeds=%s workers=%s ok=%s errors=%s cycles=%s "
+            "buckets=%s (errors are non-gating)",
+            summary.get("fs"),
+            summary.get("seeds"),
+            totals.get("workers", 0),
+            totals.get("ok", 0),
+            totals.get("fail", 0),
+            totals.get("cycles", 0),
+            summary.get("buckets_sampled", summary.get("events_sampled", 0)),
+        )
+        log.info(
+            "%-8s %-22s %-14s %5s %5s %7s %7s %7s",
+            "Category",
+            "Op",
+            "Target",
+            "OK",
+            "Err",
+            "p50s",
+            "p95s",
+            "maxs",
+        )
+        log.info("-" * 100)
+        for op in summary.get("operations") or []:
+            lat = op.get("latency_s") or {}
+            log.info(
+                "%-8s %-22s %-14s %5s %5s %7s %7s %7s",
+                op.get("category", ""),
+                op.get("op", ""),
+                str(op.get("target", "—")),
+                op.get("ok", 0),
+                op.get("fail", 0),
+                _fmt_s(lat.get("p50")),
+                _fmt_s(lat.get("p95")),
+                _fmt_s(lat.get("max")),
+            )
+        by_phase = summary.get("by_phase") or []
+        if by_phase:
+            log.info("")
+            log.info("  By upgrade phase (from minute aggregates):")
+            log.info("  %-32s %6s %6s %7s %8s", "Phase", "OK", "Err", "Err%", "avg_s")
+            for row in by_phase:
+                cycles = row.get("ok", 0) + row.get("fail", 0)
+                fail_pct = (
+                    "%.0f%%" % (100.0 * row.get("fail", 0) / cycles) if cycles else "—"
+                )
+                avg_s = row.get("avg_s")
+                if avg_s is None and isinstance(row.get("avg_ms"), (int, float)):
+                    avg_s = round(row["avg_ms"] / 1000.0, 3)
+                log.info(
+                    "  %-32s %6s %6s %7s %8s",
+                    str(row.get("phase", "")),
+                    row.get("ok", 0),
+                    row.get("fail", 0),
+                    fail_pct,
+                    _fmt_s(avg_s),
+                )
+
     def _log_bug_summary(self) -> None:
         """Print bug validation results table to the log."""
         log.info("")
@@ -2512,6 +2638,113 @@ def _fmt_val(val) -> str:
     if isinstance(val, float):
         return f"{val:.2f}"
     return str(val)
+
+
+def _fmt_s(value) -> str:
+    """Format second values for parallel-ops log tables."""
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _parse_boundary_ts(value) -> float | None:
+    """Parse phase_boundary timestamp (ISO) or event epoch float → epoch seconds."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _bucket_parallel_ops_by_phase(samples: list, boundaries: list) -> list[dict]:
+    """Assign parallel-ops activity to the latest phase_boundary at/before ``t``.
+
+    Accepts:
+    - minute aggregates: ``{t, ok, fail, dur_sum_ms, n}`` (preferred; full hop)
+    - legacy cycle events: ``{t, ok: bool, ms}``
+
+    Returns ordered rows: phase, ok, fail, avg_ms. Empty when no samples.
+    """
+    if not samples:
+        return []
+    marks: list[tuple[float, str]] = []
+    for b in boundaries or []:
+        if not isinstance(b, dict):
+            continue
+        ts = _parse_boundary_ts(b.get("timestamp"))
+        name = b.get("name")
+        if ts is None or not name:
+            continue
+        marks.append((ts, str(name)))
+    marks.sort(key=lambda x: x[0])
+
+    buckets: dict[str, dict] = {}
+    order: list[str] = []
+    for sample in samples:
+        if not isinstance(sample, dict):
+            continue
+        ets = _parse_boundary_ts(sample.get("t"))
+        if ets is None:
+            continue
+        phase = "pre_baseline"
+        for ts, name in marks:
+            if ts <= ets:
+                phase = name
+            else:
+                break
+        row = buckets.get(phase)
+        if row is None:
+            row = {"phase": phase, "ok": 0, "fail": 0, "dur_sum_ms": 0, "n": 0}
+            buckets[phase] = row
+            order.append(phase)
+        # Minute aggregate vs legacy per-cycle event
+        if "n" in sample or "dur_sum_ms" in sample or "fail" in sample:
+            try:
+                row["ok"] += int(sample.get("ok", 0) or 0)
+                row["fail"] += int(sample.get("fail", 0) or 0)
+                row["dur_sum_ms"] += int(sample.get("dur_sum_ms", 0) or 0)
+                row["n"] += int(sample.get("n", 0) or 0)
+            except (TypeError, ValueError):
+                pass
+        else:
+            if sample.get("ok"):
+                row["ok"] += 1
+            else:
+                row["fail"] += 1
+            try:
+                row["dur_sum_ms"] += int(sample.get("ms") or 0)
+            except (TypeError, ValueError):
+                pass
+            row["n"] += 1
+
+    out = []
+    for phase in order:
+        row = buckets[phase]
+        n = row["n"] or 1
+        avg_ms = int(round(row["dur_sum_ms"] / n))
+        out.append(
+            {
+                "phase": phase,
+                "ok": row["ok"],
+                "fail": row["fail"],
+                "avg_ms": avg_ms,
+                "avg_s": round(avg_ms / 1000.0, 3),
+            }
+        )
+    return out
 
 
 def _truncate(text: str, max_len: int) -> str:
