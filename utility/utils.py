@@ -614,6 +614,55 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     check_ceph_status(verify_io_on_site_node)
 
 
+def wait_for_data_sync(node, timeout=1800, delay=60):
+    """Wait until a secondary zone has caught up its *data* sync.
+
+    Multisite IO tests read ``user_details.json``, which the primary
+    replicates to the secondary through data sync (not metadata sync). On a
+    secondary that is still recovering shards the file is absent and the IO
+    script aborts with::
+
+        FileNotFoundError: user_details.json missing, this is needed in
+        multisite setup
+
+    Observed on secondaries reporting "2 shards are recovering" at the moment
+    the script started, so this is a race rather than a product fault.
+
+    Args:
+        node: node to run ``radosgw-admin sync status`` on (secondary RGW).
+        timeout: overall seconds to wait (default 30 min).
+        delay: seconds between polls.
+
+    Raises:
+        Exception: if data sync has not caught up within ``timeout``.
+    """
+    deadline = time.time() + timeout
+    last_status = ""
+    while time.time() < deadline:
+        last_status, _ = node.exec_command(
+            cmd="sudo radosgw-admin sync status", check_ec=False
+        )
+        last_status = last_status or ""
+        caught_up = (
+            "data is caught up with source" in last_status
+            # Archive zones do not sync data back to the source by design.
+            or ("archive" in last_status and "not syncing from zone" in last_status)
+        )
+        if caught_up:
+            log.info("RGW data sync caught up on %s" % node.ip_address)
+            return True
+        log.info(
+            "RGW data sync still in progress on %s; retrying in %ds"
+            % (node.ip_address, delay)
+        )
+        time.sleep(delay)
+
+    raise Exception(
+        "RGW data sync did not catch up within %ds on %s. Last sync status:\n%s"
+        % (timeout, node.ip_address, last_status[-2000:])
+    )
+
+
 def check_ceph_status(site):
     """
     get the ceph cluster status and health

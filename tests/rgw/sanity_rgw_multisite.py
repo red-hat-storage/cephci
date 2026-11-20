@@ -287,6 +287,20 @@ def run(**kw):
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
+    # The multisite IO scripts read user_details.json, which the primary
+    # replicates to the secondary through *data* sync. On a secondary whose
+    # data sync is still recovering, the file is not there yet and the script
+    # aborts with:
+    #
+    #   FileNotFoundError: user_details.json missing, this is needed in
+    #   multisite setup
+    #
+    # Observed on a secondary reporting "2 shards are recovering" when the
+    # script started, so wait for data sync first. Without this the run is
+    # reported as a test failure even though nothing is wrong with the product.
+    if getattr(test_site, "name", None) == getattr(secondary_cluster, "name", None):
+        utils.wait_for_data_sync(secondary_rgw_node)
+
     cmd_env = " ".join(config.get("env-vars", []))
     test_status = exec_from.exec_command(
         cmd=cmd_env
