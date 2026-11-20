@@ -248,36 +248,13 @@ tests:
       abort-on-fail: true
       clusters:
         ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "ceph config dump | grep rgw_run_sync_thread"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info on primary
-      polarion-id: CEPH-83591291
-  - test:
-      abort-on-fail: true
-      clusters:
+          config: {}
         ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "ceph config dump | grep rgw_run_sync_thread"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info on secondary
+          config: {}
+      desc: Verify RGW multisite configuration
       polarion-id: CEPH-83591291
+      module: verify_multisite_config.py
+      name: verify multisite configuration
   # create user from primary
   - test:
       clusters:

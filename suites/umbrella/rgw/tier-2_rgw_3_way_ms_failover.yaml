@@ -296,25 +296,6 @@ tests:
       polarion-id: CEPH-83608639
 
   - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph -s"
-              - "radosgw-admin sync status"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "ceph osd dump"
-              - "ceph orch ls"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info on primary
-      polarion-id: CEPH-83575227
-
-  - test:
       name: create user
       desc: create tenanted user
       polarion-id: CEPH-83575199
@@ -349,38 +330,13 @@ tests:
       abort-on-fail: true
       clusters:
         ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "ceph osd dump"
-              - "ceph orch ls"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info on primary
-      polarion-id: CEPH-83608639
-  - test:
-      abort-on-fail: true
-      clusters:
+          config: {}
         ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "ceph osd dump"
-              - "ceph orch ls"
-      desc: Retrieve the configured environment details
-      module: exec.py
-      name: get shared realm info on secondary
+          config: {}
+      desc: Verify RGW multisite configuration
       polarion-id: CEPH-83608639
+      module: verify_multisite_config.py
+      name: verify multisite configuration
 
   # Test work flow
   - test:
