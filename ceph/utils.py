@@ -325,12 +325,19 @@ def create_ibmc_ceph_nodes(
         else:
             params["root-login"] = True
 
-        with parallel() as p:
-            for node in range(1, 100):
-                node = "node" + str(node)
-                if not ceph_cluster.get(node):
-                    break
+        # Iterate all nodeN keys in conf (not capped at node99). Needed for
+        # large suites e.g. agent scale regression (151+ hosts).
+        node_keys = sorted(
+            (
+                k
+                for k in ceph_cluster
+                if isinstance(k, str) and k.startswith("node") and k[4:].isdigit()
+            ),
+            key=lambda k: int(k[4:]),
+        )
 
+        with parallel() as p:
+            for node in node_keys:
                 node_dict = ceph_cluster.get(node)
                 node_params = params.copy()
                 node_params["role"] = RolesContainer(node_dict.get("role"))
