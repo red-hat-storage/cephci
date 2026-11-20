@@ -8,6 +8,7 @@ import time
 from looseversion import LooseVersion
 
 from ceph.ceph_admin.orch import Orch
+from ceph.nvmeof.cli.v1 import NVMeGWCLI
 from ceph.utils import get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL, DEFAULT_PORT
@@ -32,8 +33,17 @@ class NVMeService:
         self.config = config
         self.group = self.config.get("gw_group", None)
         self.mtls = config.get("mtls", False)
+        self.tls_psk = config.get("tls_psk", False)
         self.inband_auth_mode = config.get("inband_auth_mode", None)
         self.ceph_cluster = ceph_cluster
+
+        # Optional explicit CLI version override: "v1" forces NVMeGWCLI (podman-run),
+        # "v2" forces NVMeGWCLIV2 (ceph nvmeof), None = auto-detect from cluster version.
+        self.nvmeof_cli_version = config.get("nvmeof_cli_version", None)
+        nvmeof_cli_image = config.get("nvmeof_cli_image", None)
+        if nvmeof_cli_image:
+            LOG.info("NVMeService: setting NVMeGWCLI image to %s", nvmeof_cli_image)
+            NVMeGWCLI.NVMEOF_CLI_IMAGE = nvmeof_cli_image
         self.clients = self.ceph_cluster.get_nodes(role="client")
         if not self.clients:
             raise ValueError("No client nodes found in the cluster")
@@ -57,7 +67,7 @@ class NVMeService:
             or bool(self.config.get("nvmeof_spec"))
             or bool(self.config.get("cnc_spec"))
         )
-        if self.inband_auth_mode:
+        if self.inband_auth_mode or self.tls_psk:
             self.is_spec_or_mtls = True
         self.service_name = None
         self.service_id = None
@@ -84,10 +94,32 @@ class NVMeService:
             return self.config.get("nvme_metadata_pool")
 
     def delete_nvme_service(self):
-        """Delete the NVMe gateway service."""
+        """Delete the NVMe gateway service.
+
+        Safe to call even when deploy() failed mid-way:
+        - If self.service_name was never set, _discover_service_name() is called
+          first to find any running nvmeof service for this group on the cluster.
+        - If no service exists at all, returns 0 (nothing to clean up).
+        """
         ceph_cluster = self.ceph_cluster
 
+        # If deploy failed before _discover_service_name ran, try to find it now
+        if not self.service_name:
+            try:
+                self._discover_service_name()
+            except Exception as exc:
+                LOG.warning(
+                    "delete_nvme_service: could not discover service name: %s", exc
+                )
+
         service_name = self.service_name
+        if not service_name:
+            LOG.warning(
+                "delete_nvme_service: no service_name known — "
+                "nothing to remove (deploy may have failed before service was created)"
+            )
+            return 0
+
         cfg = {
             "no_cluster_state": False,
             "config": {
@@ -112,6 +144,9 @@ class NVMeService:
             "placement": self._get_placement_config(self.config, self.gw_nodes),
             "spec": {
                 "pool": self.nvme_metadata_pool,
+                # enable_auth is mTLS for nvme CLI ↔ gateway.
+                # enable_encryption is TLS-PSK for initiator IO in transit.
+                # The two are independent and may both be true.
                 "enable_auth": self.config.get("mtls", False),
             },
         }
@@ -124,12 +159,24 @@ class NVMeService:
         if self.inband_auth_mode:
             spec["encryption"] = True
 
-        # Add support for enable_encryption and encryption_key_path params
-        # Refer https://ibm-ceph.atlassian.net/browse/IBMCEPH-16168
-        if self.config.get("enable_encryption", False):
+        # TLS-PSK uses the same three top-level flags as generate_nvmeof_spec.
+        # That helper creates the RSA key and copies it to each gateway at
+        # /root/encryption.key, then writes enable_encryption and
+        # encryption_key_path into the service spec. enable_auth stays mtls.
+        if self.tls_psk:
+            spec["encryption"] = True
             spec["enable_encryption"] = True
-        if self.config.get("encryption_key_path", False):
             spec["encryption_key_path"] = True
+        else:
+            # Keep a caller-supplied BYOK path inside the service spec.
+            # generate_nvmeof_spec pops these top-level keys and drops them
+            # unless encryption is also set.
+            if self.config.get("enable_encryption", False):
+                spec["spec"]["enable_encryption"] = True
+            if self.config.get("encryption_key_path"):
+                spec["spec"]["encryption_key_path"] = self.config[
+                    "encryption_key_path"
+                ]
 
         # Add group if specified
         if self.group:
@@ -171,6 +218,16 @@ class NVMeService:
                     cfg["config"]["specs"][0]["spec"][
                         "rebalance_period_sec"
                     ] = rebalance_sec
+
+                # Add state-update tuning parameters if specified
+                if "state_update_interval_sec" in self.config:
+                    cfg["config"]["specs"][0]["spec"]["state_update_interval_sec"] = (
+                        self.config["state_update_interval_sec"]
+                    )
+                if "state_update_notify" in self.config:
+                    cfg["config"]["specs"][0]["spec"]["state_update_notify"] = (
+                        self.config["state_update_notify"]
+                    )
 
                 self._merge_nvmeof_spec_keys(cfg["config"]["specs"][0]["spec"])
                 return cfg
@@ -219,16 +276,23 @@ class NVMeService:
     def apply_nvmeof_spec(self, nvmeof_spec=None, redeploy=True, wait_sec=60):
         """Apply (or re-apply) the NVMe-oF orch service spec.
 
+        When ``tls_psk`` is True the three top-level flags that
+        ``generate_nvmeof_spec`` already understands are set. That helper
+        creates the RSA key, copies it to the gateways, and writes
+        ``enable_encryption`` and ``encryption_key_path`` into the spec.
+        ``enable_auth`` stays at the ``mtls`` value.
+
         Args:
-            nvmeof_spec: Optional dict merged into config nvmeof_spec before apply
-            redeploy: Whether to ``ceph orch redeploy`` after apply
-            wait_sec: Sleep after redeploy for daemons to come up
+            nvmeof_spec: Optional dict merged into config nvmeof_spec before apply.
+            redeploy (bool): Whether to ``ceph orch redeploy`` after apply.
+            wait_sec (int): Sleep after redeploy for daemons to come up.
         """
         if nvmeof_spec:
             merged = dict(self.config.get("nvmeof_spec") or {})
             merged.update(nvmeof_spec)
             self.config["nvmeof_spec"] = merged
         self.is_spec_or_mtls = True
+
         deploy_config = self._create_spec_deployment_config()
         if not deploy_config:
             raise RuntimeError("Failed to build nvmeof apply_spec config")
@@ -294,6 +358,9 @@ class NVMeService:
     def deploy(self):
         """
         Deploy NVMe gateways using orchestrator, then fetch and update daemon and service names for each gateway node.
+
+        When ``tls_psk`` is True, ``generate_nvmeof_spec`` creates the RSA key
+        while the service spec is rendered.
         """
         # Open up firewall ports if running.
         setup_firewalld(self.gw_nodes)
@@ -301,6 +368,7 @@ class NVMeService:
         check_and_enable_nvmeof_module(
             ceph_cluster=self.ceph_cluster, ceph_version=self.ceph_version
         )
+
         deploy_config = self._create_spec_deployment_config()
         if deploy_config:
             test_nvmeof.run(self.ceph_cluster, **deploy_config)
@@ -308,7 +376,12 @@ class NVMeService:
         self._discover_service_name()
 
     def redeploy(self, wait_sec=30):
-        """Redeploy the NVMe-oF orchestrator service after spec apply."""
+        """Redeploy the NVMe-oF orchestrator service after spec apply.
+
+        When gateways are already initialised, also waits until each gateway
+        reports ``gateway_initialization_over``. Subsystem CLI calls issued
+        during the redeploy fail with "is going down" or connection refused.
+        """
         if not self.service_name:
             raise RuntimeError("NVMe-oF service name not set; deploy the service first")
         orch = Orch(self.ceph_cluster, **{})
@@ -317,6 +390,11 @@ class NVMeService:
         orch.shell(args=[cmd])
         if wait_sec:
             time.sleep(wait_sec)
+        # orch "running" is not enough for subsystem CLI calls. A redeploy
+        # returns "gateway is going down" / connection refused until
+        # gateway_initialization_over is true.
+        if getattr(self, "gateways", None):
+            self.wait_for_gateways_ready()
 
     def wait_for_gateways_ready(self, timeout=300, interval=10):
         """Poll each gateway until gateway_initialization_over is True.
@@ -442,7 +520,9 @@ class NVMeService:
         self.gateways = []
         port = getattr(self, "port", DEFAULT_PORT)
         ceph = Orch(self.ceph_cluster, **{})
-        version = nvme_gw_cli_version_adapter(self.ceph_cluster)
+        version = nvme_gw_cli_version_adapter(
+            self.ceph_cluster, override=self.nvmeof_cli_version
+        )
 
         for node in self.gw_nodes:
             deadline = time.time() + timeout

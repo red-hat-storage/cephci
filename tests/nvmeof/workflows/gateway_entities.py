@@ -126,10 +126,10 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
         ceph_version = get_ceph_version_from_cluster(
             ceph_cluster.get_nodes(role="client")[0]
         )
+        # HA is the default for a gateway group. subsystem add rejects --enable-ha.
         args = {
             **sub_args,
             "max-namespaces": sub_cfg.get("max_ns", 32),
-            "enable-ha": sub_cfg.get("enable_ha", False),
             "no-group-append": no_group_append,
         }
 
@@ -137,7 +137,14 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
             if sub_cfg.get("listener_port"):
                 args["port"] = sub_cfg.get("listener_port")
             if sub_cfg.get("secure_listener"):
-                args["secure_listeners"] = sub_cfg.get("secure_listener")
+                # V1 podman CLI uses hyphenated flag (--secure-listeners);
+                # V2 ceph-nvmeof CLI uses underscored flag (--secure_listeners).
+                secure_key = (
+                    "secure-listeners"
+                    if getattr(gateway, "v1", False)
+                    else "secure_listeners"
+                )
+                args[secure_key] = sub_cfg.get("secure_listener")
             # Prefer suite-defined network-mask; else derive from GW primary IPs
             args["network-mask"] = (
                 sub_cfg.get("network_mask")
@@ -402,9 +409,13 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                 # consider adding option to create pool and image if it doesn't exist
                 # and also ns_create_image is false
                 if bdev_cfg.get("ns_create_image"):
+                    # V1 podman CLI uses --size; V2 ceph-nvmeof CLI uses --rbd-image-size.
+                    size_key = (
+                        "size" if getattr(gateway, "v1", False) else "rbd-image-size"
+                    )
                     namespace_args.update(
                         {
-                            "rbd-image-size": bdev_cfg.get("size", "1G"),
+                            size_key: bdev_cfg.get("size", "1G"),
                             "rbd-create-image": bdev_cfg.get("ns_create_image", True),
                         }
                     )
@@ -665,27 +676,41 @@ def teardown(nvme_service, rbd_obj, cleanup_config=None):
     # test failed before the subsystem was ever created) does not abort teardown
     # and leave the gateway service running — which would block the next test
     # from deploying its own gateway on the same nodes.
+    #
+    # IMPORTANT: nvme_service.gateways is only set after init_gateways() succeeds.
+    # If deploy() failed before init_gateways() ran, gateways will not exist.
+    # In that case, subsystem cleanup is skipped (nothing was created yet) but
+    # the gateway SERVICE deletion (below) is still attempted so the orch service
+    # does not linger and pollute the next test's deploy.
+    gateways_ready = bool(getattr(nvme_service, "gateways", None))
+
     if "subsystems" in nvme_service.config["cleanup"]:
-        config_sub_node = nvme_service.config["subsystems"]
-        if not isinstance(config_sub_node, list):
-            config_sub_node = [config_sub_node]
-        for sub_cfg in config_sub_node:
-            gateway = nvme_service.gateways[0]
-            try:
-                out, err = gateway.subsystem.delete(
-                    **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
-                )
-                if "success" not in out.lower():
-                    LOG.warning(
-                        f"Failed to delete subsystem {sub_cfg['nqn']}: {out} with error {err}"
+        if not gateways_ready:
+            LOG.warning(
+                "teardown: gateways not initialised (deploy likely failed before "
+                "init_gateways) — skipping subsystem delete, will still remove GW service"
+            )
+        else:
+            config_sub_node = nvme_service.config["subsystems"]
+            if not isinstance(config_sub_node, list):
+                config_sub_node = [config_sub_node]
+            for sub_cfg in config_sub_node:
+                gateway = nvme_service.gateways[0]
+                try:
+                    out, err = gateway.subsystem.delete(
+                        **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
                     )
-                    rc = 1
-            except Exception as exc:
-                LOG.warning(
-                    "Subsystem %s delete raised %s — skipping (subsystem may not exist yet)",
-                    sub_cfg["nqn"],
-                    exc,
-                )
+                    if "success" not in out.lower():
+                        LOG.warning(
+                            f"Failed to delete subsystem {sub_cfg['nqn']}: {out} with error {err}"
+                        )
+                        rc = 1
+                except Exception as exc:
+                    LOG.warning(
+                        "Subsystem %s delete raised %s — skipping (subsystem may not exist yet)",
+                        sub_cfg["nqn"],
+                        exc,
+                    )
 
     # Delete gateways — always attempted even if subsystem cleanup above failed.
     if "gateway" in nvme_service.config.get("cleanup", []):

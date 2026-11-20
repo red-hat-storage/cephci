@@ -532,6 +532,7 @@ def validate_nvme_metadata(cluster, config, pool, group=""):
 
 def nvme_gw_cli_version_adapter(
     ceph: Ceph,
+    override: str = None,
 ) -> Union[Type[NVMeGWCLI], Type[NVMeGWCLIV2]]:
     """Select the appropriate NVMe Gateway CLI obj based on the Ceph version.
 
@@ -540,12 +541,31 @@ def nvme_gw_cli_version_adapter(
     It ensures that commands are executed with the correct CLI for compatibility
     with the target gateway.
 
+    An explicit ``override`` can bypass the version probe entirely:
+        - ``"v1"``  → always return :class:`NVMeGWCLI`  (podman-run V1 CLI)
+        - ``"v2"``  → always return :class:`NVMeGWCLIV2` (ceph nvmeof V2 CLI)
+
     Args:
         ceph (Ceph): CephCI Ceph object
+        override (str, optional): Force CLI version — ``"v1"`` or ``"v2"``.
+            When ``None`` (default) the version is auto-detected from the cluster.
 
     Returns:
         type[NVMeGWCLI] | type[NVMeGWCLIV2]: CLI class (not an instance).
     """
+    if override:
+        override = override.lower().strip()
+        if override == "v1":
+            LOG.info(
+                "nvme_gw_cli_version_adapter: forced to V1 (NVMeGWCLI) by override"
+            )
+            return NVMeGWCLI
+        if override == "v2":
+            LOG.info(
+                "nvme_gw_cli_version_adapter: forced to V2 (NVMeGWCLIV2) by override"
+            )
+            return NVMeGWCLIV2
+
     out, _ = Orch(ceph, **{}).shell(args=["ceph", "--format", "json", "version"])
 
     match = re.search(r"[0-9]+(\.[0-9]+)*", out)
@@ -557,10 +577,10 @@ def nvme_gw_cli_version_adapter(
 
 
 def check_and_set_nvme_cli_image(
-    ceph: Ceph, image: str = "", config: list = []
+    ceph: Ceph, image: str = "", config: list = [], override: str = None
 ) -> None:
     """Set CLI image on NVMeGWCLI Version1."""
-    version = nvme_gw_cli_version_adapter(ceph)
+    version = nvme_gw_cli_version_adapter(ceph, override=override)
     if version is NVMeGWCLIV2:
         return
 

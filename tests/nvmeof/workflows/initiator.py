@@ -266,7 +266,9 @@ class NVMeInitiator(Initiator):
 
         Args:
             io_size: Size of the IO to be performed
-            runtime: FIO runtime in seconds. When set, size is not sent to fio.
+            runtime: FIO runtime in seconds. Sent with ``io_size`` as the
+                working set. A time-based job with no size writes the whole
+                device (``100%``) and can hit ENOSPC before ``--runtime`` ends.
             paths: List of paths to perform IO on
             serial (bool): When True, run fio on each path sequentially (one at
                 a time).  When False (default), all paths are spawned in parallel
@@ -293,10 +295,10 @@ class NVMeInitiator(Initiator):
         results = []
         io_args = {}
 
+        if io_size:
+            io_args["size"] = io_size
         if runtime:
-            io_args.update({"run_time": runtime})
-        elif io_size:
-            io_args.update({"size": io_size})
+            io_args["run_time"] = runtime
 
         # Update io_args if test_name is provided
         if kwargs.get("test_name"):
