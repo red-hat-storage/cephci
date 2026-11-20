@@ -27,7 +27,7 @@ setup(
         "junitparser==4.0.2",
         "kubernetes>=28,<33",
         "looseversion==1.3.0",
-        "paramiko==3.5.1",
+        "paramiko==5.0.0",
         "plotly==6.1.2",
         "pyyaml==6.0.2",
         "requests==2.32.4",
