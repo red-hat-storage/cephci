@@ -378,6 +378,16 @@ def run_refresh_rate_test(ceph_cluster, installer):
             installer,
             f"ceph config set mgr mgr/cephadm/agent_refresh_rate {NEW_RATE}",
         )
+        # The rate is pushed to the agent as `refresh_period` inside agent.json
+        # (services/agent.py: generate_config), but it is NOT part of the
+        # dependency list that triggers a config push
+        # (AgentService.get_dependencies -> mgr IP, agent server port, root CA,
+        # device_enhanced_scan, image). So changing mgr/cephadm/agent_refresh_rate
+        # alone never propagates: the agent keeps its previous refresh_period.
+        # Observed on 20.2.2-367 #1188 — rate changed 20 -> 10, 30s elapsed, and
+        # exactly 1 post was counted, i.e. the old 20s cadence.
+        # Reconfig re-pushes agent.json so the new period is actually in effect.
+        shell(installer, "ceph orch reconfig agent")
         time.sleep(NEW_RATE * 3)
 
         log.info("Measuring post frequency at 10s rate")
@@ -399,6 +409,10 @@ def run_refresh_rate_test(ceph_cluster, installer):
             installer,
             f"ceph config set mgr mgr/cephadm/agent_refresh_rate {SLOW_RATE}",
         )
+        # Same reasoning as above: without a reconfig the agent keeps the 10s
+        # rate from the previous phase, so a 60s window would show ~6 posts and
+        # trip the `<= 3` assertion below.
+        shell(installer, "ceph orch reconfig agent")
         time.sleep(SLOW_RATE + 10)
 
         log.info("Measuring post frequency at 60s rate")
