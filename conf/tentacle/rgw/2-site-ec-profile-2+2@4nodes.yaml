@@ -1,0 +1,80 @@
+# Two-site RGW multisite, EC 2+2, 4 nodes. Primary and secondary.
+# node2 and node4 host RGW. The rgw role installs ceph-common and the admin keyring
+# there, because user create SSHes to the first zone endpoint (node2).
+---
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+          - rgw
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+
+      node1:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mgr
+          - mon
+          - osd
+          - rgw
+
+      node3:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 15
+        no-of-volumes: 3
+        role:
+          - osd
+          - rgw
+          - client
