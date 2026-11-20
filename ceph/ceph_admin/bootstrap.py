@@ -277,6 +277,21 @@ class BootstrapMixin:
                     f"This is a downgrade, which is not a supported Ceph upgrade "
                     f"scenario. Skipping upgrade suite to avoid misleading failures."
                 )
+            # An upgrade to the same build is a no-op: nothing is exercised, and the
+            # suite typically fails later on post-upgrade assertions that assume a real
+            # version change. This happens when a release manifest publishes identical
+            # 'stable' and 'nightly' versions (e.g. ibm/10.0.yaml had both at
+            # 21.1.1-9), so the upgrade path is not yet meaningful for that release.
+            if LooseVersion(_baseline_ver) == LooseVersion(_target_ver):
+                raise RuntimeError(
+                    f"Invalid upgrade path detected — aborting. "
+                    f"Baseline '{_manifest_section}' build ({_baseline_ver}) is identical "
+                    f"to the target build ({_target_ver}), so this upgrade is a no-op "
+                    f"and cannot validate anything. Skipping upgrade suite to avoid a "
+                    f"misleading failure. Point the suite at a manifest whose baseline "
+                    f"is older than the target, or wait for a newer nightly build."
+                )
+
             logger.info(
                 f"Upgrade path validated: baseline {_baseline_ver} -> target {_target_ver}."
             )
