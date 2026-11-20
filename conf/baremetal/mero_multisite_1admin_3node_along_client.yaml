@@ -6,7 +6,7 @@ globals:
       nodes:
         - hostname: mero016
           ip: 10.8.129.236
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -29,7 +29,7 @@ globals:
             - /dev/sdl
         - hostname: mero002
           ip: 10.8.129.222
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -50,7 +50,7 @@ globals:
             - /dev/sdl
         - hostname: mero003
           ip: 10.8.129.223
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -71,7 +71,7 @@ globals:
             - /dev/sdl
         - hostname: mero004
           ip: 10.8.129.224
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -91,7 +91,7 @@ globals:
             - /dev/sdl
         - hostname: mero006
           ip: 10.8.129.226
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
           volumes:
@@ -109,7 +109,7 @@ globals:
             - /dev/sdl
         - hostname: mero008
           ip: 10.8.129.228
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
           volumes:
@@ -133,7 +133,7 @@ globals:
       nodes:
         - hostname: mero005
           ip: 10.8.129.225
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -155,7 +155,7 @@ globals:
             - /dev/sdk
         - hostname: mero009
           ip: 10.8.129.229
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -176,7 +176,7 @@ globals:
             - /dev/sdl
         - hostname: mero011
           ip: 10.8.129.231
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -197,7 +197,7 @@ globals:
             - /dev/sdm
         - hostname: mero013
           ip: 10.8.129.233
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -217,7 +217,7 @@ globals:
             - /dev/sdm
         - hostname: mero010
           ip: 10.8.129.230
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
           volumes:
@@ -235,7 +235,7 @@ globals:
             - /dev/sdl
         - hostname: mero012
           ip: 10.8.129.232
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
           volumes:

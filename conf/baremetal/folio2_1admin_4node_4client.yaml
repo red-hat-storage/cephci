@@ -7,7 +7,7 @@ globals:
         - hostname: folio03.ceph.redhat.com
           ip: 10.1.172.223
           id: node1
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -16,7 +16,7 @@ globals:
         - hostname: folio18.ceph.redhat.com
           ip: 10.8.128.134
           id: node2
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -33,7 +33,7 @@ globals:
         - hostname: folio19.ceph.redhat.com
           ip: 10.8.128.135
           id: node3
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - mds
@@ -50,7 +50,7 @@ globals:
         - hostname: folio20.ceph.redhat.com
           ip: 10.8.128.136
           id: node4
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -66,24 +66,24 @@ globals:
         - hostname: folio11.ceph.redhat.com
           ip: 10.1.172.231
           id: node5
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
         - hostname: folio12.ceph.redhat.com
           ip: 10.1.172.232
           id: node6
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
         - hostname: folio13.ceph.redhat.com
           ip: 10.1.172.233
           id: node7
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
         - hostname: folio14.ceph.redhat.com
           ip: 10.1.172.234
           id: node8
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

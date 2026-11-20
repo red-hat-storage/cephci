@@ -13,7 +13,7 @@ globals:
           hostname: magna051
           id: node1
           ip: 10.8.128.51
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -24,7 +24,7 @@ globals:
           hostname: magna052
           id: node2
           ip: 10.8.128.52
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - mgr
@@ -33,7 +33,7 @@ globals:
           hostname: magna053
           id: node3
           ip: 10.8.128.53
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - mon
@@ -41,7 +41,7 @@ globals:
           hostname: argo020
           id: node4
           ip: 10.8.128.220
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -57,7 +57,7 @@ globals:
           hostname: argo021
           id: node5
           ip: 10.8.128.221
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -73,7 +73,7 @@ globals:
           hostname: argo022
           id: node6
           ip: 10.8.128.222
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -89,7 +89,7 @@ globals:
           hostname: argo023
           id: node7
           ip: 10.8.128.223
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - rgw
@@ -105,7 +105,7 @@ globals:
           hostname: argo024
           id: node8
           ip: 10.8.128.224
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - osd
@@ -121,7 +121,7 @@ globals:
           hostname: argo025
           id: node9
           ip: 10.8.128.225
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
           volumes:
@@ -136,13 +136,13 @@ globals:
           hostname: magna056
           id: node10
           ip: 10.8.128.56
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
         -
           hostname: magna055
           id: node11
           ip: 10.8.128.55
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

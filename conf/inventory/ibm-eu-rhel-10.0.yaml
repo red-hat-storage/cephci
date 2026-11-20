@@ -10,7 +10,7 @@ instance:
     #cloud-config
     no_ssh_fingerprints: true
     disable_root: false
-    ssh_pwauth: true
+    ssh_pwauth: false
 
     # We are forcing an update of the packages
     package_update: true
@@ -85,13 +85,15 @@ instance:
         owner: root:root
         permissions: '0644'
       - content: |
-          PermitRootLogin yes
+          PermitRootLogin prohibit-password
         path: /etc/ssh/sshd_config.d/50-cephci.conf
         owner: root:root
         permissions: '0644'
 
     groups:
       - cephuser
+      - psathyan
+      - rchilkun
 
     users:
       - name: cephuser
@@ -99,19 +101,22 @@ instance:
         sudo: ALL=(root) NOPASSWD:ALL
         shell: /bin/bash
         ssh-authorized-keys:
-          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoKGCTzMmNvHFY4THKNpZYFLeEgB7Do8y2JAEy+ZvIZ ceph-qe-sa
-          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
-          - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBNkaK5/dSj7VjggT4oCnc5nbf9AGAk6zduy0AiCWN/l5p9Q0r0e7rn81Pr8AMVpJL26Jr6ElWyJf1jF8rbxqbfTe6VwyRwQoHZETSqk9oDiSrsbZkNih/akwDlLcXVfWDw== ceph-qe-sa-sm@ibm.com
-          - ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKFa+YJXE5pBoRYrLsdTBjoR2ckoIv5Syn1H6I9Jt/iuVWupS3haQCAjuXe3f7f2s8EqauEvZYLro0NQEjWt4rg= psathyan mac laptop
-          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDiyEczrypnoTNJHmzxegLvNjeU6hIh57KKvp63C3NbWfkIHO9rQES4NFQLR1yKFs9ow2hdzmjiGWYOEKRiMYOwllYjwCzOJnT/EnVMp79HmtXUfuWiVo5JYkZe1KVbIiSYRhrzJMU2eSuyIp6rPCaj+tF862fUZGJS2AFW6z7RJAOPjvJt1evG+Fc3i/Uwmr+dBBgpb/oEEqwIJN/kGJS9kLCfxDrGuqsCoVQ+3DpIUlHy624OzHordpCMYQP6CbSXbaLLNGbBen6ge1yg7UPkQP4UGnTwOcGOC/HAVyJii0bfUCdjPRTgbV95+XM7bt4A3lDB3Sg9MU1w5E4i3L7gEb5xgeWbPTkPPQ3u4hUTfirur/U4vm93CYU0C9Nvv94igr97k+VBWM82nuwCS0I3pk4mJEnhqRIOcYyUXYoKSSPXFZyjpqNoZp4aLE0Pgl0mT3d1GhevsPaGd/elecCdQx6zEkqo65XgtbKXuN+F5jpWcLreatKDhJ/+M85uH/U= ceph-qe-sa-sm@ibm.com
-
-    chpasswd:
-      expire: false
-      users:
-        - name: cephuser
-          password: $y$j9T$PxJ09a3yVNnPj0Veb8QDT.$bdWoyLq1IdGwlimyJC98P5OsSFE2w7.9ac68z4eoa01
-        - name: root
-          password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
+          - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAGAhrLVC1yr8ZP7pX1h8ghCIE7OAMpA6aXxGJkkYu8GPwJvmR5gl9CqJ4bcMc1gxVzJCXe0Aw9xrP3ahnWjMXkRJABWgN1jjv7lZkhFMfDgXhalYNzli7QIeOnujQaaHtWD/o6/Nky+P7fdwn37evr5A0RslI6mxzn4es4PdHGTOjkDXQ== ibm-storage-ceph-ci-user
+      - name: root
+        ssh-authorized-keys:
+          - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAGAhrLVC1yr8ZP7pX1h8ghCIE7OAMpA6aXxGJkkYu8GPwJvmR5gl9CqJ4bcMc1gxVzJCXe0Aw9xrP3ahnWjMXkRJABWgN1jjv7lZkhFMfDgXhalYNzli7QIeOnujQaaHtWD/o6/Nky+P7fdwn37evr5A0RslI6mxzn4es4PdHGTOjkDXQ== ibm-storage-ceph-ci-user
+      - name: psathyan
+        primary-group: psathyan
+        sudo: ALL=(root) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBPDlMqoFJqzj9yP5o3w4O/rm4fHWSDKAsDr4YxHHFN35hEQ5vb4xALP0KoZg3UthbqnbXWvtSD3VoG3EFvPLjXNoO8xnM6VZrrDZYw8MT9Em2i+mCam+tpDBWbOojGvEfw== psathyan-fips
+      - name: rchilkun
+        primary-group: rchilkun
+        sudo: ALL=(root) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAHzT2JgaOA+RQsExHsk3E4IZjD4ZPNJghZbt4TucWcVd+jVotfWDFR+AHQwShYaCy4RCbXiPgWvZUjMmRWwmZqOwwHRQ520hhwdc6+R/h7i7axVBO++kQDvvH450B+Vr9UHwVB9LICPBSXHXIUUdFB5eSUi8C5LSsxd+JnRIyhM9vOCcg== rakeshnarayanchilkunda@Rakeshs-MacBook-Pro-3.local
 
     runcmd:
       - timedatectl set-timezone Etc/UTC

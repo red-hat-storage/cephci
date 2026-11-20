@@ -1295,19 +1295,27 @@ class NodeVolume(object):
 
 
 class SSHConnectionManager(object):
+    """Manage a key-based SSH connection to a remote host.
+
+    Password authentication is deliberately unsupported. Every host must
+    authorize the runner's public key for the user being connected as.
+    """
+
     def __init__(
         self,
         ip_address,
         username,
-        password,
+        *,
         look_for_keys=False,
         private_key_file_path="",
         private_key_password=None,
         outage_timeout=600,
     ):
+        # Keyword-only past `username` on purpose: a stale caller passing a
+        # password positionally must fail loudly instead of having it silently
+        # land in look_for_keys.
         self.ip_address = ip_address
         self.username = username
-        self.password = password
         self.look_for_keys = look_for_keys
         self._private_key_file_path = private_key_file_path or ""
         self._private_key_password = private_key_password
@@ -1409,11 +1417,7 @@ class SSHConnectionManager(object):
         last_error = None
         while end_time > datetime.datetime.now():
             try:
-                auth = (
-                    "key"
-                    if self._private_key_file_path
-                    else ("password" if self.password else "none")
-                )
+                auth = "key" if self._private_key_file_path else "default-keys"
                 logger.info(
                     "SSH connect attempt to %s as %s (auth: %s, key_path: %s)",
                     self.ip_address,
@@ -1424,7 +1428,6 @@ class SSHConnectionManager(object):
                 connect_kw = {
                     "hostname": self.ip_address,
                     "username": self.username,
-                    "password": self.password,
                     "allow_agent": False,
                     "look_for_keys": (
                         False if self._private_key_file_path else self.look_for_keys
@@ -1443,12 +1446,11 @@ class SSHConnectionManager(object):
             except Exception as e:
                 last_error = e
                 logger.warning(
-                    "SSH connect failed to %s as %s: %s (auth: key=%s, pwd=%s)",
+                    "SSH connect failed to %s as %s: %s (auth: key=%s)",
                     self.ip_address,
                     self.username,
                     e,
                     bool(self._private_key_file_path),
-                    bool(self.password),
                 )
                 if not self.__outage_start_time:
                     self.__outage_start_time = datetime.datetime.now()
@@ -1479,12 +1481,12 @@ class SSHConnectionManager(object):
                 else:
                     key_hint = (
                         f" Key: {self._private_key_file_path}. Ensure it matches "
-                        f"the key OneCloud has for user '{self.username}'."
+                        f"a key authorized for user '{self.username}' on the host."
                     )
-            elif "bad authentication type" in err_str and self.password:
+            else:
                 key_hint = (
-                    " Hardened images only allow publickey; use private_key_path "
-                    "with step ssh certificate."
+                    " No private_key_path configured; password auth is not "
+                    "supported. Set private_key_path in the cloud credentials."
                 )
             hint = f" (SSH auth failed{key_hint})"
         raise AssertionError(
@@ -1540,16 +1542,18 @@ class CephNode(object):
             use_ipv6                    - when True, ip_address/subnet follow IPv6
         Derived: ip_address and subnet are the active stack (IPv6 if use_ipv6 and set, else IPv4).
 
-        eg CephNode(username='cephuser', password='cephpasswd',
-                    root_password='passwd', ipv4_address='...', ipv4_subnet='...',
+        Authentication is key-based only; passwords are not supported.
+
+        eg CephNode(username='cephuser', ipv4_address='...', ipv4_subnet='...',
                     hostname='hostname', role='mon|osd|client', no_of_volumes=3,
                     ceph_vmnode='ref_to_libcloudvm')
         """
         self.username = kw["username"]
-        self.password = kw["password"]
-        self.root_passwd = kw["root_password"]
         self.root_username = kw.get("root_username") or "root"
-        self.look_for_key = kw["look_for_key"]
+        # Key authentication is the only supported mechanism. When no explicit
+        # private_key_path is given, paramiko falls back to the runner's default
+        # keys (~/.ssh/id_*), so this is always enabled.
+        self.look_for_key = True
         self.private_key_password = kw.get("private_key_password")
         _key_path = kw.get("private_key_path") or ""
         self.private_key_path = (
@@ -1560,7 +1564,6 @@ class CephNode(object):
             os.path.expanduser(str(_boot_key).strip()) if _boot_key else ""
         )
         self.bootstrap_key_password = kw.get("bootstrap_key_password") or ""
-        self.root_login = kw["root_login"]
         self.private_ip = kw["private_ip"]
 
         # Explicit IPv4 storage (backward compat: ip_address/subnet treated as IPv4)
@@ -1621,7 +1624,6 @@ class CephNode(object):
         self.root_connection = SSHConnectionManager(
             self.ip_address,
             self.root_username,
-            self.root_passwd,
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=self.private_key_password,
@@ -1629,7 +1631,6 @@ class CephNode(object):
         self.connection = SSHConnectionManager(
             self.ip_address,
             self.username,
-            self.password,
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=self.private_key_password,
@@ -1853,15 +1854,12 @@ class CephNode(object):
             self.root_connection.close()
             self.connection.close()
             self.root_username = "root"
-            self.root_passwd = ""
             self.username = "cephuser"
-            self.password = ""
             self.look_for_key = True
             _key_pw = getattr(self, "private_key_password", None)
             root_mgr = SSHConnectionManager(
                 self.ip_address,
                 "root",
-                "",
                 look_for_keys=True,
                 private_key_file_path=key_path,
                 private_key_password=_key_pw,
@@ -1869,7 +1867,6 @@ class CephNode(object):
             cephuser_mgr = SSHConnectionManager(
                 self.ip_address,
                 "cephuser",
-                "",
                 look_for_keys=True,
                 private_key_file_path=key_path,
                 private_key_password=_key_pw,
@@ -1900,17 +1897,13 @@ class CephNode(object):
                     else:
                         raise
 
-        sudo_prefix = "sudo " if self.username != "root" else ""
-        if self.password:
-            _, stdout, stderr = self.rssh().exec_command(
-                f"echo '{self.username}:{self.password}' | {sudo_prefix}chpasswd"
-            )
-            logger.info(stdout.readlines())
-        if self.root_passwd:
-            _, stdout, stderr = self.rssh().exec_command(
-                f"echo 'root:{self.root_passwd}' | {sudo_prefix}chpasswd"
-            )
-            logger.info(stdout.readlines())
+        # Password rotation used to happen here. Access is key-based only now,
+        # so there is nothing to set up: cloud-init (or the baremetal prep
+        # pipeline) authorizes the runner public key for root and cephuser.
+        #
+        # These run over the privileged connection, so elevate only when that
+        # connection is not root itself.
+        sudo_prefix = "sudo " if self.root_username != "root" else ""
         # TCP keepalive (applies to both IPv4 and IPv6 on Linux)
         self.rssh().exec_command(
             f"echo 120 | {sudo_prefix}tee /proc/sys/net/ipv4/tcp_keepalive_time"
@@ -2189,8 +2182,7 @@ class CephNode(object):
         key_pw = getattr(self, "private_key_password", None)
         self.root_connection = SSHConnectionManager(
             self.ip_address,
-            "root",
-            self.root_passwd,
+            getattr(self, "root_username", "root"),
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=key_pw,
@@ -2198,7 +2190,6 @@ class CephNode(object):
         self.connection = SSHConnectionManager(
             self.ip_address,
             self.username,
-            self.password,
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=key_pw,
@@ -2342,7 +2333,7 @@ class CephNode(object):
             build(str|LooseVersion): rhcs version
         """
         user = "redhat"
-        passwd = "OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9"
+        passwd = "masked"
         num = str(build).split(".")[0]
         cmd = (
             "umask 0077; echo deb https://{user}:{passwd}@rhcs.download.redhat.com/{num}-updates/Tools "

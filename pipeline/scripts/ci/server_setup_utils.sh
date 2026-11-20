@@ -1,48 +1,85 @@
 #!/bin/bash
 
-# Function to perform initial setup on node
-# Arguments:
-#   node: The node to perform setup on
-#   password: The password to set for the root user (default: "passwd")
+# Baremetal node preparation helpers.
+#
+# Authentication is public-key only. sshpass and password arguments have been
+# removed: every function takes an optional private key path as its third
+# argument and falls back to the agent / default keys when it is omitted.
+#
+# Arguments common to most functions:
+#   node:     FQDN or IP address of the node
+#   username: Remote user (default: "root")
+#   key:      Path to the SSH private key (optional)
+
+SSH_COMMON_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes)
+
+function _ssh {
+  # Run a command over ssh using key authentication.
+  #   $1 node, $2 username, $3 key (may be empty), $4.. command
+  local node="$1"; shift
+  local username="$1"; shift
+  local key="$1"; shift
+
+  local opts=("${SSH_COMMON_OPTS[@]}")
+  if [ -n "${key}" ]; then
+    opts+=(-i "${key}")
+  fi
+
+  ssh "${opts[@]}" "${username}@${node}" "$@"
+}
 
 function cleanup_node {
   # This function is to cleanup any ceph residuals.
-  #   node: FQDN or IP address of the node
-  #   passwd: Password of the root user
-
   local node="$1"
   local username="${2:-root}"
-  local password="${3:-passwd}"
+  local key="${3:-}"
   echo "Clean-up ceph residuals on ${node}"
-  output=$(sshpass -p ${password} ssh ${username}@${node} 'sudo rm -rf /etc/ceph /var/lib/ceph /var/log/ceph')
+  output=$(_ssh "${node}" "${username}" "${key}" 'sudo rm -rf /etc/ceph /var/lib/ceph /var/log/ceph')
   echo "Status : ${output}"
 }
 
-function initial_setup {
-  # This function performs initial setup on a given node. It takes two arguments:
-  #   node: The name or IP address of the node to perform setup on
-  #   password: The password to set for the root user (default: "passwd")
-  # The function uses sshpass to login to the node with root privileges and sets the root password to the provided value.
-  # It then checks if PermitRootLogin is set to yes in /etc/ssh/sshd_config and if not, adds the setting to the file.
-  # Finally, the sshd service is restarted on the node.
+function authorize_key {
+  # Authorize the CI public key for root on the node, using an existing
+  # key-based login as the provisioning user. Replaces the old flow that set
+  # a root password and enabled PermitRootLogin yes.
+  #   $1 node, $2 provisioning username, $3 provisioning key (optional)
   local node="$1"
-  local password="${2:-passwd}"
-  ssh ubuntu@${node} 'echo "passwd" | sudo passwd --stdin root; \
-  grep -qxF "PermitRootLogin yes" /etc/ssh/sshd_config || \
-  echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config'
-  ssh ubuntu@${node} 'sudo systemctl restart sshd &'
+  local username="${2:-root}"
+  local key="${3:-}"
+  local pub_key_file="${SSH_PUBLIC_KEY:-${HOME}/.ssh/id_rsa.pub}"
+
+  if [ ! -f "${pub_key_file}" ]; then
+    echo "ERR: public key ${pub_key_file} not found; set SSH_PUBLIC_KEY"
+    exit 2
+  fi
+
+  local pub_key
+  pub_key=$(cat "${pub_key_file}")
+
+  _ssh "${node}" "${username}" "${key}" "sudo install -d -m 700 /root/.ssh; \
+    grep -qxF '${pub_key}' /root/.ssh/authorized_keys 2>/dev/null || \
+    echo '${pub_key}' | sudo tee -a /root/.ssh/authorized_keys > /dev/null; \
+    sudo chmod 600 /root/.ssh/authorized_keys"
+}
+
+function initial_setup {
+  # Authorize the CI key for root and make sure root login is key-only.
+  local node="$1"
+  local key="${2:-}"
+
+  authorize_key "${node}" "ubuntu" "${key}"
+
+  _ssh "${node}" "ubuntu" "${key}" 'grep -qxF "PermitRootLogin prohibit-password" /etc/ssh/sshd_config || \
+  echo "PermitRootLogin prohibit-password" | sudo tee -a /etc/ssh/sshd_config'
+  _ssh "${node}" "ubuntu" "${key}" 'sudo systemctl restart sshd &'
   sleep 2
 }
 
 function initial_setup_dsal {
-  # This function performs initial setup on a given node. It takes two arguments:
-  #   node: The name or IP address of the node to perform setup on
-  #   password: The password to set for the root user (default: "passwd")
-  # The function uses sshpass to login to the node with root privileges and sets the root password to the provided value.
-  # It then checks if PermitRootLogin is set to yes in /etc/ssh/sshd_config and if not, adds the setting to the file.
-  # Finally, the sshd service is restarted on the node.
+  # Same as initial_setup, for nodes already reachable as root by key.
   local node="$1"
-  local password="${2:-passwd}"
+  local username="${2:-root}"
+  local key="${3:-}"
   KNOWN_HOSTS_FILE="$HOME/.ssh/known_hosts"
   if ssh-keygen -F "${node}" -f "$KNOWN_HOSTS_FILE" >/dev/null; then
     echo "Host already exists in known_hosts."
@@ -50,21 +87,16 @@ function initial_setup_dsal {
     ssh-keyscan -H "${node}" >> "$KNOWN_HOSTS_FILE"
   fi
 
-  ssh root@${node} 'echo "passwd" | sudo passwd --stdin root; \
-  grep -qxF "PermitRootLogin yes" /etc/ssh/sshd_config || \
-  echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config'
-  ssh root@${node} 'sudo systemctl restart sshd &'
+  authorize_key "${node}" "${username}" "${key}"
+
+  _ssh "${node}" "${username}" "${key}" 'grep -qxF "PermitRootLogin prohibit-password" /etc/ssh/sshd_config || \
+  echo "PermitRootLogin prohibit-password" | sudo tee -a /etc/ssh/sshd_config'
+  _ssh "${node}" "${username}" "${key}" 'sudo systemctl restart sshd &'
   sleep 2
 }
 
-# Function to wipe data disks clean
-# Arguments:
-#   node: The node to wipe disks on
-#   password: The password to use to access the node (default: "passwd")
 function wipe_drives {
-  # This function wipes all data disks clean on a given node. It takes two arguments:
-  #   node: The name or IP address of the node to wipe disks on
-  #   password: The password to use to access the node (default: "passwd")
+  # This function wipes all data disks clean on a given node.
   # The function first retrieves the list of data disks on the node using lsblk.
   # It then identifies the root disk by looking for the disk that has the / mount point.
   # The function then iterates through all disks except the root disk and uses the wipefs command to wipe them clean.
@@ -72,14 +104,14 @@ function wipe_drives {
   # and the function exits.
   local node="$1"
   local username="${2:-root}"
-  local password="${3:-passwd}"
+  local key="${3:-}"
   echo "Wipe all data disks clean."
 
   # Find all disks and its type
-  disks=$(sshpass -p ${password} ssh -q ${username}@${node} "lsblk -ndo name,type | awk '{print \$1\",\"\$2}'")
+  disks=$(_ssh "${node}" "${username}" "${key}" -q "lsblk -ndo name,type | awk '{print \$1\",\"\$2}'")
 
   # Find root disk device
-  root_disk=$(sshpass -p ${password} ssh -q ${username}@${node} "sudo findmnt -v -n -T /boot -o SOURCE")
+  root_disk=$(_ssh "${node}" "${username}" "${key}" -q "sudo findmnt -v -n -T /boot -o SOURCE")
   if [ -z "${root_disk}" ]; then
       echo "ERR: Unable to find root disk on ${node}"
       exit 2
@@ -102,52 +134,47 @@ function wipe_drives {
       echo "Skipping this disk :  disk - ${name} , type - ${type}"
       continue
     else
-      sshpass -p ${password} ssh ${username}@${node} "wipefs -a --force /dev/${name}"
+      _ssh "${node}" "${username}" "${key}" "wipefs -a --force /dev/${name}"
     fi
   done
 }
 
 # This function sets the hostname of a node to its shortname and cleans the default repo files to avoid conflicts.
-# Arguments:
-#   node: The node to perform setup on
-#   password: The password to set for the root user (default: "passwd")
 function set_hostnames_repos {
   local node="$1"
   local username="${2:-root}"
-  local password="${3:-passwd}"
+  local key="${3:-}"
   echo 'Setting the systems to use shortnames'
-  sshpass -p ${password} ssh ${username}@${node} "sudo hostnamectl set-hostname ${node}"
-  sshpass -p ${password} ssh ${username}@${node} "sudo echo ${node} > /etc/hostname"
-  sshpass -p ${password} ssh ${username}@${node} 'sudo sed -i "s/$(hostname)/$(hostname -s)/g" /etc/hosts'
+  _ssh "${node}" "${username}" "${key}" "sudo hostnamectl set-hostname ${node}"
+  _ssh "${node}" "${username}" "${key}" "sudo echo ${node} > /etc/hostname"
+  _ssh "${node}" "${username}" "${key}" 'sudo sed -i "s/$(hostname)/$(hostname -s)/g" /etc/hosts'
 
   echo 'Cleaning default repo files to avoid conflicts'
-  sshpass -p ${password} ssh ${username}@${node} 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
+  _ssh "${node}" "${username}" "${key}" 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
 }
 
 function remove_repos {
   local node="$1"
   local username="${2:-root}"
-  local password="${3:-passwd}"
+  local key="${3:-}"
 
   echo 'Cleaning default repo files to avoid conflicts'
-  sshpass -p ${password} ssh ${username}@${node} 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
+  _ssh "${node}" "${username}" "${key}" 'sudo rm -f /etc/yum.repos.d/*; sudo yum clean all'
 
 }
 
 function reboot_node {
   local node="$1"
   local username="${2:-root}"
-  local password="${3:-passwd}"
+  local key="${3:-}"
 
-  echo 'Cleaning default repo files to avoid conflicts'
-  sshpass -p ${password} ssh ${username}@${node} 'sudo reboot'
+  echo 'Rebooting the node'
+  _ssh "${node}" "${username}" "${key}" 'sudo reboot'
 
 }
 
 function wait_for_node {
   local node="$1"
-  local username="${2:-root}"
-  local password="${3:-passwd}"
   local max_attempts=10
   local wait_time=60
 
@@ -170,9 +197,9 @@ function wait_for_node {
 function verify_disk() {
   local node="$1"
   local username="${2:-root}"
-  local password="${3:-passwd}"
+  local key="${3:-}"
   echo "Verifying wipefs on ${node}"
-  output=$(sshpass -p ${password} ssh ${username}@${node} 'sudo lsblk -o name,fstype')
+  output=$(_ssh "${node}" "${username}" "${key}" 'sudo lsblk -o name,fstype')
   echo "ouput of lsblk ${output}"
   # Check if any block device has a non-empty fstype
   while read -r line; do

@@ -1304,7 +1304,6 @@ class CephVMNodeOCP:
         self._volumes: list = list()
         self._precreated_volumes: list = list()
         self.node: Optional[dict] = None
-        self.root_login: bool = True
         self.osd_scenario = None
         self.location = None
         self.id = None

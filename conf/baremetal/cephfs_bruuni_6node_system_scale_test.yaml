@@ -10,7 +10,7 @@ globals:
           hostname: bruuni001
           id: node1
           ip: 10.64.0.220
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -25,7 +25,7 @@ globals:
           hostname: bruuni002
           id: node2
           ip: 10.64.0.221
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -42,7 +42,7 @@ globals:
           hostname: bruuni003
           id: node3
           ip: 10.64.0.222
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mds
@@ -57,7 +57,7 @@ globals:
           hostname: bruuni004
           id: node4
           ip: 10.64.0.223
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - node-exporter
@@ -71,7 +71,7 @@ globals:
           hostname: bruuni005
           id: node5
           ip: 10.64.0.224
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - osd
@@ -86,7 +86,7 @@ globals:
           hostname: bruuni006
           id: node6
           ip: 10.64.0.225
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mds
             - osd
@@ -102,28 +102,28 @@ globals:
           ip: 10.64.26.238
           role:
           - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: cephfs-client-vm02
           id: node8
           ip: 10.64.26.125
           role:
           - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: cephfs-client-vm03
           id: node9
           ip: 10.64.26.201
           role:
           - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: cephfs-client-vm04
           id: node10
           ip: 10.64.27.93
           role:
           - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: cephfs-client-vm05
           id: node11
           ip: 10.64.26.162
           role:
           - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa

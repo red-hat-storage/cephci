@@ -8,7 +8,7 @@ globals:
         -
           hostname: depressa013.ceph.redhat.com
           ip: 10.1.172.213
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -22,7 +22,7 @@ globals:
         -
           hostname: depressa014.ceph.redhat.com
           ip: 10.1.172.214
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -34,7 +34,7 @@ globals:
         -
           hostname: depressa015.ceph.redhat.com
           ip: 10.1.172.215
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -47,45 +47,45 @@ globals:
         -
           hostname: extensa024.ceph.redhat.com
           ip: 10.1.172.124
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
 
         -
           hostname: extensa025.ceph.redhat.com
           ip: 10.1.172.125
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa026.ceph.redhat.com
           ip: 10.1.172.126
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
 
         -
           hostname: extensa027.ceph.redhat.com
           ip: 10.1.172.127
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa028.ceph.redhat.com
           ip: 10.1.172.128
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa029.ceph.redhat.com
           ip: 10.1.172.129
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa022.ceph.redhat.com
           ip: 10.1.172.122
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client
 
@@ -98,7 +98,7 @@ globals:
         -
           hostname: depressa016.ceph.redhat.com
           ip: 10.1.172.216
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -112,7 +112,7 @@ globals:
         -
           hostname: depressa017.ceph.redhat.com
           ip: 10.1.172.217
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -124,7 +124,7 @@ globals:
         -
           hostname: depressa018.ceph.redhat.com
           ip: 10.1.172.218
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -137,44 +137,44 @@ globals:
         -
           hostname: extensa031.ceph.redhat.com
           ip: 10.1.172.131
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
 
         -
           hostname: extensa032.ceph.redhat.com
           ip: 10.1.172.132
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa033.ceph.redhat.com
           ip: 10.1.172.133
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
 
         -
           hostname: extensa034.ceph.redhat.com
           ip: 10.1.172.134
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa035.ceph.redhat.com
           ip: 10.1.172.135
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa036.ceph.redhat.com
           ip: 10.1.172.136
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - rgw
         -
           hostname: extensa030.ceph.redhat.com
           ip: 10.1.172.130
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

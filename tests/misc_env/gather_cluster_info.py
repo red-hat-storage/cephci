@@ -75,7 +75,8 @@ def run(ceph_cluster, ceph_nodes, config, **kwargs) -> int:
         {
             "access_key_rgw-admin-ops-user": access_key,
             "secret_key_rgw-admin-ops-user": secret_key,
-            "login": {"username": "root", "password": ceph_nodes[0].root_passwd},
+            # Key-based access only; the hosts have no root password set.
+            "login": {"username": "root", "auth": "ssh-key"},
             "admin_keyring": {"key": admin_key},
             "external_cluster_node_roles": list(),
         }

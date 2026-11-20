@@ -17,7 +17,7 @@ STATE_AVAILABLE = "available"
 STATE_DESTROY = "destroy"
 
 CLOUD_DATA = """
-    ssh_pwauth: true
+    ssh_pwauth: false
     disable_root: false
 
     groups:
@@ -28,17 +28,14 @@ CLOUD_DATA = """
         primary-group: cephuser
         sudo: ALL=(ALL) NOPASSWD:ALL
         shell: /bin/bash
-
-    chpasswd:
-      list: |
-        root:passwd
-        cephuser:pass123
-      expire: false
+        ssh-authorized-keys: {ssh_authorized_keys}
+      - name: root
+        ssh-authorized-keys: {ssh_authorized_keys}
 
     runcmd:
-      - sed -i -e 's/^Defaults\\s\\+requiretty/# \0/' /etc/sudoers
+      - sed -i -e 's/^Defaults\\s\\+requiretty/# \\0/' /etc/sudoers
       - hostnamectl set-hostname $(hostname -s)
-      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
       - systemctl restart sshd
       - touch /ceph-qa-ready
 
@@ -111,13 +108,28 @@ class Openstack:
             image (str): Image to be used for node
             size (int): Node root volume size
             networks (list|tuple): Networks to be attached to node
+            ssh_authorized_keys (list|tuple): Public keys to authorize for
+                cephuser and root. Required: nodes are reachable by key only.
         """
+        authorized_keys = config.get("ssh_authorized_keys")
+        if not authorized_keys:
+            raise ConfigError(
+                "'ssh_authorized_keys' is required. Password authentication "
+                "is not supported, so the node would be unreachable."
+            )
+
+        cloud_data = CLOUD_DATA.format(
+            ssh_authorized_keys="".join(
+                f"\n          - {key.strip()}" for key in authorized_keys
+            )
+        )
+
         try:
             node = self._driver.create_node(
                 name=name,
                 image=config.get("image"),
                 size=config.get("size"),
-                ex_userdata=CLOUD_DATA,
+                ex_userdata=cloud_data,
                 networks=config.get("networks"),
             )
         except Exception as e:

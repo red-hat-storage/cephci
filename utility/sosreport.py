@@ -5,13 +5,14 @@ then upload all the collected logs to magna/directory(run_dir) provided
 
   Typical usage example:
 
-  python sosreport.py --ip x.x.x.x --username abc --password abcd --directory /tmp/cephci-run-ysfyu
+  python sosreport.py --ip x.x.x.x --username abc [--private-key ~/.ssh/id_rsa] --directory /tmp/cephci-run-ysfyu
   python sosreport.py -h
 """
 
 import os
 import re
 import sys
+from os.path import expanduser
 
 import paramiko
 from docopt import docopt
@@ -20,27 +21,34 @@ doc = """
 Standard script to collect all the logs from ceph cluster
 
     Usage:
-        sosreport.py --ip <str> --username <str> --password <str> --directory <str>
+        sosreport.py --ip <str> --username <str> [--private-key <str>] --directory <str>
         sosreport.py (-h | --help)
 
     Options:
         -h --help          Shows the command usage
         --ip <str>         IP address of Installer node.
         --username <str>   Username to be used to access the system other than root
-        --password <str>   password of given username
+        --private-key <str>  path to the SSH private key (defaults to the runner's keys)
         --directory <str>  directory/folder
 """
 
 
+def _key_auth(key_path):
+    """Build paramiko connect kwargs for key-only authentication."""
+    if key_path:
+        return {"key_filename": [expanduser(key_path)], "allow_agent": False}
+    return {"look_for_keys": True, "allow_agent": False}
+
+
 def generate_sosreport_in_node(
-    nodeip: str, uname: str, pword: str, directory: str, results: list
+    nodeip: str, uname: str, key_path: str, directory: str, results: list
 ) -> None:
     """Generate sosreport in the given node and copy report to directory provided
 
     Args:
        nodeip              host Ip address
        uname               Username for accessing host
-       pword               password for accessing host through given user
+       key_path            SSH private key path (may be None)
        directory           directory to store all the logs
        results             host IP address for which this operation are failed
 
@@ -51,7 +59,7 @@ def generate_sosreport_in_node(
     try:
         ssh_d = paramiko.SSHClient()
         ssh_d.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_d.connect(nodeip, username=uname, password=pword)
+        ssh_d.connect(nodeip, username=uname, **_key_auth(key_path))
         ssh_d.exec_command("sudo yum -y install sos")
         stdin, stdout, stderr = ssh_d.exec_command(
             "sudo sos report -a --all-logs --batch"
@@ -80,7 +88,7 @@ def generate_sosreport_in_node(
         results.append(nodeip)
 
 
-def run(installer_ip: str, uname: str, pword: str, directory: str) -> int:
+def run(installer_ip: str, uname: str, key_path: str, directory: str) -> int:
     """Standard script to collect all the logs from ceph cluster
 
     Through installer node get all other nodes in the cluster, generate sosreport for all the nodes obtained.
@@ -89,7 +97,7 @@ def run(installer_ip: str, uname: str, pword: str, directory: str) -> int:
     Args:
        installer_ip   installer IP address
        uname          username to be used to access the system other than root
-       pword          password for installer node
+       key_path       SSH private key path for the installer node
        directory      directory/folder name ex:
 
     Returns:
@@ -102,7 +110,7 @@ def run(installer_ip: str, uname: str, pword: str, directory: str) -> int:
 
     ssh_install = paramiko.SSHClient()
     ssh_install.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh_install.connect(installer_ip, username=uname, password=pword)
+    ssh_install.connect(installer_ip, username=uname, **_key_auth(key_path))
     stdin, stdout, stderr = ssh_install.exec_command("hostname")
     if "installer" not in stdout.read().decode():
         raise AssertionError("Please provide installer node details")
@@ -114,7 +122,7 @@ def run(installer_ip: str, uname: str, pword: str, directory: str) -> int:
     print(f"Host that are obtained from given host: {nodes}")
     for nodeip in nodes:
         if nodeip:
-            generate_sosreport_in_node(nodeip, uname, pword, directory, results)
+            generate_sosreport_in_node(nodeip, uname, key_path, directory, results)
     print(f"\n\nFailed to collect logs from nodes :{results}")
     return 1 if results else 0
 
@@ -123,7 +131,7 @@ if __name__ == "__main__":
     arguments = docopt(doc)
     installer_ip = arguments["--ip"]
     username = arguments["--username"]
-    password = arguments["--password"]
+    key_path = arguments["--private-key"]
     directory = arguments["--directory"]
-    rc = run(installer_ip, username, password, directory)
+    rc = run(installer_ip, username, key_path, directory)
     sys.exit(rc)

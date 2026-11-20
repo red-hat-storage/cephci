@@ -5,7 +5,7 @@ Run shell script on installer node, then upload all the collected logs to magna
 
   Typical usage example:
 
-  python collect_logs.py --ip x.x.x.x --username abc --password abcd
+  python collect_logs.py --ip x.x.x.x --username abc [--private-key ~/.ssh/id_rsa]
   python collect_logs.py -h
 """
 
@@ -24,14 +24,14 @@ doc = """
 Standard script to collect all the logs from ceph cluster through installer node
 
     Usage:
-        collect_logs.py --ip <str> --username <str> --password <str> [--directory <str>]
+        collect_logs.py --ip <str> --username <str> [--private-key <str>] [--directory <str>]
         collect_logs.py (-h | --help)
 
     Options:
         -h --help          Shows the command usage
         --ip <str>         IP address of Installer node.
         --username <str>   Username to be used to access the system other than root
-        --password <str>   password of given username
+        --private-key <str>  path to the SSH private key (defaults to the runner's keys)
         --directory <str>  directory/folder name
 """
 
@@ -113,7 +113,7 @@ def collect_logs(
 
 
 def generate_sosreport_in_node(
-    ssh_install, nodeip: str, uname: str, pword: str, log_dir: str, results: list
+    ssh_install, nodeip: str, uname: str, key_path: str, log_dir: str, results: list
 ) -> None:
     """Generate sosreport in the given node and copy report to installer
 
@@ -121,7 +121,7 @@ def generate_sosreport_in_node(
        ssh_install         ssh object of installer node
        nodeip              host Ip address
        uname               Username for accessing host
-       pword               password for accessing host through given user
+       key_path            SSH private key path (may be None)
        log_dir             directory to store all the logs
        results             host Ip address which are failed
 
@@ -130,7 +130,9 @@ def generate_sosreport_in_node(
     """
     print(f"Connecting {nodeip} to generate sosreport")
     try:
-        ssh_d = SSHConnectionManager(nodeip, uname, pword).get_client()
+        ssh_d = SSHConnectionManager(
+            nodeip, uname, look_for_keys=True, private_key_file_path=key_path or ""
+        ).get_client()
         ssh_d.exec_command("sudo yum -y install sos")
         stdin, stdout, stderr = ssh_d.exec_command(
             "sudo sosreport -a --all-logs --batch"
@@ -155,7 +157,7 @@ def run(args: dict) -> int:
     Args:
        ip         installer IP address
        username   username to be used to access the system other than root
-       password   password for installer node
+       private-key  SSH private key path for the installer node
 
     Returns:
         0 on success or 1 for failures
@@ -167,11 +169,13 @@ def run(args: dict) -> int:
     run_id = generate_unique_id(length=6)
     ip = args["--ip"]
     uname = args["--username"]
-    pword = args["--password"]
+    key_path = args["--private-key"]
     directory = args["--directory"]
     log_dir = f"ceph_logs_{run_id}"
 
-    ssh_install = SSHConnectionManager(ip, uname, pword).get_client()
+    ssh_install = SSHConnectionManager(
+        ip, uname, look_for_keys=True, private_key_file_path=key_path or ""
+    ).get_client()
     stdin, stdout, stderr = ssh_install.exec_command("hostname")
     if "installer" not in stdout:
         raise AssertionError("Please provide installer node details")
@@ -192,7 +196,7 @@ def run(args: dict) -> int:
                     ssh_install,
                     nodeip,
                     uname,
-                    pword,
+                    key_path,
                     log_dir,
                     results,
                 )
