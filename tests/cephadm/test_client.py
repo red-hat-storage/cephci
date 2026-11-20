@@ -204,6 +204,22 @@ def add(cls, config: Dict) -> None:
                     _node.exec_command(
                         cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
                     )
+
+                # Fail here, with a clear message, if the ceph CLI is still not
+                # usable on the client. Downstream suites run bare `ceph`
+                # commands on this node (e.g. RadosOrchestrator uses
+                # client_exec=True for `ceph df`), and without this guard a
+                # failed ceph-common install surfaced much later as dozens of
+                # unrelated "bash: ceph: command not found" failures in the
+                # test suites rather than as one packaging error here.
+                if any("ceph-common" in str(p) for p in config.get("install_packages")):
+                    _node.exec_command(
+                        cmd="ceph --version",
+                        sudo=True,
+                        check_ec=True,
+                        long_running=True,
+                    )
+                    log.info("ceph CLI verified on client node %s" % _node.hostname)
             if config.get("git_clone", False):
                 log.info("perform cloning operation")
                 role = config.get("git_node_role", "client")
