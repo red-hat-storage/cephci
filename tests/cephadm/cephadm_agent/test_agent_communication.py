@@ -8,7 +8,6 @@ from cephadm_agent.helpers import (
     DEFAULT_AGENT_DOWN_TIMEOUT,
     DEFAULT_AGENT_REFRESH,
     agent_service_name,
-    get_active_mgr_ip,
     get_agent_daemons,
     get_fsid,
     get_node_for_host,
@@ -36,12 +35,26 @@ def run_communication_test(ceph_cluster, installer):
     fsid = get_fsid(installer)
     service_name = agent_service_name(fsid, hostname)
 
-    mgr_ip = get_active_mgr_ip(installer)
+    # Read the endpoint the agent actually posts to. Previously this used
+    # get_active_mgr_ip() (the mgr's own listen address) with a hardcoded
+    # "7150:7300" port range that the agent never uses — the agent targets
+    # mgr on 8443 in these clusters. The rule therefore blocked nothing, the
+    # agent stayed connected, CEPHADM_AGENT_DOWN never fired, and the wait
+    # timed out after 150s. That accounted for ~86 communication /
+    # network-partition / restart failures across 9.2 sanity runs.
+    # network_partition below already does this correctly.
+    agent_json, _ = target_node.exec_command(
+        sudo=True, cmd=f"cat /var/lib/ceph/{fsid}/agent.{hostname}/agent.json"
+    )
+    agent_cfg = json.loads(agent_json)
+    mgr_ip = agent_cfg["target_ip"]
+    mgr_port = agent_cfg["target_port"]
+    log.info(f"Agent {hostname} posts to mgr endpoint {mgr_ip}:{mgr_port}")
 
-    log.info(f"Blocking traffic from {hostname} to mgr at {mgr_ip}")
+    log.info(f"Blocking traffic from {hostname} to mgr at {mgr_ip}:{mgr_port}")
     iptables_cmd(
         target_node,
-        f"-A OUTPUT -d {mgr_ip} -p tcp --dport 7150:7300 -j DROP",
+        f"-A OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j DROP",
     )
 
     try:
@@ -51,10 +64,10 @@ def run_communication_test(ceph_cluster, installer):
         ), f"CEPHADM_AGENT_DOWN not raised within {down_timeout}s after blocking traffic"
         log.info("CEPHADM_AGENT_DOWN detected after blocking traffic")
     finally:
-        log.info(f"Unblocking traffic from {hostname} to {mgr_ip}")
+        log.info(f"Unblocking traffic from {hostname} to {mgr_ip}:{mgr_port}")
         iptables_cmd(
             target_node,
-            f"-D OUTPUT -d {mgr_ip} -p tcp --dport 7150:7300 -j DROP",
+            f"-D OUTPUT -d {mgr_ip} -p tcp --dport {mgr_port} -j DROP",
         )
 
     log.info("Restarting agent to force reconnection after unblock")
