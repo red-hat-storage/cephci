@@ -228,19 +228,48 @@ class CephTestManifest:
                 "Unable to download the Ceph QE manifest file %s \n%s", manifest_url, e
             )
 
+        # A non-200 response must be rejected explicitly. GitHub returns the body
+        # "404: Not Found" for a missing manifest, which yaml.safe_load happily
+        # parses as {404: 'Not Found'}. The subsequent section lookup then raised
+        # KeyError and was reported as "Unknown build_type provided." — pointing at
+        # the caller's build_type when the real problem was a missing manifest.
+        # This is what made the 10.0 sanity upgrades fail with a misleading error.
+        if data.status_code != 200:
+            raise RuntimeError(
+                f"Unable to download the Ceph QE manifest file {manifest_url}: "
+                f"HTTP {data.status_code} {data.reason}. "
+                f"Cannot look up the '{self.build_type}' section."
+            )
+
         try:
             yml_data: Dict[str, Any] = yaml.safe_load(data.text)
-            build_data = yml_data[self.build_type]
-
-            # Convert image digests from '@sha256:<digest>' format to ':<digest>' format if datacenter is 'eu-de'
-            if self.datacenter == "eu-de":
-                images = build_data.get("images", {})
-                for k, v in images.items():
-                    images[k] = v.replace("@sha256:", ":")
-
-            return build_data
-
         except yaml.YAMLError:
-            raise RuntimeError("Unable to process the Ceph QE manifest file")
-        except KeyError:
-            raise RuntimeError("Unknown build_type provided.")
+            raise RuntimeError(
+                f"Unable to process the Ceph QE manifest file {manifest_url}"
+            )
+
+        if not isinstance(yml_data, dict):
+            raise RuntimeError(
+                f"Unexpected content in Ceph QE manifest file {manifest_url}: "
+                f"expected a mapping, got {type(yml_data).__name__}"
+            )
+
+        if self.build_type not in yml_data:
+            available = ", ".join(sorted(str(k) for k in yml_data)) or "(none)"
+            raise RuntimeError(
+                f"Manifest {manifest_url} has no '{self.build_type}' section "
+                f"for release '{self._release}' (product '{self.product}'). "
+                f"Available sections: {available}. "
+                f"Add the '{self.build_type}' section to the manifest, or point the "
+                f"suite at one that exists."
+            )
+
+        build_data = yml_data[self.build_type]
+
+        # Convert image digests from '@sha256:<digest>' format to ':<digest>' format if datacenter is 'eu-de'
+        if self.datacenter == "eu-de" and isinstance(build_data, dict):
+            images = build_data.get("images", {})
+            for k, v in images.items():
+                images[k] = v.replace("@sha256:", ":")
+
+        return build_data
