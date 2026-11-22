@@ -229,9 +229,7 @@ spec:
   frontend_port: 2049
   monitor_port: 9000
   virtual_ip: 10.8.128.100/21
-""".format(
-            hosts="".join([f"   - {node.node.hostname}\n" for node in interm_list])
-        )
+""".format(hosts="".join([f"   - {node.node.hostname}\n" for node in interm_list]))
 
         filename = "nfs.yaml"
         nfs_file = clients[0].remote_file(

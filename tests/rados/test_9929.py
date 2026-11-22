@@ -48,9 +48,7 @@ def run(ceph_cluster, **kw):
     profile = pname
     if build.startswith("4"):
         prof_cmd = "osd erasure-code-profile set {profile} k={k} m={m} \
-            crush-failure-domain=osd".format(
-            profile=profile, k=k, m=m
-        )
+            crush-failure-domain=osd".format(profile=profile, k=k, m=m)
     else:
         prof_cmd = "osd erasure-code-profile set {profile} k={k} m={m} \
             ruleset-failure-domain=osd crush-failure-domain=osd".format(
@@ -177,9 +175,7 @@ def run(ceph_cluster, **kw):
     found = 0
     while timeout:
         incon_pg = "sudo rados list-inconsistent-pg \
-                    {pname}".format(
-            pname=pname
-        )
+                    {pname}".format(pname=pname)
         outbuf, err = ctrlr.exec_command(cmd=incon_pg)
         log.info(outbuf)
         if targt_pg not in outbuf:

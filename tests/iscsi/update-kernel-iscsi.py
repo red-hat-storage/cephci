@@ -51,9 +51,7 @@ name=KernelUpdate
 baseurl= {base_url}
 gpgcheck=0
 enabled=1
-""".format(
-        base_url=repo_url
-    )
+""".format(base_url=repo_url)
     client.exec_command(cmd="sudo yum install -y wget")
     client.exec_command(
         cmd="sudo wget -O /etc/yum.repos.d/rh_7_nightly.repo "

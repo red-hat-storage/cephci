@@ -5935,10 +5935,8 @@ os.system('sudo systemctl start  network')
                 if all(isinstance(v, list) for v in values):
                     # Compare list contents
                     if all(sorted(v) == sorted(values[0]) for v in values):
-                        log.info(
-                            f"Key '{key}' validated across {len(dicts_with_key)} \
-                            dictionaries with the list value {values[0]}"
-                        )
+                        log.info(f"Key '{key}' validated across {len(dicts_with_key)} \
+                            dictionaries with the list value {values[0]}")
                     else:
                         log.error(f"Key '{key}' mismatch: List values = {values}")
                         raise ValueMismatchError

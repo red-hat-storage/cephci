@@ -59,8 +59,10 @@ def run(**kw):
     # Remove block=10 and time = 60 lines after #Bug-1848016 fix
     block = 10
     time = 60
-    rados_bench = "sudo rados --no-log-to-stderr  -b {block} -p {pool} bench {time} {op} \
+    rados_bench = (
+        "sudo rados --no-log-to-stderr  -b {block} -p {pool} bench {time} {op} \
      {cleanup}".format(
-        name=name, block=block, pool=pool_name, time=time, op=op, cleanup=cleanup
+            name=name, block=block, pool=pool_name, time=time, op=op, cleanup=cleanup
+        )
     )
     return client.exec_command(cmd=rados_bench, long_running=True)

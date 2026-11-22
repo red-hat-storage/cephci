@@ -153,10 +153,8 @@ def test_ceph_83608838(ceph_cluster, config, nvme_service):
     time.sleep(180)
     validate_auto_loadbalance(orch, nvme_service.nvme_metadata_pool, nvme_service.group)
 
-    LOG.info(
-        "CEPH-83608838 - Test load balancing for namespace addition and deletion \
-             with same LB group test validated successfully."
-    )
+    LOG.info("CEPH-83608838 - Test load balancing for namespace addition and deletion \
+             with same LB group test validated successfully.")
 
 
 def test_ceph_83609769(ceph_cluster, config, nvme_service):

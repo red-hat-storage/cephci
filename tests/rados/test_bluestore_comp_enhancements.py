@@ -282,8 +282,7 @@ def run(ceph_cluster, **kw):
                 bluestore_compression.min_alloc_size_test(**kwargs)
 
         if "scenario-6" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test blob sizes by writing IO to a compressed pool and validating
 that the blob sizes match the configured minimum blob size.
 Steps:
@@ -294,8 +293,7 @@ Steps:
 5) Write IO to the pool
 6) Validate blob sizes match the configured blob size
 7) Cleanup OSD config and delete pool
-            """
-            )
+            """)
 
             pool_suffix = "".join(
                 random.choices(string.ascii_letters + string.digits, k=6)
@@ -405,8 +403,7 @@ Steps:
                     raise Exception("Failed to delete pool %s" % pool_name)
 
         if "scenario-7" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test target_blob_size validation based on object allocation hints.
 If allocation hint is sequential read + append only OR sequential read + immutable,
 target_blob_size should be 65536, else 8192.
@@ -417,8 +414,7 @@ Steps:
 4) Write IO with allocation hint
 5) Validate target_blob_size matches expected blob size based on allocation hint
 6) Cleanup pool
-            """
-            )
+            """)
             compression_mode = COMPRESSION_MODES.FORCE
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
@@ -566,8 +562,7 @@ Steps:
             log.info("COMPELTED: Scenario 8: Disable bluestore_write_v2 and validate")
 
         if "scenario-9" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression validation when primary OSD is down.
 Steps:
 1) Create Pool
@@ -579,8 +574,7 @@ Steps:
 7) Check all the objects in primary OSD
 8) They should be compressed
 9) Clean up the pool
-            """
-            )
+            """)
             # initializations
             compression_mode = COMPRESSION_MODES.FORCE
             compression_obj = BluestoreDataCompression(
@@ -723,8 +717,7 @@ Steps:
             log.info("Scenario-9 completed successfully")
 
         if "scenario-10" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression validation when primary OSD host is down.
 Steps:
 1) Create pool
@@ -736,8 +729,7 @@ Steps:
 7) Restart primary OSD host
 8) Validate that the object written to pool is stored compressed in primary OSD
 9) Cleanup
-            """
-            )
+            """)
             # Initializations
             compression_mode = COMPRESSION_MODES.FORCE
             compression_obj = BluestoreDataCompression(
@@ -900,8 +892,7 @@ Steps:
             log.info("Scenario-10 completed successfully")
 
         if "scenario-11" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression validation when primary OSD host is restarted after IO.
 Steps:
 1) Create pool, store primary, secondary and tertiary OSD IDs
@@ -911,8 +902,7 @@ Steps:
 5) Restart Primary OSD host
 6) Post restart validate primary OSD is still compressed
 7) Delete pool
-            """
-            )
+            """)
             compression_mode = COMPRESSION_MODES.FORCE
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
@@ -1186,8 +1176,7 @@ Steps:
             log.info("Scenario-12 completed successfully")
 
         if "scenario-13" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression algorithms across different pools and workload types (cephfs, rbd, rgw).
 Steps:
 1) Iterate through test pools (cephfs, rbd, rgw)
@@ -1198,8 +1187,7 @@ Steps:
 6) Stop OSDs and fetch blob information from objectstore
 7) Validate compressed_length < compression_percentage * logical_length
 8) Start OSDs and cleanup
-            """
-            )
+            """)
             test_prerequisite_setup(**prereq_kwargs)
             compression_mode = COMPRESSION_MODES.FORCE
             objectstore_obj.nostop = True
@@ -1435,8 +1423,7 @@ Steps:
             log.info("******* Scenario 13 passed **********")
 
         if "scenario-14" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression modes (none, force, passive, aggressive) across different pools (cephfs, rbd, rgw).
 Steps:
 1) Iterate through test pools (cephfs, rbd, rgw)
@@ -1448,8 +1435,7 @@ Steps:
    - force/aggressive: compression should occur
    - passive/none: compression should not occur (unless hints are passed)
 7) Cleanup
-            """
-            )
+            """)
             compression_percentage = "70"
             algorithm = "snappy"
             log.info(
@@ -1625,8 +1611,7 @@ Steps:
             log.info("******* Test 14 passed **********")
 
         if "scenario-15" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression_required_ratio validation with different blob sizes across different pools (cephfs, rbd, rgw).
 Steps:
 1) Iterate through test pools (cephfs, rbd, rgw)
@@ -1639,8 +1624,7 @@ Steps:
    - If compressed_AU/original_AU < ratio, compression should occur
    - If compressed_AU/original_AU >= ratio, compression should not occur
 8) Start OSDs and cleanup
-            """
-            )
+            """)
             algorithm = "snappy"
             compression_percentage = "70"
             log.info(
@@ -1949,8 +1933,7 @@ Steps:
             log.info("******* Test 15 passed **********")
 
         if "scenario-16" in scenarios_to_run:
-            log.info(
-                """
+            log.info("""
 Test compression validation post recovery across cephfs, rgw and rbd.
 Steps:
 1) Iterate through test pools (cephfs, rbd, rgw)
@@ -1964,8 +1947,7 @@ Steps:
 9) Get newly added OSD from new acting set
 10) Validate that objects are compressed on newly added OSD
 11) Cleanup pool
-            """
-            )
+            """)
             test_prerequisite_setup(**prereq_kwargs)
             # initializations
             compression_percentage = 70

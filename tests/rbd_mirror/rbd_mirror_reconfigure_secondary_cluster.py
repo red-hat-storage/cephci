@@ -134,15 +134,11 @@ def run(**kw):
                     and image_info["mirroring"]["state"] == "enabled"
                     and image_info["mirroring"]["mode"] == "snapshot"
                 ):
-                    log.info(
-                        f"Mirroring configured successfully for image\
-                            {image} in the new secondary cluster"
-                    )
+                    log.info(f"Mirroring configured successfully for image\
+                            {image} in the new secondary cluster")
                 else:
-                    log.error(
-                        f"Mirroring configuration failed for image\
-                            {image} in the new secondary cluster"
-                    )
+                    log.error(f"Mirroring configuration failed for image\
+                            {image} in the new secondary cluster")
                     return 1
         return 0
 
