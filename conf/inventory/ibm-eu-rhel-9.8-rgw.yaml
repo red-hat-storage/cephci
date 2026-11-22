@@ -4,7 +4,7 @@ id: rhel
 instance:
   create:
     image-name: rhel-98-server-amd64-kvm
-    private_key: ceph-qe-sa-svc
+    private_key: ci-user-rsa-fips
 
   setup: |
     #cloud-config
@@ -13,30 +13,88 @@ instance:
     ssh_pwauth: true
     timezone: Etc/UTC
 
+    # Derive repos/<major>/<minor>/ from guest VERSION_ID so mix-os
+    # (e.g. rhel-100 on a 9.2 default inventory) hits the matching mirror.
+    # RHEL 9 uses dnf vars under /etc/dnf/vars (yum is dnf-compatible).
+    bootcmd:
+      - |
+        set -e
+        . /etc/os-release
+        major=${VERSION_ID%%.*}
+        minor=${VERSION_ID#*.}
+        minor=${minor%%.*}
+        mkdir -p /etc/dnf/vars
+        printf '%s\n' "$major" > /etc/dnf/vars/releasever_major
+        printf '%s\n' "$minor" > /etc/dnf/vars/releasever_minor
+
     # We are forcing an update of the packages
     package_update: true
 
-    # Create the base repositories
+    # Create the base repositories (dnf vars from bootcmd above)
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/BaseOS/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/BaseOS/
         gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/8/CRB/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/$releasever_major/$releasever_minor/CRB/
         gpgcheck: false
         enabled: true
 
-    # write the mirror registry details
+    # write_files: sysctl, sshd, containers policy, and nginx-vm-01 registry mirror
     write_files:
+      # Container registries: pulls for registry.redhat.io, registry.stage.redhat.io,
+      # registry-proxy.engineering.redhat.com, quay.io, cp.icr.io, cp.stg.icr.io and
+      # preprod.icr.io are redirected to the nginx-vm-01 mirror (registries.conf.d/nginx-vm-01.conf).
+      # Auth uses bootstrap --registry-url / credentials (see #6124 / #6156).
+      - content: |
+          net.core.default_qdisc=netem
+        path: /etc/sysctl.d/1000-qdisc.conf
+        owner: root:root
+        permissions: '0644'
+      - content: |
+          PermitRootLogin yes
+        path: /etc/ssh/sshd_config.d/50-cephci.conf
+        owner: root:root
+        permissions: '0644'
+      - content: |
+          {
+              "default": [
+                  {
+                      "type": "insecureAcceptAnything"
+                  }
+              ],
+              "transports": {
+                  "docker": {
+                      "registry.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "registry.stage.redhat.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ],
+                      "quay.io": [
+                          {
+                              "type": "insecureAcceptAnything"
+                          }
+                      ]
+                  }
+              }
+          }
+        path: /etc/containers/policy.json
+        owner: root:root
+        permissions: '0644'
       - content: |
           [[registry]]
           location = "nginx-vm-01.qe.ceph.lab:5000"
@@ -80,19 +138,11 @@ instance:
         owner: root:root
         permissions: '0644'
         defer: true
-      - content: |
-          net.core.default_qdisc=netem
-        path: /etc/sysctl.d/1000-qdisc.conf
-        owner: root:root
-        permissions: '0644'
-      - content: |
-          PermitRootLogin yes
-        path: /etc/ssh/sshd_config.d/50-cephci.conf
-        owner: root:root
-        permissions: '0644'
 
     groups:
       - cephuser
+      - psathyan
+      - rchilkun
 
     users:
       - name: cephuser
@@ -100,11 +150,25 @@ instance:
         sudo: ALL=(root) NOPASSWD:ALL
         shell: /bin/bash
         ssh-authorized-keys:
-          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPoKGCTzMmNvHFY4THKNpZYFLeEgB7Do8y2JAEy+ZvIZ ceph-qe-sa
-          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILuKaVnvq986B7zkgR0LyQbUo5F6JfrU9NnrRp1XbAYG ceph qe svc
-          - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBNkaK5/dSj7VjggT4oCnc5nbf9AGAk6zduy0AiCWN/l5p9Q0r0e7rn81Pr8AMVpJL26Jr6ElWyJf1jF8rbxqbfTe6VwyRwQoHZETSqk9oDiSrsbZkNih/akwDlLcXVfWDw== ceph-qe-sa-sm@ibm.com
-          - ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBKFa+YJXE5pBoRYrLsdTBjoR2ckoIv5Syn1H6I9Jt/iuVWupS3haQCAjuXe3f7f2s8EqauEvZYLro0NQEjWt4rg= psathyan mac laptop
-          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDiyEczrypnoTNJHmzxegLvNjeU6hIh57KKvp63C3NbWfkIHO9rQES4NFQLR1yKFs9ow2hdzmjiGWYOEKRiMYOwllYjwCzOJnT/EnVMp79HmtXUfuWiVo5JYkZe1KVbIiSYRhrzJMU2eSuyIp6rPCaj+tF862fUZGJS2AFW6z7RJAOPjvJt1evG+Fc3i/Uwmr+dBBgpb/oEEqwIJN/kGJS9kLCfxDrGuqsCoVQ+3DpIUlHy624OzHordpCMYQP6CbSXbaLLNGbBen6ge1yg7UPkQP4UGnTwOcGOC/HAVyJii0bfUCdjPRTgbV95+XM7bt4A3lDB3Sg9MU1w5E4i3L7gEb5xgeWbPTkPPQ3u4hUTfirur/U4vm93CYU0C9Nvv94igr97k+VBWM82nuwCS0I3pk4mJEnhqRIOcYyUXYoKSSPXFZyjpqNoZp4aLE0Pgl0mT3d1GhevsPaGd/elecCdQx6zEkqo65XgtbKXuN+F5jpWcLreatKDhJ/+M85uH/U= ceph-qe-sa-sm@ibm.com
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDeI9B2StVok97tZ3k+kYQrYFxCqPeS1N367SP1uIQDYdwgVW+HwQcwriCG7DtfB5rY1Sa2L34B5A6XPWU2SME8w9G4C7/mtCW6N1caT7G0BQUHzOFpWg/l9ZSse0iz17kzX91BcCaL/HdmmMySxM6kBmYHOHDhJFhfN9KU+5paPNTYCT9J4L57oycYkxO0X4WoEhgztc/wkUw58K+7xWSBVVLFJxk4jJQHRnk1UyoLykSf3IF6/o9cbGUhhxvTtRzBaRnEHLg2xinqGXeH2wOelBTa6dDXdQwEkI2R7aM/9v5kmUboEwaySCXBEQ9ktKhdiGichbWg1rd+oNSOURF7OO0GstjgumFvjmasLBbM7pOTcaJqIytgD2t25bT+DIsv8wBZJHTEGGk5gwDKNWeDCQgui3PyCTInUV+SHpzgvVqGgfnTzV2k+rObQL2+fodRT9p8kaLF4RLxpGuwrLMywdk4Kro/EO/26irONvuPFv4GvJMw5vybnpQ08EDKsrk5avXGpJ7fAgTUg9vEKkP/rM3K5z8epkBKtxe/mXpNgWDy5A/9KCoQ+TMC9JsoJQFtnn7CkfTUZ166gFtdg2aS0D7MAX0Af7Sr6AEhNLTgpAFfibFyuIjui5NhA4LK5NZf6mb4wd1CmmpeBkr+FInth51Rz7XyG7kTLdQc3DTqAQ== ibm-storage-qe-ci-user-fips RSA key
+
+      - name: psathyan
+        primary-group: psathyan
+        sudo: ALL=(root) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ecdsa-sha2-nistp384 AAAAE2VjZHNhLXNoYTItbmlzdHAzODQAAAAIbmlzdHAzODQAAABhBPDlMqoFJqzj9yP5o3w4O/rm4fHWSDKAsDr4YxHHFN35hEQ5vb4xALP0KoZg3UthbqnbXWvtSD3VoG3EFvPLjXNoO8xnM6VZrrDZYw8MT9Em2i+mCam+tpDBWbOojGvEfw== psathyan-fips
+
+      - name: rchilkun
+        primary-group: rchilkun
+        sudo: ALL=(root) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAHzT2JgaOA+RQsExHsk3E4IZjD4ZPNJghZbt4TucWcVd+jVotfWDFR+AHQwShYaCy4RCbXiPgWvZUjMmRWwmZqOwwHRQ520hhwdc6+R/h7i7axVBO++kQDvvH450B+Vr9UHwVB9LICPBSXHXIUUdFB5eSUi8C5LSsxd+JnRIyhM9vOCcg== rakeshnarayanchilkunda@Rakeshs-MacBook-Pro-3.local
+
+      - name: root
+        ssh-authorized-keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDeI9B2StVok97tZ3k+kYQrYFxCqPeS1N367SP1uIQDYdwgVW+HwQcwriCG7DtfB5rY1Sa2L34B5A6XPWU2SME8w9G4C7/mtCW6N1caT7G0BQUHzOFpWg/l9ZSse0iz17kzX91BcCaL/HdmmMySxM6kBmYHOHDhJFhfN9KU+5paPNTYCT9J4L57oycYkxO0X4WoEhgztc/wkUw58K+7xWSBVVLFJxk4jJQHRnk1UyoLykSf3IF6/o9cbGUhhxvTtRzBaRnEHLg2xinqGXeH2wOelBTa6dDXdQwEkI2R7aM/9v5kmUboEwaySCXBEQ9ktKhdiGichbWg1rd+oNSOURF7OO0GstjgumFvjmasLBbM7pOTcaJqIytgD2t25bT+DIsv8wBZJHTEGGk5gwDKNWeDCQgui3PyCTInUV+SHpzgvVqGgfnTzV2k+rObQL2+fodRT9p8kaLF4RLxpGuwrLMywdk4Kro/EO/26irONvuPFv4GvJMw5vybnpQ08EDKsrk5avXGpJ7fAgTUg9vEKkP/rM3K5z8epkBKtxe/mXpNgWDy5A/9KCoQ+TMC9JsoJQFtnn7CkfTUZ166gFtdg2aS0D7MAX0Af7Sr6AEhNLTgpAFfibFyuIjui5NhA4LK5NZf6mb4wd1CmmpeBkr+FInth51Rz7XyG7kTLdQc3DTqAQ== ibm-storage-qe-ci-user-fips RSA key
 
     chpasswd:
       expire: false
@@ -125,11 +189,15 @@ instance:
       - wget
 
     package_upgrade: true
+    # Reboot when a kernel (or other package) marks the system reboot-required
+    package_reboot_if_required: true
 
     runcmd:
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf
       - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
       - mkdir -p /root/rgw_rpms
-      - curl --fail -L -k -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm
-      - curl --fail -L -k -o /root/rgw_rpms/oathtool.rpm https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
+      - curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 600 -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm
+      - curl --fail --silent --show-error --location --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 600 -o /root/rgw_rpms/oathtool.rpm https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
       - touch /ceph-qa-ready
+
+    final_message: "Ready for ceph qa testing"
