@@ -27,10 +27,8 @@ def test_rbd_python_module(rbd_obj, **kw):
                 out, err = client.exec_command(cmd=cmd)
                 if err or "don't match" in out:
                     log.error(out)
-                    log.error(
-                        f"Executing rbd python to create image, read and\
-                               write data failed for image {pool}/{image}"
-                    )
+                    log.error(f"Executing rbd python to create image, read and\
+                               write data failed for image {pool}/{image}")
                     return 1
                 log.info(out)
     return 0

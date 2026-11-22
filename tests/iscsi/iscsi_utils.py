@@ -175,9 +175,7 @@ gateway_keyring = ceph.client.admin.keyring
 api_secure = false
 api_ssl_verify = false
 trusted_ip_list = {0}
-        """.format(
-            trusted_ips
-        )
+        """.format(trusted_ips)
         for gw in gw_list:
             conf_file = gw.remote_file(
                 sudo=True, file_name="/etc/ceph/iscsi-gateway.cfg", file_mode="w"
@@ -398,9 +396,7 @@ discovery.sendtargets.iscsi.MaxRecvDataSegmentLength = 32768
 node.conn[0].iscsi.HeaderDigest = None
 node.session.nr_sessions = 1
 node.session.scan = auto
-    """.format(
-            username=iscsi_name
-        )
+    """.format(username=iscsi_name)
         multipath_file = iscsi_initiators.remote_file(
             sudo=True, file_name="/etc/iscsi/iscsid.conf", file_mode="w"
         )

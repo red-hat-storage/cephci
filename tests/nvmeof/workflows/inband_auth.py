@@ -22,10 +22,8 @@ def create_dhchap_key(config, ceph_cluster, update_host_key=False, initiators=No
             for existing_init in initiators:
                 if existing_init.node.id == node_id and existing_init.nqn == subnqn:
                     initiator = existing_init
-                    LOG.info(
-                        f"create_dhchap_key: Reusing existing initiator \
-                            from current group for node={node_id}, nqn={subnqn}"
-                    )
+                    LOG.info(f"create_dhchap_key: Reusing existing initiator \
+                            from current group for node={node_id}, nqn={subnqn}")
                     break
 
         # If not found in current group's initiators, get or create a new one

@@ -150,10 +150,8 @@ def run(ceph_cluster, **kw):
         - FIO should be installed on the client.
     """
     log.info("Running PWL....")
-    log.info(
-        "Running test - CEPH-83574711 Test performance with/without \
-            cache enabled. persistent write cache"
-    )
+    log.info("Running test - CEPH-83574711 Test performance with/without \
+            cache enabled. persistent write cache")
     config = kw.get("config")
     for level in config.get("levels"):
         cache_client = get_node_by_id(ceph_cluster, config["client"])

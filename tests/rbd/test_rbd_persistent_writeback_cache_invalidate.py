@@ -83,10 +83,8 @@ def validate_cache_invalidate(cache, cfg, client):
         log.info("Cache file is removed after cache invalidate")
 
     if cache_present:
-        raise Exception(
-            f"Cache file is present in cache status even after \
-                        cache invalidate for {cfg['image_spec']}"
-        )
+        raise Exception(f"Cache file is present in cache status even after \
+                        cache invalidate for {cfg['image_spec']}")
 
     out, err = client.exec_command(cmd=f"ls -l {cache.pwl_path}")
     if cache_file in out + err:
@@ -112,10 +110,8 @@ def run(ceph_cluster, **kw):
         - FIO should be installed on the client.
 
     """
-    log.info(
-        "Running test - CEPH-83574709 - Verify persistent write back cache \
-            invalidate at image/pool/client(node) level in SSD mode	"
-    )
+    log.info("Running test - CEPH-83574709 - Verify persistent write back cache \
+            invalidate at image/pool/client(node) level in SSD mode	")
     config = kw.get("config")
     cache_client = get_node_by_id(ceph_cluster, config["client"])
     kw["ceph_client"] = cache_client

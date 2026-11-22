@@ -93,10 +93,8 @@ def run(**kw):
     """
 
     try:
-        log.info(
-            "Starting test CEPH-83575566 - Performance counter for rbd mirror\
-             network connection health metrics."
-        )
+        log.info("Starting test CEPH-83575566 - Performance counter for rbd mirror\
+             network connection health metrics.")
         config = kw.get("config")
 
         mirror1 = rbdmirror.RbdMirror(

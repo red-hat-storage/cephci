@@ -365,8 +365,6 @@ def run(ceph_cluster, **kw):
             log.error("Test failed due to crash at the end of test")
             return 1
 
-    log.info(
-        "Successfully verified connection scores at different scenarios\
-        later reverted cluster to original state"
-    )
+    log.info("Successfully verified connection scores at different scenarios\
+        later reverted cluster to original state")
     return 0

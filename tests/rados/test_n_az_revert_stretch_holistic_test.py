@@ -71,8 +71,7 @@ def run(ceph_cluster, **kw):
             "Test Case: 3 AZ stretch cluster -> 2 site stretch cluster -> non-stretch cluster"
         )
         log.info("=" * 80)
-        log.info(
-            """Step 1): Verify 3 AZ stretch cluster setup
+        log.info("""Step 1): Verify 3 AZ stretch cluster setup
 Step 2): Simulate datacenter DC2 failure
 Step 3): Revert from 3 AZ stretched pool cluster
 Step 4): Remove all offline hosts from DC2 bucket
@@ -83,8 +82,7 @@ Step 8): Add the first restarted host back to the cluster
 Step 9): Enter 2-site stretch mode with DC1, DC3 and tiebreaker
 Step 10): Simulate datacenter DC3 failure
 Step 11): Revert 2-site stretch mode back to non-stretch cluster
-Step 12): Remove all offline hosts from DC3 bucket"""
-        )
+Step 12): Remove all offline hosts from DC3 bucket""")
         log.info("=" * 80)
 
         # Step 1: Verify we are in 3 AZ stretch cluster with DC1, DC2, DC3

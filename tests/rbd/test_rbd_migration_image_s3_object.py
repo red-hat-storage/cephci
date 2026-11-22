@@ -34,10 +34,8 @@ def cleanup(rbd: Rbd, pool_config):
 
 
 def run(**kw):
-    log.info(
-        "Executing CEPH-83574092 - \
-        verify snapshot downloaded creates a local RBD image"
-    )
+    log.info("Executing CEPH-83574092 - \
+        verify snapshot downloaded creates a local RBD image")
 
     initial_rbd_config(**kw)
     rbd_obj = Rbd(**kw)

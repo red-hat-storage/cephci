@@ -160,10 +160,8 @@ def run(**kw):
                 "Testing image operations from primary and secondary cluster failed"
             )
     except Exception as e:
-        log.error(
-            f"Testing image operations from primary and secondary cluster\
-             failed with error {str(e)}"
-        )
+        log.error(f"Testing image operations from primary and secondary cluster\
+             failed with error {str(e)}")
         ret_val = 1
     finally:
         cleanup(pool_types=pool_types, multi_cluster_obj=mirror_obj, **kw)
