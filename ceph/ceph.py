@@ -12,7 +12,6 @@ import socket
 import subprocess
 from time import sleep, time
 
-import cryptography
 import paramiko
 import requests
 import yaml
@@ -1319,14 +1318,6 @@ class SSHConnectionManager(object):
         self.look_for_keys = look_for_keys
         self._private_key_file_path = private_key_file_path or ""
         self._private_key_password = private_key_password
-        # Use pkey only when no explicit path (key_filename used for path+cert)
-        self.pkey = (
-            self._get_ssh_key(private_key_file_path)
-            if look_for_keys
-            and private_key_file_path
-            and not self._private_key_file_path
-            else None
-        )
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
@@ -1343,64 +1334,6 @@ class SSHConnectionManager(object):
             self.__transport = self.__client.get_transport()
 
         return self.__client
-
-    def _get_ssh_key(self, private_key_file_path):
-        """Get SSH key based on file type"""
-        passphrase = self._private_key_password
-        if isinstance(passphrase, str) and passphrase:
-            passphrase = passphrase.encode("utf-8")
-        elif not passphrase:
-            passphrase = None
-
-        private_key = None
-        with open(private_key_file_path, "rb") as key_file:
-            key_data = key_file.read()
-
-        try:
-            # Try loading as OpenSSH first
-            private_key = (
-                cryptography.hazmat.primitives.serialization.load_ssh_private_key(
-                    key_data,
-                    password=passphrase,
-                    backend=cryptography.hazmat.backends.default_backend(),
-                )
-            )
-        except ValueError:
-            # Fall back to PEM format
-            private_key = (
-                cryptography.hazmat.primitives.serialization.load_pem_private_key(
-                    key_data,
-                    password=passphrase,
-                    backend=cryptography.hazmat.backends.default_backend(),
-                )
-            )
-
-        if isinstance(
-            private_key,
-            cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey,
-        ):
-            return paramiko.RSAKey.from_private_key_file(
-                private_key_file_path, password=self._private_key_password
-            )
-
-        elif isinstance(
-            private_key,
-            cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey,
-        ):
-            return paramiko.Ed25519Key.from_private_key_file(
-                private_key_file_path, password=self._private_key_password
-            )
-
-        elif isinstance(
-            private_key,
-            cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey,
-        ):
-            return paramiko.ECDSAKey.from_private_key_file(
-                private_key_file_path, password=self._private_key_password
-            )
-
-        logger.error("Unsupported ssh key {}".format(private_key_file_path))
-        return False
 
     def close(self):
         """Close the SSH connection."""
@@ -1437,8 +1370,6 @@ class SSHConnectionManager(object):
                     # key_filename + passphrase (agent removed per user: agent did not work)
                     connect_kw["key_filename"] = [self._private_key_file_path]
                     connect_kw["passphrase"] = self._private_key_password
-                else:
-                    connect_kw["pkey"] = self.pkey
                 self.__client.connect(**connect_kw)
                 logger.info("SSH connected to %s as %s", self.ip_address, self.username)
                 self.__outage_start_time = None
@@ -1507,9 +1438,6 @@ class SSHConnectionManager(object):
             del pickle_dict["_SSHConnectionManager__transport"]
         if pickle_dict.get("_SSHConnectionManager__client"):
             del pickle_dict["_SSHConnectionManager__client"]
-        # pkey (paramiko/cryptography key) is not picklable; recreated in __setstate__
-        if pickle_dict.get("pkey") is not None:
-            del pickle_dict["pkey"]
         return pickle_dict
 
     def __setstate__(self, state):
@@ -1517,10 +1445,6 @@ class SSHConnectionManager(object):
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
-        key_path = getattr(self, "_private_key_file_path", "") or ""
-        self.pkey = (
-            self._get_ssh_key(key_path) if self.look_for_keys and key_path else None
-        )
 
 
 class CephNode(object):
