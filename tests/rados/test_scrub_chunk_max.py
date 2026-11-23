@@ -12,6 +12,7 @@ from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 
@@ -89,7 +90,7 @@ def run(ceph_cluster, **kw):
 
         log.info(f"last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
         log.info(f"last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}")
-        if rhbuild and rhbuild.split(".")[0] > "5":
+        if get_rhbuild_major_version(rhbuild) > 5:
             org_objects_scrubbed = int(pool_pg_dump["objects_scrubbed"])
             log.info(f"objects_scrubbed: {org_objects_scrubbed}")
 
@@ -103,7 +104,7 @@ def run(ceph_cluster, **kw):
         start_time = datetime.datetime.now()
         while datetime.datetime.now() <= start_time + datetime.timedelta(seconds=600):
             pool_pg_dump = rados_obj.get_ceph_pg_dump(pg_id=pool_pgid)
-            if rhbuild and rhbuild.split(".")[0] > "5":
+            if get_rhbuild_major_version(rhbuild) > 5:
                 objects_scrubbed = int(pool_pg_dump["objects_scrubbed"])
                 log.info(f"Objects scrubbed: {objects_scrubbed} | Target: {objs}")
                 if (objects_scrubbed - org_objects_scrubbed) >= objs:
@@ -142,7 +143,7 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Final last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}"
         )
-        if rhbuild and rhbuild.split(".")[0] > "5":
+        if get_rhbuild_major_version(rhbuild) > 5:
             log.info(f"Final objects_scrubbed: {pool_pg_dump['objects_scrubbed']}")
 
         scrub_logs = rados_obj.get_journalctl_log(

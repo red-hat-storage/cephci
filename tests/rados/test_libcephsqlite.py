@@ -11,6 +11,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 
@@ -197,7 +198,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-        if rhbuild.split(".")[0] > "5":
+        if get_rhbuild_major_version(rhbuild) > 5:
             mon_obj.remove_config(section="mgr", name="debug_mgr")
             mon_obj.remove_config(section="mgr", name="debug_cephsqlite")
             if "cephsqlite_addr" in locals() or "cephsqlite_addr" in globals():

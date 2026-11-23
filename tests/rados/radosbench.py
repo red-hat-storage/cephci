@@ -1,6 +1,7 @@
 import random
 
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 
@@ -51,7 +52,7 @@ def run(**kw):
     )
 
     client.exec_command(cmd=pool_create)
-    if rhbuild and rhbuild.split(".")[0] >= "3":
+    if get_rhbuild_major_version(rhbuild) >= 3:
         client.exec_command(cmd=pool_enable_app)
     block = str(config.get("size", 4 << 20))
     time = str(config.get("time", 360))
