@@ -1,0 +1,401 @@
+# ==================================================================================
+# IBM Cloud (ibmc) cluster layout for cephadm agent scale regression
+#
+# Shape:
+#   node1            — bootstrap (_admin/installer/mon/mgr), no OSD volumes
+#   node2..node41    — TC1: 40 OSD hosts × 2 volumes = 80 OSDs
+#   node42..node51   — TC3: 10 OSD hosts × 2 volumes = 20 OSDs
+#   node52           — client (RGW/NFS/MDS workloads)
+#
+# Totals: 51 cluster nodes + 1 client = 52 VMs, ~100 data volumes (15 GiB)
+# Protocol pressure (suite): 16 RGW, 8 NFS clusters, 8 MDS
+# OSD host count stays near 50. See tests/cephadm/cephadm_agent/CONTEXT.md
+#
+# Guest image is taken from --inventory so the run matches the fleet
+# (conf/inventory/ibm-rhel-9.8.yaml or ibm-rhel-10.2.yaml).
+#
+# Suite:
+#   suites/umbrella/cephadm/tier3-cephadm-agent-scale-regression.yaml
+#
+# Example:
+#   python run.py --cloud ibmc \
+#     --global-conf conf/umbrella/cephadm/1admin-51node-1client-agent-scale-ibmc.yaml \
+#     --inventory conf/inventory/ibm-rhel-9.8.yaml \
+#     --suite suites/umbrella/cephadm/tier3-cephadm-agent-scale-regression.yaml \
+#     --osp-cred <ibmc-cred.yaml> --custom-config use_agent=true
+# ==================================================================================
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node3:
+        role:
+          - osd
+          - mon
+          - mgr
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - mon
+          - mgr
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - mon
+          - mgr
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node6:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node7:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node8:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node9:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node10:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node11:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node12:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node13:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node14:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node15:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node16:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node17:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node18:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node19:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node20:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node21:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node22:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node23:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node24:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node25:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node26:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node27:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node28:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node29:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node30:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node31:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node32:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node33:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node34:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node35:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node36:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node37:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node38:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node39:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node40:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node41:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node42:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node43:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node44:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node45:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node46:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node47:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node48:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node49:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node50:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node51:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node52:
+        role:
+          - client
