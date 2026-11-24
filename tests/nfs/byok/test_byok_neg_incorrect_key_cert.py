@@ -26,6 +26,23 @@ from utility.utils import get_cephci_config
 
 log = Log(__name__)
 
+# Markers that indicate NFS mount denial (expected for incorrect key/cert).
+# Do not use ``nfs_mount in str(ex)`` — MountFailedError dumps the full mount(8)
+# table, and leftover mounts from earlier suite TCs can share a path prefix
+# (e.g. /mnt/nfs_byok vs /mnt/nfs_byok_cmount_0_fuse), causing a false FAIL.
+_MOUNT_FAIL_MARKERS = (
+    "Nfs mount failed",
+    "No such file or directory",
+    "mount.nfs:",
+    "MountFailedError",
+)
+
+
+def _is_expected_nfs_mount_failure(ex):
+    """Return True when exception is an expected NFS mount denial."""
+    msg = str(ex)
+    return any(marker in msg for marker in _MOUNT_FAIL_MARKERS)
+
 
 def run(ceph_cluster, **kw):
     """
@@ -178,17 +195,22 @@ def byok_test_incorrect_enctag():
             nfs_server=nfs_node.hostname,
         )
     except Exception as ex:
-        log.info(ex)
-        if ("Nfs mount failed" not in str(ex)) or (nfs_mount in str(ex)):
+        log.info("Mount failed as expected for incorrect enctag: %s", ex)
+        if not _is_expected_nfs_mount_failure(ex):
             log.error(
-                "Mount suceeds but is expected to fail due to incorrect enctag in export"
+                "Unexpected exception (expected NFS mount denial for incorrect enctag): %s",
+                ex,
             )
             return 1
-        else:
-            expect_list = ["keyset callback: runt/missing key for kmip_key_id"]
-            if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
-                log.error("NFS Debug log doesn't contain %s", expect_list)
-                return 1
+        expect_list = ["keyset callback: runt/missing key for kmip_key_id"]
+        if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
+            log.error("NFS Debug log doesn't contain %s", expect_list)
+            return 1
+    else:
+        log.error(
+            "Mount succeeded but is expected to fail due to incorrect enctag in export"
+        )
+        return 1
     log.info("Cleanup GKLM Client")
     clean_up_gklm(
         gklm_rest_client=byok_setup_params["gklm_rest_client"],
@@ -246,16 +268,22 @@ def byok_test_incorrect_kmip_cert():
             nfs_server=nfs_node.hostname,
         )
     except Exception as ex:
-        if ("Nfs mount failed" not in str(ex)) or (nfs_mount in str(ex)):
+        log.info("Mount failed as expected for incorrect KMIP cert: %s", ex)
+        if not _is_expected_nfs_mount_failure(ex):
             log.error(
-                "Mount suceeds but is expected to fail due to incorrect enctag in export"
+                "Unexpected exception (expected NFS mount denial for incorrect KMIP cert): %s",
+                ex,
             )
             return 1
-        else:
-            expect_list = ["kmip can't connect to"]
-            if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
-                log.error("NFS Debug log doesn't contain %s", expect_list)
-                return 1
+        expect_list = ["kmip can't connect to"]
+        if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
+            log.error("NFS Debug log doesn't contain %s", expect_list)
+            return 1
+    else:
+        log.error(
+            "Mount succeeded but is expected to fail due to incorrect KMIP cert"
+        )
+        return 1
     log.info("Cleanup mountdir,export and nfs cluster")
     cleanup_custom_nfs_cluster_multi_export_client(
         clients, nfs_mount, nfs_name, nfs_export, 1
@@ -285,16 +313,22 @@ def byok_test_incorrect_kmip_cert():
             nfs_server=nfs_node.hostname,
         )
     except Exception as ex:
-        if ("Nfs mount failed" not in str(ex)) or (nfs_mount in str(ex)):
+        log.info("Mount failed as expected for incorrect KMIP CA cert: %s", ex)
+        if not _is_expected_nfs_mount_failure(ex):
             log.error(
-                "Mount suceeds but is expected to fail due to incorrect enctag in export"
+                "Unexpected exception (expected NFS mount denial for incorrect KMIP CA cert): %s",
+                ex,
             )
             return 1
-        else:
-            expect_list = ["kmip can't connect to"]
-            if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
-                log.error("NFS Debug log doesn't contain %s", expect_list)
-                return 1
+        expect_list = ["kmip can't connect to"]
+        if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
+            log.error("NFS Debug log doesn't contain %s", expect_list)
+            return 1
+    else:
+        log.error(
+            "Mount succeeded but is expected to fail due to incorrect KMIP CA cert"
+        )
+        return 1
     incorrect_cert_cleanup = 1
     log.info("Cleanup mountdir,export and nfs cluster")
     cleanup_custom_nfs_cluster_multi_export_client(

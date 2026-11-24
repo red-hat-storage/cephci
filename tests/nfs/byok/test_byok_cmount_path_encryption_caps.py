@@ -14,6 +14,7 @@ import traceback
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
+from cli.utilities.filesys import Unmount
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
     collect_gklm_logs_on_failure,
@@ -208,7 +209,21 @@ def run(ceph_cluster, **kw):
                 collect_gklm_logs_on_failure(gklm_params)
             except Exception as cleanup_exc:
                 log.warning("GKLM failure log collect: %s", cleanup_exc)
+        # Unmount FUSE paths left by perform_io_operations_and_validate_fuse so
+        # later suite TCs do not see leftover /mnt/nfs_*_fuse in mount(8) dumps.
         if client_export_mount_dict is not None:
+            for client in clients:
+                for mount in [
+                    m + "_fuse"
+                    for m in client_export_mount_dict.get(client, {}).get("mount", [])
+                ]:
+                    try:
+                        client.exec_command(
+                            sudo=True, cmd="rm -rf {}/*".format(mount), check_ec=False
+                        )
+                        Unmount(client).unmount(mount)
+                    except Exception as cleanup_exc:
+                        log.warning("FUSE cleanup %s: %s", mount, cleanup_exc)
             try:
                 cleanup_custom_nfs_cluster_multi_export_client(
                     clients, nfs_mount, nfs_name, nfs_export, export_num
