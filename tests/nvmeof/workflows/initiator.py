@@ -1,4 +1,5 @@
 import json
+import threading
 from time import sleep
 
 from ceph.ceph import CommandFailed
@@ -6,6 +7,13 @@ from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.exceptions import NoDevicesFound
+from tests.nvmeof.workflows.log_collect import (
+    arm_initiator_connect_window,
+    collect_initiator_fio_dmesg,
+    collect_open_initiator_window,
+    get_node_timestamp,
+    safe_collect_open_initiator_windows,
+)
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import config_dict_to_string, log_json_dump, run_fio
@@ -23,6 +31,9 @@ class NVMeInitiator(Initiator):
         # TODO: Need to cosume initiator nqn rather than getting from outside
         self.nqn = nqn
         self.auth_mode = ""
+        self._fio_dmesg_since = None
+        self._fio_dmesg_collected = False
+        self._fio_dmesg_lock = threading.Lock()
 
     def fetch_lsblk_nvme_devices_dict(self):
         """Validate all devices at client side.
@@ -83,6 +94,9 @@ class NVMeInitiator(Initiator):
     def connect_targets(self, gateway, config):
         if not config:
             config = self.config
+
+        # Arm connect→disconnect dmesg/journalctl window (per connect cycle).
+        arm_initiator_connect_window(self.node)
 
         # Discover the subsystem endpoints
         cmd_args = {
@@ -240,11 +254,58 @@ class NVMeInitiator(Initiator):
         LOG.debug(targets)
         return targets
 
+    def _collect_fio_window_dmesg(self):
+        """Dump initiator dmesg/journalctl -k for the active FIO window.
+
+        Soft check: Cluster Logs always. Index Comments are owned by the
+        connect→disconnect window when armed (FIO stays artifact-only then);
+        otherwise FIO may publish Comments. HA reconnect noise suppressed from
+        Comments. Thread-safe and idempotent so HA ``stop_fio`` + ``start_fio``
+        finally cannot double-collect the same window.
+        """
+        with self._fio_dmesg_lock:
+            if self._fio_dmesg_collected or not self._fio_dmesg_since:
+                return
+            since = self._fio_dmesg_since
+            self._fio_dmesg_collected = True
+            self._fio_dmesg_since = None
+        try:
+            collect_initiator_fio_dmesg(self.node, since=since)
+        except Exception as exc:  # noqa: BLE001
+            # Collector hard-failure only (content ERRORS are logged inside helper).
+            LOG.error(
+                "FIO-window dmesg collection failed on %s: %s",
+                self.node.hostname,
+                exc,
+            )
+
+    def _collect_connect_window_dmesg(self):
+        """Collect connect→disconnect dmesg/journalctl just before disconnect."""
+        try:
+            collect_open_initiator_window(self.node)
+        except Exception as exc:  # noqa: BLE001
+            LOG.error(
+                "Connect-window dmesg collection failed on %s: %s",
+                self.node.hostname,
+                exc,
+            )
+
+    def disconnect(self, **kwargs):
+        """Disconnect subsystem; collect connect-window logs first."""
+        self._collect_connect_window_dmesg()
+        return super().disconnect(**kwargs)
+
+    def disconnect_all(self):
+        """Disconnect all controllers; collect connect-window logs first."""
+        self._collect_connect_window_dmesg()
+        return super().disconnect_all()
+
     def stop_fio(self):
         """Stop any running FIO processes on the client node.
 
         Sends SIGTERM first to allow fio to flush, then SIGKILL after 5 seconds
-        if any processes remain.
+        if any processes remain. Collects FIO-window dmesg once after stop when
+        this initiator started FIO via start_fio().
         """
         LOG.info(f"Stopping FIO on node {self.node.hostname}")
         try:
@@ -258,6 +319,7 @@ class NVMeInitiator(Initiator):
         except Exception:
             pass
         LOG.info(f"FIO stopped on node {self.node.hostname}")
+        self._collect_fio_window_dmesg()
 
     def start_fio(
         self, io_size="100%", runtime=None, paths=None, serial=False, **kwargs
@@ -274,6 +336,10 @@ class NVMeInitiator(Initiator):
             stop_io (bool): When True, stop any running FIO processes on this
                             node and return immediately without starting new IO.
             **kwargs: Additional arguments for FIO
+
+        After FIO finishes (or is stopped), initiator kernel/dmesg for the FIO
+        time window is archived under Cluster Logs; ERROR/Comments only for
+        real err+ content (HA reconnect noise suppressed).
         """
         # Handle stop_io before any IO is set up.
         if kwargs.get("stop_io"):
@@ -351,55 +417,61 @@ class NVMeInitiator(Initiator):
                 )
             return {**io_args, **_io_args}
 
-        if serial:
-            # Run fio on each path one at a time — no threads, no parallel context.
-            LOG.info("Running FIO serially on %d path(s)", len(paths))
-            for path in paths:
-                LOG.info("FIO on %s", path)
-                results.append(run_fio(**_build_io_args(path)))
-        else:
-            # Use max_workers to ensure all FIO processes can start simultaneously
-            with parallel(max_workers=len(paths) + 4) as p:
-                # Configure SSH MaxSessions to accommodate max_workers
-                max_workers = len(paths) + 4
-                required_sessions = max_workers + 10  # Add buffer for safety
-                try:
-                    # Backup original sshd_config
-                    self.node.exec_command(
-                        cmd="cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup",
-                        sudo=True,
-                    )
-
-                    # Update MaxSessions in sshd_config
-                    self.node.exec_command(
-                        cmd=f"sed -i 's/^#*MaxSessions.*/MaxSessions {required_sessions}/' /etc/ssh/sshd_config",
-                        sudo=True,
-                    )
-
-                    # Add MaxSessions if it doesn't exist
-                    self.node.exec_command(
-                        cmd=(
-                            f"grep -q '^MaxSessions' /etc/ssh/sshd_config || "
-                            f"echo 'MaxSessions {required_sessions}' >> /etc/ssh/sshd_config"
-                        ),
-                        sudo=True,
-                    )
-
-                    # Restart sshd service to apply changes
-                    self.node.exec_command(cmd="systemctl restart sshd", sudo=True)
-
-                    LOG.info(
-                        f"Configured SSH MaxSessions to {required_sessions} for max_workers={max_workers}"
-                    )
-                    sleep(3)  # To ensure sshd restarted
-                except Exception as e:
-                    LOG.warning(f"Failed to configure SSH MaxSessions: {e}")
-
+        with self._fio_dmesg_lock:
+            self._fio_dmesg_since = get_node_timestamp(self.node)
+            self._fio_dmesg_collected = False
+        try:
+            if serial:
+                # Run fio on each path one at a time — no threads, no parallel context.
+                LOG.info("Running FIO serially on %d path(s)", len(paths))
                 for path in paths:
-                    p.spawn(run_fio, **_build_io_args(path))
-                for op in p:
-                    results.append(op)
-        return results
+                    LOG.info("FIO on %s", path)
+                    results.append(run_fio(**_build_io_args(path)))
+            else:
+                # Use max_workers to ensure all FIO processes can start simultaneously
+                with parallel(max_workers=len(paths) + 4) as p:
+                    # Configure SSH MaxSessions to accommodate max_workers
+                    max_workers = len(paths) + 4
+                    required_sessions = max_workers + 10  # Add buffer for safety
+                    try:
+                        # Backup original sshd_config
+                        self.node.exec_command(
+                            cmd="cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup",
+                            sudo=True,
+                        )
+
+                        # Update MaxSessions in sshd_config
+                        self.node.exec_command(
+                            cmd=f"sed -i 's/^#*MaxSessions.*/MaxSessions {required_sessions}/' /etc/ssh/sshd_config",
+                            sudo=True,
+                        )
+
+                        # Add MaxSessions if it doesn't exist
+                        self.node.exec_command(
+                            cmd=(
+                                f"grep -q '^MaxSessions' /etc/ssh/sshd_config || "
+                                f"echo 'MaxSessions {required_sessions}' >> /etc/ssh/sshd_config"
+                            ),
+                            sudo=True,
+                        )
+
+                        # Restart sshd service to apply changes
+                        self.node.exec_command(cmd="systemctl restart sshd", sudo=True)
+
+                        LOG.info(
+                            f"Configured SSH MaxSessions to {required_sessions} for max_workers={max_workers}"
+                        )
+                        sleep(3)  # To ensure sshd restarted
+                    except Exception as e:
+                        LOG.warning(f"Failed to configure SSH MaxSessions: {e}")
+
+                    for path in paths:
+                        p.spawn(run_fio, **_build_io_args(path))
+                    for op in p:
+                        results.append(op)
+            return results
+        finally:
+            self._collect_fio_window_dmesg()
 
     def register(self, base, register_args, nrkey, client_node):
         """
@@ -648,11 +720,23 @@ def purge_cached_initiators(node_ids, cluster=None, disconnect=True):
     if disconnect:
         if cluster is None:
             raise ValueError("cluster is required when disconnect=True")
+        nodes = []
         for nid in node_ids:
             try:
-                Initiator(get_node_by_id(cluster, nid)).disconnect_all()
+                nodes.append(get_node_by_id(cluster, nid))
             except Exception as err:
-                LOG.warning("disconnect_all failed for node=%s: %s", nid, err)
+                LOG.warning("resolve node failed for node=%s: %s", nid, err)
+        if nodes:
+            safe_collect_open_initiator_windows(nodes=nodes)
+        for node in nodes:
+            try:
+                Initiator(node).disconnect_all()
+            except Exception as err:
+                LOG.warning(
+                    "disconnect_all failed for node=%s: %s",
+                    getattr(node, "id", node),
+                    err,
+                )
     for key in [k for k in Initiators if k[0] in node_ids]:
         LOG.info("Purging cached initiator entry %s", key)
         del Initiators[key]
