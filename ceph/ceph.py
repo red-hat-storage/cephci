@@ -1488,6 +1488,9 @@ class CephNode(object):
             os.path.expanduser(str(_boot_key).strip()) if _boot_key else ""
         )
         self.bootstrap_key_password = kw.get("bootstrap_key_password") or ""
+        # Public key content authorized for this user; used to guarantee root
+        # access (see _ensure_root_authorized_key).
+        self.ssh_pub_key = kw.get("ssh_pub_key")
         self.private_ip = kw["private_ip"]
 
         # Explicit IPv4 storage (backward compat: ip_address/subnet treated as IPv4)
@@ -1633,6 +1636,22 @@ class CephNode(object):
         if _is_onecloud_bootstrap:
             pass  # skip initial Paramiko connect; subprocess handles it below
         else:
+            # When a custom SSH user/key is in play, guarantee the provided
+            # key is authorized for root before the first privileged
+            # connection is made.
+            if self.ssh_pub_key:
+                try:
+                    self._ensure_root_authorized_key()
+                except AssertionError:
+                    # The user connection with the provided key failed; the
+                    # root connection would fail the same way.
+                    raise
+                except Exception as err:
+                    logger.warning(
+                        "Could not ensure the runner key for root on %s: %s",
+                        self.ip_address,
+                        err,
+                    )
             self.rssh().exec_command("dmesg")
             self.rssh_transport().set_keepalive(15)
 
@@ -1866,6 +1885,40 @@ class CephNode(object):
 
         logger.info("finished connect")
         self.run_once = True
+
+    def _ensure_root_authorized_key(self):
+        """
+        Ensure the runner's public key is authorized for root.
+
+        The inventory cloud-config is expected to authorize the key for root,
+        however it is enforced here as well (over the user connection, using
+        its passwordless sudo) so that a root connection can always be
+        established with the provided key. The operation is idempotent.
+        """
+        pub_key = self.ssh_pub_key.strip()
+        # The base64 blob is the unique part of a public key line and is safe
+        # to embed in the grep pattern.
+        key_fields = pub_key.split()
+        key_blob = key_fields[1] if len(key_fields) > 1 else pub_key
+        key_b64 = base64.b64encode(pub_key.encode()).decode()
+        cmd = (
+            "sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh && "
+            "sudo touch /root/.ssh/authorized_keys && "
+            "sudo chmod 600 /root/.ssh/authorized_keys && "
+            f"(sudo grep -qF '{key_blob}' /root/.ssh/authorized_keys || "
+            f"echo '{key_b64}' | base64 -d | sudo tee -a /root/.ssh/authorized_keys)"
+        )
+        logger.info(
+            "Ensuring the runner key is authorized for root on %s", self.ip_address
+        )
+        _, stdout, stderr = self.ssh().exec_command(cmd)
+        exit_code = stdout.channel.recv_exit_status()
+        if exit_code != 0:
+            err = stderr.read().decode()
+            raise RuntimeError(
+                "Failed to authorize the runner key for root on"
+                f" {self.ip_address}: {err}"
+            )
 
     def set_internal_ip(self):
         """

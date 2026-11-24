@@ -216,6 +216,7 @@ def create_nodes(
     platform=None,
     ssh_user=None,
     ssh_private_key=None,
+    ssh_pub_key=None,
 ):
     """Creates the system under test environment.
 
@@ -231,6 +232,8 @@ def create_nodes(
         platform        RHEL platform (e.g. rhel-9, rhel-10) for OneCloud image selection
         ssh_user        Overrides the user used to access the systems
         ssh_private_key Overrides the private key used to access the systems
+        ssh_pub_key     Public key content authorized for the SSH user; used
+                        to guarantee root access on the systems
 
     Notes:
         use custom_config to specify the environments or configuration to
@@ -403,6 +406,7 @@ def create_nodes(
                     private_key_password=private_key_password,
                     bootstrap_key_path=bootstrap_key_path,
                     bootstrap_key_password=bootstrap_key_password,
+                    ssh_pub_key=ssh_pub_key,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
                     ipv4_address=node.ip_address,
@@ -871,6 +875,7 @@ def run(args):
         ssh_user_private_key or ssh_user_pub_key or ssh_user_name != "cephuser"
     )
     ssh_user = ssh_user_name if ssh_user_overridden else None
+    ssh_user_pub_key_content = None
 
     if ssh_user_overridden and reuse:
         log.warning("--ssh-user-* options are ignored when --reuse is provided")
@@ -1027,6 +1032,7 @@ def run(args):
                 platform=platform,
                 ssh_user=ssh_user,
                 ssh_private_key=ssh_user_private_key,
+                ssh_pub_key=ssh_user_pub_key_content,
             )
 
         except Exception as err:
@@ -1411,6 +1417,7 @@ def run(args):
                 platform=platform,
                 ssh_user=ssh_user,
                 ssh_private_key=ssh_user_private_key,
+                ssh_pub_key=ssh_user_pub_key_content,
             )
 
         tcs.append(tc)

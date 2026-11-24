@@ -172,8 +172,11 @@ Access the systems using the given user and SSH key instead of the default
 ``cephuser`` with the cloud credentials key. When provided, the user and its
 primary group are added to the inventory's cloud-init configuration with
 passwordless sudo privileges and the public key authorized, so that the
-framework can access the systems post deployment. The public key defaults to
-``<private-key>.pub`` when ``--ssh-user-pub-key`` is not given. ::
+framework can access the systems post deployment. The public key is also
+authorized for ``root`` — in the cloud-init configuration and again at
+connection time — so that the framework's privileged (root) connections
+succeed. The public key defaults to ``<private-key>.pub`` when
+``--ssh-user-pub-key`` is not given. ::
 
     python run.py --osp-cred <cred_file> \
       --global-conf <conf_file> \

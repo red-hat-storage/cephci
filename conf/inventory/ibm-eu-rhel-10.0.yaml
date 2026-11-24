@@ -46,11 +46,6 @@ instance:
         owner: root:root
         permissions: '0644'
       - content: |
-          PermitRootLogin yes
-        path: /etc/ssh/sshd_config.d/50-cephci.conf
-        owner: root:root
-        permissions: '0644'
-      - content: |
           {
               "default": [
                   {

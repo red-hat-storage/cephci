@@ -60,7 +60,7 @@ instance:
         owner: root:root
         permissions: '0644'
       - content: |
-          PermitRootLogin yes
+          PermitRootLogin prohibit-password
         path: /etc/ssh/sshd_config.d/50-cephci.conf
         owner: root:root
         permissions: '0644'
