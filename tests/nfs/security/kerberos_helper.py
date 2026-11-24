@@ -407,6 +407,4 @@ def _kdc_conf_content(realm):
         supported_enctypes = aes256-cts-hmac-sha1-96:normal aes128-cts-hmac-sha1-96:normal
         default_principal_flags = +preauth
     }}
-""".format(
-        realm=realm
-    )
+""".format(realm=realm)

@@ -757,16 +757,14 @@ def run(ceph_cluster, **kw):
             log.info("Scenario 6 passed: convergence factor checks")
 
         elif "scenario7" in scenarios:
-            log.info(
-                """
+            log.info("""
             Scenario 7: Rack failure domain with max=100 - osd, host, rack, chassis buckets
               Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean
               Step 2: Run ok-to-upgrade (max=100) for osd bucket and verify output
               Step 3: Run ok-to-upgrade (max=100) for host bucket and verify output
               Step 4: Run ok-to-upgrade (max=100) for rack bucket and verify output
               Step 5: Run ok-to-upgrade (max=100) for chassis bucket and verify output
-            """
-            )
+            """)
             log.info("Step 1: Create CRUSH rule (rack FD) and pool, wait for PGs clean")
             pool_name = "ok-to-upgrade-rack-fd"
             failure_domain = "rack"

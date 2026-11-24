@@ -680,6 +680,7 @@ class CephfsMirroringUtils(object):
         log.info("Get Peer Connection Information")
         log.info("Fetch peer connection information from the source system")
         out, _ = source_clients.exec_command(
+            sudo=True,
             cmd=f"ceph fs snapshot mirror peer_list {source_fs} --format json-pretty",
         )
         try:
@@ -811,6 +812,16 @@ class CephfsMirroringUtils(object):
         log.info(daemon_names)
         return daemon_names
 
+    @staticmethod
+    def _parse_mirror_daemon_status(out):
+        """Parse daemon-status JSON; raise if empty / no filesystems yet."""
+        data = json.loads(out)
+        if not data or not data[0].get("filesystems"):
+            raise CommandFailed(
+                f"Mirror daemon status empty or has no filesystems yet (raw={out!r})"
+            )
+        return data
+
     @retry(CommandFailed, tries=5, delay=30)
     def get_filesystem_id_by_name(self, source_clients, fs_name):
         """
@@ -825,7 +836,7 @@ class CephfsMirroringUtils(object):
         out, _ = source_clients.exec_command(
             sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
         )
-        data = json.loads(out)
+        data = self._parse_mirror_daemon_status(out)
         filesystem_id = None
         for filesystem in data[0]["filesystems"]:
             if filesystem["name"] == fs_name:
@@ -851,7 +862,7 @@ class CephfsMirroringUtils(object):
         out, _ = source_clients.exec_command(
             sudo=True, cmd="ceph fs snapshot mirror daemon status -f json"
         )
-        data = json.loads(out)
+        data = self._parse_mirror_daemon_status(out)
         peer_uuid = None
         for filesystem in data[0]["filesystems"]:
             if filesystem["name"] == fs_name:
@@ -3014,6 +3025,85 @@ class CephfsMirroringUtils(object):
         if path in status:
             return status[path].get("current_syncing_snap")
         return None
+
+    def sync_and_verify_snapshot(
+        self,
+        source_client,
+        target_client,
+        source_mount,
+        dir_name,
+        snap_name,
+        source_fs,
+        target_fs,
+        mirror_path,
+        timeout=300,
+        interval=15,
+    ):
+        """Create a snap, wait via MGR status, verify with md5sum checksum helper.
+
+        Uses ``ceph fs snapshot mirror status`` (no asok) until the path is
+        idle with ``last_synced_snap`` matching *snap_name*, then
+        ``list_and_verify_remote_snapshots_and_data_checksum``.
+        """
+        source_client.exec_command(sudo=True, cmd="sync")
+        snap_mkdir = f"{source_mount.rstrip('/')}/{dir_name}/.snap/{snap_name}"
+        source_client.exec_command(sudo=True, cmd=f"mkdir {snap_mkdir}")
+        log.info("Created snapshot %s at %s", snap_name, snap_mkdir)
+
+        path_key = mirror_path.rstrip("/")
+        deadline = time.monotonic() + timeout
+        peer_stats = {}
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CommandFailed(
+                    f"Path '{path_key}' did not reach idle with "
+                    f"last_synced_snap={snap_name} within {timeout}s via MGR status"
+                )
+            try:
+                status = self.get_mgr_mirror_status(source_client, source_fs)
+                peers = list(
+                    status.get("metrics", {}).get(path_key, {}).get("peer", {}).values()
+                )
+                peer_stats = peers[0] if peers else {}
+                state = peer_stats.get("state", "unknown")
+                last_snap = (peer_stats.get("last_synced_snap") or {}).get("name")
+                log.info(
+                    "[sync_and_verify %ds left] path=%s state=%s last_synced=%s",
+                    int(remaining),
+                    path_key,
+                    state,
+                    last_snap,
+                )
+                if state == "idle" and last_snap == snap_name:
+                    break
+            except (
+                CommandFailed,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+                IndexError,
+            ) as exc:
+                log.warning("MGR status poll error (will retry): %s", exc)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                continue
+            time.sleep(min(interval, remaining))
+
+        ok, msg = self.list_and_verify_remote_snapshots_and_data_checksum(
+            target_client,
+            f"client.{target_client.node.hostname}",
+            f"{mirror_path.rstrip('/')}/",
+            source_client,
+            f"{source_mount.rstrip('/')}/",
+            target_fs,
+        )
+        if not ok:
+            raise CommandFailed(
+                f"Checksum verification failed after {snap_name}: {msg}"
+            )
+        log.info("Checksum OK after %s: %s", snap_name, msg)
+        return peer_stats
 
 
 def _ensure_ceph_common(asok_file):

@@ -104,10 +104,8 @@ def run(ceph_cluster, **kw):
         dd(clients[0], nfs_mounting_dir, file_name="dd_file_nfs", bs="100M", count=20)
         dd(clients[0], local_fs_path, file_name="dd_file_local", bs="100M", count=20)
 
-        log.info(
-            "File Operations : move data b/w nfs mounts and local filesystem, \
-                verify the transfers and check for data integrity"
-        )
+        log.info("File Operations : move data b/w nfs mounts and local filesystem, \
+                verify the transfers and check for data integrity")
         filename_nfs = f"{clients[0].node.hostname}dd_file_nfs"
         filename_local = f"{clients[0].node.hostname}dd_file_local"
 

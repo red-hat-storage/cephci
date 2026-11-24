@@ -16,9 +16,7 @@ def get_ms_type(osd, osds, ceph_cluster):
     target_osd_hostname = ceph_cluster.get_osd_metadata(osd).get("hostname")
     tosd = ceph_cluster.get_node_by_hostname(target_osd_hostname)
     probe_ms = "sudo ceph --admin-daemon /var/run/ceph/ceph-osd.{oid}.asok \
-                config show --format json".format(
-        oid=osd
-    )
+                config show --format json".format(oid=osd)
     outbuf, err = tosd.exec_command(cmd=probe_ms)
     log.info(outbuf)
     jconfig = json.loads(outbuf)
@@ -74,12 +72,8 @@ def run(ceph_cluster, **kw):
     """check what's the default messenger"""
     mstype = get_ms_type(targt_osd, osds, ceph_cluster)
     if mstype != "async+posix":
-        log.error(
-            "default on luminous should be async but\
-                   we have {mstype}".format(
-                mstype=mstype
-            )
-        )
+        log.error("default on luminous should be async but\
+                   we have {mstype}".format(mstype=mstype))
         return 1
 
     """switch to simple and do IO"""

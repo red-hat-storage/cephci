@@ -160,7 +160,7 @@ tests:
       name: Replace OSD
       desc: Perform replace OSD operation
       module: test_replace_osd.py
-      polarion-id: CEPH-83573766
+      polarion-id: CEPH-83573766, CEPH-83575107
       config:
         replace:
           command: rm

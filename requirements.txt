@@ -1,8 +1,8 @@
 -e .
-xmltodict == 0.14.2
-python-openstackclient==8.0.0
+xmltodict == 1.0.4
+python-openstackclient==10.5.0
 tfacon == 1.1.4
-uplink == 0.9.7
-pylero == 0.1.1
-python-dotenv == 1.1.0
-smbprotocol == 1.15.0
+uplink == 0.10.0
+pylero == 0.2.0
+python-dotenv == 1.2.4
+smbprotocol == 1.17.0

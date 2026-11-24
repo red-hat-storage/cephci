@@ -203,8 +203,7 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
 
     # Python runs on the agent host (same place the real agent posts from).
     # Posts crafted cases and writes JSON results for the test to assert on.
-    post_script = textwrap.dedent(
-        f"""\
+    post_script = textwrap.dedent(f"""\
         import json, ssl, time
         from urllib.request import Request, urlopen
         from urllib.error import HTTPError, URLError
@@ -306,8 +305,7 @@ def run_corrupt_metadata_payload_test(ceph_cluster, installer):
         with open(results_path, "w") as f:
             json.dump(out, f, indent=2)
         print(json.dumps(out))
-        """
-    )
+        """)
 
     try:
         log.info("POSTing crafted corrupt payloads to mgr /data endpoint")

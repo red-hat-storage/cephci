@@ -3650,17 +3650,46 @@ EOF"""
 
     def get_inconsistent_object_details(self, pg_id):
         """
-        Method returns the inconsistent object list from a PG
+        Method returns the inconsistent object list from a PG.
+
+        Retries ``rados list-inconsistent-obj`` for up to 5 minutes when scrub
+        information is not yet available (e.g. after OSD restart / PG peering).
+
         Args:
             pg_id: pg id
 
-        Returns: Return the inconsistent object list
+        Returns: Return the inconsistent object list, or None on timeout/failure
         """
         cmd_inconsistent_object = f"rados  list-inconsistent-obj  {pg_id}"
-        object_details = self.run_ceph_command(cmd_inconsistent_object)
-        if not object_details:
-            log.info(f"The inconsistent objects list is empty in the PG {pg_id}")
-        return object_details
+        end_time = time.time() + 300  # 5 minutes
+        sleep_interval = 10
+
+        while time.time() < end_time:
+            try:
+                object_details = self.run_ceph_command(cmd_inconsistent_object)
+                if object_details and "inconsistents" in object_details:
+                    log.info(
+                        f"Retrieved inconsistent object details for PG {pg_id}: "
+                        f"{len(object_details['inconsistents'])} object(s)"
+                    )
+                    return object_details
+                log.info(
+                    f"The inconsistent objects list is empty or unavailable in PG {pg_id}; "
+                    f"retrying in {sleep_interval}s"
+                )
+            except Exception as err:
+                log.warning(
+                    f"list-inconsistent-obj failed for PG {pg_id}: {err}. "
+                    f"Retrying in {sleep_interval}s "
+                    f"(remaining ~{int(end_time - time.time())}s)"
+                )
+            time.sleep(sleep_interval)
+
+        log.error(
+            f"Timed out after 5 minutes waiting for scrub information on PG {pg_id} "
+            f"(rados list-inconsistent-obj)"
+        )
+        return None
 
     def check_inconsistent_health(self, inconsistent_present: bool = True):
         """
@@ -5242,12 +5271,28 @@ EOF"""
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
         self.run_deep_scrub(pgid=pg_id)
-        self.start_check_deep_scrub_complete(
-            pg_id=pg_id, user_initiated=True, wait_time=1800
-        )
 
-        inconsistent_details = self.get_inconsistent_object_details(pg_id)
-        obj_count = len(inconsistent_details["inconsistents"])
+        # Return as soon as inconsistent objects are visible instead of waiting
+        # for the full deep-scrub stamp (can save several minutes).
+        end_time = time.time() + 180
+        obj_count = 0
+        while time.time() < end_time:
+            inconsistent_details = self.get_inconsistent_object_details(pg_id)
+            obj_count = len(inconsistent_details["inconsistents"])
+            log.info(
+                f"Waiting for inconsistent objects on PG {pg_id}; "
+                f"current count: {obj_count}/{no_of_objects}"
+            )
+            if obj_count >= no_of_objects:
+                break
+            time.sleep(10)
+        else:
+            log.error(
+                f"Timed out waiting for {no_of_objects} inconsistent objects on PG {pg_id}; "
+                f"found {obj_count}"
+            )
+            return None
+
         log.info(f"The inconsistent object count is -{obj_count}")
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id, obj_count

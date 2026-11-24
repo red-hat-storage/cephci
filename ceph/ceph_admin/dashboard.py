@@ -131,10 +131,8 @@ def validate_enable_dashboard(cls, username, password):
 
     resp = session.post(url_, data=data, verify=False)
     if not resp.ok:
-        LOG.error(
-            f"Dashboard API login is not successful, Status code: \
-            {resp.status_code}\nResponse: {resp.text}"
-        )
+        LOG.error(f"Dashboard API login is not successful, Status code: \
+            {resp.status_code}\nResponse: {resp.text}")
     else:
         LOG.info(f"Dashboard API login is successful, status code : {resp.status_code}")
 

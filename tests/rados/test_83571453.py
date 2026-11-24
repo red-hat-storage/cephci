@@ -48,9 +48,7 @@ def run(ceph_cluster, **kw):
     profile = pname
     if build.startswith("4"):
         prof_cmd = "osd erasure-code-profile set {profile} k={k} m={m} \
-            crush-failure-domain=osd".format(
-            profile=profile, k=k, m=m
-        )
+            crush-failure-domain=osd".format(profile=profile, k=k, m=m)
     else:
         prof_cmd = "osd erasure-code-profile set {profile} k={k} m={m} \
             ruleset-failure-domain=osd crush-failure-domain=osd".format(
@@ -192,9 +190,7 @@ def run(ceph_cluster, **kw):
     found = 0
     while timeout:
         incon_obj = "sudo rados list-inconsistent-snapset \
-                     {pg}".format(
-            pg=targt_pg
-        )
+                     {pg}".format(pg=targt_pg)
         outbuf, err = ctrlr.exec_command(cmd=incon_obj)
         log.info(outbuf)
         if oname not in outbuf:

@@ -57,9 +57,7 @@ def run(**kw):
         prof_name = "LRCprofile{suf}".format(suf=suffix)
         if build.startswith("4"):
             profile = "osd erasure-code-profile set {LRC} plugin=lrc k={k} m={m} l={l} \
-                crush-failure-domain=osd".format(
-                LRC=prof_name, k=k, m=m, l=l
-            )
+                crush-failure-domain=osd".format(LRC=prof_name, k=k, m=m, l=l)
         else:
             profile = "osd erasure-code-profile set {LRC} plugin=lrc k={k} m={m} l={l} \
                 ruleset-failure-domain=osd crush-failure-domain=osd".format(
