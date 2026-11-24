@@ -275,7 +275,7 @@ class BootstrapMixin:
                     f"Baseline '{_manifest_section}' build ({_baseline_ver}) is higher "
                     f"than the target build ({_target_ver}). "
                     f"This is a downgrade, which is not a supported Ceph upgrade "
-                    f"scenario. Skipping upgrade suite to avoid misleading failures."
+                    f"scenario. Failing the run instead of attempting a downgrade."
                 )
             logger.info(
                 f"Upgrade path validated: baseline {_baseline_ver} -> target {_target_ver}."
