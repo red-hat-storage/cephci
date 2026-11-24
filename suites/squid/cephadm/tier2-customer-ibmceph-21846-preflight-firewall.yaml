@@ -1,0 +1,100 @@
+#============================================================
+# Test-Case: Preflight preserves firewalld (IBMCEPH-21846 / 8.1z10)
+#
+# Cluster Configuration:
+#    conf/squid/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cephadm-ansible preflight playbook default
+      desc: execute cephadm-preflight playbook with default firewall behavior
+      module: test_cephadm_ansible.py
+      abort-on-fail: true
+      config:
+        playbook: cephadm-preflight.yml
+        extra-vars:
+          ceph_origin: ibm
+
+  - test:
+      name: cephadm-ansible preflight playbook opt-out
+      desc: execute cephadm-preflight playbook with firewall management disabled
+      module: test_cephadm_ansible.py
+      abort-on-fail: true
+      config:
+        playbook: cephadm-preflight.yml
+        extra-vars:
+          ceph_origin: ibm
+          cephadm_enable_firewall: false
+
+  - test:
+      name: cephadm-ansible preflight playbook opt-in
+      desc: execute cephadm-preflight playbook with firewall management enabled
+      module: test_cephadm_ansible.py
+      abort-on-fail: true
+      config:
+        playbook: cephadm-preflight.yml
+        extra-vars:
+          ceph_origin: ibm
+          cephadm_enable_firewall: true
+
+  - test:
+      name: cephadm-ansible preflight playbook opt-in repeat
+      desc: re-execute cephadm-preflight playbook to validate idempotence
+      module: test_cephadm_ansible.py
+      abort-on-fail: true
+      config:
+        playbook: cephadm-preflight.yml
+        extra-vars:
+          ceph_origin: ibm
+          cephadm_enable_firewall: true
+
+  - test:
+      name: Cephadm Bootstrap after preflight
+      desc: Bootstrap cluster after firewall preflight scenarios
+      module: test_bootstrap.py
+      destroy-cluster: false
+      abort-on-fail: true
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: node1
+          skip-monitoring-stack: true
+          orphan-initial-daemons: true
+
+  - test:
+      name: Add all hosts to ceph cluster
+      desc: Add all host node with IP address and labels
+      module: test_host.py
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes: []
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: Deploy OSD services after bootstrap
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy OSDs using cephadm

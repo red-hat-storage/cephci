@@ -1,0 +1,105 @@
+#============================================================
+# Test-Case: Host maintenance exit after reboot (IBMCEPH-21062 / 7.1z12)
+#
+# Cluster Configuration:
+#    conf/reef/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Place a host under maintenance using cephadm
+      desc: Use orchestrator to place a host in maintenance mode, verify its status.
+      module: test_host.py
+      polarion-id: CEPH-83573799
+      config:
+        service: host
+        command: enter
+        verify: true
+        args:
+          node: node2
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Check cluster status when nodes are performed with reboot
+      desc: Perform reboot and check ceph status
+      polarion-id: CEPH-83573754
+      module: test_verify_cluster_health_after_reboot.py
+      config:
+        action: node-reboot
+      abort-on-fail: true
+
+  - test:
+      name: Exit a host from maintenance using cephadm
+      desc: Use orchestrator to exit maintenance mode on a host, verify its status.
+      module: test_host.py
+      polarion-id: CEPH-83573799
+      config:
+        service: host
+        command: exit
+        verify: true
+        args:
+          node: node2
+      destroy-cluster: false
+      abort-on-fail: true

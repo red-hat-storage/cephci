@@ -1,0 +1,30 @@
+#============================================================
+# Test-Case: Bootstrap with --skip-ssh (IBMCEPH-21884 / 10.0)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with skip-ssh
+      desc: Bootstrap cluster using --skip-ssh and automatic license acceptance
+      module: test_bootstrap.py
+      destroy-cluster: false
+      abort-on-fail: true
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: node1
+          skip-ssh: true
+          skip-dashboard: true
+          skip-monitoring-stack: true
