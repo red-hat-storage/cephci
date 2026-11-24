@@ -35,12 +35,10 @@ KNOWN_IGNORABLE_WARNINGS = {
 # fragments such as "cephadm shell -- " — that is the prefix of every command
 # and would retry genuine failures (permission denied, EINVAL, command not
 # found) three times with a 20s penalty before failing anyway.
-TRANSIENT_SHELL_PATTERNS = (
-    "statfs ",
-    "no such file or directory",
-    "Inferring fsid",
-    "Inferring config",
-)
+# The discriminator is the missing mon config file. "statfs",
+# "Inferring fsid" and "Inferring config" always accompany it in this failure,
+# so they add nothing to the match.
+TRANSIENT_SHELL_PATTERN = "no such file or directory"
 TRANSIENT_SHELL_ATTEMPTS = 3
 TRANSIENT_SHELL_DELAY = 10
 
@@ -54,7 +52,7 @@ def _is_transient_shell_error(exc):
     msg = str(exc)
     if "code 125" not in msg:
         return False
-    return any(pat in msg for pat in TRANSIENT_SHELL_PATTERNS)
+    return TRANSIENT_SHELL_PATTERN in msg
 
 
 def shell(installer, cmd):

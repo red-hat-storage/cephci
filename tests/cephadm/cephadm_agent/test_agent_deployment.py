@@ -41,7 +41,7 @@ def run_deployment_test(ceph_cluster, installer):
             ]
         except Exception as exc:  # noqa: BLE001 - diagnostics must not raise
             observed = f"<could not query agents: {str(exc).splitlines()[-1][:120]}>"
-        assert False, (
+        raise AssertionError(
             "Agent daemon(s) not running on all hosts after enabling use_agent "
             f"(last orch ps agents={observed})"
         )
