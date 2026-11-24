@@ -522,6 +522,25 @@ def retain_bucket_pol_at_archive(
             )
 
 
+def _sync_error_list_has_entries(sync_error_list):
+    """Return True when `radosgw-admin sync error list` actually reported errors.
+
+    The command emits JSON -- normally an empty list when nothing is wrong -- but
+    can also return an empty string. Only a genuinely non-empty result should
+    make the caller fail, so that a stray "failed"/"error" marker in the sync
+    status text does not by itself fail a healthy cluster.
+    """
+    raw = (sync_error_list or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        # Non-empty and not JSON: treat as a real error report.
+        return True
+    return bool(parsed)
+
+
 def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
     """
     verify RGW multisite sync status
@@ -560,14 +579,27 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
         cmd="sudo radosgw-admin sync status"
     )
 
-    # check for 'failed' or 'ERROR' in sync status.
-    if "failed|ERROR" in check_sync_status:
+    # Look for the same failure markers the retry loop above treats as real
+    # errors. This previously read `"failed|ERROR" in check_sync_status`, a
+    # literal substring test that can never match, so the branch never ran.
+    # Fixing it *enables* the check rather than merely correcting a message, so
+    # the markers are kept narrow and the error list must actually report
+    # something before failing: `radosgw-admin sync error list` returns an empty
+    # list when there is nothing wrong.
+    sync_error_markers = (
+        "failed to fetch master sync status",
+        "failed to retrieve sync info",
+        "Input/output error",
+    )
+    if any(marker in check_sync_status for marker in sync_error_markers):
         log.info("checking for any sync error")
         sync_error_list, err = verify_io_on_site_node.exec_command(
             cmd="sudo radosgw-admin sync error list"
         )
         log.error(err)
-        raise Exception(sync_error_list)
+        if _sync_error_list_has_entries(sync_error_list):
+            raise Exception(sync_error_list)
+        log.info("sync status showed an error marker but sync error list is empty")
     else:
         log.info("No errors or failures in sync status")
 
@@ -588,12 +620,12 @@ def verify_sync_status(verify_io_on_site_node, retry=25, delay=60):
                 log.info("sync completed")
                 break
 
-        if (retry_count > retry) and (
-            "behind" in check_sync_status or "recovering" in check_sync_status
-        ):
-            raise Exception(
-                f"sync is still in progress. with {retry} retries and sleep of {delay}secs between each retry"
-            )
+        # NOTE: the previous `if (retry_count > retry) and (...)` guard could
+        # never be true, since range(retry) leaves retry_count at retry-1. It is
+        # dropped rather than repaired: a status that is still recovering is
+        # already rejected by the "sync is either in progress or stuck" check
+        # below, and raising here would wrongly override the multi-source and
+        # archive cases where one source is caught up while another recovers.
 
     log.info(check_sync_status)
     # check metadata sync status

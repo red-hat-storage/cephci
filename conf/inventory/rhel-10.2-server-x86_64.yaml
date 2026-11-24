@@ -37,6 +37,29 @@ instance:
         content: |
           net.core.default_qdisc=netem
 
+      # Route CDN/stage image names through the RH eng pull-through so stage
+      # bootstrap does not need a second CDN login for monitoring sidecars.
+      # If a magna-local mirror exists with the content, replace location with
+      # that host (same shape as IBM EU nginx-vm-01 redirects).
+      - path: /etc/containers/registries.conf.d/rh-registry-redirect.conf
+        owner: root:root
+        permissions: '0644'
+        defer: true
+        content: |
+          [[registry]]
+          prefix = "registry.redhat.io"
+          location = "registry-proxy.engineering.redhat.com"
+          insecure = true
+
+          [[registry]]
+          prefix = "registry.stage.redhat.io"
+          location = "registry-proxy.engineering.redhat.com"
+          insecure = true
+
+          [[registry]]
+          location = "registry-proxy.engineering.redhat.com"
+          insecure = true
+
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - hostnamectl set-hostname $(hostname -s)

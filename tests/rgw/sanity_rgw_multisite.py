@@ -287,6 +287,33 @@ def run(**kw):
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
+    # Only steps that actually consume the shared user file opt in with
+    # `requires-user-details: true` in the suite YAML. Plenty of modules run on
+    # the secondary site without it (swift_*, curl admin-api tests, credential
+    # replication), and some multisite suites never use copy-user-info-to-site
+    # at all. An unconditional check would skip those tests and hide real
+    # regressions, so the guard is explicit and per-step.
+    #
+    # Known limitation: this only catches an absent file. A stale
+    # user_details.json left behind on a reused node passes the check and the
+    # test then exercises old users, failing later and less clearly. Covering
+    # that needs a timestamp comparison or clearing the file in the create-user
+    # step.
+    if config.get("requires-user-details", False):
+        details_path = test_folder_path + lib_dir + "user_details.json"
+        _, _, details_rc, _ = exec_from.exec_command(
+            cmd=f"test -f {details_path}", check_ec=False, verbose=True
+        )
+        if details_rc != 0:
+            log.warning(
+                "user_details.json is absent at %s on %s. It is produced by the "
+                "earlier user_create.py step and copied to this site only when "
+                "that step succeeds, so its absence points at that prerequisite "
+                "rather than at this test. Skipping instead of failing for an "
+                "upstream reason." % (details_path, exec_from.hostname)
+            )
+            return -1
+
     cmd_env = " ".join(config.get("env-vars", []))
     test_status = exec_from.exec_command(
         cmd=cmd_env

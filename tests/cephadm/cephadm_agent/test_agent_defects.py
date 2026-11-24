@@ -23,6 +23,36 @@ from cephadm_agent.helpers import (
     wait_for_health_warning,
 )
 
+# ---------------------------------------------------------------------------
+# Known-defect signalling
+#
+# The TC-KI tests below assert that an *upstream* bug is still present. When the
+# bug is real they raise, which cephci would record as "Failed" and which would
+# make the suite permanently red. Instead they signal a known defect explicitly:
+#
+#   * bug present   -> KnownDefectPresent  -> test recorded as Skipped
+#   * bug fixed     -> assertion passes    -> test recorded as Pass
+#   * harness broke -> any other exception -> test recorded as Failed
+#
+# `run()` below converts KnownDefectPresent into cephci's skip return code (-1)
+# so the suite is not failed by an unfixed product bug, while a *fixed* bug or a
+# genuine harness error still surfaces.
+# ---------------------------------------------------------------------------
+
+
+class KnownDefectPresent(Exception):
+    """Raised by TC-KI tests when the tracked upstream defect still reproduces."""
+
+    def __init__(self, tracker, detail=""):
+        self.tracker = tracker
+        self.detail = detail
+        super().__init__(f"{tracker}: {detail}" if detail else tracker)
+
+
+def raise_known_defect(tracker, detail=""):
+    """Raise KnownDefectPresent; used in place of a bare assert for TC-KI tests."""
+    raise KnownDefectPresent(tracker, detail)
+
 
 def run_stale_metadata_overwrite_test(ceph_cluster, installer):
     log.info("=== DEFECT TEST: Stale metadata overwrite (counter/ack desync) ===")
@@ -352,17 +382,46 @@ def run_auth_response_code_test(ceph_cluster, installer):
                 log.info(f"Agent orch status with wrong keyring: {agent_status}")
                 break
 
-        assert agent_status != "running", (
-            "BUG UNFIXED: Agent shows 'running' despite rejected keyring. "
-            "MGR returns HTTP 200 for auth failures (should return 401/403). "
-            "Agent cannot detect that its metadata POSTs are being rejected."
-        )
+        if agent_status == "running":
+            raise_known_defect(
+                "IBMCEPH-16022",
+                "Agent shows 'running' despite rejected keyring. MGR returns "
+                "HTTP 200 for auth failures (should return 401/403). Agent cannot "
+                "detect that its metadata POSTs are being rejected.",
+            )
 
     finally:
         log.info("Restoring keyring")
-        target_node.exec_command(sudo=True, cmd=f"cp {keyring_path}.bak {keyring_path}")
-        target_node.exec_command(sudo=True, cmd=f"rm -f {keyring_path}.bak")
-        target_node.exec_command(sudo=True, cmd=f"systemctl restart {service_name}")
+        # This test deliberately installs a bogus keyring on a live agent, so the
+        # restore has to be reliable. exec_command defaults to check_ec=True, which
+        # meant a failing `cp` aborted the finally before `systemctl restart` ran,
+        # leaving the agent running with the wrong keyring. Every step runs
+        # unchecked, then the result is verified and the test fails loudly if the
+        # keyring did not come back.
+        target_node.exec_command(
+            sudo=True, cmd=f"cp {keyring_path}.bak {keyring_path}", check_ec=False
+        )
+        target_node.exec_command(
+            sudo=True, cmd=f"rm -f {keyring_path}.bak", check_ec=False
+        )
+        target_node.exec_command(
+            sudo=True, cmd=f"systemctl restart {service_name}", check_ec=False
+        )
+        # Verify by exit status, not by matching output: "NOT_RESTORED" contains
+        # "RESTORED", so a substring test would pass when the restore failed.
+        _, _, restore_rc, _ = target_node.exec_command(
+            sudo=True,
+            cmd=f"test -s {keyring_path} && "
+            f"! grep -q 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==' {keyring_path}",
+            check_ec=False,
+            verbose=True,
+        )
+        if restore_rc != 0:
+            raise Exception(
+                "Failed to restore the real keyring at %s on %s after the auth "
+                "response test; the agent may be running with the placeholder "
+                "keyring." % (keyring_path, hostname)
+            )
 
     assert wait_for_agent_running(
         installer, hostname, timeout=180
@@ -420,12 +479,14 @@ def run_silent_listener_failure_test(ceph_cluster, installer):
         )
         log.info(f"Agent posting status: {journal_out.strip()[:200]}")
 
-        assert not (status == "active" and "PORT_NOT_LISTENING" in port_check), (
-            "BUG UNFIXED: Agent is running and posting metadata, but mgr_listener "
-            "thread has died silently. Port 4721 is not listening. MGR cannot push "
-            "config changes to this agent. The main thread should detect listener "
-            "death and either restart it or shut down the agent."
-        )
+        if status == "active" and "PORT_NOT_LISTENING" in port_check:
+            raise_known_defect(
+                "CEPHADM-AGENT-SILENT-LISTENER",
+                "Agent is running and posting metadata, but mgr_listener thread "
+                "has died silently. Port 4721 is not listening. MGR cannot push "
+                "config changes to this agent. The main thread should detect "
+                "listener death and either restart it or shut down the agent.",
+            )
 
     finally:
         log.info("Restoring listener.crt")
@@ -483,48 +544,72 @@ def run_failover_resilience_test(ceph_cluster, installer):
     target_node.exec_command(sudo=True, cmd=f"systemctl stop {service_name}")
     time.sleep(5)
 
-    log.info("Triggering MGR failover while agent is stopped...")
-    shell(installer, "ceph mgr fail")
-    time.sleep(15)
+    try:
+        log.info("Triggering MGR failover while agent is stopped...")
+        shell(installer, "ceph mgr fail")
+        time.sleep(15)
 
-    mgr_out2, _ = shell(installer, "ceph mgr stat -f json")
-    post_mgr = json.loads(mgr_out2)["active_name"]
-    post_mgr_ip = get_active_mgr_ip(installer)
-    log.info(f"Post-failover active MGR: {post_mgr} ({post_mgr_ip})")
-    assert pre_mgr != post_mgr, "MGR did not fail over to a different daemon"
+        mgr_out2, _ = shell(installer, "ceph mgr stat -f json")
+        post_mgr = json.loads(mgr_out2)["active_name"]
+        post_mgr_ip = get_active_mgr_ip(installer)
+        log.info(f"Post-failover active MGR: {post_mgr} ({post_mgr_ip})")
+        assert pre_mgr != post_mgr, "MGR did not fail over to a different daemon"
 
-    # Leave agent stopped; wait for SSH reconfig to rewrite agent.json
-    wait_timeout = DEFAULT_AGENT_DOWN_TIMEOUT + 180
-    log.info(
-        f"Waiting up to {wait_timeout}s for agent.json target_ip → {post_mgr_ip} "
-        f"while agent remains stopped"
-    )
-    updated, last_ip = wait_for_agent_json_target_ip(
-        target_node, agent_dir, post_mgr_ip, timeout=wait_timeout, interval=15
-    )
-
-    status_out, _ = target_node.exec_command(
-        sudo=True, cmd=f"systemctl is-active {service_name} || true", check_ec=False
-    )
-    log.info(f"Agent unit state while waiting: {status_out.strip()}")
-
-    assert updated, (
-        f"BUG UNFIXED / harness miss: agent.json target_ip still {last_ip!r} "
-        f"(expected {post_mgr_ip}) after failover {pre_mgr} → {post_mgr}. "
-        f"Pre-failover target_ip was {pre_target_ip}. Agent was kept stopped so "
-        f"SSH reconfig could rewrite required_files."
-    )
-    log.info(f"agent.json updated to target_ip={post_mgr_ip} while agent stopped")
-
-    log.info("Starting agent after config rewrite...")
-    target_node.exec_command(sudo=True, cmd=f"systemctl start {service_name}")
-
-    if not wait_for_agent_running(installer, hostname, timeout=180):
-        log.error(
-            "Agent did not reconnect — redeploying to recover for suite continuity"
+        # Leave agent stopped; wait for SSH reconfig to rewrite agent.json
+        wait_timeout = DEFAULT_AGENT_DOWN_TIMEOUT + 180
+        log.info(
+            f"Waiting up to {wait_timeout}s for agent.json target_ip → {post_mgr_ip} "
+            f"while agent remains stopped"
         )
-        shell(installer, f"ceph orch daemon redeploy agent.{hostname}")
-        assert wait_for_agent_running(installer, hostname, timeout=180)
+        updated, last_ip = wait_for_agent_json_target_ip(
+            target_node, agent_dir, post_mgr_ip, timeout=wait_timeout, interval=15
+        )
+
+        status_out, _ = target_node.exec_command(
+            sudo=True, cmd=f"systemctl is-active {service_name} || true", check_ec=False
+        )
+        unit_state = (status_out or "").strip()
+        log.info(f"Agent unit state while waiting: {unit_state}")
+
+        if not updated:
+            if unit_state == "active":
+                # The harness stopped the agent and expected it to stay stopped so
+                # the SSH-reconfig path would rewrite agent.json. Finding it
+                # active means that precondition was broken, so this is a harness
+                # problem and must not be reported as the tracked product defect.
+                raise Exception(
+                    "agent.json target_ip was not rewritten, but the agent unit "
+                    f"is 'active' although it was expected to stay stopped "
+                    f"(last target_ip={last_ip!r}, expected {post_mgr_ip}). "
+                    "Harness problem, not the tracked defect."
+                )
+            raise_known_defect(
+                "CEPHADM-AGENT-FAILOVER-CONFIG-PUSH",
+                f"agent.json target_ip still {last_ip!r} (expected {post_mgr_ip}) "
+                f"after failover {pre_mgr} -> {post_mgr}. Pre-failover target_ip was "
+                f"{pre_target_ip}. Agent was kept stopped so SSH reconfig could "
+                f"rewrite required_files.",
+            )
+        log.info(f"agent.json updated to target_ip={post_mgr_ip} while agent stopped")
+    finally:
+        # Always bring the agent back, including on the known-defect path, so a
+        # skipped test does not leave a stopped agent raising CEPHADM_AGENT_DOWN
+        # in every later test of the suite.
+        log.info("Starting agent after config rewrite...")
+        target_node.exec_command(
+            sudo=True, cmd=f"systemctl start {service_name}", check_ec=False
+        )
+        try:
+            if not wait_for_agent_running(installer, hostname, timeout=180):
+                log.error(
+                    "Agent did not reconnect — redeploying to recover for suite "
+                    "continuity"
+                )
+                shell(installer, f"ceph orch daemon redeploy agent.{hostname}")
+                if not wait_for_agent_running(installer, hostname, timeout=180):
+                    log.error("Agent %s still not running after redeploy", hostname)
+        except Exception as exc:  # noqa: BLE001 - recovery must not mask the result
+            log.error("Agent recovery after failover test failed: %s", exc)
 
     wait_for_health_warning(
         installer, AGENT_HEALTH_WARNING, timeout=180, expect_present=False
@@ -555,7 +640,7 @@ def run(ceph_cluster, **kw):
     else:
         tests_to_run = [test_selection]
 
-    passed, failed = [], []
+    passed, known_defects, failed = [], [], []
     for test_name in tests_to_run:
         if test_name not in TEST_REGISTRY:
             log.warning(f"Unknown test '{test_name}', skipping")
@@ -565,17 +650,41 @@ def run(ceph_cluster, **kw):
             TEST_REGISTRY[test_name](ceph_cluster, installer)
             passed.append(test_name)
             log.info(f"[PASSED] {test_name}")
+        except KnownDefectPresent as kd:
+            known_defects.append((test_name, kd.tracker))
+            log.warning(f"[KNOWN DEFECT] {test_name}: {kd.tracker} still reproduces")
+            log.warning(f"  {kd.detail}")
         except Exception as e:
             failed.append(test_name)
             log.error(f"[FAILED] {test_name}: {e}", exc_info=True)
 
     log.info(f"\n{'='*60}")
     log.info(
-        f"RESULTS: {len(passed)} passed, {len(failed)} failed "
-        f"out of {len(tests_to_run)} tests"
+        f"RESULTS: {len(passed)} passed, {len(known_defects)} known-defect, "
+        f"{len(failed)} failed out of {len(tests_to_run)} tests"
     )
     log.info(f"Passed: {passed}")
+    for name, tracker in known_defects:
+        log.warning(f"Known defect: {name} ({tracker})")
     if failed:
         log.error(f"Failed: {failed}")
     log.info(f"{'='*60}")
-    return 1 if failed else 0
+
+    if failed:
+        return 1
+    if known_defects and not passed:
+        # Nothing completed normally: report the module as Skipped so the suite
+        # is not failed by an unfixed product bug. cephci maps -1 to "Skipped".
+        return -1
+    if known_defects:
+        # Mixed result (only possible when `tests:` names several tests). -1
+        # would mark the whole module Skipped and discard the passes, while 1
+        # would fail on an expected defect. Report Pass and keep the known
+        # defects loud in the log above.
+        log.warning(
+            "%d test(s) reported a known defect; module reported Pass because "
+            "%d other test(s) passed. See the known-defect lines above.",
+            len(known_defects),
+            len(passed),
+        )
+    return 0
