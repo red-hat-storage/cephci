@@ -13,13 +13,6 @@ import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from utility.collate_scale_timings import (
-    TIMINGS_AGGREGATE_NAME,
-    load_run_timings,
-    publish_timings_to_share,
-    write_case_timings,
-    write_html_report,
-)
 from cephadm_agent.helpers import log, setup_run, shell
 from cephadm_agent.scale_helpers import (
     BackgroundMonitor,
@@ -29,6 +22,14 @@ from cephadm_agent.scale_helpers import (
     online_hostnames,
     osd_up_count,
     utc_now,
+)
+
+from utility.collate_scale_timings import (
+    TIMINGS_AGGREGATE_NAME,
+    load_run_timings,
+    publish_timings_to_share,
+    write_case_timings,
+    write_html_report,
 )
 
 ExecuteFn = Callable[[Any, Any, Dict[str, Any], List[TimingRecord]], Dict[str, Any]]
