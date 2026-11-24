@@ -392,9 +392,36 @@ def run_auth_response_code_test(ceph_cluster, installer):
 
     finally:
         log.info("Restoring keyring")
-        target_node.exec_command(sudo=True, cmd=f"cp {keyring_path}.bak {keyring_path}")
-        target_node.exec_command(sudo=True, cmd=f"rm -f {keyring_path}.bak")
-        target_node.exec_command(sudo=True, cmd=f"systemctl restart {service_name}")
+        # This test deliberately installs a bogus keyring on a live agent, so the
+        # restore has to be reliable. exec_command defaults to check_ec=True, which
+        # meant a failing `cp` aborted the finally before `systemctl restart` ran,
+        # leaving the agent running with the wrong keyring. Every step runs
+        # unchecked, then the result is verified and the test fails loudly if the
+        # keyring did not come back.
+        target_node.exec_command(
+            sudo=True, cmd=f"cp {keyring_path}.bak {keyring_path}", check_ec=False
+        )
+        target_node.exec_command(
+            sudo=True, cmd=f"rm -f {keyring_path}.bak", check_ec=False
+        )
+        target_node.exec_command(
+            sudo=True, cmd=f"systemctl restart {service_name}", check_ec=False
+        )
+        # Verify by exit status, not by matching output: "NOT_RESTORED" contains
+        # "RESTORED", so a substring test would pass when the restore failed.
+        _, _, restore_rc, _ = target_node.exec_command(
+            sudo=True,
+            cmd=f"test -s {keyring_path} && "
+            f"! grep -q 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==' {keyring_path}",
+            check_ec=False,
+            verbose=True,
+        )
+        if restore_rc != 0:
+            raise Exception(
+                "Failed to restore the real keyring at %s on %s after the auth "
+                "response test; the agent may be running with the placeholder "
+                "keyring." % (keyring_path, hostname)
+            )
 
     assert wait_for_agent_running(
         installer, hostname, timeout=180
@@ -517,50 +544,72 @@ def run_failover_resilience_test(ceph_cluster, installer):
     target_node.exec_command(sudo=True, cmd=f"systemctl stop {service_name}")
     time.sleep(5)
 
-    log.info("Triggering MGR failover while agent is stopped...")
-    shell(installer, "ceph mgr fail")
-    time.sleep(15)
+    try:
+        log.info("Triggering MGR failover while agent is stopped...")
+        shell(installer, "ceph mgr fail")
+        time.sleep(15)
 
-    mgr_out2, _ = shell(installer, "ceph mgr stat -f json")
-    post_mgr = json.loads(mgr_out2)["active_name"]
-    post_mgr_ip = get_active_mgr_ip(installer)
-    log.info(f"Post-failover active MGR: {post_mgr} ({post_mgr_ip})")
-    assert pre_mgr != post_mgr, "MGR did not fail over to a different daemon"
+        mgr_out2, _ = shell(installer, "ceph mgr stat -f json")
+        post_mgr = json.loads(mgr_out2)["active_name"]
+        post_mgr_ip = get_active_mgr_ip(installer)
+        log.info(f"Post-failover active MGR: {post_mgr} ({post_mgr_ip})")
+        assert pre_mgr != post_mgr, "MGR did not fail over to a different daemon"
 
-    # Leave agent stopped; wait for SSH reconfig to rewrite agent.json
-    wait_timeout = DEFAULT_AGENT_DOWN_TIMEOUT + 180
-    log.info(
-        f"Waiting up to {wait_timeout}s for agent.json target_ip → {post_mgr_ip} "
-        f"while agent remains stopped"
-    )
-    updated, last_ip = wait_for_agent_json_target_ip(
-        target_node, agent_dir, post_mgr_ip, timeout=wait_timeout, interval=15
-    )
-
-    status_out, _ = target_node.exec_command(
-        sudo=True, cmd=f"systemctl is-active {service_name} || true", check_ec=False
-    )
-    log.info(f"Agent unit state while waiting: {status_out.strip()}")
-
-    if not updated:
-        raise_known_defect(
-            "CEPHADM-AGENT-FAILOVER-CONFIG-PUSH",
-            f"agent.json target_ip still {last_ip!r} (expected {post_mgr_ip}) "
-            f"after failover {pre_mgr} -> {post_mgr}. Pre-failover target_ip was "
-            f"{pre_target_ip}. Agent was kept stopped so SSH reconfig could "
-            f"rewrite required_files.",
+        # Leave agent stopped; wait for SSH reconfig to rewrite agent.json
+        wait_timeout = DEFAULT_AGENT_DOWN_TIMEOUT + 180
+        log.info(
+            f"Waiting up to {wait_timeout}s for agent.json target_ip → {post_mgr_ip} "
+            f"while agent remains stopped"
         )
-    log.info(f"agent.json updated to target_ip={post_mgr_ip} while agent stopped")
-
-    log.info("Starting agent after config rewrite...")
-    target_node.exec_command(sudo=True, cmd=f"systemctl start {service_name}")
-
-    if not wait_for_agent_running(installer, hostname, timeout=180):
-        log.error(
-            "Agent did not reconnect — redeploying to recover for suite continuity"
+        updated, last_ip = wait_for_agent_json_target_ip(
+            target_node, agent_dir, post_mgr_ip, timeout=wait_timeout, interval=15
         )
-        shell(installer, f"ceph orch daemon redeploy agent.{hostname}")
-        assert wait_for_agent_running(installer, hostname, timeout=180)
+
+        status_out, _ = target_node.exec_command(
+            sudo=True, cmd=f"systemctl is-active {service_name} || true", check_ec=False
+        )
+        unit_state = (status_out or "").strip()
+        log.info(f"Agent unit state while waiting: {unit_state}")
+
+        if not updated:
+            if unit_state == "active":
+                # The harness stopped the agent and expected it to stay stopped so
+                # the SSH-reconfig path would rewrite agent.json. Finding it
+                # active means that precondition was broken, so this is a harness
+                # problem and must not be reported as the tracked product defect.
+                raise Exception(
+                    "agent.json target_ip was not rewritten, but the agent unit "
+                    f"is 'active' although it was expected to stay stopped "
+                    f"(last target_ip={last_ip!r}, expected {post_mgr_ip}). "
+                    "Harness problem, not the tracked defect."
+                )
+            raise_known_defect(
+                "CEPHADM-AGENT-FAILOVER-CONFIG-PUSH",
+                f"agent.json target_ip still {last_ip!r} (expected {post_mgr_ip}) "
+                f"after failover {pre_mgr} -> {post_mgr}. Pre-failover target_ip was "
+                f"{pre_target_ip}. Agent was kept stopped so SSH reconfig could "
+                f"rewrite required_files.",
+            )
+        log.info(f"agent.json updated to target_ip={post_mgr_ip} while agent stopped")
+    finally:
+        # Always bring the agent back, including on the known-defect path, so a
+        # skipped test does not leave a stopped agent raising CEPHADM_AGENT_DOWN
+        # in every later test of the suite.
+        log.info("Starting agent after config rewrite...")
+        target_node.exec_command(
+            sudo=True, cmd=f"systemctl start {service_name}", check_ec=False
+        )
+        try:
+            if not wait_for_agent_running(installer, hostname, timeout=180):
+                log.error(
+                    "Agent did not reconnect — redeploying to recover for suite "
+                    "continuity"
+                )
+                shell(installer, f"ceph orch daemon redeploy agent.{hostname}")
+                if not wait_for_agent_running(installer, hostname, timeout=180):
+                    log.error("Agent %s still not running after redeploy", hostname)
+        except Exception as exc:  # noqa: BLE001 - recovery must not mask the result
+            log.error("Agent recovery after failover test failed: %s", exc)
 
     wait_for_health_warning(
         installer, AGENT_HEALTH_WARNING, timeout=180, expect_present=False
@@ -623,7 +672,19 @@ def run(ceph_cluster, **kw):
 
     if failed:
         return 1
-    if known_defects:
-        # cephci maps -1 to "Skipped", which does not fail the suite.
+    if known_defects and not passed:
+        # Nothing completed normally: report the module as Skipped so the suite
+        # is not failed by an unfixed product bug. cephci maps -1 to "Skipped".
         return -1
+    if known_defects:
+        # Mixed result (only possible when `tests:` names several tests). -1
+        # would mark the whole module Skipped and discard the passes, while 1
+        # would fail on an expected defect. Report Pass and keep the known
+        # defects loud in the log above.
+        log.warning(
+            "%d test(s) reported a known defect; module reported Pass because "
+            "%d other test(s) passed. See the known-defect lines above.",
+            len(known_defects),
+            len(passed),
+        )
     return 0
