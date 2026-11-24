@@ -1,8 +1,11 @@
 #============================================================
-# Test-Case: Preflight preserves firewalld (IBMCEPH-21846 / 8.1z10)
+# Test-Case: Preflight preserves firewalld
+# Bugs: IBMCEPH-21846 (8.1z10), IBMCEPH-13852 (10.0) — same scenario; reuse this suite
 #
 # Cluster Configuration:
 #    conf/squid/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#    (For 10.0 / IBMCEPH-13852 validation, run against umbrella build with
+#     conf/umbrella/cephadm/2admin-3node-1rgw-1client-sanity.yaml)
 #============================================================
 
 tests:

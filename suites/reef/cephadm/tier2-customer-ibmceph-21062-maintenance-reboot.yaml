@@ -1,8 +1,11 @@
 #============================================================
-# Test-Case: Host maintenance exit after reboot (IBMCEPH-21062 / 7.1z12)
+# Test-Case: Host maintenance exit after reboot
+# Bugs: IBMCEPH-21062 (7.1z12), IBMCEPH-10801 (8.1z10) — same scenario; reuse this suite
 #
 # Cluster Configuration:
 #    conf/reef/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#    (For 8.1z10 / IBMCEPH-10801 validation, run against squid build with
+#     conf/squid/cephadm/2admin-3node-1rgw-1client-sanity.yaml)
 #============================================================
 
 tests:

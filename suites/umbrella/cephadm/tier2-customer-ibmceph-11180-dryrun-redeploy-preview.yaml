@@ -1,0 +1,75 @@
+#============================================================
+# Test-Case: Dry-run redeployment preview (IBMCEPH-11180 / 10.0)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/1admin-4node-1client-cluster.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: prometheus
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+      desc: bootstrap and deploy prometheus.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Dry-run prometheus placement change
+      desc: Preview placement-count change without mutating services
+      module: test_cephadm.py
+      destroy-cluster: false
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: prometheus
+              args:
+                placement:
+                  count: 2
+                dry-run: true
+
+  - test:
+      name: Verify prometheus unchanged after dry-run
+      desc: Confirm dry-run did not alter running prometheus daemons
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch ls prometheus --format json-pretty"
+          - "ceph orch ps --daemon-type prometheus"
+          - "ceph health detail"
