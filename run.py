@@ -70,6 +70,9 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--cloud <openstack> | <ibmc> | <aws> | <baremetal> | <onecloud> | <ocpvirt>]
         [--build <name>]
         [--inventory FILE]
+        [--ssh-user-name <name>]
+        [--ssh-user-private-key <path>]
+        [--ssh-user-pub-key <path>]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--add-repo <repo>]
@@ -115,6 +118,11 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
+  --ssh-user-name <name>            User used by the framework to access the
+                                    systems [default: cephuser]
+  --ssh-user-private-key <path>     Path to the private key of the SSH user
+  --ssh-user-pub-key <path>         Path to the public key authorized for the
+                                    SSH user on the systems
   --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal|onecloud|ocpvirt) [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
@@ -206,6 +214,8 @@ def create_nodes(
     enable_eus=False,
     custom_config=None,
     platform=None,
+    ssh_user=None,
+    ssh_private_key=None,
 ):
     """Creates the system under test environment.
 
@@ -219,6 +229,8 @@ def create_nodes(
         enable_eus      Extended OS support
         custom_config   list of <key>=<value>
         platform        RHEL platform (e.g. rhel-9, rhel-10) for OneCloud image selection
+        ssh_user        Overrides the user used to access the systems
+        ssh_private_key Overrides the private key used to access the systems
 
     Notes:
         use custom_config to specify the environments or configuration to
@@ -366,6 +378,12 @@ def create_nodes(
                 private_key_path = onecloud_cfg.get("private_key_path", "")
                 private_key_password = onecloud_cfg.get("private_key_password")
 
+            # SSH access overrides provided via the CLI
+            if ssh_user:
+                ssh_username = ssh_user
+            if ssh_private_key:
+                private_key_path = ssh_private_key
+
             private_key_path = (
                 expand_private_key_path(private_key_path) if private_key_path else ""
             )
@@ -465,6 +483,78 @@ def load_file(file_name):
         content = yaml.safe_load(conf_)
 
     return content
+
+
+def configure_ssh_user(inventory: dict, ssh_user: str, pub_key: str) -> None:
+    """
+    Add the SSH user to the inventory's cloud-init configuration.
+
+    The user is created along with its primary group, passwordless sudo
+    privileges and the provided public key authorized. The key is authorized
+    for root as well because the framework accesses the systems as root too.
+
+    Args:
+        inventory:  content of the inventory file
+        ssh_user:   user used by the framework to access the systems
+        pub_key:    public key content (single line) to authorize
+    """
+    instance = inventory.setdefault("instance", {})
+
+    try:
+        cloud_config = yaml.safe_load(instance.get("setup") or "") or {}
+    except yaml.YAMLError as err:
+        raise RuntimeError(f"Invalid cloud-config in the inventory: {err}")
+
+    if not isinstance(cloud_config, dict):
+        raise RuntimeError("The inventory instance setup is not a valid cloud-config.")
+
+    # Ensure the primary group of the user exists
+    groups = cloud_config.get("groups") or []
+    if ssh_user not in groups:
+        groups.append(ssh_user)
+        cloud_config["groups"] = groups
+
+    # Replace any existing entry of the user so that passwordless sudo and the
+    # provided public key are guaranteed.
+    users = [
+        user
+        for user in (cloud_config.get("users") or [])
+        if user != ssh_user
+        and not (isinstance(user, dict) and user.get("name") == ssh_user)
+    ]
+    users.append(
+        {
+            "name": ssh_user,
+            "primary-group": ssh_user,
+            "sudo": "ALL=(root) NOPASSWD:ALL",
+            "shell": "/bin/bash",
+            "ssh-authorized-keys": [pub_key],
+        }
+    )
+
+    # The framework connects as root as well, hence the key must be authorized
+    # for root too.
+    root_user = next(
+        (
+            user
+            for user in users
+            if isinstance(user, dict) and user.get("name") == "root"
+        ),
+        None,
+    )
+    if root_user is None:
+        root_user = {"name": "root"}
+        users.append(root_user)
+
+    root_keys = root_user.setdefault("ssh-authorized-keys", [])
+    if pub_key not in root_keys:
+        root_keys.append(pub_key)
+
+    cloud_config["users"] = users
+    cloud_config["disable_root"] = False
+
+    content = yaml.safe_dump(cloud_config, sort_keys=False, default_flow_style=False)
+    instance["setup"] = f"#cloud-config\n{content}"
 
 
 def get_tier_level(files: str) -> str:
@@ -768,6 +858,85 @@ def run(args):
         if inv_create and image_name is not None:
             distro.append(str(image_name).replace(".iso", ""))
 
+    # User employed by the framework to access the systems. Defaults to
+    # cephuser with the cloud credentials key. Any explicit override requires
+    # the user to exist on the systems with the given key authorized and
+    # passwordless sudo privileges.
+    ssh_user_name = args.get("--ssh-user-name") or "cephuser"
+    ssh_user_private_key = args.get("--ssh-user-private-key")
+    if ssh_user_private_key:
+        ssh_user_private_key = os.path.expanduser(ssh_user_private_key)
+    ssh_user_pub_key = args.get("--ssh-user-pub-key")
+    ssh_user_overridden = bool(
+        ssh_user_private_key or ssh_user_pub_key or ssh_user_name != "cephuser"
+    )
+    ssh_user = ssh_user_name if ssh_user_overridden else None
+
+    if ssh_user_overridden and reuse:
+        log.warning("--ssh-user-* options are ignored when --reuse is provided")
+    elif ssh_user_overridden:
+        if ssh_user_private_key and not os.path.isfile(ssh_user_private_key):
+            raise RuntimeError(
+                f"The private key file {ssh_user_private_key} does not exist."
+            )
+
+        # The public key of the user must be authorized on the systems. Fall
+        # back to the private key's counterpart when not provided explicitly.
+        pub_key_path = (
+            os.path.expanduser(ssh_user_pub_key)
+            if ssh_user_pub_key
+            else f"{ssh_user_private_key}.pub"
+        )
+        if not pub_key_path or not os.path.isfile(pub_key_path):
+            raise RuntimeError(
+                "Unable to locate the public key of the SSH user. Provide it using"
+                " --ssh-user-pub-key or place it alongside the private key as"
+                " <private-key>.pub"
+            )
+
+        with open(pub_key_path, "r") as pub_key_fh:
+            ssh_user_pub_key_content = pub_key_fh.read().strip()
+
+        if not ssh_user_pub_key_content:
+            raise RuntimeError(f"The public key file {pub_key_path} is empty.")
+
+        log.info(
+            "Using %s with private key %s for system access",
+            ssh_user_name,
+            ssh_user_private_key or "(runner default keys)",
+        )
+
+        # Ensure the user, its group and passwordless sudo exist in the
+        # inventories so that the systems are accessible post deployment.
+        if inventory:
+            configure_ssh_user(inventory, ssh_user_name, ssh_user_pub_key_content)
+
+        for cluster in conf.get("globals") or []:
+            cluster_inventory_path = (cluster.get("ceph-cluster") or {}).get(
+                "inventory"
+            )
+            if not cluster_inventory_path:
+                continue
+
+            cluster_inventory_path = os.path.abspath(cluster_inventory_path)
+            with open(cluster_inventory_path, "r") as inv_fh:
+                cluster_inventory = yaml.safe_load(inv_fh) or {}
+
+            configure_ssh_user(
+                cluster_inventory, ssh_user_name, ssh_user_pub_key_content
+            )
+
+            # Node creation reads the cluster inventory from disk, hence the
+            # updated content is persisted and the reference updated.
+            updated_path = os.path.join(
+                run_dir, f"inventory-{os.path.basename(cluster_inventory_path)}"
+            )
+            with open(updated_path, "w") as updated_fh:
+                yaml.safe_dump(cluster_inventory, updated_fh, sort_keys=False)
+
+            cluster["ceph-cluster"]["inventory"] = updated_path
+            log.info("Updated cluster inventory: %s", updated_path)
+
     for cluster in conf.get("globals"):
         if cluster.get("ceph-cluster").get("inventory"):
             cluster_inventory_path = os.path.abspath(
@@ -856,6 +1025,8 @@ def run(args):
                 enable_eus=enable_eus,
                 custom_config=custom_config,
                 platform=platform,
+                ssh_user=ssh_user,
+                ssh_private_key=ssh_user_private_key,
             )
 
         except Exception as err:
@@ -1238,6 +1409,8 @@ def run(args):
                 instances_name,
                 enable_eus=enable_eus,
                 platform=platform,
+                ssh_user=ssh_user,
+                ssh_private_key=ssh_user_private_key,
             )
 
         tcs.append(tc)
