@@ -4,7 +4,7 @@ Designed around how customers triage Ceph NVMeoF failures:
   Initiator: dmesg -T / journalctl -k for each connect→disconnect cycle (and FIO
             sub-windows as artifacts), then ``nvme list-subsys`` path state.
   Gateway:  systemd unit journal for keep-alive disconnects, SPDK abort/terminate,
-            admin qpair / socket errors (often logged as NOTICE, not only WARNING).
+            admin qpair / socket errors (often logged as NOTICE, not only WARNING)
 
 Soft checks: journals/dmesg are always scanned. Cluster Logs files are written
 only when suite ``savealllogs`` is truthy, or when ERROR/critical findings (or a
