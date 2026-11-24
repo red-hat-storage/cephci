@@ -31,10 +31,20 @@ def run_deployment_test(ceph_cluster, installer):
     hosts = json.loads(hosts_out)
     assert len(hosts) > 0, "No hosts found in the cluster"
 
-    assert ensure_agent_running_on_all(installer, ceph_cluster, timeout=360), (
-        "Agent daemon(s) not running on all hosts after enabling use_agent "
-        f"(last orch ps agents={[ (a.get('hostname'), a.get('status_desc')) for a in get_agent_daemons(installer) ]})"
-    )
+    if not ensure_agent_running_on_all(installer, ceph_cluster, timeout=360):
+        # Snapshot what we can see, but never let the diagnostic itself raise —
+        # a raising call here would replace this assertion with a traceback.
+        try:
+            observed = [
+                (a.get("hostname"), a.get("status_desc"))
+                for a in get_agent_daemons(installer)
+            ]
+        except Exception as exc:  # noqa: BLE001 - diagnostics must not raise
+            observed = f"<could not query agents: {str(exc).splitlines()[-1][:120]}>"
+        raise AssertionError(
+            "Agent daemon(s) not running on all hosts after enabling use_agent "
+            f"(last orch ps agents={observed})"
+        )
 
     for host_info in hosts:
         hostname = host_info["hostname"]
