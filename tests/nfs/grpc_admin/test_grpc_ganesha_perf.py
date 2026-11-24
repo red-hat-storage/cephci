@@ -93,29 +93,35 @@ def run(ceph_cluster, **kw):
     samples = int(config.get("samples", 20))
     p99_max_ms = float(config.get("p99_max_ms", 5000))
 
+    setup_cluster = config.get("setup_nfs_cluster", True)
+    cleanup_nfs = config.get("cleanup_nfs_cluster", setup_cluster)
+
     clients, nfs_nodes, client, nfs_node, nfs_server, nfs_ip = prepare_cluster_nodes(
         ceph_cluster, config
     )
     target = resolve_grpc_target(config, nfs_ip)
     installers = ceph_cluster.get_nodes("installer")
     installer = installers[0] if installers else None
+    # Temp ceph exports created by export_ops_perf (cleaned when shared suite keeps NFS).
+    temp_export_paths = []
 
     try:
         install_grpcurl(client)
         open_grpc_firewall(nfs_node, grpc_port)
         ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
-        setup_nfs_cluster(
-            clients=clients[:1],
-            nfs_server=nfs_server,
-            port=nfs_port,
-            version=nfs_version,
-            nfs_name=nfs_name,
-            nfs_mount=nfs_mount,
-            fs_name=fs_name,
-            export=nfs_export,
-            fs=fs,
-            ceph_cluster=ceph_cluster,
-        )
+        if setup_cluster:
+            setup_nfs_cluster(
+                clients=clients[:1],
+                nfs_server=nfs_server,
+                port=nfs_port,
+                version=nfs_version,
+                nfs_name=nfs_name,
+                nfs_mount=nfs_mount,
+                fs_name=fs_name,
+                export=nfs_export,
+                fs=fs,
+                ceph_cluster=ceph_cluster,
+            )
         transport = setup_grpc_transport(config, [client], installer, nfs_name)
         kw_tls = grpc_invoke_kwargs(transport)
 
@@ -206,6 +212,8 @@ def run(ceph_cluster, **kw):
                     nfs_export=exp_path,
                     fs=fs,
                 )
+                # Track before any failure so shared-suite finally can delete leftovers.
+                temp_export_paths.append(exp_path)
                 time.sleep(2)
                 ms_show, (ok, exports, _) = _timed_call(
                     show_exports, client, target, **kw_tls
@@ -224,15 +232,35 @@ def run(ceph_cluster, **kw):
                         break
                 if export_id is None:
                     log.warning(
-                        "Could not match export %s in ShowExports; skipping RemoveExport",
+                        "Could not match export %s in ShowExports; "
+                        "leaving for finally cleanup",
                         exp_path,
                     )
                     continue
-                ms_rm, (ok, _) = _timed_call(
+                ms_rm, (ok, raw_rm) = _timed_call(
                     remove_export, client, target, export_id, **kw_tls
                 )
                 if ok:
                     latencies.append(ms_rm)
+                    # gRPC remove succeeded; still delete ceph export object.
+                    try:
+                        Ceph(client).nfs.export.delete(nfs_name, exp_path)
+                        if exp_path in temp_export_paths:
+                            temp_export_paths.remove(exp_path)
+                    except Exception as exc:
+                        log.warning(
+                            "ceph nfs export delete %s after RemoveExport: %s",
+                            exp_path,
+                            exc,
+                        )
+                else:
+                    log.warning(
+                        "RemoveExport(%s) for %s failed: %s; "
+                        "leaving for finally cleanup",
+                        export_id,
+                        exp_path,
+                        raw_rm,
+                    )
             if not latencies:
                 raise OperationFailedError("No export op latency samples collected")
             p99 = _percentile(latencies, 99)
@@ -259,6 +287,21 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
+            # Shared suite keeps the NFS cluster — delete only temp exports we created.
+            if (not cleanup_nfs) and temp_export_paths:
+                for path in list(temp_export_paths):
+                    try:
+                        Ceph(client).nfs.export.delete(nfs_name, path)
+                        log.info("Deleted leftover perf export %s", path)
+                    except Exception as exc:
+                        log.warning(
+                            "ceph nfs export delete %s during perf cleanup: %s",
+                            path,
+                            exc,
+                        )
+            if cleanup_nfs:
+                cleanup_cluster(
+                    client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
+                )
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

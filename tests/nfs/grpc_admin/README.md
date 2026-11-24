@@ -17,7 +17,8 @@ This folder validates that Ganesha gRPC APIs work as expected. It does **not**:
 |----------|------------------------|
 | ExportService, ExportStats | GPFS / IBM Storage Scale (`nfs_upstream`) |
 | ClientMgr, ClientStats | D-Bus parity / golden compare |
-| nfsAdmin, ShowIdMapper | Inter-node HA / grace inject |
+| nfsAdmin, ClusterMembers, FakeRecall | Inter-node HA / grace inject |
+| CacheMgrService (idmapper Show*), QosMgr (smoke) | Full QoS matrix |
 | Core nfsService (grace, client/session IDs) | LogService (no upstream proto yet) |
 | Transport: TCP, UDS, mTLS, negatives | Cephadm consuming gRPC for export mgmt |
 
@@ -71,11 +72,15 @@ hyphens are not valid in Python import paths.
 | `nfsService` | `StartNfsGrace` | `StartGraceWithEvent` |
 | `nfsService` | `GetSessionId` | `GetSessionIds` |
 | `nfsService` | `nfsAdmin` | `ShutdownGanesha`, `ReReadConfig`, Purge*, Trim*, … |
-| `nfsService` | `ShowIdMapperService` | `ShowIdMapper` |
+| `nfsService` | `ClusterMembers` | `ShowClusterMembers`, `SetClusterMembers` |
+| `nfsService` | `FakeRecall` | `FakeRecall` |
+| ~~`nfsService`~~ | ~~`ShowIdMapperService`~~ | Removed — use `cacheMgr.CacheMgrService` |
 | `exportService` | `ExportService` | `ShowExports`, `DisplayExport`, `AddExport`, `RemoveExport`, `UpdateExport` |
 | `exportService` | `ExportStats` | `GetNFSv*IO`, `GetNFSIO`, `StatusStats`, `ResetStats`, … |
 | `cltmgrService` | `ClientMgr` | `ShowClients`, `AddClient`, `RemoveClient`, `DisconnectNfsv41Client` |
 | `cltmgrService` | `ClientStats` | `GetNFSv*IO`, `GetDelegations`, `GetClientAllops`, … |
+| `cacheMgr` | `CacheMgrService` | `ShowIdMapperUsers/Groups`, `ShowNegative*`, `ShowUid2Grp` (replaces ShowIdMapper) |
+| `qosService` | `QosMgr` | `Get/SetExportBandwidth`, IOPS, tokens, per-client QoS |
 
 **Not in proto yet:** Log get/set (D-Bus log interface only).
 
@@ -106,12 +111,29 @@ hyphens are not valid in Python import paths.
 | `trim_enable` / `trim_disable` | `nfsAdmin/TrimEnableDisable` |
 | `trim_call` | `nfsAdmin/TrimCall` |
 | `trim_status` | `nfsAdmin/TrimStatus` |
-| `show_idmapper` | `ShowIdMapperService/ShowIdMapper` |
+| `add_export` / `update_export` | Fail on error `message` without `success`; verify ShowExports / DisplayExport |
+| `show_clients_and_sessions` | Reject blank `session_ids` (`["",""]`) |
+| `show_cluster_members` | `ClusterMembers/ShowClusterMembers` |
+| `set_cluster_members` | `ClusterMembers/SetClusterMembers` then Show; asserts members present |
+| `fake_recall` | `FakeRecall/FakeRecall` (settle + GetClientIds) |
+| `cache_mgr_smoke` | NFS I/O then all six CacheMgr Show*; `ShowIdMapperUsers` needs `min_entries` (default 1) |
+| `qos_get_export_bandwidth` | `QosMgr/GetExportBandwidth`; requires status/bandwidth fields |
 | `export_stats_smoke` | `ExportStats` smoke (StatusStats / GetNFSv41IO / GetNFSIO) |
 | `client_stats_smoke` | `ClientStats.GetNFSv41IO` smoke |
 | `shutdown` | `nfsAdmin/ShutdownGanesha` — **not scheduled** (opt-in only) |
 
-Blocked (no upstream proto): `set_log_level`, `get_log_level`.
+Blocked: `set_log_level`, `get_log_level` (no proto). Idmapper show coverage is `cache_mgr_smoke` (not legacy `ShowIdMapperService`).
+
+### Shared NFS lifecycle (admin suite)
+
+The tier1 admin suite creates NFS **once** (`setup_shared_nfs`) and destroys it **once** (`cleanup_shared_nfs`). Intermediate cases set:
+
+```yaml
+setup_nfs_cluster: false
+cleanup_nfs_cluster: false
+```
+
+Cases that add temporary exports (e.g. `add_export`) remove only those extras; `update_export` restores `Access_Type=RW` afterward so later cases keep a writable mount.
 
 **Deferred:** full ExportStats / ClientStats RPC matrix (beyond smoke).
 
