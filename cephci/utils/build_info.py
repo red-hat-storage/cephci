@@ -225,8 +225,8 @@ class CephTestManifest:
             data: requests.Response = requests.get(manifest_url, verify=False)
         except requests.RequestException as e:
             raise RuntimeError(
-                "Unable to download the Ceph QE manifest file %s \n%s", manifest_url, e
-            )
+                f"Unable to download the Ceph QE manifest file {manifest_url}: {e}"
+            ) from e
 
         # A non-200 response must be rejected explicitly. GitHub returns the body
         # "404: Not Found" for a missing manifest, which yaml.safe_load happily
@@ -243,10 +243,10 @@ class CephTestManifest:
 
         try:
             yml_data: Dict[str, Any] = yaml.safe_load(data.text)
-        except yaml.YAMLError:
+        except yaml.YAMLError as e:
             raise RuntimeError(
-                f"Unable to process the Ceph QE manifest file {manifest_url}"
-            )
+                f"Unable to process the Ceph QE manifest file {manifest_url}: {e}"
+            ) from e
 
         if not isinstance(yml_data, dict):
             raise RuntimeError(
