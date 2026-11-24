@@ -873,11 +873,7 @@ def _build_merged_content(hostname: str, kind: str, chunks: List[dict]) -> str:
     appended afterward so Cluster Logs retain the structured dumps operators
     used to get from per-unit files.
     """
-    title = (
-        "gateway journals"
-        if kind == "gateway"
-        else "initiator dmesg/journalctl"
-    )
+    title = "gateway journals" if kind == "gateway" else "initiator dmesg/journalctl"
     header = [
         f"# Merged NVMeoF {title} for hostname={hostname}",
         f"# generated_at={datetime.now(timezone.utc).isoformat(timespec='seconds')}",
@@ -923,9 +919,7 @@ def _build_merged_content(hostname: str, kind: str, chunks: List[dict]) -> str:
         source = chunk.get("source") or "unknown"
         collected = chunk.get("collected_at") or ""
         meta_sections.append("#" + ("=" * 71))
-        meta_sections.append(
-            f"# scan/metadata for src={source} collected={collected}"
-        )
+        meta_sections.append(f"# scan/metadata for src={source} collected={collected}")
         scan_header = (chunk.get("scan_header") or "").strip()
         if scan_header:
             meta_sections.append(scan_header)
@@ -959,9 +953,7 @@ def _persist_merged_node(kind: str, hostname: str) -> Optional[str]:
         )
     if not chunks:
         return None
-    subdir = (
-        JOURNAL_ARTIFACT_SUBDIR if kind == "gateway" else DMESG_ARTIFACT_SUBDIR
-    )
+    subdir = JOURNAL_ARTIFACT_SUBDIR if kind == "gateway" else DMESG_ARTIFACT_SUBDIR
     filename = (
         GATEWAY_MERGED_FILENAME if kind == "gateway" else INITIATOR_MERGED_FILENAME
     ).format(hostname=hostname)
@@ -985,7 +977,6 @@ def _persist_all_buffered_artifacts() -> Dict[str, Dict[str, Optional[str]]]:
     for host in init_hosts:
         written["initiator"][host] = _persist_merged_node("initiator", host)
     return written
-
 
 
 def _exec(node, cmd: str) -> str:
@@ -1644,7 +1635,9 @@ def collect_nvmeof_service_journals(
         # warning+ / err / critical scan lines.
         if save_all and (raw_full or "").strip():
             merge_lines = [
-                ln for ln in (raw_full or "").splitlines() if _is_journal_content_line(ln)
+                ln
+                for ln in (raw_full or "").splitlines()
+                if _is_journal_content_line(ln)
             ]
         else:
             merge_lines = []
