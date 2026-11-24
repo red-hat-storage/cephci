@@ -1,0 +1,71 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Case:
+#      Verify that 'clog_to_monitors=false' configuration is correctly applied and persisted
+#      across MON daemon restarts.
+#
+# Reference:
+#   Jira: IBMCEPH-22672
+#
+# Cluster Configuration:
+#   conf/squid/cephadm/1admin-4node-1client-cluster.yaml
+#
+# Test steps:
+#   (1) Bootstrap Ceph cluster with MON daemons.
+#   (2) Enable debug logging for monclient (ceph config set mon debug_monc 10).
+#   (3) Configure clog_to_monitors to false (ceph config set mon clog_to_monitors false).
+#   (4) Restart MON service (ceph orch restart mon).
+#   (5) Validate that clog_to_monitors=false remains in effect and MON logs do not emit
+#       'log_client _send_to_mon log to self'.
+#   (6) Clean up configuration options.
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+      desc: Bootstrap and deploy MON cluster using cephadm.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Verify clog_to_monitors config after MON restart
+      desc: Validate clog_to_monitors false remains effective after restarting MON daemons
+      polarion-id: CEPH-83633336
+      module: test_customer_ibmceph_22672_mon_clog_to_monitors.py
