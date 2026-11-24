@@ -42,6 +42,8 @@ def run(ceph_cluster, **kw) -> int:
     # was only assigned part-way through `try` — so any earlier failure raised
     # UnboundLocalError in `finally` and hid the original error entirely.
     test_config = config.get("Verify_config_parameters") or {}
+    cleanup_failed = False
+    crash_detected = False
     try:
         with open(cluster_conf_path, "r") as fd:
             cluster_conf_file = fd.read()
@@ -86,14 +88,16 @@ def run(ceph_cluster, **kw) -> int:
         rados_obj.log_cluster_health()
         return 1
     finally:
-        # removing the additional configurations set in the mon database
+        # No `return` in this block: a return here raises a SyntaxWarning and
+        # discards any in-flight exception, and it would also override whatever
+        # the body returned. Record the outcomes and decide after the block.
         for conf in test_config.get("configurations", []):
             for entry in conf.values():
                 if not mon_obj.remove_config(**entry):
                     log.error(
                         f"Failed to remove config : {conf} from the mon config database"
                     )
-                    return 1
+                    cleanup_failed = True
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
@@ -103,6 +107,9 @@ def run(ceph_cluster, **kw) -> int:
         )
         if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
-            return 1
+            crash_detected = True
+
+    if cleanup_failed or crash_detected:
+        return 1
     log.info("Configurations added from file and then removed. Workflow complete")
     return 0
