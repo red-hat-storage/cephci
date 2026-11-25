@@ -63,6 +63,9 @@ def run(ceph_cluster, **kw):
 
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
+        # Only use clients with suite-installed ceph-common (first two).
+        # Extra conf clients lack `ceph` on PATH (command not found / exit 127).
+        clients = clients[:2]
         if len(clients) < 2:
             log.error(
                 "This test requires minimum 2 client nodes.This has only %s clients",
