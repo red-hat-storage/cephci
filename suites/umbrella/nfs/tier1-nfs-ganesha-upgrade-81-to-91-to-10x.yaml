@@ -1,26 +1,27 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-upgrade-9-1-to-9x-latest.yaml
-# Scenario: Upgrade Ceph 9.1(GA) cluster to Ceph 9.x(Latest)
-# with NFS-Ganesha in RHEL9
+# Test-Suite: tier1-nfs-ganesha-upgrade-81-to-91-to-10x.yaml
+# Scenario: Upgrade Ceph 8.1x(GA) to Ceph 9.1x(GA) and finally
+# to Ceph 10.0(Latest) with NFS-Ganesha in RHEL 9.8
 #
-# Cluster Configuration: Conf: conf/squid/nfs/1admin-3client-7node.yaml
+# Cluster Configuration: Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Test Steps:
-# - Deploy Ceph 9.1(GA) cluster in RHEL 9
-# - Deploy Ceph 9.1 client
-# - Upgrade cluster along with NFS-Ganesha IOs parallel
+# - Deploy Ceph 8.1x(GA) cluster in RHEL 9.8
+# - Deploy Ceph 8.1x client
+# - Upgrade cluster to 9.1x (GA) along with NFS-Ganesha IOs in parallel
+# - Upgrade cluster along with NFS-Ganesha IOs parallel on 10.0 builds
 ################################################################################################
 tests:
   - test:
       name: setup install pre-requisistes
-      desc: Setup phase to deploy pre-requisites for running the tests.
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
 
   - test:
-      name: Bootstrap Ceph 9.1(GA) cluster with label placements
-      desc: Bootstrap Ceph 9.1(GA) cluster with label placements
+      name: Bootstrap Ceph 8.1x (N-2) cluster and deploy services with label placements.
+      desc: Bootstrap Ceph 8.1x (N-2) cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -30,7 +31,7 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 9.1
+                rhcs-version: 8.1
                 release: released
                 mon-ip: node1
                 orphan-initial-daemons: true
@@ -176,20 +177,7 @@ tests:
         cleanup: false
 
   - test:
-      name: Nfs Ganesha metrics validation - pre_upgrade
-      module: test_nfs_ganesha_metrics_upgrade_validation.py
-      desc: Enable Enable_Metrics in ganesha.conf and validate monitoring port before upgrade
-      polarion-id: CEPH-83620035
-      abort-on-fail: true
-      config:
-        operation: before_upgrade
-        nfs_name: cephfs-nfs
-        monitoring_port: 9587
-        configure_metrics: true
-        ensure_monitoring_port: true
-
-  - test:
-      name: Nfs Verify multiple io and lookups
+      name: Nfs Verify multiple parallel io and lookups
       module: nfs_verify_multiple_parallel_io_and_lookups.py
       desc: Perform look ups while multiple parallel io are in progress
       polarion-id: CEPH-83581304
@@ -203,7 +191,7 @@ tests:
   - test:
       name: Nfsv4 multiple operations - pre_upgrade
       module: test_nfs_multiple_operations_for_upgrade.py
-      desc: NFS ops before upgrade - create, delete, write, read, rename
+      desc: nfs multiple operations before upgrade create, delete, write, read, rename
       polarion-id: CEPH-83620035
       abort-on-fail: false
       config:
@@ -216,13 +204,16 @@ tests:
         operation: before_upgrade
 
   - test:
-      name: Upgrade along with IOs for nfs
+      name: Upgrade to 8.1x along with IOs for nfs - parallel module
       module: test_parallel.py
-      desc: Upgrade along with IOs for nfs in parallel
+      config:
+        max_time: 14400
+        cancel_pending: true
+      desc: Upgrade along with IOs for nfs - parallel module
       parallel:
         - test:
-            name: Upgrade cluster to latest Ceph 9.x
-            desc: Upgrade cluster to latest Ceph 9.x
+            name: Upgrade cluster to latest Ceph 9.1x
+            desc: Upgrade cluster to latest Ceph 9.1x
             module: test_cephadm_upgrade.py
             polarion-id: CEPH-83573791,CEPH-83573790
             config:
@@ -230,11 +221,13 @@ tests:
               service: upgrade
               base_cmd_args:
                 verbose: true
-
+              args:
+                rhcs-version: 9.1
+                release: released
         - test:
             name: nfs operations during upgrade
             module: test_nfs_io_operations_during_upgrade.py
-            desc: NFS ops during upgrade - create, delete, write, read, rename
+            desc: nfs multiple operations during upgrade create, delete, write, read, rename
             polarion-id: CEPH-83620035
             abort-on-fail: false
             config:
@@ -250,25 +243,11 @@ tests:
               stall_threshold_s: 5
               stall_recovery_timeout_s: 100
               probe_interval_s: 1
-      abort-on-fail: true
 
   - test:
-      name: Nfs Ganesha metrics validation - post_upgrade
-      module: test_nfs_ganesha_metrics_upgrade_validation.py
-      desc: Verify Enable_Metrics in ganesha.conf and monitoring port after upgrade
-      polarion-id: CEPH-83620035
-      abort-on-fail: true
-      config:
-        operation: after_upgrade
-        nfs_name: cephfs-nfs
-        monitoring_port: 9587
-        configure_metrics: false
-        ensure_monitoring_port: false
-
-  - test:
-      name: NFSv4 multiple operations - post_upgrade
+      name: Nfsv3 multiple operations - post_8.1_upgrade
       module: test_nfs_multiple_operations_for_upgrade.py
-      desc: NFS ops after upgrade - create, delete, write, read, rename
+      desc: nfs multiple operations after upgrade create, delete, write, read, rename
       polarion-id: CEPH-83620035
       abort-on-fail: false
       config:
@@ -279,6 +258,89 @@ tests:
         file_count: 50
         dd_command_size_in_M: 10
         operation: after_upgrade
+
+  - test:
+      name: Nfsv4 multiple operations - pre_upgrade
+      module: test_nfs_multiple_operations_for_upgrade.py
+      desc: nfs multiple operations before upgrade create, delete, write, read, rename
+      polarion-id: CEPH-83620035
+      abort-on-fail: false
+      config:
+        sudo: false
+        nfs_version: 4.2
+        clients: 2
+        setup: false
+        file_count: 50
+        dd_command_size_in_M: 10
+        operation: before_upgrade
+
+  - test:
+      name: Upgrade along with IOs for nfs - parallel module
+      module: test_parallel.py
+      config:
+        max_time: 14400
+        cancel_pending: true
+      desc: Upgrade along with IOs for nfs - parallel module
+      parallel:
+        - test:
+            name: Upgrade cluster to latest Ceph 10.x
+            desc: Upgrade cluster to latest Ceph 10.x
+            module: test_cephadm_upgrade.py
+            polarion-id: CEPH-83573791,CEPH-83573790
+            config:
+              command: start
+              service: upgrade
+              base_cmd_args:
+                verbose: true
+        - test:
+            name: nfs operations during upgrade
+            module: test_nfs_io_operations_during_upgrade.py
+            desc: nfs multiple operations during upgrade create, delete, write, read, rename
+            polarion-id: CEPH-83620035
+            abort-on-fail: false
+            config:
+              sudo: false
+              nfs_version: 4.2
+              clients: 4
+              setup: false
+              file_count: 25
+              dd_command_size_in_M: 10
+              exports_number: 4
+              loop_count: 4
+              io_health_monitor: true
+              stall_threshold_s: 5
+              stall_recovery_timeout_s: 100
+              probe_interval_s: 1
+
+  - test:
+      name: NFS CephX key rotation ceph nfs cluster rotate key
+      module: test_nfs_cephx_key_rotation.py
+      desc: NFS export stays mounted post nfs cluster key rotate
+      polarion-id: CEPH-83633001
+      abort-on-fail: false
+      config:
+        setup: false
+        nfs_version: 4.1
+        clients: 1
+        nfs_name: cephfs-nfs
+        nfs_mount: /mnt/nfs
+        nfs_export: /export_0
+
+  - test:
+      name: NFSv4 multiple operations - post_upgrade
+      module: test_nfs_multiple_operations_for_upgrade.py
+      desc: nfs multiple operations after upgrade create, delete, write, read, rename
+      polarion-id: CEPH-83620035
+      abort-on-fail: false
+      config:
+        sudo: false
+        nfs_version: 4.2
+        clients: 2
+        setup: false
+        file_count: 50
+        dd_command_size_in_M: 10
+        operation: after_upgrade
+
 
   - test:
       name: Nfs Verify rm write lookups in parellel from multi clients
@@ -330,7 +392,7 @@ tests:
   - test:
       name: Nfs verify export unexport while nfs share is in use
       module: nfs_verify_stress.py
-      desc: Stress admin ops (export/unexport) while clients use NFS shares
+      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
       polarion-id: CEPH-83575994
       abort-on-fail: false
       config:
@@ -348,5 +410,5 @@ tests:
         sudo: false
         nfs_version: 4.1
         clients: 3
-        num_files: 10
-        num_dirs: 10
+        num_files: 1000
+        num_dirs: 1000
