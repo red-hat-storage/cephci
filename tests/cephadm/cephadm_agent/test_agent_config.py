@@ -389,6 +389,16 @@ def run_refresh_rate_test(ceph_cluster, installer):
         # Reconfig re-pushes agent.json for this daemon so the new period is in
         # effect. Daemon-scoped, so other agents on the cluster are not bounced.
         shell(installer, f"ceph orch daemon reconfig agent.{hostname}")
+        # `reconfig` is asynchronous ("Scheduled to reconfig") and redeploys the
+        # agent, so it restarts. Measuring straight after a fixed sleep counts the
+        # restart window instead of the new cadence: observed 0 posts in 30s on
+        # 20.2.2-368 run 20. Wait for the agent to be running again first, then
+        # let it settle for three refresh periods.
+        if not wait_for_agent_running(installer, hostname, timeout=180):
+            raise Exception(
+                f"Agent {hostname} did not come back after reconfig for "
+                f"{NEW_RATE}s rate"
+            )
         time.sleep(NEW_RATE * 3)
 
         log.info("Measuring post frequency at 10s rate")
@@ -414,6 +424,11 @@ def run_refresh_rate_test(ceph_cluster, installer):
         # rate from the previous phase, so a 60s window would show ~6 posts and
         # trip the `<= 3` assertion below.
         shell(installer, f"ceph orch daemon reconfig agent.{hostname}")
+        if not wait_for_agent_running(installer, hostname, timeout=180):
+            raise Exception(
+                f"Agent {hostname} did not come back after reconfig for "
+                f"{SLOW_RATE}s rate"
+            )
         time.sleep(SLOW_RATE + 10)
 
         log.info("Measuring post frequency at 60s rate")
@@ -449,6 +464,19 @@ def run_refresh_rate_test(ceph_cluster, installer):
         # CEPHADM_AGENT_DOWN. Nothing was pushed before this change, so nothing
         # leaked; the reconfig calls are what make the restore necessary.
         shell(installer, f"ceph orch daemon reconfig agent.{hostname}")
+        # The restore reconfig also restarts the agent, so wait for it to be back
+        # before the next test runs against this cluster. Bounded and non-fatal:
+        # the restore has already been pushed, and a failure here should not mask
+        # the test result.
+        try:
+            if not wait_for_agent_running(installer, hostname, timeout=180):
+                log.error(
+                    "Agent %s did not report running after restoring the refresh "
+                    "rate; later tests may see CEPHADM_AGENT_DOWN",
+                    hostname,
+                )
+        except Exception as exc:  # noqa: BLE001 - must not mask the test result
+            log.error("Readiness wait after restore failed: %s", exc)
         time.sleep(int(original_rate) * 2)
 
     log.info("PASS: Refresh rate configuration changes take effect")
