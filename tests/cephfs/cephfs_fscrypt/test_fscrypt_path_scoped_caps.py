@@ -47,9 +47,13 @@ def run(ceph_cluster, **kw):
             return 1
 
         build = config.get("build", config.get("rhbuild"))
-        fs_util.prepare_clients(clients, build)
-        fs_util.auth_list(clients)
+        # This TC only needs the primary client. auth_list() over every
+        # conf client hits nodes where ``ceph`` is not on PATH (seen on
+        # magna: ``bash: ceph: command not found`` / exit 127) and aborts
+        # before path-scoped caps are exercised.
         client = clients[0]
+        fs_util.prepare_clients([client], build)
+        fs_util.auth_list([client])
         expect_fail = bool(config.get("expect_encrypt_fail", False))
 
         erasure = (

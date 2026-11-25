@@ -10,6 +10,8 @@ on a build with the encryption auth-cap fix.
 """
 
 import json
+import random
+import string
 import traceback
 
 from cli.ceph.ceph import Ceph
@@ -128,8 +130,17 @@ def run(ceph_cluster, **kw):
     nfs_node = nfs_nodes[0]
 
     gklm_params = load_gklm_config(custom_data, config, cephci_data)
-    gklm_client_name = config.get("gklm_client_name", "automation_cmount")
-    gklm_cert_alias = config.get("gklm_cert_alias", "cert_cmount")
+    # Unique GKLM client/cert names per run — fixed names collide on shared GKLM
+    # (CTGKM3542E already exists) and abort the TC before cmount_path is exercised.
+    rand_str = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(4)
+    )
+    gklm_client_name = config.get(
+        "gklm_client_name", "automation_cmount_{}".format(rand_str)
+    )
+    gklm_cert_alias = config.get(
+        "gklm_cert_alias", "cert_cmount_{}".format(rand_str)
+    )
     client_export_mount_dict = None
     gklm_rest_client = None
     test_failed = True
