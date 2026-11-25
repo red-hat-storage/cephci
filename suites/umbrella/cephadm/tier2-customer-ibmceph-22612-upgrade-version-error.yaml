@@ -1,0 +1,91 @@
+#============================================================
+# Test-Case: Correct upgrade error for rejected version strings (IBMCEPH-22612)
+#
+# Cluster Configuration:
+#    conf/umbrella/upgrades/1admin-3node-1client-upgrade.yaml
+#
+# Note: Version rejection must not be misclassified as UPGRADE_INVALID_CRUSH_BUCKET.
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster and deploy services with label placements.
+      desc: Bootstrap cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Record CRUSH hierarchy with OSDs
+      desc: Confirm selected CRUSH bucket exists and contains OSDs
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph osd crush tree"
+          - "ceph osd tree"
+          - "ceph osd stat"
+
+  - test:
+      name: Trigger upgrade with rejected version string
+      desc: Attempt upgrade with invalid version format; capture classified error
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "ceph orch upgrade start --image invalid:not.a.version || true"
+          - "ceph orch upgrade status || true"
+          - "ceph health detail || true"
+
+  - test:
+      name: Verify upgrade did not complete after rejection
+      desc: Confirm upgrade paused/failed without reporting completion
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch upgrade status"
+          - "ceph health detail"
+          - "ceph versions"

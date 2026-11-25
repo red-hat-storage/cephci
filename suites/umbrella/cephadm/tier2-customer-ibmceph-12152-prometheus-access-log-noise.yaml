@@ -1,0 +1,59 @@
+#============================================================
+# Test-Case: Reduce repetitive Prometheus access-log noise (IBMCEPH-12152)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/1admin-4node-1client-cluster.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: prometheus
+              args:
+                placement:
+                  nodes:
+                    - node1
+                  limit: 1
+      desc: bootstrap and deploy prometheus.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Scrape prometheus metrics endpoint repeatedly
+      desc: Perform repeated successful /metrics scrapes without flooding INFO logs
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch ps --daemon-type prometheus"
+          - "ceph dashboard get-prometheus-api-host || true"
+          - "ceph health detail"

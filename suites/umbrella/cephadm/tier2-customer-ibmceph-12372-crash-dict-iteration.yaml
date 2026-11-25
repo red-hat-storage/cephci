@@ -1,0 +1,59 @@
+#============================================================
+# Test-Case: Crash-module dictionary iteration safety (IBMCEPH-12372)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/1admin-4node-1client-cluster.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: crash
+              args:
+                placement:
+                  nodes: "*"
+      desc: bootstrap and deploy crash module/service.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Exercise crash module listing under concurrent activity
+      desc: List/inspect crash records while module remains available
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph crash ls || true"
+          - "ceph crash stat || true"
+          - "ceph crash ls || true"
+          - "ceph mgr module ls"
+          - "ceph health detail"

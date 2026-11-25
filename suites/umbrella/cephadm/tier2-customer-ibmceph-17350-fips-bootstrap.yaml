@@ -1,0 +1,71 @@
+#============================================================
+# Test-Case: Bootstrap on FIPS-enabled hosts (IBMCEPH-17350)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#
+# Note: Requires FIPS-enabled hosts. Validates full bootstrap including
+#       orchestrator SSH host-add while FIPS remains enforced.
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Record FIPS / crypto policy state
+      desc: Capture host FIPS state before bootstrap
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "fips-mode-setup --check || true"
+          - "update-crypto-policies --show || true"
+          - "cat /proc/sys/crypto/fips_enabled || true"
+
+  - test:
+      name: Cephadm Bootstrap on FIPS host
+      desc: Bootstrap cluster while FIPS remains enforced
+      module: test_bootstrap.py
+      destroy-cluster: false
+      abort-on-fail: true
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          custom_image: true
+          mon-ip: node1
+          skip-monitoring-stack: true
+          orphan-initial-daemons: true
+
+  - test:
+      name: Add all hosts to ceph cluster
+      desc: Add remaining FIPS-enabled hosts through orchestrator
+      module: test_host.py
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes: []
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Verify bootstrap and host inventory
+      desc: Confirm MON/MGR/orchestrator and host inventory after FIPS bootstrap
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph status"
+          - "ceph orch host ls"
+          - "ceph orch ps"
+          - "ceph health detail"

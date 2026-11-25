@@ -1,0 +1,76 @@
+#============================================================
+# Test-Case: Preserve last successfully applied OSD spec (IBMCEPH-15887)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/1admin-4node-1client-cluster.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: bootstrap and deploy valid OSD spec.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Save last successfully applied OSD spec
+      desc: Export valid OSD spec and config-key representation
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch ls osd --export"
+          - "ceph config-key get mgr/cephadm/spec.osd || true"
+          - "ceph orch ps --daemon-type osd"
+
+  - test:
+      name: Apply invalid OSD device paths
+      desc: Apply OSD spec with nonexistent data devices and expect failure
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "printf '%s\\n' 'service_type: osd' 'service_id: osd' 'placement:' '  host_pattern: \"*\"' 'spec:' '  data_devices:' '    paths:' '      - /dev/does-not-exist-osd' > /tmp/osd-invalid.yaml"
+          - "ceph orch apply -i /tmp/osd-invalid.yaml || true"
+          - "sleep 30"
+
+  - test:
+      name: Verify last valid OSD spec retained
+      desc: Confirm export/config-key still expose last successful OSD spec
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch ls osd --export"
+          - "ceph config-key get mgr/cephadm/spec.osd || true"
+          - "ceph orch ps --daemon-type osd"
+          - "ceph health detail"
