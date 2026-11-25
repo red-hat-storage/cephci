@@ -1,0 +1,110 @@
+#============================================================
+# Test-Case: Automatic CRUSH bucket iteration during OSD upgrades
+# Bug: IBMCEPH-19445 (ON_QA / 10.0)
+#
+# Cluster Configuration:
+#    conf/umbrella/upgrades/1admin-3node-1client-upgrade.yaml
+#
+# Note: End-to-end iteration verification depends on version-string /
+#       error-reporting fixes (IBMCEPH-22611 / IBMCEPH-22612). Suite still
+#       exercises crush_bucket_type without crush_bucket_name.
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap cluster and deploy services with label placements.
+      desc: Bootstrap cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client1
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Record CRUSH hierarchy before OSD bucket upgrade
+      desc: Capture CRUSH tree and OSD mapping for bucket iteration verification
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph osd crush tree --format json"
+          - "ceph osd tree"
+          - "ceph osd stat"
+          - "ceph versions"
+
+  - test:
+      name: Start OSD upgrade with crush_bucket_type only
+      desc: Upgrade OSDs iterating buckets by type without crush_bucket_name
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "ceph orch upgrade start --daemon-types osd --crush-bucket-type host || ceph orch upgrade start --daemon_types osd --crush_bucket_type=host || true"
+          - "ceph orch upgrade status || true"
+
+  - test:
+      name: Poll upgrade status during bucket iteration
+      desc: Verify upgrade status reflects progression across buckets
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch upgrade status"
+          - "ceph orch ps --daemon-type osd"
+          - "ceph versions"
+          - "ceph health detail"

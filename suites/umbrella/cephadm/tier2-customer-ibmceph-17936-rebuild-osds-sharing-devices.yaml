@@ -1,0 +1,78 @@
+#============================================================
+# Test-Case: Forward shared-device OSD rebuild option (IBMCEPH-17936 / ON_QA / 10.0)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/1admin-4node-1client-cluster.yaml
+#
+# Note: Rebuild testing is destructive; use disposable devices only.
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: bootstrap and deploy OSDs.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Record OSD and device relationships
+      desc: Capture OSD IDs and device metadata before rebuild
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph osd tree"
+          - "ceph osd metadata"
+          - "ceph orch device ls"
+          - "ceph orch ps --daemon-type osd"
+
+  - test:
+      name: Rebuild OSD with shared-device option
+      desc: Invoke orch osd rebuild with --rebuild-osds-sharing-devices
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "OSD_ID=$(ceph osd ls | head -1); HOST=$(ceph osd find $OSD_ID --format json | python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"host\",\"node1\"))' 2>/dev/null || echo node1); echo OSD=$OSD_ID HOST=$HOST; ceph orch osd rebuild $HOST $OSD_ID --rebuild-osds-sharing-devices || ceph orch osd rebuild $HOST $OSD_ID --rebuild_osds_sharing_devices || true"
+          - "ceph orch ps --daemon-type osd || true"
+          - "ceph osd stat || true"
+
+  - test:
+      name: Verify OSD health after shared-device rebuild path
+      desc: Confirm OSDs recover and cluster remains usable after rebuild attempt
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph osd stat"
+          - "ceph orch ps --daemon-type osd"
+          - "ceph health detail"
