@@ -4,7 +4,7 @@ from cli.utilities.packages import Package, PackageError, ReposError, Rpm
 from cli.utilities.utils import get_custom_repo_url
 
 YUM_REPO_DIR = "/etc/yum.repos.d"
-REG_IMAGE = "registry.redhat.io/openshift4/{}:latest"
+REG_IMAGE = "registry.redhat.io/openshift4/{}:{}"
 
 
 def compare_packages(node, pkgs):
@@ -60,8 +60,8 @@ def pull_images(node, images):
         node (ceph): ceph node objects
         images (dict): container images
     """
-    for image, _ in images.items():
-        Container(node).pull(REG_IMAGE.format(image))
+    for image, ver in images.items():
+        Container(node).pull(REG_IMAGE.format(image, ver))
 
 
 def compare_images(node, images):
@@ -71,10 +71,10 @@ def compare_images(node, images):
         images (dict): container images
     """
     for image, ver in images.items():
-        if Container(node).compare(REG_IMAGE.format(image), ver) == -1:
-            raise PackageError(
-                f"Expected version for {REG_IMAGE.format(image)} is {ver}"
-            )
+        image_url = REG_IMAGE.format(image, ver)
+        if Container(node).compare(image_url, ver) == -1:
+            raise PackageError(f"Expected version for {image_url} is {ver}")
+
 
 
 def validate_packages(node, pkgs):
