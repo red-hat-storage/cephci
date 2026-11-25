@@ -26,6 +26,7 @@ globals:
       node3:
         role:
           - osd
+          - osd_encrypt_lv
           - node-exporter
           - crash
         no-of-volumes: 3
@@ -33,6 +34,7 @@ globals:
       node4:
         role:
           - osd
+          - osd_encrypt_raw
           - node-exporter
           - crash
         no-of-volumes: 3
@@ -40,6 +42,7 @@ globals:
       node5:
         role:
           - osd
+          - osd_lv
           - node-exporter
           - crash
         no-of-volumes: 3
@@ -65,6 +68,7 @@ globals:
       node9:
         role:
           - osd
+          - osd_lv
           - node-exporter
           - crash
         no-of-volumes: 3
@@ -72,6 +76,7 @@ globals:
       node10:
         role:
           - osd
+          - osd_raw
           - node-exporter
           - crash
         no-of-volumes: 3
