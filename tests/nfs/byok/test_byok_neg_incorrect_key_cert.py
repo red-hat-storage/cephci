@@ -77,7 +77,6 @@ def run(ceph_cluster, **kw):
         nfs_nodes = ceph_cluster.get_nodes("nfs")
         installer = ceph_cluster.get_nodes(role="installer")[0]
         clients = ceph_cluster.get_nodes("client")
-        client_objs = ceph_cluster.get_ceph_objects("client")
         client = clients[0]
         nfs_mount = config.get("nfs_mount", "/mnt/nfs_byok")
         nfs_export = config.get("nfs_export", "/export_byok")
@@ -161,7 +160,8 @@ def run(ceph_cluster, **kw):
                 clients, nfs_mount, nfs_name, nfs_export, 1
             )
 
-        cephfs_common_utils.remove_fs(client_objs[0], fs_name)
+        # Do not remove the shared suite filesystem (ceph fs volume rm). That
+        # leaves later BYOK TCs with Error ENOENT: FS 'cephfs' not found.
         log.info("Cleanup completed")
 
 
