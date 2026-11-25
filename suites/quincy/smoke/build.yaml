@@ -36,6 +36,6 @@ tests:
           ceph-fuse: "16.2"
           cephfs-top: "16.2"
         monitoring_images:
-          ose-prometheus-node-exporter: "v4.13.0"
-          ose-prometheus: "v4.13.0"
-          ose-prometheus-alertmanager: "v4.13.0"
+          ose-prometheus-node-exporter: "v4.12"
+          ose-prometheus: "v4.12"
+          ose-prometheus-alertmanager: "v4.12"
