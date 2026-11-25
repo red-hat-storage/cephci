@@ -1,5 +1,5 @@
 """
-IBMCEPH-15738 / Polarion CEPH-83633026 – ``ceph nvmeof top connection``
+IBMCEPH-15738 / Polarion CEPH-83633026 ``ceph nvmeof top connection``
 
 Automates Polarion steps for live per-connection IO statistics (IO-size buckets)
 for a host ↔ subsystem pair across NVMe-oF gateways.
@@ -1875,17 +1875,17 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             bs_sweep_runtime,
         )
         step12_qos(nvmegwcli, sub_nqn, host_nqn, gw_group, initiator_objs, io_executor)
-        # step11_ha_failover(
-        #     nvmegwcli,
-        #     sub_nqn,
-        #     host_nqn,
-        #     gw_group,
-        #     nvme_service,
-        #     ceph_cluster,
-        #     {**config, "rbd_pool": config.get("rbd_pool", "rbd"), "gw_group": gw_group},
-        #     initiator_objs,
-        #     io_executor,
-        # )
+        step11_ha_failover(
+            nvmegwcli,
+            sub_nqn,
+            host_nqn,
+            gw_group,
+            nvme_service,
+            ceph_cluster,
+            {**config, "rbd_pool": config.get("rbd_pool", "rbd"), "gw_group": gw_group},
+            initiator_objs,
+            io_executor,
+        )
         step15_invalid_period_sort(nvmegwcli, sub_nqn, host_nqn, gw_group, ceph_cluster)
         # Reconnect for disconnect negative (step14 ends disconnected)
         initiator_objs = prepare_io_execution(
