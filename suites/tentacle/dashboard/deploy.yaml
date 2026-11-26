@@ -62,14 +62,6 @@ tests:
               args:
                 placement:
                   label: nfs
-          - config:
-              command: apply
-              service: mds
-              pos_args:
-                - mds.cephfs
-              args:
-                placement:
-                  label: mds
 
           # Optional daemon steps.
           # - config:
