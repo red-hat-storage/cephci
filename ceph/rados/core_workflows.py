@@ -7590,11 +7590,12 @@ EOF"""
 
         Creates a CephFS filesystem, then provisions ``num_clusters`` NFS
         clusters each with ``exports_per_cluster`` pseudo-path exports.
-        Hosts for each cluster are selected via round-robin from the
-        available host list so that consecutive clusters start on
-        different hosts (cluster *i* begins at ``available_hosts[i]``
-        and wraps around using modular arithmetic for ``placement``
-        hosts).
+
+        Host selection prefers **disjoint** windows of ``placement`` hosts
+        (``available_hosts[i*placement:(i+1)*placement]``) so monitoring
+        ports (9587/31311) do not collide when multiple NFS services land
+        on one node. If ``num_clusters * placement`` exceeds the host
+        pool, falls back to overlapping round-robin and logs a warning.
 
         Placement is validated before any cluster is created:
 
@@ -7608,8 +7609,9 @@ EOF"""
             exports_per_cluster (int): Number of exports per cluster
                 (default: 4).
             placement (int): Number of NFS daemon hosts per cluster
-                (default: 1). Validated to be a positive integer that does
-                not exceed the available host count.
+                (default: 1; thrash suites typically pass 2). Validated to
+                be a positive integer that does not exceed the available
+                host count.
             nfs_fs_name (str): CephFS filesystem name for NFS
                 (default: ``"nfs-cephfs"``).
             pool_type (str): Pool type for CephFS -- ``"erasure"`` or
@@ -7682,6 +7684,17 @@ EOF"""
             enable_fast_ec_config_params=enable_fast_ec_config_params,
         )
 
+        try:
+            placement = int(placement)
+        except (TypeError, ValueError) as err:
+            raise ValueError(
+                f"create_nfs_clusters_and_exports: placement must be an integer, got {placement!r}"
+            ) from err
+        if placement < 1:
+            raise ValueError(
+                f"create_nfs_clusters_and_exports: placement must be >= 1, got {placement}"
+            )
+
         lbl = nfs_placement_label
         raw = self.run_ceph_command(cmd="ceph orch host ls")
         if isinstance(raw, dict):
@@ -7709,29 +7722,47 @@ EOF"""
                     if e.get("hostname") and lbl in (e.get("labels") or [])
                 )
             )
-            available_hosts = labeled_hosts or orch_hosts
-            if not labeled_hosts:
+            # Prefer label only when it covers the requested placement.
+            if len(labeled_hosts) >= placement:
+                available_hosts = labeled_hosts
+            else:
+                available_hosts = orch_hosts
                 log.warning(
-                    "create_nfs_clusters_and_exports: no orch host with label %r; "
-                    "using all orch hosts",
+                    "create_nfs_clusters_and_exports: label %r has %s host(s), "
+                    "need placement=%s; falling back to all orch hosts",
                     lbl,
+                    len(labeled_hosts),
+                    placement,
                 )
         else:
-            available_hosts = orch_hosts
+            # Prefer hosts already labeled for NFS so placement>1 does not land
+            # on OSD-only nodes — but only when the label set is large enough.
+            nfs_labeled = list(
+                dict.fromkeys(
+                    e["hostname"]
+                    for e in rows
+                    if e.get("hostname") and "nfs" in (e.get("labels") or [])
+                )
+            )
+            if len(nfs_labeled) >= placement:
+                available_hosts = nfs_labeled
+                log.info(
+                    "NFS placement: using %s host(s) with label 'nfs'",
+                    len(nfs_labeled),
+                )
+            else:
+                available_hosts = orch_hosts
+                if nfs_labeled:
+                    log.warning(
+                        "NFS placement: only %s host(s) with label 'nfs', "
+                        "need placement=%s; falling back to all orch hosts",
+                        len(nfs_labeled),
+                        placement,
+                    )
 
         if not available_hosts:
             raise ValueError(
                 "create_nfs_clusters_and_exports: no hosts available for NFS placement"
-            )
-        try:
-            placement = int(placement)
-        except (TypeError, ValueError) as err:
-            raise ValueError(
-                f"create_nfs_clusters_and_exports: placement must be an integer, got {placement!r}"
-            ) from err
-        if placement < 1:
-            raise ValueError(
-                f"create_nfs_clusters_and_exports: placement must be >= 1, got {placement}"
             )
         if placement > len(available_hosts):
             raise ValueError(
@@ -7741,18 +7772,33 @@ EOF"""
             )
         log.info("NFS cluster placement hosts: %s", available_hosts)
 
-        # Step 2: Create NFS clusters with unique ports starting from 2049
+        # Step 2: Create NFS clusters with unique NFS ports starting from 2049.
+        # Prefer disjoint host windows so ganesha monitoring ports do not clash.
         clusters = []
         base_port = 2049
+        hosts_needed = num_clusters * placement
+        disjoint = hosts_needed <= len(available_hosts)
+        if not disjoint:
+            log.warning(
+                "NFS placement: need %s hosts for %s clusters x placement %s "
+                "but only %s available — overlapping hosts (monitoring-port "
+                "collisions possible)",
+                hosts_needed,
+                num_clusters,
+                placement,
+                len(available_hosts),
+            )
         for i in range(num_clusters):
             cluster_id = f"nfs-cluster-{i + 1}"
             port = base_port + i
 
-            # Build placement hosts per cluster using round-robin selection.
-            selected_hosts = [
-                available_hosts[(i + offset) % len(available_hosts)]
-                for offset in range(placement)
-            ]
+            if disjoint:
+                selected_hosts = available_hosts[i * placement : (i + 1) * placement]
+            else:
+                selected_hosts = [
+                    available_hosts[(i * placement + offset) % len(available_hosts)]
+                    for offset in range(placement)
+                ]
             placement_hosts = " ".join(selected_hosts)
             placement_str = f'"{placement} {placement_hosts}"'
             selected_host = selected_hosts[0]
