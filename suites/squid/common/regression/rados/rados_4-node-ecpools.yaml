@@ -230,8 +230,8 @@ tests:
       desc: EC pool with Overwrites & create RBD pool
 
   - test:
-      name: Inconsistent objects in EC 8+6 pool functionality check
-      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+      name: EC Case 1-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects>auto repair errors count & auto_repair is true
       module: test_osd_ecpool_inconsistency_scenario.py
       polarion-id: CEPH-83586175
       config:
@@ -251,7 +251,133 @@ tests:
         inconsistent_obj_count: 4
         delete_pool:
           - ec86_pool4
+        case_to_run:
+          - case1
 
+  - test:
+      name: EC Case 2-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_4
+          pool_name: ec86_pool4
+          pg_num: 1
+          k: 8
+          m: 6
+          create_rule: false
+          crush-failure-domain: host
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec86_pool4
+        case_to_run:
+          - case2
+
+  - test:
+      name: EC Case 3-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects<auto repair errors count, auto_repair enabled; expect auto-repair
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_4
+          pool_name: ec86_pool4
+          pg_num: 1
+          k: 8
+          m: 6
+          create_rule: false
+          crush-failure-domain: host
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec86_pool4
+        case_to_run:
+          - case3
+
+  - test:
+      name: EC Case 4-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects>auto repair errors count & auto_repair is true
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_4
+          pool_name: ec86_pool4
+          pg_num: 1
+          k: 8
+          m: 6
+          create_rule: false
+          crush-failure-domain: host
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec86_pool4
+        case_to_run:
+          - case4
+
+  - test:
+      name: EC Case 5-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_4
+          pool_name: ec86_pool4
+          pg_num: 1
+          k: 8
+          m: 6
+          create_rule: false
+          crush-failure-domain: host
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec86_pool4
+        case_to_run:
+          - case5
+
+  - test:
+      name: EC Case 6-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects<auto repair errors count, auto_repair enabled
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_4
+          pool_name: ec86_pool4
+          pg_num: 1
+          k: 8
+          m: 6
+          create_rule: false
+          crush-failure-domain: host
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          plugin: jerasure
+          disable_pg_autoscale: true
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec86_pool4
+        case_to_run:
+          - case6
   - test:
       name: Compression test - EC 8+6 pool
       module: pool_tests.py
@@ -306,8 +432,8 @@ tests:
       desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
   - test:
-      name: Inconsistent objects in EC 2+2 pool functionality check
-      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+      name: EC Case 1-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects>auto repair errors count & auto_repair is true
       module: test_osd_ecpool_inconsistency_scenario.py
       polarion-id: CEPH-83586175
       config:
@@ -324,7 +450,118 @@ tests:
         inconsistent_obj_count: 4
         delete_pool:
           - ec22_pool4
+        case_to_run:
+          - case1
 
+  - test:
+      name: EC Case 2-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec22_4
+          pool_name: ec22_pool4
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec22_pool4
+        case_to_run:
+          - case2
+
+  - test:
+      name: EC Case 3-Inconsistent objects verification
+      desc: Scrub on EC pool - Inconsistent objects<auto repair errors count, auto_repair enabled; expect auto-repair
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec22_4
+          pool_name: ec22_pool4
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec22_pool4
+        case_to_run:
+          - case3
+
+  - test:
+      name: EC Case 4-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects>auto repair errors count & auto_repair is true
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec22_4
+          pool_name: ec22_pool4
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec22_pool4
+        case_to_run:
+          - case4
+
+  - test:
+      name: EC Case 5-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects<auto repair errors count & auto_repair is false
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec22_4
+          pool_name: ec22_pool4
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec22_pool4
+        case_to_run:
+          - case5
+
+  - test:
+      name: EC Case 6-Inconsistent objects verification
+      desc: Deep-scrub on EC pool - Inconsistent objects<auto repair errors count, auto_repair enabled
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec22_4
+          pool_name: ec22_pool4
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec22_pool4
+        case_to_run:
+          - case6
   - test:
       name: Compression test - EC 2+2 pool
       module: pool_tests.py

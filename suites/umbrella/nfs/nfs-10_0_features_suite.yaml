@@ -1,0 +1,217 @@
+# Suite: tier1 NFS 10.0 Features
+# Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
+#
+# Umbrella-only. Tier-1 NFS umbrella feature cases live in this suite.
+# First feature: cephadm NFS Ganesha log_to_file (IBMCEPH-13289).
+# There is no tentacle suite for this feature.
+#
+# Each case is its own suite step and its own Polarion ID.
+# cleanup: false keeps the NFS cluster for the next step.
+# each_daemon_own_log removes it.
+# stability_seconds is the no_redeploy_loop window.
+# followup_stability_seconds covers spec_off_uses_stderr and toggle_on_off_on.
+# Grouped drafts CEPH-83633102 (sign-off) and CEPH-83633103 (extended)
+# stay in Polarion. The suite reports the eleven IDs below.
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure NFS client
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # NFS Ganesha log_to_file (IBMCEPH-13289): cephadm spec log_to_file=true makes
+  # ganesha.nfsd log to a host file; false/absent sends logs to STDERR.
+  - test:
+      name: NFS log to file - record build
+      module: test_nfs_log_to_file.py
+      desc: Record the build and bring up one NFS daemon
+      polarion-id: CEPH-83633104
+      abort-on-fail: true
+      config: &log_to_file
+        cases: record_build
+        cleanup: false
+        nfs_name: nfs-logf
+        nfs_name_pair: nfs-logf2
+        nfs_version: "4.2"
+        port: "2049"
+        fs_name: cephfs
+        export: /export_lf
+        mount_point: /mnt/nfs_log_to_file
+        service_wait_timeout: 600
+        auto_redeploy_wait: 90
+        stability_seconds: 300
+        followup_stability_seconds: 120
+        poll_interval: 30
+
+  - test:
+      name: NFS log to file - spec enables host log
+      module: test_nfs_log_to_file.py
+      desc: Verify NFS spec log_to_file true creates a host log
+      polarion-id: CEPH-83633105
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: spec_enables_host_log
+
+  - test:
+      name: NFS log to file - spec ignores config off
+      module: test_nfs_log_to_file.py
+      desc: Verify spec log_to_file true stays on while ceph config global is false
+      polarion-id: CEPH-83633106
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: spec_ignores_config_off
+
+  - test:
+      name: NFS log to file - host log grows after IO
+      module: test_nfs_log_to_file.py
+      desc: Verify the host log grows after NFS mount and IO
+      polarion-id: CEPH-83633107
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: host_log_grows_after_io
+
+  - test:
+      name: NFS log to file - export recreate
+      module: test_nfs_log_to_file.py
+      desc: Verify export recreate while file logging is on
+      polarion-id: CEPH-83633108
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: export_recreate
+
+  - test:
+      name: NFS log to file - no redeploy loop
+      module: test_nfs_log_to_file.py
+      desc: Verify file logging does not redeploy the NFS daemon in a loop
+      polarion-id: CEPH-83633109
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: no_redeploy_loop
+
+  - test:
+      name: NFS log to file - spec off uses STDERR
+      module: test_nfs_log_to_file.py
+      desc: Verify NFS spec log_to_file false uses STDERR and NFS IO still works
+      polarion-id: CEPH-83633110
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: spec_off_uses_stderr
+
+  - test:
+      name: NFS log to file - per-daemon config gap
+      module: test_nfs_log_to_file.py
+      desc: Record the per-daemon config gap while spec log_to_file stays off
+      polarion-id: CEPH-83633111
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: per_daemon_config_gap
+
+  - test:
+      name: NFS log to file - toggle on off on
+      module: test_nfs_log_to_file.py
+      desc: Verify log_to_file toggle true, false, then true
+      polarion-id: CEPH-83633112
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: toggle_on_off_on
+
+  - test:
+      name: NFS log to file - redeploy keeps file log
+      module: test_nfs_log_to_file.py
+      desc: Verify orch redeploy keeps file logging
+      polarion-id: CEPH-83633113
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: redeploy_keeps_file_log
+
+  - test:
+      name: NFS log to file - each daemon own log
+      module: test_nfs_log_to_file.py
+      desc: Verify each NFS daemon has its own host log
+      polarion-id: CEPH-83633114
+      abort-on-fail: true
+      config:
+        <<: *log_to_file
+        cases: each_daemon_own_log
+        cleanup: true

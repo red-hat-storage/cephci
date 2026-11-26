@@ -89,11 +89,9 @@ def run(ceph_cluster, **kw):
                 break
             except AssertionError:
                 if datetime.datetime.now() > timeout_time:
-                    log.error(
-                        f"Cluster health could not reach \
+                    log.error(f"Cluster health could not reach \
                           HEALTH_WARN status or host status \
-                          is not Offline within {timeout} secs"
-                    )
+                          is not Offline within {timeout} secs")
                     raise
             time.sleep(30)
 

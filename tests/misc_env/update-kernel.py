@@ -36,9 +36,7 @@ name=KernelUpdate
 baseurl= {base_url}
 gpgcheck=0
 enabled=1
-""".format(
-        base_url=repo_url
-    )
+""".format(base_url=repo_url)
     kernel_repo = client.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_kernel.repo", file_mode="w"
     )

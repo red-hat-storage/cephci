@@ -496,20 +496,24 @@ def unmount_and_remove_mount_path(client, mount_path):
 
 
 def assert_mount_path_accessible(client, mount_path, name, should_exist=True):
-    """Assert that a path under an NFS mount is accessible or absent after delete."""
-    out, rc = client.exec_command(
+    """Assert that a path under an NFS mount is accessible or absent after delete.
+
+    CephNode.exec_command returns (stdout, stderr). The exit code is
+    client.exit_status. An empty stderr is not a failed ls.
+    """
+    out, err = client.exec_command(
         sudo=True,
         cmd=f"ls {mount_path}/{name}",
         check_ec=False,
     )
+    rc = getattr(client, "exit_status", None)
+    detail = f"rc={rc}, out={out!r}, err={err!r}"
     if should_exist:
         if rc != 0:
-            raise OperationFailedError(
-                f"Expected {name} to be accessible, rc={rc}, out={out}"
-            )
+            raise OperationFailedError(f"Expected {name} to be accessible, {detail}")
     elif rc == 0:
         raise OperationFailedError(
-            f"{name} should not be accessible after delete, but ls succeeded"
+            f"{name} should not be accessible after delete, but ls succeeded ({detail})"
         )
 
 

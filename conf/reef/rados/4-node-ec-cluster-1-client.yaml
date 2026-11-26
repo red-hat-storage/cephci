@@ -37,7 +37,6 @@ globals:
       node4:
           role:
             - osd
-            - osd_encrypt_raw
             - rgw
             - mds
             - node-exporter

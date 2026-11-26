@@ -52,6 +52,17 @@ tests:
               service: osd
               args:
                 all-available-devices: true
+          # Suppress BLUESTORE_BLUEFS_OVERSIZED (9.2z1+, ceph/ceph#67192) on small CI OSDs
+          # https://tracker.ceph.com/issues/73826
+          - config:
+              command: shell
+              args:
+                - ceph
+                - config
+                - set
+                - global
+                - bluestore_bluefs_warn_ratio
+                - "1"
       destroy-cluster: false
       abort-on-fail: true
   - test:
@@ -153,10 +164,12 @@ tests:
       name: casefold subvolume multi-mds failover journal replay
       module: cephfs_case_sensitivity.case_sensitivity_multimds_failover.py
       polarion-id: CEPH-83632953
+      comments: Test fails due to Product Bug https://ibm-ceph.atlassian.net/browse/IBMCEPH-21205
       desc: >
         Case-insensitive subvolume under max_mds>=4 with rename-heavy FUSE metadata
-        I/O; rotate mds fail across ranks mid-IO; verify no alternate_name journal
-        replay or rejoin auth crashes (IBMCEPH-16942 / #72399).
+        I/O; rotate mds fail; alternate_name Foo→FOO and journal-trim recreate
+        paths; max_mds scale-up; no alternate_name / rejoin crashes
+        (IBMCEPH-16942 / IBMCEPH-21205 / #72399).
       abort-on-fail: true
       config:
         max_mds: 4
@@ -167,6 +180,11 @@ tests:
         health_wait: 300
         mds_placement_count: 4
         run_max_mds_scaleup: true
+        run_alternate_name_replay_repros: true
+        foo_flip_iterations: 5
+        trim_recreate_iterations: 3
+        journal_flush_rounds: 8
+        journal_filler_files: 200
 
   ######################################################################################################################
   # Conf File : conf/umbrella/cephfs/tier-2_cephfs_7-node-cluster.yaml

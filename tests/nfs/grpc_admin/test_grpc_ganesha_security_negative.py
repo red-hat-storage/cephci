@@ -73,6 +73,9 @@ def run(ceph_cluster, **kw):
     fs = config.get("fs", "cephfs")
     grpc_port = int(config.get("grpc_port", DEFAULT_GRPC_PORT))
 
+    setup_cluster = config.get("setup_nfs_cluster", True)
+    cleanup_nfs = config.get("cleanup_nfs_cluster", setup_cluster)
+
     clients, nfs_nodes, client, nfs_node, nfs_server, nfs_ip = prepare_cluster_nodes(
         ceph_cluster, config
     )
@@ -86,19 +89,20 @@ def run(ceph_cluster, **kw):
         open_grpc_firewall(nfs_node, grpc_port)
         ensure_subvolume_group(client, fs_name, ceph_cluster=ceph_cluster)
 
-        setup_nfs_cluster(
-            clients=[client],
-            nfs_server=nfs_server,
-            port=nfs_port,
-            version=nfs_version,
-            nfs_name=nfs_name,
-            nfs_mount=nfs_mount,
-            fs_name=fs_name,
-            export=nfs_export,
-            fs=fs,
-            ceph_cluster=ceph_cluster,
-        )
-        deploy_grpc_certs_if_configured(config, nfs_node, nfs_name, installer)
+        if setup_cluster:
+            setup_nfs_cluster(
+                clients=[client],
+                nfs_server=nfs_server,
+                port=nfs_port,
+                version=nfs_version,
+                nfs_name=nfs_name,
+                nfs_mount=nfs_mount,
+                fs_name=fs_name,
+                export=nfs_export,
+                fs=fs,
+                ceph_cluster=ceph_cluster,
+            )
+            deploy_grpc_certs_if_configured(config, nfs_node, nfs_name, installer)
 
         transport = setup_grpc_transport(
             config, [client, nfs_node], installer, nfs_name
@@ -296,6 +300,9 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         try:
-            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
+            if cleanup_nfs:
+                cleanup_cluster(
+                    client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
+                )
         except Exception as exc:
             log.warning("Cleanup error (non-fatal): %s", exc)

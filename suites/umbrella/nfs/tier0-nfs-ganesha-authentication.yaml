@@ -1,13 +1,13 @@
 #===============================================================================================
 # NFS-Ganesha authentication (LDAP + Kerberos)
-# Suite: suites/tentacle/nfs/tier0-nfs-ganesha-authentication.yaml
+# Suite: suites/umbrella/nfs/tier0-nfs-ganesha-authentication.yaml
 # Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Combined auth suite: LDAP identity mapping tests, then MIT Kerberos (KDC on clients[1])
 # infra, mount/IO, flavors, enforcement, multi-client, wrong SPN, multi-sectype.
 #
 # For an already-deployed cluster (executor reruns), use:
-#   suites/tentacle/nfs/tier0-nfs-ganesha-authentication-tests-only.yaml
+#   suites/umbrella/nfs/tier0-nfs-ganesha-authentication-tests-only.yaml
 # This file includes full bootstrap + client setup for greenfield pipeline runs.
 #===============================================================================================
 tests:

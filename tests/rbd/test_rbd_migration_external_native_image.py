@@ -262,10 +262,8 @@ def run(**kw):
                     size: 4G
                 create_pool_parallely: true
     """
-    log.info(
-        "Executing CEPH-83597689: Live migration of images with native \
-        data format from external ceph cluster"
-    )
+    log.info("Executing CEPH-83597689: Live migration of images with native \
+        data format from external ceph cluster")
 
     try:
         rbd_obj = initial_rbd_config(**kw)

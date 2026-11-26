@@ -305,7 +305,7 @@ tests:
       name: Validate adjust retention time for prometheus daemon
       desc: Change the retention time for prometheus daemon
       module: test_adjust_prometheus_retention_time.py
-      polarion-id: CEPH-83574726
+      polarion-id: CEPH-83591132
       config:
         specs:
           service_type: prometheus

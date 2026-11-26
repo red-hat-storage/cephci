@@ -197,15 +197,13 @@ def run(ceph_cluster, **kw):
                 wait_for_device_rados, test_host, target_osd, action="remove"
             )
 
-        log.info(
-            """Performing following checks on the cluster after OSD removal
+        log.info("""Performing following checks on the cluster after OSD removal
 1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2
 2) Health warning - UNEVEN_WEIGHTS_STRETCH_MODE
 3) PGs should reach active+clean state
 4) Pool sanity checks should be successful
 5) No inactive PGs on the pool
-6) Write IO should succeed"""
-        )
+6) Write IO should succeed""")
 
         log.info(
             "Proceeding to perform Check (3) Health warning - UNEVEN_WEIGHTS_STRETCH_MODE post OSD removal"
@@ -261,11 +259,9 @@ def run(ceph_cluster, **kw):
             obj_name=rados_object_name,
         )
 
-        log.info(
-            f"Proceeding to add back removed OSDs:\
+        log.info(f"Proceeding to add back removed OSDs:\
                  DC1 OSDs: {dc_1_osds_to_remove} \
-                 DC2 OSDs: {dc_2_osds_to_remove}"
-        )
+                 DC2 OSDs: {dc_2_osds_to_remove}")
 
         for target_osd in dc_1_osds_to_remove + dc_2_osds_to_remove:
             test_host = osd_to_test_hosts_map[target_osd]
@@ -284,11 +280,9 @@ def run(ceph_cluster, **kw):
 
         assert service_obj.add_osds_to_managed_service()
 
-        log.info(
-            f"Successfully removed and added back removed OSDs:\
+        log.info(f"Successfully removed and added back removed OSDs:\
                  DC1 OSDs: {dc_1_osds_to_remove} \
-                 DC2 OSDs: {dc_2_osds_to_remove}"
-        )
+                 DC2 OSDs: {dc_2_osds_to_remove}")
 
         log.info(
             """Performing following checks on the cluster after OSD addition post removal
@@ -430,15 +424,13 @@ def run(ceph_cluster, **kw):
             service_obj.remove_custom_host(host_node_name=test_host.hostname)
         time.sleep(10)
 
-        log.info(
-            """Performing following checks on the cluster post OSD Host removal
+        log.info("""Performing following checks on the cluster post OSD Host removal
 1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2
 3) Health warning - UNEVEN_WEIGHTS_STRETCH_MODE
 4) PGs should reach active+clean state
 5) Pool sanity checks should be successful
 6) No inactive PGs on the pool
-7) Write IO should succeed"""
-        )
+7) Write IO should succeed""")
 
         log.info(
             "Proceeding to perform Check (3) No inactive PGs on the pool post OSD Host removal"
@@ -562,15 +554,13 @@ def run(ceph_cluster, **kw):
 
         rados_obj.set_managed_flag(service_type="mon", service_name="mon")
 
-        log.info(
-            """Performing following checks on the cluster after OSD removal
+        log.info("""Performing following checks on the cluster after OSD removal
 1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2
 3) Health warning - UNEVEN_WEIGHTS_STRETCH_MODE
 4) PGs should reach active+clean state
 5) Pool sanity checks should be successful
 6) No inactive PGs on the pool
-7) Write IO should succeed"""
-        )
+7) Write IO should succeed""")
 
         log.info(
             "Proceeding to perform Check (3) No inactive PGs on the pool post OSD Host addition"

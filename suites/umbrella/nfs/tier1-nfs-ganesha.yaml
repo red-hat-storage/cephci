@@ -567,3 +567,85 @@ tests:
         fio_bs: 4k
         fio_runtime: 300
         timeout: 7200
+
+  # NFS orch rm warning + .nfs RADOS cleanup (IBMCEPH-14094 / CEPH-83633264).
+  # Umbrella/10.0 only (not mirrored to suites/tentacle).
+  # One service_id per row (isolation); ports hardcoded (no 2049 defaults); all nfs-role hosts.
+  # Acc-3 (same_name_recreate) still deletes+recreates its own id within that row (IBMCEPH-21921).
+  - test:
+      name: NFS orch rm warning and RADOS leftovers
+      desc: orch rm removes daemon only, prints warning, leaves durable .nfs objects
+      module: test_nfs_rados_cleanup.py
+      polarion-id: CEPH-83633274
+      abort-on-fail: false
+      config:
+        scenario: orch_rm_warning_leftovers
+        cluster_a:
+          service_id: nfs-rados-warn
+          port: 62050
+          monitoring_port: 62550
+          cluster_qos_port: 63050
+
+  - test:
+      name: NFS cluster rm after orch rm cleans namespace
+      desc: After orch rm leftovers, nfs cluster rm empties .nfs namespace
+      module: test_nfs_rados_cleanup.py
+      polarion-id: CEPH-83633275
+      abort-on-fail: false
+      config:
+        scenario: cluster_rm_after_orch_rm
+        cluster_a:
+          service_id: nfs-rados-after
+          port: 62050
+          monitoring_port: 62550
+          cluster_qos_port: 63050
+
+  - test:
+      name: NFS same-name recreate without stale exports
+      desc: After full cleanup, recreate same id must not inherit prior exports
+      module: test_nfs_rados_cleanup.py
+      polarion-id: CEPH-83633276
+      # Known fail until IBMCEPH-21921 is fixed (ghost exports on same-id recreate).
+      # abort-on-fail: false = suite continues on Fail; when 21921 is fixed this row
+      # should Pass without changing this flag. Optional later: set true to gate the suite.
+      abort-on-fail: false
+      config:
+        scenario: same_name_recreate
+        cluster_a:
+          service_id: nfs-rados-recreate
+          port: 62050
+          monitoring_port: 62550
+          cluster_qos_port: 63050
+
+  - test:
+      name: NFS cluster rm alone fully cleans
+      desc: nfs cluster rm without prior orch rm removes service and empties namespace
+      module: test_nfs_rados_cleanup.py
+      polarion-id: CEPH-83633277
+      abort-on-fail: false
+      config:
+        scenario: cluster_rm_alone
+        cluster_a:
+          service_id: nfs-rados-alone
+          port: 62050
+          monitoring_port: 62550
+          cluster_qos_port: 63050
+
+  - test:
+      name: NFS cross-cluster .nfs namespace isolation
+      desc: Removing cluster A empties A; B durable objects unchanged (ignore rec-*/grace)
+      module: test_nfs_rados_cleanup.py
+      polarion-id: CEPH-83633278
+      abort-on-fail: false
+      config:
+        scenario: cross_cluster_isolation
+        cluster_a:
+          service_id: nfs-rados-iso-a
+          port: 62050
+          monitoring_port: 62550
+          cluster_qos_port: 63050
+        cluster_b:
+          service_id: nfs-rados-iso-b
+          port: 62051
+          monitoring_port: 62551
+          cluster_qos_port: 63051

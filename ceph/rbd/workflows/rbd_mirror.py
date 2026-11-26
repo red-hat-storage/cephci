@@ -141,10 +141,8 @@ def wait_for_status(rbd, cluster_name, **kw):
                         "state",
                         json.loads(image_status[0]),
                     )
-                    log.info(
-                        f"State of image {kw['imagespec']} : {out}, \
-                        waiting for {kw['state_pattern']}"
-                    )
+                    log.info(f"State of image {kw['imagespec']} : {out}, \
+                        waiting for {kw['state_pattern']}")
                     if kw["state_pattern"] in out:
                         return 0
                 if kw.get("description_pattern"):

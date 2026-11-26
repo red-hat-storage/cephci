@@ -92,11 +92,12 @@ tests:
               specs:
                 - service_type: osd
                   service_id: osd_encrypted_raw
-                  encrypted: "true"
                   placement:
                     label: osd_encrypt_raw
                   spec:
                     method: raw
+                    encrypted: "true"
+                    tpm2: "true"
                     data_devices:
                       size: "'1G:'"
 

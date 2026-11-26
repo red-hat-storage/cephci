@@ -8,7 +8,11 @@ import requests
 import yaml
 
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.utils import (
+    get_cephci_config,
+    normalize_container_image,
+    split_container_image,
+)
 
 logger = Log(__name__)
 
@@ -124,31 +128,36 @@ class CephTestManifest:
 
     @property
     def ceph_image(self) -> str:
-        return self.build_info["images"]["ceph-base"]
+        return normalize_container_image(self.build_info["images"]["ceph-base"])
 
     @property
     def crimson_image(self) -> str:
-        return self.images.get("crimson_image", "")
+        return normalize_container_image(self.images.get("crimson_image", ""))
 
     @property
     def ceph_image_dtr(self) -> str:
-        return self.ceph_image.split("/")[0]
+        registry, _, _ = split_container_image(
+            self.crimson_image if self._crimson else self.ceph_image
+        )
+        return registry
 
     @property
     def ceph_image_tag(self) -> str:
-        if self._crimson:
-            return self.crimson_image.split(":")[-1]
-        return self.ceph_image.split(":")[-1]
+        _, _, tag = split_container_image(
+            self.crimson_image if self._crimson else self.ceph_image
+        )
+        return tag or ""
 
     @property
     def ceph_image_path(self) -> str:
-        _image_fqdn = self.crimson_image if self._crimson else self.ceph_image
-        _image_without_dtr = _image_fqdn.split("/", 1)[1]
-        return _image_without_dtr.split(":")[0]
+        _, path, _ = split_container_image(
+            self.crimson_image if self._crimson else self.ceph_image
+        )
+        return path or ""
 
     @property
     def nvme_cli_image(self) -> str:
-        return self.images.get("nvmeof_cli_image", "")
+        return normalize_container_image(self.images.get("nvmeof_cli_image", ""))
 
     @property
     def custom_images(self) -> dict[str, str]:
@@ -158,6 +167,9 @@ class CephTestManifest:
             - ceph-base
             - cephcsi
             - nvmeof-cli
+
+        Digest refs mistyped as tags (``repo:<64-hex>``) are normalized to
+        ``repo@sha256:<64-hex>``; ordinary tags are left unchanged.
         """
         remove_list = [
             "cephcsi",
@@ -175,7 +187,7 @@ class CephTestManifest:
                 if rl in image_value:
                     break
             else:
-                rst.update({image_key: image_value})
+                rst.update({image_key: normalize_container_image(image_value)})
 
         return rst
 
@@ -230,15 +242,7 @@ class CephTestManifest:
 
         try:
             yml_data: Dict[str, Any] = yaml.safe_load(data.text)
-            build_data = yml_data[self.build_type]
-
-            # Convert image digests from '@sha256:<digest>' format to ':<digest>' format if datacenter is 'eu-de'
-            if self.datacenter == "eu-de":
-                images = build_data.get("images", {})
-                for k, v in images.items():
-                    images[k] = v.replace("@sha256:", ":")
-
-            return build_data
+            return yml_data[self.build_type]
 
         except yaml.YAMLError:
             raise RuntimeError("Unable to process the Ceph QE manifest file")

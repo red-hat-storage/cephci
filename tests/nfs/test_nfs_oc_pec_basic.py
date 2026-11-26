@@ -27,6 +27,8 @@ from tests.nfs.nfs_oc_pec import (
     apply_nfs_object_cache,
     deploy_nfs_with_object_cache,
     ensure_nfs_admin_socket,
+    full_nfs_cleanup,
+    rm_nfs_mount_point,
     skip_oc_pec_unless_supported,
     verify_nfs_object_cache,
     verify_pec,
@@ -49,18 +51,8 @@ def _do_mount(client, mount_point, version, port, server, export):
 
 def _do_unmount(client, mount_point):
     Unmount(client).unmount(mount_point)
-    _rm_mount_point(client, mount_point)
+    rm_nfs_mount_point(client, mount_point)
     sleep(2)
-
-
-def _rm_mount_point(client, mount_point):
-    """Remove mount dir; bound so a stuck NFS leftover cannot hang forever."""
-    client.exec_command(
-        sudo=True,
-        cmd=f"timeout 120 rm -rf -- {mount_point}",
-        check_ec=False,
-        timeout=180,
-    )
 
 
 def _write_with_integrity(client, mount_point, filename="testfile", size_mb=4):
@@ -169,63 +161,6 @@ def _create_export(client, nfs_name, export_path, cmount_path=False):
         **kwargs,
     )
     sleep(2)
-
-
-def _delete_cluster(client, nfs_name):
-    try:
-        client.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster rm {nfs_name}", timeout=60
-        )
-    except Exception as err:
-        log.warning("cluster rm %s: %s", nfs_name, err)
-    for _ in range(12):
-        out, _ = client.exec_command(
-            sudo=True,
-            cmd=f"ceph orch ls --service-name nfs.{nfs_name}",
-            check_ec=False,
-        )
-        text = str(out)
-        if "No services reported" in text or f"nfs.{nfs_name}" not in text:
-            return
-        sleep(5)
-    log.warning("nfs.%s still listed after cluster rm", nfs_name)
-
-
-def _delete_exports_and_subvols(client, nfs_name, export_paths):
-    for export_path in export_paths:
-        try:
-            Ceph(client).nfs.export.delete(nfs_name, export_path)
-        except Exception as err:
-            log.warning("export delete %s: %s", export_path, err)
-        subvol_name = export_path.replace("/", "")
-        if not subvol_name:
-            continue
-        client.exec_command(
-            sudo=True,
-            cmd=(
-                f"ceph fs subvolume rm cephfs {subvol_name} "
-                "--group_name ganeshagroup --force"
-            ),
-            check_ec=False,
-        )
-
-
-def _full_cleanup(client, nfs_name, export_paths, mount_points):
-    if isinstance(mount_points, str):
-        mount_points = [mount_points]
-    for mount_point in mount_points:
-        try:
-            client.exec_command(
-                sudo=True,
-                cmd=f"timeout 60 umount -l {mount_point}",
-                check_ec=False,
-                timeout=90,
-            )
-            _rm_mount_point(client, mount_point)
-        except Exception:
-            pass
-    _delete_exports_and_subvols(client, nfs_name, export_paths)
-    _delete_cluster(client, nfs_name)
 
 
 def _server_ip(ceph_cluster, hostname):
@@ -355,7 +290,7 @@ def scenario_shared_to_pec_via_apply(ceph_cluster, config):
         verify_pec(ceph_cluster, client, nfs_name, expect_clients=1)
         _verify_integrity(client, mount_point, md5)
     finally:
-        _full_cleanup(client, nfs_name, [export_path], [mount_point])
+        full_nfs_cleanup(client, nfs_name, [export_path], [mount_point])
 
 
 def _export_and_io(
@@ -439,8 +374,8 @@ def scenario_oc_on(ceph_cluster, config):
             port_boot,
         )
     finally:
-        _full_cleanup(client, name_boot, [export_boot], [mount_boot])
-        _full_cleanup(client, name_reapply, [export_reapply], [mount_reapply])
+        full_nfs_cleanup(client, name_boot, [export_boot], [mount_boot])
+        full_nfs_cleanup(client, name_reapply, [export_reapply], [mount_reapply])
 
 
 def scenario_enable_oc_on_existing(ceph_cluster, config):
@@ -478,7 +413,7 @@ def scenario_enable_oc_on_existing(ceph_cluster, config):
             export_path,
         )
     finally:
-        _full_cleanup(client, nfs_name, [export_path], [mount_point])
+        full_nfs_cleanup(client, nfs_name, [export_path], [mount_point])
 
 
 def scenario_pec_cmount_path(ceph_cluster, config):
@@ -505,7 +440,7 @@ def scenario_pec_cmount_path(ceph_cluster, config):
                 client, mount_point, "4.2", port, server_ip, export_path
             )
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 def scenario_pec_then_enable_oc(ceph_cluster, config):
@@ -547,7 +482,7 @@ def scenario_pec_then_enable_oc(ceph_cluster, config):
                 client, mount_point, "4.2", port, server_ip, export_path
             )
     finally:
-        _full_cleanup(client, nfs_name, exports, mounts)
+        full_nfs_cleanup(client, nfs_name, exports, mounts)
 
 
 SCENARIO_MAP = {

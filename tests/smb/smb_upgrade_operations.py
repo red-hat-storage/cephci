@@ -226,6 +226,7 @@ def upgrade(
     samba_metrics_image,
     ceph_image,
     smb_spec,
+    deployment_version,
 ):
     """Upgrade ceph cluster
     Args:
@@ -273,6 +274,9 @@ def upgrade(
 
         # Start Upgrade
         cmd = f"cephadm shell -- ceph orch upgrade start {ceph_image}"
+        # Automatically accept IBM license for 9.0 and above
+        if tuple(map(int, str(deployment_version).split("."))) >= (9, 2):
+            cmd += " --automatically-accept-license"
         installer.exec_command(sudo=True, cmd=cmd)
 
         # Monitor upgrade status, till completion
@@ -419,6 +423,7 @@ def run(ceph_cluster, **kw):
                 samba_metrics_image,
                 ceph_image,
                 smb_spec,
+                deployment_version,
             )
         elif operation == "cleanup_smb":
             # cleanup smb services

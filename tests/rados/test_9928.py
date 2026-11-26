@@ -148,9 +148,7 @@ def run(ceph_cluster, **kw):
     found = 0
     while timeout:
         incon_pg = "sudo rados list-inconsistent-pg \
-                    {pname}".format(
-            pname=pname
-        )
+                    {pname}".format(pname=pname)
         outbuf, err = ctrlr.exec_command(cmd=incon_pg)
         log.info(outbuf)
         if targt_pg not in outbuf:
@@ -167,9 +165,7 @@ def run(ceph_cluster, **kw):
     found = 0
     while timeout:
         incon_snap = "sudo rados list-inconsistent-snapset \
-                      {pg}".format(
-            pg=targt_pg
-        )
+                      {pg}".format(pg=targt_pg)
         outbuf, err = ctrlr.exec_command(cmd=incon_snap)
         log.info(outbuf)
         if oname not in outbuf:

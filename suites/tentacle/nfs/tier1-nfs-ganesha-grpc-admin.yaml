@@ -16,6 +16,9 @@
 # Modules: tests/nfs/grpc_admin/
 # Related smoke: tier1-nfs-ganesha-grpc.yaml (core nfsService RPCs)
 # Optional perf: tier1-nfs-ganesha-grpc-perf.yaml
+# Shared NFS lifecycle: Setup Shared NFS once after image override, then
+# API/perf/build cases reuse it (setup_nfs_cluster/cleanup_nfs_cluster: false).
+# Cleanup Shared NFS runs last. Cases that add extra exports remove only those.
 #===============================================================================================
 tests:
   - test:
@@ -102,6 +105,27 @@ tests:
         operation: set_nfs_image
         # nfs_container_image: quay.io/rhceph/nfs-ganesha-grpc:<tag>
 
+
+  # =============================================================================
+  # Shared NFS-Ganesha lifecycle (one create, one destroy for the whole suite)
+  # =============================================================================
+  - test:
+      name: gRPC API - Setup Shared NFS
+      module: grpc_admin.test_grpc_ganesha_admin.py
+      desc: Create NFS cluster, export, mount, and gRPC certs once for subsequent API tests
+      abort-on-fail: true
+      config:
+        operation: setup_shared_nfs
+        setup_nfs_cluster: true
+        cleanup_nfs_cluster: false
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
   # =============================================================================
   # Transport / discovery
   # =============================================================================
@@ -113,6 +137,8 @@ tests:
       config:
         operation: verify_port
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         fs_name: cephfs
         clients: 1
@@ -127,6 +153,8 @@ tests:
       abort-on-fail: false
       config:
         operation: list_services
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         require_all_services: false
         nfs_name: cephfs-nfs
         nfs_export: /export
@@ -144,6 +172,8 @@ tests:
       config:
         operation: verify_tcp_discovery
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         fs_name: cephfs
         clients: 1
@@ -158,6 +188,8 @@ tests:
       abort-on-fail: false
       config:
         operation: verify_bad_port_rejected
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         fs_name: cephfs
@@ -176,6 +208,8 @@ tests:
         operation: verify_tls_required
         skip_if_blocked: false
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         clients: 1
@@ -190,6 +224,8 @@ tests:
       abort-on-fail: false
       config:
         operation: verify_admin_auth_matrix
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         skip_if_blocked: false
         admin_method: nfsService.nfsAdmin/ReReadConfig
         nfs_name: cephfs-nfs
@@ -207,6 +243,8 @@ tests:
       config:
         operation: verify_invalid_protobuf
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         clients: 1
@@ -221,6 +259,8 @@ tests:
       abort-on-fail: false
       config:
         operation: verify_resource_exhaustion
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -239,6 +279,8 @@ tests:
       config:
         operation: verify_timeout
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         clients: 1
@@ -258,6 +300,8 @@ tests:
       config:
         operation: get_grace_period
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -273,6 +317,8 @@ tests:
       abort-on-fail: false
       config:
         operation: start_grace_event_0
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -290,6 +336,8 @@ tests:
       config:
         operation: show_clients_and_sessions
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -309,6 +357,8 @@ tests:
       config:
         operation: show_exports
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -324,6 +374,8 @@ tests:
       abort-on-fail: false
       config:
         operation: display_export
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -341,6 +393,8 @@ tests:
       config:
         operation: add_export
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -357,6 +411,8 @@ tests:
       abort-on-fail: false
       config:
         operation: remove_export
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -375,6 +431,8 @@ tests:
         operation: update_export
         update_access_type: RO
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -395,6 +453,8 @@ tests:
       config:
         operation: show_clients_mgr
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -410,6 +470,8 @@ tests:
       abort-on-fail: false
       config:
         operation: add_client
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -427,6 +489,8 @@ tests:
       config:
         operation: remove_client
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -442,6 +506,8 @@ tests:
       abort-on-fail: false
       config:
         operation: disconnect_nfsv41_client
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -451,7 +517,7 @@ tests:
         port: 2049
 
   # =============================================================================
-  # nfsService.nfsAdmin / ShowIdMapper (ShutdownGanesha intentionally skipped)
+  # nfsService.nfsAdmin (ShutdownGanesha intentionally skipped; idmapper show via CacheMgr)
   # =============================================================================
   - test:
       name: gRPC API - ReReadConfig
@@ -462,6 +528,8 @@ tests:
       config:
         operation: reread_config
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -477,6 +545,8 @@ tests:
       abort-on-fail: false
       config:
         operation: purge_gids
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -494,6 +564,8 @@ tests:
       config:
         operation: purge_netgroups
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -509,6 +581,47 @@ tests:
       abort-on-fail: false
       config:
         operation: init_fd_limit
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  # =============================================================================
+  # ClusterMembers / FakeRecall / CacheMgr / QosMgr (current image discovery)
+  # =============================================================================
+  - test:
+      name: gRPC API - ShowClusterMembers
+      module: grpc_admin.test_grpc_ganesha_admin.py
+      desc: nfsService.ClusterMembers/ShowClusterMembers succeeds
+      polarion-id: CEPH-83632477
+      abort-on-fail: false
+      config:
+        operation: show_cluster_members
+        nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  - test:
+      name: gRPC API - SetClusterMembers
+      module: grpc_admin.test_grpc_ganesha_admin.py
+      desc: nfsService.ClusterMembers/SetClusterMembers then Show
+      polarion-id: CEPH-83632477
+      abort-on-fail: false
+      config:
+        operation: set_cluster_members
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -518,14 +631,55 @@ tests:
         port: 2049
 
   - test:
-      name: gRPC API - ShowIdMapper
+      name: gRPC API - FakeRecall
       module: grpc_admin.test_grpc_ganesha_admin.py
-      desc: ShowIdMapperService.ShowIdMapper succeeds
+      desc: nfsService.FakeRecall with an active client id
       polarion-id: CEPH-83632477
       abort-on-fail: false
       config:
-        operation: show_idmapper
+        operation: fake_recall
+        skip_if_no_client_id: true
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  - test:
+      name: gRPC API - CacheMgr Smoke
+      module: grpc_admin.test_grpc_ganesha_admin.py
+      desc: CacheMgrService Show* after NFS I/O; ShowIdMapperUsers requires min_entries (replaces ShowIdMapperService)
+      polarion-id: CEPH-83632477
+      abort-on-fail: false
+      config:
+        operation: cache_mgr_smoke
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
+        min_entries: 1
+        require_entries_rpc: ShowIdMapperUsers
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  - test:
+      name: gRPC API - QosMgr GetExportBandwidth
+      module: grpc_admin.test_grpc_ganesha_admin.py
+      desc: qosService.QosMgr/GetExportBandwidth smoke (QoS may be disabled)
+      polarion-id: CEPH-83632477
+      abort-on-fail: false
+      config:
+        operation: qos_get_export_bandwidth
+        nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -541,6 +695,8 @@ tests:
       abort-on-fail: false
       config:
         operation: purge_idmapper_cache
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -558,6 +714,8 @@ tests:
       config:
         operation: purge_idmapper_negative_cache
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -573,6 +731,8 @@ tests:
       abort-on-fail: false
       config:
         operation: malloc_trace
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         malloc_trace_file: /tmp/ganesha_malloc_trace.out
         nfs_name: cephfs-nfs
         nfs_export: /export
@@ -591,6 +751,8 @@ tests:
       config:
         operation: malloc_untrace
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -606,6 +768,8 @@ tests:
       abort-on-fail: false
       config:
         operation: trim_enable
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -623,6 +787,8 @@ tests:
       config:
         operation: trim_call
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -638,6 +804,8 @@ tests:
       abort-on-fail: false
       config:
         operation: trim_status
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -655,6 +823,8 @@ tests:
       config:
         operation: trim_disable
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -674,6 +844,8 @@ tests:
       config:
         operation: export_stats_smoke
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -689,6 +861,8 @@ tests:
       abort-on-fail: false
       config:
         operation: client_stats_smoke
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -710,6 +884,8 @@ tests:
       config:
         operation: admin_perf_under_load
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -727,6 +903,8 @@ tests:
       abort-on-fail: false
       config:
         operation: stats_collection_vs_io
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -746,6 +924,8 @@ tests:
       config:
         operation: show_clients_at_scale
         nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_export: /export
         nfs_mount: /mnt/nfs
         fs_name: cephfs
@@ -763,6 +943,8 @@ tests:
       abort-on-fail: false
       config:
         operation: export_ops_perf
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs
@@ -782,6 +964,25 @@ tests:
       abort-on-fail: false
       config:
         operation: verify_grpc_build
+        nfs_name: cephfs-nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: false
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 1
+        nfs_version: 4.1
+        port: 2049
+
+  - test:
+      name: gRPC API - Cleanup Shared NFS
+      module: grpc_admin.test_grpc_ganesha_admin.py
+      desc: Tear down shared NFS cluster/export/mount after all gRPC API tests
+      abort-on-fail: false
+      config:
+        operation: cleanup_shared_nfs
+        setup_nfs_cluster: false
+        cleanup_nfs_cluster: true
         nfs_name: cephfs-nfs
         nfs_export: /export
         nfs_mount: /mnt/nfs

@@ -116,9 +116,7 @@ class CertificateGenerator:
             node.upload_file(key_path, f"{dest_path}/{key_path}", sudo=True)
             node.upload_file(cert_path, f"{dest_path}/{cert_path}", sudo=True)
 
-            LOG.info(
-                f"""Private key and certificate have been generated and
-                saved to {dest_path}/{key_path} and {dest_path}/{cert_path}."""
-            )
+            LOG.info(f"""Private key and certificate have been generated and
+                saved to {dest_path}/{key_path} and {dest_path}/{cert_path}.""")
 
         return private_key_pem.decode("ascii"), certificate_pem.decode("ascii")

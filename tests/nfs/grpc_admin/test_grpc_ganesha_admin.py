@@ -6,6 +6,7 @@ gRPC interfaces only — D-Bus parity and NFS protocol regression are out of sco
 """
 
 import json
+import re
 from shlex import quote
 from time import sleep
 
@@ -13,16 +14,21 @@ from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
 from tests.nfs.grpc_admin.grpc_client import (
+    CACHE_MGR_SHOW_RPCS,
     DEFAULT_GRPC_PORT,
+    _norm_export_path,
+    _write_counters_positive,
     add_client,
     add_export,
     admin_rpc,
+    cache_mgr_rpc,
     check_blocked_operation,
     client_stats,
     disconnect_nfsv41_client,
     display_export,
     ensure_subvolume_group,
     export_stats,
+    fake_recall,
     first_export_id,
     get_client_ids,
     get_grace_period,
@@ -32,13 +38,15 @@ from tests.nfs.grpc_admin.grpc_client import (
     list_grpc_services,
     open_grpc_firewall,
     prepare_cluster_nodes,
+    qos_mgr_rpc,
     remove_client,
     remove_export,
     resolve_grpc_target,
+    set_cluster_members,
     setup_grpc_transport,
     show_clients,
+    show_cluster_members,
     show_exports,
-    show_idmapper,
     start_grace_with_event,
     update_export,
     verify_expected_services,
@@ -71,14 +79,17 @@ def _setup_additional_mounts(clients, nfs_server, nfs_export, nfs_mount, version
     for i, client in enumerate(clients[1:], start=1):
         mount_point = f"{nfs_mount}_{i}"
         client.create_dirs(dir_path=mount_point, sudo=True)
-        if Mount(client).nfs(
-            mount=mount_point,
-            version=version,
-            port=port,
-            server=nfs_server,
-            export=nfs_export,
-        ):
-            log.error("Failed to mount NFS on %s", client.hostname)
+        try:
+            # Mount.nfs returns None on success; raises MountFailedError on failure.
+            Mount(client).nfs(
+                mount=mount_point,
+                version=version,
+                port=port,
+                server=nfs_server,
+                export=nfs_export,
+            )
+        except Exception as exc:
+            log.error("Failed to mount NFS on %s: %s", client.hostname, exc)
             continue
         client.exec_command(sudo=True, cmd=f"touch {mount_point}/grpc_admin_test_{i}")
         mount_points.append((client, mount_point))
@@ -104,6 +115,61 @@ def _cleanup_additional_mounts(mount_points):
             )
         except Exception as exc:
             log.warning("Cleanup error on %s: %s", client.hostname, exc)
+
+
+def _ips_match(left, right):
+    """Compare client IPs loosely (ignore IPv4-mapped IPv6 prefix)."""
+
+    def _norm(value):
+        text = str(value or "").strip().lower()
+        if text.startswith("::ffff:"):
+            text = text[7:]
+        return text
+
+    a, b = _norm(left), _norm(right)
+    return bool(a) and a == b
+
+
+def _remount_nfs_export(
+    client, nfs_server, export_path, nfs_mount, nfs_version, nfs_port
+):
+    """Unmount/remount *nfs_mount*; return True on success."""
+    try:
+        Unmount(client).unmount(nfs_mount)
+    except Exception as exc:
+        log.warning("Unmount %s before remount: %s", nfs_mount, exc)
+    try:
+        client.create_dirs(dir_path=nfs_mount, sudo=True)
+        # Mount.nfs returns None on success; raises MountFailedError on failure.
+        Mount(client).nfs(
+            mount=nfs_mount,
+            version=nfs_version,
+            port=nfs_port,
+            server=nfs_server,
+            export=export_path,
+        )
+        return True
+    except Exception as exc:
+        log.warning(
+            "Remount %s (export=%s server=%s) failed: %s",
+            nfs_mount,
+            export_path,
+            nfs_server,
+            exc,
+        )
+        return False
+
+
+def _delete_ceph_nfs_export(client, nfs_name, export_path):
+    """Best-effort ``ceph nfs export delete`` for leftover suite exports."""
+    path = str(export_path or "").strip()
+    if not path:
+        return
+    try:
+        Ceph(client).nfs.export.delete(nfs_name, path)
+        log.info("Deleted ceph nfs export %s on %s", path, nfs_name)
+    except Exception as exc:
+        log.warning("ceph nfs export delete %s failed: %s", path, exc)
 
 
 def _write_export_config(nfs_node, path, content):
@@ -194,9 +260,16 @@ def run(ceph_cluster, **kw):
         reread_config, trim_status, trim_enable, trim_disable, trim_call,
         purge_gids, purge_netgroups, init_fd_limit,
         purge_idmapper_cache, purge_idmapper_negative_cache,
-        malloc_trace, malloc_untrace, show_idmapper,
+        malloc_trace, malloc_untrace,
+        show_cluster_members, set_cluster_members, fake_recall,
+        cache_mgr_smoke (ShowIdMapperUsers + Show* after NFS I/O),
+        qos_get_export_bandwidth,
         export_stats_smoke, client_stats_smoke,
+        setup_shared_nfs / cleanup_shared_nfs (suite-wide lifecycle),
         shutdown (destructive — opt-in, not scheduled)
+
+    Suite tip: run ``setup_shared_nfs`` once, set ``setup_nfs_cluster: false``
+    and ``cleanup_nfs_cluster: false`` on API cases, then ``cleanup_shared_nfs``.
     """
     config = kw.get("config", {})
     operation = config.get("operation")
@@ -219,7 +292,15 @@ def run(ceph_cluster, **kw):
     fs_name = config.get("fs_name", "cephfs")
     fs = config.get("fs", "cephfs")
     subvolume_group = config.get("subvolume_group", "ganeshagroup")
+    # Shared-suite mode: setup/cleanup only when explicitly requested.
     setup_cluster = config.get("setup_nfs_cluster", True)
+    cleanup_nfs = config.get("cleanup_nfs_cluster", setup_cluster)
+    if operation == "setup_shared_nfs":
+        setup_cluster = True
+        cleanup_nfs = False
+    elif operation == "cleanup_shared_nfs":
+        setup_cluster = False
+        cleanup_nfs = True
 
     clients, nfs_nodes, client, nfs_node, nfs_server, nfs_ip = prepare_cluster_nodes(
         ceph_cluster, config
@@ -228,9 +309,19 @@ def run(ceph_cluster, **kw):
     installer = installers[0] if installers else None
     target = resolve_grpc_target(config, nfs_ip)
     additional_mounts = []
+    # Extra exports created by this case (cleaned without destroying the NFS cluster).
+    extra_export_ids = []
+    extra_export_paths = []
+    kw_tls = None
+    shared_mode = not cleanup_nfs
 
     log.info("Running gRPC API operation: %s", operation)
     log.info("Target: %s", target)
+    log.info(
+        "NFS lifecycle: setup=%s cleanup=%s",
+        setup_cluster,
+        cleanup_nfs,
+    )
 
     try:
         for c in clients:
@@ -257,6 +348,15 @@ def run(ceph_cluster, **kw):
             )
             deploy_grpc_certs_if_configured(config, nfs_node, nfs_name, installer)
 
+        export_path = f"{nfs_export}_0"
+
+        if operation == "cleanup_shared_nfs":
+            # Run destroy in-body so PASS/FAIL reflects cleanup success.
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
+            cleanup_nfs = False  # avoid double-destroy in finally
+            log.info("TEST PASSED - gRPC API operation=%s", operation)
+            return 0
+
         transport = setup_grpc_transport(config, clients, installer, nfs_name)
         kw_tls = grpc_invoke_kwargs(transport)
         log.info(
@@ -264,9 +364,38 @@ def run(ceph_cluster, **kw):
             "mTLS" if transport["use_mtls"] else "plaintext",
         )
 
-        export_path = f"{nfs_export}_0"
+        if operation == "setup_shared_nfs":
+            if not verify_grpc_port_listening(nfs_node):
+                raise OperationFailedError(
+                    "gRPC port not listening after setup_shared_nfs"
+                )
+            ok, services = list_grpc_services(client, target, **kw_tls)
+            if not ok or not services:
+                raise OperationFailedError(
+                    "gRPC discovery failed after setup_shared_nfs"
+                )
+            # Prove the shared mount is usable for later I/O-based cases.
+            probe = f"{nfs_mount}/grpc_shared_setup_probe"
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=(
+                    f"dd if=/dev/zero of={probe} bs=4k count=1 oflag=dsync "
+                    f"2>/dev/null; echo __EC:$?; rm -f {probe}"
+                ),
+                check_ec=False,
+            )
+            if "__EC:0" not in (out or ""):
+                raise OperationFailedError(
+                    f"Shared NFS mount {nfs_mount} not writable after setup: {out}"
+                )
+            log.info(
+                "Shared NFS ready: mount=%s export=%s services=%s",
+                nfs_mount,
+                export_path,
+                len(services),
+            )
 
-        if operation == "verify_port":
+        elif operation == "verify_port":
             if not verify_grpc_port_listening(nfs_node):
                 raise OperationFailedError("gRPC port is not listening")
 
@@ -326,10 +455,12 @@ def run(ceph_cluster, **kw):
             log.info("Active client IDs: %s", client_ids)
 
             if operation == "show_clients_and_sessions":
-                ok, session_ids, _ = get_session_ids(client, target, **kw_tls)
+                ok, session_ids, raw = get_session_ids(client, target, **kw_tls)
+                # Blank strings are filtered in the helper; empty list is a fail.
                 if not ok or not session_ids:
                     raise OperationFailedError(
-                        "GetSessionIds failed or returned empty list with active mounts"
+                        "GetSessionIds failed or returned no non-empty session IDs "
+                        f"with active mounts: {raw}"
                     )
                 log.info("Active session IDs: %s", session_ids)
 
@@ -340,9 +471,13 @@ def run(ceph_cluster, **kw):
             log.info("Client IDs: %s", client_ids)
 
         elif operation == "get_session_ids":
-            ok, session_ids, _ = get_session_ids(client, target, **kw_tls)
+            ok, session_ids, raw = get_session_ids(client, target, **kw_tls)
             if not ok:
-                raise OperationFailedError("GetSessionIds RPC failed")
+                raise OperationFailedError(f"GetSessionIds RPC failed: {raw}")
+            if not session_ids and not config.get("allow_empty_session_ids", False):
+                raise OperationFailedError(
+                    f"GetSessionIds returned no non-empty session IDs: {raw}"
+                )
             log.info("Session IDs: %s", session_ids)
 
         # ---- ExportService -------------------------------------------------
@@ -370,9 +505,9 @@ def run(ceph_cluster, **kw):
             filename = config.get("export_config_filename", "grpc_add_export.conf")
             expression = config.get("export_expression", "EXPORT")
             content = config.get("export_config_content")
+            export_id = int(config.get("new_export_id", 77))
+            pseudo = config.get("new_export_pseudo", "/grpc_added_export")
             if not content:
-                export_id = int(config.get("new_export_id", 77))
-                pseudo = config.get("new_export_pseudo", "/grpc_added_export")
                 user_id = config.get(
                     "fsal_user_id",
                     f"nfs.{nfs_name}.{fs_name}.{subvolume_group}.0",
@@ -393,13 +528,85 @@ def run(ceph_cluster, **kw):
                 _write_export_config(nfs_node, file_path, content)
             else:
                 file_path = _stage_export_config(nfs_node, nfs_name, filename, content)
+            # When suite supplies export_config_content, derive id/pseudo from it
+            # so ShowExports verification does not use unrelated defaults.
+            id_match = re.search(r"Export_Id\s*=\s*(\d+)", content or "")
+            if id_match:
+                export_id = int(id_match.group(1))
+            pseudo_match = re.search(r'Pseudo\s*=\s*"([^"]+)"', content or "")
+            if pseudo_match:
+                pseudo = pseudo_match.group(1)
+            ok, exports_before, _ = show_exports(client, target, **kw_tls)
+            if not ok:
+                raise OperationFailedError("ShowExports before AddExport failed")
+            before_ids = {
+                int(i)
+                for i in (e.get("exportId", e.get("export_id")) for e in exports_before)
+                if i is not None
+            }
             ok, raw = add_export(client, target, file_path, expression, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"AddExport failed: {raw}")
+            # Track immediately — verification/remove can fail and must not leak
+            # into later shared-suite cases.
+            if config.get("cleanup_added_export", True):
+                if export_id is not None:
+                    extra_export_ids.append(int(export_id))
+                if pseudo:
+                    extra_export_paths.append(pseudo)
+            sleep(2)
             ok, exports, _ = show_exports(client, target, **kw_tls)
             if not ok:
                 raise OperationFailedError("ShowExports after AddExport failed")
-            log.info("Exports after AddExport: %s", exports)
+            after_ids = {
+                int(i)
+                for i in (e.get("exportId", e.get("export_id")) for e in exports)
+                if i is not None
+            }
+            # If config id was wrong, adopt the single newly appeared id for cleanup.
+            if config.get("cleanup_added_export", True) and export_id not in after_ids:
+                new_ids = after_ids - before_ids
+                if len(new_ids) == 1:
+                    real_id = next(iter(new_ids))
+                    if export_id is not None and int(export_id) in extra_export_ids:
+                        extra_export_ids.remove(int(export_id))
+                    export_id = real_id
+                    extra_export_ids.append(int(export_id))
+            want_pseudo = _norm_export_path(pseudo)
+            pseudos = {
+                _norm_export_path(e.get("pseudoPath") or e.get("pseudo_path") or "")
+                for e in exports
+            }
+            added_by_id = export_id in after_ids and export_id not in before_ids
+            added_by_pseudo = bool(want_pseudo) and want_pseudo in pseudos
+            if not (added_by_id or added_by_pseudo):
+                raise OperationFailedError(
+                    f"AddExport reported success but export not in ShowExports; "
+                    f"expected id={export_id} pseudo={pseudo} before={before_ids} "
+                    f"after={after_ids} exports={exports}"
+                )
+            log.info(
+                "AddExport verified id=%s pseudo=%s exports=%s",
+                export_id,
+                pseudo,
+                exports,
+            )
+            # Best-effort immediate remove; finally still covers leftovers.
+            if config.get("cleanup_added_export", True) and export_id is not None:
+                ok_rm, raw_rm = remove_export(client, target, export_id, **kw_tls)
+                if ok_rm:
+                    log.info("Removed AddExport id=%s after verification", export_id)
+                    if int(export_id) in extra_export_ids:
+                        extra_export_ids.remove(int(export_id))
+                    if pseudo in extra_export_paths:
+                        extra_export_paths.remove(pseudo)
+                else:
+                    log.warning(
+                        "Immediate RemoveExport(%s) after AddExport failed: %s; "
+                        "leaving for shared-suite finally cleanup",
+                        export_id,
+                        raw_rm,
+                    )
 
         elif operation == "remove_export":
             # Prefer suite-provided export_id; else create a second ceph export and remove it.
@@ -413,6 +620,8 @@ def run(ceph_cluster, **kw):
                     nfs_export=created_path,
                     fs=fs,
                 )
+                # Track immediately so shared-suite leftovers are cleaned on failure.
+                extra_export_paths.append(created_path)
                 sleep(int(config.get("export_settle_sleep", 5)))
                 ok, exports, raw = show_exports(client, target, **kw_tls)
                 if not ok:
@@ -440,6 +649,10 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     f"Export {export_id} still present after RemoveExport"
                 )
+            # gRPC remove succeeded — also drop the ceph export object if we created it.
+            if created_path and created_path in extra_export_paths:
+                _delete_ceph_nfs_export(client, nfs_name, created_path)
+                extra_export_paths.remove(created_path)
             log.info(
                 "RemoveExport(%s) succeeded; remaining=%s", export_id, remaining_ids
             )
@@ -449,6 +662,8 @@ def run(ceph_cluster, **kw):
             expression = config.get("export_expression", "EXPORT")
             content = config.get("export_config_content")
             export_id = config.get("export_id")
+            # Flip access type so the update is observable via mount writes.
+            new_access = config.get("update_access_type", "RO")
             if not content:
                 ok, exports, raw = show_exports(client, target, **kw_tls)
                 if not ok or not exports:
@@ -476,8 +691,6 @@ def run(ceph_cluster, **kw):
                     f"nfs.{nfs_name}.{fs_name}.{subvolume_group}.0",
                 )
                 secret = config.get("fsal_secret_access_key", "")
-                # Flip access type so the update is observable.
-                new_access = config.get("update_access_type", "RO")
                 content = _build_ceph_export_block(
                     export_id=int(export_id),
                     pseudo=pseudo,
@@ -495,21 +708,115 @@ def run(ceph_cluster, **kw):
             ok, raw = update_export(client, target, file_path, expression, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"UpdateExport failed: {raw}")
-            # Best-effort verify via DisplayExport
+            sleep(2)
             ok, exports, _ = show_exports(client, target, **kw_tls)
+            if not ok:
+                raise OperationFailedError("ShowExports after UpdateExport failed")
             if export_id is None and exports:
                 export_id = first_export_id(exports)
-            if export_id is not None:
-                ok, payload, raw = display_export(client, target, export_id, **kw_tls)
-                if not ok:
-                    raise OperationFailedError(
-                        f"DisplayExport after UpdateExport failed: {raw}"
-                    )
-                log.info(
-                    "UpdateExport verified DisplayExport perms=%s",
-                    payload.get("exportPermissions")
-                    or payload.get("export_permissions"),
+            if export_id is None:
+                raise OperationFailedError(
+                    "UpdateExport succeeded but no export_id to verify"
                 )
+            ok, payload, raw = display_export(client, target, export_id, **kw_tls)
+            if not ok:
+                raise OperationFailedError(
+                    f"DisplayExport after UpdateExport failed: {raw}"
+                )
+            shown_id = payload.get("exportId", payload.get("export_id"))
+            if shown_id is not None and int(shown_id) != int(export_id):
+                raise OperationFailedError(
+                    f"DisplayExport after update returned export_id={shown_id}, "
+                    f"expected {export_id}: {raw}"
+                )
+            if not (
+                payload.get("pseudoPath")
+                or payload.get("pseudo_path")
+                or payload.get("fullPath")
+                or payload.get("full_path")
+            ):
+                raise OperationFailedError(
+                    f"DisplayExport after UpdateExport missing path fields: {raw}"
+                )
+            # DisplayExport often omits Access_Type — prove RO via mount write.
+            if str(new_access).upper() == "RO" and config.get(
+                "verify_ro_after_update", True
+            ):
+                probe = f"{nfs_mount}/grpc_ro_probe"
+                out, _ = client.exec_command(
+                    sudo=True,
+                    cmd=(
+                        f"dd if=/dev/zero of={probe} bs=4k count=1 oflag=dsync "
+                        f"2>/dev/null; echo __EC:$?"
+                    ),
+                    check_ec=False,
+                )
+                if "__EC:0" in (out or ""):
+                    raise OperationFailedError(
+                        "UpdateExport claimed success but mount still allows writes "
+                        f"(Access_Type={new_access} not effective)"
+                    )
+                client.exec_command(sudo=True, cmd=f"rm -f {probe}", check_ec=False)
+            log.info(
+                "UpdateExport verified export_id=%s access=%s keys=%s",
+                export_id,
+                new_access,
+                list(payload.keys()),
+            )
+            # Restore RW so later shared-suite cases keep a writable mount.
+            if str(new_access).upper() != "RW" and config.get(
+                "restore_access_after_update", True
+            ):
+                restore_full = (
+                    payload.get("fullPath") or payload.get("full_path") or "/"
+                )
+                if not str(restore_full).startswith("/"):
+                    restore_full = f"/{restore_full}"
+                restore = _build_ceph_export_block(
+                    export_id=int(export_id),
+                    pseudo=payload.get("pseudoPath")
+                    or payload.get("pseudo_path")
+                    or export_path,
+                    fs_name=fs_name,
+                    user_id=config.get(
+                        "fsal_user_id",
+                        f"nfs.{nfs_name}.{fs_name}.{subvolume_group}.0",
+                    ),
+                    secret=config.get("fsal_secret_access_key", ""),
+                    access_type="RW",
+                    path=restore_full,
+                )
+                restore_path = _stage_export_config(
+                    nfs_node, nfs_name, "grpc_restore_export.conf", restore
+                )
+                ok_r, raw_r = update_export(
+                    client, target, restore_path, expression, **kw_tls
+                )
+                if not ok_r:
+                    # Soft-log when this case also destroys NFS; hard-fail in shared mode.
+                    if shared_mode:
+                        raise OperationFailedError(
+                            "UpdateExport RO check passed but failed to restore "
+                            f"Access_Type=RW for shared suite: {raw_r}"
+                        )
+                    log.warning(
+                        "Failed to restore Access_Type=RW after UpdateExport: %s",
+                        raw_r,
+                    )
+                else:
+                    log.info("Restored Access_Type=RW on export_id=%s", export_id)
+                    sleep(2)
+                    if shared_mode and not _remount_nfs_export(
+                        client,
+                        nfs_server,
+                        export_path,
+                        nfs_mount,
+                        nfs_version,
+                        nfs_port,
+                    ):
+                        raise OperationFailedError(
+                            f"Remount {nfs_mount} after restoring RW failed"
+                        )
 
         # ---- ClientMgr -----------------------------------------------------
         elif operation == "show_clients_mgr":
@@ -526,6 +833,10 @@ def run(ceph_cluster, **kw):
             ok, mgr_clients, raw = show_clients(client, target, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"ClientMgr.ShowClients failed: {raw}")
+            if not mgr_clients and not config.get("allow_empty_clients", False):
+                raise OperationFailedError(
+                    f"ClientMgr.ShowClients returned no clients with mounts: {raw}"
+                )
             log.info(
                 "ClientMgr.ShowClients count=%s: %s", len(mgr_clients), mgr_clients
             )
@@ -539,7 +850,11 @@ def run(ceph_cluster, **kw):
         elif operation == "remove_client":
             ipaddr = config.get("client_ip", clients[-1].ip_address)
             # Ensure entry exists then remove.
-            add_client(client, target, ipaddr, **kw_tls)
+            ok, raw = add_client(client, target, ipaddr, **kw_tls)
+            if not ok:
+                raise OperationFailedError(
+                    f"AddClient({ipaddr}) before RemoveClient failed: {raw}"
+                )
             ok, raw = remove_client(client, target, ipaddr, **kw_tls)
             if not ok:
                 raise OperationFailedError(f"RemoveClient({ipaddr}) failed: {raw}")
@@ -561,6 +876,43 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     f"DisconnectNfsv41Client({ipaddr}) failed: {raw}"
                 )
+            try:
+                payload = json.loads(raw or "")
+            except (TypeError, json.JSONDecodeError):
+                payload = {}
+            destroyed = payload.get("connections_destroyed")
+            if destroyed is None:
+                destroyed = payload.get("connectionsDestroyed")
+            if int(destroyed or 0) < 1 and not config.get(
+                "allow_zero_disconnects", False
+            ):
+                raise OperationFailedError(
+                    f"DisconnectNfsv41Client({ipaddr}) destroyed {destroyed} "
+                    f"connections: {raw}"
+                )
+            # Remount when we disconnected the primary grpcurl client mount.
+            if config.get("remount_after_disconnect", True) and _ips_match(
+                ipaddr, client.ip_address
+            ):
+                if not _remount_nfs_export(
+                    client,
+                    nfs_server,
+                    export_path,
+                    nfs_mount,
+                    nfs_version,
+                    nfs_port,
+                ):
+                    if shared_mode:
+                        raise OperationFailedError(
+                            f"Remount of {nfs_mount} after DisconnectNfsv41Client "
+                            "failed (shared suite needs a live mount)"
+                        )
+                    log.warning(
+                        "Remount of %s after DisconnectNfsv41Client failed",
+                        nfs_mount,
+                    )
+                else:
+                    log.info("Remounted %s after DisconnectNfsv41Client", nfs_mount)
 
         # ---- nfsAdmin / IdMapper -------------------------------------------
         elif operation in ADMIN_EMPTY_OPS:
@@ -596,12 +948,6 @@ def run(ceph_cluster, **kw):
             if not ok:
                 raise OperationFailedError(f"MallocTrace failed: {raw}")
 
-        elif operation == "show_idmapper":
-            ok, entries, raw = show_idmapper(client, target, **kw_tls)
-            if not ok:
-                raise OperationFailedError(f"ShowIdMapper failed: {raw}")
-            log.info("ShowIdMapper entries=%s", len(entries))
-
         elif operation == "shutdown":
             ok, raw = admin_rpc(client, target, "ShutdownGanesha", **kw_tls)
             if not ok:
@@ -635,6 +981,14 @@ def run(ceph_cluster, **kw):
                     raise OperationFailedError(
                         f"ExportStats IO RPC failed for export {export_id}: {raw}"
                     )
+                try:
+                    io_payload = json.loads(raw or "")
+                except (TypeError, json.JSONDecodeError):
+                    io_payload = {}
+                if not _write_counters_positive(io_payload):
+                    raise OperationFailedError(
+                        f"ExportStats IO RPC returned no write counters after I/O: {raw}"
+                    )
             ok, raw = export_stats(client, target, "GetNFSIO", **kw_tls)
             if not ok:
                 raise OperationFailedError(f"GetNFSIO failed: {raw}")
@@ -658,7 +1012,134 @@ def run(ceph_cluster, **kw):
             )
             if not ok:
                 raise OperationFailedError(f"ClientStats failed for {ipaddr}: {raw}")
+            try:
+                stats_payload = json.loads(raw or "")
+            except (TypeError, json.JSONDecodeError):
+                stats_payload = {}
+            if not _write_counters_positive(stats_payload):
+                raise OperationFailedError(
+                    f"ClientStats returned no write counters after I/O for "
+                    f"{ipaddr}: {raw}"
+                )
             log.info("ClientStats smoke passed for %s", ipaddr)
+
+        # ---- ClusterMembers / FakeRecall / CacheMgr / QosMgr --------------
+        elif operation == "show_cluster_members":
+            ok, ipaddrs, raw = show_cluster_members(client, target, **kw_tls)
+            if not ok:
+                raise OperationFailedError(f"ShowClusterMembers failed: {raw}")
+            log.info("ShowClusterMembers ipaddrs=%s", ipaddrs)
+
+        elif operation == "set_cluster_members":
+            members = config.get("cluster_members")
+            if not members:
+                members = [nfs_ip]
+            if isinstance(members, str):
+                members = [m.strip() for m in members.split(",") if m.strip()]
+            members = [str(m) for m in members]
+            if not members:
+                raise ConfigError("set_cluster_members requires at least one IP")
+            ok, raw = set_cluster_members(client, target, members, **kw_tls)
+            if not ok:
+                raise OperationFailedError(f"SetClusterMembers failed: {raw}")
+            ok, shown, raw = show_cluster_members(client, target, **kw_tls)
+            if not ok:
+                raise OperationFailedError(
+                    f"ShowClusterMembers after set failed: {raw}"
+                )
+            missing = [m for m in members if m not in shown]
+            if missing:
+                raise OperationFailedError(
+                    f"SetClusterMembers did not stick; missing={missing} "
+                    f"requested={members} shown={shown}"
+                )
+            log.info("SetClusterMembers verified members=%s shown=%s", members, shown)
+
+        elif operation == "fake_recall":
+            # FakeRecall needs a live NFSv4 client id; settle after mount.
+            sleep(int(config.get("client_settle_sleep", 5)))
+            client_id = config.get("client_id")
+            if client_id is None:
+                ok, client_ids, raw = get_client_ids(client, target, **kw_tls)
+                if not ok:
+                    raise OperationFailedError(f"GetClientIds failed: {raw}")
+                if not client_ids:
+                    if config.get("skip_if_no_client_id", True):
+                        log.info("SKIP: fake_recall — no NFS client IDs available yet")
+                        return -1
+                    raise OperationFailedError(
+                        "FakeRecall requires a client_id and none were found"
+                    )
+                client_id = client_ids[0]
+            ok, raw = fake_recall(client, target, client_id, **kw_tls)
+            if not ok:
+                raise OperationFailedError(f"FakeRecall({client_id}) failed: {raw}")
+            log.info("FakeRecall client_id=%s succeeded", client_id)
+
+        elif operation == "cache_mgr_smoke":
+            # Populate idmapper cache (replaces legacy ShowIdMapperService).
+            client.exec_command(
+                sudo=True,
+                cmd=(
+                    f"dd if=/dev/zero of={nfs_mount}/grpc_cachemgr_io bs=4k "
+                    f"count=8 oflag=dsync 2>/dev/null; "
+                    f"ls -la {nfs_mount}/grpc_cachemgr_io"
+                ),
+                check_ec=False,
+            )
+            sleep(int(config.get("idmapper_settle_sleep", 3)))
+            rpcs = config.get("cache_mgr_rpcs", list(CACHE_MGR_SHOW_RPCS))
+            require_rpc = config.get("require_entries_rpc", "ShowIdMapperUsers")
+            min_entries = int(config.get("min_entries", 1))
+            for rpc_name in rpcs:
+                ok, payload, raw = cache_mgr_rpc(client, target, rpc_name, **kw_tls)
+                if not ok:
+                    raise OperationFailedError(f"CacheMgr.{rpc_name} failed: {raw}")
+                entries = payload.get("entries") or []
+                if not isinstance(entries, list):
+                    raise OperationFailedError(
+                        f"CacheMgr.{rpc_name} entries is not a list: {raw}"
+                    )
+                if rpc_name == require_rpc and len(entries) < min_entries:
+                    raise OperationFailedError(
+                        f"CacheMgr.{rpc_name} returned {len(entries)} entries "
+                        f"(need >= {min_entries}); refusing timestamp-only/"
+                        f"empty idmapper cache as success. raw={raw}"
+                    )
+                log.info(
+                    "CacheMgr.%s ok entries=%s",
+                    rpc_name,
+                    len(entries) if isinstance(entries, list) else "n/a",
+                )
+
+        elif operation == "qos_get_export_bandwidth":
+            ok, exports, raw = show_exports(client, target, **kw_tls)
+            if not ok:
+                raise OperationFailedError(f"ShowExports failed: {raw}")
+            export_id = config.get("export_id", first_export_id(exports))
+            if export_id is None:
+                raise OperationFailedError(
+                    "qos_get_export_bandwidth requires an export_id"
+                )
+            data = json.dumps({"export_id": int(export_id)})
+            ok, payload, raw = qos_mgr_rpc(
+                client, target, "GetExportBandwidth", data=data, **kw_tls
+            )
+            if not ok:
+                raise OperationFailedError(f"QosMgr.GetExportBandwidth failed: {raw}")
+            # Require a structured GetExportBandwidthResponse (status and/or bandwidth).
+            if "status" not in payload and "bandwidth" not in payload:
+                raise OperationFailedError(
+                    f"QosMgr.GetExportBandwidth missing status/bandwidth: {raw}"
+                )
+            status = payload.get("status") or {}
+            log.info(
+                "QosMgr.GetExportBandwidth export_id=%s status=%s bandwidth=%s",
+                export_id,
+                status,
+                payload.get("bandwidth"),
+            )
+            # status.success=false is acceptable when QoS is not enabled for the export.
 
         else:
             raise ConfigError(f"Unknown operation: {operation}")
@@ -678,8 +1159,41 @@ def run(ceph_cluster, **kw):
     finally:
         try:
             _cleanup_additional_mounts(additional_mounts)
-            nfs_log_parser(client=client, nfs_node=nfs_nodes, nfs_name=nfs_name)
-            if setup_cluster and operation != "shutdown":
+            # Remove only extras created by this case (keep shared NFS cluster).
+            # Use live cleanup_nfs (may be cleared after cleanup_shared_nfs body).
+            if (not cleanup_nfs) and (extra_export_ids or extra_export_paths):
+                try:
+                    kw_tls_cleanup = kw_tls
+                    if kw_tls_cleanup is None:
+                        transport = setup_grpc_transport(
+                            config, clients, installer, nfs_name
+                        )
+                        kw_tls_cleanup = grpc_invoke_kwargs(transport)
+                    for eid in list(extra_export_ids):
+                        ok_rm, raw_rm = remove_export(
+                            client, target, eid, **kw_tls_cleanup
+                        )
+                        log.info(
+                            "Extra export cleanup id=%s ok=%s raw=%s",
+                            eid,
+                            ok_rm,
+                            (raw_rm or "")[:200],
+                        )
+                        if not ok_rm:
+                            log.warning(
+                                "gRPC RemoveExport(%s) during cleanup failed; "
+                                "will try ceph nfs export delete for tracked paths",
+                                eid,
+                            )
+                    for path in list(extra_export_paths):
+                        _delete_ceph_nfs_export(client, nfs_name, path)
+                except Exception as exc:
+                    log.warning("Extra-export cleanup error (non-fatal): %s", exc)
+            try:
+                nfs_log_parser(client=client, nfs_node=nfs_nodes, nfs_name=nfs_name)
+            except Exception as exc:
+                log.warning("nfs_log_parser error (non-fatal): %s", exc)
+            if cleanup_nfs and operation != "shutdown":
                 cleanup_cluster(
                     client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
                 )

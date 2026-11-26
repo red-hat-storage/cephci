@@ -448,9 +448,11 @@ def run(ceph_cluster, **kw):
             section="osd", name="bluestore_compression_mode", value="force"
         )
 
-        log_info_msg = f"3. Creating Replicated pool {pool2} without compression disabled\
+        log_info_msg = (
+            f"3. Creating Replicated pool {pool2} without compression disabled\
             ( Compression disabled Pool created after OSD compression config set \
             bluestore_compression_algorithm and bluestore_compression_mode )"
+        )
         log.info(log_info_msg)
         compression_obj.create_pool_wrapper(pool2)
 
@@ -541,10 +543,8 @@ def run(ceph_cluster, **kw):
         if rados_obj.delete_pool(pool=pool2) is False:
             raise Exception(f"Deleting pool {pool2} failed")
 
-        log.info(
-            "9. Disable OSD compression configs (bluestore_compression_algorithm \
-                 and bluestore_compression_mode) "
-        )
+        log.info("9. Disable OSD compression configs (bluestore_compression_algorithm \
+                 and bluestore_compression_mode) ")
         if not mon_obj.remove_config(
             section="osd",
             name="bluestore_compression_algorithm",
@@ -636,10 +636,8 @@ def run(ceph_cluster, **kw):
         pool1_stats = get_pool_stats(rados_obj=rados_obj, pool_name=pool1)
         pool2_stats = get_pool_stats(rados_obj=rados_obj, pool_name=pool2)
 
-        log.info(
-            "6. Perform validations\
-            - pool1 and pool2 should inherit compression configurations from OSD"
-        )
+        log.info("6. Perform validations\
+            - pool1 and pool2 should inherit compression configurations from OSD")
 
         log_info_msg = f"Pool1 stats: {json.dumps(pool1_stats, indent=4)}"
         log.info(log_info_msg)
@@ -654,18 +652,14 @@ def run(ceph_cluster, **kw):
         # If OSD compression configs are inherited, compression should occur
         # compress_bytes_used != 0 and compress_under_bytes != 0
         if not data_compressed(pool_stats=pool1_stats):
-            raise Exception(
-                f"pool1 {pool1} is not compressed, when OSD compression\
+            raise Exception(f"pool1 {pool1} is not compressed, when OSD compression\
                     (bluestore_compression_algorithm and bluestore_compression_mode)\
-                        config is set"
-            )
+                        config is set")
 
         if not data_compressed(pool_stats=pool2_stats):
-            raise Exception(
-                f"pool2 {pool2} is not compressed, when OSD compression\
+            raise Exception(f"pool2 {pool2} is not compressed, when OSD compression\
                     (bluestore_compression_algorithm and bluestore_compression_mode)\
-                        config is set"
-            )
+                        config is set")
 
         log_info_msg = f"7. Reading data from pool1 {pool1}, pool2 {pool2}"
         log.info(log_info_msg)

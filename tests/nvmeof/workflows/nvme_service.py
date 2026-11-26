@@ -11,6 +11,11 @@ from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL, DEFAULT_PORT
+from tests.nvmeof.workflows.log_collect import (
+    arm_nvmeof_journal_window,
+    bind_test_config,
+    safe_collect_nvmeof_service_journals,
+)
 from tests.nvmeof.workflows.nvme_gateway import create_gateway
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_enable_nvmeof_module,
@@ -61,6 +66,12 @@ class NVMeService:
             self.is_spec_or_mtls = True
         self.service_name = None
         self.service_id = None
+        # Wall-clock on first GW node; used as journalctl --since for pre-cleanup collect.
+        # First arm force-resets Comments; same-config re-bind below is a no-op reset.
+        self.test_start_time = arm_nvmeof_journal_window(self.config, self.gw_nodes[0])
+        self._journals_collected = False
+        # Enable index.html Comments via config["artifacts"] for log findings.
+        bind_test_config(self.config)
 
     def _get_ceph_version(self):
         return get_ceph_version_from_cluster(self.clients[0])
@@ -85,9 +96,20 @@ class NVMeService:
 
     def delete_nvme_service(self):
         """Delete the NVMe gateway service."""
-        ceph_cluster = self.ceph_cluster
+        # Ensure journals are captured even when called outside shared teardown.
+        safe_collect_nvmeof_service_journals(nvme_service=self)
 
+        # Deploy may have been interrupted before discovery; re-resolve for rm.
+        self._discover_service_name()
         service_name = self.service_name
+        if not service_name:
+            LOG.warning(
+                "Skipping nvmeof orch remove: service_name is unset "
+                "(deploy may not have completed)"
+            )
+            return 1
+
+        ceph_cluster = self.ceph_cluster
         cfg = {
             "no_cluster_state": False,
             "config": {

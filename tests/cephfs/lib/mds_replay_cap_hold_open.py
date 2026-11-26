@@ -8,6 +8,7 @@ MDS fail / clientreplay (upstream TestReplayCapReconnect pattern).
 Usage:
   python3 mds_replay_cap_hold_open.py <path> <marker_file>
 """
+
 import os
 import signal
 import sys

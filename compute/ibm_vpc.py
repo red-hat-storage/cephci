@@ -525,11 +525,9 @@ class CephVMNodeIBM:
             key_id = get_resource_id(private_key, keys.get_result())
 
             key_identity_model = dict({"id": key_id})
-            # SSH fingerprint of ceph-qe-sa.pub - ssh-keygen -lf ceph-qe-sa.pub
-            # This key has to be part of SSH Keys for VPC.
-            # FixMe: switch this key to FIPs compliant in the future.
+            # FIPS compliant SSH key of ci-user.
             key_identity_shared = {
-                "fingerprint": "SHA256:SFan4TdEd1xcT4v9So8q4A+B/f2PcXOoPfS2vwPk9/M"
+                "fingerprint": "SHA256:MQhwUtAE9ch2W9yfPi6xA6y2IALUuEmyGpewgMEZXRU"
             }
 
             # Construct a dict representation of a ResourceIdentityById model
