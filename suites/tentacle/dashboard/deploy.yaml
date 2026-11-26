@@ -45,7 +45,7 @@ tests:
               command: apply
               service: osd
               args:
-                all-available-devices: true          
+                all-available-devices: true
           - config:
               command: apply
               service: rgw

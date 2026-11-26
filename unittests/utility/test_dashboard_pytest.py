@@ -12,6 +12,7 @@ import yaml
 from utility.dashboard_pytest import (
     DashboardPytestError,
     ensure_dashboard_venv,
+    publish_dashboard_report,
     run_dashboard_pytest,
     validate_dashboard_pytest_args,
 )
@@ -201,6 +202,15 @@ def test_write_endpoint_is_restricted(tmp_path):
     assert os.path.basename(path) == "dashboard_endpoint.json"
 
 
+def _bootstrap_args(suite):
+    steps = suite["tests"][1]["test"]["config"]["steps"]
+    for step in steps:
+        cfg = step["config"]
+        if cfg.get("command") == "bootstrap":
+            return cfg["args"]
+    raise AssertionError("bootstrap step missing")
+
+
 def test_deploy_suite_pins_dashboard_login_and_exports_endpoint():
     root = Path("suites")
     suites = sorted(root.glob("*/dashboard/deploy.yaml"))
@@ -210,18 +220,17 @@ def test_deploy_suite_pins_dashboard_login_and_exports_endpoint():
         "tentacle",
         "umbrella",
     ]
-    texts = [path.read_text(encoding="utf-8") for path in suites]
-    assert len(set(texts)) == 1
-    loaded = yaml.safe_load(texts[0])
-    names = [item["test"]["name"] for item in loaded["tests"]]
-    assert names[-1] == "Export dashboard endpoint"
-    bootstrap = loaded["tests"][1]["test"]["config"]["args"]
-    assert bootstrap["initial-dashboard-user"] == "admin"
-    assert bootstrap["initial-dashboard-password"] == "admin@123"
-    assert bootstrap["dashboard-password-noupdate"] is True
-    export = loaded["tests"][-1]["test"]
-    assert export["module"] == "export_dashboard_endpoint.py"
-    assert export["config"]["password"] == bootstrap["initial-dashboard-password"]
+    for path in suites:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        names = [item["test"]["name"] for item in loaded["tests"]]
+        assert names[-1] == "Export dashboard endpoint"
+        bootstrap = _bootstrap_args(loaded)
+        assert bootstrap["initial-dashboard-user"] == "admin"
+        assert bootstrap["initial-dashboard-password"] == "admin@123"
+        assert bootstrap["dashboard-password-noupdate"] is True
+        export = loaded["tests"][-1]["test"]
+        assert export["module"] == "export_dashboard_endpoint.py"
+        assert export["config"]["password"] == bootstrap["initial-dashboard-password"]
 
 
 def test_ensure_dashboard_venv_skips_install_when_present(tmp_path):
@@ -322,6 +331,40 @@ def test_run_falls_back_to_bootstrap_log(tmp_path):
     assert endpoint["username"] == "admin"
     assert endpoint["password"] == "generated-secret"
     assert not (tmp_path / "dashboard").exists()
+
+
+def test_publish_dashboard_report_links_the_suite_page(tmp_path):
+    dash = tmp_path / "dashboard"
+    dash.mkdir()
+    (dash / "session_20261126_120000.html").write_text(
+        "<html><body>dashboard steps</body></html>", encoding="utf-8"
+    )
+    (dash / "junit.xml").write_text(
+        '<testsuites><testsuite name="pytest" tests="14" failures="2" '
+        'errors="0" skipped="1" time="12.5"></testsuite></testsuites>',
+        encoding="utf-8",
+    )
+    suite = tmp_path / "index.html"
+    suite.write_text(
+        "<html><body><table>"
+        "<tr><td>Export dashboard endpoint</td><td>Pass</td></tr>"
+        "</table><h4>CLI Arguments</h4></body></html>",
+        encoding="utf-8",
+    )
+
+    publish_dashboard_report(str(tmp_path))
+
+    assert (dash / "index.html").read_text(encoding="utf-8") == (
+        "<html><body>dashboard steps</body></html>"
+    )
+    page = suite.read_text(encoding="utf-8")
+    assert 'href="./dashboard/index.html"' in page
+    assert "11 passed, 2 failed, 1 skipped" in page
+    assert "Failed" in page
+    export_at = page.index("Export dashboard endpoint")
+    dashboard_at = page.index("Dashboard API results")
+    table_end = page.index("</table>")
+    assert export_at < dashboard_at < table_end
 
 
 def test_run_dashboard_pytest_skips_when_endpoint_missing(tmp_path):
