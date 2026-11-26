@@ -5,9 +5,12 @@ Wraps grpcurl installation, plaintext/TLS invocation, and RPC helpers for
 services defined in nfs-ganesha next/src/grpc_server/proto:
 
   nfsService        — GetClientId, GetNfsGrace, StartNfsGrace, GetSessionId,
-                      nfsAdmin, ShowIdMapperService
+                      nfsAdmin, ClusterMembers, FakeRecall
   exportService     — ExportService, ExportStats
   cltmgrService     — ClientMgr, ClientStats
+  cacheMgr          — CacheMgrService (idmapper / negative cache show;
+                      replaces legacy nfsService.ShowIdMapperService)
+  qosService        — QosMgr (export/client bandwidth, IOPS, tokens)
 """
 
 import json
@@ -47,15 +50,18 @@ EXPECTED_GRPC_SERVICES = [
     "nfsService.GetSessionId",
     "nfsService.StartNfsGrace",
     "nfsService.nfsAdmin",
-    "nfsService.ShowIdMapperService",
+    "nfsService.ClusterMembers",
+    "nfsService.FakeRecall",
     "exportService.ExportService",
     "exportService.ExportStats",
     "cltmgrService.ClientMgr",
     "cltmgrService.ClientStats",
+    "cacheMgr.CacheMgrService",
+    "qosService.QosMgr",
     "grpc.reflection.v1alpha.ServerReflection",
 ]
 
-# Only Log D-Bus APIs remain without a gRPC proto on upstream next.
+# Log D-Bus APIs have no gRPC proto in current nfs-ganesha images.
 BLOCKED_OPERATIONS = frozenset(
     {
         "set_log_level",
@@ -357,10 +363,142 @@ def verify_grpc_port_listening(nfs_node, port=DEFAULT_GRPC_PORT):
 
 
 def _parse_json(raw):
-    try:
-        return json.loads(raw) if raw and raw.strip() else {}
-    except json.JSONDecodeError:
+    """
+    Parse grpcurl JSON.
+
+    Returns:
+      * ``{}`` for empty/whitespace stdout (valid proto3 omit-everything)
+      * ``dict``/``list``/scalar for valid JSON
+      * ``None`` on invalid JSON (callers must treat as failure — do not
+        conflate with ``{}`` or soft-pass)
+    """
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
         return {}
+    try:
+        return json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def _as_dict(payload):
+    """Return payload if it is a dict; else None (invalid / non-object JSON)."""
+    return payload if isinstance(payload, dict) else None
+
+
+_FAILURE_MSG_RE = re.compile(
+    r"\b(fail(?:ed|ure)?|error|invalid\s+argument|not\s+found)\b",
+    re.IGNORECASE,
+)
+_SUCCESS_MSG_RE = re.compile(r"\bsuccess", re.IGNORECASE)
+
+
+def _status_success_false(payload):
+    """True when payload or nested status explicitly reports success=false."""
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("success") is False:
+        return True
+    status = payload.get("status")
+    return isinstance(status, dict) and status.get("success") is False
+
+
+def _action_message(payload):
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("message", "error_msg", "errorMsg", "response_msg", "responseMsg"):
+        val = payload.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    status = payload.get("status")
+    if isinstance(status, dict):
+        for key in ("error_msg", "errorMsg", "message"):
+            val = status.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+    return ""
+
+
+def _action_response_ok(payload, require_explicit_success=False):
+    """
+    Validate mutation/admin JSON responses.
+
+    Proto3 often omits ``success=false`` and returns only an error ``message``.
+    Treating transport-ok + omitted success as pass is a false positive
+    (seen with AddExport / UpdateExport).
+
+    ``payload`` must be a dict (use ``_as_dict``); ``None`` is never ok.
+    """
+    if not isinstance(payload, dict):
+        return False
+    if _status_success_false(payload):
+        return False
+
+    msg = _action_message(payload)
+    msg_ok = msg.upper() == "OK"
+    if (
+        msg
+        and not msg_ok
+        and _FAILURE_MSG_RE.search(msg)
+        and not _SUCCESS_MSG_RE.search(msg)
+    ):
+        return False
+
+    if payload.get("success") is True:
+        return True
+    status = payload.get("status")
+    if isinstance(status, dict) and status.get("success") is True:
+        return True
+
+    if require_explicit_success:
+        # Accept "Export removed successfully" without relying on success=true.
+        return bool(
+            msg and _SUCCESS_MSG_RE.search(msg) and not _FAILURE_MSG_RE.search(msg)
+        )
+
+    # Soft path: no failure indicators in message (empty {} allowed).
+    return True
+
+
+def _nonempty_ids(ids):
+    """Drop blank / whitespace-only ID strings (GetSessionIds false-positive)."""
+    result = []
+    for item in ids or []:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            result.append(text if isinstance(item, str) else item)
+    return result
+
+
+def _norm_export_path(path):
+    """Normalize pseudo/full path for exact comparison."""
+    text = str(path or "").strip()
+    if not text:
+        return ""
+    return "/" + text.strip("/")
+
+
+def _counter_positive(value):
+    """True when a stats counter is a positive int (handles string digits)."""
+    if value is None or value is False:
+        return False
+    try:
+        return int(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _write_counters_positive(payload):
+    """True when payload.write has transferred or total_ops > 0."""
+    if not isinstance(payload, dict):
+        return False
+    write = payload.get("write") or {}
+    if not isinstance(write, dict):
+        return False
+    return _counter_positive(write.get("total_ops")) or _counter_positive(
+        write.get("transferred")
+    )
 
 
 def get_grace_period(client_node, target, plaintext=True, tls_paths=None):
@@ -375,7 +513,9 @@ def get_grace_period(client_node, target, plaintext=True, tls_paths=None):
         return False, None, out or err
 
     ingrace = None
-    payload = _parse_json(out)
+    payload = _as_dict(_parse_json(out))
+    if payload is None and out and out.strip():
+        return False, None, out or err
     if payload:
         ingrace = payload.get("ingrace", payload.get("inGrace"))
     else:
@@ -417,11 +557,13 @@ def start_grace_with_event(
 
 def parse_id_list(raw, json_keys, regex_pattern):
     """Parse repeated ID fields from grpcurl JSON or text output."""
-    payload = _parse_json(raw)
+    payload = _as_dict(_parse_json(raw))
     if payload:
         for key in json_keys:
             if key in payload:
-                return list(payload[key])
+                return list(payload[key] or [])
+    if raw is None:
+        return []
     return re.findall(regex_pattern, raw, re.IGNORECASE)
 
 
@@ -442,11 +584,15 @@ def get_client_ids(client_node, target, plaintext=True, tls_paths=None):
     )
     if not ids and out.strip():
         ids = re.findall(r'"?clientId"?\s*:\s*"?(\d+)"?', out, re.IGNORECASE)
-    return True, ids, out
+    return True, _nonempty_ids(ids), out
 
 
 def get_session_ids(client_node, target, plaintext=True, tls_paths=None):
-    """Call GetSessionId.GetSessionIds; return (ok, ids, raw)."""
+    """Call GetSessionId.GetSessionIds; return (ok, ids, raw).
+
+    Blank session id strings (e.g. ``["", ""]``) are filtered out so callers
+    do not treat placeholder values as a functional pass.
+    """
     method = "nfsService.GetSessionId/GetSessionIds"
     cmd = build_grpcurl_cmd(
         target, method, data="{}", plaintext=plaintext, tls_paths=tls_paths
@@ -455,12 +601,14 @@ def get_session_ids(client_node, target, plaintext=True, tls_paths=None):
     log.info("GetSessionIds response: %s", out)
     if not ok:
         return False, [], out or err
+    if _parse_json(out) is None:
+        return False, [], out or err or "invalid GetSessionIds JSON"
     ids = parse_id_list(
         out,
         ("sessionIds", "session_ids"),
         r'"?sessionId"?\s*:\s*"?([^",\s]+)"?',
     )
-    return True, ids, out
+    return True, _nonempty_ids(ids), out
 
 
 # ---------------------------------------------------------------------------
@@ -482,9 +630,13 @@ def show_exports(client_node, target, plaintext=True, tls_paths=None):
     log.info("ShowExports response: %s", out)
     if not ok:
         return False, [], out or err
-    payload = _parse_json(out)
+    payload = _as_dict(_parse_json(out))
+    if payload is None:
+        return False, [], out or err or "invalid ShowExports JSON"
     exports = payload.get("exports", [])
-    if payload.get("success") is False:
+    if not isinstance(exports, list):
+        return False, [], out
+    if not _action_response_ok(payload):
         return False, exports, out
     return True, exports, out
 
@@ -504,9 +656,9 @@ def display_export(client_node, target, export_id, plaintext=True, tls_paths=Non
     log.info("DisplayExport(%s) response: %s", export_id, out)
     if not ok:
         return False, {}, out or err
-    payload = _parse_json(out)
-    if payload.get("success") is False:
-        return False, payload, out
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(payload):
+        return False, payload or {}, out
     return True, payload, out
 
 
@@ -530,10 +682,14 @@ def add_export(
         tls_paths=tls_paths,
     )
     log.info("AddExport response: %s", out)
-    payload = _parse_json(out)
-    if payload and payload.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(
+        payload, require_explicit_success=True
+    ):
+        return False, out or err
+    return True, out or err
 
 
 def remove_export(client_node, target, export_id, plaintext=True, tls_paths=None):
@@ -549,10 +705,14 @@ def remove_export(client_node, target, export_id, plaintext=True, tls_paths=None
         tls_paths=tls_paths,
     )
     log.info("RemoveExport(%s) response: %s", export_id, out)
-    payload = _parse_json(out)
-    if payload and payload.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(
+        payload, require_explicit_success=True
+    ):
+        return False, out or err
+    return True, out or err
 
 
 def update_export(
@@ -575,10 +735,14 @@ def update_export(
         tls_paths=tls_paths,
     )
     log.info("UpdateExport response: %s", out)
-    payload = _parse_json(out)
-    if payload and payload.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(
+        payload, require_explicit_success=True
+    ):
+        return False, out or err
+    return True, out or err
 
 
 # ---------------------------------------------------------------------------
@@ -613,7 +777,12 @@ def export_stats(
         tls_paths=tls_paths,
     )
     log.info("ExportStats.%s response: %s", rpc_name, out[:500] if out else out)
-    return ok, out or err
+    if not ok:
+        return False, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(payload):
+        return False, out or err
+    return True, out or err
 
 
 def client_stats(
@@ -638,7 +807,12 @@ def client_stats(
     log.info(
         "ClientStats.%s(%s) response: %s", rpc_name, ipaddr, out[:500] if out else out
     )
-    return ok, out or err
+    if not ok:
+        return False, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(payload):
+        return False, out or err
+    return True, out or err
 
 
 # ---------------------------------------------------------------------------
@@ -660,8 +834,12 @@ def show_clients(client_node, target, plaintext=True, tls_paths=None):
     log.info("ShowClients response: %s", out)
     if not ok:
         return False, [], out or err
-    payload = _parse_json(out)
+    payload = _as_dict(_parse_json(out))
+    if payload is None:
+        return False, [], out or err or "invalid ShowClients JSON"
     clients = payload.get("clients", [])
+    if not isinstance(clients, list):
+        return False, [], out
     return True, clients, out
 
 
@@ -678,10 +856,14 @@ def add_client(client_node, target, ipaddr, plaintext=True, tls_paths=None):
         tls_paths=tls_paths,
     )
     log.info("AddClient(%s) response: %s", ipaddr, out)
-    payload = _parse_json(out)
-    if payload and payload.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(
+        payload, require_explicit_success=True
+    ):
+        return False, out or err
+    return True, out or err
 
 
 def remove_client(client_node, target, ipaddr, plaintext=True, tls_paths=None):
@@ -697,10 +879,14 @@ def remove_client(client_node, target, ipaddr, plaintext=True, tls_paths=None):
         tls_paths=tls_paths,
     )
     log.info("RemoveClient(%s) response: %s", ipaddr, out)
-    payload = _parse_json(out)
-    if payload and payload.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(
+        payload, require_explicit_success=True
+    ):
+        return False, out or err
+    return True, out or err
 
 
 def disconnect_nfsv41_client(
@@ -718,15 +904,16 @@ def disconnect_nfsv41_client(
         tls_paths=tls_paths,
     )
     log.info("DisconnectNfsv41Client(%s) response: %s", ipaddr, out)
-    payload = _parse_json(out)
-    status = payload.get("status") or {}
-    if isinstance(status, dict) and status.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or not _action_response_ok(payload):
+        return False, out or err
+    return True, out or err
 
 
 # ---------------------------------------------------------------------------
-# nfsService.nfsAdmin / ShowIdMapperService
+# nfsService.nfsAdmin
 # ---------------------------------------------------------------------------
 
 
@@ -756,15 +943,23 @@ def admin_rpc(
         tls_paths=tls_paths,
     )
     log.info("nfsAdmin.%s response: %s", rpc_name, out)
-    payload = _parse_json(out)
-    if payload.get("success") is False:
+    if not ok:
         return False, out or err
-    return ok, out or err
+    parsed = _parse_json(out)
+    if parsed is None:
+        return False, out or err or "invalid nfsAdmin JSON"
+    payload = _as_dict(parsed)
+    if payload is None:
+        return False, out or err
+    # Empty {} is valid proto3 for success=true omitted; reject only failures.
+    if not _action_response_ok(payload):
+        return False, out or err
+    return True, out or err
 
 
-def show_idmapper(client_node, target, plaintext=True, tls_paths=None):
-    """Call ShowIdMapperService.ShowIdMapper; return (ok, entries, raw)."""
-    method = "nfsService.ShowIdMapperService/ShowIdMapper"
+def show_cluster_members(client_node, target, plaintext=True, tls_paths=None):
+    """Call ClusterMembers.ShowClusterMembers; return (ok, ipaddrs, raw)."""
+    method = "nfsService.ClusterMembers/ShowClusterMembers"
     ok, out, err = invoke_grpc_method(
         client_node,
         target,
@@ -773,11 +968,131 @@ def show_idmapper(client_node, target, plaintext=True, tls_paths=None):
         plaintext=plaintext,
         tls_paths=tls_paths,
     )
-    log.info("ShowIdMapper response: %s", out)
+    log.info("ShowClusterMembers response: %s", out)
     if not ok:
         return False, [], out or err
-    payload = _parse_json(out)
-    return True, payload.get("entries", []), out
+    payload = _as_dict(_parse_json(out))
+    if payload is None:
+        return False, [], out or err or "invalid ShowClusterMembers JSON"
+    if _status_success_false(payload):
+        return False, [], out or err
+    ipaddrs = payload.get("ipaddrs") or payload.get("ipAddrs") or []
+    if not isinstance(ipaddrs, list):
+        return False, [], out or err
+    return True, [str(ip) for ip in ipaddrs], out
+
+
+def set_cluster_members(client_node, target, ipaddrs, plaintext=True, tls_paths=None):
+    """Call ClusterMembers.SetClusterMembers; return (ok, raw)."""
+    method = "nfsService.ClusterMembers/SetClusterMembers"
+    members = [str(ip) for ip in ipaddrs]
+    data = json.dumps({"ipaddrs": members})
+    ok, out, err = invoke_grpc_method(
+        client_node,
+        target,
+        method,
+        data=data,
+        plaintext=plaintext,
+        tls_paths=tls_paths,
+    )
+    log.info("SetClusterMembers response: %s", out)
+    if not ok:
+        return False, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or _status_success_false(payload):
+        return False, out or err
+    return True, out or err
+
+
+def fake_recall(client_node, target, client_id, plaintext=True, tls_paths=None):
+    """Call FakeRecall.FakeRecall; return (ok, raw)."""
+    method = "nfsService.FakeRecall/FakeRecall"
+    data = json.dumps({"client_id": int(client_id)})
+    ok, out, err = invoke_grpc_method(
+        client_node,
+        target,
+        method,
+        data=data,
+        plaintext=plaintext,
+        tls_paths=tls_paths,
+    )
+    log.info("FakeRecall(%s) response: %s", client_id, out)
+    if not ok:
+        return False, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None or _status_success_false(payload):
+        return False, out or err
+    return True, out or err
+
+
+CACHE_MGR_SHOW_RPCS = (
+    "ShowIdMapperUsers",
+    "ShowIdMapperGroups",
+    "ShowNegativeUsers",
+    "ShowNegativeGroups",
+    "ShowNegativeUIDs",
+    "ShowUid2Grp",
+)
+
+
+def cache_mgr_rpc(client_node, target, rpc_name, plaintext=True, tls_paths=None):
+    """
+    Call cacheMgr.CacheMgrService/<rpc_name> (EmptyRequest).
+
+    Returns ``(ok, payload, raw)`` where *payload* is the parsed JSON object
+    (includes ``entries`` for ShowIdMapperUsers/Groups and related RPCs).
+    """
+    method = f"cacheMgr.CacheMgrService/{rpc_name}"
+    ok, out, err = invoke_grpc_method(
+        client_node,
+        target,
+        method,
+        data="{}",
+        plaintext=plaintext,
+        tls_paths=tls_paths,
+    )
+    log.info("CacheMgr.%s response: %s", rpc_name, (out or "")[:500])
+    if not ok:
+        return False, {}, out or err
+    payload = _as_dict(_parse_json(out))
+    if payload is None:
+        return False, {}, out or err or "invalid CacheMgr JSON"
+    return True, payload, out
+
+
+def qos_mgr_rpc(
+    client_node,
+    target,
+    rpc_name,
+    data="{}",
+    plaintext=True,
+    tls_paths=None,
+):
+    """
+    Call qosService.QosMgr/<rpc_name>; return (ok, payload, raw).
+
+    Transport success is required. ``status.success=false`` is returned as
+    ok=True with payload so callers can decide (QoS may be disabled).
+    """
+    method = f"qosService.QosMgr/{rpc_name}"
+    ok, out, err = invoke_grpc_method(
+        client_node,
+        target,
+        method,
+        data=data,
+        plaintext=plaintext,
+        tls_paths=tls_paths,
+    )
+    log.info("QosMgr.%s response: %s", rpc_name, (out or "")[:500])
+    if not ok:
+        return False, {}, out or err
+    try:
+        payload = json.loads(out or "")
+    except (TypeError, json.JSONDecodeError):
+        return False, {}, out or err or "invalid QosMgr JSON"
+    if not isinstance(payload, dict):
+        return False, {}, out or err
+    return True, payload, out
 
 
 def get_nfs_grpc_cert_dir(admin_node, nfs_name):
@@ -1000,16 +1315,17 @@ def resolve_grpc_target(config, nfs_ip, port=None):
 
 def check_blocked_operation(operation, config):
     """
-    Return -1 to skip when *operation* is blocked pending upstream proto.
+    Return -1 to skip when *operation* is blocked (missing proto/image support).
 
     Raises ConfigError when blocked and skip_if_blocked is False.
     """
     blocked = config.get("blocked", operation in BLOCKED_OPERATIONS)
     if not blocked:
         return None
-    msg = (
-        f"Operation '{operation}' is blocked — Log gRPC proto not yet in "
-        "upstream nfs-ganesha (or explicitly marked blocked in suite config)"
+    msg = config.get(
+        "block_reason",
+        f"Operation '{operation}' is blocked — not available in this "
+        "nfs-ganesha/gRPC image (or explicitly marked blocked in suite config)",
     )
     if config.get("skip_if_blocked", True):
         log.info("SKIP: %s", msg)
