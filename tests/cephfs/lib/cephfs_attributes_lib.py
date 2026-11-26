@@ -871,6 +871,8 @@ class CephFSAttributeUtilities(object):
         ``alternate_name`` journal metadata (IBMCEPH-16942 repro amplifier).
         """
         client.exec_command(sudo=True, cmd="rm -f {}".format(stop_flag_path))
+        # Includes #72399 path: rm Foo then create FOO on the same
+        # casefold dentry so replay can see mismatched alternate_name.
         storm_script = (
             "i=0; "
             "while [ ! -f {stop} ]; do "
@@ -883,6 +885,12 @@ class CephFSAttributeUtilities(object):
             "for c in A a B b C c; do "
             'touch "$d/${{c}}_$i" 2>/dev/null || true; '
             "done; "
+            # Drop any prior case-equivalent entry so a storm restart (i resets
+            # while FOO_$i remains) still creates Foo then flips to FOO.
+            'rm -f "$d/Foo_$i" "$d/FOO_$i" 2>/dev/null || true; '
+            'echo x >"$d/Foo_$i" 2>/dev/null || true; '
+            'rm -f "$d/Foo_$i" 2>/dev/null || true; '
+            'echo y >"$d/FOO_$i" 2>/dev/null || true; '
             "done"
         ).format(stop=stop_flag_path, mnt=mount_path)
 
