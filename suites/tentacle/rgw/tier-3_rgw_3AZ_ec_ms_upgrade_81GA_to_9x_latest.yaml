@@ -1,0 +1,613 @@
+# Test suite for evaluating RGW 3AZ EC multisite upgrade scenario from RHCS 8.1 GA to 9.x latest.
+#
+# Topology:
+#   ceph-pri  — 3-AZ stretch cluster (DC1: node1-3, DC2: node4-6, DC3: node7-9)
+#               Hosts RHCS 8.1, upgraded to 9.x latest.
+#               Primary zone of the "india" realm / "shared" zonegroup.
+#   ceph-sec  — Standard cluster (node1-7) with an EC data pool.
+#               Hosts RHCS 8.1, upgraded to 9.x latest.
+#               Secondary zone of the "india" realm / "shared" zonegroup.
+#
+# Upgrade order: secondary first, then primary (ensures no data loss during mixed-mode).
+#
+# Use cluster-conf file: conf/tentacle/rgw/3AZ-ec-ms.yaml
+
+tests:
+
+  # -------------------------------------------------------------------------
+  # PHASE 1: Pre-requisites
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: install vm pre-requsites
+
+  # -------------------------------------------------------------------------
+  # PHASE 2: Deploy ceph-pri at RHCS 8.1 with 3-AZ crush topology
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    rhcs-version: 8.1
+                    release: stable
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    ssh-user: cephuser
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+                    apply-spec:
+                      - service_type: host
+                        address: true
+                        labels: apply-all-labels
+                        nodes:
+                          - node1
+                          - node2
+                          - node3
+                        location:
+                          root: default
+                          datacenter: DC1
+                      - service_type: host
+                        address: true
+                        labels: apply-all-labels
+                        nodes:
+                          - node4
+                          - node5
+                          - node6
+                        location:
+                          root: default
+                          datacenter: DC2
+                      - service_type: host
+                        address: true
+                        labels: apply-all-labels
+                        nodes:
+                          - node7
+                          - node8
+                          - node9
+                        location:
+                          root: default
+                          datacenter: DC3
+                      - service_type: mon
+                        spec:
+                          crush_locations:
+                            node1:
+                              - datacenter=DC1
+                            node2:
+                              - datacenter=DC1
+                            node3:
+                              - datacenter=DC1
+                            node4:
+                              - datacenter=DC2
+                            node5:
+                              - datacenter=DC2
+                            node6:
+                              - datacenter=DC2
+                            node7:
+                              - datacenter=DC3
+                            node8:
+                              - datacenter=DC3
+                            node9:
+                              - datacenter=DC3
+                        placement:
+                          label: mon
+                      - service_type: mgr
+                        placement:
+                          label: mgr
+                  base_cmd_args:
+                    verbose: true
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: osd
+                      service_id: all-available-devices
+                      placement:
+                        label: osd
+                      spec:
+                        data_devices:
+                          all: "true"
+              - config:
+                  command: shell
+                  args:
+                    - "ceph osd tree"
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri
+                  args:
+                    placement:
+                      label: rgw
+      desc: Deploy ceph-pri RHCS 8.1 cluster with 3-AZ crush topology using cephadm.
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy ceph-pri cluster (8.1 — 3AZ)
+
+  # -------------------------------------------------------------------------
+  # PHASE 3: Deploy ceph-sec at RHCS 8.1 with EC data pool
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    rhcs-version: 8.1
+                    release: stable
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+                  base_cmd_args:
+                    verbose: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: shell
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec01 k=4 m=2 crush-failure-domain=host crush-device-class=hdd"
+              - config:
+                  command: shell
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32 erasure rgwec01"
+              - config:
+                  command: shell
+                  args:
+                    - "ceph osd pool application enable secondary.rgw.buckets.data rgw"
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec
+                  args:
+                    placement:
+                      nodes:
+                        - node7
+      desc: Deploy ceph-sec RHCS 8.1 cluster with EC data pool using cephadm.
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy ceph-sec cluster (8.1 — EC pool)
+
+  # -------------------------------------------------------------------------
+  # PHASE 4: Monitoring stack
+  # -------------------------------------------------------------------------
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+
+  # -------------------------------------------------------------------------
+  # PHASE 5: Configure clients
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node10
+            install_packages:
+              - ceph-common
+              - ceph-base
+            copy_admin_keyring: true
+            caps:
+              mon: "allow *"
+              osd: "allow *"
+              mds: "allow *"
+              mgr: "allow *"
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node8
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure RGW client nodes on both clusters.
+      destroy-cluster: false
+      module: test_client.py
+      name: configure clients
+      polarion-id: CEPH-83573758
+
+  # -------------------------------------------------------------------------
+  # PHASE 6: Setup RGW multisite realm (india / shared / primary + secondary)
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node2}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node2}:80 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph orch restart {service_name:shared.pri}"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node2}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node2}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node7}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
+              - "ceph orch restart {service_name:shared.sec}"
+      desc: Setting up RGW multisite replication environment (india realm).
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+  # -------------------------------------------------------------------------
+  # PHASE 7: Enable 3AZ stretch mode on primary cluster pools
+  # -------------------------------------------------------------------------
+
+  - test:
+      name: Enable Stretch mode on all pools of primary
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      clusters:
+        ceph-pri:
+          config:
+            enable_3AZ_stretch_pools:
+              pool_name: test-pool-11
+              stretch_bucket: datacenter
+              rule_name: 3az_rule
+      desc: Enable 3 AZ stretch mode on all pools of the primary cluster.
+
+  # -------------------------------------------------------------------------
+  # PHASE 8: Verify environment pre-upgrade
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details on primary pre-upgrade.
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on primary pre-upgrade
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details on secondary pre-upgrade.
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on secondary pre-upgrade
+
+  # -------------------------------------------------------------------------
+  # PHASE 9: Pre-upgrade baseline IO tests
+  # -------------------------------------------------------------------------
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+      desc: Create non-tenanted user before upgrade.
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user pre-upgrade
+      polarion-id: CEPH-83575199
+
+  - test:
+      name: multipart upload pre-upgrade
+      desc: test_Mbuckets_with_Nobjects_multipart pre-upgrade
+      polarion-id: CEPH-14265
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            verify-io-on-site: ["ceph-sec"]
+            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+
+  - test:
+      name: Bucket Granular Sync policy test pre-upgrade
+      desc: Bucket sync policy test for prefix and tag pre-upgrade
+      polarion-id: CEPH-83575133
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_syncpolicy_prefix_tag.py
+            config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: ordered listing of buckets pre-upgrade
+      desc: Test duration for ordered listing of bucket with top-level objects pre-upgrade
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83573545
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered.yaml
+
+  - test:
+      name: Create bucket for manual resharding brownfield pre-upgrade
+      desc: Create bucket for Testing manual resharding brownfield scenario pre-upgrade
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83574735
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_manual_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+
+  # -------------------------------------------------------------------------
+  # PHASE 10: Upgrade — secondary first, then primary
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      desc: Upgrade ceph-sec cluster to latest 9.x version (secondary first).
+      module: test_cephadm_upgrade.py
+      name: multisite ceph upgrade — secondary first
+      polarion-id: CEPH-83574647
+      clusters:
+        ceph-sec:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+
+  # Create a user during mixed-mode (pri still on 8.1, sec on 9.x)
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+      desc: Create non-tenanted user during mixed-mode upgrade.
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user mixed-mode
+      polarion-id: CEPH-83575199
+
+  - test:
+      abort-on-fail: true
+      desc: Upgrade ceph-pri 3AZ cluster to latest 9.x version (primary upgrade).
+      module: test_cephadm_upgrade.py
+      name: multisite ceph upgrade — primary (3AZ)
+      polarion-id: CEPH-83574647
+      clusters:
+        ceph-pri:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+
+  # -------------------------------------------------------------------------
+  # PHASE 11: Post-upgrade verification
+  # -------------------------------------------------------------------------
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph mgr module enable orchestrator"
+              - "sleep 120"
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details on primary post-upgrade.
+      polarion-id: CEPH-83575200
+      module: exec.py
+      name: get shared realm info on primary post-upgrade
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details on secondary post-upgrade.
+      polarion-id: CEPH-83575200
+      module: exec.py
+      name: get shared realm info on secondary post-upgrade
+
+  # Verify 3AZ stretch mode is still intact after upgrade
+
+  # -------------------------------------------------------------------------
+  # PHASE 12: Post-upgrade IO and regression tests
+  # -------------------------------------------------------------------------
+
+  - test:
+      name: multipart upload post-upgrade
+      desc: test_Mbuckets_with_Nobjects_multipart post-upgrade
+      polarion-id: CEPH-14265
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            verify-io-on-site: ["ceph-sec"]
+            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+
+  - test:
+      name: Test dynamic resharding brownfield post-upgrade
+      desc: Test dynamic resharding brownfield scenario after upgrade
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83574736
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+
+  - test:
+      name: Bucket Granular Sync policy test post-upgrade
+      desc: Bucket sync policy test for prefix and tag post-upgrade
+      polarion-id: CEPH-83575133
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_syncpolicy_prefix_tag.py
+            config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: ordered listing of buckets post-upgrade
+      desc: Test duration for ordered listing of bucket with top-level objects post-upgrade
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83573545
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered.yaml

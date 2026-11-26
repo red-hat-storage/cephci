@@ -593,15 +593,17 @@ def _wait_for_osd_and_rgw_ready(node, timeout=600, interval=10):
             stats = json.loads(osd_out)
             up = int(stats.get("num_up_osds", 0))
             total = int(stats.get("num_osds", 0))
+            # Cached orch status can outlive the restart and falsely block
+            # recovery even after the OSD map and PGs are ready.
             rgw_out, _ = node.exec_command(
-                cmd="ceph orch ps --daemon_type rgw --format json"
+                cmd="ceph orch ps --daemon_type rgw --format json --refresh"
             )
             rgws = json.loads(rgw_out) if str(rgw_out).strip() else []
             rgw_ready = bool(rgws) and all(
                 d.get("status_desc") == "running" for d in rgws
             )
             osd_ps_out, _ = node.exec_command(
-                cmd="ceph orch ps --daemon_type osd --format json"
+                cmd="ceph orch ps --daemon_type osd --format json --refresh"
             )
             osds = json.loads(osd_ps_out) if str(osd_ps_out).strip() else []
             osd_ready = bool(osds) and all(
@@ -618,6 +620,30 @@ def _wait_for_osd_and_rgw_ready(node, timeout=600, interval=10):
                 f"RGW running={rgw_ready}; pgs unavailable={pgs_down}"
             )
             log.info(last_msg)
+            if not osd_ready or not rgw_ready:
+                # Preserve the daemon and refresh details that explain a timeout,
+                # rather than reporting only an aggregate running=False flag.
+                blocked_daemons = [
+                    {
+                        key: daemon.get(key)
+                        for key in (
+                            "daemon_name",
+                            "daemon_type",
+                            "daemon_id",
+                            "hostname",
+                            "status",
+                            "status_desc",
+                            "last_refresh",
+                        )
+                    }
+                    for daemon in osds + rgws
+                    if daemon.get("status_desc") != "running"
+                ]
+                last_msg += (
+                    f"; orch entries: osd={len(osds)}, rgw={len(rgws)}; "
+                    f"non-running daemons={json.dumps(blocked_daemons)}"
+                )
+                log.info(last_msg)
             if total > 0 and up == total and osd_ready and rgw_ready and not pgs_down:
                 if attempts > 1:
                     time.sleep(15)
