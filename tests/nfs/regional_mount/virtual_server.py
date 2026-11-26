@@ -5,6 +5,8 @@ import json
 import re
 from time import sleep
 
+import yaml
+
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
@@ -30,6 +32,12 @@ except ImportError:
         setup_custom_nfs_cluster_multi_export_client,
         setup_nfs_cluster,
     )
+
+try:
+    from tests.nfs.lib.common_lib import get_nfs_container_id
+except ImportError:
+    from lib.common_lib import get_nfs_container_id  # type: ignore
+
 from utility.log import Log
 
 log = Log(__name__)
@@ -88,6 +96,7 @@ def prepare_mount_for_nonroot_io(client, mount_path, io_user=DEFAULT_IO_USER):
 
 
 def _multi_route_requirements_hint():
+    """Return the runbook text for provisioning multi-homed nodes."""
     return (
         "Virtual Server tests need dual-homed NFS and client VMs (2+ IPv4 addresses "
         f"per node on matching subnets). Use --global-conf {_MULTI_ROUTE_CONF} and "
@@ -270,10 +279,12 @@ def _command_succeeded(client):
 
 
 def _route_pair_key(route):
+    """Return a hashable identity for a (nfs_ip, client, client_ip) route."""
     return (route["server_ip"], route["client_ip"])
 
 
 def _all_routes_same_client(routes):
+    """True when every route uses the same client node."""
     if not routes:
         return False
     first = routes[0].get("client")
@@ -299,6 +310,7 @@ def log_route_taken(route, phase, extra=""):
 
 
 def log_routes_summary(routes, header="Planned routes"):
+    """Log a compact one-line-per-route table of the planned routes."""
     log.info("%s (%d):", header, len(routes))
     for route in routes:
         log_route_taken(route, "planned")
@@ -693,6 +705,7 @@ def preflight_route_connectivity(routes, config=None):
 
 
 def default_nfs_names():
+    """Return (fs_name, nfs_name, nfs_export) defaults for a VS cluster."""
     return {
         "fs_name": "cephfs",
         "nfs_name": "cephfs-nfs",
@@ -752,12 +765,14 @@ def setup_virtual_server_exports(
 
 
 def export_name_for_index(nfs_export_base, index, single_export=False):
+    """Return the export pseudo path for a zero-based route index."""
     if single_export:
         return f"{nfs_export_base}_0"
     return f"{nfs_export_base}_{index}"
 
 
 def mount_path_for_route(base_mount, route_id):
+    """Return a per-route mount directory under the base mount path."""
     return f"{base_mount}_route{route_id}"
 
 
@@ -771,6 +786,7 @@ def mount_nfs_route(
     route=None,
     sudo=True,
 ):
+    """Mount one export on one route with readiness polling."""
     if route is not None:
         log_route_taken(route, "mount", extra=f"export={export} path={mount_path}")
     client.create_dirs(dir_path=mount_path, sudo=True)
@@ -808,6 +824,7 @@ def mount_nfs_for_route(route, export, mount_path, version, port, sudo=True):
 
 
 def unmount_nfs_route(client, mount_path):
+    """Unmount and remove a route mount directory, with retry."""
     try:
         Unmount(client).unmount(mount_path)
     except Exception as exc:
@@ -847,6 +864,7 @@ def run_nfs_io(client, mount_path, route_id, route=None, sudo=True):
 
 
 def run_nfs_io_for_route(route, mount_path, sudo=True):
+    """Write and verify a per-route IO marker file on the mount."""
     run_nfs_io(
         route["client"],
         mount_path,
@@ -859,6 +877,7 @@ def run_nfs_io_for_route(route, mount_path, sudo=True):
 def assert_mount_fails(
     client, server_ip, export, mount_path, version, port, route=None
 ):
+    """Assert an NFS mount command fails (fencing check); mount failure must not succeed."""
     if route is not None:
         log_route_taken(
             route,
@@ -890,6 +909,7 @@ def assert_mount_fails(
 
 
 def assert_mount_fails_for_route(route, export, mount_path, version, port):
+    """Assert the fenced route can no longer mount its export."""
     assert_mount_fails(
         route["client"],
         route["server_ip"],
@@ -902,6 +922,7 @@ def assert_mount_fails_for_route(route, export, mount_path, version, port):
 
 
 def _inject_export_fencing(conf, server_ip, client_ip):
+    """Insert CLIENT and Server_Addrs fencing blocks into a ganesha conf dict."""
     conf = re.sub(r"\n\s*Server_Addrs\s*=.*;", "", conf)
     conf = re.sub(
         r"\n\s*CLIENT\s*\{[^}]*\}\s*;",
@@ -945,6 +966,7 @@ def apply_export_fencing(client, nfs_name, export_name, server_ip, client_ip):
 
 
 def apply_export_fencing_for_route(client, nfs_name, export_name, route):
+    """Apply export fencing limiting one export to one server/client pair."""
     log_route_taken(route, "fencing", extra=f"export={export_name}")
     apply_export_fencing(
         client,
@@ -1070,6 +1092,7 @@ def cleanup_virtual_server(
 
 
 def get_clients(ceph_cluster, config):
+    """Return the client nodes the suite config asks for."""
     clients = ceph_cluster.get_nodes("client")
     count = int(config.get("clients", 2))
     if count > len(clients):
@@ -1080,6 +1103,7 @@ def get_clients(ceph_cluster, config):
 
 
 def get_nfs_server_hostname(ceph_cluster):
+    """Return the hostname of the first NFS-role node."""
     nfs_nodes = ceph_cluster.get_nodes("nfs")
     if not nfs_nodes:
         raise ConfigError("No NFS role node found in cluster configuration")
@@ -1087,4 +1111,259 @@ def get_nfs_server_hostname(ceph_cluster):
 
 
 def export_names_for_count(export_num, nfs_export_base="/export"):
+    """Return a list of export pseudo paths numbered 0..n-1."""
     return [f"{nfs_export_base}_{i}" for i in range(export_num)]
+
+
+def _cmd_text(out):
+    """Decode command output bytes to text safely."""
+    if isinstance(out, tuple):
+        out = out[0]
+    if isinstance(out, bytes):
+        out = out.decode("utf-8", errors="replace")
+    return str(out or "")
+
+
+def list_running_nfs_daemons(client, nfs_name):
+    """Return orch-ps dicts for running ``nfs.<nfs_name>`` daemons."""
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ps --service-name nfs.{nfs_name} --format json",
+        check_ec=False,
+    )
+    try:
+        daemons = json.loads(_cmd_text(out) or "[]")
+    except json.JSONDecodeError as exc:
+        raise OperationFailedError(
+            f"Unable to parse orch ps for nfs.{nfs_name}: {exc}"
+        ) from exc
+    running = []
+    for daemon in daemons or []:
+        status = str(daemon.get("status_desc") or "").lower()
+        if status == "running":
+            running.append(daemon)
+    return running
+
+
+def export_nfs_orch_apply_spec(client, nfs_name):
+    """
+    Return an orch-apply-safe NFS service spec (no status/events).
+
+    Used for IBMCEPH-11530 toggle: edit ``spec.enable_virtual_server`` then
+    ``ceph orch apply -i`` + mandatory ``ceph orch daemon reconfig``.
+    """
+    out, _ = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch ls --service-name nfs.{nfs_name} --export -f yaml",
+        check_ec=False,
+    )
+    text = _cmd_text(out)
+    try:
+        docs = [doc for doc in yaml.safe_load_all(text) if doc]
+    except yaml.YAMLError as exc:
+        raise OperationFailedError(
+            f"Unable to parse exported orch YAML for nfs.{nfs_name}: {exc}"
+        ) from exc
+    if not docs:
+        raise OperationFailedError(f"Exported orch spec for nfs.{nfs_name} is empty")
+    doc = docs[0]
+    apply_spec = {
+        key: doc[key]
+        for key in ("service_type", "service_id", "placement", "spec")
+        if key in doc
+    }
+    apply_spec.setdefault("service_type", "nfs")
+    apply_spec.setdefault("service_id", nfs_name)
+    apply_spec.setdefault("spec", {})
+    return apply_spec
+
+
+def get_enable_virtual_server_from_spec(client, nfs_name):
+    """Return ``spec.enable_virtual_server`` from the exported orch NFS spec."""
+    spec = export_nfs_orch_apply_spec(client, nfs_name)
+    return (spec.get("spec") or {}).get("enable_virtual_server")
+
+
+def apply_enable_virtual_server(client, nfs_name, enabled, spec_path=None):
+    """
+    Set ``enable_virtual_server`` via ``ceph orch apply -i``.
+
+    Does **not** reconfig the daemon — callers must call
+    ``reconfig_nfs_daemons`` afterwards (field is not in the dependency
+    tracker, so auto-reconfig will not fire).
+    """
+    spec_path = spec_path or f"/tmp/nfs_{nfs_name}_vs_spec.yaml"
+    apply_spec = export_nfs_orch_apply_spec(client, nfs_name)
+    apply_spec.setdefault("spec", {})
+    apply_spec["spec"]["enable_virtual_server"] = bool(enabled)
+    body = yaml.safe_dump(apply_spec, default_flow_style=False)
+    client.exec_command(
+        sudo=True,
+        cmd=f"cat > {spec_path} <<'VS_SPEC_EOF'\n{body}VS_SPEC_EOF",
+    )
+    out, err = client.exec_command(
+        sudo=True,
+        cmd=f"ceph orch apply -i {spec_path}",
+    )
+    log.info(
+        "Applied nfs.%s enable_virtual_server=%s (orch apply): %s %s",
+        nfs_name,
+        enabled,
+        _cmd_text(out).strip(),
+        _cmd_text(err).strip(),
+    )
+    return apply_spec
+
+
+def reconfig_nfs_daemons(client, nfs_name):
+    """
+    Run ``ceph orch daemon reconfig`` for every running nfs daemon.
+
+    Mandatory after changing ``enable_virtual_server`` (developer-confirmed:
+    the field is not in the dependency tracker).
+    """
+    daemons = list_running_nfs_daemons(client, nfs_name)
+    if not daemons:
+        raise OperationFailedError(f"No running nfs.{nfs_name} daemons to reconfig")
+    for daemon in daemons:
+        daemon_name = daemon.get("daemon_name")
+        if not daemon_name:
+            daemon_id = daemon.get("daemon_id")
+            daemon_name = f"nfs.{nfs_name}.{daemon_id}"
+        out, err = client.exec_command(
+            sudo=True,
+            cmd=f"ceph orch daemon reconfig {daemon_name}",
+            check_ec=False,
+        )
+        log.info(
+            "Reconfig %s: rc-related out=%s err=%s",
+            daemon_name,
+            _cmd_text(out).strip(),
+            _cmd_text(err).strip(),
+        )
+    sleep(20)
+
+
+def set_virtual_server_enabled(client, nfs_name, enabled):
+    """Apply orch spec change then mandatory daemon reconfig."""
+    apply_enable_virtual_server(client, nfs_name, enabled)
+    reconfig_nfs_daemons(client, nfs_name)
+
+
+def parse_virtual_server_conf_value(ganesha_conf):
+    """
+    Return True/False from ``Virtual_Server = ...;`` in ganesha.conf.
+
+    The line is always present in the NFSv4 block (even for default clusters).
+    """
+    text = ganesha_conf if isinstance(ganesha_conf, str) else str(ganesha_conf)
+    match = re.search(
+        r"Virtual_Server\s*=\s*(true|false)\s*;",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        raise OperationFailedError(
+            "Virtual_Server line not found in ganesha.conf "
+            "(expected unconditional NFSv4 block entry)"
+        )
+    return match.group(1).lower() == "true"
+
+
+def read_ganesha_conf_from_nfs_node(nfs_node, nfs_name):
+    """Read ``/etc/ganesha/ganesha.conf`` from the NFS container on ``nfs_node``."""
+    cid = get_nfs_container_id(nfs_node, nfs_name=nfs_name)
+    if not cid:
+        raise OperationFailedError(
+            f"No nfs.{nfs_name} container on {nfs_node.hostname}"
+        )
+    out, _ = nfs_node.exec_command(
+        sudo=True,
+        cmd=f"podman exec {cid} cat /etc/ganesha/ganesha.conf",
+    )
+    return _cmd_text(out)
+
+
+def assert_virtual_server_conf(nfs_nodes, nfs_name, expected_enabled):
+    """
+    Assert every host that runs ``nfs.<nfs_name>`` renders Virtual_Server correctly.
+
+    Grep for the value (dev review): the line is always present.
+    Nodes listed in inventory with an NFS role but without this daemon are skipped.
+    """
+    if not isinstance(nfs_nodes, list):
+        nfs_nodes = [nfs_nodes]
+    expected = bool(expected_enabled)
+    checked = 0
+    for node in nfs_nodes:
+        cid = get_nfs_container_id(node, nfs_name=nfs_name)
+        if not cid:
+            log.info(
+                "Skipping %s for Virtual_Server check — no nfs.%s container",
+                node.hostname,
+                nfs_name,
+            )
+            continue
+        conf = read_ganesha_conf_from_nfs_node(node, nfs_name)
+        actual = parse_virtual_server_conf_value(conf)
+        log.info(
+            "ganesha.conf on %s: Virtual_Server = %s (expected %s)",
+            node.hostname,
+            actual,
+            expected,
+        )
+        if actual is not expected:
+            raise OperationFailedError(
+                f"Virtual_Server on {node.hostname} is {actual}, expected {expected}"
+            )
+        checked += 1
+    if checked == 0:
+        raise OperationFailedError(
+            f"No nfs.{nfs_name} containers found on provided NFS nodes"
+        )
+
+
+def _normalize_ceph_ls(raw):
+    """Normalize ``ceph nfs cluster/export ls`` output to a flat list of names."""
+    if raw is None:
+        return []
+    if isinstance(raw, tuple):
+        raw = raw[0]
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+    if isinstance(raw, list):
+        names = []
+        for item in raw:
+            if isinstance(item, (list, dict)):
+                names.extend(_normalize_ceph_ls(item))
+            elif isinstance(item, str) and item.strip().startswith("["):
+                names.extend(_normalize_ceph_ls(item))
+            else:
+                names.append(str(item).strip().strip('"'))
+        return [n for n in names if n]
+    return [str(raw)]
+
+
+def assert_cluster_and_export_preserved(client, nfs_name, export_name):
+    """Confirm cluster id and export survive an enable_virtual_server toggle."""
+    clusters = Ceph(client).nfs.cluster.ls()
+    cluster_list = _normalize_ceph_ls(clusters)
+    if nfs_name not in cluster_list:
+        raise OperationFailedError(
+            f"NFS cluster {nfs_name} missing after toggle; ls={cluster_list}"
+        )
+    exports = Ceph(client).nfs.export.ls(nfs_name)
+    export_list = _normalize_ceph_ls(exports)
+    if export_name not in export_list:
+        raise OperationFailedError(
+            f"Export {export_name} missing after toggle; ls={export_list}"
+        )
+    log.info("Preserved cluster %s and export %s", nfs_name, export_name)
