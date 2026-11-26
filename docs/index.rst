@@ -22,6 +22,12 @@ the resources when complete.
    source/github_guidelines.rst
    source/multi_registry_auth.rst
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Design notes:
+
+   refactor/run.md
+
 
 Indices and tables
 ==================
