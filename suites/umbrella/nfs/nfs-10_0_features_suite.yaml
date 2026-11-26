@@ -1,4 +1,4 @@
-# Suite: tier1 NFS Umbrella Features
+# Suite: tier1 NFS 10.0 Features
 # Conf: conf/umbrella/nfs/1admin-7node-3client.yaml
 #
 # Umbrella-only. Tier-1 NFS umbrella feature cases live in this suite.
@@ -91,6 +91,8 @@ tests:
       module: test_client.py
       name: configure client
 
+  # NFS Ganesha log_to_file (IBMCEPH-13289): cephadm spec log_to_file=true makes
+  # ganesha.nfsd log to a host file; false/absent sends logs to STDERR.
   - test:
       name: NFS log to file - record build
       module: test_nfs_log_to_file.py
