@@ -27,7 +27,7 @@
 #   P7   - Report generation: log tables + interactive HTML with charts
 #
 # UPGRADE PATH (folio double-hop):
-#   Bootstrap at 8.1 released -> Hop 1: 8.1 to 9.1 released -> Hop 2: 9.1 to 9.2 stable
+#   Bootstrap at 9.1z0 -> Hop 1: 9.1z0 to 9.1 released -> Hop 2: 9.1 to 9.2 stable.
 #   Each hop runs the full 7-phase workflow. Hop 2 skips Phase 1 via
 #   skip_service_setup and skips pre-fill via cluster_fill.enabled: false.
 #   Hop 1 uses skip_client_cleanup / skip_cluster_cleanup to preserve resources.
@@ -52,6 +52,7 @@
 #   - PG management (pg_num_min/pg_num_max pinning, mon_max_pg_per_osd auto-set)
 #   - Health warning tracking across all phases (not just during upgrade)
 #   - Per-component feature toggles with pre/post-upgrade validation
+#   - Parallel CephFS/NFS admin churn (upgrade_parallel_ops) during upgrade
 #   - 23 bug regression validators
 #   - Interactive HTML report with Gantt charts, IO timelines, phase annotations
 #
@@ -326,9 +327,9 @@
 #       data_pool_pg_num:      [512]  PG count for default.rgw.buckets.data
 #       daemons_per_service:   [2]    Number of RGW daemons to deploy
 #     cephfs:
-#       filesystems: [cephfs1, cephfs2]  CephFS filesystem names
+#       filesystems: [cephfs_direct, cephfs_nfs]  direct clients vs NFS-backed FS
 #       active_mds:            [6]       max_mds setting
-#       mds_count_per_host:    [2]       MDS daemons per host
+#       mds_count_per_host:    [2]       MDS daemons per host (need hosts*count >= active_mds)
 #       pin_policy:            [distributed]  Subvolume pinning policy
 #       data_pool_pg_num_max:  [512]     pg_num_max for data pools
 #     nfs:
@@ -380,6 +381,92 @@
 #           qos_bandwidth: false       # IBMCEPH-16312: config parsing crash
 #
 #   ---------------------------------------------------------------------------
+#   upgrade_parallel_ops:  (customer-like CephFS/NFS admin churn during upgrade)
+#     Soft-fail only — never aborts the upgrade. Module:
+#       tests/rados/upgrade_thrashing/upgrade_thrash_parallel_ops.py
+#     Starts after background IO; tears down after fail_fs NFS recover (and
+#     again in finally). No phase gate — all enabled workers run concurrently
+#     for the whole upgrade window (multi-customer overlap).
+#     HTML report: "Parallel Ops" shows per-worker ok/error counts, cycle
+#     latency (p50/p95/max), and buckets by upgrade phase_boundaries.
+#     Ceph CLI / remount failures (including fail_fs / MDS-down) are logged
+#     as warning/info only — they never fail the hop.
+#
+#     Isolation:
+#       svg / seed subvols / par_nfs_* clusters / mounts under mount_prefix
+#       are dedicated to this churn. UpgradeIOManager excludes mount_prefix
+#       from bg IO / integrity / fill mount discovery.
+#
+#     enabled: (true/false) [false]
+#     svg: (string) [par_ops]  Stable subvolumegroup (never deleted mid-run)
+#     nfs_prefix: (string) [par_nfs]  Prefix for throwaway NFS cluster ids
+#     base_port: (int) [2100]  Stable NFS port; throwaways use base_port+10..
+#       Folio hops use 2100; Cali holistic uses 2060 to avoid colliding with
+#       the suite's own NFS service ports.
+#     max_live_nfs_clusters: (int) [2]  Cap on concurrent throwaway NFS
+#       clusters (stable par_nfs_stable is not counted)
+#     seed_subvol_count: (int) [3]  Distinct seed subvols (par_sv0..) ≈
+#       distinct customers. Volume-bound workers fan out one thread per seed.
+#     mount_prefix: (string) [/mnt/par_]  Client mounts for remount churn
+#     snap_schedule_interval: (string) [1h]
+#       Allowed units: h/d/w/M/y only (mgr snap_schedule rejects 1m)
+#     rate_limits:
+#       manual_snap_interval_s: [60]   snap/clone + visibility loop
+#       subvol_interval_s:      [15]   SVG/subvol/export lifecycle loop
+#       nfs_create_interval_s:  [60]   NFS cluster create/rm + config/qos
+#       remount_interval_s:     [90]   NFS client remount + .snap probe
+#     cephfs:  (each true/false; each true flag => its own worker thread;
+#               volume-bound flags also fan out per seed_subvol_count)
+#       subvolumegroup_lifecycle  churn sibling SVG {svg}_churn only
+#       subvolume_lifecycle       create/info/resize/pin/metadata/rm
+#       subvolume_snapshot        manual snap create/ls/info/metadata/rm
+#       subvolume_clone           snap clone + clone status wait + rm
+#       group_snapshot            SVG snapshot create/ls/rm (on first seed)
+#       snap_schedule             add/retention/activate on seed path only
+#                                 (never FeatureManager's / root schedule)
+#       snapshot_visibility       set/get --value true on seed subvols
+#       readonly_status           fs ls/status, mds versions/metadata
+#     nfs:
+#       cluster_lifecycle         create/info/rm throwaway clusters
+#       cluster_config            config set/get/reset on par_nfs_stable
+#       export_lifecycle          create/ls/info/rm throwaway exports
+#       export_default            get-export-default only (read-only probe)
+#       client_remount_snap       mount/umount per seed export + .snap ls
+#       readonly_status           nfs cluster ls/info
+#       (NFS QoS is features.nfs.qos_* / FeatureManager only — not parallel_ops)
+#     Example:
+#       upgrade_parallel_ops:
+#         enabled: true
+#         svg: par_ops
+#         nfs_prefix: par_nfs
+#         base_port: 2100
+#         max_live_nfs_clusters: 2
+#         seed_subvol_count: 3
+#         mount_prefix: /mnt/par_
+#         rate_limits:
+#           manual_snap_interval_s: 60
+#           subvol_interval_s: 15
+#           nfs_create_interval_s: 60
+#           remount_interval_s: 90
+#         snap_schedule_interval: "1h"
+#         cephfs:
+#           subvolumegroup_lifecycle: true
+#           subvolume_lifecycle: true
+#           subvolume_snapshot: true
+#           subvolume_clone: true
+#           group_snapshot: true
+#           snap_schedule: true
+#           snapshot_visibility: true
+#           readonly_status: true
+#         nfs:
+#           cluster_lifecycle: true
+#           cluster_config: true
+#           export_lifecycle: true
+#           export_default: true
+#           client_remount_snap: true
+#           readonly_status: true
+#
+#   ---------------------------------------------------------------------------
 #   bug_validations:
 #     23 validators for known upgrade regressions. Each checks for a specific
 #     failure mode using live cluster queries and monitoring data (Phase 6).
@@ -424,7 +511,7 @@ tests:
 
   - test:
       name: cluster deployment
-      desc: Bootstrap cluster at 8.1 released for folio multi-hop upgrade testing.
+      desc: Bootstrap cluster at 9.1z0 for folio upgrade thrashing to 9.2.
       module: test_cephadm.py
       abort-on-fail: true
       config:
@@ -437,8 +524,8 @@ tests:
                 verbose: true
               args:
                 mon-ip: node2
-                rhcs-version: 9.0
-                release: released
+                rhcs-version: 9.1
+                release: z0
                 platform: rhel-9
 
   - test:
@@ -516,7 +603,7 @@ tests:
 
   - test:
       name: MDS Service deployment with spec
-      # Initial volume only; max_mds / extra MDS placement is test Phase 1
+      # Initial volume only; max_mds / second FS / scaled MDS is test Phase 1
       desc: Add MDS services using spec file
       module: test_cephadm.py
       config:
@@ -524,17 +611,17 @@ tests:
           - config:
               command: shell
               args:
-                - ceph fs volume create cephfs1
+                - ceph fs volume create cephfs_direct
           - config:
               command: apply_spec
               service: orch
               validate-spec-services: true
               specs:
                 - service_type: mds
-                  service_id: cephfs1
+                  service_id: cephfs_direct
                   placement:
                     label: mds
-                    count_per_host: 3
+                    count_per_host: 4
 
   - test:
       name: Configure client admin
@@ -659,17 +746,15 @@ tests:
       desc: Change config options to enable logging to file
 
   # -----------------------------------------------------------------------
-  # Hop 1: Upgrade 9.0 -> 9.1 released
+  # Hop 1: Upgrade 9.1z0 -> 9.1 released
   #
   # Full 7-phase workflow. Staggered Phase 4 with MDS cache drain cooldowns.
   # skip_client_cleanup / skip_cluster_cleanup preserve resources for Hop 2.
-  # Features requiring 9.1+ (NFS delegations, export_default)
-  # stay disabled here; enabled in Hop 2.
   # -----------------------------------------------------------------------
   - test:
-      name: "Hop 1: upgrade thrashing 8.1 -> 9.1"
+      name: "Hop 1: upgrade thrashing 9.1z0 -> 9.1"
       desc: >
-        Multi-hop step 1: full 7-phase upgrade from 8.1 to 9.1 released. Sets up services, enables 8.1-available features, fills cluster, upgrades with monitoring, verifies integrity. Preserves mounts/maps for Hop 2.
+        Multi-hop step 1: full 7-phase upgrade from 9.1z0 to 9.1 released. Sets up services (cephfs_direct + cephfs_nfs, 100 NFS clusters), fills cluster, upgrades with monitoring, verifies integrity. Preserves mounts/maps for Hop 2.
       module: upgrade_thrashing.test_upgrade_thrashing.py
       abort-on-fail: true
       config:
@@ -703,7 +788,7 @@ tests:
 
         upgrade_phases:
           - daemon_types: "mgr,mon,crash,osd"
-            cooldown_sec: 120
+            cooldown_sec: 60
             cooldown_actions:
               - type: set_config
                 target: mds
@@ -883,22 +968,25 @@ tests:
 
           cephfs:
             filesystems:
-              - cephfs1
-              - cephfs2
-            active_mds: 6
-            mds_count_per_host: 3
+              - cephfs_direct
+              - cephfs_nfs
+            direct_filesystem: cephfs_direct
+            # mini-folio: 7 mds hosts x 4 = 28 daemons/FS (>= active_mds 24)
+            active_mds: 24
+            mds_count_per_host: 6
             pin_policy: distributed
 
           nfs:
-            cluster_count: 20
-            daemons_per_cluster: 1
-            base_port: 2049               # cluster 1=2049, then 2050+; no other NFS on these hosts
+            filesystem: cephfs_nfs
+            cluster_count: 100
+            daemons_per_cluster: 2
+            base_port: 2049               # ports 2049-2148; keep parallel_ops above this
             nfs_versions:
               # - "3"
               - "4.1"
               - "4.2"
             # mounts_per_version: 2       # code default; retains root_squash coverage
-            # Result: 20 clusters, 20 daemons, 80 exports, ~48 mounts/client
+            # Result: 100 clusters x 2 daemons = 200 NFS daemons; ports 2049-2148
 
         # =================================================================
         # SERVICES
@@ -911,6 +999,40 @@ tests:
           nfs: true
           smb: false
           nvmeof: false
+
+        # =================================================================
+        # PARALLEL OPS (customer-like CephFS/NFS admin churn during upgrade)
+        # =================================================================
+        upgrade_parallel_ops:
+          enabled: true
+          svg: par_ops
+          nfs_prefix: par_nfs
+          base_port: 2200                 # above scale.nfs ports 2049-2148
+          max_live_nfs_clusters: 2
+          seed_subvol_count: 3
+          mount_prefix: /mnt/par_
+          rate_limits:
+            manual_snap_interval_s: 60
+            subvol_interval_s: 15
+            nfs_create_interval_s: 60
+            remount_interval_s: 90
+          snap_schedule_interval: "1h"
+          cephfs:
+            subvolumegroup_lifecycle: true
+            subvolume_lifecycle: true
+            subvolume_snapshot: true
+            subvolume_clone: true
+            group_snapshot: true
+            snap_schedule: true
+            snapshot_visibility: true
+            readonly_status: true
+          nfs:
+            cluster_lifecycle: true
+            cluster_config: true
+            export_lifecycle: true
+            export_default: false  # IBMCEPH-17898: EXPORT DEFAULT + EXPORT → Ganesha parse crash
+            client_remount_snap: true
+            readonly_status: true
 
         # =================================================================
         # FEATURE TOGGLES
@@ -964,9 +1086,11 @@ tests:
             qos_iops: false       # IBMCEPH-18028
             multiple_exports: true
             root_squash: true
+            # IBMCEPH-17898: set-export-default + exports → Ganesha syntax error / crash loop
+            # (blocks NFS upgrade redeploy). Re-enable when fixed in 9.2 train.
             delegations: false
             nfsv3: false
-            export_default: false
+            export_default: false  # IBMCEPH-17898
             ingress_ha: false
             ingress_virtual_ip: ""
             kerberos: false
@@ -1031,6 +1155,8 @@ tests:
           a21_upgrade_health_err: true
           a24_grace_metrics: true
           a27_nfs_client_continuity: true
+
+  # -----------------------------------------------------------------------
 
   # -----------------------------------------------------------------------
   # Hop 2: Upgrade 9.1 -> 9.2 stable
@@ -1259,22 +1385,24 @@ tests:
 
           cephfs:
             filesystems:
-              - cephfs1
-              - cephfs2
-            active_mds: 6
-            mds_count_per_host: 3
+              - cephfs_direct
+              - cephfs_nfs
+            direct_filesystem: cephfs_direct
+            # mini-folio: 7 mds hosts x 6 = 42 daemons/FS (24 active + 18 standby)
+            active_mds: 24
+            mds_count_per_host: 6
             pin_policy: distributed
 
           nfs:
-            cluster_count: 20
-            daemons_per_cluster: 1
-            base_port: 2049               # cluster 1=2049, then 2050+; no other NFS on these hosts
+            filesystem: cephfs_nfs
+            cluster_count: 100
+            daemons_per_cluster: 2
+            base_port: 2049               # ports 2049-2148; keep parallel_ops above this
             nfs_versions:
               # - "3"
               - "4.1"
               - "4.2"
-            # mounts_per_version: 2       # code default; retains root_squash coverage
-            # Result: 20 clusters, 20 daemons, 80 exports, ~48 mounts/client
+            # Result: 100 clusters x 2 daemons = 200 NFS daemons; ports 2049-2148
 
         # =================================================================
         # SERVICES
@@ -1287,6 +1415,40 @@ tests:
           nfs: true
           smb: false
           nvmeof: false
+
+        # =================================================================
+        # PARALLEL OPS (customer-like CephFS/NFS admin churn during upgrade)
+        # =================================================================
+        upgrade_parallel_ops:
+          enabled: true
+          svg: par_ops
+          nfs_prefix: par_nfs
+          base_port: 2200                 # above scale.nfs ports 2049-2148
+          max_live_nfs_clusters: 2
+          seed_subvol_count: 3
+          mount_prefix: /mnt/par_
+          rate_limits:
+            manual_snap_interval_s: 60
+            subvol_interval_s: 15
+            nfs_create_interval_s: 60
+            remount_interval_s: 90
+          snap_schedule_interval: "1h"
+          cephfs:
+            subvolumegroup_lifecycle: true
+            subvolume_lifecycle: true
+            subvolume_snapshot: true
+            subvolume_clone: true
+            group_snapshot: true
+            snap_schedule: true
+            snapshot_visibility: true
+            readonly_status: true
+          nfs:
+            cluster_lifecycle: true
+            cluster_config: true
+            export_lifecycle: true
+            export_default: false  # IBMCEPH-17898: EXPORT DEFAULT + EXPORT → Ganesha parse crash
+            client_remount_snap: true
+            readonly_status: true
 
         # =================================================================
         # FEATURE TOGGLES
@@ -1340,9 +1502,11 @@ tests:
             qos_iops: false       # IBMCEPH-18028
             multiple_exports: true
             root_squash: true
-            delegations: true
+            # IBMCEPH-17898: set-export-default + exports → Ganesha syntax error / crash loop
+            # (blocks NFS upgrade redeploy). Re-enable when fixed in 9.2 train.
+            delegations: false
             nfsv3: false
-            export_default: true
+            export_default: false  # IBMCEPH-17898
             ingress_ha: false
             ingress_virtual_ip: ""
             kerberos: false
