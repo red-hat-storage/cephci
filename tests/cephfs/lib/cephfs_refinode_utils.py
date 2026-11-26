@@ -656,6 +656,11 @@ class RefInodeUtils(object):
     def allow_referent_inode_feature_enablement(self, clients, fs_name, enable=False):
         """
         Checks if 'allow_referent_inodes' is enabled. Enables if needed.
+
+        Callers must gate this with ``LooseVersion(ceph_version) >= LooseVersion("22.0")``.
+        The flag is not a valid ``ceph fs set`` option on 20.2.x / 21.x (EINVAL; key
+        absent from mdsmap flags_state). Referent-inode support is expected with
+        fast-cloning in the 11.0 / 22.x line — do not enable on 10.0 / 21.x builds.
         """
         out, _ = clients.exec_command(
             sudo=True,

@@ -77,6 +77,7 @@ def run(ceph_cluster, **kw):
     2. ceph fs subvolume rm <vol_name> <subvol_name> [--group_name <subvol_group_name>]
     3. ceph fs subvolumegroup rm <vol_name> <group_name>
     """
+    snapshot = None
     try:
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
@@ -136,11 +137,13 @@ def run(ceph_cluster, **kw):
             extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
+        # allow_referent_inodes: unsupported on 20.2/21.x (EINVAL). Gate >= 22.0;
+        # feature expected with fast-cloning in 11.0. See helper docstring.
+        if LooseVersion(ceph_version) >= LooseVersion("22.0"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=True
             )
-            log.info("Ceph version >= 20.3 detected. Creating referent inode setup.")
+            log.info("Ceph version >= 22.0 detected. Creating referent inode setup.")
             ref_base_path = fuse_mounting_dir_1
             ref_inode_utils.create_directories(
                 client1, ref_base_path, ["dirA", "dirA/dirB"]
@@ -252,7 +255,8 @@ def run(ceph_cluster, **kw):
                 )
             log.info(f"Iteration {iteration} has been completed")
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
+        # Same >= 22.0 gate as enable path above.
+        if LooseVersion(ceph_version) >= LooseVersion("22.0"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=False
             )
@@ -284,5 +288,6 @@ def run(ceph_cluster, **kw):
                     client1, **clonevolume, force=True, validate=False, check_ec=False
                 )
         log.info("Clean Up in progess")
-        fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
+        if snapshot is not None:
+            fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
         fs_util.remove_subvolume(client1, **subvolume, validate=False, check_ec=False)

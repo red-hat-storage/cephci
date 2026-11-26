@@ -61,7 +61,7 @@ def _fill_data(
     # Use dd: bs=1M count = size_bytes / (1024*1024)
     count_mb = size_bytes // (1024 * 1024)
     path = f"{mount_dir.rstrip('/')}/{filename}"
-    cmd = f"dd if=/dev/random of={path} bs=1M count={count_mb} conv=fsync 2>/dev/null"
+    cmd = f"dd if=/dev/urandom of={path} bs=1M count={count_mb} conv=fsync 2>/dev/null"
     try:
         client.exec_command(sudo=True, cmd=cmd, check_ec=False)
     except Exception as e:

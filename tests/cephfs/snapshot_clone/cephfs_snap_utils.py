@@ -557,7 +557,7 @@ class SnapUtils(object):
                     f"ls -1 {shlex.quote(snap_dir)}/ | grep -c scheduled " "|| echo 0"
                 ),
             )
-            snap_count = int(out.strip())
+            snap_count = int(out.strip().splitlines()[-1])
             log.info("Scheduled snap count under %s: %s", snap_dir, snap_count)
             if snap_count >= min_count:
                 return

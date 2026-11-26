@@ -316,11 +316,16 @@ def run(ceph_cluster, **kw):
         log.info(f"fsid on ceph cluster : {fsid}")
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         log.info(f"Name of the cephfs-mirror daemon : {daemon_name}")
-        asok_file = fs_mirroring_utils.get_asok_file(
+        asok_file = fs_mirroring_utils.get_asok_file_with_connectivity_check(
             cephfs_mirror_node[0], fsid, daemon_name
         )
+        if not asok_file:
+            raise AssertionError(
+                "No accessible cephfs-mirror asok found — daemon may not be running"
+            )
         log.info(
-            f"Admin Socket file of cephfs-mirror daemon : {asok_file[cephfs_mirror_node[0].node.hostname][1]}"
+            "Admin Socket file of cephfs-mirror daemon : %s",
+            next(iter(asok_file.values()))[1],
         )
         filesystem_id = fs_mirroring_utils.get_filesystem_id_by_name(
             source_clients[0], source_fs
