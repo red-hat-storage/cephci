@@ -11,6 +11,13 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
+    # Init outside try so finally is safe on early abort.
+    mds_session_metadata_threshold_default = None
+    fuse_mount_dir = None
+    subvolume = None
+    client1 = None
+    fs_util = None
+    clients = None
     try:
         """
          CEPH-83581613 - Client is blocklisted if session metadata is bloated/large.
@@ -220,15 +227,33 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Peforming Cleanup")
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph config set mds mds_session_metadata_threshold {mds_session_metadata_threshold_default}",
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd='ceph config set client "client_inject_fixed_oldest_tid" false',
-        )
-        mds_session_metadata_threshold_default = out.strip()
-        client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False)
-        client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}", check_ec=False)
-        fs_util.remove_subvolume(clients[0], **subvolume)
+        if client1 is not None:
+            if mds_session_metadata_threshold_default is not None:
+                client1.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "ceph config set mds mds_session_metadata_threshold "
+                        f"{mds_session_metadata_threshold_default}"
+                    ),
+                    check_ec=False,
+                )
+            client1.exec_command(
+                sudo=True,
+                cmd='ceph config set client "client_inject_fixed_oldest_tid" false',
+                check_ec=False,
+            )
+            if fuse_mount_dir is not None:
+                client1.exec_command(
+                    sudo=True,
+                    cmd=f"umount -l '{fuse_mount_dir}'",
+                    check_ec=False,
+                    timeout=120,
+                )
+                client1.exec_command(
+                    sudo=True,
+                    cmd=f"rm -rf '{fuse_mount_dir}'",
+                    check_ec=False,
+                    timeout=120,
+                )
+        if fs_util is not None and clients and subvolume is not None:
+            fs_util.remove_subvolume(clients[0], **subvolume)

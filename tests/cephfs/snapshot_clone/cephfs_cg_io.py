@@ -850,6 +850,7 @@ class CG_snap_IO(object):
             for _ in list(range(3))
             )
             end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
+            files = []
             while datetime.datetime.now() < end_time:
                 out,rc = client.exec_command(sudo=True, cmd=f"ls {dir_path}")
                 log.info(f"dd_io {io_type} cmd op : {out}")
@@ -1310,6 +1311,8 @@ class CG_snap_IO(object):
             dir_path = f"{mnt_pt}/cg_io/dd_dir"
             end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
             cmd_pass = 0
+            files = []
+            file_name = None
             while datetime.datetime.now() < end_time and cmd_pass == 0:
                 try:
                     out, _ = client.exec_command(
@@ -1318,12 +1321,18 @@ class CG_snap_IO(object):
                     log.info(f"linux_cmds {io_type} cmd op : {out}")
                     out = out.strip()
                     files = out.split()
+                    if not files:
+                        raise Exception(f"No files listed under {dir_path}")
                     file_name = random.choice(files)
                     cmd_pass = 1
                 except BaseException as ex:
                     log.info(ex)
                     log.info(traceback.format_exc())
                     time.sleep(5)
+            if not files or file_name is None:
+                raise Exception(
+                    f"linux_cmds {io_type}: no files available under {dir_path}"
+                )
             retry_cnt = 10
             while retry_cnt > 0:
                 file_name = random.choice(files)

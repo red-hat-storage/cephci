@@ -96,7 +96,9 @@ def run(ceph_cluster, **kw):
         )
         base_path = "/mnt/mycephfs1"
         main_file = "%s/file1" % base_path
-        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
+        # allow_referent_inodes: unsupported on 20.2/21.x (EINVAL). Gate >= 22.0;
+        # feature expected with fast-cloning in 11.0. See helper docstring.
+        if LooseVersion(ceph_version) >= LooseVersion("22.0"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, fs_name, enable=True
             )
@@ -168,7 +170,8 @@ def run(ceph_cluster, **kw):
             log.error("checksum is not matching after snapshot1 revert")
             return 1
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
+        # Same >= 22.0 gate as enable path above.
+        if LooseVersion(ceph_version) >= LooseVersion("22.0"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, fs_name, enable=False
             )

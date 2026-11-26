@@ -91,6 +91,17 @@ tests:
                     placement:
                       nodes:
                         - node6
+              # Suppress BLUESTORE_BLUEFS_OVERSIZED (9.2z1+, ceph/ceph#67192) on small CI OSDs
+              # https://tracker.ceph.com/issues/73826
+              - config:
+                  command: shell
+                  args:
+                    - ceph
+                    - config
+                    - set
+                    - global
+                    - bluestore_bluefs_warn_ratio
+                    - "1"
         ceph2:
           config:
             verify_cluster_health: true
@@ -142,6 +153,17 @@ tests:
                       nodes:
                         - node4
                         - node5
+              # Suppress BLUESTORE_BLUEFS_OVERSIZED (9.2z1+, ceph/ceph#67192) on small CI OSDs
+              # https://tracker.ceph.com/issues/73826
+              - config:
+                  command: shell
+                  args:
+                    - ceph
+                    - config
+                    - set
+                    - global
+                    - bluestore_bluefs_warn_ratio
+                    - "1"
       desc:  CephFS Mirror cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py

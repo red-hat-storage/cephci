@@ -48,6 +48,9 @@ def run(ceph_cluster, **kw):
     4. Deactivate and remove sanp_Schedule
     5. Remove FS
     """
+    client1 = None
+    default_fs = None
+    sanp_schedule_list = ["/dir_kernel", "/dir_fuse"]
     try:
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
@@ -120,11 +123,13 @@ def run(ceph_cluster, **kw):
             extra_params=f",fs={default_fs}",
         )
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
+        # allow_referent_inodes: unsupported on 20.2/21.x (EINVAL). Gate >= 22.0;
+        # feature expected with fast-cloning in 11.0. See helper docstring.
+        if LooseVersion(ceph_version) >= LooseVersion("22.0"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=True
             )
-            log.info("Ceph version >= 20.3 detected. Creating referent inode setup.")
+            log.info("Ceph version >= 22.0 detected. Creating referent inode setup.")
             ref_base_path = kernel_mounting_dir_1
             ref_inode_utils.create_directories(
                 client1, ref_base_path, ["dirA", "dirA/dirB"]
@@ -176,7 +181,6 @@ def run(ceph_cluster, **kw):
             extra_params=f"--client_fs {default_fs}",
         )
         client1.exec_command(sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}/dir_fuse")
-        sanp_schedule_list = ["/dir_kernel", "/dir_fuse"]
         m_granularity = (
             "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
@@ -216,7 +220,8 @@ def run(ceph_cluster, **kw):
             schedule=f"1{m_granularity}",
         )
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.3"):
+        # Same >= 22.0 gate as enable path above.
+        if LooseVersion(ceph_version) >= LooseVersion("22.0"):
             ref_inode_utils.unlink_hardlinks(
                 client1, default_fs, main_file, ref_base_path
             )
@@ -230,23 +235,26 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Clean Up in progess")
-        commands = [
-            f"ceph fs snap-schedule deactivate path --fs {default_fs}",
-            f"ceph fs snap-schedule remove path --fs {default_fs}",
-            "ceph config set mgr mgr/snap_schedule/allow_m_granularity false",
-        ]
-        modified_commands = [
-            cmd.replace("path", item) for item in sanp_schedule_list for cmd in commands
-        ]
-        for cmd in modified_commands:
-            client1.exec_command(sudo=True, cmd=cmd)
-        commands = [
-            "ceph config set mon mon_allow_pool_delete true",
-            f"ceph fs volume rm {default_fs} --yes-i-really-mean-it",
-        ]
-        for cmd in commands:
-            client1.exec_command(sudo=True, cmd=cmd)
+        if client1 is not None and default_fs:
+            log.info("Clean Up in progess")
+            commands = [
+                f"ceph fs snap-schedule deactivate path --fs {default_fs}",
+                f"ceph fs snap-schedule remove path --fs {default_fs}",
+                "ceph config set mgr mgr/snap_schedule/allow_m_granularity false",
+            ]
+            modified_commands = [
+                cmd.replace("path", item)
+                for item in sanp_schedule_list
+                for cmd in commands
+            ]
+            for cmd in modified_commands:
+                client1.exec_command(sudo=True, cmd=cmd)
+            commands = [
+                "ceph config set mon mon_allow_pool_delete true",
+                f"ceph fs volume rm {default_fs} --yes-i-really-mean-it",
+            ]
+            for cmd in commands:
+                client1.exec_command(sudo=True, cmd=cmd)
 
 
 def verify_snap_schedule(client, path, fs_name, schedule):
