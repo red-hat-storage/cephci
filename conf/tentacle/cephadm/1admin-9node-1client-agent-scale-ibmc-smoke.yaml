@@ -1,0 +1,101 @@
+# ==================================================================================
+# IBM Cloud (ibmc) gate layout for agent scale regression SMOKE
+#
+# Shape (matches tier3-cephadm-agent-scale-regression-smoke.yaml defaults):
+#   node1           — bootstrap (_admin/installer/mon/mgr)
+#   node2..node6    — TC1: 5 OSD hosts × 2 volumes (~8+ OSDs)
+#   node7..node9    — TC3: 3 OSD hosts × 2 volumes
+#   node10          — client
+#
+# Suite:
+#   suites/tentacle/cephadm/tier3-cephadm-agent-scale-regression-smoke.yaml
+#
+# Guest image comes from --inventory (RHEL 9.8 or 10.2).
+#
+# Example:
+#   python run.py --cloud ibmc \
+#     --global-conf conf/tentacle/cephadm/1admin-9node-1client-agent-scale-ibmc-smoke.yaml \
+#     --inventory conf/inventory/ibm-rhel-9.8.yaml \
+#     --suite suites/tentacle/cephadm/tier3-cephadm-agent-scale-regression-smoke.yaml \
+#     --osp-cred <ibmc-cred.yaml> --custom-config use_agent=true ...
+# ==================================================================================
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - crash
+          - prometheus
+          - grafana
+          - alertmanager
+      node2:
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mon
+          - mgr
+          - rgw
+          - nfs
+        no-of-volumes: 2
+        disk-size: 15
+      node3:
+        role:
+          - osd
+          - node-exporter
+          - crash
+          - mon
+          - mgr
+          - rgw
+          - nfs
+        no-of-volumes: 2
+        disk-size: 15
+      node4:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node5:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node6:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node7:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node8:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node9:
+        role:
+          - osd
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node10:
+        role:
+          - client
