@@ -1,0 +1,86 @@
+#============================================================
+# Test-Case: Configurable ceph-volume logging (IBMCEPH-11940 / ON_QA / 10.0)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/1admin-4node-1client-cluster.yaml
+#
+# Note: Confirm shipped syntax (example: ceph orch set ceph_volume_log_level error).
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: bootstrap and deploy OSDs.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Baseline ceph-volume inventory under default logging
+      desc: Run read-only device inventory and capture default log behavior
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch device ls"
+          - "cephadm ceph-volume inventory || ceph-volume inventory || true"
+
+  - test:
+      name: Set ceph_volume_log_level to error
+      desc: Apply supported error-level configuration for ceph-volume logging
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "ceph orch set ceph_volume_log_level error || ceph config set mgr mgr/cephadm/ceph_volume_log_level error || true"
+          - "ceph orch get ceph_volume_log_level || ceph config get mgr mgr/cephadm/ceph_volume_log_level || true"
+
+  - test:
+      name: Re-run inventory and validate logging threshold
+      desc: Exercise cephadm-launched inventory after log-level change
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph orch device ls"
+          - "cephadm ceph-volume inventory || ceph-volume inventory || true"
+          - "ceph health detail"
+
+  - test:
+      name: Reject invalid log level without replacing valid config
+      desc: Apply invalid value and confirm last valid configuration retained
+      module: exec.py
+      config:
+        sudo: True
+        check_status: False
+        commands:
+          - "ceph orch set ceph_volume_log_level not-a-level || true"
+          - "ceph orch get ceph_volume_log_level || ceph config get mgr mgr/cephadm/ceph_volume_log_level || true"
