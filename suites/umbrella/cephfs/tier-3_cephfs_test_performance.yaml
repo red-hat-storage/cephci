@@ -10,6 +10,7 @@
   #               same data from other clients
   # CEPH-11221 - Mount CephFS on multiple clients and run Stress IO from all clients on same directory
   # CEPH-11222 - Mount CephFS on multiple clients and run Stress IO from all clients on different directories
+  # IBMCEPH-19131 - OSDC async dispatch: flag on/off, few FIO cells OFF vs ON, negative/corner
 #=======================================================================================================================
 tests:
   -
@@ -213,3 +214,34 @@ tests:
         num_of_osds: 12
       desc: Mount CephFS on multiple clients,
       abort-on-fail: false
+  # -------------------------------------------------------------------------------------------------
+  # OSDC (objecter_dispatch_to_session_strand) — minimal CI coverage for IBMCEPH-19131 / 18277
+  # Full formal SC matrix stays on lab/QE Share; this block is short flag A/B + negatives.
+  # -------------------------------------------------------------------------------------------------
+  - test:
+      name: OSDC async dispatch — flag on/off + basic IO compare
+      module: cephfs_perf.test_osdc_async_dispatch.py
+      polarion-id: IBMCEPH-19131
+      desc: >
+        Toggle objecter_dispatch_to_session_strand OFF vs ON on fuse (libcephfs),
+        run a few direct-IO FIO cells, compare IOPS; include negative and corner cases.
+      abort-on-fail: false
+      config:
+        runtime: 30
+        iodepth: 32
+        fio_size: 256M
+        max_regression_pct: 50
+        skip_if_unsupported: true
+        cells:
+          - rw: randread
+            bs: 4k
+            jobs: 8
+          - rw: randwrite
+            bs: 4k
+            jobs: 8
+          - rw: randread
+            bs: 64k
+            jobs: 8
+          - rw: randwrite
+            bs: 64k
+            jobs: 8
