@@ -2359,7 +2359,15 @@ class CephNode(object):
 
     def setup_deb_cdn_repos(self, build):
         """
-        Setup cdn repositories for deb systems
+        Setup CDN repositories for deb (Ubuntu installer) systems.
+
+        Legacy code, currently unreachable: no inventory in this repository
+        provisions deb-based nodes (``pkg_type`` is always ``rpm``), so
+        ``Ceph.setup_packages`` never dispatches here. Retained for
+        reference only. If the deb path is ever revived, the CDN credential
+        must be wired in from configuration -- ``masked`` is a scrubbed
+        placeholder and cannot authenticate.
+
         Args:
             build(str|LooseVersion): rhcs version
         """
@@ -2444,7 +2452,12 @@ class CephNode(object):
 
     def setup_deb_repos(self, deb_repo):
         """
-        Setup repositories for deb system
+        Setup repositories for deb (Ubuntu installer) systems.
+
+        Legacy code, currently unreachable: no inventory in this repository
+        provisions deb-based nodes (``pkg_type`` is always ``rpm``).
+        Retained for reference only.
+
         Args:
             deb_repo(str): deb (Ubuntu) repository link
         """

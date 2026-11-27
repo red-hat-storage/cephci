@@ -868,7 +868,16 @@ def run(args):
     ssh_pub_key_content = None
 
     if ssh_keys_overridden and reuse:
-        log.warning("--ssh-private-key/--ssh-pub-key are ignored with --reuse")
+        log.warning(
+            "--ssh-private-key/--ssh-pub-key are ignored with --reuse; the "
+            "cluster is accessed with the keys it was created with"
+        )
+        # Honor the warning: drop the override so the recreate-cluster path
+        # (which may create fresh nodes) uses the cloud-credentials key that
+        # the inventory authorizes. The override key was never authorized on
+        # the reused cluster's nodes, so keeping it would make every connect
+        # to freshly created nodes time out.
+        ssh_private_key = None
     elif ssh_keys_overridden:
         if ssh_private_key and not os.path.isfile(ssh_private_key):
             raise RuntimeError(

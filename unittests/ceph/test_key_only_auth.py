@@ -169,8 +169,8 @@ class TestSetupSshKeysDoesNotLockUsOut:
 
     def test_setup_ssh_keys_has_a_single_implementation(self):
         """cephci must re-use the cli implementation, not fork it."""
-        import cli.utilities.configure
         import cephci.utils.configure
+        import cli.utilities.configure
 
         assert (
             cephci.utils.configure.setup_ssh_keys
