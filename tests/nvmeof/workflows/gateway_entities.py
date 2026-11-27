@@ -131,10 +131,10 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
         ceph_version = get_ceph_version_from_cluster(
             ceph_cluster.get_nodes(role="client")[0]
         )
+        # HA is the default for a gateway group. subsystem add rejects --enable-ha.
         args = {
             **sub_args,
             "max-namespaces": sub_cfg.get("max_ns", 32),
-            "enable-ha": sub_cfg.get("enable_ha", False),
             "no-group-append": no_group_append,
         }
 
@@ -142,7 +142,14 @@ def configure_subsystems(nvme_service, ceph_cluster=None, subsystem_config=None)
             if sub_cfg.get("listener_port"):
                 args["port"] = sub_cfg.get("listener_port")
             if sub_cfg.get("secure_listener"):
-                args["secure_listeners"] = sub_cfg.get("secure_listener")
+                # V1 podman CLI uses hyphenated flag (--secure-listeners);
+                # V2 ceph-nvmeof CLI uses underscored flag (--secure_listeners).
+                secure_key = (
+                    "secure-listeners"
+                    if getattr(gateway, "v1", False)
+                    else "secure_listeners"
+                )
+                args[secure_key] = sub_cfg.get("secure_listener")
             # Prefer suite-defined network-mask; else derive from GW primary IPs
             args["network-mask"] = (
                 sub_cfg.get("network_mask")
@@ -407,9 +414,13 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                 # consider adding option to create pool and image if it doesn't exist
                 # and also ns_create_image is false
                 if bdev_cfg.get("ns_create_image"):
+                    # V1 podman CLI uses --size; V2 ceph-nvmeof CLI uses --rbd-image-size.
+                    size_key = (
+                        "size" if getattr(gateway, "v1", False) else "rbd-image-size"
+                    )
                     namespace_args.update(
                         {
-                            "rbd-image-size": bdev_cfg.get("size", "1G"),
+                            size_key: bdev_cfg.get("size", "1G"),
                             "rbd-create-image": bdev_cfg.get("ns_create_image", True),
                         }
                     )
