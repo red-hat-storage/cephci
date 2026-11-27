@@ -190,6 +190,15 @@ tests:
 #            m: 2
 #            disable_pg_autoscale: true
 
+  - test:
+      name: Bluestore compression negative scenarios
+      module: test_bluestore_comp_negative.py
+      desc: negative scenarios for bluestore compression
+      polarion-id: CEPH-83620071
+      config:
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
 
 # Bluestore compression tests - moved here as part of optimization to reduce RHOS-d run time
 # Tests:-
@@ -211,6 +220,16 @@ tests:
       config:
         delete_pool: True
         scenarios_to_run:
+          - scenario-2
+
+  - test:
+      name: Bluestore compression negative scenarios
+      module: test_bluestore_comp_negative.py
+      desc: negative scenarios for bluestore compression
+      polarion-id: CEPH-83620071
+      config:
+        scenarios_to_run:
+          - scenario-1
           - scenario-2
 
   - test:
