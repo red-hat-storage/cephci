@@ -1,0 +1,175 @@
+# 39 Ceph servers (original size) + 5 clients (node40-node44).
+# Hardware profile and AZ allocation must be verified in IBM Cloud inventory.
+# Exact cephadm labels are in the suite host specs, not provisioning roles.
+globals:
+- ceph-cluster:
+    name: ceph
+    node1:
+      role:
+      - installer
+      - _admin
+      - mon
+      - mgr
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node2:
+      role:
+      - nfs
+    node3:
+      role:
+      - nfs
+    node4:
+      role:
+      - nfs
+    node5:
+      role:
+      - nfs
+    node6:
+      role:
+      - mds
+    node7:
+      role:
+      - mds
+      - nfs
+    node8:
+      role:
+      - mds
+    node9:
+      role:
+      - mds
+      - nfs
+    node10:
+      role:
+      - _admin
+      - mon
+      - mgr
+    node11:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node12:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node13:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node14:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node15:
+      role:
+      - nfs
+    node16:
+      role:
+      - nfs
+    node17:
+      role:
+      - nfs
+    node18:
+      role:
+      - nfs
+    node19:
+      role:
+      - mds
+    node20:
+      role:
+      - mds
+      - nfs
+    node21:
+      role:
+      - mds
+    node22:
+      role:
+      - mds
+    node23:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node24:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node25:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node26:
+      role:
+      - nfs
+    node27:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node28:
+      role:
+      - nfs
+    node29:
+      role:
+      - nfs
+    node30:
+      role:
+      - nfs
+    node31:
+      role:
+      - mds
+    node32:
+      role:
+      - mds
+      - nfs
+    node33:
+      role:
+      - mds
+    node34:
+      role:
+      - mds
+      - nfs
+    node35:
+      role:
+      - _admin
+      - mon
+      - mgr
+    node36:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node37:
+      role:
+      - osd
+      no-of-volumes: 7
+      disk-size: 960
+    node38:
+      role:
+      - osd
+      no-of-volumes: 8
+      disk-size: 960
+    node39:
+      role:
+      - nfs
+    node40:
+      role:
+      - client
+    node41:
+      role:
+      - client
+    node42:
+      role:
+      - client
+    node43:
+      role:
+      - client
+    node44:
+      role:
+      - client
