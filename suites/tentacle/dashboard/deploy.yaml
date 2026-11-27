@@ -1,0 +1,94 @@
+# Deploy a Ceph cluster for ceph_dashboard_api_automation.
+#
+# Provisioning and topology stay on the existing run.py flags (--cloud,
+# --global-conf, --inventory). This suite only bootstraps the cluster, pins
+# the dashboard login, and writes dashboard_endpoint.json into the cephci log
+# directory. It does not run pytest; run.py does that when --dashboard-repo
+# and --dashboard-marker are set.
+#
+# mon-ip is the installer node name from --global-conf. node1 matches the
+# standard 1admin cephadm topologies. Point it at the installer node if the
+# chosen topology uses a different name.
+#
+# Bootstrap, host add, OSD apply, and optional daemons (RGW, NFS, MDS,
+# NVMe-oF, iSCSI) are steps of one test_cephadm.py test. Uncomment an
+# optional step after OSDs. The topology must already label nodes for that
+# daemon. Those steps do not change how pytest is started.
+---
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: "Install prerequisites for Ceph cluster deployment."
+      module: install_prereq.py
+      name: "test suite setup"
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                initial-dashboard-user: admin
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: nfs
+              pos_args:
+                - nfs.cephfs-nfs
+              args:
+                placement:
+                  label: nfs
+
+          # Optional daemon steps.
+          # - config:
+          #     command: apply
+          #     service: nvmeof
+          #     args:
+          #       placement:
+          #         label: nvmeof
+          #
+          # - config:
+          #     command: apply
+          #     service: iscsi
+          #     args:
+          #       placement:
+          #         label: iscsi
+      desc: "Bootstrap the cluster with a pinned dashboard login and deploy services."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "Deploy cluster using cephadm"
+
+  - test:
+      abort-on-fail: true
+      config:
+        username: admin
+        password: admin@123
+        health-wait-seconds: 600
+      desc: "Write dashboard host, port, user, and password for pytest."
+      destroy-cluster: false
+      module: export_dashboard_endpoint.py
+      name: "Export dashboard endpoint"

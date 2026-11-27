@@ -1,0 +1,43 @@
+# OpenStack topology for a local Ceph 9.2 (tentacle) dashboard run.
+# Roles become orch labels via add_hosts apply-all-labels.
+# node1 is the installer; suites/tentacle/dashboard/deploy-osd-rgw-nfs.yaml
+# passes mon-ip: node1.
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - nfs
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - nfs
+          - rgw
+          - node-exporter
+          - crash
+        no-of-volumes: 3
+        disk-size: 15
+      node3:
+        role:
+          - mon
+          - osd
+          - nfs
+          - rgw
+          - node-exporter
+          - crash
+        no-of-volumes: 2
+        disk-size: 15
