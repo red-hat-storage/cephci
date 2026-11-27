@@ -119,11 +119,6 @@ instance:
         permissions: '0644'
         defer: true
       - content: |
-          net.core.default_qdisc=netem
-        path: /etc/sysctl.d/1000-qdisc.conf
-        owner: root:root
-        permissions: '0644'
-      - content: |
           PermitRootLogin prohibit-password
         path: /etc/ssh/sshd_config.d/50-cephci.conf
         owner: root:root

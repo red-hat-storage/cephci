@@ -68,7 +68,10 @@ class Remote:
             if allow_password and password:
                 connect_kw["password"] = password
             else:
-                connect_kw["pkey"] = ssh_key
+                # ssh_key is a path to a private key file; paramiko expects
+                # that in `key_filename` (`pkey` takes a PKey object).
+                if ssh_key:
+                    connect_kw["key_filename"] = ssh_key
                 connect_kw["look_for_keys"] = True
             client.connect(**connect_kw)
         except Exception as e:

@@ -443,23 +443,6 @@ class BootstrapMixin:
                     reg_args.get("registry-password"),
                 )
                 saved_podman_auths = read_podman_auth_file(self.installer.node)
-                # Surface real podman errors (auth vs missing tag) before
-                # cephadm swallows them into a one-line Failed command
-                # (RH sanity 1170 / stage registry pulls).
-                if image_ref and isinstance(image_ref, str):
-                    logger.info(
-                        "Pre-pulling bootstrap image via %s: %s",
-                        PODMAN_AUTH_PATH,
-                        image_ref,
-                    )
-                    self.installer.exec_command(
-                        sudo=True,
-                        cmd=(
-                            f"podman pull --authfile={PODMAN_AUTH_PATH} " f"{image_ref}"
-                        ),
-                        timeout=600,
-                        check_ec=True,
-                    )
             except KeyError as err:
                 logger.warning(
                     "Could not merge bootstrap registry %s into %s: %s",
@@ -467,6 +450,37 @@ class BootstrapMixin:
                     PODMAN_AUTH_PATH,
                     err,
                 )
+            else:
+                # Surface real podman errors (auth vs missing tag) before
+                # cephadm swallows them into a one-line Failed command
+                # (RH sanity 1170 / stage registry pulls). The pre-pull is
+                # diagnostic only: bootstrap performs its own pull, so a
+                # possibly transient failure here must not abort it.
+                if image_ref and isinstance(image_ref, str):
+                    logger.info(
+                        "Pre-pulling bootstrap image via %s: %s",
+                        PODMAN_AUTH_PATH,
+                        image_ref,
+                    )
+                    try:
+                        self.installer.exec_command(
+                            sudo=True,
+                            cmd=(
+                                f"podman pull --authfile={PODMAN_AUTH_PATH} "
+                                f"{image_ref}"
+                            ),
+                            timeout=600,
+                            check_ec=True,
+                        )
+                    except CommandFailed as err:
+                        logger.error(
+                            "Pre-pull of the bootstrap image %s failed: %s. "
+                            "Continuing with bootstrap; cephadm performs its "
+                            "own pull and fails definitively there if the "
+                            "credentials or the image reference are wrong.",
+                            image_ref,
+                            err,
+                        )
 
         if use_container_auth_json:
             cmd += f" --container-auth-json {PODMAN_AUTH_PATH}"

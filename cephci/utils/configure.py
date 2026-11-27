@@ -2,28 +2,17 @@ from json import loads
 
 from cli.cephadm.ansible import Ansible
 from cli.exceptions import AnsiblePlaybookExecutionError, OperationFailedError
-from cli.utilities.configure import authorize_key
+from cli.utilities.configure import setup_ssh_keys  # noqa: F401 (re-export)
 from cli.utilities.containers import Container
 from cli.utilities.packages import Package
 from utility.log import Log
 
 log = Log(__name__)
 
+# setup_ssh_keys is intentionally re-exported from cli.utilities.configure:
+# there must be exactly one implementation of the key-authorization flow.
+
 CEPHADM_PREFLIGHT_PLAYBOOK = "cephadm-preflight.yml"
-ETC_HOSTS = "/etc/hosts"
-
-SSH = "~/.ssh"
-SSH_CONFIG = f"{SSH}/config"
-SSH_ID_RSA_PUB = f"{SSH}/id_rsa.pub"
-SSH_KNOWN_HOSTS = f"{SSH}/known_hosts"
-
-# Remove only the generated keypair. Never 'rm -rf ~/.ssh': that would delete
-# authorized_keys and lock the framework out, since access is key-only.
-SSH_REMOVE_KEYS = f"rm -f {SSH}/id_rsa {SSH}/id_rsa.pub"
-SSH_KEYGEN = f"mkdir -p {SSH} && chmod 700 {SSH} && ssh-keygen -b 2048 -f {SSH}/id_rsa -t rsa -q -N ''"
-SSH_KEYSCAN = "ssh-keyscan {}"
-
-CHMOD_CONFIG = f"chmod 600 {SSH_CONFIG}"
 REGISTRY_PATH = "/opt/registry"
 REGISTRY_AUTH_PATH = f"{REGISTRY_PATH}/auth/htpasswd"
 DOMAIN_KEY_PATH = f"{REGISTRY_PATH}/certs/domain.key"
@@ -37,59 +26,6 @@ REGISTRY_CERTS = f"{REGISTRY_PATH}/certs"
 DOMAIN_CERT_PATH_CERT = f"{REGISTRY_PATH}/certs/domain.cert"
 PRIVATE_REGISTRY_NAME = "myprivateregistry"
 PRIVATE_REGISTRY_PORT = "5000:5000"
-
-
-def setup_ssh_keys(installer, nodes):
-    """Set up SSH keys
-
-    Args:
-        installer (Node): Cluster installer node object
-        nodes (List): List of Node objects
-    """
-    hosts, config = (
-        "",
-        "Host *\n\tStrictHostKeyChecking no\n\tServerAliveInterval 2400\n",
-    )
-    for node in nodes:
-        config += f"\nHost {node.ip_address}"
-        config += f"\n\tHostname {node.hostname}"
-        config += "\n\tUser root"
-
-        hosts += f"\n{node.ip_address}"
-        hosts += f"\t{node.hostname}"
-        hosts += f"\t{node.shortname}"
-
-        node.exec_command(cmd=SSH_REMOVE_KEYS, check_ec=False)
-        node.exec_command(cmd=SSH_KEYGEN)
-
-        node.exec_command(sudo=True, cmd=SSH_REMOVE_KEYS, check_ec=False)
-        node.exec_command(sudo=True, cmd=SSH_KEYGEN)
-
-    installer.exec_command(sudo=True, cmd=f"echo -e '{hosts}' >> {ETC_HOSTS}")
-    installer.exec_command(
-        cmd=f"touch {SSH_CONFIG} && echo -e '{config}' > {SSH_CONFIG}"
-    )
-    installer.exec_command(cmd=CHMOD_CONFIG)
-
-    # Collect the installer public keys that peers must trust
-    installer_user_key, _ = installer.exec_command(cmd=f"cat {SSH_ID_RSA_PUB}")
-    installer_root_key, _ = installer.exec_command(
-        sudo=True, cmd=f"cat {SSH_ID_RSA_PUB}"
-    )
-
-    for node in nodes:
-        installer.exec_command(
-            cmd="{} >> {}".format(SSH_KEYSCAN.format(node.hostname), SSH_KNOWN_HOSTS),
-        )
-        installer.exec_command(
-            sudo=True,
-            cmd="{} >> {}".format(SSH_KEYSCAN.format(node.hostname), SSH_KNOWN_HOSTS),
-        )
-
-        # Authorize the installer keys over the framework's own key-based
-        # session instead of sshpass/ssh-copy-id.
-        authorize_key(node, installer_user_key, sudo=False)
-        authorize_key(node, installer_root_key, sudo=True)
 
 
 def accept_eula(node):

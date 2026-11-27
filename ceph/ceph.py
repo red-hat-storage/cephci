@@ -1,6 +1,5 @@
 """This module implements the required foundation data structures for testing."""
 
-import base64
 import codecs
 import datetime
 import json
@@ -19,6 +18,11 @@ from looseversion import LooseVersion
 
 from ceph.parallel import parallel
 from cli.ceph.ceph import Ceph as CephCli
+from cli.utilities.ssh_keys import (
+    CEPH_USER,
+    build_authorize_key_cmds,
+    build_user_setup_cmds,
+)
 from utility import lvm_utils
 from utility.log import Log
 from utility.utils import custom_ceph_config, get_rhbuild_major_version
@@ -1643,8 +1647,9 @@ class CephNode(object):
                 try:
                     self._ensure_authorized_keys()
                 except AssertionError:
-                    # The user connection with the provided key failed; the
-                    # root connection would fail the same way.
+                    # Neither the cephuser nor the root connection could be
+                    # established (both are attempted; see
+                    # _ensure_authorized_keys).
                     raise
                 except Exception as err:
                     logger.warning(
@@ -1696,34 +1701,26 @@ class CephNode(object):
                 "LogLevel=ERROR",
                 f"{ssh_user}@{self.ip_address}",
             ]
-            key_b64 = base64.b64encode(key_line.encode()).decode()
-            setup_cmds = [
-                (
-                    "id cephuser >/dev/null 2>&1 || (sudo groupadd -f cephuser && "
-                    "sudo useradd -m -s /bin/bash -g cephuser cephuser)"
-                ),
-                "echo 'cephuser ALL=(ALL) NOPASSWD:ALL' "
-                "| sudo tee /etc/sudoers.d/cephuser",
-                "sudo chmod 440 /etc/sudoers.d/cephuser",
-                "sudo mkdir -p /home/cephuser/.ssh && "
-                "sudo chmod 700 /home/cephuser/.ssh",
-                f"echo '{key_b64}' | base64 -d "
-                "| sudo tee -a /home/cephuser/.ssh/authorized_keys",
-                "sudo chmod 600 /home/cephuser/.ssh/authorized_keys",
-                "sudo chown -R cephuser:cephuser /home/cephuser/.ssh",
-                "sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh",
-                f"echo '{key_b64}' | base64 -d "
-                "| sudo tee -a /root/.ssh/authorized_keys",
-                "sudo chmod 600 /root/.ssh/authorized_keys",
-                "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
-                "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf "
-                "2>/dev/null || true",
-                "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
-                "/etc/ssh/sshd_config 2>/dev/null || true",
-                "sudo systemctl restart sshd 2>/dev/null || "
-                "sudo systemctl restart ssh 2>/dev/null || true",
-                "sudo touch /ceph-qa-ready",
-            ]
+            # Shared idempotent key-authorization commands (see
+            # cli.utilities.ssh_keys); the first command waits for the node
+            # to become reachable (retries below).
+            setup_cmds = (
+                build_user_setup_cmds(CEPH_USER)
+                + build_authorize_key_cmds(
+                    key_line, f"/home/{CEPH_USER}", owner=CEPH_USER
+                )
+                + build_authorize_key_cmds(key_line, "/root")
+                + [
+                    "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
+                    "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf "
+                    "2>/dev/null || true",
+                    "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
+                    "/etc/ssh/sshd_config 2>/dev/null || true",
+                    "sudo systemctl restart sshd 2>/dev/null || "
+                    "sudo systemctl restart ssh 2>/dev/null || true",
+                    "sudo touch /ceph-qa-ready",
+                ]
+            )
             ssh_env = None
             askpass_file = None
             boot_pwd = getattr(self, "bootstrap_key_password", "")
@@ -1889,56 +1886,93 @@ class CephNode(object):
 
     def _ensure_authorized_keys(self):
         """
-        Ensure the runner's public key is authorized for cephuser and root.
+        Ensure the runner's public key is authorized for the login user and root.
 
         The inventory cloud-config is expected to authorize the key for both
-        users, however it is enforced here as well (over the cephuser
-        connection, using its passwordless sudo) so that the framework's
-        connections can always be established with the provided key. cephuser
-        is created along with passwordless sudo privileges when absent. The
-        operation is idempotent.
+        users, however it is enforced here as well so that the framework's
+        connections can always be established with the provided key. The login
+        user is created along with passwordless sudo privileges when absent.
+        The operation is idempotent.
+
+        The repair commands cannot run over a connection that the missing key
+        would block, so the login-user and root connections are both attempted
+        with short, alternating retries: the key may already be authorized for
+        only one of the two users, and the node may still be booting. The
+        commands (see cli.utilities.ssh_keys) embed sudo, so they work over
+        either connection.
         """
         pub_key = self.ssh_pub_key.strip()
-        # The base64 blob is the unique part of a public key line and is safe
-        # to embed in the grep pattern.
-        key_fields = pub_key.split()
-        key_blob = key_fields[1] if len(key_fields) > 1 else pub_key
-        key_b64 = base64.b64encode(pub_key.encode()).decode()
-        cephuser_cmd = (
-            "id cephuser >/dev/null 2>&1 || "
-            "(sudo groupadd -f cephuser && "
-            "sudo useradd -m -s /bin/bash -g cephuser cephuser) && "
-            "echo 'cephuser ALL=(ALL) NOPASSWD:ALL' "
-            "| sudo tee /etc/sudoers.d/cephuser && "
-            "sudo chmod 440 /etc/sudoers.d/cephuser && "
-            "sudo mkdir -p /home/cephuser/.ssh && "
-            "sudo chmod 700 /home/cephuser/.ssh && "
-            "sudo touch /home/cephuser/.ssh/authorized_keys && "
-            "sudo chmod 600 /home/cephuser/.ssh/authorized_keys && "
-            f"(sudo grep -qF '{key_blob}' /home/cephuser/.ssh/authorized_keys || "
-            f"echo '{key_b64}' | base64 -d "
-            "| sudo tee -a /home/cephuser/.ssh/authorized_keys) && "
-            "sudo chown -R cephuser:cephuser /home/cephuser/.ssh"
-        )
-        root_cmd = (
-            "sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh && "
-            "sudo touch /root/.ssh/authorized_keys && "
-            "sudo chmod 600 /root/.ssh/authorized_keys && "
-            f"(sudo grep -qF '{key_blob}' /root/.ssh/authorized_keys || "
-            f"echo '{key_b64}' | base64 -d | sudo tee -a /root/.ssh/authorized_keys)"
-        )
+        # Idempotent repair commands, shared with the OneCloud bootstrap path
+        # (see cli.utilities.ssh_keys).
+        user_cmds = []
+        if self.username != self.root_username:
+            user_cmds = build_user_setup_cmds(self.username)
+            user_cmds += build_authorize_key_cmds(
+                pub_key, f"/home/{self.username}", owner=self.username
+            )
+        root_cmds = build_authorize_key_cmds(pub_key, "/root")
         logger.info(
-            "Ensuring the runner key is authorized for cephuser and root on %s",
+            "Ensuring the runner key is authorized for %s and %s on %s",
+            self.username,
+            self.root_username,
             self.ip_address,
         )
-        for cmd in (cephuser_cmd, root_cmd):
-            _, stdout, stderr = self.ssh().exec_command(cmd)
-            exit_code = stdout.channel.recv_exit_status()
-            if exit_code != 0:
-                err = stderr.read().decode()
-                raise RuntimeError(
-                    "Failed to authorize the runner key on" f" {self.ip_address}: {err}"
+
+        # Do not run the repair over self.ssh() alone: when the key is not yet
+        # authorized for cephuser that connection cannot be established at all
+        # and the repair would never execute. Probe both users instead, with
+        # short alternating attempts, until one of them connects. A connection
+        # as either user is enough to run the idempotent repair commands.
+        probe_users = list(
+            dict.fromkeys((self.username, self.root_username))
+        )  # ordered de-duplication
+        deadline = time() + self.connection.outage_timeout.total_seconds()
+        last_errors = []
+        probe = None
+        client = None
+        while client is None and time() < deadline:
+            for username in probe_users:
+                probe = SSHConnectionManager(
+                    self.ip_address,
+                    username,
+                    look_for_keys=self.look_for_key,
+                    private_key_file_path=self.private_key_path,
+                    private_key_password=self.private_key_password,
+                    outage_timeout=30,
                 )
+                try:
+                    client = probe.get_client()
+                    logger.info(
+                        "Authorizing the runner key on %s over the %s connection",
+                        self.ip_address,
+                        username,
+                    )
+                    break
+                except AssertionError as err:
+                    last_errors.append(f"{username}: {err}")
+        if client is None:
+            raise AssertionError(
+                f"Unable to establish a connection with {self.ip_address} as "
+                f"'{self.username}' or '{self.root_username}' to authorize the "
+                f"runner key. Ensure the key is authorized for at least one of "
+                f"them (password authentication is not supported). Last errors: "
+                f"{'; '.join(last_errors[-len(probe_users):])}"
+            )
+
+        try:
+            for cmd in (" && ".join(user_cmds), " && ".join(root_cmds)):
+                if not cmd:
+                    continue
+                _, stdout, stderr = client.exec_command(cmd)
+                exit_code = stdout.channel.recv_exit_status()
+                if exit_code != 0:
+                    err = stderr.read().decode()
+                    raise RuntimeError(
+                        "Failed to authorize the runner key on"
+                        f" {self.ip_address}: {err}"
+                    )
+        finally:
+            probe.close()
 
     def set_internal_ip(self):
         """

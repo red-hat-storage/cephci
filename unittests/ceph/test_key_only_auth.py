@@ -167,15 +167,20 @@ class TestAuthorizeKey:
 class TestSetupSshKeysDoesNotLockUsOut:
     """rm -rf ~/.ssh would delete the authorized_keys we log in with."""
 
-    @pytest.mark.parametrize(
-        "module",
-        ["cli.utilities.configure", "cephci.utils.configure"],
-    )
-    def test_never_removes_the_ssh_directory(self, module):
-        import importlib
+    def test_setup_ssh_keys_has_a_single_implementation(self):
+        """cephci must re-use the cli implementation, not fork it."""
+        import cli.utilities.configure
+        import cephci.utils.configure
 
-        mod = importlib.import_module(module)
-        source = inspect.getsource(mod.setup_ssh_keys)
+        assert (
+            cephci.utils.configure.setup_ssh_keys
+            is cli.utilities.configure.setup_ssh_keys
+        )
+
+    def test_never_removes_the_ssh_directory(self):
+        import cli.utilities.configure
+
+        source = inspect.getsource(cli.utilities.configure.setup_ssh_keys)
         assert "rm -rf" not in source
         assert "SSHPASS" not in source
         assert "sshpass" not in source.lower().replace(
@@ -183,15 +188,57 @@ class TestSetupSshKeysDoesNotLockUsOut:
         ), "sshpass must not be used"
         assert "authorize_key" in source
 
-    @pytest.mark.parametrize(
-        "module",
-        ["cli.utilities.configure", "cephci.utils.configure"],
-    )
-    def test_remove_keys_targets_only_the_keypair(self, module):
-        import importlib
+    def test_remove_keys_targets_only_the_keypair(self):
+        import cli.utilities.configure
 
-        mod = importlib.import_module(module)
-        assert mod.SSH_REMOVE_KEYS == "rm -f ~/.ssh/id_rsa ~/.ssh/id_rsa.pub"
+        assert (
+            cli.utilities.configure.SSH_REMOVE_KEYS
+            == "rm -f ~/.ssh/id_rsa ~/.ssh/id_rsa.pub"
+        )
+
+
+class TestSshKeyCommandBuilders:
+    """cli.utilities.ssh_keys is the single source of the raw-channel
+    key-authorization commands used by ceph.ceph (paramiko probe and the
+    OneCloud system-ssh bootstrap)."""
+
+    def test_authorize_cmds_append_idempotently(self):
+        from cli.utilities.ssh_keys import build_authorize_key_cmds
+
+        cmds = build_authorize_key_cmds(
+            "ssh-rsa AAAAB3Nza test@host", "/home/cephuser", owner="cephuser"
+        )
+        append = [c for c in cmds if "authorized_keys" in c and "tee" in c]
+        assert len(append) == 1
+        # idempotent: grep before append, and only ever append (tee -a)
+        assert "grep -qF" in append[0]
+        assert "tee -a" in append[0]
+        assert "> " not in append[0].replace(">>", "").replace("tee -a", "")
+        assert any("chown -R cephuser:cephuser" in c for c in cmds)
+        assert any("chmod 600" in c for c in cmds)
+
+    def test_authorize_cmds_skip_chown_without_owner(self):
+        from cli.utilities.ssh_keys import build_authorize_key_cmds
+
+        cmds = build_authorize_key_cmds("ssh-rsa AAAAB3Nza t@h", "/root")
+        assert not any("chown" in c for c in cmds)
+
+    def test_key_quoting_survives_metacharacters(self):
+        import base64 as b64
+
+        from cli.utilities.ssh_keys import key_b64, key_blob
+
+        key = "ssh-rsa AAAAB3Nza 'quoted; $HOME comment"
+        assert key_blob(key) == "AAAAB3Nza"
+        assert b64.b64decode(key_b64(key)).decode() == key
+
+    def test_user_setup_cmds_create_with_passwordless_sudo(self):
+        from cli.utilities.ssh_keys import build_user_setup_cmds
+
+        cmds = build_user_setup_cmds("cephuser")
+        assert any("useradd" in c and "id cephuser" in c for c in cmds)
+        assert any("NOPASSWD:ALL" in c for c in cmds)
+        assert any("chmod 440" in c for c in cmds)
 
 
 class TestInventoryAuthorizedKeys:
