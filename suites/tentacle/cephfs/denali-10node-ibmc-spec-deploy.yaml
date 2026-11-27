@@ -1,0 +1,1789 @@
+# Reduced Denali functional topology; review preflight flag before provisioning.
+tests:
+- test:
+    name: Install prerequisites
+    desc: Install prerequisites
+    module: install_prereq.py
+    abort-on-fail: true
+    destroy-cluster: false
+- test:
+    name: Verify IBM Cloud prerequisites for reduced model
+    desc: Verify IBM Cloud prerequisites for exact model
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: preflight
+      expected_hosts:
+        node1:
+          labels:
+          - zone1
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z1
+          - mgr_z1
+          - nfsc1
+          - nfsc1_z1
+          - nfsc2
+          - nfsc2_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node2:
+          labels:
+          - zone1
+          - osds
+          - mds
+          - z1_mds
+          - nfsc3
+          - nfsc3_z1
+          - nfsc4
+          - nfsc4_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node3:
+          labels:
+          - zone1
+          - mds
+          - z1_mds
+          - nfsc5
+          - nfsc5_z1
+          - nfsc6
+          - nfsc6_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 0
+        node4:
+          labels:
+          - zone2
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z2
+          - mgr_z2
+          - nfsc1
+          - nfsc1_z2
+          - nfsc2
+          - nfsc2_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node5:
+          labels:
+          - zone2
+          - osds
+          - mds
+          - z2_mds
+          - nfsc3
+          - nfsc3_z2
+          - nfsc4
+          - nfsc4_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node6:
+          labels:
+          - zone2
+          - mds
+          - z2_mds
+          - nfsc5
+          - nfsc5_z2
+          - nfsc6
+          - nfsc6_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 0
+        node7:
+          labels:
+          - zone3
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z3
+          - mgr_z3
+          - nfsc1
+          - nfsc1_z3
+          - nfsc2
+          - nfsc2_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node8:
+          labels:
+          - zone3
+          - osds
+          - mds
+          - z3_mds
+          - nfsc3
+          - nfsc3_z3
+          - nfsc4
+          - nfsc4_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node9:
+          labels:
+          - zone3
+          - mds
+          - z3_mds
+          - nfsc5
+          - nfsc5_z3
+          - nfsc6
+          - nfsc6_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 0
+      require_tpm2: false
+      rdma_nodes: []
+      deployment_reviewed: true
+- test:
+    name: Bootstrap with all host specifications
+    desc: Bootstrap with all host specifications
+    module: test_cephadm.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      steps:
+      - config:
+          command: bootstrap
+          base_cmd_args:
+            verbose: true
+          args:
+            mon-ip: node1
+            orphan-initial-daemons: true
+            skip-monitoring-stack: true
+          service: cephadm
+      - config:
+          command: apply_spec
+          service: orch
+          specs:
+          - service_type: host
+            address: true
+            nodes:
+            - node1
+            labels:
+            - zone1
+            - _admin
+            - mon
+            - mgr
+            - mons
+            - osds
+            - mon_z1
+            - mgr_z1
+            - nfsc1
+            - nfsc1_z1
+            - nfsc2
+            - nfsc2_z1
+            location:
+              root: default
+              zone: zone1
+          - service_type: host
+            address: true
+            nodes:
+            - node2
+            labels:
+            - zone1
+            - osds
+            - mds
+            - z1_mds
+            - nfsc3
+            - nfsc3_z1
+            - nfsc4
+            - nfsc4_z1
+            location:
+              root: default
+              zone: zone1
+          - service_type: host
+            address: true
+            nodes:
+            - node3
+            labels:
+            - zone1
+            - mds
+            - z1_mds
+            - nfsc5
+            - nfsc5_z1
+            - nfsc6
+            - nfsc6_z1
+            location:
+              root: default
+              zone: zone1
+          - service_type: host
+            address: true
+            nodes:
+            - node4
+            labels:
+            - zone2
+            - _admin
+            - mon
+            - mgr
+            - mons
+            - osds
+            - mon_z2
+            - mgr_z2
+            - nfsc1
+            - nfsc1_z2
+            - nfsc2
+            - nfsc2_z2
+            location:
+              root: default
+              zone: zone2
+          - service_type: host
+            address: true
+            nodes:
+            - node5
+            labels:
+            - zone2
+            - osds
+            - mds
+            - z2_mds
+            - nfsc3
+            - nfsc3_z2
+            - nfsc4
+            - nfsc4_z2
+            location:
+              root: default
+              zone: zone2
+          - service_type: host
+            address: true
+            nodes:
+            - node6
+            labels:
+            - zone2
+            - mds
+            - z2_mds
+            - nfsc5
+            - nfsc5_z2
+            - nfsc6
+            - nfsc6_z2
+            location:
+              root: default
+              zone: zone2
+          - service_type: host
+            address: true
+            nodes:
+            - node7
+            labels:
+            - zone3
+            - _admin
+            - mon
+            - mgr
+            - mons
+            - osds
+            - mon_z3
+            - mgr_z3
+            - nfsc1
+            - nfsc1_z3
+            - nfsc2
+            - nfsc2_z3
+            location:
+              root: default
+              zone: zone3
+          - service_type: host
+            address: true
+            nodes:
+            - node8
+            labels:
+            - zone3
+            - osds
+            - mds
+            - z3_mds
+            - nfsc3
+            - nfsc3_z3
+            - nfsc4
+            - nfsc4_z3
+            location:
+              root: default
+              zone: zone3
+          - service_type: host
+            address: true
+            nodes:
+            - node9
+            labels:
+            - zone3
+            - mds
+            - z3_mds
+            - nfsc5
+            - nfsc5_z3
+            - nfsc6
+            - nfsc6_z3
+            location:
+              root: default
+              zone: zone3
+      verify_cluster_health: false
+- test:
+    name: Verify labels and deploy control plane
+    desc: Verify labels and deploy control plane
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: control
+      expected_hosts:
+        node1:
+          labels:
+          - zone1
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z1
+          - mgr_z1
+          - nfsc1
+          - nfsc1_z1
+          - nfsc2
+          - nfsc2_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node2:
+          labels:
+          - zone1
+          - osds
+          - mds
+          - z1_mds
+          - nfsc3
+          - nfsc3_z1
+          - nfsc4
+          - nfsc4_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node3:
+          labels:
+          - zone1
+          - mds
+          - z1_mds
+          - nfsc5
+          - nfsc5_z1
+          - nfsc6
+          - nfsc6_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 0
+        node4:
+          labels:
+          - zone2
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z2
+          - mgr_z2
+          - nfsc1
+          - nfsc1_z2
+          - nfsc2
+          - nfsc2_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node5:
+          labels:
+          - zone2
+          - osds
+          - mds
+          - z2_mds
+          - nfsc3
+          - nfsc3_z2
+          - nfsc4
+          - nfsc4_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node6:
+          labels:
+          - zone2
+          - mds
+          - z2_mds
+          - nfsc5
+          - nfsc5_z2
+          - nfsc6
+          - nfsc6_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 0
+        node7:
+          labels:
+          - zone3
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z3
+          - mgr_z3
+          - nfsc1
+          - nfsc1_z3
+          - nfsc2
+          - nfsc2_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node8:
+          labels:
+          - zone3
+          - osds
+          - mds
+          - z3_mds
+          - nfsc3
+          - nfsc3_z3
+          - nfsc4
+          - nfsc4_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node9:
+          labels:
+          - zone3
+          - mds
+          - z3_mds
+          - nfsc5
+          - nfsc5_z3
+          - nfsc6
+          - nfsc6_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 0
+      specs:
+      - service_type: mgr
+        placement:
+          count_per_label: 1
+          labels:
+          - mgr_z1
+          - mgr_z2
+          - mgr_z3
+      - service_type: mon
+        placement:
+          count_per_label: 1
+          labels:
+          - mon_z1
+          - mon_z2
+          - mon_z3
+- test:
+    name: Apply cluster tunables
+    desc: Apply cluster tunables
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: settings
+      settings:
+        global:
+          log_to_file: true
+          log_to_stderr: false
+          mon_cluster_log_to_file: true
+          mon_cluster_log_to_stderr: false
+        mds:
+          mds_cache_memory_limit: 2147483648
+        osd:
+          osd_memory_target_autotune: false
+          osd_memory_target: 2147483648
+        mgr:
+          mgr/cephadm/cephadm_log_destination: file
+          mgr/cephadm/container_init: true
+          mgr/dashboard/ssl_server_port: 8443
+- test:
+    name: Apply OSD drive group spec
+    desc: Apply OSD drive group spec
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: osd
+      expected_hosts:
+        node1:
+          labels:
+          - zone1
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z1
+          - mgr_z1
+          - nfsc1
+          - nfsc1_z1
+          - nfsc2
+          - nfsc2_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node2:
+          labels:
+          - zone1
+          - osds
+          - mds
+          - z1_mds
+          - nfsc3
+          - nfsc3_z1
+          - nfsc4
+          - nfsc4_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node3:
+          labels:
+          - zone1
+          - mds
+          - z1_mds
+          - nfsc5
+          - nfsc5_z1
+          - nfsc6
+          - nfsc6_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 0
+        node4:
+          labels:
+          - zone2
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z2
+          - mgr_z2
+          - nfsc1
+          - nfsc1_z2
+          - nfsc2
+          - nfsc2_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node5:
+          labels:
+          - zone2
+          - osds
+          - mds
+          - z2_mds
+          - nfsc3
+          - nfsc3_z2
+          - nfsc4
+          - nfsc4_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node6:
+          labels:
+          - zone2
+          - mds
+          - z2_mds
+          - nfsc5
+          - nfsc5_z2
+          - nfsc6
+          - nfsc6_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 0
+        node7:
+          labels:
+          - zone3
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z3
+          - mgr_z3
+          - nfsc1
+          - nfsc1_z3
+          - nfsc2
+          - nfsc2_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node8:
+          labels:
+          - zone3
+          - osds
+          - mds
+          - z3_mds
+          - nfsc3
+          - nfsc3_z3
+          - nfsc4
+          - nfsc4_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node9:
+          labels:
+          - zone3
+          - mds
+          - z3_mds
+          - nfsc5
+          - nfsc5_z3
+          - nfsc6
+          - nfsc6_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 0
+      specs:
+      - service_type: osd
+        service_id: nvme
+        placement:
+          label: osds
+        spec:
+          data_devices:
+            size: 18G:23G
+          filter_logic: AND
+          method: raw
+          objectstore: bluestore
+          termination_grace_period_seconds: 30
+          crush_device_class: ssd
+- test:
+    name: Create and validate zone CRUSH rule
+    desc: Create and validate zone CRUSH rule
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: crush
+      crush_rule: &id002
+        name: replicated_zone
+        root: default
+        failure_domain: zone
+- test:
+    name: Create pools and apply zone CRUSH rule
+    desc: Create pools and apply zone CRUSH rule
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: pools
+      pools: &id001
+      - name: .mgr
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 1
+        pg_autoscale_mode: 'off'
+        flags: hashpspool
+        options:
+          pg_num_max: 32
+          pg_num_min: 1
+        application_metadata:
+          mgr: {}
+      - name: denalifs-meta
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 64
+        pg_autoscale_mode: 'off'
+        flags: hashpspool,bulk
+        options:
+          pg_autoscale_bias: 4
+          pg_num_min: 16
+          recovery_priority: 5
+        application_metadata:
+          cephfs:
+            metadata: denalifs
+      - name: denalifs-data
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 64
+        pg_autoscale_mode: 'off'
+        flags: hashpspool,selfmanaged_snaps,bulk
+        options: {}
+        application_metadata:
+          cephfs:
+            data: denalifs
+      - name: .nfs
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 8
+        pg_autoscale_mode: 'off'
+        flags: hashpspool
+        options: {}
+        application_metadata:
+          nfs: {}
+- test:
+    name: Validate pool rules and PG zone distribution
+    desc: Validate pool rules and PG zone distribution
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: pg_zones
+      pools: *id001
+      expected_hosts:
+        node1:
+          labels:
+          - zone1
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z1
+          - mgr_z1
+          - nfsc1
+          - nfsc1_z1
+          - nfsc2
+          - nfsc2_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node2:
+          labels:
+          - zone1
+          - osds
+          - mds
+          - z1_mds
+          - nfsc3
+          - nfsc3_z1
+          - nfsc4
+          - nfsc4_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node3:
+          labels:
+          - zone1
+          - mds
+          - z1_mds
+          - nfsc5
+          - nfsc5_z1
+          - nfsc6
+          - nfsc6_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 0
+        node4:
+          labels:
+          - zone2
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z2
+          - mgr_z2
+          - nfsc1
+          - nfsc1_z2
+          - nfsc2
+          - nfsc2_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node5:
+          labels:
+          - zone2
+          - osds
+          - mds
+          - z2_mds
+          - nfsc3
+          - nfsc3_z2
+          - nfsc4
+          - nfsc4_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node6:
+          labels:
+          - zone2
+          - mds
+          - z2_mds
+          - nfsc5
+          - nfsc5_z2
+          - nfsc6
+          - nfsc6_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 0
+        node7:
+          labels:
+          - zone3
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z3
+          - mgr_z3
+          - nfsc1
+          - nfsc1_z3
+          - nfsc2
+          - nfsc2_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node8:
+          labels:
+          - zone3
+          - osds
+          - mds
+          - z3_mds
+          - nfsc3
+          - nfsc3_z3
+          - nfsc4
+          - nfsc4_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node9:
+          labels:
+          - zone3
+          - mds
+          - z3_mds
+          - nfsc5
+          - nfsc5_z3
+          - nfsc6
+          - nfsc6_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 0
+- test:
+    name: Create CephFS with explicit pools
+    desc: Create CephFS with explicit pools
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: filesystem
+      filesystem:
+        name: denalifs
+        metadata_pool: denalifs-meta
+        data_pools:
+        - denalifs-data
+        max_mds: 6
+        standby_count_wanted: 1
+        allow_standby_replay: true
+        balance_automate: false
+        max_file_size: 1099511627776
+- test:
+    name: Apply MDS spec and filesystem rank settings
+    desc: Apply MDS spec and filesystem rank settings
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: mds
+      specs:
+      - service_type: mds
+        service_id: denalifs
+        placement:
+          count_per_host: 2
+          label: mds
+      filesystem:
+        name: denalifs
+        metadata_pool: denalifs-meta
+        data_pools:
+        - denalifs-data
+        max_mds: 6
+        standby_count_wanted: 1
+        allow_standby_replay: true
+        balance_automate: false
+        max_file_size: 1099511627776
+      expected_mds: 12
+- test:
+    name: Apply six NFS service specs
+    desc: Apply six NFS service specs
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: services
+      specs:
+      - service_type: nfs
+        service_id: nfsc1
+        placement:
+          count_per_label: 1
+          labels:
+          - nfsc1_z1
+          - nfsc1_z2
+          - nfsc1_z3
+        spec:
+          enable_rdma: false
+          grpc_certificate_source: cephadm-signed
+          port: 2049
+          monitoring_port: 19001
+      - service_type: nfs
+        service_id: nfsc2
+        placement:
+          count_per_label: 1
+          labels:
+          - nfsc2_z1
+          - nfsc2_z2
+          - nfsc2_z3
+        spec:
+          enable_rdma: false
+          grpc_certificate_source: cephadm-signed
+          port: 2050
+          monitoring_port: 19002
+      - service_type: nfs
+        service_id: nfsc3
+        placement:
+          count_per_label: 1
+          labels:
+          - nfsc3_z1
+          - nfsc3_z2
+          - nfsc3_z3
+        spec:
+          enable_rdma: false
+          grpc_certificate_source: cephadm-signed
+          port: 2049
+          monitoring_port: 19003
+      - service_type: nfs
+        service_id: nfsc4
+        placement:
+          count_per_label: 1
+          labels:
+          - nfsc4_z1
+          - nfsc4_z2
+          - nfsc4_z3
+        spec:
+          enable_rdma: false
+          grpc_certificate_source: cephadm-signed
+          port: 2050
+          monitoring_port: 19004
+      - service_type: nfs
+        service_id: nfsc5
+        placement:
+          count_per_label: 1
+          labels:
+          - nfsc5_z1
+          - nfsc5_z2
+          - nfsc5_z3
+        spec:
+          grpc_certificate_source: cephadm-signed
+          port: 2049
+          enable_rdma: false
+          monitoring_port: 19005
+      - service_type: nfs
+        service_id: nfsc6
+        placement:
+          count_per_label: 1
+          labels:
+          - nfsc6_z1
+          - nfsc6_z2
+          - nfsc6_z3
+        spec:
+          grpc_certificate_source: cephadm-signed
+          port: 2050
+          enable_rdma: false
+          monitoring_port: 19006
+- test:
+    name: Apply subvolume and NFS export manifest
+    desc: Apply subvolume and NFS export manifest
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: exports
+      filesystem: denalifs
+      subvolumes:
+      - name: nfsc1-data
+        group: _nogroup
+      - name: nfsc1-e2
+        group: _nogroup
+      - name: nfsc1-e3
+        group: _nogroup
+      - name: nfsc2-e1
+        group: _nogroup
+      - name: nfsc2-e2
+        group: _nogroup
+      - name: nfsc2-e3
+        group: _nogroup
+      - name: nfsc3-e1
+        group: _nogroup
+      - name: nfsc3-e2
+        group: _nogroup
+      - name: nfsc3-e3
+        group: _nogroup
+      - name: nfsc4-e1
+        group: _nogroup
+      - name: nfsc4-e2
+        group: _nogroup
+      - name: nfsc4-e3
+        group: _nogroup
+      - name: nfsc5-data
+        group: _nogroup
+      - name: nfsc6-data
+        group: _nogroup
+      exports:
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc1
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc1-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc1-data
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc1
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc1-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc1-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc1
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc1-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc1-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc2
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc2-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc2-e1
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc2
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc2-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc2-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc2
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc2-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc2-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc3
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc3-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc3-e1
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc3
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc3-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc3-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc3
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc3-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc3-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc4
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc4-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc4-e1
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc4
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc4-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc4-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc4
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc4-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc4-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc5
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc5-data
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc5-data
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc6
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc6-data
+        sectype:
+        - sys
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc6-data
+- test:
+    name: Apply monitoring service specs
+    desc: Apply monitoring service specs
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: services
+      specs:
+      - service_type: alertmanager
+        placement:
+          count: 1
+        spec:
+          certificate_source: cephadm-signed
+          ssl: true
+      - service_type: alloy
+        placement:
+          host_pattern: '*'
+      - service_type: ceph-exporter
+        placement:
+          host_pattern: '*'
+        spec:
+          certificate_source: cephadm-signed
+          prio_limit: 5
+          ssl: true
+          stats_period: 5
+      - service_type: crash
+        placement:
+          host_pattern: '*'
+      - service_type: grafana
+        placement:
+          count: 1
+          label: mgr
+        spec:
+          anonymous_access: true
+          certificate_source: cephadm-signed
+          protocol: https
+          ssl: true
+      - service_type: loki
+        placement:
+          count: 1
+      - service_type: node-exporter
+        placement:
+          host_pattern: '*'
+        spec:
+          certificate_source: cephadm-signed
+          ssl: true
+      - service_type: prometheus
+        placement:
+          count: 1
+        spec:
+          certificate_source: cephadm-signed
+          ssl: true
+- test:
+    name: Validate replica
+    desc: Validate replica
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: validate
+      expected_hosts:
+        node1:
+          labels:
+          - zone1
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z1
+          - mgr_z1
+          - nfsc1
+          - nfsc1_z1
+          - nfsc2
+          - nfsc2_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node2:
+          labels:
+          - zone1
+          - osds
+          - mds
+          - z1_mds
+          - nfsc3
+          - nfsc3_z1
+          - nfsc4
+          - nfsc4_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 2
+        node3:
+          labels:
+          - zone1
+          - mds
+          - z1_mds
+          - nfsc5
+          - nfsc5_z1
+          - nfsc6
+          - nfsc6_z1
+          location:
+            root: default
+            zone: zone1
+          osds: 0
+        node4:
+          labels:
+          - zone2
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z2
+          - mgr_z2
+          - nfsc1
+          - nfsc1_z2
+          - nfsc2
+          - nfsc2_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node5:
+          labels:
+          - zone2
+          - osds
+          - mds
+          - z2_mds
+          - nfsc3
+          - nfsc3_z2
+          - nfsc4
+          - nfsc4_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 2
+        node6:
+          labels:
+          - zone2
+          - mds
+          - z2_mds
+          - nfsc5
+          - nfsc5_z2
+          - nfsc6
+          - nfsc6_z2
+          location:
+            root: default
+            zone: zone2
+          osds: 0
+        node7:
+          labels:
+          - zone3
+          - _admin
+          - mon
+          - mgr
+          - mons
+          - osds
+          - mon_z3
+          - mgr_z3
+          - nfsc1
+          - nfsc1_z3
+          - nfsc2
+          - nfsc2_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node8:
+          labels:
+          - zone3
+          - osds
+          - mds
+          - z3_mds
+          - nfsc3
+          - nfsc3_z3
+          - nfsc4
+          - nfsc4_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 2
+        node9:
+          labels:
+          - zone3
+          - mds
+          - z3_mds
+          - nfsc5
+          - nfsc5_z3
+          - nfsc6
+          - nfsc6_z3
+          location:
+            root: default
+            zone: zone3
+          osds: 0
+      expected_services:
+        alertmanager: 1
+        alloy: 9
+        ceph-exporter: 9
+        crash: 9
+        grafana: 1
+        loki: 1
+        mds.denalifs: 12
+        mgr: 3
+        mon: 3
+        nfs.nfsc1: 3
+        nfs.nfsc2: 3
+        nfs.nfsc3: 3
+        nfs.nfsc4: 3
+        nfs.nfsc5: 3
+        nfs.nfsc6: 3
+        node-exporter: 9
+        osd.nvme: 12
+        prometheus: 1
+      filesystem: denalifs
+      exports:
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc1
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc1-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc1-data
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc1
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc1-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc1-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc1
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc1-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc1-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc2
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc2-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc2-e1
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc2
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc2-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc2-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc2
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc2-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc2-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc3
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc3-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc3-e1
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc3
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc3-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc3-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc3
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc3-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc3-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc4
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc4-e1
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc4-e1
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc4
+        export_id: 2
+        protocols:
+        - 4
+        pseudo: /nfsc4-e2
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc4-e2
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc4
+        export_id: 3
+        protocols:
+        - 4
+        pseudo: /nfsc4-e3
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc4-e3
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc5
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc5-data
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc5-data
+      - access_type: rw
+        clients: []
+        cluster_id: nfsc6
+        export_id: 1
+        protocols:
+        - 4
+        pseudo: /nfsc6-data
+        sectype:
+        - sys
+        security_label: true
+        squash: none
+        transports:
+        - TCP
+        fsal:
+          cmount_path: /
+          fs_name: denalifs
+          name: CEPH
+        subvolume: nfsc6-data
+      pools:
+      - name: .mgr
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 1
+        pg_autoscale_mode: 'off'
+        flags: hashpspool
+        options:
+          pg_num_max: 32
+          pg_num_min: 1
+        application_metadata:
+          mgr: {}
+      - name: denalifs-meta
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 64
+        pg_autoscale_mode: 'off'
+        flags: hashpspool,bulk
+        options:
+          pg_autoscale_bias: 4
+          pg_num_min: 16
+          recovery_priority: 5
+        application_metadata:
+          cephfs:
+            metadata: denalifs
+      - name: denalifs-data
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 64
+        pg_autoscale_mode: 'off'
+        flags: hashpspool,selfmanaged_snaps,bulk
+        options: {}
+        application_metadata:
+          cephfs:
+            data: denalifs
+      - name: .nfs
+        type: replicated
+        size: 3
+        min_size: 2
+        crush_rule: replicated_zone
+        pg_num: 8
+        pg_autoscale_mode: 'off'
+        flags: hashpspool
+        options: {}
+        application_metadata:
+          nfs: {}
+      crush_rule: *id002
+      expected_mds: 12
+      max_mds: 6
+- test:
+    name: Prepare dedicated NFS client
+    desc: Install NFS utilities on node10; no server roles or admin keyring
+    module: test_denali_10node_specs.py
+    abort-on-fail: true
+    destroy-cluster: false
+    config:
+      action: client
+      client: node10

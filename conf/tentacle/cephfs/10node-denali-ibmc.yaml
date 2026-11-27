@@ -1,0 +1,68 @@
+# 9 Ceph servers + 1 client; 12 x 20 GB data disks.
+globals:
+- ceph-cluster:
+    name: ceph
+    node1:
+      role:
+      - installer
+      - _admin
+      - mon
+      - mgr
+      - osd
+      - nfs
+      no-of-volumes: 2
+      disk-size: 20
+    node2:
+      role:
+      - osd
+      - mds
+      - nfs
+      no-of-volumes: 2
+      disk-size: 20
+    node3:
+      role:
+      - mds
+      - nfs
+    node4:
+      role:
+      - _admin
+      - mon
+      - mgr
+      - osd
+      - nfs
+      no-of-volumes: 2
+      disk-size: 20
+    node5:
+      role:
+      - osd
+      - mds
+      - nfs
+      no-of-volumes: 2
+      disk-size: 20
+    node6:
+      role:
+      - mds
+      - nfs
+    node7:
+      role:
+      - _admin
+      - mon
+      - mgr
+      - osd
+      - nfs
+      no-of-volumes: 2
+      disk-size: 20
+    node8:
+      role:
+      - osd
+      - mds
+      - nfs
+      no-of-volumes: 2
+      disk-size: 20
+    node9:
+      role:
+      - mds
+      - nfs
+    node10:
+      role:
+      - client
