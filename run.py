@@ -70,6 +70,8 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--cloud <openstack> | <ibmc> | <aws> | <baremetal> | <onecloud> | <ocpvirt>]
         [--build <name>]
         [--inventory FILE]
+        [--ssh-private-key <path>]
+        [--ssh-pub-key <path>]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--add-repo <repo>]
@@ -115,6 +117,10 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
+  --ssh-private-key <path>          Path to the private key used to access the
+                                    systems as cephuser
+  --ssh-pub-key <path>              Path to the public key authorized for
+                                    cephuser and root on the systems
   --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal|onecloud|ocpvirt) [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
@@ -206,6 +212,8 @@ def create_nodes(
     enable_eus=False,
     custom_config=None,
     platform=None,
+    ssh_private_key=None,
+    ssh_pub_key=None,
 ):
     """Creates the system under test environment.
 
@@ -219,6 +227,9 @@ def create_nodes(
         enable_eus      Extended OS support
         custom_config   list of <key>=<value>
         platform        RHEL platform (e.g. rhel-9, rhel-10) for OneCloud image selection
+        ssh_private_key Overrides the private key used to access the systems
+        ssh_pub_key     Public key content authorized for cephuser and root;
+                        used to guarantee root access on the systems
 
     Notes:
         use custom_config to specify the environments or configuration to
@@ -302,7 +313,6 @@ def create_nodes(
         use_ipv6 = resolve_use_ipv6(custom_config, cloud_type, osp_cred)
 
         ceph_nodes = []
-        root_password = None
         # OneCloud creds: globals.onecloud-credentials (osp-cred) or credentials.cloud.onecloud (cephci.yaml)
         onecloud_cfg = {}
         if cloud_type == "onecloud":
@@ -319,43 +329,40 @@ def create_nodes(
                 onecloud_cfg.get("private_key_path", "(none)"),
             )
         for node in ceph_vmnodes.values():
-            look_for_key = False
             private_key_path = ""
             private_key_password = None
             bootstrap_key_path = ""
             bootstrap_key_password = ""
-            cephuser_password = "cephuser"
             ssh_username = "cephuser"
             root_username = None  # None = use default "root"
 
             if cloud_type == "openstack":
+                glbs = osp_cred.get("globals") or {}
+                os_cfg = glbs.get("openstack-credentials") or {}
+                private_key_path = os_cfg.get("private_key_path", "")
+                private_key_password = os_cfg.get("private_key_password")
                 private_ip = node.get_private_ip()
                 ceph_nodename = node.node.name
             elif "baremetal" in cloud_type:
                 private_key_path = node.private_key if node.private_key else ""
                 private_ip = node.ip_address
-                look_for_key = True if node.private_key else False
-                root_password = node.root_password
                 ceph_nodename = node.hostname
             elif cloud_type == "ibmc":
                 glbs = osp_cred.get("globals")
                 ibmc = glbs.get("ibm-credentials")
                 private_key_path = ibmc.get("private_key_path")
                 private_ip = node.ip_address
-                look_for_key = True
                 ceph_nodename = node.hostname
             elif cloud_type == "aws":
                 glbs = osp_cred.get("globals")
                 aws_cfg = glbs.get("aws-credentials")
                 private_key_path = aws_cfg.get("private_key_path", "")
                 private_ip = node.ip_address
-                look_for_key = True
                 ceph_nodename = node.hostname
             elif cloud_type == "ocpvirt":
                 ocp_cfg = resolve_ocpvirt_credentials(osp_cred, custom_config)
                 private_key_path = ocp_cfg.get("private_key_path", "")
                 private_ip = node.ip_address
-                look_for_key = bool(private_key_path)
                 ceph_nodename = node.hostname
             elif cloud_type == "onecloud":
                 private_ip = node.ip_address
@@ -367,10 +374,12 @@ def create_nodes(
                 bootstrap_key_password = onecloud_cfg.get("bootstrap_key_password", "")
                 ssh_username = onecloud_ssh_user
                 root_username = onecloud_ssh_user
-                root_password = ""
-                look_for_key = True
                 private_key_path = onecloud_cfg.get("private_key_path", "")
                 private_key_password = onecloud_cfg.get("private_key_password")
+
+            # SSH access overrides provided via the CLI
+            if ssh_private_key:
+                private_key_path = ssh_private_key
 
             private_key_path = (
                 expand_private_key_path(private_key_path) if private_key_path else ""
@@ -384,27 +393,14 @@ def create_nodes(
                 # IPv6 attrs only when available (OpenStack dual-stack); other envs have no ipv6_* on node
                 ipv6_address = getattr(node, "ipv6_address", None)
                 ipv6_subnet = getattr(node, "ipv6_subnet", None)
-                pwd = (
-                    (root_password or "passwd")
-                    if ssh_username == "root"
-                    else cephuser_password
-                )
-                root_pwd = (
-                    ""
-                    if (cloud_type == "onecloud" and look_for_key)
-                    else (root_password or "passwd")
-                )
                 ceph = CephNode(
                     username=ssh_username,
-                    password=pwd,
-                    root_password=root_pwd,
                     root_username=root_username,
-                    look_for_key=look_for_key,
                     private_key_path=private_key_path,
                     private_key_password=private_key_password,
                     bootstrap_key_path=bootstrap_key_path,
                     bootstrap_key_password=bootstrap_key_password,
-                    root_login=node.root_login,
+                    ssh_pub_key=ssh_pub_key,
                     role=node.role,
                     no_of_volumes=node.no_of_volumes,
                     ipv4_address=node.ip_address,
@@ -485,6 +481,78 @@ def load_file(file_name):
         content = yaml.safe_load(conf_)
 
     return content
+
+
+def configure_ssh_user(inventory: dict, pub_key: str) -> None:
+    """
+    Authorize the provided public key for cephuser and root in the inventory's
+    cloud-init configuration.
+
+    The framework accesses the systems as cephuser (and root for privileged
+    operations), hence the key is authorized for both. A missing cephuser
+    entry is created along with its primary group and passwordless sudo
+    privileges.
+
+    Args:
+        inventory:  content of the inventory file
+        pub_key:    public key content (single line) to authorize
+    """
+    instance = inventory.setdefault("instance", {})
+
+    try:
+        cloud_config = yaml.safe_load(instance.get("setup") or "") or {}
+    except yaml.YAMLError as err:
+        raise RuntimeError(f"Invalid cloud-config in the inventory: {err}")
+
+    if not isinstance(cloud_config, dict):
+        raise RuntimeError("The inventory instance setup is not a valid cloud-config.")
+
+    # Ensure the primary group of cephuser exists
+    groups = cloud_config.get("groups") or []
+    if "cephuser" not in groups:
+        groups.append("cephuser")
+        cloud_config["groups"] = groups
+
+    users = cloud_config.get("users") or []
+
+    def _user_entry(name, defaults):
+        entry = next(
+            (
+                user
+                for user in users
+                if isinstance(user, dict) and user.get("name") == name
+            ),
+            None,
+        )
+        if entry is None:
+            entry = {"name": name, **defaults}
+            users.append(entry)
+        return entry
+
+    ceph_user = _user_entry(
+        "cephuser",
+        {
+            "primary-group": "cephuser",
+            "sudo": "ALL=(ALL) NOPASSWD:ALL",
+            "shell": "/bin/bash",
+        },
+    )
+    ceph_keys = ceph_user.setdefault("ssh-authorized-keys", [])
+    if pub_key not in ceph_keys:
+        ceph_keys.append(pub_key)
+
+    # The framework connects as root as well, hence the key must be authorized
+    # for root too.
+    root_user = _user_entry("root", {})
+    root_keys = root_user.setdefault("ssh-authorized-keys", [])
+    if pub_key not in root_keys:
+        root_keys.append(pub_key)
+
+    cloud_config["users"] = users
+    cloud_config["disable_root"] = False
+
+    content = yaml.safe_dump(cloud_config, sort_keys=False, default_flow_style=False)
+    instance["setup"] = f"#cloud-config\n{content}"
 
 
 def get_tier_level(files: str) -> str:
@@ -788,6 +856,85 @@ def run(args):
         if inv_create and image_name is not None:
             distro.append(str(image_name).replace(".iso", ""))
 
+    # The framework accesses the systems as cephuser (root for privileged
+    # operations) with the cloud credentials key by default. The key may be
+    # overridden via the CLI; the provided public key is then authorized for
+    # cephuser and root on the systems.
+    ssh_private_key = args.get("--ssh-private-key")
+    if ssh_private_key:
+        ssh_private_key = os.path.expanduser(ssh_private_key)
+    ssh_pub_key = args.get("--ssh-pub-key")
+    ssh_keys_overridden = bool(ssh_private_key or ssh_pub_key)
+    ssh_pub_key_content = None
+
+    if ssh_keys_overridden and reuse:
+        log.warning(
+            "--ssh-private-key/--ssh-pub-key are ignored with --reuse; the "
+            "cluster is accessed with the keys it was created with"
+        )
+        # Honor the warning: drop the override so the recreate-cluster path
+        # (which may create fresh nodes) uses the cloud-credentials key that
+        # the inventory authorizes. The override key was never authorized on
+        # the reused cluster's nodes, so keeping it would make every connect
+        # to freshly created nodes time out.
+        ssh_private_key = None
+    elif ssh_keys_overridden:
+        if ssh_private_key and not os.path.isfile(ssh_private_key):
+            raise RuntimeError(
+                f"The private key file {ssh_private_key} does not exist."
+            )
+
+        # The public key must be authorized on the systems. Fall back to the
+        # private key's counterpart when not provided explicitly.
+        pub_key_path = (
+            os.path.expanduser(ssh_pub_key) if ssh_pub_key else f"{ssh_private_key}.pub"
+        )
+        if not pub_key_path or not os.path.isfile(pub_key_path):
+            raise RuntimeError(
+                "Unable to locate the public key. Provide it using --ssh-pub-key or"
+                " place it alongside the private key as <private-key>.pub"
+            )
+
+        with open(pub_key_path, "r") as pub_key_fh:
+            ssh_pub_key_content = pub_key_fh.read().strip()
+
+        if not ssh_pub_key_content:
+            raise RuntimeError(f"The public key file {pub_key_path} is empty.")
+
+        log.info(
+            "Using cephuser with private key %s for system access",
+            ssh_private_key or "(runner default keys)",
+        )
+
+        # Ensure the public key is authorized for cephuser and root in the
+        # inventories so that the systems are accessible post deployment.
+        if inventory:
+            configure_ssh_user(inventory, ssh_pub_key_content)
+
+        for cluster in conf.get("globals") or []:
+            cluster_inventory_path = (cluster.get("ceph-cluster") or {}).get(
+                "inventory"
+            )
+            if not cluster_inventory_path:
+                continue
+
+            cluster_inventory_path = os.path.abspath(cluster_inventory_path)
+            with open(cluster_inventory_path, "r") as inv_fh:
+                cluster_inventory = yaml.safe_load(inv_fh) or {}
+
+            configure_ssh_user(cluster_inventory, ssh_pub_key_content)
+
+            # Node creation reads the cluster inventory from disk, hence the
+            # updated content is persisted and the reference updated.
+            updated_path = os.path.join(
+                run_dir, f"inventory-{os.path.basename(cluster_inventory_path)}"
+            )
+            with open(updated_path, "w") as updated_fh:
+                yaml.safe_dump(cluster_inventory, updated_fh, sort_keys=False)
+
+            cluster["ceph-cluster"]["inventory"] = updated_path
+            log.info("Updated cluster inventory: %s", updated_path)
+
     for cluster in conf.get("globals"):
         if cluster.get("ceph-cluster").get("inventory"):
             cluster_inventory_path = os.path.abspath(
@@ -876,6 +1023,8 @@ def run(args):
                 enable_eus=enable_eus,
                 custom_config=custom_config,
                 platform=platform,
+                ssh_private_key=ssh_private_key,
+                ssh_pub_key=ssh_pub_key_content,
             )
 
         except Exception as err:
@@ -1258,6 +1407,8 @@ def run(args):
                 instances_name,
                 enable_eus=enable_eus,
                 platform=platform,
+                ssh_private_key=ssh_private_key,
+                ssh_pub_key=ssh_pub_key_content,
             )
 
         tcs.append(tc)
@@ -1345,7 +1496,7 @@ def run(args):
             sosreport.run(
                 installer.ip_address,
                 installer.username,
-                installer.password or "cephuser",
+                installer.private_key_path,
                 run_dir,
             )
 

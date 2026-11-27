@@ -1,6 +1,5 @@
 """This module implements the required foundation data structures for testing."""
 
-import base64
 import codecs
 import datetime
 import json
@@ -12,7 +11,6 @@ import socket
 import subprocess
 from time import sleep, time
 
-import cryptography
 import paramiko
 import requests
 import yaml
@@ -20,6 +18,11 @@ from looseversion import LooseVersion
 
 from ceph.parallel import parallel
 from cli.ceph.ceph import Ceph as CephCli
+from cli.utilities.ssh_keys import (
+    CEPH_USER,
+    build_authorize_key_cmds,
+    build_user_setup_cmds,
+)
 from utility import lvm_utils
 from utility.log import Log
 from utility.utils import custom_ceph_config, get_rhbuild_major_version
@@ -1295,30 +1298,30 @@ class NodeVolume(object):
 
 
 class SSHConnectionManager(object):
+    """Manage a key-based SSH connection to a remote host.
+
+    Password authentication is deliberately unsupported. Every host must
+    authorize the runner's public key for the user being connected as.
+    """
+
     def __init__(
         self,
         ip_address,
         username,
-        password,
+        *,
         look_for_keys=False,
         private_key_file_path="",
         private_key_password=None,
         outage_timeout=600,
     ):
+        # Keyword-only past `username` on purpose: a stale caller passing a
+        # password positionally must fail loudly instead of having it silently
+        # land in look_for_keys.
         self.ip_address = ip_address
         self.username = username
-        self.password = password
         self.look_for_keys = look_for_keys
         self._private_key_file_path = private_key_file_path or ""
         self._private_key_password = private_key_password
-        # Use pkey only when no explicit path (key_filename used for path+cert)
-        self.pkey = (
-            self._get_ssh_key(private_key_file_path)
-            if look_for_keys
-            and private_key_file_path
-            and not self._private_key_file_path
-            else None
-        )
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
@@ -1336,64 +1339,6 @@ class SSHConnectionManager(object):
 
         return self.__client
 
-    def _get_ssh_key(self, private_key_file_path):
-        """Get SSH key based on file type"""
-        passphrase = self._private_key_password
-        if isinstance(passphrase, str) and passphrase:
-            passphrase = passphrase.encode("utf-8")
-        elif not passphrase:
-            passphrase = None
-
-        private_key = None
-        with open(private_key_file_path, "rb") as key_file:
-            key_data = key_file.read()
-
-        try:
-            # Try loading as OpenSSH first
-            private_key = (
-                cryptography.hazmat.primitives.serialization.load_ssh_private_key(
-                    key_data,
-                    password=passphrase,
-                    backend=cryptography.hazmat.backends.default_backend(),
-                )
-            )
-        except ValueError:
-            # Fall back to PEM format
-            private_key = (
-                cryptography.hazmat.primitives.serialization.load_pem_private_key(
-                    key_data,
-                    password=passphrase,
-                    backend=cryptography.hazmat.backends.default_backend(),
-                )
-            )
-
-        if isinstance(
-            private_key,
-            cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey,
-        ):
-            return paramiko.RSAKey.from_private_key_file(
-                private_key_file_path, password=self._private_key_password
-            )
-
-        elif isinstance(
-            private_key,
-            cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey,
-        ):
-            return paramiko.Ed25519Key.from_private_key_file(
-                private_key_file_path, password=self._private_key_password
-            )
-
-        elif isinstance(
-            private_key,
-            cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey,
-        ):
-            return paramiko.ECDSAKey.from_private_key_file(
-                private_key_file_path, password=self._private_key_password
-            )
-
-        logger.error("Unsupported ssh key {}".format(private_key_file_path))
-        return False
-
     def close(self):
         """Close the SSH connection."""
         try:
@@ -1409,11 +1354,7 @@ class SSHConnectionManager(object):
         last_error = None
         while end_time > datetime.datetime.now():
             try:
-                auth = (
-                    "key"
-                    if self._private_key_file_path
-                    else ("password" if self.password else "none")
-                )
+                auth = "key" if self._private_key_file_path else "default-keys"
                 logger.info(
                     "SSH connect attempt to %s as %s (auth: %s, key_path: %s)",
                     self.ip_address,
@@ -1424,7 +1365,6 @@ class SSHConnectionManager(object):
                 connect_kw = {
                     "hostname": self.ip_address,
                     "username": self.username,
-                    "password": self.password,
                     "allow_agent": False,
                     "look_for_keys": (
                         False if self._private_key_file_path else self.look_for_keys
@@ -1434,8 +1374,6 @@ class SSHConnectionManager(object):
                     # key_filename + passphrase (agent removed per user: agent did not work)
                     connect_kw["key_filename"] = [self._private_key_file_path]
                     connect_kw["passphrase"] = self._private_key_password
-                else:
-                    connect_kw["pkey"] = self.pkey
                 self.__client.connect(**connect_kw)
                 logger.info("SSH connected to %s as %s", self.ip_address, self.username)
                 self.__outage_start_time = None
@@ -1443,12 +1381,11 @@ class SSHConnectionManager(object):
             except Exception as e:
                 last_error = e
                 logger.warning(
-                    "SSH connect failed to %s as %s: %s (auth: key=%s, pwd=%s)",
+                    "SSH connect failed to %s as %s: %s (auth: key=%s)",
                     self.ip_address,
                     self.username,
                     e,
                     bool(self._private_key_file_path),
-                    bool(self.password),
                 )
                 if not self.__outage_start_time:
                     self.__outage_start_time = datetime.datetime.now()
@@ -1479,12 +1416,12 @@ class SSHConnectionManager(object):
                 else:
                     key_hint = (
                         f" Key: {self._private_key_file_path}. Ensure it matches "
-                        f"the key OneCloud has for user '{self.username}'."
+                        f"a key authorized for user '{self.username}' on the host."
                     )
-            elif "bad authentication type" in err_str and self.password:
+            else:
                 key_hint = (
-                    " Hardened images only allow publickey; use private_key_path "
-                    "with step ssh certificate."
+                    " No private_key_path configured; password auth is not "
+                    "supported. Set private_key_path in the cloud credentials."
                 )
             hint = f" (SSH auth failed{key_hint})"
         raise AssertionError(
@@ -1505,9 +1442,6 @@ class SSHConnectionManager(object):
             del pickle_dict["_SSHConnectionManager__transport"]
         if pickle_dict.get("_SSHConnectionManager__client"):
             del pickle_dict["_SSHConnectionManager__client"]
-        # pkey (paramiko/cryptography key) is not picklable; recreated in __setstate__
-        if pickle_dict.get("pkey") is not None:
-            del pickle_dict["pkey"]
         return pickle_dict
 
     def __setstate__(self, state):
@@ -1515,10 +1449,6 @@ class SSHConnectionManager(object):
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
-        key_path = getattr(self, "_private_key_file_path", "") or ""
-        self.pkey = (
-            self._get_ssh_key(key_path) if self.look_for_keys and key_path else None
-        )
 
 
 class CephNode(object):
@@ -1540,16 +1470,18 @@ class CephNode(object):
             use_ipv6                    - when True, ip_address/subnet follow IPv6
         Derived: ip_address and subnet are the active stack (IPv6 if use_ipv6 and set, else IPv4).
 
-        eg CephNode(username='cephuser', password='cephpasswd',
-                    root_password='passwd', ipv4_address='...', ipv4_subnet='...',
+        Authentication is key-based only; passwords are not supported.
+
+        eg CephNode(username='cephuser', ipv4_address='...', ipv4_subnet='...',
                     hostname='hostname', role='mon|osd|client', no_of_volumes=3,
                     ceph_vmnode='ref_to_libcloudvm')
         """
         self.username = kw["username"]
-        self.password = kw["password"]
-        self.root_passwd = kw["root_password"]
         self.root_username = kw.get("root_username") or "root"
-        self.look_for_key = kw["look_for_key"]
+        # Key authentication is the only supported mechanism. When no explicit
+        # private_key_path is given, paramiko falls back to the runner's default
+        # keys (~/.ssh/id_*), so this is always enabled.
+        self.look_for_key = True
         self.private_key_password = kw.get("private_key_password")
         _key_path = kw.get("private_key_path") or ""
         self.private_key_path = (
@@ -1560,7 +1492,9 @@ class CephNode(object):
             os.path.expanduser(str(_boot_key).strip()) if _boot_key else ""
         )
         self.bootstrap_key_password = kw.get("bootstrap_key_password") or ""
-        self.root_login = kw["root_login"]
+        # Public key content authorized for cephuser and root; used to
+        # guarantee framework access (see _ensure_authorized_keys).
+        self.ssh_pub_key = kw.get("ssh_pub_key")
         self.private_ip = kw["private_ip"]
 
         # Explicit IPv4 storage (backward compat: ip_address/subnet treated as IPv4)
@@ -1621,7 +1555,6 @@ class CephNode(object):
         self.root_connection = SSHConnectionManager(
             self.ip_address,
             self.root_username,
-            self.root_passwd,
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=self.private_key_password,
@@ -1629,7 +1562,6 @@ class CephNode(object):
         self.connection = SSHConnectionManager(
             self.ip_address,
             self.username,
-            self.password,
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=self.private_key_password,
@@ -1708,6 +1640,24 @@ class CephNode(object):
         if _is_onecloud_bootstrap:
             pass  # skip initial Paramiko connect; subprocess handles it below
         else:
+            # When an SSH key override is in play, guarantee the provided key
+            # is authorized for cephuser and root before the first privileged
+            # connection is made.
+            if self.ssh_pub_key:
+                try:
+                    self._ensure_authorized_keys()
+                except AssertionError:
+                    # Neither the cephuser nor the root connection could be
+                    # established (both are attempted; see
+                    # _ensure_authorized_keys).
+                    raise
+                except Exception as err:
+                    logger.warning(
+                        "Could not ensure the runner key for cephuser and root on"
+                        " %s: %s",
+                        self.ip_address,
+                        err,
+                    )
             self.rssh().exec_command("dmesg")
             self.rssh_transport().set_keepalive(15)
 
@@ -1751,34 +1701,26 @@ class CephNode(object):
                 "LogLevel=ERROR",
                 f"{ssh_user}@{self.ip_address}",
             ]
-            key_b64 = base64.b64encode(key_line.encode()).decode()
-            setup_cmds = [
-                (
-                    "id cephuser >/dev/null 2>&1 || (sudo groupadd -f cephuser && "
-                    "sudo useradd -m -s /bin/bash -g cephuser cephuser)"
-                ),
-                "echo 'cephuser ALL=(ALL) NOPASSWD:ALL' "
-                "| sudo tee /etc/sudoers.d/cephuser",
-                "sudo chmod 440 /etc/sudoers.d/cephuser",
-                "sudo mkdir -p /home/cephuser/.ssh && "
-                "sudo chmod 700 /home/cephuser/.ssh",
-                f"echo '{key_b64}' | base64 -d "
-                "| sudo tee -a /home/cephuser/.ssh/authorized_keys",
-                "sudo chmod 600 /home/cephuser/.ssh/authorized_keys",
-                "sudo chown -R cephuser:cephuser /home/cephuser/.ssh",
-                "sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh",
-                f"echo '{key_b64}' | base64 -d "
-                "| sudo tee -a /root/.ssh/authorized_keys",
-                "sudo chmod 600 /root/.ssh/authorized_keys",
-                "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
-                "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf "
-                "2>/dev/null || true",
-                "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
-                "/etc/ssh/sshd_config 2>/dev/null || true",
-                "sudo systemctl restart sshd 2>/dev/null || "
-                "sudo systemctl restart ssh 2>/dev/null || true",
-                "sudo touch /ceph-qa-ready",
-            ]
+            # Shared idempotent key-authorization commands (see
+            # cli.utilities.ssh_keys); the first command waits for the node
+            # to become reachable (retries below).
+            setup_cmds = (
+                build_user_setup_cmds(CEPH_USER)
+                + build_authorize_key_cmds(
+                    key_line, f"/home/{CEPH_USER}", owner=CEPH_USER
+                )
+                + build_authorize_key_cmds(key_line, "/root")
+                + [
+                    "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
+                    "/etc/ssh/sshd_config.d/00-complianceascode-hardening.conf "
+                    "2>/dev/null || true",
+                    "sudo sed -i 's/^.*PermitRootLogin.*/PermitRootLogin prohibit-password/' "
+                    "/etc/ssh/sshd_config 2>/dev/null || true",
+                    "sudo systemctl restart sshd 2>/dev/null || "
+                    "sudo systemctl restart ssh 2>/dev/null || true",
+                    "sudo touch /ceph-qa-ready",
+                ]
+            )
             ssh_env = None
             askpass_file = None
             boot_pwd = getattr(self, "bootstrap_key_password", "")
@@ -1853,15 +1795,12 @@ class CephNode(object):
             self.root_connection.close()
             self.connection.close()
             self.root_username = "root"
-            self.root_passwd = ""
             self.username = "cephuser"
-            self.password = ""
             self.look_for_key = True
             _key_pw = getattr(self, "private_key_password", None)
             root_mgr = SSHConnectionManager(
                 self.ip_address,
                 "root",
-                "",
                 look_for_keys=True,
                 private_key_file_path=key_path,
                 private_key_password=_key_pw,
@@ -1869,7 +1808,6 @@ class CephNode(object):
             cephuser_mgr = SSHConnectionManager(
                 self.ip_address,
                 "cephuser",
-                "",
                 look_for_keys=True,
                 private_key_file_path=key_path,
                 private_key_password=_key_pw,
@@ -1900,17 +1838,13 @@ class CephNode(object):
                     else:
                         raise
 
-        sudo_prefix = "sudo " if self.username != "root" else ""
-        if self.password:
-            _, stdout, stderr = self.rssh().exec_command(
-                f"echo '{self.username}:{self.password}' | {sudo_prefix}chpasswd"
-            )
-            logger.info(stdout.readlines())
-        if self.root_passwd:
-            _, stdout, stderr = self.rssh().exec_command(
-                f"echo 'root:{self.root_passwd}' | {sudo_prefix}chpasswd"
-            )
-            logger.info(stdout.readlines())
+        # Password rotation used to happen here. Access is key-based only now,
+        # so there is nothing to set up: cloud-init (or the baremetal prep
+        # pipeline) authorizes the runner public key for root and cephuser.
+        #
+        # These run over the privileged connection, so elevate only when that
+        # connection is not root itself.
+        sudo_prefix = "sudo " if self.root_username != "root" else ""
         # TCP keepalive (applies to both IPv4 and IPv6 on Linux)
         self.rssh().exec_command(
             f"echo 120 | {sudo_prefix}tee /proc/sys/net/ipv4/tcp_keepalive_time"
@@ -1949,6 +1883,96 @@ class CephNode(object):
 
         logger.info("finished connect")
         self.run_once = True
+
+    def _ensure_authorized_keys(self):
+        """
+        Ensure the runner's public key is authorized for the login user and root.
+
+        The inventory cloud-config is expected to authorize the key for both
+        users, however it is enforced here as well so that the framework's
+        connections can always be established with the provided key. The login
+        user is created along with passwordless sudo privileges when absent.
+        The operation is idempotent.
+
+        The repair commands cannot run over a connection that the missing key
+        would block, so the login-user and root connections are both attempted
+        with short, alternating retries: the key may already be authorized for
+        only one of the two users, and the node may still be booting. The
+        commands (see cli.utilities.ssh_keys) embed sudo, so they work over
+        either connection.
+        """
+        pub_key = self.ssh_pub_key.strip()
+        # Idempotent repair commands, shared with the OneCloud bootstrap path
+        # (see cli.utilities.ssh_keys).
+        user_cmds = []
+        if self.username != self.root_username:
+            user_cmds = build_user_setup_cmds(self.username)
+            user_cmds += build_authorize_key_cmds(
+                pub_key, f"/home/{self.username}", owner=self.username
+            )
+        root_cmds = build_authorize_key_cmds(pub_key, "/root")
+        logger.info(
+            "Ensuring the runner key is authorized for %s and %s on %s",
+            self.username,
+            self.root_username,
+            self.ip_address,
+        )
+
+        # Do not run the repair over self.ssh() alone: when the key is not yet
+        # authorized for cephuser that connection cannot be established at all
+        # and the repair would never execute. Probe both users instead, with
+        # short alternating attempts, until one of them connects. A connection
+        # as either user is enough to run the idempotent repair commands.
+        probe_users = list(
+            dict.fromkeys((self.username, self.root_username))
+        )  # ordered de-duplication
+        deadline = time() + self.connection.outage_timeout.total_seconds()
+        last_errors = []
+        probe = None
+        client = None
+        while client is None and time() < deadline:
+            for username in probe_users:
+                probe = SSHConnectionManager(
+                    self.ip_address,
+                    username,
+                    look_for_keys=self.look_for_key,
+                    private_key_file_path=self.private_key_path,
+                    private_key_password=self.private_key_password,
+                    outage_timeout=30,
+                )
+                try:
+                    client = probe.get_client()
+                    logger.info(
+                        "Authorizing the runner key on %s over the %s connection",
+                        self.ip_address,
+                        username,
+                    )
+                    break
+                except AssertionError as err:
+                    last_errors.append(f"{username}: {err}")
+        if client is None:
+            raise AssertionError(
+                f"Unable to establish a connection with {self.ip_address} as "
+                f"'{self.username}' or '{self.root_username}' to authorize the "
+                f"runner key. Ensure the key is authorized for at least one of "
+                f"them (password authentication is not supported). Last errors: "
+                f"{'; '.join(last_errors[-len(probe_users):])}"
+            )
+
+        try:
+            for cmd in (" && ".join(user_cmds), " && ".join(root_cmds)):
+                if not cmd:
+                    continue
+                _, stdout, stderr = client.exec_command(cmd)
+                exit_code = stdout.channel.recv_exit_status()
+                if exit_code != 0:
+                    err = stderr.read().decode()
+                    raise RuntimeError(
+                        "Failed to authorize the runner key on"
+                        f" {self.ip_address}: {err}"
+                    )
+        finally:
+            probe.close()
 
     def set_internal_ip(self):
         """
@@ -2189,8 +2213,7 @@ class CephNode(object):
         key_pw = getattr(self, "private_key_password", None)
         self.root_connection = SSHConnectionManager(
             self.ip_address,
-            "root",
-            self.root_passwd,
+            getattr(self, "root_username", "root"),
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=key_pw,
@@ -2198,7 +2221,6 @@ class CephNode(object):
         self.connection = SSHConnectionManager(
             self.ip_address,
             self.username,
-            self.password,
             look_for_keys=self.look_for_key,
             private_key_file_path=self.private_key_path,
             private_key_password=key_pw,
@@ -2337,12 +2359,20 @@ class CephNode(object):
 
     def setup_deb_cdn_repos(self, build):
         """
-        Setup cdn repositories for deb systems
+        Setup CDN repositories for deb (Ubuntu installer) systems.
+
+        Legacy code, currently unreachable: no inventory in this repository
+        provisions deb-based nodes (``pkg_type`` is always ``rpm``), so
+        ``Ceph.setup_packages`` never dispatches here. Retained for
+        reference only. If the deb path is ever revived, the CDN credential
+        must be wired in from configuration -- ``masked`` is a scrubbed
+        placeholder and cannot authenticate.
+
         Args:
             build(str|LooseVersion): rhcs version
         """
         user = "redhat"
-        passwd = "OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9"
+        passwd = "masked"
         num = str(build).split(".")[0]
         cmd = (
             "umask 0077; echo deb https://{user}:{passwd}@rhcs.download.redhat.com/{num}-updates/Tools "
@@ -2422,7 +2452,12 @@ class CephNode(object):
 
     def setup_deb_repos(self, deb_repo):
         """
-        Setup repositories for deb system
+        Setup repositories for deb (Ubuntu installer) systems.
+
+        Legacy code, currently unreachable: no inventory in this repository
+        provisions deb-based nodes (``pkg_type`` is always ``rpm``).
+        Retained for reference only.
+
         Args:
             deb_repo(str): deb (Ubuntu) repository link
         """

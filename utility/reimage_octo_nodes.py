@@ -18,6 +18,7 @@ Server details and their Manufacturer details are present in following document:
 """
 
 import multiprocessing
+import os
 import subprocess
 import time
 
@@ -177,14 +178,20 @@ def initiate_graceful_restart(idrac_ip, username, password):
     return response.status_code
 
 
-def login_to_node(node_ip, username="root", password="passwd"):
+def login_to_node(node_ip, username="root", private_key=None):
+    """Log in to a freshly imaged node over SSH (key authentication only)."""
     try:
         # Create an SSH client instance
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         # Connect to the node
-        ssh_client.connect(node_ip, username=username, password=password)
+        connect_kw = {"username": username, "allow_agent": False}
+        if private_key:
+            connect_kw["key_filename"] = [os.path.expanduser(private_key)]
+        else:
+            connect_kw["look_for_keys"] = True
+        ssh_client.connect(node_ip, **connect_kw)
 
         # Run a command to retrieve the OS version
         stdin, stdout, stderr = ssh_client.exec_command("cat /etc/os-release")
@@ -268,7 +275,7 @@ def validate_installation(node_ip, os_version):
     if ping_node(f"{node_ip}.ceph.redhat.com"):
         print(f"Node {node_ip} is pingable after restart.")
         login_successful, actual_os_version = login_to_node(
-            f"{node_ip}.ceph.redhat.com", "bootuser", "passwd"
+            f"{node_ip}.ceph.redhat.com", "bootuser"
         )
 
         if login_successful:

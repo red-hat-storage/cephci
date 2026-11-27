@@ -8,7 +8,7 @@ globals:
         -
           hostname: pluto001.ceph.redhat.com
           ip: 10.8.129.101
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -22,7 +22,7 @@ globals:
         -
           hostname: pluto002.ceph.redhat.com
           ip: 10.8.129.102
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -35,7 +35,7 @@ globals:
         -
           hostname: pluto003.ceph.redhat.com
           ip: 10.8.129.103
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -57,7 +57,7 @@ globals:
         -
           hostname: pluto004.ceph.redhat.com
           ip: 10.8.129.104
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -71,7 +71,7 @@ globals:
         -
           hostname: pluto005.ceph.redhat.com
           ip: 10.8.129.105
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -84,7 +84,7 @@ globals:
         -
           hostname: pluto006.ceph.redhat.com
           ip: 10.8.129.106
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -105,7 +105,7 @@ globals:
         -
           hostname: pluto007.ceph.redhat.com
           ip: 10.8.129.107
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -119,7 +119,7 @@ globals:
         -
           hostname: pluto008.ceph.redhat.com
           ip: 10.8.129.108
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr
@@ -132,7 +132,7 @@ globals:
         -
           hostname: pluto010.ceph.redhat.com
           ip: 10.8.129.110
-          root_password: r
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - mgr

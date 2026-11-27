@@ -1,6 +1,6 @@
 import json
 import tempfile
-import time
+from shlex import quote
 
 from cli.exceptions import ConfigError, OperationFailedError, ResourceNotFoundError
 from cli.ops.cephadm_ansible import (
@@ -22,11 +22,13 @@ SSH = "~/.ssh"
 SSH_CONFIG = f"{SSH}/config"
 SSH_ID_RSA_PUB = f"{SSH}/id_rsa.pub"
 SSH_KNOWN_HOSTS = f"{SSH}/known_hosts"
+SSH_AUTHORIZED_KEYS = f"{SSH}/authorized_keys"
 
-SSH_KEYGEN = f"ssh-keygen -b 2048 -f {SSH}/id_rsa -t rsa -q -N ''"
-SSH_COPYID = "ssh-copy-id -f -i {} {}@{}"
+# Remove only the generated keypair. Never 'rm -rf ~/.ssh': that would delete
+# authorized_keys and lock the framework out, since access is key-only.
+SSH_REMOVE_KEYS = f"rm -f {SSH}/id_rsa {SSH}/id_rsa.pub"
+SSH_KEYGEN = f"mkdir -p {SSH} && chmod 700 {SSH} && ssh-keygen -b 2048 -f {SSH}/id_rsa -t rsa -q -N ''"
 SSH_KEYSCAN = "ssh-keyscan {}"
-SSHPASS = "sshpass -p {}"
 CHMOD_CONFIG = f"chmod 600 {SSH_CONFIG}"
 
 EPEL_REPOS = {
@@ -86,6 +88,35 @@ def generate_mgr_ssl_certificate(node, key, crt):
     return True
 
 
+def authorize_key(node, public_key, sudo=False):
+    """Append a public key to the target account's authorized_keys.
+
+    Replaces the old sshpass/ssh-copy-id flow. The framework already has a
+    key-based session to the node, so the key is written over that session.
+    Existing entries are preserved -- in particular the runner's own key,
+    without which the node becomes unreachable.
+
+    Args:
+        node (CephNode): Node to authorize the key on
+        public_key (str): Public key content
+        sudo (bool): Authorize for root instead of the non-root user
+    """
+    key = public_key.strip()
+    if not key:
+        raise OperationFailedError(f"Empty public key for {node.hostname}")
+
+    node.exec_command(sudo=sudo, cmd=f"mkdir -p {SSH} && chmod 700 {SSH}")
+    # grep -qxF keeps this idempotent across repeated calls
+    node.exec_command(
+        sudo=sudo,
+        cmd=(
+            f"grep -qxF {quote(key)} {SSH_AUTHORIZED_KEYS} 2>/dev/null || "
+            f"echo {quote(key)} >> {SSH_AUTHORIZED_KEYS}"
+        ),
+    )
+    node.exec_command(sudo=sudo, cmd=f"chmod 600 {SSH_AUTHORIZED_KEYS}")
+
+
 def setup_ssh_keys(installer, nodes):
     """Setup ssh keys
 
@@ -111,12 +142,12 @@ def setup_ssh_keys(installer, nodes):
         hosts += f"\t{node.hostname}"
         hosts += f"\t{node.shortname}"
 
-        # Remove existing ssh directory from non-root user
-        node.exec_command(cmd=f"rm -rf {SSH}", check_ec=False)
+        # Regenerate the keypair for the non-root user
+        node.exec_command(cmd=SSH_REMOVE_KEYS, check_ec=False)
         node.exec_command(cmd=SSH_KEYGEN)
 
-        # Remove existing ssh directory from root user
-        node.exec_command(sudo=True, cmd=f"rm -rf {SSH}", check_ec=False)
+        # Regenerate the keypair for the root user
+        node.exec_command(sudo=True, cmd=SSH_REMOVE_KEYS, check_ec=False)
         node.exec_command(sudo=True, cmd=SSH_KEYGEN)
 
     # Create hosts file on installer node
@@ -130,10 +161,15 @@ def setup_ssh_keys(installer, nodes):
     # Set permissions to ssh config
     installer.exec_command(cmd=CHMOD_CONFIG)
 
-    # Install sshpass
-    Package(installer).install("sshpass")
+    # Collect the installer public keys that peers must trust
+    installer_user_key, _ = installer.exec_command(cmd=f"cat {SSH_ID_RSA_PUB}")
+    installer_root_key, _ = installer.exec_command(
+        sudo=True, cmd=f"cat {SSH_ID_RSA_PUB}"
+    )
 
-    # Setup passwordless ssh
+    # Setup passwordless ssh. The framework already holds an authenticated
+    # (key-based) session to every node, so the installer public keys are
+    # appended directly instead of going through sshpass/ssh-copy-id.
     for node in nodes:
         # Add hosts to known_hosts for non-root user
         installer.exec_command(
@@ -146,33 +182,11 @@ def setup_ssh_keys(installer, nodes):
             cmd="{} >> {}".format(SSH_KEYSCAN.format(node.hostname), SSH_KNOWN_HOSTS),
         )
 
-        # Copy ssh key to non-root user
-        installer.exec_command(
-            cmd="{} {}".format(
-                SSHPASS.format(node.password),
-                SSH_COPYID.format(SSH_ID_RSA_PUB, node.username, node.hostname),
-            ),
-        )
+        # Authorize the installer non-root key on the peer non-root account
+        authorize_key(node, installer_user_key, sudo=False)
 
-        # Copy ssh key to root user (non-root to root - may fail if password auth disabled)
-        installer.exec_command(
-            cmd="{} {}".format(
-                SSHPASS.format(node.root_passwd),
-                SSH_COPYID.format(SSH_ID_RSA_PUB, "root", node.hostname),
-            ),
-            check_ec=False,
-        )
-
-        # Copy ssh key to host root user (root to root - this should always work)
-        time.sleep(2)
-        installer.exec_command(
-            sudo=True,
-            cmd="{} {}".format(
-                SSHPASS.format(node.root_passwd),
-                SSH_COPYID.format(SSH_ID_RSA_PUB, "root", node.hostname),
-            ),
-            check_ec=False,
-        )
+        # Authorize the installer root key on the peer root account
+        authorize_key(node, installer_root_key, sudo=True)
 
 
 def setup_ibm_licence(nodes, build_type, accept_eula={"ACCEPT_EULA": "Y"}):

@@ -39,12 +39,11 @@ class Baremetal:
             # Set node inventory
             self._inventory = config.get("inventory")
 
-            # Connect to teuthology node
+            # Connect to teuthology node (key authentication only)
             self._client = Remote(
                 config["server"],
                 config.get("ssh_key"),
                 config["username"],
-                config.get("password"),
             )
         except KeyError:
             msg = "Insufficient config related to Cloud provider"

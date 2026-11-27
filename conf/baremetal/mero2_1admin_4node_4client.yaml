@@ -17,7 +17,7 @@ globals:
             - mgr
             - rgw
             - nfs
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -42,7 +42,7 @@ globals:
             - mds
             - _admin
             - nfs
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -67,7 +67,7 @@ globals:
             - osd
             - osd-bak
             - nfs
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -93,7 +93,7 @@ globals:
             - grafana
             - prometheus
             - nfs
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           volumes:
             - /dev/sda
             - /dev/sdb
@@ -113,22 +113,22 @@ globals:
           ip: 10.8.129.12
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: clara013
           id: node6
           ip: 10.8.129.13
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: clara014
           id: node7
           ip: 10.8.129.14
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
         - hostname: clara015
           id: node8
           ip: 10.8.129.15
           role:
             - client
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa

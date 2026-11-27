@@ -15,7 +15,7 @@ globals:
           hostname: cali001
           id: node1
           ip: 10.8.130.1
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - _admin
             - installer
@@ -34,7 +34,7 @@ globals:
           hostname: cali004
           id: node2
           ip: 10.8.130.4
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - osd
@@ -52,7 +52,7 @@ globals:
           hostname: cali005
           id: node3
           ip: 10.8.130.5
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - mon
             - osd
@@ -68,7 +68,7 @@ globals:
           hostname: cali008
           id: node4
           ip: 10.8.130.8
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - nvmeof-gw
@@ -82,7 +82,7 @@ globals:
           hostname: cali010
           id: node5
           ip: 10.8.130.10
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - osd
             - nvmeof-gw
@@ -97,6 +97,6 @@ globals:
           hostname: cali012
           id: node6
           ip: 10.8.130.12
-          root_password: passwd
+          root_private_key: ~/.ssh/id_rsa
           role:
             - client

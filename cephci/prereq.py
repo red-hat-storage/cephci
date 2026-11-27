@@ -1,3 +1,6 @@
+import ast
+import json
+import os
 import pickle
 import re
 
@@ -24,7 +27,7 @@ from cephci.utils.configure import (
     start_local_private_registry,
 )
 from cephci.utils.utility import set_logging_env
-from cli.exceptions import NodeConfigError
+from cli.exceptions import ConfigError, NodeConfigError
 from cli.utilities.containers import Registry
 from cli.utilities.packages import Package, Rpm
 from cli.utilities.packages import SubscriptionManager as sm
@@ -36,6 +39,9 @@ from utility.log import Log
 LOG = Log(__name__)
 
 CEPHADM_ANSIBLE = "cephadm-ansible"
+
+# Container image used to run the local private registry (disconnected install)
+DOCKER_REGISTRY_IMAGE_DEFAULT = "registry.redhat.io/rhel8/registry:2"
 
 doc = """
 Utility to configure prerequisites for deployed cluster
@@ -177,16 +183,28 @@ def enable_rhel_repos(node, server, distro):
     return True
 
 
+def _parse_images_env(value):
+    """Parse the IMAGES env variable into a list.
+
+    Accepts a JSON list; falls back to ``ast.literal_eval`` for python-repr
+    lists set by older CI jobs.
+    """
+    try:
+        return json.loads(value)
+    except ValueError:
+        return ast.literal_eval(value)
+
+
 def setup_private_container_registry(
     installer,
     nodes,
     registry,
-    reg_username,
-    reg_password,
     build_type,
-    private_reg_username,
-    private_reg_password,
-    docker_reg_image,
+    reg_username=None,
+    reg_password=None,
+    private_reg_username=None,
+    private_reg_password=None,
+    docker_reg_image=None,
     images=None,
 ):
     """
@@ -196,14 +214,57 @@ def setup_private_container_registry(
         installer (ceph.ceph.Ceph): Installer node
         nodes (ceph.ceph.Ceph): List of nodes
         registry (str): registery name
-        reg_username (str): registry username
-        reg_password (str): registry password
+        reg_username (str): registry username (default: ``registries:`` in
+            ~/.cephci.yaml, fetched via ``get_registry_credentials``)
+        reg_password (str): registry password (default: same source)
         build_type (str): build type
-        private_reg_username (str): private registry username
-        private_reg_password (str): private registry password
-        docker_reg_image (str): docker-registry image name
-        images (list): list of images
+        private_reg_username (str): private registry username (default:
+            ``PRIVATE_REG_USERNAME`` env variable)
+        private_reg_password (str): private registry password (default:
+            ``PRIVATE_REG_PASSWORD`` env variable)
+        docker_reg_image (str): docker-registry image name (default:
+            ``DOCKER_REGISTRY_IMAGE`` env variable, else
+            ``DOCKER_REGISTRY_IMAGE_DEFAULT``)
+        images (list): list of images (default: ``IMAGES`` env variable,
+            parsed as a JSON list)
     """
+    # Source the source-registry credentials from the host-keyed registries
+    # section of ~/.cephci.yaml when not provided explicitly.
+    if not (reg_username and reg_password):
+        _creds = get_registry_credentials(registry)
+        reg_username = reg_username or _creds["username"]
+        reg_password = reg_password or _creds["password"]
+
+    # The private registry credentials are created by this function (htpasswd
+    # on the installer); they come from the CI job environment unless given.
+    private_reg_username = private_reg_username or os.environ.get(
+        "PRIVATE_REG_USERNAME"
+    )
+    private_reg_password = private_reg_password or os.environ.get(
+        "PRIVATE_REG_PASSWORD"
+    )
+    if not (private_reg_username and private_reg_password):
+        raise ConfigError(
+            "Private registry credentials are required for the disconnected "
+            "install. Pass private_reg_username/private_reg_password or set "
+            "the PRIVATE_REG_USERNAME and PRIVATE_REG_PASSWORD environment "
+            "variables."
+        )
+
+    docker_reg_image = (
+        docker_reg_image
+        or os.environ.get("DOCKER_REGISTRY_IMAGE")
+        or DOCKER_REGISTRY_IMAGE_DEFAULT
+    )
+
+    if images is None:
+        _images = os.environ.get("IMAGES")
+        images = _parse_images_env(_images) if _images else None
+    if not images:
+        raise ConfigError(
+            "No images to mirror into the private registry. Pass images or "
+            "set the IMAGES environment variable to a JSON list of images."
+        )
 
     # Step 1: Create folders for the private registry
     if not create_registry_directories(installer):

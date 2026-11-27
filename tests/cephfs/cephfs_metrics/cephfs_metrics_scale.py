@@ -4,6 +4,7 @@ import string
 import time
 import traceback
 from json import JSONDecodeError
+from shlex import quote
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -561,21 +562,30 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd="ip route get 8.8.8.8 | awk '{print $7}'",
         )[0].strip()
-        # install sshpass package if not installed
         client2.exec_command(
             sudo=True, cmd=f"chown -R cephuser:cephuser {fuse_mounting_dir_2}"
         )
         client2.exec_command(sudo=True, cmd=f"chmod -R u+w {fuse_mounting_dir_2}")
-        for client in clients:
-            sshpass_check, _ = client.exec_command(
-                cmd="rpm -qa | grep sshpass", check_ec=False
-            )
-            if "sshpass" not in sshpass_check:
-                client.exec_command(sudo=True, cmd="yum install -y sshpass")
-        # Copy the file from client1 to client2
+
+        # Authorize client1's cephuser key on client2 so the copy below works
+        # over public-key auth (password auth is not supported).
         client1.exec_command(
-            sudo=True,
-            cmd=f"sshpass -p 'cephuser' scp -o StrictHostKeyChecking=no {client1_scp_file}"
+            cmd="test -f ~/.ssh/id_rsa.pub || "
+            "ssh-keygen -b 2048 -f ~/.ssh/id_rsa -t rsa -q -N ''",
+            check_ec=False,
+        )
+        client1_pub_key, _ = client1.exec_command(cmd="cat ~/.ssh/id_rsa.pub")
+        client1_pub_key = client1_pub_key.strip()
+        client2.exec_command(cmd="mkdir -p ~/.ssh && chmod 700 ~/.ssh")
+        client2.exec_command(
+            cmd=f"grep -qxF {quote(client1_pub_key)} ~/.ssh/authorized_keys 2>/dev/null "
+            f"|| echo {quote(client1_pub_key)} >> ~/.ssh/authorized_keys"
+        )
+        client2.exec_command(cmd="chmod 600 ~/.ssh/authorized_keys")
+
+        # Copy the file from client1 to client2 as cephuser (key-based)
+        client1.exec_command(
+            cmd=f"scp -o StrictHostKeyChecking=no {client1_scp_file}"
             f" cephuser@{client2_ip}:{fuse_mounting_dir_2}/{rand}_read_copied",
         )
         time.sleep(90)

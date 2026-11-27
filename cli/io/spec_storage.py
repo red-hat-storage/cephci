@@ -27,8 +27,11 @@ class SpecStorage(Cli):
         Install SPECstorage
         """
         try:
+            # NOTE: sshpass was previously installed here as a prerequisite.
+            # Password authentication is no longer supported, so it is gone.
+            # SPECstorage reaches its clients over ssh using the cluster's
+            # distributed key pairs (see Ceph.setup_ssh_keys).
             # Install prerequiste packages
-            Package(self.primary_client).install("sshpass", nogpgcheck=True)
             for package in self.packages:
                 Package(self.primary_client).pip_install(package)
 

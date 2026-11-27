@@ -3658,11 +3658,16 @@ EOF"""
         Args:
             pg_id: pg id
 
-        Returns: Return the inconsistent object list, or None on timeout/failure
+        Returns: Return the inconsistent object list. When the command keeps
+            failing until the timeout, ``CommandFailed`` is raised; when it
+            succeeds but never reports scrub information, the last payload is
+            returned as-is.
         """
         cmd_inconsistent_object = f"rados  list-inconsistent-obj  {pg_id}"
         end_time = time.time() + 300  # 5 minutes
         sleep_interval = 10
+        last_result = None
+        last_error = None
 
         while time.time() < end_time:
             try:
@@ -3673,11 +3678,13 @@ EOF"""
                         f"{len(object_details['inconsistents'])} object(s)"
                     )
                     return object_details
+                last_result = object_details
                 log.info(
                     f"The inconsistent objects list is empty or unavailable in PG {pg_id}; "
                     f"retrying in {sleep_interval}s"
                 )
             except Exception as err:
+                last_error = err
                 log.warning(
                     f"list-inconsistent-obj failed for PG {pg_id}: {err}. "
                     f"Retrying in {sleep_interval}s "
@@ -3685,11 +3692,19 @@ EOF"""
                 )
             time.sleep(sleep_interval)
 
+        if last_result is None:
+            # The command never succeeded; fail loudly instead of returning
+            # None, which every caller subscripts (previously the command
+            # failure was raised immediately by run_ceph_command).
+            raise CommandFailed(
+                f"rados list-inconsistent-obj kept failing for PG {pg_id} "
+                f"for 5 minutes: {last_error}"
+            )
         log.error(
-            f"Timed out after 5 minutes waiting for scrub information on PG {pg_id} "
-            f"(rados list-inconsistent-obj)"
+            f"Timed out after 5 minutes without scrub information on PG {pg_id}; "
+            f"returning the last payload: {last_result}"
         )
-        return None
+        return last_result
 
     def check_inconsistent_health(self, inconsistent_present: bool = True):
         """

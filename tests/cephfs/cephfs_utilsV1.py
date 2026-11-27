@@ -4275,7 +4275,6 @@ os.system('sudo systemctl start  network')
                     for node in self.ceph_cluster.get_nodes(role=k):
                         logs_dict[k].update({node.hostname: node.ip_address})
                 uname = "root"
-                pword = "passwd"
                 fsid = self.get_fsid(client)
                 node_info = {}
                 for k in daemons:
@@ -4285,7 +4284,7 @@ os.system('sudo systemctl start  network')
                 log.info("Collect logs in each node to tmp/<node_hostname> directory")
                 for node in node_info:
                     ssh_install = SSHConnectionManager(
-                        node_info[node], uname, pword
+                        node_info[node], uname, look_for_keys=True
                     ).get_client()
                     ssh_install.exec_command(f"sudo mkdir -p tmp/{node}")
                     for k in daemons:
@@ -4305,7 +4304,12 @@ os.system('sudo systemctl start  network')
                 ssh_d.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 for node in node_info:
                     nodeip = node_info[node]
-                    ssh_d.connect(nodeip, username=uname, password=pword)
+                    ssh_d.connect(
+                        nodeip,
+                        username=uname,
+                        allow_agent=False,
+                        look_for_keys=True,
+                    )
                     source_file = f"tmp/{node}.tar.gz"
                     dir_exist = os.path.exists(log_path)
                     if not dir_exist:

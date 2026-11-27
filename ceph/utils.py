@@ -173,7 +173,6 @@ def create_baremetal_ceph_nodes(cluster_conf):
                 {
                     "ip": node.get("ip"),
                     "hostname": node.get("hostname"),
-                    "root_password": node.get("root_password"),
                     "root_private_key": node.get("root_private_key"),
                     "role": RolesContainer(node.get("role")),
                     "no-of-volumes": len(node.get("volumes", [])),
@@ -320,11 +319,6 @@ def create_ibmc_ceph_nodes(
             "create"
         ).get("profile")
 
-        if params.get("root-login") is False:
-            params["root-login"] = False
-        else:
-            params["root-login"] = True
-
         with parallel() as p:
             for node in range(1, 100):
                 node = "node" + str(node)
@@ -409,7 +403,6 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
         )
 
         vm.role = params["role"]
-        vm.root_login = params["root-login"]
         vm.osd_scenario = params.get("osd-scenario")
         vm.location = params.get("location")
         vm.id = params.get("id")
@@ -569,7 +562,6 @@ def create_onecloud_ceph_nodes(
             "role": role,
             "id": node_dict.get("id") or node_key,
             "location": node_dict.get("location"),
-            "root_login": node_dict.get("root-login", True),
             "extra_disk_sizes": extra_disk_sizes,
         }
 
@@ -752,7 +744,6 @@ def create_onecloud_ceph_nodes(
             verify_ssl=verify_ssl,
         )
         vm.role = spec["role"]
-        vm.root_login = spec["root_login"]
         vm.id = spec["id"]
         vm.location = spec["location"]
         ceph_nodes[spec["node_key"]] = vm
@@ -825,11 +816,6 @@ def create_ceph_nodes(
             ]
             if _nets:
                 openstack_network_override = _nets
-
-        if params.get("root-login") is False:
-            params["root-login"] = False
-        else:
-            params["root-login"] = True
 
         with parallel() as p:
             for node in range(1, 100):
@@ -917,7 +903,6 @@ def setup_vm_node(node, ceph_nodes, **params):
         )
 
         vm.role = params["role"]
-        vm.root_login = params["root-login"]
         vm.keypair = params["keypair"]
         vm.osd_scenario = params.get("osd-scenario", False)
         vm.location = params.get("location")
@@ -1010,11 +995,6 @@ def create_aws_ceph_nodes(
             )
 
         params["cluster-name"] = ceph_cluster.get("name")
-        if params.get("root-login") is False:
-            params["root-login"] = False
-        else:
-            params["root-login"] = True
-
         with parallel() as p:
             for node in range(1, 100):
                 node_key = "node" + str(node)
@@ -1099,7 +1079,6 @@ def setup_vm_node_aws(node, ceph_nodes, **params):
         )
 
         vm.role = params["role"]
-        vm.root_login = params["root-login"]
         vm.osd_scenario = params.get("osd-scenario")
         vm.location = params.get("location")
         vm.id = params.get("id")
@@ -1183,7 +1162,6 @@ def create_ocpvirt_ceph_nodes(
     params["storage_class"] = ocp_cred.get("storage_class")
     params["network"] = ocp_cred.get("network", "default")
     params["cluster-name"] = ceph_cluster.get("name")
-    params["root-login"] = True
 
     pvc_needed = estimate_pvc_requirement(ceph_cluster)
     ensure_namespace_quota(params["namespace"], pvc_needed, ocp_cred)
@@ -1320,7 +1298,6 @@ def setup_vm_node_ocpvirt(node, ceph_nodes, **params):
             secure_boot=params.get("secure_boot", True),
         )
         vm.role = params["role"]
-        vm.root_login = params["root-login"]
         vm.osd_scenario = params.get("osd-scenario")
         vm.location = params.get("location")
         vm.id = params.get("id")

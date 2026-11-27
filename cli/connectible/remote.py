@@ -10,32 +10,50 @@ LOG = Log(__name__)
 
 
 class Remote:
-    """Interface for remote operations"""
+    """Interface for remote operations.
 
-    def __init__(self, host, ssh_key=None, username=None, password=None):
+    Key authentication by default. ``password`` is only honoured when
+    ``allow_password=True``, which exists solely for third-party appliances
+    that cannot be given an SSH key (see the exemptions noted in the callers).
+    Ceph nodes must never use it.
+    """
+
+    def __init__(
+        self, host, ssh_key=None, username=None, password=None, allow_password=False
+    ):
         """Initialize instance using configs
 
         Args:
             host (str): host IP or Hostname
             ssh_key (str): SSH Key path
             username (str): Name of user to be connected
-            password (str): Password of user
+            password (str): Password of user -- requires allow_password
+            allow_password (bool): Opt in to password auth (appliances only)
         """
         # Set host configs
         self._host = host
 
         # Connect to teuthology node
-        self._client = self._connect(host, ssh_key, username, password)
+        self._client = self._connect(host, ssh_key, username, password, allow_password)
 
-    def _connect(self, host, ssh_key=None, username=None, password=None):
+    def _connect(
+        self, host, ssh_key=None, username=None, password=None, allow_password=False
+    ):
         """Connect to host
 
         Args:
             host (str): host IP or Hostname
             ssh_key (str): SSH Key path
             username (str): Name of user to be connected
-            password (str): Password of user
+            password (str): Password of user -- requires allow_password
+            allow_password (bool): Opt in to password auth (appliances only)
         """
+        if password and not allow_password:
+            raise RemoteConnectionError(
+                f"Password authentication is not supported for '{host}'. "
+                f"Provide ssh_key instead."
+            )
+
         client = None
         try:
             # Set client object
@@ -46,9 +64,16 @@ class Remote:
 
             # Connect to host
             LOG.debug(f"Connecting to host {host}")
-            client.connect(
-                hostname=host, pkey=ssh_key, username=username, password=password
-            )
+            connect_kw = {"hostname": host, "username": username}
+            if allow_password and password:
+                connect_kw["password"] = password
+            else:
+                # ssh_key is a path to a private key file; paramiko expects
+                # that in `key_filename` (`pkey` takes a PKey object).
+                if ssh_key:
+                    connect_kw["key_filename"] = ssh_key
+                connect_kw["look_for_keys"] = True
+            client.connect(**connect_kw)
         except Exception as e:
             LOG.error(f"Failed to connect to host '{host}' with error -\n{str(e)}")
             raise RemoteConnectionError(str(e))

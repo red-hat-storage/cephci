@@ -1538,7 +1538,6 @@ class CephVMNodeOneCloud:
         self._verify_ssl = verify_ssl
         self._roles: List = []
         self._subnet: str = ""
-        self.root_login: bool = True
         self.osd_scenario: Optional[str] = None
         self.location: Optional[str] = None
         self.id: Optional[str] = None

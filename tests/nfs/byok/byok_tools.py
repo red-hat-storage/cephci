@@ -148,7 +148,11 @@ def collect_gklm_logs_on_failure(gklm_params, tail_lines=_GKLM_LOG_TAIL_LINES):
 
     remote = None
     try:
-        remote = Remote(host=host, username=username, password=password)
+        # GKLM is a third-party appliance that cannot be given an SSH key,
+        # so it is an explicit exemption from the key-only rule.
+        remote = Remote(
+            host=host, username=username, password=password, allow_password=True
+        )
         stdout, stderr = remote.run(cmd=remote_cmd, timeout=180)
         banner = (
             f"========== GKLM 5.x logs (test failure) "
