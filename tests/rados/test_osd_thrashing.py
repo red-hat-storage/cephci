@@ -313,7 +313,7 @@ from tests.rados.thrash_helpers import (
     write_integrity_baseline,
 )
 from utility.log import Log
-from utility.utils import extract_ceph_version
+from utility.utils import extract_ceph_version, get_rhbuild_major_version
 
 log = Log(__name__)
 
@@ -373,7 +373,7 @@ def _get_pool_configs_path(rhbuild: str) -> str:
     Returns:
         Path to the pool-configurations.yaml for that release
     """
-    major = int(rhbuild.split(".")[0])
+    major = get_rhbuild_major_version(rhbuild)
     release = _VERSION_RELEASE_MAP.get(major)
     if not release:
         log.warning(
@@ -595,7 +595,7 @@ def run(ceph_cluster, **kw):
     enable_fast_ec_config_params = config.get("enable_fast_ec_config_params", True)
     enable_esb_verification = config.get("enable_esb_verification", False)
     disabled_ec_optimizations = False
-    major_version = int(rados_obj.rhbuild.split(".")[0])
+    major_version = get_rhbuild_major_version(rados_obj.rhbuild)
 
     if major_version < 9:
         enable_fast_ec_config_params = False

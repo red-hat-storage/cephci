@@ -84,7 +84,7 @@ from cli.utilities.packages import Package, Rpm
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
-from utility.utils import method_should_succeed
+from utility.utils import get_rhbuild_major_version, method_should_succeed
 
 log = Log(__name__)
 
@@ -247,7 +247,7 @@ def run(ceph_cluster, **kw):
             section="osd", param="osd_scrub_load_threshold"
         )
         log.info("The rh build value is- %s", rhbuild)
-        if rhbuild.split(".")[0] < "9":
+        if get_rhbuild_major_version(rhbuild) < 9:
             expected_threshold_value = 0.500000
         else:
             expected_threshold_value = 10.0
@@ -539,7 +539,7 @@ def run(ceph_cluster, **kw):
                     default_threshold_value,
                 )
 
-                if rhbuild.split(".")[0] < "9":
+                if get_rhbuild_major_version(rhbuild) < 9:
                     assert mon_obj.set_config(
                         section="osd",
                         name="osd_scrub_load_threshold",

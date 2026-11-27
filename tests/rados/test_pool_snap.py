@@ -11,6 +11,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 
@@ -188,7 +189,7 @@ def run(ceph_cluster, **kw):
                 "Completed reproducing issue with unfixed build, test will resume after upgrade"
             )
         if config.get("verify_fix"):
-            if rhbuild.split(".")[0] < "8":
+            if get_rhbuild_major_version(rhbuild) < 8:
                 # check if test pool exists on the cluster
                 if rados_obj.get_pool_details(pool=_pool_name):
                     log.info(

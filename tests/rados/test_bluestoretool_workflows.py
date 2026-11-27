@@ -31,6 +31,7 @@ from ceph.rados.utils import get_cluster_timestamp
 from ceph.utils import get_node_by_id
 from tests.misc_env.lvm_deployer import create_lvms
 from utility.log import Log
+from utility.utils import get_rhbuild_major_version
 
 log = Log(__name__)
 STOPPED_OSDS = []
@@ -141,7 +142,7 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert "success" in out
 
-        if op == "fsck-quick" and rhbuild.split(".")[0] >= "6":
+        if op == "fsck-quick" and get_rhbuild_major_version(rhbuild) >= 6:
             # Execute ceph-bluestore-tool qfsck --path <osd_path>
             intro = (
                 f"\n --------------------"
@@ -153,7 +154,7 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert "success" in out
 
-        if op == "allocmap" and rhbuild.split(".")[0] >= "6":
+        if op == "allocmap" and get_rhbuild_major_version(rhbuild) >= 6:
             # Execute ceph-bluestore-tool allocmap --path <osd_path>
             intro = (
                 f"\n --------------------"
@@ -312,7 +313,7 @@ def run(ceph_cluster, **kw):
             log.info(intro)
             out = (
                 cbt_obj.get_free_dump(osd_id=_osd_id)
-                if rhbuild.split(".")[0] >= "6"
+                if get_rhbuild_major_version(rhbuild) >= 6
                 else cbt_obj.get_free_dump(osd_id=_osd_id, allocator_type="block")
             )
             log.debug(out)
@@ -328,7 +329,7 @@ def run(ceph_cluster, **kw):
             log.info(intro)
             out = (
                 cbt_obj.get_free_score(osd_id=_osd_id)
-                if rhbuild.split(".")[0] >= "6"
+                if get_rhbuild_major_version(rhbuild) >= 6
                 else cbt_obj.get_free_score(osd_id=_osd_id, allocator_type="block")
             )
             log.info(out)
@@ -390,7 +391,7 @@ def run(ceph_cluster, **kw):
             pattern_list = ["device size", "wal_total", "db_total", "slow_total"]
 
             # verbose updated stats for Reef and above
-            if rhbuild.split(".")[0] > "6" or (
+            if get_rhbuild_major_version(rhbuild) > 6 or (
                 rhbuild.startswith("6") and dedicated_db
             ):
                 pattern_list = [
@@ -406,7 +407,7 @@ def run(ceph_cluster, **kw):
                 ]
                 (
                     pattern_list.append("LEV/DEV")
-                    if rhbuild.split(".")[0] > "8"
+                    if get_rhbuild_major_version(rhbuild) > 8
                     else pattern_list.append("DEV/LEV")
                 )
             for pattern in pattern_list:

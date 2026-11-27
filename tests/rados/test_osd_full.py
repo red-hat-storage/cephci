@@ -20,7 +20,7 @@ from tests.cephadm.test_host import run as deploy_host
 from tests.rados.rados_test_util import get_device_path
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
-from utility.utils import method_should_succeed
+from utility.utils import get_rhbuild_major_version, method_should_succeed
 
 log = Log(__name__)
 
@@ -332,7 +332,7 @@ def run(ceph_cluster, **kw):
                 )
 
                 # tune mclock recovery settings
-                if rhbuild and rhbuild.split(".")[0] >= "6":
+                if get_rhbuild_major_version(rhbuild) >= 6:
                     rados_obj.set_mclock_profile(profile="high_recovery_ops")
                     rados_obj.set_mclock_parameter(param="osd_max_backfills", value=8)
 
@@ -390,7 +390,7 @@ def run(ceph_cluster, **kw):
                     "ceph osd set-full-ratio 0.95",
                 ]
                 [cephadm.shell(args=[cmd]) for cmd in cmds]
-                if rhbuild and rhbuild.split(".")[0] >= "6":
+                if get_rhbuild_major_version(rhbuild) >= 6:
                     rados_obj.set_mclock_profile(reset=True)
 
                 # log cluster health
@@ -549,7 +549,7 @@ def run(ceph_cluster, **kw):
                 )
 
                 # tune mclock recovery settings
-                if rhbuild and rhbuild.split(".")[0] >= "6":
+                if get_rhbuild_major_version(rhbuild) >= 6:
                     rados_obj.set_mclock_profile(profile="high_recovery_ops")
                     rados_obj.set_mclock_parameter(param="osd_max_backfills", value=8)
 
@@ -762,7 +762,7 @@ def run(ceph_cluster, **kw):
                     # Waiting for recovery post OSD host removal
                     method_should_succeed(wait_for_clean_pg_sets, rados_obj)
                     log.info("PG's are active + clean post OSD host removal")
-                    if rhbuild and rhbuild.split(".")[0] >= "6":
+                    if get_rhbuild_major_version(rhbuild) >= 6:
                         rados_obj.set_mclock_profile(reset=True)
 
                     # log cluster health
@@ -936,14 +936,14 @@ def run(ceph_cluster, **kw):
                 cephadm.shell([f"ceph osd reweight osd.{osd_id} 1"])
 
             # tune mclock recovery settings
-            if rhbuild and rhbuild.split(".")[0] >= "6":
+            if get_rhbuild_major_version(rhbuild) >= 6:
                 rados_obj.set_mclock_profile(profile="high_recovery_ops")
                 rados_obj.set_mclock_parameter(param="osd_max_backfills", value=8)
 
             # Waiting for recovery post test execution completion
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
             log.info("PG's are active + clean post test workflow")
-            if rhbuild and rhbuild.split(".")[0] >= "6":
+            if get_rhbuild_major_version(rhbuild) >= 6:
                 rados_obj.set_mclock_profile(reset=True)
 
         log.info(
