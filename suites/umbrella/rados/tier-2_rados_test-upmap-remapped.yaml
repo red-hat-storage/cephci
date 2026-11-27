@@ -1,0 +1,113 @@
+# Suite to verify upmap-remapped.py workflow for prolonged remapped/backfill
+#===============================================================================================
+# Conf: conf/tentacle/rados/7-node-cluster.yaml
+#
+# Scenario:
+#   1. Verify active+clean and require_min_compat_client >= luminous
+#   2. Confirm no recovery/backfill/remap activity
+#   3. Set norebalance
+#   4. Mark out / remove an OSD to trigger constrained remapping
+#   5. Verify remapped+backfilling / remapped+backfill_wait
+#   6. Verify balancer pauses when target_max_misplaced_ratio is exceeded
+#   7. Classify long backfill; dry-run upmap-remapped.py
+#   8. Apply upmap-remapped.py | sh only for long backfill
+#   9. Verify active+clean, unset norebalance, balancer resumes
+#===============================================================================================
+# RHOS-d run duration: 90 mins
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                allow-fqdn-hostname: true
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1
+        node: node7
+        install_packages:
+          - ceph-common
+          - python3
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Verify upmap-remapped feature
+      desc: >
+        Validate upmap-remapped.py dry-run and apply workflow for prolonged
+        remapped/backfill after OSD removal with norebalance set
+      module: test_upmap_remapped_feature.py
+      polarion-id:
+      abort-on-fail: true
+      config:
+        pool_name: upmap_remapped_pool
+        delete_pool: true
+        pg_num: 64
+        byte_size: 4M
+        rados_write_duration: 120
+        max_objs: 500
+        target_max_misplaced_ratio: 0.01
+        long_backfill_seconds: 120
+        remapped_wait_timeout: 300
+        clean_timeout: 3600
+        post_unset_monitor_seconds: 60
