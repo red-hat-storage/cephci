@@ -1488,8 +1488,8 @@ class CephNode(object):
             os.path.expanduser(str(_boot_key).strip()) if _boot_key else ""
         )
         self.bootstrap_key_password = kw.get("bootstrap_key_password") or ""
-        # Public key content authorized for this user; used to guarantee root
-        # access (see _ensure_root_authorized_key).
+        # Public key content authorized for cephuser and root; used to
+        # guarantee framework access (see _ensure_authorized_keys).
         self.ssh_pub_key = kw.get("ssh_pub_key")
         self.private_ip = kw["private_ip"]
 
@@ -1636,19 +1636,20 @@ class CephNode(object):
         if _is_onecloud_bootstrap:
             pass  # skip initial Paramiko connect; subprocess handles it below
         else:
-            # When a custom SSH user/key is in play, guarantee the provided
-            # key is authorized for root before the first privileged
+            # When an SSH key override is in play, guarantee the provided key
+            # is authorized for cephuser and root before the first privileged
             # connection is made.
             if self.ssh_pub_key:
                 try:
-                    self._ensure_root_authorized_key()
+                    self._ensure_authorized_keys()
                 except AssertionError:
                     # The user connection with the provided key failed; the
                     # root connection would fail the same way.
                     raise
                 except Exception as err:
                     logger.warning(
-                        "Could not ensure the runner key for root on %s: %s",
+                        "Could not ensure the runner key for cephuser and root on"
+                        " %s: %s",
                         self.ip_address,
                         err,
                     )
@@ -1886,14 +1887,16 @@ class CephNode(object):
         logger.info("finished connect")
         self.run_once = True
 
-    def _ensure_root_authorized_key(self):
+    def _ensure_authorized_keys(self):
         """
-        Ensure the runner's public key is authorized for root.
+        Ensure the runner's public key is authorized for cephuser and root.
 
-        The inventory cloud-config is expected to authorize the key for root,
-        however it is enforced here as well (over the user connection, using
-        its passwordless sudo) so that a root connection can always be
-        established with the provided key. The operation is idempotent.
+        The inventory cloud-config is expected to authorize the key for both
+        users, however it is enforced here as well (over the cephuser
+        connection, using its passwordless sudo) so that the framework's
+        connections can always be established with the provided key. cephuser
+        is created along with passwordless sudo privileges when absent. The
+        operation is idempotent.
         """
         pub_key = self.ssh_pub_key.strip()
         # The base64 blob is the unique part of a public key line and is safe
@@ -1901,7 +1904,23 @@ class CephNode(object):
         key_fields = pub_key.split()
         key_blob = key_fields[1] if len(key_fields) > 1 else pub_key
         key_b64 = base64.b64encode(pub_key.encode()).decode()
-        cmd = (
+        cephuser_cmd = (
+            "id cephuser >/dev/null 2>&1 || "
+            "(sudo groupadd -f cephuser && "
+            "sudo useradd -m -s /bin/bash -g cephuser cephuser) && "
+            "echo 'cephuser ALL=(ALL) NOPASSWD:ALL' "
+            "| sudo tee /etc/sudoers.d/cephuser && "
+            "sudo chmod 440 /etc/sudoers.d/cephuser && "
+            "sudo mkdir -p /home/cephuser/.ssh && "
+            "sudo chmod 700 /home/cephuser/.ssh && "
+            "sudo touch /home/cephuser/.ssh/authorized_keys && "
+            "sudo chmod 600 /home/cephuser/.ssh/authorized_keys && "
+            f"(sudo grep -qF '{key_blob}' /home/cephuser/.ssh/authorized_keys || "
+            f"echo '{key_b64}' | base64 -d "
+            "| sudo tee -a /home/cephuser/.ssh/authorized_keys) && "
+            "sudo chown -R cephuser:cephuser /home/cephuser/.ssh"
+        )
+        root_cmd = (
             "sudo mkdir -p /root/.ssh && sudo chmod 700 /root/.ssh && "
             "sudo touch /root/.ssh/authorized_keys && "
             "sudo chmod 600 /root/.ssh/authorized_keys && "
@@ -1909,16 +1928,17 @@ class CephNode(object):
             f"echo '{key_b64}' | base64 -d | sudo tee -a /root/.ssh/authorized_keys)"
         )
         logger.info(
-            "Ensuring the runner key is authorized for root on %s", self.ip_address
+            "Ensuring the runner key is authorized for cephuser and root on %s",
+            self.ip_address,
         )
-        _, stdout, stderr = self.ssh().exec_command(cmd)
-        exit_code = stdout.channel.recv_exit_status()
-        if exit_code != 0:
-            err = stderr.read().decode()
-            raise RuntimeError(
-                "Failed to authorize the runner key for root on"
-                f" {self.ip_address}: {err}"
-            )
+        for cmd in (cephuser_cmd, root_cmd):
+            _, stdout, stderr = self.ssh().exec_command(cmd)
+            exit_code = stdout.channel.recv_exit_status()
+            if exit_code != 0:
+                err = stderr.read().decode()
+                raise RuntimeError(
+                    "Failed to authorize the runner key on" f" {self.ip_address}: {err}"
+                )
 
     def set_internal_ip(self):
         """

@@ -70,9 +70,8 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--cloud <openstack> | <ibmc> | <aws> | <baremetal> | <onecloud> | <ocpvirt>]
         [--build <name>]
         [--inventory FILE]
-        [--ssh-user-name <name>]
-        [--ssh-user-private-key <path>]
-        [--ssh-user-pub-key <path>]
+        [--ssh-private-key <path>]
+        [--ssh-pub-key <path>]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--add-repo <repo>]
@@ -118,11 +117,10 @@ Options:
   --global-conf <file>              global cloud configuration file
   --cluster-conf <file>             cluster configuration file
   --inventory <file>                hosts inventory file
-  --ssh-user-name <name>            User used by the framework to access the
-                                    systems [default: cephuser]
-  --ssh-user-private-key <path>     Path to the private key of the SSH user
-  --ssh-user-pub-key <path>         Path to the public key authorized for the
-                                    SSH user on the systems
+  --ssh-private-key <path>          Path to the private key used to access the
+                                    systems as cephuser
+  --ssh-pub-key <path>              Path to the public key authorized for
+                                    cephuser and root on the systems
   --cloud <cloud_type>              cloud type (openstack|ibmc|aws|baremetal|onecloud|ocpvirt) [default: openstack]
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
@@ -214,7 +212,6 @@ def create_nodes(
     enable_eus=False,
     custom_config=None,
     platform=None,
-    ssh_user=None,
     ssh_private_key=None,
     ssh_pub_key=None,
 ):
@@ -230,10 +227,9 @@ def create_nodes(
         enable_eus      Extended OS support
         custom_config   list of <key>=<value>
         platform        RHEL platform (e.g. rhel-9, rhel-10) for OneCloud image selection
-        ssh_user        Overrides the user used to access the systems
         ssh_private_key Overrides the private key used to access the systems
-        ssh_pub_key     Public key content authorized for the SSH user; used
-                        to guarantee root access on the systems
+        ssh_pub_key     Public key content authorized for cephuser and root;
+                        used to guarantee root access on the systems
 
     Notes:
         use custom_config to specify the environments or configuration to
@@ -382,8 +378,6 @@ def create_nodes(
                 private_key_password = onecloud_cfg.get("private_key_password")
 
             # SSH access overrides provided via the CLI
-            if ssh_user:
-                ssh_username = ssh_user
             if ssh_private_key:
                 private_key_path = ssh_private_key
 
@@ -489,17 +483,18 @@ def load_file(file_name):
     return content
 
 
-def configure_ssh_user(inventory: dict, ssh_user: str, pub_key: str) -> None:
+def configure_ssh_user(inventory: dict, pub_key: str) -> None:
     """
-    Add the SSH user to the inventory's cloud-init configuration.
+    Authorize the provided public key for cephuser and root in the inventory's
+    cloud-init configuration.
 
-    The user is created along with its primary group, passwordless sudo
-    privileges and the provided public key authorized. The key is authorized
-    for root as well because the framework accesses the systems as root too.
+    The framework accesses the systems as cephuser (and root for privileged
+    operations), hence the key is authorized for both. A missing cephuser
+    entry is created along with its primary group and passwordless sudo
+    privileges.
 
     Args:
         inventory:  content of the inventory file
-        ssh_user:   user used by the framework to access the systems
         pub_key:    public key content (single line) to authorize
     """
     instance = inventory.setdefault("instance", {})
@@ -512,44 +507,43 @@ def configure_ssh_user(inventory: dict, ssh_user: str, pub_key: str) -> None:
     if not isinstance(cloud_config, dict):
         raise RuntimeError("The inventory instance setup is not a valid cloud-config.")
 
-    # Ensure the primary group of the user exists
+    # Ensure the primary group of cephuser exists
     groups = cloud_config.get("groups") or []
-    if ssh_user not in groups:
-        groups.append(ssh_user)
+    if "cephuser" not in groups:
+        groups.append("cephuser")
         cloud_config["groups"] = groups
 
-    # Replace any existing entry of the user so that passwordless sudo and the
-    # provided public key are guaranteed.
-    users = [
-        user
-        for user in (cloud_config.get("users") or [])
-        if user != ssh_user
-        and not (isinstance(user, dict) and user.get("name") == ssh_user)
-    ]
-    users.append(
+    users = cloud_config.get("users") or []
+
+    def _user_entry(name, defaults):
+        entry = next(
+            (
+                user
+                for user in users
+                if isinstance(user, dict) and user.get("name") == name
+            ),
+            None,
+        )
+        if entry is None:
+            entry = {"name": name, **defaults}
+            users.append(entry)
+        return entry
+
+    ceph_user = _user_entry(
+        "cephuser",
         {
-            "name": ssh_user,
-            "primary-group": ssh_user,
-            "sudo": "ALL=(root) NOPASSWD:ALL",
+            "primary-group": "cephuser",
+            "sudo": "ALL=(ALL) NOPASSWD:ALL",
             "shell": "/bin/bash",
-            "ssh-authorized-keys": [pub_key],
-        }
+        },
     )
+    ceph_keys = ceph_user.setdefault("ssh-authorized-keys", [])
+    if pub_key not in ceph_keys:
+        ceph_keys.append(pub_key)
 
     # The framework connects as root as well, hence the key must be authorized
     # for root too.
-    root_user = next(
-        (
-            user
-            for user in users
-            if isinstance(user, dict) and user.get("name") == "root"
-        ),
-        None,
-    )
-    if root_user is None:
-        root_user = {"name": "root"}
-        users.append(root_user)
-
+    root_user = _user_entry("root", {})
     root_keys = root_user.setdefault("ssh-authorized-keys", [])
     if pub_key not in root_keys:
         root_keys.append(pub_key)
@@ -862,59 +856,51 @@ def run(args):
         if inv_create and image_name is not None:
             distro.append(str(image_name).replace(".iso", ""))
 
-    # User employed by the framework to access the systems. Defaults to
-    # cephuser with the cloud credentials key. Any explicit override requires
-    # the user to exist on the systems with the given key authorized and
-    # passwordless sudo privileges.
-    ssh_user_name = args.get("--ssh-user-name") or "cephuser"
-    ssh_user_private_key = args.get("--ssh-user-private-key")
-    if ssh_user_private_key:
-        ssh_user_private_key = os.path.expanduser(ssh_user_private_key)
-    ssh_user_pub_key = args.get("--ssh-user-pub-key")
-    ssh_user_overridden = bool(
-        ssh_user_private_key or ssh_user_pub_key or ssh_user_name != "cephuser"
-    )
-    ssh_user = ssh_user_name if ssh_user_overridden else None
-    ssh_user_pub_key_content = None
+    # The framework accesses the systems as cephuser (root for privileged
+    # operations) with the cloud credentials key by default. The key may be
+    # overridden via the CLI; the provided public key is then authorized for
+    # cephuser and root on the systems.
+    ssh_private_key = args.get("--ssh-private-key")
+    if ssh_private_key:
+        ssh_private_key = os.path.expanduser(ssh_private_key)
+    ssh_pub_key = args.get("--ssh-pub-key")
+    ssh_keys_overridden = bool(ssh_private_key or ssh_pub_key)
+    ssh_pub_key_content = None
 
-    if ssh_user_overridden and reuse:
-        log.warning("--ssh-user-* options are ignored when --reuse is provided")
-    elif ssh_user_overridden:
-        if ssh_user_private_key and not os.path.isfile(ssh_user_private_key):
+    if ssh_keys_overridden and reuse:
+        log.warning("--ssh-private-key/--ssh-pub-key are ignored with --reuse")
+    elif ssh_keys_overridden:
+        if ssh_private_key and not os.path.isfile(ssh_private_key):
             raise RuntimeError(
-                f"The private key file {ssh_user_private_key} does not exist."
+                f"The private key file {ssh_private_key} does not exist."
             )
 
-        # The public key of the user must be authorized on the systems. Fall
-        # back to the private key's counterpart when not provided explicitly.
+        # The public key must be authorized on the systems. Fall back to the
+        # private key's counterpart when not provided explicitly.
         pub_key_path = (
-            os.path.expanduser(ssh_user_pub_key)
-            if ssh_user_pub_key
-            else f"{ssh_user_private_key}.pub"
+            os.path.expanduser(ssh_pub_key) if ssh_pub_key else f"{ssh_private_key}.pub"
         )
         if not pub_key_path or not os.path.isfile(pub_key_path):
             raise RuntimeError(
-                "Unable to locate the public key of the SSH user. Provide it using"
-                " --ssh-user-pub-key or place it alongside the private key as"
-                " <private-key>.pub"
+                "Unable to locate the public key. Provide it using --ssh-pub-key or"
+                " place it alongside the private key as <private-key>.pub"
             )
 
         with open(pub_key_path, "r") as pub_key_fh:
-            ssh_user_pub_key_content = pub_key_fh.read().strip()
+            ssh_pub_key_content = pub_key_fh.read().strip()
 
-        if not ssh_user_pub_key_content:
+        if not ssh_pub_key_content:
             raise RuntimeError(f"The public key file {pub_key_path} is empty.")
 
         log.info(
-            "Using %s with private key %s for system access",
-            ssh_user_name,
-            ssh_user_private_key or "(runner default keys)",
+            "Using cephuser with private key %s for system access",
+            ssh_private_key or "(runner default keys)",
         )
 
-        # Ensure the user, its group and passwordless sudo exist in the
+        # Ensure the public key is authorized for cephuser and root in the
         # inventories so that the systems are accessible post deployment.
         if inventory:
-            configure_ssh_user(inventory, ssh_user_name, ssh_user_pub_key_content)
+            configure_ssh_user(inventory, ssh_pub_key_content)
 
         for cluster in conf.get("globals") or []:
             cluster_inventory_path = (cluster.get("ceph-cluster") or {}).get(
@@ -927,9 +913,7 @@ def run(args):
             with open(cluster_inventory_path, "r") as inv_fh:
                 cluster_inventory = yaml.safe_load(inv_fh) or {}
 
-            configure_ssh_user(
-                cluster_inventory, ssh_user_name, ssh_user_pub_key_content
-            )
+            configure_ssh_user(cluster_inventory, ssh_pub_key_content)
 
             # Node creation reads the cluster inventory from disk, hence the
             # updated content is persisted and the reference updated.
@@ -1030,9 +1014,8 @@ def run(args):
                 enable_eus=enable_eus,
                 custom_config=custom_config,
                 platform=platform,
-                ssh_user=ssh_user,
-                ssh_private_key=ssh_user_private_key,
-                ssh_pub_key=ssh_user_pub_key_content,
+                ssh_private_key=ssh_private_key,
+                ssh_pub_key=ssh_pub_key_content,
             )
 
         except Exception as err:
@@ -1415,9 +1398,8 @@ def run(args):
                 instances_name,
                 enable_eus=enable_eus,
                 platform=platform,
-                ssh_user=ssh_user,
-                ssh_private_key=ssh_user_private_key,
-                ssh_pub_key=ssh_user_pub_key_content,
+                ssh_private_key=ssh_private_key,
+                ssh_pub_key=ssh_pub_key_content,
             )
 
         tcs.append(tc)
