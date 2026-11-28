@@ -190,6 +190,16 @@ tests:
         config-file-name: ../../curl/configs/test_rgw_user_cap_user_info_without_keys.yaml
 
   - test:
+      name: Test AdminOps REST user types and account operations
+      desc: Exercise AdminOps REST for user types, keys, quotas, and accounts
+      polarion-id: CEPH-83623503
+      module: sanity_rgw.py
+      config:
+        script-name: ../rest/test_admin_api_user_types.py
+        config-file-name: ../../rest/configs/test_admin_api_user_types.yaml
+        timeout: 900
+
+  - test:
       name: Test bucket listing is not truncated
       desc: Test bucket listing is not truncated
       polarion-id: CEPH-83575816
