@@ -19,9 +19,68 @@ KNOWN_IGNORABLE_WARNINGS = {
 }
 
 
+# cephadm shell has a known transient failure mode where the mon config file
+# disappears mid-flight, e.g.
+#
+#     Inferring fsid <fsid>
+#     Inferring config /var/lib/ceph/<fsid>/mon.<host>/config
+#     Error: statfs /var/lib/ceph/<fsid>/mon.<host>/config: no such file or directory
+#     (exit 125)
+#
+# Observed ~28x more often on the 20.2.2-234..254 builds than elsewhere, but it
+# also shows up as a one-off on healthy builds. It is not caused by the test, so
+# a single transient must not abort an entire suite. Retry those specific
+# signatures briefly, then give up and let the caller fail for real.
+# Only signatures unique to this transient belong here. Do NOT add generic
+# fragments such as "cephadm shell -- " — that is the prefix of every command
+# and would retry genuine failures (permission denied, EINVAL, command not
+# found) three times with a 20s penalty before failing anyway.
+# The discriminator is the missing mon config file. "statfs",
+# "Inferring fsid" and "Inferring config" always accompany it in this failure,
+# so they add nothing to the match.
+TRANSIENT_SHELL_PATTERN = "no such file or directory"
+TRANSIENT_SHELL_ATTEMPTS = 3
+TRANSIENT_SHELL_DELAY = 10
+
+
+def _is_transient_shell_error(exc):
+    """Return True when a cephadm shell failure looks like the known transient.
+
+    Requires the exit-125 marker *and* one of the mon-config signatures, so a
+    plain non-zero exit with an unrelated error is never retried.
+    """
+    msg = str(exc)
+    if "code 125" not in msg:
+        return False
+    return TRANSIENT_SHELL_PATTERN in msg
+
+
 def shell(installer, cmd):
-    """Run a cephadm shell command and return (stdout, stderr)."""
-    return installer.exec_command(sudo=True, cmd=f"cephadm shell -- {cmd}")
+    """Run a cephadm shell command and return (stdout, stderr).
+
+    Retries the known cephadm-shell transient (exit 125 / missing mon config)
+    a few times before surfacing the original error, so an intermittent
+    infrastructure hiccup does not fail the whole test.
+    """
+    last_exc = None
+    for attempt in range(1, TRANSIENT_SHELL_ATTEMPTS + 1):
+        try:
+            return installer.exec_command(sudo=True, cmd=f"cephadm shell -- {cmd}")
+        except Exception as exc:  # noqa: BLE001 - classify by message below
+            if not _is_transient_shell_error(exc):
+                raise
+            last_exc = exc
+            if attempt == TRANSIENT_SHELL_ATTEMPTS:
+                break
+            log.warning(
+                "cephadm shell transient failure (attempt %d/%d), retrying in %ds: %s",
+                attempt,
+                TRANSIENT_SHELL_ATTEMPTS,
+                TRANSIENT_SHELL_DELAY,
+                str(exc).splitlines()[-1][:200] if str(exc) else exc,
+            )
+            time.sleep(TRANSIENT_SHELL_DELAY)
+    raise last_exc
 
 
 def get_agent_daemons(installer):
@@ -36,28 +95,56 @@ def wait_for_health_warning(
     """
     Poll `ceph health detail` until the given warning code appears (or disappears).
     Returns True if condition met within timeout, False otherwise.
+
+    A raising poll (e.g. transient cephadm shell failure) is logged and treated
+    as "not yet", so the loop keeps trying until the timeout instead of aborting
+    the whole test on the first hiccup.
     """
     end = time.time() + timeout
+    last_err = None
     while time.time() < end:
-        out, _ = shell(installer, "ceph health detail -f json")
-        health = json.loads(out)
+        try:
+            out, _ = shell(installer, "ceph health detail -f json")
+            health = json.loads(out)
+        except Exception as exc:  # noqa: BLE001 - keep polling until timeout
+            last_err = exc
+            log.warning("health poll failed, retrying: %s", str(exc)[:200])
+            time.sleep(interval)
+            continue
         checks = health.get("checks", {})
         present = warning_code in checks
         if present == expect_present:
             return True
         time.sleep(interval)
+    if last_err:
+        log.warning(
+            "wait_for_health_warning timed out; last error: %s", str(last_err)[:200]
+        )
     return False
 
 
 def wait_for_agent_running(installer, hostname, timeout=120, interval=10):
     """Wait until agent daemon on a specific host shows status 'running'."""
     end = time.time() + timeout
+    last_err = None
     while time.time() < end:
-        agents = get_agent_daemons(installer)
+        try:
+            agents = get_agent_daemons(installer)
+        except Exception as exc:  # noqa: BLE001 - keep polling until timeout
+            last_err = exc
+            log.warning("agent poll failed, retrying: %s", str(exc)[:200])
+            time.sleep(interval)
+            continue
         for a in agents:
             if a.get("hostname") == hostname and a.get("status_desc") == "running":
                 return True
         time.sleep(interval)
+    if last_err:
+        log.warning(
+            "wait_for_agent_running(%s) timed out; last error: %s",
+            hostname,
+            str(last_err)[:200],
+        )
     return False
 
 
@@ -87,16 +174,33 @@ def agent_service_name(fsid, hostname):
 
 
 def ensure_agent_running_on_all(installer, ceph_cluster, timeout=180):
-    """Wait until agent daemons are running on every cluster host."""
-    hosts_out, _ = shell(installer, "ceph orch host ls -f json")
-    expected = {h["hostname"] for h in json.loads(hosts_out)}
+    """Wait until agent daemons are running on every cluster host.
+
+    The whole poll body is retried until the timeout so a single transient
+    cephadm shell failure does not abort a multi-minute wait.
+    """
+    last_err = None
     end = time.time() + timeout
+    expected = None
     while time.time() < end:
-        agents = get_agent_daemons(installer)
+        try:
+            if expected is None:
+                hosts_out, _ = shell(installer, "ceph orch host ls -f json")
+                expected = {h["hostname"] for h in json.loads(hosts_out)}
+            agents = get_agent_daemons(installer)
+        except Exception as exc:  # noqa: BLE001 - keep polling until timeout
+            last_err = exc
+            log.warning("agent poll failed, retrying: %s", str(exc)[:200])
+            time.sleep(15)
+            continue
         running = {a["hostname"] for a in agents if a.get("status_desc") == "running"}
         if running >= expected:
             return True
         time.sleep(15)
+    if last_err:
+        log.warning(
+            "ensure_agent_running_on_all timed out; last error: %s", str(last_err)[:200]
+        )
     return False
 
 
