@@ -1,0 +1,240 @@
+#===============================================================================================
+# Tier-Level: 2
+# Test-Suite: tier-2_cephfs_concurrent_mds_upgrade.yaml
+# JIRA: IBMCEPH-19132 / IBMCEPH-16204 / IBMCEPH-16487
+#
+# Scenario:
+#   Near-term Concurrent MDS Upgrade qualification for IBM Storage Ceph 10.0.
+#   - Deploy cluster with multi-MDS CephFS
+#   - Create FS/NFS/mount prerequisites and start continuous data IO
+#   - Staggered upgrade MGR → MON → MDS
+#   - BEFORE MDS upgrade: apply the frozen MDS cache-trim config set, wait for trim,
+#     flush journals, optionally set mgr/orchestrator/fail_fs=true
+#   - Capture per-component upgrade duration and MDS phase timings
+#     (first degrade/fail, fail→all-active, total restart window)
+#   - AFTER MDS upgrade: restore (remove) trim configs
+#
+# Cluster Configuration:
+#    conf/umbrella/cephfs/tier-2_cephfs_upgrade.yaml
+#
+# Notes:
+#   - Pass target image via CLI custom-config / --store or suite override:
+#       container_image: <registry>/rh-osbs/rhceph@sha256:...
+#   - max_mds in upgrade_pre_req defaults to 5; override via config if needed.
+#===============================================================================================
+---
+tests:
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              args:
+                rhcs-version: 9.1
+                release: released
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                skip-monitoring-stack: false
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          - config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          - config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          - config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          - config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          - config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      abort-on-fail: true
+      desc: Creates FS components, mounts and starts baseline workload prep before upgrade
+      module: cephfs_upgrade.upgrade_pre_req.py
+      name: "creation of Prerequisites for Upgrade"
+      polarion-id: CEPH-83575312
+      config:
+        max_mds: 2
+
+  - test:
+      abort-on-fail: false
+      desc: Collects metadata required for validating the upgrade
+      module: cephfs_upgrade.metadata_version_validation.py
+      name: "Metadata collection before upgrade"
+      polarion-id: CEPH-83575313
+
+  - test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+        crash_setup: 1
+        daemon_list: ['mds', 'osd', 'mgr', 'mon']
+
+  - test:
+      name: Concurrent MDS upgrade trim with IO
+      module: test_parallel.py
+      abort-on-fail: true
+      desc: >
+        Continuous CephFS IO in parallel with staggered MGR/MON/MDS upgrade.
+        MDS trim configs applied before MDS upgrade and restored after.
+      parallel:
+        - test:
+            abort-on-fail: false
+            config:
+              timeout: 10800
+            desc: Runs continuous data IO during upgrade window
+            module: cephfs_upgrade.cephfs_io.py
+            name: "CephFS data IO during upgrade"
+            polarion-id: CEPH-83575315
+
+        - test:
+            abort-on-fail: true
+            name: Staggered MGR/MON/MDS upgrade with MDS trim configs
+            desc: >
+              Apply MDS trim configs before MDS upgrade; staggered upgrade of
+              mgr, mon, mds; capture timings; restore configs.
+            module: cephfs_upgrade.test_concurrent_mds_upgrade_trim.py
+            # polarion-id: TBD — map after Polarion TC creation for IBMCEPH-19132
+            config:
+              # container_image must be provided via CLI custom-config / --store
+              # container_image: <target-10x-image>
+              fs_name: cephfs
+              mds_service: mds.cephfs
+              components:
+                - mgr
+                - mon
+                - mds
+              apply_trim_before: mds
+              trim_wait_seconds: 180
+              flush_journal: true
+              fail_fs: true
+              restore_trim_after: true
+              upgrade_timeout: 3600
+              osd_flags:
+                - noout
+                - noscrub
+                - nodeep-scrub
+              mds_trim_configs:
+                mds_heartbeat_grace: 300
+                mds_cache_reservation: 0.95
+                mds_cache_trim_threshold: 524288
+                mds_recall_global_max_decay_threshold: 1000000
+                mds_recall_max_decay_threshold: 420715
+                mds_session_cap_acquisition_throttle: 100
+                mds_max_caps_per_client: 10000
+
+  - test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check: 1
+        daemon_list: ['mds', 'osd', 'mgr', 'mon']
+
+  - test:
+      abort-on-fail: false
+      desc: Validates the data after upgrade
+      module: cephfs_upgrade.metadata_version_validation.py
+      name: "Metadata collection After upgrade"
+      polarion-id: CEPH-83575313
+
+  - test:
+      abort-on-fail: false
+      desc: Validates nfs after upgrade
+      module: cephfs_upgrade.cephfs_post_upgrade_validation.py
+      name: "Validates NFS after upgrade"
+      polarion-id: CEPH-83575098
