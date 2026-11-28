@@ -5,6 +5,10 @@ from cli.utilities.configure import (
     setup_client_node,
     setup_installer_node,
 )
+from utility.cephadm_agent_config import (
+    apply_use_agent_to_cli_bootstrap_config,
+    resolve_custom_overrides,
+)
 
 
 def run(ceph_cluster, **kwargs):
@@ -13,6 +17,10 @@ def run(ceph_cluster, **kwargs):
     config, custom_config = (
         kwargs.get("config"),
         kwargs.get("test_data", {}).get("custom-config", {}),
+    )
+    overrides = resolve_custom_overrides(
+        custom_config,
+        kwargs.get("test_data", {}).get("custom_config_dict"),
     )
 
     # Check mandatory parameter bootstrap
@@ -47,6 +55,9 @@ def run(ceph_cluster, **kwargs):
 
     # Get bootstrap config
     bootstrap_config = config.get("bootstrap")
+
+    # Opt-in agent via --custom-config use_agent=true (bootstrap --config)
+    apply_use_agent_to_cli_bootstrap_config(bootstrap_config, overrides=overrides)
 
     # Bootstrap cluster
     bootstrap(
