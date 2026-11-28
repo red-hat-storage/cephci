@@ -48,8 +48,20 @@ def run(ceph_cluster, **kw):
         Remove subvolumes and subvolumegroup
         Remove FS volume if created
     """
+    # Bound before try so finally never hits UnboundLocalError on early fail.
+    # `build` is also read by workflow helpers below via module/global scope.
+    global build
+    client = None
+    clients = []
+    build = ""
+    cleanup = 1
+    setup_params = None
+    mount_details = None
+    fs_name = None
+    fs_util = None
+    cephfs_common_utils = None
+
     try:
-        global build
         test_data = kw.get("test_data")
         fs_util = FsUtilsv1(ceph_cluster, test_data=test_data)
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
@@ -62,6 +74,10 @@ def run(ceph_cluster, **kw):
 
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
+        # tier-1_cephfs_fscrypt only configure_client-installs ceph-common on the
+        # first two client-role nodes (node8/node9). Conf still labels node10/11
+        # as clients; auth_list on those hits `bash: ceph: command not found`.
+        clients = clients[:2]
         if len(clients) < 2:
             log.info(
                 "This test requires minimum 2 client nodes.This has only %s clients",
@@ -146,18 +162,27 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         wait_time_secs = 300
-        if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
-            log.error("Cluster health is not OK even after waiting for 300secs")
-        if LooseVersion(build) >= LooseVersion("9.0"):
+        if client is not None and cephfs_common_utils is not None:
+            if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+        if build and LooseVersion(build) >= LooseVersion("9.0"):
             for client_tmp in clients:
                 client_tmp.exec_command(
                     sudo=True,
                     cmd="cp -f /etc/fstab.backup /etc/fstab;rm -f /etc/fstab.backup",
                     check_ec=False,
                 )
-        if cleanup:
+        if (
+            cleanup
+            and client is not None
+            and setup_params is not None
+            and mount_details is not None
+            and fs_util is not None
+            and cephfs_common_utils is not None
+        ):
             cephfs_common_utils.test_cleanup(client, setup_params, mount_details)
-            fs_util.remove_fs(client, fs_name)
+            if fs_name:
+                fs_util.remove_fs(client, fs_name)
 
 
 def fscrypt_test_run(fscrypt_test_params):

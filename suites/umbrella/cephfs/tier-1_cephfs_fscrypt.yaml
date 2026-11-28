@@ -5,6 +5,7 @@
 # Conf file : conf/umbrella/cephfs/tier-1_fs.yaml
 # Test-Case Covered:
 #	CEPH-83607378 Verify fscrypt functionality tests
+#	CEPH-83633335 fscrypt path-scoped MDS caps (IBMCEPH-22631)
 #===============================================================================================
 tests:
   -
@@ -107,6 +108,14 @@ tests:
       module: cephfs_fscrypt.test_fscrypt_basic.py
       name: "fscrypt_basic"
       polarion-id: CEPH-83607378
+  -
+    test:
+      abort-on-fail: false
+      desc: "fscrypt encrypt with mds allow all path= caps (IBMCEPH-22631 / #81908)"
+      destroy-cluster: false
+      module: cephfs_fscrypt.test_fscrypt_path_scoped_caps.py
+      name: "fscrypt_path_scoped_caps"
+      polarion-id: CEPH-83633335
   -
     test:
       abort-on-fail: false

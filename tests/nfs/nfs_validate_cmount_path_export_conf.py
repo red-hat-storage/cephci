@@ -56,14 +56,12 @@ def run(ceph_cluster, **kw):
         # Check if cmount_path is present in output or not
         if data.get("fsal", {}).get("cmount_path") == "/":
             log.info("Test Passed: 'cmount_path': '/' is present.")
-        else:
-            log.info("Test Failed: 'cmount_path': '/' is not present.")
-        return 0
+            return 0
+        log.error("Test Failed: 'cmount_path': '/' is not present.")
+        return 1
 
     except Exception as e:
         log.error(f"Failed to validate the cmount_param in export file : {e}")
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-        log.info("Cleaning up successful")
         return 1
 
     finally:

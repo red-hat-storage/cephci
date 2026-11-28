@@ -7,6 +7,7 @@
 #   - Deployment and configuration of NFS Ganesha v4.2
 #   - I/O operations validation on NFS exports
 #   - Encryption enforcement verification via FUSE mounts
+#   - CEPH-83633334 BYOK cmount_path path-scoped MDS caps (IBMCEPH-22631)
 #
 # Prerequisites:
 #   • CephCI environment configured for your cloud (openstack or baremetal)
@@ -354,3 +355,17 @@ tests:
          polarion-id: CEPH-83628801
          config:
            nfs_version: 4.2
+
+     # IBMCEPH-22631 — run last so local NFS/GKLM cleanup cannot disturb later TCs
+     - test:
+         name: BYOK cmount_path path-scoped MDS caps mount
+         module: byok.test_byok_cmount_path_encryption_caps.py
+         desc: BYOK export with cmount_path path-scoped caps; mount and keyset (IBMCEPH-22631)
+         polarion-id: CEPH-83633334
+         config:
+            nfs_version: 4.2
+            total_export_num: 1
+            clients: 1
+            nfs_mount: /mnt/nfs_byok_cmount
+            nfs_export: /export_byok_cmount
+            nfs_instance_name: nfs_byok_cmount
