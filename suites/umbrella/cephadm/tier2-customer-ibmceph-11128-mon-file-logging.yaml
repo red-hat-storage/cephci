@@ -1,0 +1,55 @@
+#============================================================
+# Test-Case: Default monitor file logging (IBMCEPH-11128 / backlog → umbrella)
+#
+# Cluster Configuration:
+#    conf/umbrella/cephadm/2admin-3node-1rgw-1client-sanity.yaml
+#
+# Note: Design-gated. Validates effective mon logging after bootstrap once
+#       the approved default is present in the build under test.
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Inspect monitor logging configuration
+      desc: Verify effective mon file-logging defaults after fresh install
+      module: exec.py
+      config:
+        sudo: True
+        check_status: True
+        commands:
+          - "ceph config get mon log_to_file"
+          - "ceph config get mon log_file"
+          - "ceph config dump | grep -E 'mon.*(log_to_file|log_file)' || true"
+          - "ceph health detail"
