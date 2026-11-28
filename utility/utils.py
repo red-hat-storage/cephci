@@ -644,19 +644,32 @@ def _wait_for_osd_and_rgw_ready(node, timeout=600, interval=10):
             stats = json.loads(osd_out)
             up = int(stats.get("num_up_osds", 0))
             total = int(stats.get("num_osds", 0))
+            # --refresh so the daemon status is read from the cluster rather
+            # than from cephadm's cached view, which lags after a restart. cephci
+            # uses --refresh for the same reason elsewhere.
             rgw_out, _ = node.exec_command(
-                cmd="ceph orch ps --daemon_type rgw --format json"
+                cmd="ceph orch ps --daemon_type rgw --format json --refresh"
             )
             rgws = json.loads(rgw_out) if str(rgw_out).strip() else []
             rgw_ready = bool(rgws) and all(
                 d.get("status_desc") == "running" for d in rgws
             )
             osd_ps_out, _ = node.exec_command(
-                cmd="ceph orch ps --daemon_type osd --format json"
+                cmd="ceph orch ps --daemon_type osd --format json --refresh"
             )
             osds = json.loads(osd_ps_out) if str(osd_ps_out).strip() else []
+            # orch ps can still report "starting" for daemons that ceph itself
+            # already considers up: `ceph osd stat` showed 12/12 up with no
+            # unavailable PGs for nine minutes while orch ps kept saying
+            # "starting" (20.2.2-368 run 20). When ceph says every OSD is up,
+            # treat "starting" as served rather than waiting for a status field
+            # that is not tracking reality.
+            osd_all_up = total > 0 and up == total
+            acceptable_osd_status = {"running"}
+            if osd_all_up:
+                acceptable_osd_status.add("starting")
             osd_ready = bool(osds) and all(
-                d.get("status_desc") == "running" for d in osds
+                d.get("status_desc") in acceptable_osd_status for d in osds
             )
             status_out, _ = node.exec_command(cmd="ceph status")
             status = status_out or ""

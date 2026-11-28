@@ -72,6 +72,17 @@ from utility.utils import (
 
 log = Log(__name__)
 
+# Sites (cluster names) for which some step in this run was configured with
+# `copy-user-info-to-site`, i.e. is meant to receive the shared
+# user_details.json. Recorded as soon as such a step starts, whether or not it
+# succeeds: if the create-user step failed, the file never gets copied and every
+# later consumer on that site would die with
+#     FileNotFoundError: user_details.json missing, this is needed in
+#     multisite setup
+# Recording the intent lets the consumers skip instead of failing, without
+# needing `requires-user-details` in every suite YAML.
+_USER_DETAILS_SITES = set()
+
 TEST_DIR = {
     "v1": {
         "script": "/ceph-qe-scripts/rgw/v1/tests/multisite/",
@@ -92,6 +103,13 @@ def run(**kw):
     config = kw.get("config")
     test_site = kw.get("ceph_cluster")
     log.info(f"test site: {test_site.name}")
+
+    # Remember that this suite expects user_details.json on the target site as
+    # soon as a copy step is configured, before it can fail.
+    _copy_target = config.get("copy-user-info-to-site")
+    if _copy_target:
+        _USER_DETAILS_SITES.add(str(_copy_target))
+
     test_site_node = test_site.get_ceph_object("rgw").node
     test_client_node = test_site.get_ceph_object("client").node
     config["git-url"] = config.get(
@@ -286,6 +304,43 @@ def run(**kw):
         f_name = test_folder_path + config_dir + config_file_name
         remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
+
+    # Decide whether this step depends on the shared user file.
+    #
+    # Default: auto-detect. If an earlier step in this run was configured with
+    # `copy-user-info-to-site` pointing at this site, the suite expects the file
+    # here, so its absence means the create-user step failed.
+    #
+    # Override: `requires-user-details: true|false` forces or disables the check
+    # for suites where auto-detection is wrong (for example a suite that copies
+    # the file for a different purpose, or one that consumes it without ever
+    # configuring a copy).
+    #
+    # Known limitation: this only catches an absent file. A stale
+    # user_details.json left behind on a reused node passes the check and the
+    # test then exercises old users, failing later and less clearly. Covering
+    # that needs a timestamp comparison or clearing the file in the create-user
+    # step.
+    _details_flag = config.get("requires-user-details")
+    if _details_flag is None:
+        _needs_user_details = test_site.name in _USER_DETAILS_SITES
+    else:
+        _needs_user_details = bool(_details_flag)
+
+    if _needs_user_details:
+        details_path = test_folder_path + lib_dir + "user_details.json"
+        _, _, details_rc, _ = exec_from.exec_command(
+            cmd=f"test -f {details_path}", check_ec=False, verbose=True
+        )
+        if details_rc != 0:
+            log.warning(
+                "user_details.json is absent at %s on %s. It is produced by the "
+                "earlier user_create.py step and copied to this site only when "
+                "that step succeeds, so its absence points at that prerequisite "
+                "rather than at this test. Skipping instead of failing for an "
+                "upstream reason." % (details_path, exec_from.hostname)
+            )
+            return -1
 
     cmd_env = " ".join(config.get("env-vars", []))
     test_status = exec_from.exec_command(
