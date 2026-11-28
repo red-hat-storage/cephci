@@ -62,7 +62,8 @@ class NVMeService:
             or bool(self.config.get("nvmeof_spec"))
             or bool(self.config.get("cnc_spec"))
         )
-        if self.inband_auth_mode:
+        # inband_auth and enable_encryption both need apply_spec so keys land in orch YAML
+        if self.inband_auth_mode or self.config.get("enable_encryption", False):
             self.is_spec_or_mtls = True
         self.service_name = None
         self.service_id = None
@@ -142,8 +143,10 @@ class NVMeService:
         if LooseVersion(self.ceph_version) >= LooseVersion("20.2.1"):
             spec["spec"].pop("pool")
 
-        # Add encryption if specified (TLS pre-shared key generated on installer)
-        if self.inband_auth_mode:
+        # Add encryption if specified (TLS pre-shared key generated on installer).
+        # enable_encryption alone must also set encryption=True so helper.py generates
+        # the key file (needed for host add --psk without requiring inband_auth_mode).
+        if self.inband_auth_mode or self.config.get("enable_encryption", False):
             spec["encryption"] = True
 
         # Add support for enable_encryption and encryption_key_path params
