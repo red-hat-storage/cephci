@@ -253,6 +253,7 @@ tests:
         nfs_name: cephfs-nfs
         nfs_mount: /mnt/nfs
         nfs_export: /export_0
+        rotate_scope: server_client
 
   - test:
       name: Nfsv4.2 multiple operations - post_upgrade
