@@ -1,0 +1,63 @@
+# Virtual Server NFS — OCP Virt multi-homed topology (Regional File Mount)
+# Suite: suites/tentacle/nfs/tier-1-nfs-virtual-server-multi-share-export-ocpvirt.yaml
+#
+# Dual Multus NADs (set at provision time):
+#   --custom-config ocpvirt_networks=ceph-public,bridge-504
+#
+# Lean sizing for tenant storage quota (rh-restricted-nfs ~10Ti shared):
+#   root via --custom-config ocpvirt_root_disk_size=40Gi
+#   OSD disks: 4 x 10Gi (enough for smoke + NFS scenarios)
+#
+# Topology:
+#   node1: admin/installer/mon/mgr/osd
+#   node2: mon/mgr/osd/mds/nfs/rgw
+#   node3: mon/osd/mds/nfs/rgw
+#   node4–node5: clients (dual-homed)
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 4
+        disk-size: 10
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+          - rgw
+          - nfs
+        no-of-volumes: 4
+        disk-size: 10
+      node3:
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - mds
+          - nfs
+        no-of-volumes: 4
+        disk-size: 10
+      node4:
+        role:
+          - client
+      node5:
+        role:
+          - client
