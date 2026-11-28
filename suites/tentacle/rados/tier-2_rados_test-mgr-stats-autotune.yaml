@@ -1,0 +1,364 @@
+# Suite to verify MGR Stats Period Auto-Tuning feature (IBMCEPH-18100)
+# Validates the automatic adjustment of mgr_stats_period based on dispatch queue depth
+# PR: https://github.com/ceph/ceph/pull/65611
+#
+# Cluster config: conf/tentacle/rados/7-node-cluster.yaml
+#   - 3 Mon, 3 Mgr (for failover tests), 15 OSDs, 1 client
+
+tests:
+  # - test:
+  #     name: setup install pre-requisistes
+  #     desc: Setup phase to deploy the required pre-requisites for running the tests.
+  #     module: install_prereq.py
+  #     abort-on-fail: true
+
+  # - test:
+  #     name: cluster deployment
+  #     desc: Execute the cluster deployment workflow.
+  #     module: test_cephadm.py
+  #     abort-on-fail: true
+  #     config:
+  #       verify_cluster_health: true
+  #       steps:
+  #         - config:
+  #             command: bootstrap
+  #             service: cephadm
+  #             base_cmd_args:
+  #               verbose: true
+  #             args:
+  #               mon-ip: node1
+
+  # - test:
+  #     name: Add host
+  #     desc: Add new host node with IP address
+  #     module: test_host.py
+  #     config:
+  #       command: add_hosts
+  #       service: host
+  #       args:
+  #         nodes:
+  #           - node1
+  #           - node2
+  #           - node3
+  #           - node4
+  #           - node5
+  #           - node6
+  #           - node7
+  #         attach_ip_address: true
+  #         labels: apply-all-labels
+  #     destroy-cluster: false
+  #     abort-on-fail: true
+
+  # - test:
+  #     name: Mgr and Mon deployment
+  #     desc: Add Mgr and Mon daemons
+  #     module: test_cephadm.py
+  #     polarion-id: CEPH-83573746
+  #     abort-on-fail: true
+  #     config:
+  #       steps:
+  #         - config:
+  #             command: apply
+  #             service: mgr
+  #             args:
+  #               placement:
+  #                 label: mgr
+  #         - config:
+  #             command: apply
+  #             service: mon
+  #             args:
+  #               placement:
+  #                 label: mon
+
+  # - test:
+  #     name: OSD deployment
+  #     desc: Add OSD services using spec file.
+  #     module: test_cephadm.py
+  #     polarion-id: CEPH-83573746
+  #     abort-on-fail: true
+  #     config:
+  #       steps:
+  #         - config:
+  #             command: apply_spec
+  #             service: orch
+  #             validate-spec-services: true
+  #             specs:
+  #               - service_type: osd
+  #                 service_id: osds
+  #                 encrypted: "true"
+  #                 placement:
+  #                   label: osd
+  #                 spec:
+  #                   data_devices:
+  #                     all: "true"
+
+  # - test:
+  #     name: Configure client admin
+  #     desc: Configures client admin node on cluster
+  #     module: test_client.py
+  #     polarion-id: CEPH-83573758
+  #     abort-on-fail: true
+  #     config:
+  #       command: add
+  #       id: client.1
+  #       nodes:
+  #         - node7
+  #       install_packages:
+  #         - ceph-common
+  #         - ceph-base
+  #       copy_admin_keyring: true
+  #       caps:
+  #         mon: "allow *"
+  #         osd: "allow *"
+  #         mds: "allow *"
+  #         mgr: "allow *"
+
+  # - test:
+  #     name: Enable logging to file
+  #     module: rados_prep.py
+  #     config:
+  #       log_to_file: true
+  #     desc: Change config options to enable logging to file
+
+  # -------------------------------------------------------------------
+  # Test 1: Default config values verification
+  # Test plan: #1, #2
+  # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune default config verification
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620500
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_config_defaults: true
+  #     desc: >
+  #       Verify default values of mgr_stats_period_autotune (true),
+  #       mgr_stats_period_autotune_queue_threshold (100), and
+  #       mgr_stats_period (5) at both DB and runtime levels
+
+  # -------------------------------------------------------------------
+  # Test 2: Config set/get/toggle operations
+  # Test plan: #3, #4
+  # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune config set-get operations
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620501
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_config_set_get: true
+  #     desc: >
+  #       Verify toggling mgr_stats_period_autotune between true/false,
+  #       setting custom queue threshold values, and modifying mgr_stats_period
+
+  # # -------------------------------------------------------------------
+  # # Test 3: Invalid config value handling (Negative tests)
+  # # Test plan: #20, #21
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune invalid config handling
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620502
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_invalid_config: true
+  #     desc: >
+  #       Negative tests - verify invalid boolean value, negative threshold,
+  #       zero threshold, and extremely large threshold are handled gracefully
+
+  # # -------------------------------------------------------------------
+  # # Test 4: Config persistence across MGR failover
+  # # Test plan: #6, #19
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune config persistence across failover
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620503
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_config_persistence_mgr_failover: true
+  #     desc: >
+  #       Set autotune configs, fail active MGR, verify configs persist
+  #       on new active MGR including baseline mgr_stats_period
+
+  # # -------------------------------------------------------------------
+  # # Probe: Which events raise MGR dispatch_queue.length
+  # # -------------------------------------------------------------------
+  - test:
+      name: MGR dispatch queue trigger comparison
+      module: test_mgr_dispatch_queue_triggers.py
+      abort-on-fail: false
+      config:
+        test_mgr_dispatch_queue_triggers: true
+      desc: >
+        Sustain mass-peering waves (repeat concurrent OSD stop/out + high-PG
+        create/bump) to keep mgr dispatch_queue.length above threshold 5
+
+  # # -------------------------------------------------------------------
+  # # Test 5: Disabled autotune behavior under load
+  # # Test plan: #7
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune disabled behavior under load
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620504
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_disabled_behavior: true
+  #     desc: >
+  #       Verify that with mgr_stats_period_autotune disabled,
+  #       mgr_stats_period remains constant despite cluster activity
+
+  # # -------------------------------------------------------------------
+  # # Test 6: Period increase under load, cap enforcement, and recovery
+  # # Test plan: #8, #9, #10, #11
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune period increase, cap and recovery
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620505
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_period_increase_and_recovery: true
+  #     desc: >
+  #       Verify period increases under load with low threshold, stays within
+  #       60-second cap, and recovers to baseline when load subsides
+
+  # # # -------------------------------------------------------------------
+  # # Test 7: Baseline tracking with custom mgr_stats_period
+  # # Test plan: #12
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune baseline tracking with custom period
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620506
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_baseline_tracking: true
+  #     desc: >
+  #       Set mgr_stats_period to 10, generate load, verify period increases
+  #       from 10 and recovers to 10 (not the default 5)
+
+  # # -------------------------------------------------------------------
+  # # Test 8: Idle cluster edge case
+  # # Test plan: #22
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune idle cluster edge case
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620507
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_idle_cluster: true
+  #     desc: >
+  #       Verify autotune does not decrease period below baseline on
+  #       a completely idle cluster, and no divide-by-zero errors occur
+
+  # # -------------------------------------------------------------------
+  # # Test 9: MGR crash during active period adjustment
+  # # Test plan: #18
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune MGR crash during adjustment
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620508
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_mgr_crash_during_adjustment: true
+  #     desc: >
+  #       Generate load to trigger autotune, crash active MGR,
+  #       verify standby takes over with correct autotune config
+
+  # # -------------------------------------------------------------------
+  # # Test 10: OSD/MDS report frequency changes
+  # # Test plan: #13
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune OSD report frequency changes
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620509
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_daemon_report_frequency: true
+  #     desc: >
+  #       Verify that when mgr_stats_period changes, OSDs and MDS
+  #       adjust their reporting interval accordingly
+
+  # # -------------------------------------------------------------------
+  # # Test 11: Dashboard/CLI responsiveness during auto-tune
+  # # Test plan: #14
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: MGR autotune CLI responsiveness under load
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620510
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_dashboard_responsiveness: true
+  #     desc: >
+  #       Verify ceph CLI commands (status, health, df, osd stat)
+  #       remain responsive while autotune is actively adjusting period
+
+  # # -------------------------------------------------------------------
+  # # Test 12: BUG HUNTER — Negative/zero threshold causes permanent spike
+  # # Code bug: no min constraint on queue_threshold in mgr.yaml.in
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: BUG HUNTER negative threshold runtime behavior
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620511
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_negative_threshold_behavior: true
+  #     desc: >
+  #       Verify behavior when queue_threshold is -1 or 0 — no min constraint
+  #       in config definition means queue_depth > threshold is always true,
+  #       driving period to 60s permanently
+
+  # # -------------------------------------------------------------------
+  # # Test 13: BUG HUNTER — Baseline state lost on MGR failover under load
+  # # Code bug: StatsAutotuner constructed fresh per-MGR, no state transfer
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: BUG HUNTER MGR failover under load baseline state
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620512
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_failover_under_load: true
+  #     desc: >
+  #       Fail active MGR while period is elevated by autotuner.
+  #       Verify new MGR starts at stored baseline (not elevated value)
+  #       and re-autotunes correctly if load persists
+
+  # # -------------------------------------------------------------------
+  # # Test 14: BUG HUNTER — Rapid autotune toggle leaves period elevated
+  # # Code bug: disabling autotune while elevated does not revert period
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: BUG HUNTER rapid autotune toggle elevated period
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620513
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_rapid_toggle: true
+  #     desc: >
+  #       Disable autotune while period is elevated — set_val() change
+  #       is local so period stays elevated. Verify behavior and recovery
+  #       when re-enabled
+
+  # # -------------------------------------------------------------------
+  # # Test 15: BUG HUNTER — Config change propagation latency
+  # # Code note: get_tracked_keys() excludes autotune configs
+  # # -------------------------------------------------------------------
+  # - test:
+  #     name: BUG HUNTER autotune config propagation latency
+  #     module: test_mgr_stats_period_autotune.py
+  #     polarion-id: CEPH-83620514
+  #     abort-on-fail: true
+  #     config:
+  #       test_mgr_stats_autotune_config_change_latency: true
+  #     desc: >
+  #       Measure how quickly threshold changes take effect — autotune
+  #       configs are not in get_tracked_keys() so propagation depends
+  #       on next tick cycle (up to ~10s delay)
