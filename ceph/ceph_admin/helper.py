@@ -968,7 +968,12 @@ class GenerateServiceSpec:
             method = self._get_render_method(spec["service_type"])
             if not method:
                 raise UnknownSpecFound(f"unknown spec found - {spec}")
-            spec_content += method(spec=spec)
+            # Ensure each document ends with a newline so the next "---"
+            # starts on its own line (osd.jinja can omit a trailing \n).
+            chunk = method(spec=spec)
+            if not chunk.endswith("\n"):
+                chunk += "\n"
+            spec_content += chunk
 
         LOG.info(f"Spec yaml file content:\n{spec_content}")
         # Create spec yaml file
@@ -994,7 +999,10 @@ class GenerateServiceSpec:
             method = self._get_render_method(spec["service_type"])
             if not method:
                 raise UnknownSpecFound(f"unknown spec found - {spec}")
-            spec_content += method(spec=spec)
+            chunk = method(spec=spec)
+            if not chunk.endswith("\n"):
+                chunk += "\n"
+            spec_content += chunk
         LOG.info(f"SNMP Conf file content:\n{spec_content}")
         temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
         conf_file = self.node.remote_file(
