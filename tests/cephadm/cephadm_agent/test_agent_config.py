@@ -378,6 +378,27 @@ def run_refresh_rate_test(ceph_cluster, installer):
             installer,
             f"ceph config set mgr mgr/cephadm/agent_refresh_rate {NEW_RATE}",
         )
+        # The rate is pushed to the agent as `refresh_period` inside agent.json
+        # (services/agent.py: generate_config), but it is NOT part of the
+        # dependency list that triggers a config push
+        # (AgentService.get_dependencies -> mgr IP, agent server port, root CA,
+        # device_enhanced_scan, image). So changing mgr/cephadm/agent_refresh_rate
+        # alone never propagates: the agent keeps its previous refresh_period.
+        # Observed on 20.2.2-367 #1188 — rate changed 20 -> 10, 30s elapsed, and
+        # exactly 1 post was counted, i.e. the old 20s cadence.
+        # Reconfig re-pushes agent.json for this daemon so the new period is in
+        # effect. Daemon-scoped, so other agents on the cluster are not bounced.
+        shell(installer, f"ceph orch daemon reconfig agent.{hostname}")
+        # `reconfig` is asynchronous ("Scheduled to reconfig") and redeploys the
+        # agent, so it restarts. Measuring straight after a fixed sleep counts the
+        # restart window instead of the new cadence: observed 0 posts in 30s on
+        # 20.2.2-368 run 20. Wait for the agent to be running again first, then
+        # let it settle for three refresh periods.
+        if not wait_for_agent_running(installer, hostname, timeout=180):
+            raise Exception(
+                f"Agent {hostname} did not come back after reconfig for "
+                f"{NEW_RATE}s rate"
+            )
         time.sleep(NEW_RATE * 3)
 
         log.info("Measuring post frequency at 10s rate")
@@ -399,6 +420,15 @@ def run_refresh_rate_test(ceph_cluster, installer):
             installer,
             f"ceph config set mgr mgr/cephadm/agent_refresh_rate {SLOW_RATE}",
         )
+        # Same reasoning as above: without a reconfig the agent keeps the 10s
+        # rate from the previous phase, so a 60s window would show ~6 posts and
+        # trip the `<= 3` assertion below.
+        shell(installer, f"ceph orch daemon reconfig agent.{hostname}")
+        if not wait_for_agent_running(installer, hostname, timeout=180):
+            raise Exception(
+                f"Agent {hostname} did not come back after reconfig for "
+                f"{SLOW_RATE}s rate"
+            )
         time.sleep(SLOW_RATE + 10)
 
         log.info("Measuring post frequency at 60s rate")
@@ -425,6 +455,28 @@ def run_refresh_rate_test(ceph_cluster, installer):
             installer,
             f"ceph config set mgr mgr/cephadm/agent_refresh_rate {original_rate}",
         )
+        # The agent must be told about the restore as well. `ceph config set`
+        # only updates the mgr option and, as above, the config push is gated on
+        # a dependency list that does not include agent_refresh_rate. Without
+        # this reconfig the agent keeps the 60s refresh_period from the slow
+        # phase while the mgr computes the down threshold from the restored 20s
+        # option (3 x 20s), so later tests in the suite can see a spurious
+        # CEPHADM_AGENT_DOWN. Nothing was pushed before this change, so nothing
+        # leaked; the reconfig calls are what make the restore necessary.
+        shell(installer, f"ceph orch daemon reconfig agent.{hostname}")
+        # The restore reconfig also restarts the agent, so wait for it to be back
+        # before the next test runs against this cluster. Bounded and non-fatal:
+        # the restore has already been pushed, and a failure here should not mask
+        # the test result.
+        try:
+            if not wait_for_agent_running(installer, hostname, timeout=180):
+                log.error(
+                    "Agent %s did not report running after restoring the refresh "
+                    "rate; later tests may see CEPHADM_AGENT_DOWN",
+                    hostname,
+                )
+        except Exception as exc:  # noqa: BLE001 - must not mask the test result
+            log.error("Readiness wait after restore failed: %s", exc)
         time.sleep(int(original_rate) * 2)
 
     log.info("PASS: Refresh rate configuration changes take effect")
