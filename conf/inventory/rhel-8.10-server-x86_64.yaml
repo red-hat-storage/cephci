@@ -39,6 +39,30 @@ instance:
         ssh-authorized-keys:
           - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAHzT2JgaOA+RQsExHsk3E4IZjD4ZPNJghZbt4TucWcVd+jVotfWDFR+AHQwShYaCy4RCbXiPgWvZUjMmRWwmZqOwwHRQ520hhwdc6+R/h7i7axVBO++kQDvvH450B+Vr9UHwVB9LICPBSXHXIUUdFB5eSUi8C5LSsxd+JnRIyhM9vOCcg== rakeshnarayanchilkunda@Rakeshs-MacBook-Pro-3.local
 
+    write_files:
+      # Route CDN/stage image names through the RH eng pull-through so stage
+      # bootstrap does not need a second CDN login for monitoring sidecars.
+      # If a magna-local mirror exists with the content, replace location with
+      # that host (same shape as IBM EU nginx-vm-01 redirects).
+      - path: /etc/containers/registries.conf.d/rh-registry-redirect.conf
+        owner: root:root
+        permissions: '0644'
+        defer: true
+        content: |
+          [[registry]]
+          prefix = "registry.redhat.io"
+          location = "registry-proxy.engineering.redhat.com"
+          insecure = true
+
+          [[registry]]
+          prefix = "registry.stage.redhat.io"
+          location = "registry-proxy.engineering.redhat.com"
+          insecure = true
+
+          [[registry]]
+          location = "registry-proxy.engineering.redhat.com"
+          insecure = true
+
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
