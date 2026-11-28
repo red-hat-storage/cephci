@@ -1,0 +1,183 @@
+# Placeholder for archive and multisite upgrade cases the P0 suites do not run.
+# Moved from the old tentacle multisite and archive upgrade suites. This file does not deploy or upgrade a cluster.
+
+tests:
+
+  - test:
+      name: Verify DBR feature enabled on pre-upgraded cluster
+      desc: Check DBR feature enabled on pre-upgraded cluster
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83573596
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_check_sharding_enabled_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+      desc: Test dynamic resharding brownfield scenario after upgrade
+      module: sanity_rgw_multisite.py
+      name: Test dynamic resharding brownfield scenario after upgrade
+      polarion-id: CEPH-83574736
+
+  - test:
+      name: Bucket Granular Sync policy test for prefix and tag
+      desc: Bucket sync policy test for prefix and tag
+      polarion-id: CEPH-83575133
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_syncpolicy_prefix_tag.py
+            config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_swift_basic_ops.py
+            config-file-name: test_swift_object_expire_op.yaml
+            verify-io-on-site: ["ceph-sec"]
+      desc: test object expiration with swift
+      module: sanity_rgw_multisite.py
+      name: swift object expiration post upgrade
+      polarion-id: CEPH-9718
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_manual_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec", "ceph-arc"]
+      desc: Create bucket for Testing manual resharding brownfield scenario pre upgrade
+      module: sanity_rgw_multisite.py
+      name: Create bucket for Testing manual resharding brownfield scenario pre upgrade
+      polarion-id: CEPH-83574735
+
+  - test:
+      name: bucket granular sync policy with symmetrical flow having archive zone
+      desc: Test bucket granular sync policy with symmetrical flow having archive zone
+      polarion-id: CEPH-83575879
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucketsync_archive_symmetrical.yaml
+            timeout: 5500
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_manual_resharding_greenfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec", "ceph-arc"]
+      desc: Test manual resharding brownfield scenario after upgrade on new bucket
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      name: Manual Resharding tests on Primary cluster
+      polarion-id: CEPH-83574734
+
+  - test:
+      name: Granular multisite sync policy group transition
+      desc: Test multisite sync policy group transition
+      polarion-id: CEPH-83575133
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_sync_policy.py
+            config-file-name: test_sync_policy_state_change.yaml
+
+  - test:
+      name: Test NFS cluster and export create
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../nfs_ganesha/nfs_cluster.py
+            config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+
+  - test:
+      name: NFS export delete
+      desc: NFS cluster and exports delete
+      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../nfs_ganesha/nfs_cluster.py
+            config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec" , "ceph-arc"]
+      desc: Test dynamic resharding brownfield scenario after upgrade on new bucket
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      name: Dynamic resharding tests on Primary cluster
+      polarion-id: CEPH-83574737
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_bucket_enc_multipart_download_archive_site.yaml
+      desc: test multipart+encrypt object access at the archive site
+      polarion-id: CEPH-83573390
+      module: sanity_rgw_multisite.py
+      name: test multipart+encrypt object access at the archive site
+
+  - test:
+      name: S3CMD object download on primary pre upgarde
+      desc: S3CMD object download or GET pre upgarde
+      polarion-id: CEPH-83575477
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+            monitor-consistency-bucket-stats: true
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_rgw_ops_log.py
+            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+      desc: S3CMD tests, rgw log details pre upgrade
+      module: sanity_rgw_multisite.py
+      name: S3CMD tests, rgw log details pre upgrade
+      polarion-id: CEPH-83575470
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_swift_basic_ops.py
+            config-file-name: test_swift_basic_ops.yaml
+            verify-io-on-site: ["ceph-sec"]
+      desc: Test object operations with swift
+      module: sanity_rgw_multisite.py
+      name: swift basic operations pre upgrade
+      polarion-id: CEPH-11019
